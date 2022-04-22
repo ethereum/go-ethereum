@@ -26,6 +26,16 @@ type AttachCommand struct {
 	JSpathFlag    string
 }
 
+// MarkDown implements cli.MarkDown interface
+func (c *AttachCommand) MarkDown() string {
+	items := []string{
+		"# Attach",
+		"Connect to remote Bor IPC console.",
+		c.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (c *AttachCommand) Help() string {
 	return `Usage: bor attach <IPC FILE>

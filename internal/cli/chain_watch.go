@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -15,6 +16,15 @@ import (
 // ChainWatchCommand is the command to group the peers commands
 type ChainWatchCommand struct {
 	*Meta2
+}
+
+// MarkDown implements cli.MarkDown interface
+func (c *ChainWatchCommand) MarkDown() string {
+	items := []string{
+		"# Chain watch",
+		"The ```chain watch``` command is used to view the chainHead, reorg and fork events in real-time.",
+	}
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface

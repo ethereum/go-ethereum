@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -10,6 +11,16 @@ import (
 
 type AccountImportCommand struct {
 	*Meta
+}
+
+// MarkDown implements cli.MarkDown interface
+func (a *AccountImportCommand) MarkDown() string {
+	items := []string{
+		"# Account import",
+		"The ```account import``` command imports an account in Json format to the Bor data directory.",
+		a.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface

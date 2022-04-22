@@ -31,6 +31,33 @@ type DebugCommand struct {
 	output  string
 }
 
+// MarkDown implements cli.MarkDown interface
+func (d *DebugCommand) MarkDown() string {
+	examples := []string{
+		"## Examples",
+		"By default it creates a tar.gz file with the output:",
+		CodeBlock([]string{
+			"$ bor debug",
+			"Starting debugger...\n",
+			"Created debug archive: bor-debug-2021-10-26-073819Z.tar.gz",
+		}),
+		"Send the output to a specific directory:",
+		CodeBlock([]string{
+			"$ bor debug --output data",
+			"Starting debugger...\n",
+			"Created debug directory: data/bor-debug-2021-10-26-075437Z",
+		}),
+	}
+
+	items := []string{
+		"# Debug",
+		"The ```bor debug``` command takes a debug dump of the running client.",
+		d.Flags().MarkDown(),
+	}
+	items = append(items, examples...)
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (d *DebugCommand) Help() string {
 	return `Usage: bor debug

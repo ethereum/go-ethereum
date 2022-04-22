@@ -14,6 +14,16 @@ type PeersStatusCommand struct {
 	*Meta2
 }
 
+// MarkDown implements cli.MarkDown interface
+func (p *PeersStatusCommand) MarkDown() string {
+	items := []string{
+		"# Peers status",
+		"The ```peers status <peer id>``` command displays the status of a peer by its id.",
+		p.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (p *PeersStatusCommand) Help() string {
 	return `Usage: bor peers status <peer id>

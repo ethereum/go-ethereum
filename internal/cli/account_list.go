@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
@@ -9,6 +10,16 @@ import (
 
 type AccountListCommand struct {
 	*Meta
+}
+
+// MarkDown implements cli.MarkDown interface
+func (a *AccountListCommand) MarkDown() string {
+	items := []string{
+		"# Account list",
+		"The `account list` command lists all the accounts in the Bor data directory.",
+		a.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface

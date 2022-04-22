@@ -14,6 +14,16 @@ type PeersListCommand struct {
 	*Meta2
 }
 
+// MarkDown implements cli.MarkDown interface
+func (p *PeersListCommand) MarkDown() string {
+	items := []string{
+		"# Peers add",
+		"The ```peers list``` command lists the connected peers.",
+		p.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (p *PeersListCommand) Help() string {
 	return `Usage: bor peers list

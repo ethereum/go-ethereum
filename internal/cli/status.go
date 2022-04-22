@@ -14,6 +14,15 @@ type StatusCommand struct {
 	*Meta2
 }
 
+// MarkDown implements cli.MarkDown interface
+func (p *StatusCommand) MarkDown() string {
+	items := []string{
+		"# Status",
+		"The ```status``` command outputs the status of the client.",
+	}
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (p *StatusCommand) Help() string {
 	return `Usage: bor status

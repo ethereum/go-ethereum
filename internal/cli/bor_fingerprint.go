@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/mitchellh/cli"
@@ -16,6 +17,15 @@ import (
 // VersionCommand is the command to show the version of the agent
 type FingerprintCommand struct {
 	UI cli.Ui
+}
+
+// MarkDown implements cli.MarkDown interface
+func (c *FingerprintCommand) MarkDown() string {
+	items := []string{
+		"# Fingerprint",
+		"Display the system fingerprint",
+	}
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface

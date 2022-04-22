@@ -14,13 +14,29 @@ import (
 	"google.golang.org/grpc"
 )
 
+type MarkDownCommand interface {
+	MarkDown
+	cli.Command
+}
+
+type MarkDownCommandFactory func() (MarkDownCommand, error)
+
 func Run(args []string) int {
-	commands := commands()
+	commands := Commands()
+
+	mappedCommands := make(map[string]cli.CommandFactory)
+
+	for k, v := range commands {
+		mappedCommands[k] = func() (cli.Command, error) {
+			cmd, err := v()
+			return cmd.(cli.Command), err
+		}
+	}
 
 	cli := &cli.CLI{
 		Name:     "bor",
 		Args:     args,
-		Commands: commands,
+		Commands: mappedCommands,
 	}
 
 	exitCode, err := cli.Run()
@@ -31,7 +47,7 @@ func Run(args []string) int {
 	return exitCode
 }
 
-func commands() map[string]cli.CommandFactory {
+func Commands() map[string]MarkDownCommandFactory {
 	ui := &cli.BasicUi{
 		Reader:      os.Stdin,
 		Writer:      os.Stdout,
@@ -44,93 +60,93 @@ func commands() map[string]cli.CommandFactory {
 	meta := &Meta{
 		UI: ui,
 	}
-	return map[string]cli.CommandFactory{
-		"server": func() (cli.Command, error) {
+	return map[string]MarkDownCommandFactory{
+		"server": func() (MarkDownCommand, error) {
 			return &server.Command{
 				UI: ui,
 			}, nil
 		},
-		"version": func() (cli.Command, error) {
+		"version": func() (MarkDownCommand, error) {
 			return &VersionCommand{
 				UI: ui,
 			}, nil
 		},
-		"debug": func() (cli.Command, error) {
+		"debug": func() (MarkDownCommand, error) {
 			return &DebugCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"chain": func() (cli.Command, error) {
+		"chain": func() (MarkDownCommand, error) {
 			return &ChainCommand{
 				UI: ui,
 			}, nil
 		},
-		"chain watch": func() (cli.Command, error) {
+		"chain watch": func() (MarkDownCommand, error) {
 			return &ChainWatchCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"chain sethead": func() (cli.Command, error) {
+		"chain sethead": func() (MarkDownCommand, error) {
 			return &ChainSetHeadCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"account": func() (cli.Command, error) {
+		"account": func() (MarkDownCommand, error) {
 			return &Account{
 				UI: ui,
 			}, nil
 		},
-		"account new": func() (cli.Command, error) {
+		"account new": func() (MarkDownCommand, error) {
 			return &AccountNewCommand{
 				Meta: meta,
 			}, nil
 		},
-		"account import": func() (cli.Command, error) {
+		"account import": func() (MarkDownCommand, error) {
 			return &AccountImportCommand{
 				Meta: meta,
 			}, nil
 		},
-		"account list": func() (cli.Command, error) {
+		"account list": func() (MarkDownCommand, error) {
 			return &AccountListCommand{
 				Meta: meta,
 			}, nil
 		},
-		"peers": func() (cli.Command, error) {
+		"peers": func() (MarkDownCommand, error) {
 			return &PeersCommand{
 				UI: ui,
 			}, nil
 		},
-		"peers add": func() (cli.Command, error) {
+		"peers add": func() (MarkDownCommand, error) {
 			return &PeersAddCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"peers remove": func() (cli.Command, error) {
+		"peers remove": func() (MarkDownCommand, error) {
 			return &PeersRemoveCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"peers list": func() (cli.Command, error) {
+		"peers list": func() (MarkDownCommand, error) {
 			return &PeersListCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"peers status": func() (cli.Command, error) {
+		"peers status": func() (MarkDownCommand, error) {
 			return &PeersStatusCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"status": func() (cli.Command, error) {
+		"status": func() (MarkDownCommand, error) {
 			return &StatusCommand{
 				Meta2: meta2,
 			}, nil
 		},
-		"fingerprint": func() (cli.Command, error) {
+		"fingerprint": func() (MarkDownCommand, error) {
 			return &FingerprintCommand{
 				UI: ui,
 			}, nil
 		},
-		"attach": func() (cli.Command, error) {
+		"attach": func() (MarkDownCommand, error) {
 			return &AttachCommand{
 				UI:    ui,
 				Meta:  meta,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
@@ -14,6 +15,18 @@ type ChainSetHeadCommand struct {
 	*Meta2
 
 	yes bool
+}
+
+// MarkDown implements cli.MarkDown interface
+func (a *ChainSetHeadCommand) MarkDown() string {
+	items := []string{
+		"# Chain sethead",
+		"The ```chain sethead <number>``` command sets the current chain to a certain block.",
+		"## Arguments",
+		"- ```number```: The block number to roll back.",
+		a.Flags().MarkDown(),
+	}
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface
