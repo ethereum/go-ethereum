@@ -2325,7 +2325,13 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
+// FlushState persists the post-state of a block to disk.
 func (bc *BlockChain) FlushState(number uint64) error {
+	if !bc.chainmu.TryLock() {
+		return errChainStopped
+	}
+	defer bc.chainmu.Unlock()
+
 	triedb := bc.stateCache.TrieDB()
 	block := bc.GetBlockByNumber(number)
 	log.Info("Writing cached state to disk", "block", block.Number(), "hash", block.Hash(), "root", block.Root())
