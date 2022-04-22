@@ -2009,18 +2009,38 @@ func NewPublicDbAPI(b Backend) *PublicDbAPI {
 }
 
 // Get returns the raw value of a key stored in the database.
-func (api *PublicDbAPI) Get(key hexutil.Bytes) (hexutil.Bytes, error) {
-	return api.b.ChainDb().Get(key)
+func (api *PublicDbAPI) Get(key string) (hexutil.Bytes, error) {
+	blob, err := parseHexOrString(key)
+	if err != nil {
+		return nil, err
+	}
+	return api.b.ChainDb().Get(blob)
 }
 
 // Put stores a raw value under the key in the database.
-func (api *PublicDbAPI) Put(key hexutil.Bytes, value hexutil.Bytes) error {
-	return api.b.ChainDb().Put(key, value)
+func (api *PublicDbAPI) Put(key string, value hexutil.Bytes) (hexutil.Bytes, error) {
+	var (
+		ret []byte
+		db  = api.b.ChainDb()
+	)
+	blob, err := parseHexOrString(key)
+	if err != nil {
+		return nil, err
+	}
+	data, err := db.Get(blob)
+	if err == nil {
+		ret = data
+	}
+	return ret, db.Put(blob, value)
 }
 
 // Delete removes an item from the database.
-func (api *PublicDbAPI) Delete(key hexutil.Bytes) error {
-	return api.b.ChainDb().Delete(key)
+func (api *PublicDbAPI) Delete(key string) error {
+	blob, err := parseHexOrString(key)
+	if err != nil {
+		return err
+	}
+	return api.b.ChainDb().Delete(blob)
 }
 
 // checkTxFee is an internal function used to check whether the fee of
@@ -2045,4 +2065,13 @@ func toHexSlice(b [][]byte) []string {
 		r[i] = hexutil.Encode(b[i])
 	}
 	return r
+}
+
+// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
+func parseHexOrString(str string) ([]byte, error) {
+	b, err := hexutil.Decode(str)
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		return []byte(str), nil
+	}
+	return b, err
 }
