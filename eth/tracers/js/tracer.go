@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// package js is a collection of tracers written in javascript.
+// Package js is a collection of tracers written in javascript.
 package js
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/big"
 	"strings"
 	"sync/atomic"
@@ -51,9 +52,23 @@ var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
 func init() {
-	for _, file := range tracers.AssetNames() {
-		name := camel(strings.TrimSuffix(file, ".js"))
-		assetTracers[name] = string(tracers.MustAsset(file))
+	err := fs.WalkDir(tracers.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		b, err := fs.ReadFile(tracers.FS, path)
+		if err != nil {
+			return err
+		}
+		name := camel(strings.TrimSuffix(path, ".js"))
+		assetTracers[name] = string(b)
+		return nil
+	})
+	if err != nil {
+		panic(err)
 	}
 	tracers2.RegisterLookup(true, newJsTracer)
 }
@@ -685,7 +700,7 @@ func (jst *jsTracer) CaptureTxStart(gasLimit uint64) {
 	jst.gasLimit = gasLimit
 }
 
-// CaptureTxStart implements the Tracer interface and is invoked at the end of
+// CaptureTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
 func (*jsTracer) CaptureTxEnd(restGas uint64) {}
 
