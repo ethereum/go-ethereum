@@ -16,6 +16,8 @@ func TestParseSelector(t *testing.T) {
 				result = append(result, ArgumentMarshaling{name, typeName, typeName, nil, false})
 			} else if components, ok := typeOrComponents.([]ArgumentMarshaling); ok {
 				result = append(result, ArgumentMarshaling{name, "tuple", "tuple", components, false})
+			} else if components, ok := typeOrComponents.([][]ArgumentMarshaling); ok {
+				result = append(result, ArgumentMarshaling{name, "tuple[]", "tuple[]", components[0], false})
 			} else {
 				log.Fatalf("unexpected type %T", typeOrComponents)
 			}
@@ -34,6 +36,13 @@ func TestParseSelector(t *testing.T) {
 		{"singleNest(bytes32,uint8,(uint256,uint256),address)", "singleNest", mkType("bytes32", "uint8", mkType("uint256", "uint256"), "address")},
 		{"multiNest(address,(uint256[],uint256),((address,bytes32),uint256))", "multiNest",
 			mkType("address", mkType("uint256[]", "uint256"), mkType(mkType("address", "bytes32"), "uint256"))},
+		{"arrayNest((uint256,uint256)[],bytes32)", "arrayNest", mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, "bytes32")},
+		{"multiArrayNest((uint256,uint256)[],(uint256,uint256)[])", "multiArrayNest",
+			mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, [][]ArgumentMarshaling{mkType("uint256", "uint256")})},
+		{"singleArrayNestAndArray((uint256,uint256)[],bytes32[])", "singleArrayNestAndArray",
+			mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, "bytes32[]")},
+		{"singleArrayNestWithArrayAndArray((uint256[],address[2],uint8[4][][5])[],bytes32[])", "singleArrayNestWithArrayAndArray",
+			mkType([][]ArgumentMarshaling{mkType("uint256[]", "address[2]", "uint8[4][][5]")}, "bytes32[]")},
 	}
 	for i, tt := range tests {
 		selector, err := ParseSelector(tt.input)

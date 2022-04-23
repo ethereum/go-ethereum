@@ -16,7 +16,7 @@ archives are published at https://geth.ethereum.org/downloads/.
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/install-and-build/installing-geth).
 
-Building `geth` requires both a Go (version 1.14 or later) and a C compiler. You can install
+Building `geth` requires both a Go (version 1.16 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
 ```shell
@@ -58,14 +58,14 @@ Minimum:
 
 * CPU with 2+ cores
 * 4GB RAM
-* 500GB free storage space to sync the Mainnet
+* 1TB free storage space to sync the Mainnet
 * 8 MBit/sec download Internet service
 
 Recommended:
 
 * Fast CPU with 4+ cores
 * 16GB+ RAM
-* High Performance SSD with at least 500GB free space
+* High Performance SSD with at least 1TB free space
 * 25+ MBit/sec download Internet service
 
 ### Full node on the main Ethereum network

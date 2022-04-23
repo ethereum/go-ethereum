@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,26 +14,19 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+//go:build tools
+// +build tools
+
+package tools
 
 import (
-	"fmt"
+	// Tool imports for go:generate.
+	_ "github.com/fjl/gencodec"
+	_ "github.com/golang/protobuf/protoc-gen-go"
+	_ "github.com/kevinburke/go-bindata/go-bindata"
+	_ "golang.org/x/tools/cmd/stringer"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	// Tool imports for mobile build.
+	_ "golang.org/x/mobile/cmd/gobind"
+	_ "golang.org/x/mobile/cmd/gomobile"
 )
-
-var (
-	rpcRequestGauge        = metrics.NewRegisteredGauge("rpc/requests", nil)
-	successfulRequestGauge = metrics.NewRegisteredGauge("rpc/success", nil)
-	failedRequestGauge     = metrics.NewRegisteredGauge("rpc/failure", nil)
-	rpcServingTimer        = metrics.NewRegisteredTimer("rpc/duration/all", nil)
-)
-
-func newRPCServingTimer(method string, valid bool) metrics.Timer {
-	flag := "success"
-	if !valid {
-		flag = "failure"
-	}
-	m := fmt.Sprintf("rpc/duration/%s/%s", method, flag)
-	return metrics.GetOrRegisterTimer(m, nil)
-}
