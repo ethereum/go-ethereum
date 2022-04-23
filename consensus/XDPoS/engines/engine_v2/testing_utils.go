@@ -73,3 +73,7 @@ func (x *XDPoS_v2) HygieneTimeoutPoolFaker() {
 func (x *XDPoS_v2) GetTimeoutPoolKeyListFaker() []string {
 	return x.timeoutPool.PoolObjKeysList()
 }
+
+func (x *XDPoS_v2) GetForensicsFaker() *Forensics {
+	return x.forensics
+}
