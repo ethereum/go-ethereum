@@ -24,13 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
 	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag}
 
-	consoleCommand = cli.Command{
+	consoleCommand = &cli.Command{
 		Action:   utils.MigrateFlags(localConsole),
 		Name:     "console",
 		Usage:    "Start an interactive JavaScript environment",
@@ -42,7 +42,7 @@ which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://geth.ethereum.org/docs/interface/javascript-console.`,
 	}
 
-	attachCommand = cli.Command{
+	attachCommand = &cli.Command{
 		Action:    utils.MigrateFlags(remoteConsole),
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
@@ -56,7 +56,7 @@ See https://geth.ethereum.org/docs/interface/javascript-console.
 This command allows to open a console on a running geth node.`,
 	}
 
-	javascriptCommand = cli.Command{
+	javascriptCommand = &cli.Command{
 		Action:    utils.MigrateFlags(ephemeralConsole),
 		Name:      "js",
 		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
@@ -85,7 +85,7 @@ func localConsole(ctx *cli.Context) error {
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
-		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),
+		DocRoot: ctx.String(utils.JSpathFlag.Name),
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
@@ -96,7 +96,7 @@ func localConsole(ctx *cli.Context) error {
 	defer console.Stop(false)
 
 	// If only a short execution was requested, evaluate and return.
-	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
+	if script := ctx.String(utils.ExecFlag.Name); script != "" {
 		console.Evaluate(script)
 		return nil
 	}
@@ -129,7 +129,7 @@ func remoteConsole(ctx *cli.Context) error {
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
-		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),
+		DocRoot: ctx.String(utils.JSpathFlag.Name),
 		Client:  client,
 		Preload: utils.MakeConsolePreloads(ctx),
 	}
@@ -139,7 +139,7 @@ func remoteConsole(ctx *cli.Context) error {
 	}
 	defer console.Stop(false)
 
-	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
+	if script := ctx.String(utils.ExecFlag.Name); script != "" {
 		console.Evaluate(script)
 		return nil
 	}

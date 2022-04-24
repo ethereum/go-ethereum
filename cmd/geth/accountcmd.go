@@ -25,11 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	walletCommand = cli.Command{
+	walletCommand = &cli.Command{
 		Name:      "wallet",
 		Usage:     "Manage Ethereum presale wallets",
 		ArgsUsage: "",
@@ -40,7 +40,7 @@ var (
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 
 				Name:      "import",
@@ -64,7 +64,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 		},
 	}
 
-	accountCommand = cli.Command{
+	accountCommand = &cli.Command{
 		Name:     "account",
 		Usage:    "Manage accounts",
 		Category: "ACCOUNT COMMANDS",
@@ -88,7 +88,7 @@ It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 
 Make sure you backup your keys regularly.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "Print summary of existing accounts",
@@ -263,7 +263,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 func accountCreate(ctx *cli.Context) error {
 	cfg := gethConfig{Node: defaultNodeConfig()}
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
@@ -300,13 +300,13 @@ func accountCreate(ctx *cli.Context) error {
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
-	if len(ctx.Args()) == 0 {
+	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
 	stack, _ := makeConfigNode(ctx)
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	for _, addr := range ctx.Args() {
+	for _, addr := range ctx.Args().Slice() {
 		account, oldPassword := unlockAccount(ks, addr, 0, nil)
 		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {
@@ -317,10 +317,10 @@ func accountUpdate(ctx *cli.Context) error {
 }
 
 func importWallet(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
+	keyfile := ctx.Args().First()
 	keyJSON, err := os.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
@@ -339,10 +339,10 @@ func importWallet(ctx *cli.Context) error {
 }
 
 func accountImport(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
+	keyfile := ctx.Args().First()
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)

@@ -40,11 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/olekukonko/tablewriter"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	removedbCommand = cli.Command{
+	removedbCommand = &cli.Command{
 		Action:    utils.MigrateFlags(removeDB),
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
@@ -54,12 +54,12 @@ var (
 		Description: `
 Remove blockchain and state databases`,
 	}
-	dbCommand = cli.Command{
+	dbCommand = &cli.Command{
 		Name:      "db",
 		Usage:     "Low level database operations",
 		ArgsUsage: "",
 		Category:  "DATABASE COMMANDS",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			dbInspectCmd,
 			dbStatCmd,
 			dbCompactCmd,
@@ -75,7 +75,7 @@ Remove blockchain and state databases`,
 			dbCheckStateContentCmd,
 		},
 	}
-	dbInspectCmd = cli.Command{
+	dbInspectCmd = &cli.Command{
 		Action:    utils.MigrateFlags(inspect),
 		Name:      "inspect",
 		ArgsUsage: "<prefix> <start>",
@@ -85,7 +85,7 @@ Remove blockchain and state databases`,
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
-	dbCheckStateContentCmd = cli.Command{
+	dbCheckStateContentCmd = &cli.Command{
 		Action:    utils.MigrateFlags(checkStateContent),
 		Name:      "check-state-content",
 		ArgsUsage: "<start (optional)>",
@@ -95,7 +95,7 @@ Remove blockchain and state databases`,
 For each trie node encountered, it checks that the key corresponds to the keccak256(value). If this is not true, this indicates
 a data corruption.`,
 	}
-	dbStatCmd = cli.Command{
+	dbStatCmd = &cli.Command{
 		Action: utils.MigrateFlags(dbStats),
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
@@ -103,7 +103,7 @@ a data corruption.`,
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 	}
-	dbCompactCmd = cli.Command{
+	dbCompactCmd = &cli.Command{
 		Action: utils.MigrateFlags(dbCompact),
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
@@ -116,7 +116,7 @@ a data corruption.`,
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
 	}
-	dbGetCmd = cli.Command{
+	dbGetCmd = &cli.Command{
 		Action:    utils.MigrateFlags(dbGet),
 		Name:      "get",
 		Usage:     "Show the value of a database key",
@@ -126,7 +126,7 @@ corruption if it is aborted during execution'!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "This command looks up the specified database key from the database.",
 	}
-	dbDeleteCmd = cli.Command{
+	dbDeleteCmd = &cli.Command{
 		Action:    utils.MigrateFlags(dbDelete),
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
@@ -137,7 +137,7 @@ corruption if it is aborted during execution'!`,
 		Description: `This command deletes the specified database key from the database. 
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
-	dbPutCmd = cli.Command{
+	dbPutCmd = &cli.Command{
 		Action:    utils.MigrateFlags(dbPut),
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
@@ -148,7 +148,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Description: `This command sets a given database key to the given value. 
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
-	dbGetSlotsCmd = cli.Command{
+	dbGetSlotsCmd = &cli.Command{
 		Action:    utils.MigrateFlags(dbDumpTrie),
 		Name:      "dumptrie",
 		Usage:     "Show the storage key/values of a given storage trie",
@@ -158,7 +158,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "This command looks up the specified database key from the database.",
 	}
-	dbDumpFreezerIndex = cli.Command{
+	dbDumpFreezerIndex = &cli.Command{
 		Action:    utils.MigrateFlags(freezerInspect),
 		Name:      "freezer-index",
 		Usage:     "Dump out the index of a given freezer type",
@@ -168,7 +168,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "This command displays information about the freezer index.",
 	}
-	dbImportCmd = cli.Command{
+	dbImportCmd = &cli.Command{
 		Action:    utils.MigrateFlags(importLDBdata),
 		Name:      "import",
 		Usage:     "Imports leveldb-data from an exported RLP dump.",
@@ -178,7 +178,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "The import command imports the specific chain data from an RLP encoded stream.",
 	}
-	dbExportCmd = cli.Command{
+	dbExportCmd = &cli.Command{
 		Action:    utils.MigrateFlags(exportChaindata),
 		Name:      "export",
 		Usage:     "Exports the chain data into an RLP dump. If the <dumpfile> has .gz suffix, gzip compression will be used.",
@@ -188,7 +188,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
 	}
-	dbMetadataCmd = cli.Command{
+	dbMetadataCmd = &cli.Command{
 		Action: utils.MigrateFlags(showMetaData),
 		Name:   "metadata",
 		Usage:  "Shows metadata about the chain status.",
@@ -197,7 +197,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "Shows metadata about the chain status.",
 	}
-	dbMigrateFreezerCmd = cli.Command{
+	dbMigrateFreezerCmd = &cli.Command{
 		Action:    utils.MigrateFlags(freezerMigrate),
 		Name:      "freezer-migrate",
 		Usage:     "Migrate legacy parts of the freezer. (WARNING: may take a long time)",

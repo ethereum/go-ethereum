@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // AppHelpFlagGroups is the application flags, grouped by functionality.
@@ -276,7 +276,7 @@ func init() {
 		} else if tmpl == flags.CommandHelpTemplate {
 			// Iterate over all command specific flags and categorize them
 			categorized := make(map[string][]cli.Flag)
-			for _, flag := range data.(cli.Command).Flags {
+			for _, flag := range data.(*cli.Command).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
 					categorized[flags.FlagCategory(flag, AppHelpFlagGroups)] = append(categorized[flags.FlagCategory(flag, AppHelpFlagGroups)], flag)
 				}

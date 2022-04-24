@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -56,7 +55,7 @@ func init() {
 		os.Exit(1)
 	}
 	// Add subcommands.
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		enrdumpCommand,
 		keyCommand,
 		discv4Command,
@@ -73,10 +72,17 @@ func main() {
 
 // commandHasFlag returns true if the current command supports the given flag.
 func commandHasFlag(ctx *cli.Context, flag cli.Flag) bool {
-	flags := ctx.FlagNames()
-	sort.Strings(flags)
-	i := sort.SearchStrings(flags, flag.GetName())
-	return i != len(flags) && flags[i] == flag.GetName()
+	names := flag.Names()
+	set := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		set[name] = struct{}{}
+	}
+	for _, fn := range ctx.FlagNames() {
+		if _, ok := set[fn]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // getNodeArg handles the common case of a single node descriptor argument.
@@ -84,7 +90,7 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 	if ctx.NArg() < 1 {
 		exit("missing node as command-line argument")
 	}
-	n, err := parseNode(ctx.Args()[0])
+	n, err := parseNode(ctx.Args().First())
 	if err != nil {
 		exit(err)
 	}

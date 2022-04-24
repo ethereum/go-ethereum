@@ -38,11 +38,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	initCommand = cli.Command{
+	initCommand = &cli.Command{
 		Action:    utils.MigrateFlags(initGenesis),
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
@@ -56,7 +56,7 @@ participating.
 
 It expects the genesis file as argument.`,
 	}
-	dumpGenesisCommand = cli.Command{
+	dumpGenesisCommand = &cli.Command{
 		Action:    utils.MigrateFlags(dumpGenesis),
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
@@ -66,7 +66,7 @@ It expects the genesis file as argument.`,
 		Description: `
 The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
 	}
-	importCommand = cli.Command{
+	importCommand = &cli.Command{
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
@@ -102,7 +102,7 @@ with several RLP-encoded blocks, or several files can be used.
 If only one file is used, import error will result in failure. If several files are used,
 processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
-	exportCommand = cli.Command{
+	exportCommand = &cli.Command{
 		Action:    utils.MigrateFlags(exportChain),
 		Name:      "export",
 		Usage:     "Export blockchain into file",
@@ -119,7 +119,7 @@ last block to write. In this mode, the file will be appended
 if already existing. If the file ends with .gz, the output will
 be gzipped.`,
 	}
-	importPreimagesCommand = cli.Command{
+	importPreimagesCommand = &cli.Command{
 		Action:    utils.MigrateFlags(importPreimages),
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
@@ -134,7 +134,7 @@ The import-preimages command imports hash preimages from an RLP encoded stream.
 It's deprecated, please use "geth db import" instead.
 `,
 	}
-	exportPreimagesCommand = cli.Command{
+	exportPreimagesCommand = &cli.Command{
 		Action:    utils.MigrateFlags(exportPreimages),
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
@@ -149,7 +149,7 @@ The export-preimages command exports hash preimages to an RLP encoded stream.
 It's deprecated, please use "geth db export" instead.
 `,
 	}
-	dumpCommand = cli.Command{
+	dumpCommand = &cli.Command{
 		Action:    utils.MigrateFlags(dump),
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
@@ -192,7 +192,7 @@ func initGenesis(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.GlobalString(utils.AncientFlag.Name), "", false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -219,7 +219,7 @@ func dumpGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	// Start metrics export if enabled
@@ -253,13 +253,13 @@ func importChain(ctx *cli.Context) error {
 
 	var importErr error
 
-	if len(ctx.Args()) == 1 {
+	if ctx.Args().Len() == 1 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			importErr = err
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for _, arg := range ctx.Args().Slice() {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
@@ -281,7 +281,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
-	if ctx.GlobalBool(utils.NoCompactionFlag.Name) {
+	if ctx.Bool(utils.NoCompactionFlag.Name) {
 		return nil
 	}
 
@@ -298,7 +298,7 @@ func importChain(ctx *cli.Context) error {
 }
 
 func exportChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
@@ -310,7 +310,7 @@ func exportChain(ctx *cli.Context) error {
 
 	var err error
 	fp := ctx.Args().First()
-	if len(ctx.Args()) < 3 {
+	if ctx.Args().Len() < 3 {
 		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
@@ -337,7 +337,7 @@ func exportChain(ctx *cli.Context) error {
 
 // importPreimages imports preimage data from the specified file.
 func importPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
@@ -356,7 +356,7 @@ func importPreimages(ctx *cli.Context) error {
 
 // exportPreimages dumps the preimage data to specified json file in streaming way.
 func exportPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeConfigNode(ctx)

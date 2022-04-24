@@ -27,10 +27,10 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-// Custom type which is registered in the flags library which cli uses for
+// DirectoryString is custom type which is registered in the flags library which cli uses for
 // argument parsing. This allows us to expand Value to an absolute path when
 // the argument is parsed
 type DirectoryString string
@@ -44,25 +44,36 @@ func (s *DirectoryString) Set(value string) error {
 	return nil
 }
 
-// Custom cli.Flag type which expand the received string to an absolute path.
+// DirectoryFlag is custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	Name   string
-	Value  DirectoryString
-	Usage  string
-	EnvVar string
+	Name       string
+	Value      DirectoryString
+	Usage      string
+	EnvVar     string
+	HasBeenSet bool
+}
+
+func (f DirectoryFlag) Names() []string {
+	return []string{f.Name}
+}
+
+func (f DirectoryFlag) IsSet() bool {
+	return f.HasBeenSet
 }
 
 func (f DirectoryFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
-// called by cli library, grabs variable from environment (if in env)
+// Apply called by cli library, grabs variable from environment (if in env)
 // and adds variable to flag set for parsing.
-func (f DirectoryFlag) Apply(set *flag.FlagSet) {
+func (f DirectoryFlag) Apply(set *flag.FlagSet) error {
 	eachName(f.Name, func(name string) {
 		set.Var(&f.Value, f.Name, f.Usage)
 	})
+
+	return nil
 }
 
 func (f DirectoryFlag) GetName() string {
@@ -70,7 +81,7 @@ func (f DirectoryFlag) GetName() string {
 }
 
 func (f *DirectoryFlag) Set(value string) {
-	f.Value.Set(value)
+	_ = f.Value.Set(value)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -105,10 +116,19 @@ func (v textMarshalerVal) Set(s string) error {
 
 // TextMarshalerFlag wraps a TextMarshaler value.
 type TextMarshalerFlag struct {
-	Name   string
-	Value  TextMarshaler
-	Usage  string
-	EnvVar string
+	Name       string
+	Value      TextMarshaler
+	Usage      string
+	EnvVar     string
+	HasBeenSet bool
+}
+
+func (f TextMarshalerFlag) Names() []string {
+	return []string{f.Name}
+}
+
+func (f TextMarshalerFlag) IsSet() bool {
+	return f.HasBeenSet
 }
 
 func (f TextMarshalerFlag) GetName() string {
@@ -119,15 +139,17 @@ func (f TextMarshalerFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
-func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
+func (f TextMarshalerFlag) Apply(set *flag.FlagSet) error {
 	eachName(f.Name, func(name string) {
 		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
 	})
+
+	return nil
 }
 
 // GlobalTextMarshaler returns the value of a TextMarshalerFlag from the global flag set.
 func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
-	val := ctx.GlobalGeneric(name)
+	val := ctx.Generic(name)
 	if val == nil {
 		return nil
 	}
@@ -137,10 +159,19 @@ func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or
 // hexadecimal syntax.
 type BigFlag struct {
-	Name   string
-	Value  *big.Int
-	Usage  string
-	EnvVar string
+	Name       string
+	Value      *big.Int
+	Usage      string
+	EnvVar     string
+	HasBeenSet bool
+}
+
+func (f BigFlag) Names() []string {
+	return []string{f.Name}
+}
+
+func (f BigFlag) IsSet() bool {
+	return f.HasBeenSet
 }
 
 // bigValue turns *big.Int into a flag.Value
@@ -170,16 +201,18 @@ func (f BigFlag) String() string {
 	return cli.FlagStringer(f)
 }
 
-func (f BigFlag) Apply(set *flag.FlagSet) {
+func (f BigFlag) Apply(set *flag.FlagSet) error {
 	eachName(f.Name, func(name string) {
 		f.Value = new(big.Int)
 		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
 	})
+
+	return nil
 }
 
 // GlobalBig returns the value of a BigFlag from the global flag set.
 func GlobalBig(ctx *cli.Context, name string) *big.Int {
-	val := ctx.GlobalGeneric(name)
+	val := ctx.Generic(name)
 	if val == nil {
 		return nil
 	}

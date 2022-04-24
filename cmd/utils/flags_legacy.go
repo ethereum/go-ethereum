@@ -20,10 +20,10 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var ShowDeprecated = cli.Command{
+var ShowDeprecated = &cli.Command{
 	Action:      showDeprecated,
 	Name:        "show-deprecated-flags",
 	Usage:       "Show flags that have been deprecated",
@@ -39,12 +39,12 @@ var DeprecatedFlags = []cli.Flag{
 
 var (
 	// (Deprecated May 2020, shown in aliased flags section)
-	NoUSBFlag = cli.BoolFlag{
+	NoUSBFlag = &cli.BoolFlag{
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
 	}
 	// (Deprecated July 2021, shown in aliased flags section)
-	LegacyMinerGasTargetFlag = cli.Uint64Flag{
+	LegacyMinerGasTargetFlag = &cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks (deprecated)",
 		Value: ethconfig.Defaults.Miner.GasFloor,
@@ -52,7 +52,7 @@ var (
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
-func showDeprecated(*cli.Context) {
+func showDeprecated(*cli.Context) error {
 	fmt.Println("--------------------------------------------------------------------")
 	fmt.Println("The following flags are deprecated and will be removed in the future!")
 	fmt.Println("--------------------------------------------------------------------")
@@ -61,4 +61,5 @@ func showDeprecated(*cli.Context) {
 		fmt.Println(flag.String())
 	}
 	fmt.Println()
+	return nil
 }
