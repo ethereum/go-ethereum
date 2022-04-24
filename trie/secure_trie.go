@@ -64,6 +64,18 @@ func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
 	return &SecureTrie{trie: *trie}, nil
 }
 
+// NewSecureWithOwner creates secure trie with specified trie owner.
+func NewSecureWithOwner(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
+	if db == nil {
+		panic("trie.NewSecure called without a database")
+	}
+	trie, err := NewWithOwner(owner, root, db)
+	if err != nil {
+		return nil, err
+	}
+	return &SecureTrie{trie: *trie}, nil
+}
+
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {

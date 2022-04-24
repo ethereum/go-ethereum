@@ -423,7 +423,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
 				return nil, nil
 			}
-			stTrie, err := trie.New(acc.Root, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewWithOwner(account, acc.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -531,7 +531,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if err != nil || account == nil {
 				break
 			}
-			stTrie, err := trie.NewSecure(common.BytesToHash(account.Root), triedb)
+			stTrie, err := trie.NewSecureWithOwner(common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
 			loads++ // always account database reads, even for failures
 			if err != nil {
 				break

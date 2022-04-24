@@ -207,7 +207,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				if err := rlp.DecodeBytes(srcTrie.Get(path[0]), &acc); err != nil {
 					t.Fatalf("failed to decode account on path %x: %v", path, err)
 				}
-				stTrie, err := trie.New(acc.Root, srcDb.TrieDB())
+				stTrie, err := trie.NewWithOwner(common.BytesToHash(path[0]), acc.Root, srcDb.TrieDB())
 				if err != nil {
 					t.Fatalf("failed to retriev storage trie for path %x: %v", path, err)
 				}

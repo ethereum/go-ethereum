@@ -430,7 +430,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				return err
 			}
 			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewSecure(acc.Root, trie.NewDatabase(db))
+				storageTrie, err := trie.NewSecureWithOwner(common.BytesToHash(accIter.LeafKey()), acc.Root, trie.NewDatabase(db))
 				if err != nil {
 					return err
 				}

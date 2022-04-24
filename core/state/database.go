@@ -142,7 +142,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(root, db.db)
+	tr, err := trie.NewSecureWithOwner(addrHash, root, db.db)
 	if err != nil {
 		return nil, err
 	}
