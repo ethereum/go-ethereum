@@ -18,11 +18,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -130,7 +130,7 @@ func remoteConsole(ctx *cli.Context) error {
 				// Maintain compatibility with older Geth configurations storing the
 				// Ropsten database in `testnet` instead of `ropsten`.
 				legacyPath := filepath.Join(path, "testnet")
-				if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+				if common.FileExist(legacyPath) {
 					path = legacyPath
 				} else {
 					path = filepath.Join(path, "ropsten")
