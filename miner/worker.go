@@ -1069,19 +1069,16 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 	}
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
-		err := w.commitTransactions(env, txs, interrupt)
-		if err != nil {
+		if err := w.commitTransactions(env, txs, interrupt); err != nil {
 			return err
 		}
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
-		err := w.commitTransactions(env, txs, interrupt)
-		if err != nil {
+		if err := w.commitTransactions(env, txs, interrupt); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
