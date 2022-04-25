@@ -1,0 +1,23 @@
+{
+	"name": "Go",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"args": {
+			"VARIANT": "1.18-bullseye",
+			"NODE_VERSION": "none"
+		}
+	},
+	"runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+
+	"settings": {
+		"go.toolsManagement.checkForUpdates": "local",
+		"go.useLanguageServer": true,
+		"go.gopath": "/go"
+	},
+
+	"extensions": [
+		"golang.Go"
+	],
+
+	"remoteUser": "vscode"
+}
