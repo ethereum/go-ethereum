@@ -66,8 +66,9 @@ type Freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen uint64 // Number of blocks already frozen
-	tail   uint64 // Number of the first stored item in the freezer
+	frozen  uint64 // Number of blocks already frozen
+	tail    uint64 // Number of the first stored item in the freezer
+	datadir string // Path of root directory of ancient store
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -110,6 +111,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		datadir:      datadir,
 	}
 
 	// Create the tables.
@@ -224,7 +226,7 @@ func (f *Freezer) AncientSize(kind string) (uint64, error) {
 
 // ReadAncients runs the given read operation while ensuring that no writes take place
 // on the underlying freezer.
-func (f *Freezer) ReadAncients(fn func(ethdb.AncientReader) error) (err error) {
+func (f *Freezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
 	f.writeLock.RLock()
 	defer f.writeLock.RUnlock()
 
@@ -427,7 +429,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := NewFreezerTable(migrationPath, kind, FreezerNoSnappy[kind], false)
+	newTable, err := NewFreezerTable(migrationPath, kind, table.noCompression, false)
 	if err != nil {
 		return err
 	}
@@ -486,4 +488,9 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	}
 
 	return nil
+}
+
+// AncientDatadir returns the root directory path of the ancient store.
+func (f *Freezer) AncientDatadir() (string, error) {
+	return f.datadir, nil
 }

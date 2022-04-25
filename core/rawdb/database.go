@@ -129,7 +129,7 @@ func (db *nofreezedb) Sync() error {
 	return errNotSupported
 }
 
-func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
 	// Unlike other ancient-related methods, this method does not return
 	// errNotSupported when invoked.
 	// The reason for this is that the caller might want to do several things:
@@ -149,6 +149,11 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (e
 // converting them to a new format if they're of an old format.
 func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 	return errNotSupported
+}
+
+// AncientDatadir returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) AncientDatadir() (string, error) {
+	return "", errNotSupported
 }
 
 // NewDatabase creates a high level database on top of a given key-value data
