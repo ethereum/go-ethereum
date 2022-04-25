@@ -23,7 +23,6 @@ import (
 	// Tool imports for go:generate.
 	_ "github.com/fjl/gencodec"
 	_ "github.com/golang/protobuf/protoc-gen-go"
-	_ "github.com/kevinburke/go-bindata/go-bindata"
 	_ "golang.org/x/tools/cmd/stringer"
 
 	// Tool imports for mobile build.
