@@ -48,7 +48,6 @@ type chainFreezer struct {
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 	quit      chan struct{}
 	wg        sync.WaitGroup
-	closeOnce sync.Once
 	trigger   chan chan struct{} // Manual blocking freeze trigger, test determinism
 }
 
