@@ -78,8 +78,8 @@ const (
 )
 
 var (
-	ErrBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
-	ErrBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
+	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
+	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
 
 // environment is the worker's current environment and holds all
@@ -597,11 +597,7 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				err := w.commitTransactions(w.current, txset, nil)
-				if err != nil {
-					// Log but update the snapshot anyway to ensure it's consistent with w.current
-					log.Error("unexpected error while committing transactions", "err", err)
-				}
+				w.commitTransactions(w.current, txset, nil)
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
@@ -875,9 +871,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 					ratio: ratio,
 					inc:   true,
 				}
-				return ErrBlockInterruptedByRecommit
+				return errBlockInterruptedByRecommit
 			}
-			return ErrBlockInterruptedByNewHead
+			return errBlockInterruptedByNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
@@ -1097,10 +1093,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	err = w.fillTransactions(nil, work)
-	if err != nil {
-		return nil, err
-	}
+	w.fillTransactions(nil, work)
 
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
@@ -1134,7 +1127,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 
 	// Fill pending transactions from the txpool
 	err = w.fillTransactions(interrupt, work)
-	if err != nil && err != ErrBlockInterruptedByRecommit {
+	if err != nil && !errors.Is(err, errBlockInterruptedByRecommit) {
 		work.discard()
 		return
 	}
