@@ -61,6 +61,19 @@ go install -v ./cmd/geth
 If you want to compile geth for an architecture that differs from your host, please
 consult our [cross compilation guide][cross-compile].
 
+### Building the Docker image
+
+Make sure you have [Docker Engine installed][docker-install]. To build the Docker image, run:
+```sh
+$ docker image build --build-arg "COMMIT=$(git rev-parse --short HEAD)" --tag ethereum/client-go:local .
+```
+
+After building it, you can run locally:
+```sh
+$ docker container run --interactive --rm --tty ethereum/client-go:local
+```
+
+
 ### Testing
 
 Testing a package:
@@ -117,6 +130,7 @@ This will dump stack traces for each instance to their respective log file.
 [code-review]: ../developers/code-review-guidelines
 [cross-compile]: ../install-and-build/cross-compile
 [go-modules]: https://github.com/golang/go/wiki/Modules
+[docker-install]: https://docs.docker.com/engine/install/
 [discord]: https://discord.gg/invite/nthXNEv
 [go-install]: https://golang.org/doc/install
 [testflag]: https://golang.org/cmd/go/#hdr-Testing_flags
