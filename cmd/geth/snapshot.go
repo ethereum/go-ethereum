@@ -277,6 +277,9 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+
+	snapshot.NewDanglingRange(chaindb, nil, nil, true)
+
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")

@@ -28,8 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// danglingRange describes the range for detecting dangling storages.
-type danglingRange struct {
+// DanglingRange describes the range for detecting dangling storages.
+type DanglingRange struct {
 	db    ethdb.KeyValueStore // The database stores the snapshot data
 	start []byte              // The start of the key range
 	limit []byte              // The last of the key range
@@ -38,10 +38,10 @@ type danglingRange struct {
 	duration time.Duration // Total time spent on the iteration
 }
 
-// newDanglingRange initializes a dangling storage scanner and detects all the
+// NewDanglingRange initializes a dangling storage scanner and detects all the
 // dangling accounts out.
-func newDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) *danglingRange {
-	r := &danglingRange{
+func NewDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) *DanglingRange {
+	r := &DanglingRange{
 		db:    db,
 		start: start,
 		limit: limit,
@@ -67,7 +67,7 @@ func newDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) 
 // detect iterates the storage snapshot in the specified key range and
 // returns a list of account hash of the dangling storages. Note both
 // start and limit are included for iteration.
-func (r *danglingRange) detect(report bool) ([]common.Hash, time.Duration) {
+func (r *DanglingRange) detect(report bool) ([]common.Hash, time.Duration) {
 	var (
 		checked    []byte
 		result     []common.Hash
@@ -96,6 +96,9 @@ func (r *danglingRange) detect(report bool) ([]common.Hash, time.Duration) {
 		}
 		result = append(result, accountHash)
 
+		if report {
+			log.Warn("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accountHash))
+		}
 		if time.Since(lastReport) > time.Second*8 && report {
 			log.Info("Detecting dangling storage", "at", fmt.Sprintf("%#x", accountHash), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
@@ -105,7 +108,7 @@ func (r *danglingRange) detect(report bool) ([]common.Hash, time.Duration) {
 }
 
 // cleanup wipes the dangling storages which fall within the range before the given key.
-func (r *danglingRange) cleanup(limit []byte) error {
+func (r *DanglingRange) cleanup(limit []byte) error {
 	var (
 		err   error
 		wiped int

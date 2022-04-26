@@ -382,7 +382,7 @@ func (dl *diskLayer) proveRange(stats *generatorStats, root common.Hash, prefix 
 // However, for accounts, the storage trie of the account needs to be checked. Also,
 // dangling storages(storage exists but the corresponding account is missing) need to
 // be cleaned up.
-type onStateCallback func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error
+type onStateCallback func(key []byte, val []byte, r *DanglingRange, write bool, delete bool) error
 
 // generateRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through range-proof and skip
@@ -410,9 +410,9 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
-		var r *danglingRange
+		var r *DanglingRange
 		if kind != "storage" {
-			r = newDanglingRange(dl.diskdb, origin, result.last(), false)
+			r = NewDanglingRange(dl.diskdb, origin, result.last(), false)
 		}
 		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, r, false, false) }); err != nil {
 			return false, nil, err
@@ -477,9 +477,9 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	)
 	nodeIt.AddResolver(snapNodeCache)
 
-	var r *danglingRange
+	var r *DanglingRange
 	if kind != "storage" {
-		r = newDanglingRange(dl.diskdb, origin, result.last(), false)
+		r = NewDanglingRange(dl.diskdb, origin, result.last(), false)
 	}
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
@@ -597,7 +597,7 @@ func (dl *diskLayer) checkAndFlush(current []byte, batch ethdb.Batch, stats *gen
 // generateStorages generates the missing storage slots of the specific contract.
 // It's supposed to restart the generation from the given origin position.
 func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Hash, storeMarker []byte, batch ethdb.Batch, stats *generatorStats, logged *time.Time) error {
-	onStorage := func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error {
+	onStorage := func(key []byte, val []byte, r *DanglingRange, write bool, delete bool) error {
 		defer func(start time.Time) {
 			snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 		}(time.Now())
@@ -644,7 +644,7 @@ func generateStorages(dl *diskLayer, account common.Hash, storageRoot common.Has
 // storage slots in the main trie. It's supposed to restart the generation
 // from the given origin position.
 func generateAccounts(dl *diskLayer, accMarker []byte, batch ethdb.Batch, stats *generatorStats, logged *time.Time) error {
-	onAccount := func(key []byte, val []byte, r *danglingRange, write bool, delete bool) error {
+	onAccount := func(key []byte, val []byte, r *DanglingRange, write bool, delete bool) error {
 		var (
 			start       = time.Now()
 			accountHash = common.BytesToHash(key)
@@ -754,7 +754,7 @@ func generateAccounts(dl *diskLayer, accMarker []byte, batch ethdb.Batch, stats 
 		if exhausted {
 			// Last step, cleanup the storages after the last account.
 			// All the left storages should be treated as dangling.
-			if err := newDanglingRange(dl.diskdb, origin, nil, false).cleanup(nil); err != nil {
+			if err := NewDanglingRange(dl.diskdb, origin, nil, false).cleanup(nil); err != nil {
 				return err
 			}
 			break
