@@ -137,11 +137,6 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
-		}, {
-			Namespace: "db",
-			Version:   "1.0",
-			Service:   NewPublicDbAPI(apiBackend),
-			Public:    true,
 		},
 	}
 }

@@ -30,7 +30,6 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
-	"db":       DbJS,
 }
 
 const CliqueJs = `
@@ -472,6 +471,11 @@ web3._extend({
 			params: 2,
 			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
+		new web3._extend.Method({
+			name: 'dbGet',
+			call: 'debug_dbGet',
+			params: 1
+		}),
 	],
 	properties: []
 });
@@ -852,30 +856,5 @@ web3._extend({
 			getter: 'vflux_requestStats'
 		}),
 	]
-});
-`
-
-const DbJS = `
-web3._extend({
-	property: 'db',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'get',
-			call: 'db_get',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'put',
-			call: 'db_put',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'delete',
-			call: 'db_delete',
-			params: 1
-		}),
-	],
-	properties: []
 });
 `

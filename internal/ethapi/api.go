@@ -1972,6 +1972,12 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
 }
 
+// Get returns the raw value of a key stored in the database.
+func (api *PrivateDebugAPI) DbGet(key string) (hexutil.Bytes, error) {
+	blob := common.FromHex(key)
+	return api.b.ChainDb().Get(blob)
+}
+
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	net            *p2p.Server
@@ -1998,51 +2004,6 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
-// PublicDbAPI exposes low-level methods for interacting with the database.
-type PublicDbAPI struct {
-	b Backend
-}
-
-// NewPublicDbAPI creates a new instance of PublicDbAPI.
-func NewPublicDbAPI(b Backend) *PublicDbAPI {
-	return &PublicDbAPI{b: b}
-}
-
-// Get returns the raw value of a key stored in the database.
-func (api *PublicDbAPI) Get(key string) (hexutil.Bytes, error) {
-	blob, err := parseHexOrString(key)
-	if err != nil {
-		return nil, err
-	}
-	return api.b.ChainDb().Get(blob)
-}
-
-// Put stores a raw value under the key in the database.
-func (api *PublicDbAPI) Put(key string, value hexutil.Bytes) (hexutil.Bytes, error) {
-	var (
-		ret []byte
-		db  = api.b.ChainDb()
-	)
-	blob, err := parseHexOrString(key)
-	if err != nil {
-		return nil, err
-	}
-	data, err := db.Get(blob)
-	if err == nil {
-		ret = data
-	}
-	return ret, db.Put(blob, value)
-}
-
-// Delete removes an item from the database.
-func (api *PublicDbAPI) Delete(key string) error {
-	blob, err := parseHexOrString(key)
-	if err != nil {
-		return err
-	}
-	return api.b.ChainDb().Delete(blob)
-}
-
 // checkTxFee is an internal function used to check whether the fee of
 // the given transaction is _reasonable_(under the cap).
 func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
@@ -2065,13 +2026,4 @@ func toHexSlice(b [][]byte) []string {
 		r[i] = hexutil.Encode(b[i])
 	}
 	return r
-}
-
-// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
-func parseHexOrString(str string) ([]byte, error) {
-	b, err := hexutil.Decode(str)
-	if errors.Is(err, hexutil.ErrMissingPrefix) {
-		return []byte(str), nil
-	}
-	return b, err
 }
