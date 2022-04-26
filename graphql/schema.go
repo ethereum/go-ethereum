@@ -140,8 +140,8 @@ const schema string = `
         # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
-        # RLP-encoding of the receipts
-        receiptsRLP: Bytes!
+        # binary encoding of the receipts
+        receiptsBinary: Bytes!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied
