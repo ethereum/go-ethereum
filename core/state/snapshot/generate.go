@@ -410,11 +410,11 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 		// The verification is passed, process each state with the given
 		// callback function. If this state represents a contract, the
 		// corresponding storage check will be performed in the callback
-		var r *DanglingRange
+		var drange *DanglingRange
 		if kind != "storage" {
-			r = NewDanglingRange(dl.diskdb, origin, result.last(), false)
+			drange = NewDanglingRange(dl.diskdb, origin, result.last(), false)
 		}
-		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, r, false, false) }); err != nil {
+		if err := result.forEach(func(key []byte, val []byte) error { return onState(key, val, drange, false, false) }); err != nil {
 			return false, nil, err
 		}
 		// Only abort the iteration when both database and trie are exhausted
@@ -477,9 +477,9 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	)
 	nodeIt.AddResolver(snapNodeCache)
 
-	var r *DanglingRange
+	var drange *DanglingRange
 	if kind != "storage" {
-		r = NewDanglingRange(dl.diskdb, origin, result.last(), false)
+		drange = NewDanglingRange(dl.diskdb, origin, result.last(), false)
 	}
 	for iter.Next() {
 		if last != nil && bytes.Compare(iter.Key, last) > 0 {
@@ -493,7 +493,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			if cmp := bytes.Compare(kvkeys[0], iter.Key); cmp < 0 {
 				// delete the key
 				istart := time.Now()
-				if err := onState(kvkeys[0], nil, r, false, true); err != nil {
+				if err := onState(kvkeys[0], nil, drange, false, true); err != nil {
 					return false, nil, err
 				}
 				kvkeys = kvkeys[1:]
@@ -515,7 +515,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 			break
 		}
 		istart := time.Now()
-		if err := onState(iter.Key, iter.Value, r, write, false); err != nil {
+		if err := onState(iter.Key, iter.Value, drange, write, false); err != nil {
 			return false, nil, err
 		}
 		internal += time.Since(istart)
@@ -526,7 +526,7 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	// Delete all stale snapshot states remaining
 	istart := time.Now()
 	for _, key := range kvkeys {
-		if err := onState(key, nil, r, false, true); err != nil {
+		if err := onState(key, nil, drange, false, true); err != nil {
 			return false, nil, err
 		}
 		deleted += 1
@@ -546,8 +546,8 @@ func (dl *diskLayer) generateRange(root common.Hash, prefix []byte, kind string,
 	// snapshot is regenerated. Note if the last is nil, it means there
 	// is no snapshot data at disk at all, the entire snapshot is expected
 	// to be re-generated already.
-	if last == nil && r != nil {
-		if err := r.cleanup(nil); err != nil {
+	if last == nil && drange != nil {
+		if err := drange.cleanup(nil); err != nil {
 			return false, nil, err
 		}
 	}
