@@ -2101,7 +2101,7 @@ func (bc *BlockChain) SetChainHead(head *types.Block) error {
 		if err := bc.recoverAncestors(head); err != nil {
 			return err
 		}
-		log.Debug("Recovered head state", "number", head.Number(), "hash", head.Hash())
+		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
