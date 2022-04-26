@@ -142,7 +142,7 @@ It is possible to refer to a file containing the message.`,
 }
 
 func getMessage(ctx *cli.Context, msgarg int) []byte {
-	if file := ctx.String("msgfile"); file != "" {
+	if file := ctx.String(msgfileFlag.Name); file != "" {
 		if len(ctx.Args()) > msgarg {
 			utils.Fatalf("Can't use --msgfile and message argument at the same time.")
 		}

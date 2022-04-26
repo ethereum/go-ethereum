@@ -33,6 +33,13 @@ type outputInspect struct {
 	PrivateKey string
 }
 
+var (
+	privateFlag = cli.BoolFlag{
+		Name:  "private",
+		Usage: "include the private key in the output",
+	}
+)
+
 var commandInspect = cli.Command{
 	Name:      "inspect",
 	Usage:     "inspect a keyfile",
@@ -45,10 +52,7 @@ make sure to use this feature with great caution!`,
 	Flags: []cli.Flag{
 		passphraseFlag,
 		jsonFlag,
-		cli.BoolFlag{
-			Name:  "private",
-			Usage: "include the private key in the output",
-		},
+		privateFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		keyfilepath := ctx.Args().First()
@@ -67,7 +71,7 @@ make sure to use this feature with great caution!`,
 		}
 
 		// Output all relevant information we can retrieve.
-		showPrivate := ctx.Bool("private")
+		showPrivate := ctx.Bool(privateFlag.Name)
 		out := outputInspect{
 			Address: key.Address.Hex(),
 			PublicKey: hex.EncodeToString(

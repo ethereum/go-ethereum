@@ -56,19 +56,58 @@ import (
 
 var client *simulations.Client
 
+var (
+	// global command flags
+	apiFlag = cli.StringFlag{
+		Name:   "api",
+		Value:  "http://localhost:8888",
+		Usage:  "simulation API URL",
+		EnvVar: "P2PSIM_API_URL",
+	}
+
+	// events subcommand flags
+	currentFlag = cli.BoolFlag{
+		Name:  "current",
+		Usage: "get existing nodes and conns first",
+	}
+	filterFlag = cli.StringFlag{
+		Name:  "filter",
+		Value: "",
+		Usage: "message filter",
+	}
+
+	// node create subcommand flags
+	nameFlag = cli.StringFlag{
+		Name:  "name",
+		Value: "",
+		Usage: "node name",
+	}
+	servicesFlag = cli.StringFlag{
+		Name:  "services",
+		Value: "",
+		Usage: "node services (comma separated)",
+	}
+	keyFlag = cli.StringFlag{
+		Name:  "key",
+		Value: "",
+		Usage: "node private key (hex encoded)",
+	}
+
+	// node rpc subcommand flags
+	subscribeFlag = cli.BoolFlag{
+		Name:  "subscribe",
+		Usage: "method is a subscription",
+	}
+)
+
 func main() {
 	app := cli.NewApp()
 	app.Usage = "devp2p simulation command-line client"
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:   "api",
-			Value:  "http://localhost:8888",
-			Usage:  "simulation API URL",
-			EnvVar: "P2PSIM_API_URL",
-		},
+		apiFlag,
 	}
 	app.Before = func(ctx *cli.Context) error {
-		client = simulations.NewClient(ctx.GlobalString("api"))
+		client = simulations.NewClient(ctx.GlobalString(apiFlag.Name))
 		return nil
 	}
 	app.Commands = []cli.Command{
@@ -82,15 +121,8 @@ func main() {
 			Usage:  "stream network events",
 			Action: streamNetwork,
 			Flags: []cli.Flag{
-				cli.BoolFlag{
-					Name:  "current",
-					Usage: "get existing nodes and conns first",
-				},
-				cli.StringFlag{
-					Name:  "filter",
-					Value: "",
-					Usage: "message filter",
-				},
+				currentFlag,
+				filterFlag,
 			},
 		},
 		{
@@ -118,21 +150,9 @@ func main() {
 					Usage:  "create a node",
 					Action: createNode,
 					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "name",
-							Value: "",
-							Usage: "node name",
-						},
-						cli.StringFlag{
-							Name:  "services",
-							Value: "",
-							Usage: "node services (comma separated)",
-						},
-						cli.StringFlag{
-							Name:  "key",
-							Value: "",
-							Usage: "node private key (hex encoded)",
-						},
+						nameFlag,
+						servicesFlag,
+						keyFlag,
 					},
 				},
 				{
@@ -171,10 +191,7 @@ func main() {
 					Usage:     "call a node RPC method",
 					Action:    rpcNode,
 					Flags: []cli.Flag{
-						cli.BoolFlag{
-							Name:  "subscribe",
-							Usage: "method is a subscription",
-						},
+						subscribeFlag,
 					},
 				},
 			},
@@ -207,8 +224,8 @@ func streamNetwork(ctx *cli.Context) error {
 	}
 	events := make(chan *simulations.Event)
 	sub, err := client.SubscribeNetwork(events, simulations.SubscribeOpts{
-		Current: ctx.Bool("current"),
-		Filter:  ctx.String("filter"),
+		Current: ctx.Bool(currentFlag.Name),
+		Filter:  ctx.String(filterFlag.Name),
 	})
 	if err != nil {
 		return err
@@ -279,8 +296,8 @@ func createNode(ctx *cli.Context) error {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
 	config := adapters.RandomNodeConfig()
-	config.Name = ctx.String("name")
-	if key := ctx.String("key"); key != "" {
+	config.Name = ctx.String(nameFlag.Name)
+	if key := ctx.String(keyFlag.Name); key != "" {
 		privKey, err := crypto.HexToECDSA(key)
 		if err != nil {
 			return err
@@ -288,7 +305,7 @@ func createNode(ctx *cli.Context) error {
 		config.ID = enode.PubkeyToIDV4(&privKey.PublicKey)
 		config.PrivateKey = privKey
 	}
-	if services := ctx.String("services"); services != "" {
+	if services := ctx.String(servicesFlag.Name); services != "" {
 		config.Lifecycles = strings.Split(services, ",")
 	}
 	node, err := client.CreateNode(config)
@@ -389,7 +406,7 @@ func rpcNode(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if ctx.Bool("subscribe") {
+	if ctx.Bool(subscribeFlag.Name) {
 		return rpcSubscribe(rpcClient, ctx.App.Writer, method, args[3:]...)
 	}
 	var result interface{}
