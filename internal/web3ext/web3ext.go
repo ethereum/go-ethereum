@@ -234,6 +234,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getRawReceipts',
+			call: 'debug_getRawReceipts',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
 			params: 1

@@ -1874,6 +1874,33 @@ func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexu
 	return rlp.EncodeToBytes(block)
 }
 
+// GetRawReceipts retrieves the binary-encoded raw receipts of a single block.
+func (api *PublicDebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+	var hash common.Hash
+	if h, ok := blockNrOrHash.Hash(); ok {
+		hash = h
+	} else {
+		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash = block.Hash()
+	}
+	receipts, err := api.b.GetReceipts(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]hexutil.Bytes, len(receipts))
+	for i, receipt := range receipts {
+		b, err := receipt.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		result[i] = b
+	}
+	return result, nil
+}
+
 // PrintBlock retrieves a block and returns its pretty printed form.
 func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (string, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
