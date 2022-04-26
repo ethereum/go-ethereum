@@ -515,16 +515,12 @@ func (t *Transaction) V(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*v), nil
 }
 
-func (t *Transaction) ReceiptsRLP(ctx context.Context) (hexutil.Bytes, error) {
+func (t *Transaction) ReceiptsBinary(ctx context.Context) (hexutil.Bytes, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
-	res, err := rlp.EncodeToBytes(receipt)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	return receipt.MarshalBinary()
 }
 
 type BlockType int
