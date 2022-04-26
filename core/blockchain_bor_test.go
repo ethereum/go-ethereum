@@ -80,7 +80,7 @@ func TestChain2HeadEvent(t *testing.T) {
 			}
 			for j := 0; j < len(ev.NewChain); j++ {
 				if ev.NewChain[j].Hash() != expect.Added[j] {
-					t.Fatal("Newchain hashes Do Not Match")
+					t.Fatalf("Newchain hashes Do Not Match %s %s", ev.NewChain[j].Hash(), expect.Added[j])
 				}
 			}
 		case <-time.After(2 * time.Second):
@@ -92,6 +92,8 @@ func TestChain2HeadEvent(t *testing.T) {
 	readEvent(&eventTest{
 		Type: Chain2HeadCanonicalEvent,
 		Added: []common.Hash{
+			chain[0].Hash(),
+			chain[1].Hash(),
 			chain[2].Hash(),
 		}})
 
@@ -129,6 +131,8 @@ func TestChain2HeadEvent(t *testing.T) {
 	readEvent(&eventTest{
 		Type: Chain2HeadCanonicalEvent,
 		Added: []common.Hash{
+			replacementBlocks[2].Hash(),
 			replacementBlocks[3].Hash(),
 		}})
+
 }

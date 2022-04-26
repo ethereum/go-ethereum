@@ -228,7 +228,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:  "txlookuplimit",
-		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
+		Usage: "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
 		Value: &c.cliConfig.Cache.TxLookupLimit,
 	})
 

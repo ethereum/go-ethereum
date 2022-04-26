@@ -1381,12 +1381,6 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			for _, data := range bc.stateSyncData {
 				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 			}
-
-			bc.chain2HeadFeed.Send(Chain2HeadEvent{
-				Type:     Chain2HeadCanonicalEvent,
-				NewChain: []*types.Block{block},
-			})
-
 			// BOR
 		}
 	} else {
@@ -1479,11 +1473,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
-
-			bc.chain2HeadFeed.Send(Chain2HeadEvent{
-				Type:     Chain2HeadCanonicalEvent,
-				NewChain: []*types.Block{lastCanon},
-			})
 		}
 	}()
 	// Start the parallel header verifier
@@ -1598,6 +1587,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			activeState.StopPrefetcher()
 		}
 	}()
+
+	// accumulator for canonical blocks
+	var canonAccum []*types.Block
+
+	emitAccum := func() {
+		size := len(canonAccum)
+		if size == 0 || size > 5 {
+			// avoid reporting events for large sync events
+			return
+		}
+		bc.chain2HeadFeed.Send(Chain2HeadEvent{
+			Type:     Chain2HeadCanonicalEvent,
+			NewChain: canonAccum,
+		})
+		canonAccum = canonAccum[:0]
+	}
 
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
@@ -1755,6 +1760,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		if !setHead {
 			return it.index, nil // Direct block insertion of a single block
 		}
+
+		// BOR
+		if status == CanonStatTy {
+			canonAccum = append(canonAccum, block)
+		} else {
+			emitAccum()
+		}
+		// BOR
+
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1782,6 +1796,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				"root", block.Root())
 		}
 	}
+
+	// BOR
+	emitAccum()
+	// BOR
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
