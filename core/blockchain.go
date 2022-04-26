@@ -2088,15 +2088,21 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 }
 
 // SetChainHead rewinds the chain to set the new head block as the specified
-// block. It's possible that after the reorg the relevant state of head
-// is missing. It can be fixed by inserting a new block which triggers
-// the re-execution.
+// block. It's possible that the state of the new head is missing, and it will
+// be recovered in this function as well.
 func (bc *BlockChain) SetChainHead(head *types.Block) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
+	// Re-execute the reorged chain in case the head state is missing.
+	if !bc.HasState(head.Root()) {
+		if err := bc.recoverAncestors(head); err != nil {
+			return err
+		}
+		log.Debug("Recovered head state", "number", head.Number(), "hash", head.Hash())
+	}
 	// Run the reorg if necessary and set the given block as new head.
 	start := time.Now()
 	if head.ParentHash() != bc.CurrentBlock().Hash() {
@@ -2106,14 +2112,6 @@ func (bc *BlockChain) SetChainHead(head *types.Block) error {
 	}
 	bc.writeHeadBlock(head)
 
-	// Re-execute the reorged chain in case the head state is missing.
-	// It should be done before firing events.
-	if !bc.HasState(head.Root()) {
-		if err := bc.recoverAncestors(head); err != nil {
-			return err
-		}
-		log.Debug("Recovered head state", "number", head.Number(), "hash", head.Hash())
-	}
 	// Emit events
 	logs := bc.collectLogs(head.Hash(), false)
 	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
