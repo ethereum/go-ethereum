@@ -140,8 +140,9 @@ const schema string = `
         # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
-        # binary encoding of the receipts
-        receiptsBinary: Bytes!
+        # RawReceipt is the binary encoding of the receipt. For post EIP-2718 typed transactions
+		# this is equivalent to TxType || ReceiptEncoding.
+        rawReceipt: Bytes!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied

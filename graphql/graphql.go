@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -515,7 +514,7 @@ func (t *Transaction) V(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*v), nil
 }
 
-func (t *Transaction) ReceiptsBinary(ctx context.Context) (hexutil.Bytes, error) {
+func (t *Transaction) RawReceipt(ctx context.Context) (hexutil.Bytes, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
