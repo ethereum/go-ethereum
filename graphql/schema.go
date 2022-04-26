@@ -141,7 +141,7 @@ const schema string = `
         type: Int
         accessList: [AccessTuple!]
         # RawReceipt is the binary encoding of the receipt. For post EIP-2718 typed transactions
-		# this is equivalent to TxType || ReceiptEncoding.
+        # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
     }
 
