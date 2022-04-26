@@ -263,8 +263,12 @@ func verifyState(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Verified the state", "root", root)
-	if err := checkDangling(chaindb, snaptree.Snapshot(root)); err != nil {
-		log.Error("Dangling snap storage check failed", "root", root, "err", err)
+	if err := checkDanglingDiskStorage(chaindb); err != nil {
+		log.Error("Dangling snap disk-storage check failed", "root", root, "err", err)
+		return err
+	}
+	if err := checkDanglingMemStorage(chaindb); err != nil {
+		log.Error("Dangling snap mem-storage check failed", "root", root, "err", err)
 		return err
 	}
 	return nil
@@ -277,33 +281,17 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
-	headBlock := rawdb.ReadHeadBlock(chaindb)
-	if headBlock == nil {
-		log.Error("Failed to load head block")
-		return errors.New("no head block")
-	}
-	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, headBlock.Root(), false, false, false)
-	if err != nil {
-		log.Error("Failed to open snapshot tree", "err", err)
+	if err := checkDanglingDiskStorage(chaindb); err != nil {
 		return err
 	}
-	if ctx.NArg() > 1 {
-		log.Error("Too many arguments given")
-		return errors.New("too many arguments")
-	}
-	var root = headBlock.Root()
-	if ctx.NArg() == 1 {
-		root, err = parseRoot(ctx.Args()[0])
-		if err != nil {
-			log.Error("Failed to resolve state root", "err", err)
-			return err
-		}
-	}
-	return checkDangling(chaindb, snaptree.Snapshot(root))
+	return checkDanglingMemStorage(chaindb)
+
 }
 
-func checkDangling(chaindb ethdb.Database, snap snapshot.Snapshot) error {
-	log.Info("Checking dangling snapshot storage")
+// checkDanglingDiskStorage checks if there is any 'dangling' storage data in the
+// disk-backed snapshot layer.
+func checkDanglingDiskStorage(chaindb ethdb.Database) error {
+	log.Info("Checking dangling snapshot disk storage")
 	var (
 		lastReport = time.Now()
 		start      = time.Now()
@@ -323,17 +311,24 @@ func checkDangling(chaindb ethdb.Database, snap snapshot.Snapshot) error {
 			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
-		data, err := snap.AccountRLP(common.BytesToHash(accKey))
-		if err != nil {
-			log.Error("Error loading snap storage data", "account", fmt.Sprintf("%#x", accKey), "err", err)
-			return err
-		}
-		if len(data) == 0 {
+		if data := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
 			log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
 			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
 		}
 	}
-	log.Info("Verified the snapshot storage", "root", snap.Root(), "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+	log.Info("Verified the snapshot disk storage", "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+	return nil
+}
+
+// checkDanglingMemStorage checks if there is any 'dangling' storage in the journalled
+// snapshot difflayers.
+func checkDanglingMemStorage(chaindb ethdb.Database) error {
+	start := time.Now()
+	log.Info("Checking dangling snapshot difflayer journalled storage")
+	if err := snapshot.CheckJournalStorage(chaindb); err != nil {
+		return err
+	}
+	log.Info("Verified the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 
