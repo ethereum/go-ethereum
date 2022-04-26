@@ -58,8 +58,8 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gc-mode,optional"`
 
-	// XXX
-	Snapshot bool `hcl:"snapshot,optional"`
+	// NoSnapshot disbales the snapshot database mode
+	NoSnapshot bool `hcl:"no-snapshot,optional"`
 
 	// Ethstats is the address of the ethstats server to send telemetry
 	Ethstats string `hcl:"ethstats,optional"`
@@ -406,27 +406,27 @@ func DefaultConfig() *Config {
 			URL:     "http://localhost:1317",
 			Without: false,
 		},
-		SyncMode: "full",
-		GcMode:   "full",
-		Snapshot: true,
+		SyncMode:   "full",
+		GcMode:     "full",
+		NoSnapshot: false,
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
 			Journal:      "",
 			Rejournal:    time.Duration(1 * time.Hour),
-			PriceLimit:   1,
+			PriceLimit:   30000000000,
 			PriceBump:    10,
 			AccountSlots: 16,
-			GlobalSlots:  4096,
-			AccountQueue: 64,
-			GlobalQueue:  1024,
+			GlobalSlots:  32768,
+			AccountQueue: 16,
+			GlobalQueue:  32768,
 			LifeTime:     time.Duration(3 * time.Hour),
 		},
 		Sealer: &SealerConfig{
 			Enabled:   false,
 			Etherbase: "",
 			GasCeil:   8000000,
-			GasPrice:  big.NewInt(params.GWei),
+			GasPrice:  big.NewInt(30 * params.GWei),
 			ExtraData: "",
 		},
 		Gpo: &GpoConfig{
@@ -443,11 +443,11 @@ func DefaultConfig() *Config {
 			GasCap:     ethconfig.Defaults.RPCGasCap,
 			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
 			Http: &APIConfig{
-				Enabled: true,
+				Enabled: false,
 				Port:    8545,
 				Prefix:  "",
 				Host:    "localhost",
-				Modules: []string{"eth", "web3", "net"},
+				Modules: []string{"eth", "net", "web3", "txpool", "bor"},
 			},
 			Ws: &APIConfig{
 				Enabled: false,
@@ -805,7 +805,7 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 	}
 
 	// snapshot disable check
-	if c.Snapshot {
+	if c.NoSnapshot {
 		if n.SyncMode == downloader.SnapSync {
 			log.Info("Snap sync requested, enabling --snapshot")
 		} else {
@@ -867,6 +867,10 @@ func (c *Config) buildNode() (*node.Config, error) {
 		cfg.P2P.ListenAddr = ""
 		cfg.P2P.NoDial = true
 		cfg.P2P.DiscoveryV5 = false
+
+		// enable JsonRPC HTTP API
+		c.JsonRPC.Http.Enabled = true
+		cfg.HTTPModules = []string{"admin", "debug", "eth", "miner", "net", "personal", "txpool", "web3", "bor"}
 	}
 
 	// enable jsonrpc endpoints
@@ -921,6 +925,11 @@ func (c *Config) Merge(cc ...*Config) error {
 	for _, elem := range cc {
 		if err := mergo.Merge(c, elem, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
 			return fmt.Errorf("failed to merge configurations: %v", err)
+		}
+
+		// override max peers
+		if elem.P2P.MaxPeers == 0 {
+			c.P2P.MaxPeers = 0
 		}
 	}
 	return nil

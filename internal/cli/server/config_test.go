@@ -22,8 +22,8 @@ func TestConfigDefault(t *testing.T) {
 
 func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
-		Chain:    "0",
-		Snapshot: true,
+		Chain:      "0",
+		NoSnapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 		},
@@ -53,8 +53,8 @@ func TestConfigMerge(t *testing.T) {
 		},
 	}
 	expected := &Config{
-		Chain:    "1",
-		Snapshot: true,
+		Chain:      "1",
+		NoSnapshot: true,
 		Whitelist: map[string]string{
 			"a": "b",
 			"b": "c",
@@ -70,6 +70,28 @@ func TestConfigMerge(t *testing.T) {
 					"b",
 				},
 			},
+		},
+	}
+	assert.NoError(t, c0.Merge(c1))
+	assert.Equal(t, c0, expected)
+}
+
+func TestDefaultDatatypeOverride(t *testing.T) {
+	// This test is specific to `maxpeers` flag (for now) to check
+	// if default datatype value (0 in case of uint64) is overridden.
+	c0 := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 30,
+		},
+	}
+	c1 := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 0,
+		},
+	}
+	expected := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 0,
 		},
 	}
 	assert.NoError(t, c0.Merge(c1))
