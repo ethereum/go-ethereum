@@ -1972,7 +1972,7 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
 }
 
-// Get returns the raw value of a key stored in the database.
+// DbGet returns the raw value of a key stored in the database.
 func (api *PrivateDebugAPI) DbGet(key string) (hexutil.Bytes, error) {
 	blob, err := common.ParseHexOrString(key)
 	if err != nil {
