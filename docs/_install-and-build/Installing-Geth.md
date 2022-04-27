@@ -262,7 +262,7 @@ docker run -it -p 30303:30303 ethereum/client-go
 
 ### Most Linux systems and macOS
 
-Go Ethereum is written in [Go][go], so to building from source code requires the most recent version of Go to be installed. Instructions for installing GO are available at the [Go installation page][go-install] and necessary bundles can be downlaoded from the [Go download page][go-dl].
+Geth is written in [Go][go], so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page][go-install] and necessary bundles can be downloaded from the [Go download page][go-dl].
 
 With Go installed, Geth can be downloaded into a `GOPATH` workspace via:
 
