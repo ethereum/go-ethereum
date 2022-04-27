@@ -1328,14 +1328,22 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)
-
 			hashes = append(hashes, hash)
 			paths = append(paths, pathset)
 			pathsets = append(pathsets, [][]byte(pathset)) // TODO(karalabe): group requests by account hash
-
 			if len(hashes) >= cap {
 				break
 			}
+		}
+		{ // Group requests by account hash
+			data, _ := rlp.EncodeToBytes(pathsets)
+
+			n := &healRequestSort{hashes, paths, pathsets}
+			sort.Sort(n)
+			n.Merge()
+			hashes, paths, pathsets = n.hashes, n.paths, n.pathsets
+			data2, _ := rlp.EncodeToBytes(pathsets)
+			log.Info("trie heal request size", "original", len(data), "merged", len(data2), "saved", len(data)-len(data2))
 		}
 		req := &trienodeHealRequest{
 			peer:    idle,
@@ -2908,3 +2916,75 @@ func (s *capacitySort) Swap(i, j int) {
 	s.ids[i], s.ids[j] = s.ids[j], s.ids[i]
 	s.caps[i], s.caps[j] = s.caps[j], s.caps[i]
 }
+
+// healRequestSort implements the Sort interface, allowing sorting trienode
+// heal requests, which is a prerequisite for merging storage-requests.
+type healRequestSort struct {
+	hashes   []common.Hash
+	paths    []trie.SyncPath
+	pathsets []TrieNodePathSet
+}
+
+func (t *healRequestSort) Len() int {
+	return len(t.hashes)
+}
+
+func (t *healRequestSort) Less(i, j int) bool {
+	// 1-tuple is smaller than 2-tuple
+	a := t.paths[i]
+	b := t.paths[j]
+	switch bytes.Compare(a[0], b[0]) {
+	case -1:
+		return true
+	case 1:
+		return false
+	}
+	// identical first part
+	if len(a) < len(b) {
+		return true
+	}
+	if len(b) < len(a) {
+		return false
+	}
+	if len(a) == 2 {
+		return bytes.Compare(a[1], b[1]) < 0
+	}
+	return false
+}
+
+func (t *healRequestSort) Swap(i, j int) {
+	t.hashes[i], t.hashes[j] = t.hashes[j], t.hashes[i]
+	t.paths[i], t.paths[j] = t.paths[j], t.paths[i]
+	t.pathsets[i], t.pathsets[j] = t.pathsets[j], t.pathsets[i]
+}
+
+// Merge merges the pathsets, so that several storage requests concerning the
+// same account are merged into one, to reduce bandwidth.
+// OBS: This operation is moot if t has not first been sorted.
+func (t *healRequestSort) Merge() {
+	var nPathset []TrieNodePathSet
+	var last TrieNodePathSet
+
+	for _, pSet := range t.pathsets {
+		if len(pSet) == 1 {
+			nPathset = append(nPathset, pSet)
+			last = nil
+			continue
+		}
+		if last != nil && bytes.Equal(pSet[0], last[0]) {
+			// we can merge this into the last one
+			last = append(last, pSet[1])
+			nPathset[len(nPathset)-1] = last
+		} else {
+			nPathset = append(nPathset, pSet)
+			last = pSet
+		}
+	}
+	t.pathsets = nPathset
+}
+
+//func groupRequests(hashes []common.Hash, paths []trie.SyncPath, pathsets []TrieNodePathSet) {
+//	t := &healRequestSort{ hashes, paths, pathsets}
+//	// start by sorting them
+//	sort.Sort(t)
+//}
