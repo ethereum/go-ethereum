@@ -136,7 +136,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### FreeBSD via ports
 
-Installing Geth using ports, simpyl requires navigating to the `net-p2p/go-ethereum` ports directory and running `make install` as root:
+Installing Geth using ports, simply requires navigating to the `net-p2p/go-ethereum` ports directory and running `make install` as root:
 
 <br>
 ```shell
