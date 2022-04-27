@@ -1337,7 +1337,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		// Maintain compatibility with older Geth configurations storing the
 		// Ropsten database in `testnet` instead of `ropsten`.
 		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
-		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		if common.FileExist(legacyPath) {
 			log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
 			cfg.DataDir = legacyPath
 		} else {
