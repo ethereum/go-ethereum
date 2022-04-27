@@ -1124,7 +1124,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 
 	// Fill pending transactions from the txpool
 	err = w.fillTransactions(interrupt, work)
-	if err != nil && !errors.Is(err, errBlockInterruptedByRecommit) {
+	if errors.Is(err, errBlockInterruptedByNewHead) {
 		work.discard()
 		return
 	}
