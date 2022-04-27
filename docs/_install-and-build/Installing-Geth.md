@@ -40,7 +40,7 @@ brew install ethereum --devel
 ```
 <br>
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
@@ -57,7 +57,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### Ubuntu via PPAs
 
-The easiest way to install Geth on Ubuntu-based distributions is with the built-in launchpad PPAs (Personal Package Archives). A single PPA repository is provided, containing stable and development releases for Ubuntu versions `trusty`, `xenial`, `zesty` and `artful`.
+The easiest way to install Geth on Ubuntu-based distributions is with the built-in launchpad PPAs (Personal Package Archives). A single PPA repository is provided, containing stable and development releases for Ubuntu versions `xenial`, `trusty`, `impish`, `focal`, `bionic`.
 
 The following command enables the launchpad repository:
 
@@ -85,7 +85,7 @@ sudo apt-get install ethereum-unstable
 ```
 <br>
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 <br>
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
@@ -103,7 +103,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### Windows
 
-The easiest way to install Geth is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed in the terminal by running `geth --help`.
+The easiest way to install Geth is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version followign the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
@@ -120,7 +120,7 @@ pkg install go-ethereum
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. 
 
-The full list of command line options can be viewed in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
@@ -147,7 +147,7 @@ make install
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. 
 
-The full list of command line options can be viewed in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 
 Updating an existing Geth installation can be achieved by stopping the node and running the following command:
@@ -172,7 +172,7 @@ pacman -S geth
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/bin/`. 
 
-The full list of command line options can be viewed in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation can be achieved by stopping the node and running the following command:
 
@@ -416,6 +416,7 @@ To build a stable release, e.g. v1.9.21, the command `git checkout v1.9.21` retr
 [chocolatey]: https://chocolatey.org
 [geth-releases]: https://github.com/ethereum/go-ethereum/releases
 [geth-readme-exe]: https://github.com/ethereum/go-ethereum#executables
+[geth-cl-options]: https://geth.ethereum.org/docs/interface/command-line-options
 [geth-archlinux]: https://www.archlinux.org/packages/community/x86_64/geth/
 [geth-dl]: ../../downloads/
 
