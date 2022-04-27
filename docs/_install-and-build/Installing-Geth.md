@@ -42,7 +42,7 @@ brew install ethereum --devel
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed in the terminal by running `geth --help`.
 
-Updating an existing geth installation to the latest version can be achieved by stopping the node and running the following commands:
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
 <br>
 ```shell
@@ -88,7 +88,7 @@ sudo apt-get install ethereum-unstable
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed in the terminal by running `geth --help`.
 
 <br>
-Updating an existing geth installation to the latest version can be achieved by stopping the node and running the following commands:
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
 <br>
 ```shell
@@ -105,7 +105,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 The easiest way to install go-ethereum is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed in the terminal by running `geth --help`.
 
-Updating an existing geth installation can be achieved by stopping the node, downloading and installing the latest version followign the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version followign the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
 ### FreeBSD via pkg
 
@@ -123,7 +123,7 @@ These commands install the core Geth software and the following developer tools:
 The full list of command line options can be viewed in the terminal by running `geth --help`.
 
 
-Updating an existing geth installation to the latest version can be achieved by stopping the node and running the following commands:
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
 <br>
 ```shell
@@ -162,7 +162,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### Arch Linux via pacman
 
-The `geth` package is available from the [community repo][geth-archlinux]. It can be installed by running:
+The Geth package is available from the [community repo][geth-archlinux]. It can be installed by running:
 
 <br>
 ```shell
@@ -389,9 +389,9 @@ make geth
 ```
 <br>
 
-These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
+These commands create a Geth executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
 
-To update an existing geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth Github repository. then rebuild and restart the node.
+To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth Github repository. then rebuild and restart the node.
 
 <br>
 ```shell
