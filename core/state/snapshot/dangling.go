@@ -48,10 +48,6 @@ func NewDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) 
 	}
 	r.result, r.duration = r.detect(report)
 
-	// Update metrics
-	snapDanglingStoragesCounter.Inc(int64(len(r.result)))
-	snapDanglingStoragesTimer.Update(r.duration)
-
 	if len(r.result) > 0 {
 		log.Warn("Detected dangling storages", "number", len(r.result), "start", hexutil.Encode(start), "limit", hexutil.Encode(limit), "elapsed", common.PrettyDuration(r.duration))
 	} else {
