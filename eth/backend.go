@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
+	beaconTypes "github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
@@ -86,6 +87,9 @@ type Ethereum struct {
 	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
 	closeBloomHandler chan struct{}
+
+	newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block)
+	forkchoiceHook     func(*beaconTypes.PayloadAttributesV1)
 
 	APIBackend *EthAPIBackend
 
@@ -378,6 +382,27 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 		}
 	}
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+}
+
+func (s *Ethereum) SetSealedBlockHook(newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block)) {
+	s.newSealedBlockHook = newSealedBlockHook
+}
+
+func (s *Ethereum) NewSealedBlock(data *beaconTypes.ExecutableDataV1, block *types.Block) {
+	if s.newSealedBlockHook != nil {
+		s.newSealedBlockHook(data, block)
+	}
+}
+
+func (s *Ethereum) SetForkchoiceHook(forkchoiceHook func(*beaconTypes.PayloadAttributesV1)) {
+	s.forkchoiceHook = forkchoiceHook
+}
+
+func (s *Ethereum) ForkchoiceHook(payloadAttributes *beaconTypes.PayloadAttributesV1) {
+	// Possibly modifies payloadAttributes's fee recipient
+	if s.forkchoiceHook != nil {
+		s.forkchoiceHook(payloadAttributes)
+	}
 }
 
 // isLocalBlock checks whether the specified block is mined

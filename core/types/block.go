@@ -168,6 +168,8 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 
+	Profit *big.Int
+
 	// caches
 	hash atomic.Value
 	size atomic.Value

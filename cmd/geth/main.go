@@ -155,6 +155,16 @@ var (
 		configFileFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
+	builderApiFlags = []cli.Flag{
+		utils.BuilderEnableValidatorChecks,
+		utils.BuilderSecretKey,
+		utils.BuilderListenAddr,
+		utils.BuilderGenesisForkVersion,
+		utils.BuilderBellatrixForkVersion,
+		utils.BuilderGenesisValidatorsRoot,
+		utils.BuilderBeaconEndpoint,
+	}
+
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
 		utils.HTTPListenAddrFlag,
@@ -244,6 +254,7 @@ func init() {
 
 	app.Flags = utils.GroupFlags(nodeFlags,
 		rpcFlags,
+		builderApiFlags,
 		consoleFlags,
 		debug.Flags,
 		metricsFlags)

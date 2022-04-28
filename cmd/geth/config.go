@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
+	builder "github.com/ethereum/go-ethereum/builder"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -162,7 +163,17 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = utils.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
 	}
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+
+	bpConfig := &builder.BuilderConfig{
+		EnableValidatorChecks: ctx.GlobalIsSet(utils.BuilderEnableValidatorChecks.Name),
+		SecretKey:             ctx.GlobalString(utils.BuilderSecretKey.Name),
+		ListenAddr:            ctx.GlobalString(utils.BuilderListenAddr.Name),
+		GenesisForkVersion:    ctx.GlobalString(utils.BuilderGenesisForkVersion.Name),
+		BellatrixForkVersion:  ctx.GlobalString(utils.BuilderBellatrixForkVersion.Name),
+		GenesisValidatorsRoot: ctx.GlobalString(utils.BuilderGenesisValidatorsRoot.Name),
+		BeaconEndpoint:        ctx.GlobalString(utils.BuilderBeaconEndpoint.Name),
+	}
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth, bpConfig)
 	// Warn users to migrate if they have a legacy freezer format.
 	if eth != nil && !ctx.GlobalIsSet(utils.IgnoreLegacyReceiptsFlag.Name) {
 		firstIdx := uint64(0)

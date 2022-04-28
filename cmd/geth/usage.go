@@ -190,6 +190,18 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		},
 	},
 	{
+		Name: "BUILDER API",
+		Flags: []cli.Flag{
+			utils.BuilderEnableValidatorChecks,
+			utils.BuilderSecretKey,
+			utils.BuilderListenAddr,
+			utils.BuilderGenesisForkVersion,
+			utils.BuilderBellatrixForkVersion,
+			utils.BuilderGenesisValidatorsRoot,
+			utils.BuilderBeaconEndpoint,
+		},
+	},
+	{
 		Name: "GAS PRICE ORACLE",
 		Flags: []cli.Flag{
 			utils.GpoBlocksFlag,

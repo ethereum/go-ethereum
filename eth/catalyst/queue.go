@@ -47,7 +47,7 @@ type payload struct {
 
 // resolve extracts the generated full block from the given channel if possible
 // or fallback to empty block as an alternative.
-func (req *payload) resolve() *beacon.ExecutableDataV1 {
+func (req *payload) resolve() (*beacon.ExecutableDataV1, *types.Block) {
 	// this function can be called concurrently, prevent any
 	// concurrency issue in the first place.
 	req.lock.Lock()
@@ -71,9 +71,9 @@ func (req *payload) resolve() *beacon.ExecutableDataV1 {
 	}
 
 	if req.block != nil {
-		return beacon.BlockToExecutableData(req.block)
+		return beacon.BlockToExecutableData(req.block), req.block
 	}
-	return beacon.BlockToExecutableData(req.empty)
+	return beacon.BlockToExecutableData(req.empty), req.empty
 }
 
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
@@ -120,7 +120,8 @@ func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
 			return nil // no more items
 		}
 		if item.id == id {
-			return item.data.resolve()
+			data, _ := item.data.resolve()
+			return data
 		}
 	}
 	return nil

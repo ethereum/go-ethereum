@@ -86,7 +86,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	api.forkChoiceLock.Lock()
 	defer api.forkChoiceLock.Unlock()
 
-	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
+	log.Info("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
+
+	// Adjusts payload attributes to next slot's validator preferences
+	api.eth.ForkchoiceHook(payloadAttributes)
+
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -194,20 +198,24 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		// Create an empty block first which can be used as a fallback
-		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
+		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.GasLimit, payloadAttributes.Random, true)
 		if err != nil {
 			log.Error("Failed to create empty sealing payload", "err", err)
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		// Send a request to generate a full block in the background.
 		// The result can be obtained via the returned channel.
-		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
+		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.GasLimit, payloadAttributes.Random, false)
 		if err != nil {
 			log.Error("Failed to create async sealing payload", "err", err)
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
+		resultPayload := &payload{empty: empty, result: resCh}
+		api.localBlocks.put(id, resultPayload)
+		go func() {
+			api.eth.NewSealedBlock(resultPayload.resolve())
+		}()
 		return valid(&id), nil
 	}
 	return valid(nil), nil
