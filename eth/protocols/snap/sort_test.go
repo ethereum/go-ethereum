@@ -2,7 +2,6 @@ package snap
 
 import (
 	"fmt"
-	"sort"
 	"testing"
 
 	"bytes"
@@ -35,7 +34,11 @@ func TestRequestSorting(t *testing.T) {
 		hash := common.Hash{}
 		return sp, tnps, hash
 	}
-	var test = new(healRequestSort)
+	var (
+		hashes   []common.Hash
+		paths    []trie.SyncPath
+		pathsets []TrieNodePathSet
+	)
 	for _, x := range []string{
 		"0x9",
 		"0x012345678901234567890123456789010123456789012345678901234567890195",
@@ -49,15 +52,14 @@ func TestRequestSorting(t *testing.T) {
 		"0x01234567890123456789012345678901012345678901234567890123456789011",
 	} {
 		sp, tnps, hash := f(x)
-		test.hashes = append(test.hashes, hash)
-		test.paths = append(test.paths, sp)
-		test.pathsets = append(test.pathsets, tnps)
+		hashes = append(hashes, hash)
+		paths = append(paths, sp)
+		pathsets = append(pathsets, tnps)
 	}
-	sort.Sort(test)
-	test.Merge()
+	hashes, paths, pathsets = sortByAccountPath(hashes, paths, pathsets)
 	var b = new(bytes.Buffer)
-	for i := 0; i < len(test.pathsets); i++ {
-		fmt.Fprintf(b, "\n%d. pathset %x", i, test.pathsets[i])
+	for i := 0; i < len(pathsets); i++ {
+		fmt.Fprintf(b, "\n%d. pathset %x", i, pathsets[i])
 	}
 	want := `
 0. pathset [0099]

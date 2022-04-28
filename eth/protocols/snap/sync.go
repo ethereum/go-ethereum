@@ -1328,23 +1328,17 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 		)
 		for hash, pathset := range s.healer.trieTasks {
 			delete(s.healer.trieTasks, hash)
+
 			hashes = append(hashes, hash)
 			paths = append(paths, pathset)
-			pathsets = append(pathsets, [][]byte(pathset)) // TODO(karalabe): group requests by account hash
+			pathsets = append(pathsets, [][]byte(pathset))
+
 			if len(hashes) >= cap {
 				break
 			}
 		}
-		{ // Group requests by account hash
-			data, _ := rlp.EncodeToBytes(pathsets)
-
-			n := &healRequestSort{hashes, paths, pathsets}
-			sort.Sort(n)
-			n.Merge()
-			hashes, paths, pathsets = n.hashes, n.paths, n.pathsets
-			data2, _ := rlp.EncodeToBytes(pathsets)
-			log.Info("trie heal request size", "original", len(data), "merged", len(data2), "saved", len(data)-len(data2))
-		}
+		// Group requests by account hash
+		hashes, paths, pathsets = sortByAccountPath(hashes, paths, pathsets)
 		req := &trienodeHealRequest{
 			peer:    idle,
 			id:      reqid,
@@ -2983,8 +2977,9 @@ func (t *healRequestSort) Merge() {
 	t.pathsets = nPathset
 }
 
-//func groupRequests(hashes []common.Hash, paths []trie.SyncPath, pathsets []TrieNodePathSet) {
-//	t := &healRequestSort{ hashes, paths, pathsets}
-//	// start by sorting them
-//	sort.Sort(t)
-//}
+func sortByAccountPath(hashes []common.Hash, paths []trie.SyncPath, pathsets []TrieNodePathSet) ([]common.Hash, []trie.SyncPath, []TrieNodePathSet) {
+	n := &healRequestSort{hashes, paths, pathsets}
+	sort.Sort(n)
+	n.Merge()
+	return n.hashes, n.paths, n.pathsets
+}
