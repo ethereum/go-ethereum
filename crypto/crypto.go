@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -73,10 +74,21 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 	return h
 }
 
+var keccakStatePool = &sync.Pool{
+	New: func() interface{} {
+		return NewKeccakState()
+	},
+}
+
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
+	d := keccakStatePool.Get().(KeccakState)
+	defer func() {
+		d.Reset()
+		keccakStatePool.Put(d)
+	}()
+
 	b := make([]byte, 32)
-	d := NewKeccakState()
 	for _, b := range data {
 		d.Write(b)
 	}
@@ -87,7 +99,12 @@ func Keccak256(data ...[]byte) []byte {
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
-	d := NewKeccakState()
+	d := keccakStatePool.Get().(KeccakState)
+	defer func() {
+		d.Reset()
+		keccakStatePool.Put(d)
+	}()
+
 	for _, b := range data {
 		d.Write(b)
 	}
@@ -95,9 +112,20 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
+var sha3Keccak512Pool = &sync.Pool{
+	New: func() interface{} {
+		return sha3.NewLegacyKeccak512()
+	},
+}
+
 // Keccak512 calculates and returns the Keccak512 hash of the input data.
 func Keccak512(data ...[]byte) []byte {
-	d := sha3.NewLegacyKeccak512()
+	d := sha3Keccak512Pool.Get().(hash.Hash)
+	defer func() {
+		d.Reset()
+		sha3Keccak512Pool.Put(d)
+	}()
+
 	for _, b := range data {
 		d.Write(b)
 	}
