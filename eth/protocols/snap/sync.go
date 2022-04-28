@@ -1331,14 +1331,13 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 			hashes = append(hashes, hash)
 			paths = append(paths, pathset)
-			pathsets = append(pathsets, [][]byte(pathset))
 
 			if len(hashes) >= cap {
 				break
 			}
 		}
 		// Group requests by account hash
-		hashes, paths, pathsets = sortByAccountPath(hashes, paths, pathsets)
+		hashes, paths, pathsets = sortByAccountPath(hashes, paths)
 		req := &trienodeHealRequest{
 			peer:    idle,
 			id:      reqid,
@@ -2914,9 +2913,8 @@ func (s *capacitySort) Swap(i, j int) {
 // healRequestSort implements the Sort interface, allowing sorting trienode
 // heal requests, which is a prerequisite for merging storage-requests.
 type healRequestSort struct {
-	hashes   []common.Hash
-	paths    []trie.SyncPath
-	pathsets []TrieNodePathSet
+	hashes []common.Hash
+	paths  []trie.SyncPath
 }
 
 func (t *healRequestSort) Len() int {
@@ -2924,7 +2922,6 @@ func (t *healRequestSort) Len() int {
 }
 
 func (t *healRequestSort) Less(i, j int) bool {
-	// 1-tuple is smaller than 2-tuple
 	a := t.paths[i]
 	b := t.paths[j]
 	switch bytes.Compare(a[0], b[0]) {
@@ -2949,18 +2946,18 @@ func (t *healRequestSort) Less(i, j int) bool {
 func (t *healRequestSort) Swap(i, j int) {
 	t.hashes[i], t.hashes[j] = t.hashes[j], t.hashes[i]
 	t.paths[i], t.paths[j] = t.paths[j], t.paths[i]
-	t.pathsets[i], t.pathsets[j] = t.pathsets[j], t.pathsets[i]
 }
 
 // Merge merges the pathsets, so that several storage requests concerning the
 // same account are merged into one, to reduce bandwidth.
 // OBS: This operation is moot if t has not first been sorted.
-func (t *healRequestSort) Merge() {
+func (t *healRequestSort) Merge() []TrieNodePathSet {
 	var nPathset []TrieNodePathSet
 	var last TrieNodePathSet
 
-	for _, pSet := range t.pathsets {
-		if len(pSet) == 1 {
+	for _, path := range t.paths {
+		pSet := TrieNodePathSet([][]byte(path))
+		if len(path) == 1 {
 			nPathset = append(nPathset, pSet)
 			last = nil
 			continue
@@ -2974,12 +2971,14 @@ func (t *healRequestSort) Merge() {
 			last = pSet
 		}
 	}
-	t.pathsets = nPathset
+	return nPathset
 }
 
-func sortByAccountPath(hashes []common.Hash, paths []trie.SyncPath, pathsets []TrieNodePathSet) ([]common.Hash, []trie.SyncPath, []TrieNodePathSet) {
-	n := &healRequestSort{hashes, paths, pathsets}
+// sortByAccountPath takes hashes and paths, and sorts them. After that, it generates
+// the TrieNodePaths and merges paths which belongs to the same account path.
+func sortByAccountPath(hashes []common.Hash, paths []trie.SyncPath) ([]common.Hash, []trie.SyncPath, []TrieNodePathSet) {
+	n := &healRequestSort{hashes, paths}
 	sort.Sort(n)
-	n.Merge()
-	return n.hashes, n.paths, n.pathsets
+	pathsets := n.Merge()
+	return n.hashes, n.paths, pathsets
 }

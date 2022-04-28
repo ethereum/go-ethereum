@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package snap
 
 import (
@@ -56,16 +72,38 @@ func TestRequestSorting(t *testing.T) {
 		paths = append(paths, sp)
 		pathsets = append(pathsets, tnps)
 	}
-	hashes, paths, pathsets = sortByAccountPath(hashes, paths, pathsets)
-	var b = new(bytes.Buffer)
-	for i := 0; i < len(pathsets); i++ {
-		fmt.Fprintf(b, "\n%d. pathset %x", i, pathsets[i])
+	hashes, paths, pathsets = sortByAccountPath(hashes, paths)
+	{
+		var b = new(bytes.Buffer)
+		for i := 0; i < len(paths); i++ {
+			fmt.Fprintf(b, "\n%d. paths %x", i, paths[i])
+		}
+		want := `
+0. paths [0099]
+1. paths [0123456789012345678901234567890101234567890123456789012345678901 00]
+2. paths [0123456789012345678901234567890101234567890123456789012345678901 0095]
+3. paths [0123456789012345678901234567890101234567890123456789012345678901 0096]
+4. paths [0123456789012345678901234567890101234567890123456789012345678901 0097]
+5. paths [0123456789012345678901234567890101234567890123456789012345678901 0099]
+6. paths [0123456789012345678901234567890101234567890123456789012345678901 10]
+7. paths [0123456789012345678901234567890101234567890123456789012345678901 11]
+8. paths [0123456789012345678901234567890101234567890123456789012345678901 19]
+9. paths [19]`
+		if have := b.String(); have != want {
+			t.Errorf("have:%v\nwant:%v\n", have, want)
+		}
 	}
-	want := `
+	{
+		var b = new(bytes.Buffer)
+		for i := 0; i < len(pathsets); i++ {
+			fmt.Fprintf(b, "\n%d. pathset %x", i, pathsets[i])
+		}
+		want := `
 0. pathset [0099]
 1. pathset [0123456789012345678901234567890101234567890123456789012345678901 00 0095 0096 0097 0099 10 11 19]
 2. pathset [19]`
-	if have := b.String(); have != want {
-		t.Errorf("have:%v\nwant:%v\n", have, want)
+		if have := b.String(); have != want {
+			t.Errorf("have:%v\nwant:%v\n", have, want)
+		}
 	}
 }
