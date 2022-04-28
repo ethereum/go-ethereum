@@ -93,9 +93,9 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
 			hash := rawdb.ReadCanonicalHash(db, i)
-			header = rawdb.ReadHeader(db, hash, i)
-			if header == nil {
+			if header = rawdb.ReadHeader(db, hash, i); header == nil {
 				b.Fatalf("Error creating bloomBits data")
+				return
 			}
 			bc.AddBloom(uint(i-sectionIdx*sectionSize), header.Bloom)
 		}
@@ -144,9 +144,9 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	db.Close()
 }
 
-var bloomBitsPrefix = []byte("bloomBits-")
-
+//nolint:unused
 func clearBloomBits(db ethdb.Database) {
+	var bloomBitsPrefix = []byte("bloomBits-")
 	fmt.Println("Clearing bloombits data...")
 	it := db.NewIterator(bloomBitsPrefix, nil)
 	for it.Next() {

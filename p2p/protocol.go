@@ -43,21 +43,21 @@ type Protocol struct {
 	// The peer connection is closed when Start returns. It should return
 	// any protocol-level error (such as an I/O error) that is
 	// encountered.
-	Run func(peer *Peer, rw MsgReadWriter) error
+	Run func(peer *Peer, rw MsgReadWriter) error `json:"-"`
 
 	// NodeInfo is an optional helper method to retrieve protocol specific metadata
 	// about the host node.
-	NodeInfo func() interface{}
+	NodeInfo func() interface{} `json:"-"`
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id enode.ID) interface{}
+	PeerInfo func(id enode.ID) interface{} `json:"-"`
 
 	// DialCandidates, if non-nil, is a way to tell Server about protocol-specific nodes
 	// that should be dialed. The server continuously reads nodes from the iterator and
 	// attempts to create connections to them.
-	DialCandidates enode.Iterator
+	DialCandidates enode.Iterator `json:"-"`
 
 	// Attributes contains protocol specific information for the node record.
 	Attributes []enr.Entry

@@ -47,8 +47,6 @@ type InstrumentedService struct {
 
 	startHook func()
 	stopHook  func()
-
-	protocols []p2p.Protocol
 }
 
 func (s *InstrumentedService) Start() error {

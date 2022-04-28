@@ -44,13 +44,14 @@ type rewindTest struct {
 
 	setheadBlock       uint64 // Block number to set head back to
 	expCanonicalBlocks int    // Number of canonical blocks expected to remain in the database (excl. genesis)
-	expSidechainBlocks int    // Number of sidechain blocks expected to remain in the database (excl. genesis)
+	expSidechainBlocks int    // Number of sidechain blocks expected to remain in theheader = rawdb.ReadHeader(db, hash, i) database (excl. genesis)
 	expFrozen          int    // Number of canonical blocks expected to be in the freezer (incl. genesis)
 	expHeadHeader      uint64 // Block number of the expected head header
 	expHeadFastBlock   uint64 // Block number of the expected head fast sync block
 	expHeadBlock       uint64 // Block number of the expected head full block
 }
 
+//nolint:unused
 func (tt *rewindTest) dump(crash bool) string {
 	buffer := new(strings.Builder)
 
