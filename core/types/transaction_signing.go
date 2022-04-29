@@ -330,6 +330,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				tx.GasFeeCap(),
 				tx.Gas(),
 				tx.EncryptedPayload(),
+				tx.BatchIndex(),
 			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad

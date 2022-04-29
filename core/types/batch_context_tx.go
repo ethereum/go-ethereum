@@ -9,6 +9,7 @@ import (
 type BatchContextTx struct {
 	ChainID       *big.Int
 	DecryptionKey []byte
+	BatchIndex    []byte
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -23,6 +24,10 @@ func (tx *BatchContextTx) copy() TxData {
 	if tx.DecryptionKey != nil {
 		cpy.DecryptionKey = make([]byte, len(tx.DecryptionKey))
 		copy(cpy.DecryptionKey, tx.DecryptionKey)
+	}
+	if tx.BatchIndex != nil {
+		cpy.BatchIndex = make([]byte, len(tx.BatchIndex))
+		copy(cpy.BatchIndex, tx.BatchIndex)
 	}
 	return cpy
 }
@@ -42,6 +47,7 @@ func (tx *BatchContextTx) nonce() uint64            { return 0 }
 func (tx *BatchContextTx) to() *common.Address      { return nil }
 func (tx *BatchContextTx) encryptedPayload() []byte { return nil }
 func (tx *BatchContextTx) decryptionKey() []byte    { return tx.DecryptionKey }
+func (tx *BatchContextTx) batchIndex() []byte       { return tx.BatchIndex }
 
 func (tx *BatchContextTx) rawSignatureValues() (v, r, s *big.Int) {
 	return big.NewInt(0), big.NewInt(0), big.NewInt(0)

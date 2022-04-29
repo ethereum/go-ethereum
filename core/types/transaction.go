@@ -311,6 +311,9 @@ func (tx *Transaction) EncryptedPayload() []byte { return tx.inner.encryptedPayl
 // DecryptionKey returns the decryption key of a decryption key transaction.
 func (tx *Transaction) DecryptionKey() []byte { return tx.inner.decryptionKey() }
 
+// BatchIndex returns the batch index (a.k.a sequence number) of a Shutter transaction.
+func (tx *Transaction) BatchIndex() []byte { return tx.inner.batchIndex() }
+
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
