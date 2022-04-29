@@ -4,57 +4,66 @@ permalink: docs/getting-started
 sort_key: A
 ---
 
+This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](install-and-build/installing-geth) pages. The tutorial on this page assumes Geth and the associated developer tools have been installed.
 
-To use Geth, you need to install it first. You can install Geth in various ways that you
-can find in the “[Install and Build](install-and-build/installing-geth)” section. These
-include installing it via your favorite package manager, downloading a standalone
-pre-built binary, running it as a docker container, or building it yourself.
+This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial also uses [Clef](clef/tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team and is intended to eventually replace the account management tool built in to Geth.
 
-We assume you have Geth installed for this guide and are ready to find out how to use it.
-The guide shows you how to create accounts, sync to a network, and send transactions
-between accounts. This guide also uses [Clef](clef/tutorial), our preferred tool for
-signing transactions with Geth.
+## Prerequisites
 
-#### Networks
-
-You can connect a Geth node to several different networks using the network name as an
-argument. These include the main Ethereum network, [a private network](getting-started/private-net) you create,
-and three test networks:
-
-- **Ropsten:** Proof-of-work test network
-- **Rinkeby:** Proof-of-authority test network
-- **Görli:** Proof-of-authority test network
-
-#### Sync modes
-
-You can start Geth in one of three different sync modes using the `--syncmode "<mode>"`
-argument that determines what sort of node it is in the network. These are:
-
-- **Full:** Downloads all blocks (including headers, transactions, and receipts) and
-  generates the state of the blockchain incrementally by executing every block.
-- **Snap:** (Default): Downloads all blocks and a recent version of the state.
-- **Light:** The node only downloads a few recent block headers, and downloads
-  other data on-demand. See this [page](../interface/les) for more info.
-
-For this guide, we will use `light` sync.
-
-### Requirements for following this guide
+In order to get the msot value from the tutorials on this page, the following skills are necessary:
 
 - Experience using the command line
 - Basic knowledge about Ethereum and testnets
 - Basic knowledge about HTTP and JavaScript
 
-## Step 1: Generate accounts
+Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and javascript [here](https://www.javascript.com/learn).
 
-Use the command below to generate an account. When you create a new account with Clef, it
-will generate a new private key, encrypt it according to the [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition),
-and store it in the keystore directory.
+
+## Background
+
+Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being managed by a central server. The information shared between nodes is packaged into discrete blocks. Nodes compete to generate a new block because they are rewarded for doing so in Ethereum's native token, ether (ETH). On receiving a new block, each node adds it to their database. The sequence of discrete blocks is called a "blockchain". The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, it is first necessary to generate an EOA (hereafter, "account").
+
+Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs/accounts/).
+
+
+## Step 1: Generating accounts
+
+There are several methods for generating accounts in Geth. This tutorial demonstrates how to generate accounts using Clef, as this is considered best practise, largely because it decouples the users key management from a specific Geth implementation, making it more modular and flexible. It can also be run from secure USB sticks or virtual machines, offering security benefits. For convenience, this tutorial will execute Clef on the same computer that will also run Geth, although more secure options are available (see [here](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/docs/setup.md)).
+
+If you installed Geth from the source code, it is necessary to run `make all` as opposed to `make geth` to build executable files for the developer tools, including Clef. These executables are saved in `~/go-ethereum/build/bin`. In order to run these executables it is first necessary to navigate to that directory or move the files to a more convenient location to run from, e.g. the top level project directory.
+
+To move the files to the top level directory, open a terminal and run:
+
+Linux: 
 
 ```shell
-clef newaccount --keystore geth-tutorial/keystore
+
+cd ~/go-ethereum
+mv ./build/bin/* ./
+
 ```
 
-It will give you the result below:
+Windows (Powershell):
+
+```shell
+
+Set-Location -Path C:\go-ethereum
+Move-Item C:\go-ethereum\build\bin\* C:\go-ethereum\
+
+```
+
+Note that these are bash commands that run on unix-based operating systems, 
+
+To generate a new account, open a terminal and run the following command:
+
+```shell
+
+clef newaccount --keystore geth-tutorial/keystore
+
+```
+
+
+
 
 ```terminal
 WARNING!
