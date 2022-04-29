@@ -45,6 +45,8 @@ const (
 	LegacyTxType = iota
 	AccessListTxType
 	DynamicFeeTxType
+	ShutterTxType      = 0x50
+	BatchContextTxType = 0x5a
 )
 
 // Transaction is an Ethereum transaction.
@@ -85,6 +87,8 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+
+	TxDataExtension
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -184,6 +188,14 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		return &inner, err
 	case DynamicFeeTxType:
 		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ShutterTxType:
+		var inner ShutterTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case BatchContextTxType:
+		var inner BatchContextTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -292,6 +304,12 @@ func (tx *Transaction) To() *common.Address {
 	cpy := *ito
 	return &cpy
 }
+
+// EncryptedPayload returns the encrypted payload of a Shutter transaction.
+func (tx *Transaction) EncryptedPayload() []byte { return tx.inner.encryptedPayload() }
+
+// DecryptionKey returns the decryption key of a decryption key transaction.
+func (tx *Transaction) DecryptionKey() []byte { return tx.inner.decryptionKey() }
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {
