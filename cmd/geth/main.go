@@ -58,7 +58,7 @@ var (
 	// The app that holds all commands and flags.
 	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
 	// flags that configure the node
-	nodeFlags = append([]cli.Flag{
+	nodeFlags = utils.GroupFlags([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
@@ -152,7 +152,7 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		utils.MinerNotifyFullFlag,
 		configFileFlag,
-	}, utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags)...)
+	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,

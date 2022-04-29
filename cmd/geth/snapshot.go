@@ -60,10 +60,10 @@ var (
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: append([]cli.Flag{
+				Flags: utils.GroupFlags([]cli.Flag{
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
-				}, utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags)...),
+				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot prune-state <state-root>
 will prune historical state data with the help of the state snapshot.
@@ -144,12 +144,12 @@ It's also usable without snapshot enabled.
 				ArgsUsage: "[? <blockHash> | <blockNum>]",
 				Action:    utils.MigrateFlags(dumpState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: append([]cli.Flag{
+				Flags: utils.GroupFlags([]cli.Flag{
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
 					utils.DumpLimitFlag,
-				}, utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags)...),
+				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
 as the backend data source, making this command a lot faster. 
