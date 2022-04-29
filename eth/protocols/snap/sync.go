@@ -2962,14 +2962,14 @@ func (t *healRequestSort) Merge() []TrieNodePathSet {
 			last = nil
 			continue
 		}
-		if last != nil && bytes.Equal(pSet[0], last[0]) {
-			// we can merge this into the last one
-			last = append(last, pSet[1])
-			nPathset[len(nPathset)-1] = last
-		} else {
+		if last == nil || !bytes.Equal(pSet[0], last[0]) {
 			nPathset = append(nPathset, pSet)
 			last = pSet
+			continue
 		}
+		// we can merge this into the last one
+		last = append(last, pSet[1])
+		nPathset[len(nPathset)-1] = last
 	}
 	return nPathset
 }
