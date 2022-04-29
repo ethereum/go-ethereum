@@ -252,8 +252,9 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
-
-	if env := prestate.Env; chainConfig.IsMerged(big.NewInt(int64(env.Number))) {
+	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
+	env := prestate.Env
+	if isMerged {
 		// post-merge:
 		// - random must be supplied
 		// - difficulty must be zero
