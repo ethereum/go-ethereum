@@ -21,6 +21,7 @@ import (
 	"net"
 )
 
+// $$# simplest way to add in capnproto?
 // DialInProc attaches an in-process connection to the given RPC server.
 func DialInProc(handler *Server) *Client {
 	initctx := context.Background()

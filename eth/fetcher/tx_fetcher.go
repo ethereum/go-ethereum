@@ -263,7 +263,9 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // and the fetcher. This method may be called by both transaction broadcasts and
 // direct request replies. The differentiation is important so the fetcher can
 // re-shedule missing transactions as soon as possible.
+// $$#
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
+	log.Info("transactions", "list", txs)
 	// Keep track of all the propagated transactions
 	if direct {
 		txReplyInMeter.Mark(int64(len(txs)))
@@ -271,6 +273,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		txBroadcastInMeter.Mark(int64(len(txs)))
 	}
 	for _, tx := range txs {
+		log.Info("tran$action", "to.Hash()", tx.To().Hash())
+		log.Info("tran$action", "to.Hash()", tx.Nonce())
 		filters.SetTxPeer(tx.Hash(), peer)
 	}
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
@@ -305,7 +309,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		default:
 			otherreject++
 		}
-		if err != nil { 
+		if err != nil {
 			filters.ClearTxTimestamp(txs[i].Hash())
 		}
 		added = append(added, txs[i].Hash())
