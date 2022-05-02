@@ -305,7 +305,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	}
 	if block.Time() <= parent.Time() {
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
-		return api.invalid(errors.New("invalid timestamp")), nil
+		return api.invalid(errors.New("invalid timestamp"), parent), nil
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
@@ -315,7 +315,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		log.Warn("NewPayloadV1: inserting block failed", "error", err)
-		return api.invalid(err), nil
+		return api.invalid(err, parent), nil
 	}
 	// We've accepted a valid payload from the beacon client. Mark the local
 	// chain transitions to notify other subsystems (e.g. downloader) of the
@@ -341,9 +341,13 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 	return out
 }
 
-// invalid returns a response "INVALID" with the latest valid hash set to the current head.
-func (api *ConsensusAPI) invalid(err error) beacon.PayloadStatusV1 {
+// invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
+// if no latestValid block was provided.
+func (api *ConsensusAPI) invalid(err error, latestValid *types.Block) beacon.PayloadStatusV1 {
 	currentHash := api.eth.BlockChain().CurrentHeader().Hash()
+	if latestValid != nil {
+		currentHash = latestValid.Hash()
+	}
 	errorMsg := err.Error()
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
 }
