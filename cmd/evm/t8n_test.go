@@ -203,6 +203,22 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{result: true},
 			expOut: "exp.json",
 		},
+		{ // Test post-merge transition
+			base: "./testdata/24",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Merged", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
+		{ // Test post-merge transition where input is missing random
+			base: "./testdata/24",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env-missingrandom.json", "Merged", "",
+			},
+			output:      t8nOutput{alloc: false, result: false},
+			expExitCode: 3,
+		},
 	} {
 
 		args := []string{"t8n"}
