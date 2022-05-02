@@ -100,6 +100,8 @@ type Ethereum struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
+	closeCh chan struct{} // Channel to signal the background processes to exit
+
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 }
 
@@ -161,6 +163,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		closeCh:           make(chan struct{}),
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 
@@ -252,6 +255,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:         uint64(cacheLimit),
 		EventMux:           eth.eventMux,
 		Checkpoint:         checkpoint,
+		EthAPI:             ethAPI,
 		PeerRequiredBlocks: config.PeerRequiredBlocks,
 	}); err != nil {
 		return nil, err
@@ -584,6 +588,54 @@ func (s *Ethereum) Start() error {
 	}
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
+
+	go s.startCheckpointWhitelistService()
+	return nil
+}
+
+// StartCheckpointWhitelistService starts the goroutine to fetch checkpoints and update the
+// checkpoint whitelist map.
+func (s *Ethereum) startCheckpointWhitelistService() {
+	every := time.Duration(100) * time.Second
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+
+Loop:
+	for {
+		select {
+		case <-ticker.C:
+			err := s.handleWhitelistCheckpoint()
+			if err != nil {
+				log.Warn(err.Error())
+			}
+		case <-s.closeCh:
+			break Loop
+		}
+	}
+}
+
+// handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
+func (s *Ethereum) handleWhitelistCheckpoint() error {
+	var m sync.Mutex
+
+	ethHandler := (*ethHandler)(s.handler)
+
+	if !ethHandler.chain.Engine().(*bor.Bor).WithoutHeimdall {
+		endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint()
+		if err != nil {
+			return err
+		}
+
+		m.Lock()
+		// Update the checkpoint whitelist map.
+		ethHandler.downloader.EnqueueCheckpointWhitelist(endBlockNum, endBlockHash)
+		// If size of checkpoint whitelist map is greater than 10, remove the oldest entry.
+		if len(ethHandler.downloader.GetCheckpointWhitelist()) > 10 {
+			ethHandler.downloader.DequeueCheckpointWhitelist()
+		}
+		m.Unlock()
+	}
+
 	return nil
 }
 
@@ -598,6 +650,9 @@ func (s *Ethereum) Stop() error {
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
+
+	// Close all bg processes
+	close(s.closeCh)
 
 	// closing consensus engine first, as miner has deps on it
 	s.engine.Close()

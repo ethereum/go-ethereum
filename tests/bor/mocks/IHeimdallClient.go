@@ -40,6 +40,29 @@ func (_m *IHeimdallClient) Fetch(path string, query string) (*bor.ResponseWithHe
 	return r0, r1
 }
 
+// FetchLatestCheckpoint provides a mock function with given fields:
+func (_m *IHeimdallClient) FetchLatestCheckpoint() (*bor.Checkpoint, error) {
+	ret := _m.Called()
+
+	var r0 *bor.Checkpoint
+	if rf, ok := ret.Get(0).(func() *bor.Checkpoint); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*bor.Checkpoint)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // FetchStateSyncEvents provides a mock function with given fields: fromID, to
 func (_m *IHeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*bor.EventRecordWithTime, error) {
 	ret := _m.Called(fromID, to)
