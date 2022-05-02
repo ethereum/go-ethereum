@@ -241,11 +241,11 @@ func init() {
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	app.Flags = append(app.Flags, nodeFlags...)
-	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, consoleFlags...)
-	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = utils.GroupFlags(nodeFlags,
+		rpcFlags,
+		consoleFlags,
+		debug.Flags,
+		metricsFlags)
 
 	app.Before = func(ctx *cli.Context) error {
 		return debug.Setup(ctx)
