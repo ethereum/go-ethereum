@@ -179,11 +179,11 @@ class StdIOHandler:
         :return:nothing
         """  # noqa: E501
         message = (
-            "Error: {text}\n"
+            "## Error\n{text}\n"
             "Press enter to continue\n"
         )
         text = req.get("text")
-        sys.stdout.write(message.format(text))
+        sys.stdout.write(message.format(text=text))
         input()
         return
 
@@ -198,11 +198,11 @@ class StdIOHandler:
         :return:nothing
         """  # noqa: E501
         message = (
-            "Info: {text}\n"
+            "## Info\n{text}\n"
             "Press enter to continue\n"
         )
         text = req.get("text")
-        sys.stdout.write(message.format(text))
+        sys.stdout.write(message.format(text=text))
         input()
         return
 
@@ -240,16 +240,19 @@ class StdIOHandler:
         message = (
             "\n"
             "## Account listing request\n"
+            "\t{meta_string}\n"
             "\tDo you want to allow listing the following accounts?\n"
             "\t-{addrs}\n"
             "\n"
             "->Auto-answering No\n"
         )
+        meta = req.get("meta", {})
         accounts = req.get("accounts", [])
         addrs = [x.get("address") for x in accounts]
         sys.stdout.write(
             message.format(
-                addrs="\n\t-".join(addrs)
+                addrs="\n\t-".join(addrs),
+                meta_string=metaString(meta)
             )
         )
         return {}
@@ -273,7 +276,7 @@ class StdIOHandler:
         )
         sys.stdout.write(
             message.format(
-                title=req.get("title")
+                title=req.get("title"),
                 prompt=req.get("prompt")
             )
         )
