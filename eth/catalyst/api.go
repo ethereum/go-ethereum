@@ -200,13 +200,15 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// Create an empty block first which can be used as a fallback
 		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
 		if err != nil {
-			return valid(nil), err
+			log.Error("Failed to create empty sealing payload", "err", err)
+			return valid(nil), &beacon.InvalidPayloadAttributes
 		}
 		// Send a request to generate a full block in the background.
 		// The result can be obtained via the returned channel.
 		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
 		if err != nil {
-			return valid(nil), err
+			log.Error("Failed to create async sealing payload", "err", err)
+			return valid(nil), &beacon.InvalidPayloadAttributes
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
 		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
