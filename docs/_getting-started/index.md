@@ -101,11 +101,11 @@ It is important to save the account address and the password somewhere secure. T
 
 The previous commands used Clef's `newaccount` function to add new key pairs to the keystore. Clef uses the private key(s) saved in the keystore is used to sign transactions. In order to do this, Clef needs to be started and left running while Geth is running simultaneously, so that the two programs can communicate between one another. 
 
-To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config dirctory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial the Chain ID is 11155111 which is for the Sepolia testnet. It is very important that this chain ID parameter is set to 11155111. The following command starts Clef on Sepolia:
+To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config dirctory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial the Chain ID is 5 which is for the Goerli testnet. It is very important that this chain ID parameter is set to 5. The following command starts Clef on Goerli:
 
 ```shell
 
-./clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 11155111
+./clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 
 ```
 
@@ -117,7 +117,7 @@ A successful call will give you the result below:
 INFO [02-10|13:55:30.812] Using CLI as UI-channel
 INFO [02-10|13:55:30.946] Loaded 4byte database                    embeds=146,841 locals=0 local=./4byte-custom.json
 WARN [02-10|13:55:30.947] Failed to open master, rules disabled    err="failed stat on geth-tutorial/clef/masterseed.json: stat geth-tutorial/clef/masterseed.json: no such file or directory"
-INFO [02-10|13:55:30.947] Starting signer                          chainid=11155111 keystore=geth-tutorial/keystore light-kdf=false advanced=false
+INFO [02-10|13:55:30.947] Starting signer                          chainid=5 keystore=geth-tutorial/keystore light-kdf=false advanced=false
 DEBUG[02-10|13:55:30.948] FS scan times                            list="133.35µs" set="5.692µs" diff="3.262µs"
 DEBUG[02-10|13:55:30.970] Ledger support enabled
 DEBUG[02-10|13:55:30.973] Trezor support enabled via HID
@@ -136,13 +136,13 @@ This result indicates that Clef is running. This terminal should be left running
 
 ## Step 3:  Start Geth
 
-Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Sepolia, an Ethereum testnet. testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), signer (points Geth to Clef), the network ID and the sync mode. For this tutorial, snap sync is recommended (see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The final argument passed to Geth is the `--http` flag. This enables the http-rpc server that allows external programs to interact with Geth by sending it http requests. By default the http server is only exposed locally using port 8545: `localhost:8545`.
+Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Goerli, an Ethereum testnet. testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), signer (points Geth to Clef), the network ID and the sync mode. For this tutorial, snap sync is recommended (see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The final argument passed to Geth is the `--http` flag. This enables the http-rpc server that allows external programs to interact with Geth by sending it http requests. By default the http server is only exposed locally using port 8545: `localhost:8545`.
 
 The following command should be run in a new terminal, separate to the one running Clef: 
 
 ```shell
 
-./geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --sepolia --syncmode light --http
+./geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode light --http
 
 ```
 
@@ -150,14 +150,14 @@ Running the above command starts Geth. The terminal should rapidly fill with sta
 
 
 ```terminal
-INFO [02-10|13:59:06.649] Starting Geth on Sepolia testnet...
+INFO [02-10|13:59:06.649] Starting Geth on goerli testnet...
 INFO [02-10|13:59:06.649] Dropping default light client cache      provided=1024 updated=128
 INFO [02-10|13:59:06.652] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [02-10|13:59:06.655] Using external signer                    url=geth-tutorial/clef/clef.ipc
 INFO [02-10|13:59:06.660] Set global gas cap                       cap=50,000,000
 INFO [02-10|13:59:06.661] Allocated cache and file handles         database=/.../geth-tutorial/geth/chaindata cache=64.00MiB handles=5120
 INFO [02-10|13:59:06.855] Persisted trie from memory database      nodes=361 size=51.17KiB time="643.54µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [02-10|13:59:06.855] Initialised chain configuration          config="{ChainID: 11155111 Homestead: 0 DAO: <nil> DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 1561651, Muir Glacier: <nil>, Berlin: 4460644, London: 5062605, Arrow Glacier: <nil>, MergeFork: <nil>, Engine: clique}"
+INFO [02-10|13:59:06.855] Initialised chain configuration          config="{ChainID: 5 Homestead: 0 DAO: <nil> DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 1561651, Muir Glacier: <nil>, Berlin: 4460644, London: 5062605, Arrow Glacier: <nil>, MergeFork: <nil>, Engine: clique}"
 INFO [02-10|13:59:06.862] Added trusted checkpoint                 block=5,799,935 hash=2de018..c32427
 INFO [02-10|13:59:06.863] Loaded most recent local header          number=6,340,934 hash=483cf5..858315 td=9,321,576 age=2d9h29m
 INFO [02-10|13:59:06.867] Configured checkpoint oracle             address=0x18CA0E045F0D772a851BC7e48357Bcaab0a0795D signers=5 threshold=2
@@ -194,34 +194,32 @@ curl http://localhost:8545
 If there is no error message reported to the terminal, everything is OK. Geth must be running in order for a user to interact with the Ethereum network. If this terminal is closed down then Geth must be restarted in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir ... ...`.
 
 
-## Step 4:  Get Goerli Testnet Ether
+## Step 4:  Get Testnet Ether
 
 In order to make some transactions, the user must fund their account with ether. On Ethereum mainnet, ether can only be obtained in three ways: 1) by receiving it as a reward for mining/validating; 2) receiving it in a transfer from another Ethereum user or contract; 3) sending it from an exchange, having paid for it with fiat money. On Ethereum testnets, the ether has no real world value so it can be made freely available via faucets. Faucets allow users to request a transfer of testnet ether to their account.
 
-The address generated by Clef in Step 1 can be pasted into the Goerli ether faucet [here](https://fauceth.komputing.org/?chain=1115511). 
+The address generated by Clef in Step 1 can be pasted into the Paradigm Multifaucet faucet [here](https://fauceth.komputing.org/?chain=1115511). This requires a Twitter login as proof of personhood. The faucets adds ether to the given address on multiple testnets simultaneously, including Goerli. In the next steps Geth will be used to check that the ether has been sent to the given address and send some of it to the second address created earlier.
 
 
 ## Step 5: Interact with Geth via IPC or RPC
 
-For interacting with the blockchain, Geth provides JSON-RPC APIs. A good way to get
-started with the API is by using the Geth JavaScript console. The console gives you a
-JavaScript environment similar to node.js and comes with Geth.
+For interacting with the blockchain, Geth provides JSON-RPC APIs. JSON-RPC is a way to execute specific tasks by sending instructions to Geth in the form of JSON objects. RPC stands for "Remote Procedure Call" and it refers to the ability to send these JSON-encoded instructions from locations outside of those managed by Geth. It is possible to interact with Geth by sending these JSON encoded instructions directly over Geth's exposed http port using tools like `curl`. However, this is somewhat user-unfriendly and error-prone, especially for more complex instructions. For this reason, there are a set of libraries built on top of JSON-RPC that provide a more user-friendly interface for interacting with Geth. One of the most widely used is Web3.js. 
 
-You can connect to the Geth node using HTTP or IPC.
+Geth provides a Javascript console that exposes the web3.js API. This means that with Geth running in one terminal, a Javascript environment can be opened in another allowing the user to interact with Geth using Web3.js. There are two transport protocols that can be used to connect the Javascript environment to Geth:
 
-- IPC (Inter-Process Communication): This provides unrestricted access to all APIs,
-  but only works when you are running the console on the same host as the geth node.
-- HTTP: This connection method provides access to the `eth`, `web3` and `net` method
-  namespaces. We will be using HTTP for this guide.
+- IPC (Inter-Process Communication): This provides unrestricted access to all APIs, but only works when the console is run on the same host as the geth node.
+  
+- HTTP: This connection method provides access to the `eth`, `web3` and `net` method namespaces.
 
-To connect to Geth using the console, open a new terminal and run this command:
+This tutorial will use the HTTP option. Note that the terminals running Geth and Clef should both still be active. In a new (third) terminal, the following command can be run to start the console and connect it to Geth using the exposed http port:
 
 ```shell
-geth attach http://127.0.0.1:8545
+
+./geth attach http://127.0.0.1:8545
+
 ```
 
-The `attach` subcommand starts the console and should print a welcome message similar to
-the text shown below:
+If this command causes the terminal to hang, it may be because it is waiting for approval from Clef. Approving the request in the terminal running Clef will lead to the following welcome message being displayed in the Geth console:
 
 ```terminal
 Welcome to the Geth JavaScript console!
@@ -233,19 +231,8 @@ at block: 6354736 (Thu Feb 10 2022 14:01:46 GMT+0100 (WAT))
 To exit, press ctrl-d or type exit
 ```
 
-### Checking your test account balance.
+The console is now active and connected to Geth. It can now be used to interact with the Ethereum (Goerli) network.
 
-Run this command in the JavaScript console to check the ether balance of the test account:
-
-```javascript
-web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"), "ether")
-```
-
-**Result:**
-
-```terminal
-> 0.1
-```
 
 ### Getting the list of accounts
 
@@ -289,6 +276,23 @@ Now you should get a result in the JavaScript console.
 If you didn't get a result (e.g. an exception was raised), it may be because the account
 listing request timed out while you were entering the password. Just try again in this
 case.
+
+
+### Checking account balance.
+
+Run this command in the JavaScript console to check the ether balance of the test account:
+
+```javascript
+web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"), "ether")
+```
+
+**Result:**
+
+```terminal
+> 0.1
+```
+
+
 
 ### Send ether to another account
 
