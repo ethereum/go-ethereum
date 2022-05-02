@@ -359,6 +359,71 @@ func TestSendTransaction(t *testing.T) {
 	}
 }
 
+func TestCancelTransaction(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+	bgCtx := context.Background()
+
+	// create a signed transaction to send
+	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+
+	original := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
+	signedOriginalTx, err := types.SignTx(original, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+
+	// send tx to simulated backend
+	err = sim.SendTransaction(bgCtx, signedOriginalTx)
+	if err != nil {
+		t.Errorf("could not add tx to pending block: %v", err)
+	}
+
+	// create a signed transaction with same nonce but higher gasPrice
+	override := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, new(big.Int).Mul(gasPrice, big.NewInt(2)), nil)
+	signedOverride, err := types.SignTx(override, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+
+	// send override transaction to simulated backend
+	err = sim.SendTransaction(bgCtx, signedOverride)
+	if err != nil {
+		t.Errorf("could not add tx to pending block: %v", err)
+	}
+
+	// create a signed transaction with same nonce but lower gasPrice that should be ignored
+	ignored := types.NewTransaction(uint64(0), testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
+	signedIgnored, err := types.SignTx(ignored, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Errorf("could not sign tx: %v", err)
+	}
+
+	// send ignored transaction to simulated backend
+	err = sim.SendTransaction(bgCtx, signedIgnored)
+	if err != nil {
+		t.Errorf("could not add tx to pending block: %v", err)
+	}
+
+	sim.Commit()
+
+	block, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
+	if err != nil {
+		t.Errorf("could not get block at height 1: %v", err)
+	}
+
+	if signedOverride.Hash() != block.Transactions()[0].Hash() {
+		t.Errorf("did not commit sent transaction. expected hash %v got hash %v", block.Transactions()[0].Hash(), signedOverride.Hash())
+	}
+
+	if len(block.Transactions()) != 1 {
+		t.Errorf("got %v commited transactions. expected only 1", len(block.Transactions()))
+	}
+}
+
 func TestTransactionByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 

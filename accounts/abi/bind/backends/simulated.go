@@ -657,18 +657,31 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if err != nil {
 		return fmt.Errorf("invalid transaction: %v", err)
 	}
-	nonce := b.pendingState.GetNonce(sender)
-	if tx.Nonce() != nonce {
+	stateDB, _ := b.blockchain.State()
+	nonce := stateDB.GetNonce(sender)
+	if tx.Nonce() < nonce {
 		return fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce)
 	}
 	// Include tx in chain
 	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
-		for _, tx := range b.pendingBlock.Transactions() {
-			block.AddTxWithChain(b.blockchain, tx)
+		var isUnderPriced bool
+		for _, pending := range b.pendingBlock.Transactions() {
+			pendingSender, _ := types.Sender(signer, pending)
+			// Check if tx is canceling a pending tx
+			if pendingSender.Hex() == sender.Hex() && pending.Nonce() == tx.Nonce() {
+				if pending.GasPrice().Cmp(tx.GasPrice()) < 0 {
+					continue
+				} else {
+					isUnderPriced = true
+				}
+			}
+			block.AddTxWithChain(b.blockchain, pending)
+		}
+		if isUnderPriced {
+			return
 		}
 		block.AddTxWithChain(b.blockchain, tx)
 	})
-	stateDB, _ := b.blockchain.State()
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
