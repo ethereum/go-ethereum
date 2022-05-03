@@ -12,6 +12,8 @@
 
 - [```attach```](./attach.md)
 
+- [```bootnode```](./bootnode.md)
+
 - [```chain```](./chain.md)
 
 - [```chain sethead```](./chain_sethead.md)
