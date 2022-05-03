@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 )
@@ -72,4 +73,12 @@ func (x *XDPoS_v2) HygieneTimeoutPoolFaker() {
 
 func (x *XDPoS_v2) GetTimeoutPoolKeyListFaker() []string {
 	return x.timeoutPool.PoolObjKeysList()
+}
+
+// Fake the signer address, the signing function is incompatible
+func (x *XDPoS_v2) AuthorizeFaker(signer common.Address) {
+	x.signLock.Lock()
+	defer x.signLock.Unlock()
+
+	x.signer = signer
 }

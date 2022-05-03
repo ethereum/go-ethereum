@@ -16,14 +16,14 @@ import (
 )
 
 func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 2251, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, 0)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	timeoutMsg := <-engineV2.BroadcastCh
 	poolSize := engineV2.GetTimeoutPoolSizeFaker(timeoutMsg.(*utils.Timeout))
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
-	assert.Equal(t, uint64(1350), timeoutMsg.(*utils.Timeout).GapNumber)
+	assert.Equal(t, uint64(450), timeoutMsg.(*utils.Timeout).GapNumber)
 	assert.Equal(t, utils.Round(1), timeoutMsg.(*utils.Timeout).Round)
 }
 

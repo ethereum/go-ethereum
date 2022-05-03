@@ -15,7 +15,7 @@ import (
 
 func TestHookPenaltyV2Mining(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, _, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, 0)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)
@@ -29,7 +29,8 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	header6300 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch * 7)
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, big.NewInt(int64(config.XDPoS.Epoch*7)), header6300.ParentHash, masternodes)
 	assert.Nil(t, err)
-	// only 1 signer address not in the masternode list
+	// when we prepare the chain, we include all 5 signers as coinbase except one signer
+	// header6300 records 5 masternodes, so penalty contains 5-4=1 address
 	assert.Equal(t, 1, len(penalty))
 	contains := false
 	for _, mn := range common.RemoveItemFromArray(masternodes, penalty) {
@@ -43,20 +44,23 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	assert.Nil(t, err)
 	err = adaptor.EngineV2.ProcessQCFaker(blockchain, extraField.QuorumCert)
 	assert.Nil(t, err)
+	// coinbase is a faker signer
 	headerMining := &types.Header{
 		ParentHash: header6300.ParentHash,
 		Number:     header6300.Number,
 		GasLimit:   params.TargetGasLimit,
 		Time:       header6300.Time,
-		Coinbase:   signer,
+		Coinbase:   acc1Addr,
 	}
 	// Force to make the node to be at its round to mine, otherwise won't pass the yourturn masternodes check
-	// We have 5 nodes in total and the node signer is always at the 4th(last) in the list. Hence int(config.XDPoS.Epoch)*7+4-900, the +4 means is to force to next 4 round and -900 is the relative round number to block number int(config.XDPoS.Epoch)*7
-	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(int(config.XDPoS.Epoch)*7+4-900), false)
+	// We have 19 nodes in total (20 candidates in snapshot - 1 penalty) and the fake signer is always at the 18th(last) in the list. Hence int(config.XDPoS.Epoch)*7+18-900, the +18 means is to force to next 18 round and -900 is the relative round number to block number int(config.XDPoS.Epoch)*7
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(int(config.XDPoS.Epoch)*7+18-900), false)
+	// The test default signer is not in the msaternodes, so we set the faker signer
+	adaptor.EngineV2.AuthorizeFaker(acc1Addr)
 	err = adaptor.Prepare(blockchain, headerMining)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(headerMining.Penalties)/common.AddressLength)
-	// 20 candidates (set by PrepareXDCTestBlockChainForV2Engine) - 3 penalty = 17
+	// 20 candidates (set by PrepareXDCTestBlockChainForV2Engine) - 1 penalty = 19
 	assert.Equal(t, 19, len(headerMining.Validators)/common.AddressLength)
 }
 
