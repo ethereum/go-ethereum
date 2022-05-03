@@ -311,8 +311,23 @@ func (tx *Transaction) EncryptedPayload() []byte { return tx.inner.encryptedPayl
 // DecryptionKey returns the decryption key of a decryption key transaction.
 func (tx *Transaction) DecryptionKey() []byte { return tx.inner.decryptionKey() }
 
-// BatchIndex returns the batch index (a.k.a sequence number) of a Shutter transaction.
+// BatchIndex returns the batch index (a.k.a sequence number) of a Shutter transaction,
+// a uint32 big-endian encoded as 4 bytes.
 func (tx *Transaction) BatchIndex() []byte { return tx.inner.batchIndex() }
+
+// L1BlockNumber returns the Layer 1 block number used for identifying the
+// collator/keyper config
+func (tx *Transaction) L1BlockNumber() *big.Int { return tx.inner.l1BlockNumber() }
+
+// Timestamp returns the timestamp ()
+func (tx *Transaction) Timestamp() *big.Int { return tx.inner.timestamp() }
+
+// ShutterTXs returns the list of RLP-byte serialised ShutterTXs included in the batch
+func (tx *Transaction) ShutterTXs() [][]byte { return tx.inner.shutterTXs() }
+
+// PlainTextTXs returns the list of RLP-byte serialised unencrypted Ethereum transactions
+//included in the batch
+func (tx *Transaction) PlainTextTXs() [][]byte { return tx.inner.plainTextTXs() }
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {

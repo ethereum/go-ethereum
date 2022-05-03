@@ -10,6 +10,10 @@ type BatchContextTx struct {
 	ChainID       *big.Int
 	DecryptionKey []byte
 	BatchIndex    []byte
+	L1BlockNumber *big.Int
+	Timestamp     *big.Int
+	ShutterTXs    [][]byte
+	PlainTextTXs  [][]byte
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -28,6 +32,22 @@ func (tx *BatchContextTx) copy() TxData {
 	if tx.BatchIndex != nil {
 		cpy.BatchIndex = make([]byte, len(tx.BatchIndex))
 		copy(cpy.BatchIndex, tx.BatchIndex)
+	}
+	if tx.PlainTextTXs != nil {
+		cpy.PlainTextTXs = make([][]byte, len(tx.PlainTextTXs))
+		for _, b := range tx.PlainTextTXs {
+			c := make([]byte, len(b))
+			copy(c, b)
+			cpy.PlainTextTXs = append(cpy.PlainTextTXs, c)
+		}
+	}
+	if tx.ShutterTXs != nil {
+		cpy.ShutterTXs = make([][]byte, len(tx.ShutterTXs))
+		for _, b := range tx.ShutterTXs {
+			c := make([]byte, len(b))
+			copy(c, b)
+			cpy.ShutterTXs = append(cpy.ShutterTXs, c)
+		}
 	}
 	return cpy
 }
@@ -48,6 +68,10 @@ func (tx *BatchContextTx) to() *common.Address      { return nil }
 func (tx *BatchContextTx) encryptedPayload() []byte { return nil }
 func (tx *BatchContextTx) decryptionKey() []byte    { return tx.DecryptionKey }
 func (tx *BatchContextTx) batchIndex() []byte       { return tx.BatchIndex }
+func (tx *BatchContextTx) l1BlockNumber() *big.Int  { return tx.L1BlockNumber }
+func (tx *BatchContextTx) timestamp() *big.Int      { return tx.Timestamp }
+func (tx *BatchContextTx) shutterTXs() [][]byte     { return tx.ShutterTXs }
+func (tx *BatchContextTx) plainTextTXs() [][]byte   { return tx.PlainTextTXs }
 
 func (tx *BatchContextTx) rawSignatureValues() (v, r, s *big.Int) {
 	return big.NewInt(0), big.NewInt(0), big.NewInt(0)

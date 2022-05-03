@@ -83,6 +83,10 @@ func (tx *ShutterTx) to() *common.Address      { return nil }
 func (tx *ShutterTx) encryptedPayload() []byte { return tx.EncryptedPayload }
 func (tx *ShutterTx) decryptionKey() []byte    { return nil }
 func (tx *ShutterTx) batchIndex() []byte       { return tx.BatchIndex }
+func (tx *ShutterTx) l1BlockNumber() *big.Int  { return nil }
+func (tx *ShutterTx) timestamp() *big.Int      { return nil }
+func (tx *ShutterTx) shutterTXs() [][]byte     { return nil }
+func (tx *ShutterTx) plainTextTXs() [][]byte   { return nil }
 
 func (tx *ShutterTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
