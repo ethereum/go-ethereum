@@ -142,6 +142,7 @@ func Supply(header *types.Header, snaptree *snapshot.Tree) (*big.Int, error) {
 	}
 	defer accIt.Release()
 
+	log.Info("Ether supply counting started", "block", header.Number, "hash", header.Hash(), "root", header.Root)
 	var (
 		start    = time.Now()
 		logged   = time.Now()
