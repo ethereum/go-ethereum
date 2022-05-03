@@ -192,17 +192,33 @@ func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 // specific block. If unavailable for the specific block (non full synced node),
 // nil will be returned.
 func ReadIssuance(db ethdb.KeyValueReader, number uint64, hash common.Hash) *big.Int {
-	data, _ := db.Get(issuanceKey(number, hash))
-	if len(data) == 0 {
+	blob, _ := db.Get(issuanceKey(number, hash))
+	if len(blob) < 2 {
 		return nil
 	}
-	return new(big.Int).SetBytes(data)
+	// Since negative big ints can't be encoded to bytes directly, use a dirty
+	// hack to store the negativift flag in the first byte (0 == positive,
+	// 1 == negative)
+	issuance := new(big.Int).SetBytes(blob[1:])
+	if blob[0] == 1 {
+		issuance.Neg(issuance)
+	}
+	return issuance
 }
 
 // WriteIssuance stores the amount of Ether (in wei) issued (or burnt) in a
 // specific block.
 func WriteIssuance(db ethdb.KeyValueWriter, number uint64, hash common.Hash, issuance *big.Int) {
-	if err := db.Put(issuanceKey(number, hash), issuance.Bytes()); err != nil {
+	// Since negative big ints can't be encoded to bytes directly, use a dirty
+	// hack to store the negativift flag in the first byte (0 == positive,
+	// 1 == negative)
+	blob := []byte{0}
+	if issuance.Sign() < 0 {
+		blob[0] = 1
+	}
+	blob = append(blob, issuance.Bytes()...)
+
+	if err := db.Put(issuanceKey(number, hash), blob); err != nil {
 		log.Crit("Failed to store block issuance", "err", err)
 	}
 }
