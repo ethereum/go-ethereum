@@ -36,7 +36,7 @@ var (
 		Action:   utils.MigrateFlags(localConsole),
 		Name:     "console",
 		Usage:    "Start an interactive JavaScript environment",
-		Flags:    append(append(nodeFlags, rpcFlags...), consoleFlags...),
+		Flags:    utils.GroupFlags(nodeFlags, rpcFlags, consoleFlags),
 		Category: "CONSOLE COMMANDS",
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
@@ -49,7 +49,7 @@ See https://geth.ethereum.org/docs/interface/javascript-console.`,
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
-		Flags:     append(consoleFlags, utils.DataDirFlag),
+		Flags:     utils.GroupFlags([]cli.Flag{utils.DataDirFlag}, consoleFlags),
 		Category:  "CONSOLE COMMANDS",
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
@@ -63,7 +63,7 @@ This command allows to open a console on a running geth node.`,
 		Name:      "js",
 		Usage:     "Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",
-		Flags:     append(nodeFlags, consoleFlags...),
+		Flags:     utils.GroupFlags(nodeFlags, consoleFlags),
 		Category:  "CONSOLE COMMANDS",
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
@@ -141,6 +141,8 @@ func remoteConsole(ctx *cli.Context) error {
 				path = filepath.Join(path, "goerli")
 			} else if ctx.GlobalBool(utils.SepoliaFlag.Name) {
 				path = filepath.Join(path, "sepolia")
+			} else if ctx.GlobalBool(utils.KilnFlag.Name) {
+				path = filepath.Join(path, "kiln")
 			}
 		}
 		endpoint = fmt.Sprintf("%s/geth.ipc", path)
