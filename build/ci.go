@@ -956,10 +956,10 @@ func doWindowsInstaller(cmdline []string) {
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 	if err := cp.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll"); err != nil {
-		log.Fatal("Failed to copy SimpleFC.dll: %v", err)
+		log.Fatalf("Failed to copy SimpleFC.dll: %v", err)
 	}
 	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING"); err != nil {
-		log.Fatal("Failed to copy copyright note: %v", err)
+		log.Fatalf("Failed to copy copyright note: %v", err)
 	}
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
