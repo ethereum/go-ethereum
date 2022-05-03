@@ -974,7 +974,20 @@ func (bc *BlockChain) procFutureBlocks() {
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			_, err := bc.InsertChain(blocks[i : i+1])
+			// let consensus engine handle the last block (e.g. for voting)
+			if i == len(blocks)-1 && err == nil {
+				engine, ok := bc.Engine().(*XDPoS.XDPoS)
+				if ok {
+					go func() {
+						header := blocks[i].Header()
+						err = engine.HandleProposedBlock(bc, header)
+						if err != nil {
+							log.Info("[procFutureBlocks] handle proposed block has error", "err", err, "block hash", header.Hash(), "number", header.Number)
+						}
+					}()
+				}
+			}
 		}
 	}
 }

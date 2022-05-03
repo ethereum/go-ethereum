@@ -57,6 +57,8 @@ type XDPoS_v2 struct {
 
 	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error)
+
+	forensics *Forensics
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
@@ -105,11 +107,13 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 		},
 		highestVotedRound:  utils.Round(0),
 		highestCommitBlock: nil,
+		forensics:          NewForensics(),
 	}
 	// Add callback to the timer
 	timeoutTimer.OnTimeoutFn = engine.OnCountdownTimeout
 
 	engine.periodicJob()
+
 	return engine
 }
 
@@ -818,41 +822,41 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 }
 
 // Update local QC variables including highestQC & lockQuorumCert, as well as commit the blocks that satisfy the algorithm requirements
-func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, quorumCert *utils.QuorumCert) error {
+func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuorumCert *utils.QuorumCert) error {
 	log.Trace("[ProcessQC][Before]", "HighQC", x.highestQuorumCert)
 	// 1. Update HighestQC
-	if quorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
-		x.highestQuorumCert = quorumCert
+	if incomingQuorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
+		x.highestQuorumCert = incomingQuorumCert
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
-	proposedBlockHeader := blockChainReader.GetHeaderByHash(quorumCert.ProposedBlockInfo.Hash)
+	proposedBlockHeader := blockChainReader.GetHeaderByHash(incomingQuorumCert.ProposedBlockInfo.Hash)
 	if proposedBlockHeader == nil {
-		log.Error("[processQC] Block not found using the QC", "quorumCert.ProposedBlockInfo.Hash", quorumCert.ProposedBlockInfo.Hash, "quorumCert.ProposedBlockInfo.Number", quorumCert.ProposedBlockInfo.Number)
-		return fmt.Errorf("Block not found, number: %v, hash: %v", quorumCert.ProposedBlockInfo.Number, quorumCert.ProposedBlockInfo.Hash)
+		log.Error("[processQC] Block not found using the QC", "quorumCert.ProposedBlockInfo.Hash", incomingQuorumCert.ProposedBlockInfo.Hash, "incomingQuorumCert.ProposedBlockInfo.Number", incomingQuorumCert.ProposedBlockInfo.Number)
+		return fmt.Errorf("Block not found, number: %v, hash: %v", incomingQuorumCert.ProposedBlockInfo.Number, incomingQuorumCert.ProposedBlockInfo.Hash)
 	}
 	if proposedBlockHeader.Number.Cmp(x.config.V2.SwitchBlock) > 0 {
 		// Extra field contain parent information
-		quorumCert, round, _, err := x.getExtraFields(proposedBlockHeader)
+		proposedBlockQuorumCert, round, _, err := x.getExtraFields(proposedBlockHeader)
 		if err != nil {
 			return err
 		}
-		if x.lockQuorumCert == nil || quorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round {
-			x.lockQuorumCert = quorumCert
+		if x.lockQuorumCert == nil || proposedBlockQuorumCert.ProposedBlockInfo.Round > x.lockQuorumCert.ProposedBlockInfo.Round {
+			x.lockQuorumCert = proposedBlockQuorumCert
 		}
 
 		proposedBlockRound := &round
 		// 3. Update commit block info
-		_, err = x.commitBlocks(blockChainReader, proposedBlockHeader, proposedBlockRound)
+		_, err = x.commitBlocks(blockChainReader, proposedBlockHeader, proposedBlockRound, incomingQuorumCert)
 		if err != nil {
-			log.Error("[processQC] Fail to commitBlocks", "proposedBlockRound", proposedBlockRound)
+			log.Error("[processQC] Error while to commitBlocks", "proposedBlockRound", proposedBlockRound)
 			return err
 		}
 	}
 	// 4. Set new round
-	if quorumCert.ProposedBlockInfo.Round >= x.currentRound {
-		err := x.setNewRound(blockChainReader, quorumCert.ProposedBlockInfo.Round+1)
+	if incomingQuorumCert.ProposedBlockInfo.Round >= x.currentRound {
+		err := x.setNewRound(blockChainReader, incomingQuorumCert.ProposedBlockInfo.Round+1)
 		if err != nil {
-			log.Error("[processQC] Fail to setNewRound", "new round to set", quorumCert.ProposedBlockInfo.Round+1)
+			log.Error("[processQC] Fail to setNewRound", "new round to set", incomingQuorumCert.ProposedBlockInfo.Round+1)
 			return err
 		}
 	}
@@ -889,7 +893,7 @@ func (x *XDPoS_v2) getSyncInfo() *utils.SyncInfo {
 }
 
 //Find parent and grandparent, check round number, if so, commit grandparent(grandGrandParent of currentBlock)
-func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round) (bool, error) {
+func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposedBlockHeader *types.Header, proposedBlockRound *utils.Round, incomingQc *utils.QuorumCert) (bool, error) {
 	// XDPoS v1.0 switch to v2.0, skip commit
 	if big.NewInt(0).Sub(proposedBlockHeader.Number, big.NewInt(2)).Cmp(x.config.V2.SwitchBlock) <= 0 {
 		return false, nil
@@ -926,6 +930,10 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 			Round:  round,
 		}
 		log.Debug("Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
+		// Perform forensics related operation
+		var headerQcToBeCommitted []types.Header
+		headerQcToBeCommitted = append(headerQcToBeCommitted, *parentBlock, *proposedBlockHeader)
+		go x.forensics.SetCommittedQCs(headerQcToBeCommitted, *incomingQc)
 		return true, nil
 	}
 	// Everything else, fail to commit

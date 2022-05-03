@@ -82,3 +82,7 @@ func (x *XDPoS_v2) AuthorizeFaker(signer common.Address) {
 
 	x.signer = signer
 }
+
+func (x *XDPoS_v2) GetForensicsFaker() *Forensics {
+	return x.forensics
+}
