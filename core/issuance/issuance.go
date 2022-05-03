@@ -21,7 +21,9 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -129,4 +131,38 @@ func Subsidy(block *types.Block, config *params.ChainConfig) (subsidy *big.Int, 
 		burn = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	}
 	return subsidy, uncles, burn
+}
+
+// Supply crawls the state snapshot at a given header and gatheres all the account
+// balances to sum into the total Ether supply.
+func Supply(header *types.Header, snaptree *snapshot.Tree) (*big.Int, error) {
+	accIt, err := snaptree.AccountIterator(header.Root, common.Hash{})
+	if err != nil {
+		return nil, err
+	}
+	defer accIt.Release()
+
+	var (
+		start    = time.Now()
+		logged   = time.Now()
+		accounts uint64
+	)
+	supply := big.NewInt(0)
+	for accIt.Next() {
+		account, err := snapshot.FullAccount(accIt.Account())
+		if err != nil {
+			return nil, err
+		}
+		supply.Add(supply, account.Balance)
+		accounts++
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Ether supply counting in progress", "at", accIt.Hash(),
+				"accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+	}
+	log.Info("Ether supply counting complete", "block", header.Number, "hash", header.Hash(), "root", header.Root,
+		"accounts", accounts, "supply", supply, "elapsed", common.PrettyDuration(time.Since(start)))
+
+	return supply, nil
 }

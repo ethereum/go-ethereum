@@ -329,11 +329,7 @@ func geth(ctx *cli.Context) error {
 	prepare(ctx)
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
-	if ctx.GlobalIsSet(utils.IssuanceFlag.Name) {
-		if err := countBalances(backend.ChainDb(), backend.CurrentHeader()); err != nil {
-			return err
-		}
-	}
+
 	startNode(ctx, stack, backend, false)
 	stack.Wait()
 	return nil
