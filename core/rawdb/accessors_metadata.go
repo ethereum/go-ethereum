@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"encoding/json"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -184,5 +185,24 @@ func ReadTransitionStatus(db ethdb.KeyValueReader) []byte {
 func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 	if err := db.Put(transitionStatusKey, data); err != nil {
 		log.Crit("Failed to store the eth2 transition status", "err", err)
+	}
+}
+
+// ReadIssuance retrieves the amount of Ether (in Wei) issued (or burnt) in a
+// specific block. If unavailable for the specific block (non full synced node),
+// nil will be returned.
+func ReadIssuance(db ethdb.KeyValueReader, number uint64, hash common.Hash) *big.Int {
+	data, _ := db.Get(issuanceKey(number, hash))
+	if len(data) == 0 {
+		return nil
+	}
+	return new(big.Int).SetBytes(data)
+}
+
+// WriteIssuance stores the amount of Ether (in wei) issued (or burnt) in a
+// specific block.
+func WriteIssuance(db ethdb.KeyValueWriter, number uint64, hash common.Hash, issuance *big.Int) {
+	if err := db.Put(issuanceKey(number, hash), issuance.Bytes()); err != nil {
+		log.Crit("Failed to store block issuance", "err", err)
 	}
 }

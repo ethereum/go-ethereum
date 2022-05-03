@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/issuance"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -1185,7 +1186,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1263,6 +1264,22 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
+	// If Ether issuance tracking is enabled, do it before emitting events
+	if bc.vmConfig.EnableIssuanceRecording {
+		// Note, this code path is opt-in for data analysis nodes, so speed
+		// is not really relevant, simplicity and containment much more so.
+		parent := rawdb.ReadHeader(bc.db, block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			log.Error("Failed to retrieve parent for issuance", "err", err)
+		} else {
+			issuance, err := issuance.Issuance(block, parent, bc.stateCache.TrieDB(), bc.chainConfig)
+			if err != nil {
+				log.Error("Failed to record Ether issuance", "err", err)
+			} else {
+				rawdb.WriteIssuance(bc.db, block.NumberU64(), block.Hash(), issuance)
+			}
+		}
+	}
 	return nil
 }
 
@@ -1280,7 +1297,7 @@ func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types
 // and also it applies the given block as the new chain head. This function expects
 // the chain mutex to be held.
 func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
-	if err := bc.writeBlockWithState(block, receipts, logs, state); err != nil {
+	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return NonStatTy, err
 	}
 	currentBlock := bc.CurrentBlock()
@@ -1643,12 +1660,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		var status WriteStatus
 		if !setHead {
 			// Don't set the head, only insert the block
-			err = bc.writeBlockWithState(block, receipts, logs, statedb)
+			err = bc.writeBlockWithState(block, receipts, statedb)
 		} else {
 			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
-		}
-		if _, err := bc.issuance(block, parent); err != nil {
-			log.Error("Failed to calculate Ether issuance: %v", err)
 		}
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {

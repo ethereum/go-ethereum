@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package issuance
 
 import (
 	"fmt"
@@ -24,14 +24,15 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// issuance calculates the Ether issuance (or burn) across two state tries. In
+// Issuance calculates the Ether issuance (or burn) across two state tries. In
 // normal mode of operation, the expectation is to calculate the issuance between
 // two consecutive blocks.
-func (bc *BlockChain) issuance(block *types.Block, parent *types.Header) (*big.Int, error) {
+func Issuance(block *types.Block, parent *types.Header, db *trie.Database, config *params.ChainConfig) (*big.Int, error) {
 	var (
 		issuance = new(big.Int)
 		start    = time.Now()
@@ -40,11 +41,11 @@ func (bc *BlockChain) issuance(block *types.Block, parent *types.Header) (*big.I
 	if block.ParentHash() != parent.Hash() {
 		return nil, fmt.Errorf("parent hash mismatch: have %s, want %s", block.ParentHash().Hex(), parent.Hash().Hex())
 	}
-	src, err := trie.New(parent.Root, bc.stateCache.TrieDB())
+	src, err := trie.New(parent.Root, db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open source trie: %v", err)
 	}
-	dst, err := trie.New(block.Root(), bc.stateCache.TrieDB())
+	dst, err := trie.New(block.Root(), db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open destination trie: %v", err)
 	}
@@ -58,7 +59,6 @@ func (bc *BlockChain) issuance(block *types.Block, parent *types.Header) (*big.I
 			panic(err)
 		}
 		issuance.Add(issuance, acc.Balance)
-		//fmt.Printf("%#x: +%v\n", fwdIt.Key, acc.Balance)
 	}
 	// Gather all the changes across from destination to source
 	rewDiffIt, _ := trie.NewDifferenceIterator(dst.NodeIterator(nil), src.NodeIterator(nil))
@@ -70,21 +70,37 @@ func (bc *BlockChain) issuance(block *types.Block, parent *types.Header) (*big.I
 			panic(err)
 		}
 		issuance.Sub(issuance, acc.Balance)
-		//fmt.Printf("%#x: -%v\n", rewIt.Key, acc.Balance)
 	}
 	// Calculate the block subsidy based on chain rules and progression
-	var (
-		subsidy = new(big.Int)
-		uncles  = new(big.Int)
-	)
+	subsidy, uncles, burn := Subsidy(block, config)
+
+	// Calculate the difference between the "calculated" and "crawled" issuance
+	diff := new(big.Int).Set(issuance)
+	diff.Sub(diff, subsidy)
+	diff.Sub(diff, uncles)
+	diff.Add(diff, burn)
+
+	log.Info("Calculated issuance for block", "number", block.Number(), "hash", block.Hash(), "state", issuance, "subsidy", subsidy, "uncles", uncles, "burn", burn, "diff", diff, "elapsed", time.Since(start))
+	return issuance, nil
+}
+
+// Subsidy calculates the block mining and uncle subsidy as well as the 1559 burn
+// solely based on header fields. This method is a very accurate approximation of
+// the true issuance, but cannot take into account Ether burns via selfdestructs,
+// so it will always be ever so slightly off.
+func Subsidy(block *types.Block, config *params.ChainConfig) (subsidy *big.Int, uncles *big.Int, burn *big.Int) {
+	// Calculate the block subsidy based on chain rules and progression
+	subsidy = new(big.Int)
+	uncles = new(big.Int)
+
 	// Select the correct block reward based on chain progression
-	if bc.chainConfig.Ethash != nil {
+	if config.Ethash != nil {
 		if block.Difficulty().BitLen() != 0 {
 			subsidy = ethash.FrontierBlockReward
-			if bc.chainConfig.IsByzantium(block.Number()) {
+			if config.IsByzantium(block.Number()) {
 				subsidy = ethash.ByzantiumBlockReward
 			}
-			if bc.chainConfig.IsConstantinople(block.Number()) {
+			if config.IsConstantinople(block.Number()) {
 				subsidy = ethash.ConstantinopleBlockReward
 			}
 		}
@@ -107,16 +123,10 @@ func (bc *BlockChain) issuance(block *types.Block, parent *types.Header) (*big.I
 			uncles.Add(uncles, r)
 		}
 	}
-	burn := new(big.Int)
+	// Calculate the burn based on chain rules and progression
+	burn = new(big.Int)
 	if block.BaseFee() != nil {
 		burn = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	}
-	// Calculate the difference between the "calculated" and "crawled" issuance
-	diff := new(big.Int).Set(issuance)
-	diff.Sub(diff, subsidy)
-	diff.Sub(diff, uncles)
-	diff.Add(diff, burn)
-
-	log.Info("Calculated issuance for block", "number", block.Number(), "hash", block.Hash(), "state", issuance, "subsidy", subsidy, "uncles", uncles, "burn", burn, "diff", diff, "elapsed", time.Since(start))
-	return issuance, nil
+	return subsidy, uncles, burn
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/issuance"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -65,6 +66,102 @@ func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 // Hashrate returns the POW hashrate
 func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
+}
+
+// Issuance send a notification each time a new block is appended to the chain
+// with various counters about Ether issuance: the state diff (if available),
+// block and uncle subsidy, 1559 burn.
+func (api *PublicEthereumAPI) Issuance(ctx context.Context, from uint64) (*rpc.Subscription, error) {
+	// If issuance tracking is not explcitly enabled, refuse to service this
+	// endpoint. Although we could enable the simple calculations, it might
+	// end up as an unexpected load on RPC providers, so let's not surprise.
+	if !api.e.config.EnableIssuanceRecording {
+		return nil, errors.New("issuance recording not enabled")
+	}
+	config := api.e.blockchain.Config()
+
+	// Issuance recording enabled, create a subscription to stream through
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+
+	// Define an internal type for issuance notifications
+	type issuanceNotification struct {
+		Number   uint64      `json:"blockNumber"`
+		Hash     common.Hash `json:"blockHash"`
+		Issuance *big.Int    `json:"totalIssuance"`
+		Subsidy  *big.Int    `json:"subsidyMining"`
+		Uncles   *big.Int    `json:"subsidyUncles"`
+		Burn     *big.Int    `json:"burnProtocol"`
+		Destruct *big.Int    `json:"burnDestruct"`
+	}
+
+	// Define a method to convert a block into an issuance notification
+	service := func(block *types.Block) {
+		// Retrieve the state-crawled issuance - if available
+		crawled := rawdb.ReadIssuance(api.e.chainDb, block.NumberU64(), block.Hash())
+
+		// Calculate the subsidy from the block's contents
+		subsidy, uncles, burn := issuance.Subsidy(block, config)
+
+		// Calculate the difference between the "calculated" and "crawled" issuance
+		var diff *big.Int
+		if crawled != nil {
+			diff = new(big.Int).Set(crawled)
+			diff.Sub(diff, subsidy)
+			diff.Sub(diff, uncles)
+			diff.Add(diff, burn)
+		}
+		// Push the issuance to the user
+		notifier.Notify(rpcSub.ID, &issuanceNotification{
+			Number:   block.NumberU64(),
+			Hash:     block.Hash(),
+			Issuance: crawled,
+			Subsidy:  subsidy,
+			Uncles:   uncles,
+			Burn:     burn,
+			Destruct: diff,
+		})
+	}
+	go func() {
+		// Iterate over all blocks from the requested source up to head and push
+		// out historical issuance values to the user. Checking the head after
+		// each iteration is a bit heavy, but it's not really relevant compared
+		// to pulling blocks from disk, so this keeps thing simpler to switch
+		// from historicla blocks to live blocks.
+		for number := from; number <= api.e.blockchain.CurrentBlock().NumberU64(); number++ {
+			block := rawdb.ReadBlock(api.e.chainDb, rawdb.ReadCanonicalHash(api.e.chainDb, number), number)
+			if block == nil {
+				log.Error("Missing block for issuane reporting", "number", number)
+				return
+			}
+			service(block)
+		}
+		// Subscribe to chain events and keep emitting issuances on all branches
+		canonBlocks := make(chan core.ChainEvent)
+		canonBlocksSub := api.e.blockchain.SubscribeChainEvent(canonBlocks)
+		defer canonBlocksSub.Unsubscribe()
+
+		sideBlocks := make(chan core.ChainSideEvent)
+		sideBlocksSub := api.e.blockchain.SubscribeChainSideEvent(sideBlocks)
+		defer sideBlocksSub.Unsubscribe()
+
+		for {
+			select {
+			case event := <-canonBlocks:
+				service(event.Block)
+			case event := <-sideBlocks:
+				service(event.Block)
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
+				return
+			}
+		}
+	}()
+	return rpcSub, nil
 }
 
 // PublicMinerAPI provides an API to control the miner.
