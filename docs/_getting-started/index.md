@@ -10,7 +10,7 @@ This page provides step-by-step instructions covering the fundamentals of using 
 
 ## Prerequisites
 
-In order to get the msot value from the tutorials on this page, the following skills are necessary:
+In order to get the most value from the tutorials on this page, the following skills are necessary:
 
 - Experience using the command line
 - Basic knowledge about Ethereum and testnets
@@ -18,6 +18,7 @@ In order to get the msot value from the tutorials on this page, the following sk
 
 Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn).
 
+Note that for some installation options (such as building from source on Linux) a `./` must be prepended to the commands in the code snippets in order to execute a particular program, e.g. `./geth` instead of simply `geth`.
 
 ## Background
 
@@ -36,7 +37,7 @@ A new account can now be created using Clef. An account is a pair of keys (publi
 
 ```shell
 
-./clef newaccount --keystore geth-tutorial/keystore
+clef newaccount --keystore geth-tutorial/keystore
 
 ```
 
@@ -62,7 +63,7 @@ Enter 'ok' to proceed:
 This is important information. The `geth-tutorial/keystore` directory will soon contain a secret key that can be used to access any funds held in the new account. If it is compromised, the funds can be stolen. If it is lost, there is no way to retrieve the funds. This tuitorial will only use dummy funds with no real world value, but when these steps are repeated on Ethereum mainnet is critical that the keystore is kept secure and backed up.
 
 
-Typing `ok` into the terminal and pressign `enter` causes Clef to prompt for a password. Clef requires a password that is at least 10 characters long, and best practise would be to use a combination of numbers, characters and special characters. Entering a suitable password and pressing `enter` returns the following result to the terminal:
+Typing `ok` into the terminal and pressing `enter` causes Clef to prompt for a password. Clef requires a password that is at least 10 characters long, and best practise would be to use a combination of numbers, characters and special characters. Entering a suitable password and pressing `enter` returns the following result to the terminal:
 
 
 ```terminal
@@ -84,7 +85,7 @@ To start Clef, run the Clef executable passing as arguments the keystore file lo
 
 ```shell
 
-./clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
+clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
 
 ```
 
@@ -121,7 +122,7 @@ The following command should be run in a new terminal, separate to the one runni
 
 ```shell
 
-./geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode light --http
+geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode snap --http
 
 ```
 
@@ -194,7 +195,7 @@ This tutorial will use the HTTP option. Note that the terminals running Geth and
 
 ```shell
 
-./geth attach http://127.0.0.1:8545
+geth attach http://127.0.0.1:8545
 
 ```
 
@@ -359,7 +360,7 @@ In the Javascript console, the transation hash is displayed. This will be used i
 
 ```
 
-It is also advised to check the account balances using Geth. At this point in the tutorial, the two accounts in the Clef keystore should have balances 0.9 and 0.1 ether.
+It is also advised to check the account balances using Geth. At this point in the tutorial, the two accounts in the Clef keystore should have balances just below 0.9 ether (because 0.1 ether has been transferred out and some small amount paid in transaction gas) and 0.1 ether.
 
 
 ### Checking the transaction hash
@@ -399,36 +400,51 @@ This returns the following response (although the actual values for each field w
 ```
 
 
+## Using Curl
 
-
-
-
-## Access using low-level HTTP
-
-In this part of the tutorial, we will show how to access the JSON-RPC API using curl.
+Up to this point this tutorial has interacted with Geth using the convenience library Web3.js. This library enables the user to send instructions to Geth using a more user-friendly interface compared to sending raw JSON objects. However, it is also possible for the user to send these JSON objects directly to Geth's exposed HTTP port. Curl is a command line tool that sends HTTP requests. This part of the tutorial demonstrates how to check account balances and send a transaction using Curl.
 
 ### Checking account balance
 
-To check account balance, use the command below.
+The command below returns the balance of the given account. This is a HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
 
 ```shell
+
 curl -X POST http://127.0.0.1:8545 \
   -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","latest"], "id":1}'
+
 ```
 
 A successful call will return a response like the one below:
 
 ```terminal
-{"jsonrpc":"2.0","id":1,"result":"0xcc445d3d4b89390"}
+{"jsonrpc":"2.0","id":1,"result":"0xc7d54951f87f7c0"}
 ```
 
-Note that the value returned is in hexadecimal and WEI. To get the balance in ether,
-convert to decimal and divide by 10^18.
+The balance is in the `return` field in the returned JSON object. However, it is denominated in Wei and presented as a hexadecimal string. There are many options for converting this value to a decimal in units of ether, for example by opening a Python console and running:
+
+```python
+
+hex_value = "0xc7d54951f87f7c0"
+
+in_ether = int(hex_value, 16)/1e18
+
+print(in_ether)
+
+```
+This returns the balance in ether ():
+
+```terminal 
+
+0.8999684999998321
+
+```
+
 
 ### Checking the account list
 
-Run the command below to get the list of all accounts.
+The curl command below returns the list of all accounts.
 
 ```shell
 curl -X POST http://127.0.0.1:8545 \
@@ -436,24 +452,33 @@ curl -X POST http://127.0.0.1:8545 \
    --data '{"jsonrpc":"2.0", "method":"eth_accounts","params":[], "id":1}'
 ```
 
-Note: you will need to confirm this request in the Clef terminal window.a
-
-**Response:**
+This requires approval in Clef. Once provided the following information is returned to the terminal:
 
 ```terminal
+
 {"jsonrpc":"2.0","id":1,"result":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec"]}
+
 ```
 
 ### Sending Transactions
 
+Sending a transcation between accounts can also be achieved using Curl. Notice that the value of the transaction is a hexadecimal string in units of Wei. To transfer 0.1 ether, it is first necessary to convert this to Wei by multiplying by 1<sup>18</sup> then converting to hex. 0.1 ether is `"0x16345785d8a0000"` in hex. As before, update the `to` and `from` fields with the addresses in the Clef keystore.  
+
+
 ```shell
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
-   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0xce8dba5e4157c2b284d8853afeeea259344c1653","value": "0x2386F26FC10000"}], "id":1}'
+   --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0xce8dba5e4157c2b284d8853afeeea259344c1653","value": "0x16345785d8a0000"}], "id":1}'
 ```
 
-A successful call will return a response containing the transaction hash.
+This requires approval in Clef. Once the password for the sender account has been provided, Clef will return a summary of the transaction details and the terminal that made the Curl request will display a response containing the transaction hash.
 
 ```terminal
+
 {"jsonrpc":"2.0","id":5,"result":"0xac8b347d70a82805edb85fc136fc2c4e77d31677c2f9e4e7950e0342f0dc7e7c"}
+
 ```
+
+## Summary
+
+This tutorial has demonstrated how to generate accounts using Clef, fund them with testnet ether and use those accounts to interact with Ethereum (Goerli) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using the web3.js library via the Geth console and using the JSON-RPC directly using Curl. 
