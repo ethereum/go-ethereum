@@ -28,13 +28,6 @@ type ContractRef interface {
 	Address() common.Address
 }
 
-// AnalyzedContract is an interface for a piece of contract
-// code that has undegone jumpdest analysis, and whose bytecode
-// can be queried to determine if it is "contract code"
-type AnalyzedContract interface {
-	IsCode(dest uint64) bool
-}
-
 // AccountRef implements ContractRef.
 //
 // Account references are used during EVM initialisation and
@@ -65,7 +58,7 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	// is the execution frame represented by this object a contract deployment 
+	// is the execution frame represented by this object a contract deployment
 	IsDeployment bool
 
 	Gas   uint64

@@ -375,28 +375,28 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
-		touchEachChunksOnReadAndChargeGas(copyOffset, nonPaddedCopyLength, scope.Contract.Address().Bytes()[:], scope.Contract.Code, scope.Contract, interpreter.evm.Accesses, scope.Contract.IsDeployment)
+		touchEachChunksOnReadAndChargeGas(copyOffset, nonPaddedCopyLength, scope.Contract.Address().Bytes()[:], scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment)
 	}
 	scope.Memory.Set(memOffset.Uint64(), uint64(len(paddedCodeCopy)), paddedCodeCopy)
 	return nil, nil
 }
 
 // touchEachChunksAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code []byte, contract AnalyzedContract, accesses *types.AccessWitness, deployment bool) uint64 {
+func touchEachChunksOnReadAndChargeGas(offset, size uint64, address []byte, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
 	// reason that we do not need the last leaf is the account's code size
 	// is already in the AccessWitness so a stateless verifier can see that
 	// the code from the last leaf is not needed.
-	if contract != nil && (size == 0 || offset > uint64(len(code))) {
+	if code != nil && (size == 0 || offset > uint64(len(code))) {
 		return 0
 	}
 	var (
 		statelessGasCharged uint64
 		endOffset           uint64
 	)
-	if contract != nil && offset+size > uint64(len(code)) {
+	if code != nil && offset+size > uint64(len(code)) {
 		endOffset = uint64(len(code))
 	} else {
 		endOffset = offset + size
@@ -445,8 +445,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
 		code := interpreter.evm.StateDB.GetCode(addr)
 		paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-		cb := codeBitmap(code)
-		touchEachChunksOnReadAndChargeGas(copyOffset, nonPaddedCopyLength, addr[:], code, &cb, interpreter.evm.Accesses, false)
+		touchEachChunksOnReadAndChargeGas(copyOffset, nonPaddedCopyLength, addr[:], code, interpreter.evm.Accesses, false)
 		scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 	} else {
 		codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
@@ -923,27 +922,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
-
-			// touch push data by adding the last byte of the pushdata
-			var value [32]byte
-			chunk := *pc / 31
-			count := uint64(0)
-			// Look for the first code byte (i.e. no pushdata)
-			for ; count < 31 && !scope.Contract.IsCode(chunk*31+count); count++ {
-			}
-			value[0] = byte(count)
-			endMin := (chunk + 1) * 31
-			if endMin > uint64(len(scope.Contract.Code)) {
-				endMin = uint64(len(scope.Contract.Code))
-			}
-			copy(value[1:], scope.Contract.Code[chunk*31:endMin])
-			index := trieUtils.GetTreeKeyCodeChunk(scope.Contract.Address().Bytes(), uint256.NewInt(chunk))
-			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(index)
-			if scope.Contract.IsDeployment {
-				interpreter.evm.Accesses.SetLeafValue(index, nil)
-			} else {
-				interpreter.evm.Accesses.SetLeafValue(index, value[:])
-			}
+			statelessGas := touchEachChunksOnReadAndChargeGas(uint64(*pc+1), uint64(1), scope.Contract.Address().Bytes()[:], scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment)
 			scope.Contract.UseGas(statelessGas)
 		}
 	} else {
@@ -968,7 +947,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		}
 
 		if interpreter.evm.chainConfig.IsCancun(interpreter.evm.Context.BlockNumber) {
-			statelessGas := touchEachChunksOnReadAndChargeGas(uint64(startMin), uint64(pushByteSize), scope.Contract.Address().Bytes()[:], scope.Contract.Code, scope.Contract, interpreter.evm.Accesses, scope.Contract.IsDeployment)
+			statelessGas := touchEachChunksOnReadAndChargeGas(uint64(startMin), uint64(pushByteSize), scope.Contract.Address().Bytes()[:], scope.Contract.Code, interpreter.evm.Accesses, scope.Contract.IsDeployment)
 			scope.Contract.UseGas(statelessGas)
 		}
 
