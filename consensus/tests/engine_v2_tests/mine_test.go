@@ -17,7 +17,7 @@ import (
 
 func TestYourTurnInitialV2(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, parentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, 0)
+	blockchain, _, parentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, nil)
 	minePeriod := config.XDPoS.V2.MinePeriod
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
@@ -62,7 +62,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 
 func TestShouldMineOncePerRound(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, block910, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, config, 0)
+	blockchain, _, block910, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	minePeriod := config.XDPoS.V2.MinePeriod
 
@@ -77,7 +77,7 @@ func TestShouldMineOncePerRound(t *testing.T) {
 
 func TestUpdateMasterNodes(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch+config.XDPoS.Gap)-1, config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	x := adaptor.EngineV2
 	snap, err := x.GetSnapshot(blockchain, currentBlock.Header())
@@ -102,7 +102,7 @@ func TestUpdateMasterNodes(t *testing.T) {
 		Coinbase:   common.HexToAddress(blockCoinbaseA),
 	}
 
-	header.Extra = generateV2Extra(450, currentBlock, signer, signFn)
+	header.Extra = generateV2Extra(450, currentBlock, signer, signFn, nil)
 
 	parentBlock, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx}, signer, signFn, config)
 	assert.Nil(t, err)
@@ -122,7 +122,7 @@ func TestUpdateMasterNodes(t *testing.T) {
 			Coinbase:   common.HexToAddress(blockCoinbase),
 		}
 
-		header.Extra = generateV2Extra(int64(i), currentBlock, signer, signFn)
+		header.Extra = generateV2Extra(int64(i), currentBlock, signer, signFn, nil)
 
 		block, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, config)
 		if err != nil {
@@ -142,7 +142,7 @@ func TestUpdateMasterNodes(t *testing.T) {
 
 func TestPrepareFail(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
+	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	tstamp := time.Now().Unix()
@@ -185,7 +185,7 @@ func TestPrepareFail(t *testing.T) {
 
 func TestPrepareHappyPath(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, 0)
+	blockchain, _, currentBlock, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch), config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	// trigger initial
 	_, err := adaptor.YourTurn(blockchain, currentBlock.Header(), signer)

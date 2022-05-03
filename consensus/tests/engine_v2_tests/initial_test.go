@@ -13,7 +13,7 @@ import (
 )
 
 func TestInitialFirstV2Blcok(t *testing.T) {
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	header := currentBlock.Header()
 
@@ -33,7 +33,7 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	expectedQuorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil,
-		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, utils.Round(1), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
@@ -55,12 +55,12 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 
 func TestInitialOtherV2Block(t *testing.T) {
 	// insert new block with new extra fields
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	blockCoinBase := "0x111000000000000000000000000000000123"
 	for blockNum := 901; blockNum <= 910; blockNum++ {
-		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil)
+		currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, int64(blockNum-900), blockCoinBase, signer, signFn, nil, nil)
 		err := blockchain.InsertBlock(currentBlock)
 		assert.Nil(t, err)
 	}
@@ -74,7 +74,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil, // after decode it got default value []utils.Signature{}
-		GapNumber: 450,
+		GapNumber:         450,
 	}
 	extra := utils.ExtraFields_v2{
 		Round:      11,
@@ -105,7 +105,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	expectedQuorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        []utils.Signature{},
-		GapNumber: blockchain.Config().XDPoS.V2.SwitchBlock.Uint64()-blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, utils.Round(11), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
@@ -118,7 +118,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 
 func TestSnapshotShouldAlreadyCreatedByUpdateM1(t *testing.T) {
 	// insert new block with new extra fields
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1800, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 1800, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, currentBlock.Header())

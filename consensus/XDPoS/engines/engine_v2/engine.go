@@ -933,7 +933,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		// Perform forensics related operation
 		var headerQcToBeCommitted []types.Header
 		headerQcToBeCommitted = append(headerQcToBeCommitted, *parentBlock, *proposedBlockHeader)
-		go x.forensics.SetCommittedQCs(headerQcToBeCommitted, *incomingQc)
+		go x.forensics.ForensicsMonitoring(blockChainReader, headerQcToBeCommitted, *incomingQc)
 		return true, nil
 	}
 	// Everything else, fail to commit

@@ -12,7 +12,7 @@ import (
 
 func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 	// Block 901 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2
@@ -43,7 +43,7 @@ func TestSyncInfoShouldSuccessfullyUpdateByQC(t *testing.T) {
 
 func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
 	// Block 901 is the first v2 block with starting round of 0
-	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	var extraField utils.ExtraFields_v2
@@ -72,7 +72,7 @@ func TestSyncInfoShouldSuccessfullyUpdateByTC(t *testing.T) {
 }
 
 func TestSkipVerifySyncInfoIfBothQcTcNotQualified(t *testing.T) {
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Make the Highest QC in syncInfo point to an old block to simulate it's no longer qualified

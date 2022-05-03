@@ -15,7 +15,7 @@ import (
 
 func TestHookPenaltyV2Mining(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, 0)
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*7, config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)

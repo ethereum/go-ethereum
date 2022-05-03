@@ -272,8 +272,14 @@ func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testi
 	return ms
 }
 
+type ForkedBlockOptions struct {
+	numOfForkedBlocks     *int
+	forkedRoundDifference *int // Minimum is 1
+	signersKey            []*ecdsa.PrivateKey
+}
+
 // V2 concensus engine
-func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, numOfForkedBlocks int) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
+func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, forkedBlockOptions *ForkedBlockOptions) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
 	// Preparation
 	var err error
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
@@ -308,22 +314,29 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 			blockCoinBase = signer.Hex()
 		}
 		roundNumber := int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()
-		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, nil)
+		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, nil, nil)
 
 		err = blockchain.InsertBlock(block)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Produce forked block for the last numOfForkedBlocks'th blocks
-		if numOfForkedBlocks != 0 && i > numOfBlocks-numOfForkedBlocks {
+		if forkedBlockOptions != nil && forkedBlockOptions.numOfForkedBlocks != nil && i > numOfBlocks-*forkedBlockOptions.numOfForkedBlocks {
 			if currentForkBlock == nil {
 				currentForkBlock = currentBlock
 			}
 			forkedBlockCoinBase := fmt.Sprintf("0x222000000000000000000000000000000%03d", i)
+			var forkedBlockRoundNumber int64
+			if forkedBlockOptions.forkedRoundDifference != nil {
+				if *forkedBlockOptions.forkedRoundDifference == 0 {
+					t.Fatal("forkedRoundDifference minimum is 1")
+				}
+				forkedBlockRoundNumber = roundNumber + int64(*forkedBlockOptions.forkedRoundDifference)
+			} else {
+				forkedBlockRoundNumber = roundNumber + int64(*forkedBlockOptions.numOfForkedBlocks)
+			}
 
-			forkedBlockRoundNumber := roundNumber + int64(numOfForkedBlocks)
-
-			forkedBlock := CreateBlock(blockchain, chainConfig, currentForkBlock, i, forkedBlockRoundNumber, forkedBlockCoinBase, signer, signFn, nil)
+			forkedBlock := CreateBlock(blockchain, chainConfig, currentForkBlock, i, forkedBlockRoundNumber, forkedBlockCoinBase, signer, signFn, nil, forkedBlockOptions.signersKey)
 
 			err = blockchain.InsertBlock(forkedBlock)
 			if err != nil {
@@ -388,7 +401,7 @@ func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks in
 		}
 		roundNumber := int64(i) - chainConfig.XDPoS.V2.SwitchBlock.Int64()
 		// use signer itself as penalty
-		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, signer[:])
+		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, signer[:], nil)
 
 		err = blockchain.InsertBlock(block)
 		if err != nil {
@@ -406,13 +419,13 @@ func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks in
 	return blockchain, backend, currentBlock, signer, signFn
 }
 
-func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte) *types.Block {
+func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte, signersKey []*ecdsa.PrivateKey) *types.Block {
 	currentBlock := startingBlock
 	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
 	var header *types.Header
 
 	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 1 { // Build engine v2 compatible extra data field
-		extraInBytes := generateV2Extra(roundNumber, currentBlock, signer, signFn)
+		extraInBytes := generateV2Extra(roundNumber, currentBlock, signer, signFn, signersKey)
 
 		header = &types.Header{
 			Root:       common.HexToHash(merkleRoot),
@@ -618,7 +631,7 @@ func getMasternodesList(signer common.Address) []common.Address {
 	return masternodes
 }
 
-func generateV2Extra(roundNumber int64, currentBlock *types.Block, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) []byte {
+func generateV2Extra(roundNumber int64, currentBlock *types.Block, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), accKeys []*ecdsa.PrivateKey) []byte {
 	var extraField utils.ExtraFields_v2
 	var round utils.Round
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
@@ -643,12 +656,17 @@ func generateV2Extra(roundNumber int64, currentBlock *types.Block, signer common
 	if err != nil {
 		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 	}
-	// Sign from acc 1, 2, 3
-	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(voteForSign).Bytes())
-	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(voteForSign).Bytes())
-	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(voteForSign).Bytes())
 	var signatures []utils.Signature
-	signatures = append(signatures, acc1SignedHash, acc2SignedHash, acc3SignedHash, signedHash)
+	if len(accKeys) == 0 {
+		// Sign from acc 1, 2, 3 by default
+		accKeys = append(accKeys, acc1Key, acc2Key, acc3Key)
+	}
+	for _, acc := range accKeys {
+		h := SignHashByPK(acc, utils.VoteSigHash(voteForSign).Bytes())
+		signatures = append(signatures, h)
+	}
+	signatures = append(signatures, signedHash)
+
 	quorumCert := &utils.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
