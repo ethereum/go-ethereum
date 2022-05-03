@@ -51,6 +51,7 @@ var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
 
 type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
 type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
+type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error)
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.
@@ -61,26 +62,32 @@ func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error)
 	return vm.ToValue(res), nil
 }
 
-func fromBuf(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error) {
-	switch exported := buf.Export().(type) {
-	case string:
-		if allowString {
-			return common.FromHex(exported), nil
+func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString bool) ([]byte, error) {
+	obj := buf.ToObject(vm)
+	switch obj.ClassName() {
+	case "String":
+		if !allowString {
+			break
 		}
-		return nil, fmt.Errorf("invalid argument")
-	case []byte:
-		return exported, nil
-	case map[string]interface{}:
-		// Uint8Array is parsed as map[string]interface{} by goja
-		// TODO: how to make sure we're not confusing it with a normal map
+		return common.FromHex(obj.String()), nil
+	case "Array":
 		var b []byte
 		if err := vm.ExportTo(buf, &b); err != nil {
 			return nil, err
 		}
 		return b, nil
-	default:
-		return nil, fmt.Errorf("invalid argument")
+
+	case "Object":
+		if !obj.Get("constructor").SameAs(bufType) {
+			break
+		}
+		var b []byte
+		if err := vm.ExportTo(buf, &b); err != nil {
+			return nil, err
+		}
+		return b, nil
 	}
+	return nil, fmt.Errorf("invalid buffer type")
 }
 
 type gojaTracer struct {
@@ -88,6 +95,7 @@ type gojaTracer struct {
 	env               *vm.EVM
 	toBig             toBigFn               // Converts a hex string into a JS bigint
 	toBuf             toBufFn               // Converts a []byte into a JS buffer
+	fromBuf           fromBufFn             // Converts an array, hex string or Uint8Array to a []byte
 	ctx               map[string]goja.Value // KV-bag passed to JS in `result`
 	activePrecompiles []common.Address      // List of active precompiles at current block
 	traceStep         bool                  // True if tracer object exposes a `step()` method
@@ -196,7 +204,7 @@ func (t *gojaTracer) CaptureTxEnd(restGas uint64) {}
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (t *gojaTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
-	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf}
+	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
 	if create {
 		t.ctx["type"] = t.vm.ToValue("CREATE")
@@ -333,7 +341,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 	vm := t.vm
 	// TODO: load console from goja-nodejs
 	vm.Set("toHex", func(v goja.Value) string {
-		b, err := fromBuf(vm, v, false)
+		b, err := t.fromBuf(vm, v, false)
 		if err != nil {
 			panic(err)
 		}
@@ -341,7 +349,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 	})
 	vm.Set("toWord", func(v goja.Value) goja.Value {
 		// TODO: add test with []byte len < 32 or > 32
-		b, err := fromBuf(vm, v, true)
+		b, err := t.fromBuf(vm, v, true)
 		if err != nil {
 			panic(err)
 		}
@@ -353,7 +361,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 		return res
 	})
 	vm.Set("toAddress", func(v goja.Value) goja.Value {
-		a, err := fromBuf(vm, v, true)
+		a, err := t.fromBuf(vm, v, true)
 		if err != nil {
 			panic(err)
 		}
@@ -365,7 +373,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 		return res
 	})
 	vm.Set("toContract", func(from goja.Value, nonce uint) goja.Value {
-		a, err := fromBuf(vm, from, true)
+		a, err := t.fromBuf(vm, from, true)
 		if err != nil {
 			panic(err)
 		}
@@ -378,12 +386,12 @@ func (t *gojaTracer) setBuiltinFunctions() {
 		return res
 	})
 	vm.Set("toContract2", func(from goja.Value, salt string, initcode goja.Value) goja.Value {
-		a, err := fromBuf(vm, from, true)
+		a, err := t.fromBuf(vm, from, true)
 		if err != nil {
 			panic(err)
 		}
 		addr := common.BytesToAddress(a)
-		code, err := fromBuf(vm, initcode, true)
+		code, err := t.fromBuf(vm, initcode, true)
 		if err != nil {
 			panic(err)
 		}
@@ -397,7 +405,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 		return res
 	})
 	vm.Set("isPrecompiled", func(v goja.Value) bool {
-		a, err := fromBuf(vm, v, true)
+		a, err := t.fromBuf(vm, v, true)
 		if err != nil {
 			panic(err)
 		}
@@ -410,7 +418,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 		return false
 	})
 	vm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
-		b, err := fromBuf(vm, slice, false)
+		b, err := t.fromBuf(vm, slice, false)
 		if err != nil {
 			panic(err)
 		}
@@ -452,6 +460,10 @@ func (t *gojaTracer) setTypeConverters() error {
 		return toBuf(vm, uint8ArrayType, val)
 	}
 	t.toBuf = toBufWrapper
+	fromBufWrapper := func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byte, error) {
+		return fromBuf(vm, uint8ArrayType, buf, allowString)
+	}
+	t.fromBuf = fromBufWrapper
 	return nil
 }
 
@@ -539,14 +551,15 @@ func (s *stackObj) setupObject() *goja.Object {
 }
 
 type dbObj struct {
-	db    vm.StateDB
-	vm    *goja.Runtime
-	toBig toBigFn
-	toBuf toBufFn
+	db      vm.StateDB
+	vm      *goja.Runtime
+	toBig   toBigFn
+	toBuf   toBufFn
+	fromBuf fromBufFn
 }
 
 func (do *dbObj) GetBalance(addrSlice goja.Value) goja.Value {
-	a, err := fromBuf(do.vm, addrSlice, false)
+	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
 		panic(err)
 	}
@@ -560,7 +573,7 @@ func (do *dbObj) GetBalance(addrSlice goja.Value) goja.Value {
 }
 
 func (do *dbObj) GetNonce(addrSlice goja.Value) uint64 {
-	a, err := fromBuf(do.vm, addrSlice, false)
+	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
 		panic(err)
 	}
@@ -569,7 +582,7 @@ func (do *dbObj) GetNonce(addrSlice goja.Value) uint64 {
 }
 
 func (do *dbObj) GetCode(addrSlice goja.Value) goja.Value {
-	a, err := fromBuf(do.vm, addrSlice, false)
+	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
 		panic(err)
 	}
@@ -583,12 +596,12 @@ func (do *dbObj) GetCode(addrSlice goja.Value) goja.Value {
 }
 
 func (do *dbObj) GetState(addrSlice goja.Value, hashSlice goja.Value) goja.Value {
-	a, err := fromBuf(do.vm, addrSlice, false)
+	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
 		panic(err)
 	}
 	addr := common.BytesToAddress(a)
-	h, err := fromBuf(do.vm, hashSlice, false)
+	h, err := do.fromBuf(do.vm, hashSlice, false)
 	if err != nil {
 		panic(err)
 	}
@@ -602,7 +615,7 @@ func (do *dbObj) GetState(addrSlice goja.Value, hashSlice goja.Value) goja.Value
 }
 
 func (do *dbObj) Exists(addrSlice goja.Value) bool {
-	a, err := fromBuf(do.vm, addrSlice, false)
+	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
 		panic(err)
 	}
