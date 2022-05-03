@@ -88,12 +88,16 @@ func (x *XDPoS_v2) isEpochSwitchAtRound(round utils.Round, parentHeader *types.H
 		return true, epochNum, nil
 	}
 
-	_, round, _, err := x.getExtraFields(parentHeader)
+	_, parentRound, _, err := x.getExtraFields(parentHeader)
 	if err != nil {
 		log.Error("[IsEpochSwitch] decode header error", "err", err, "header", parentHeader, "extra", common.Bytes2Hex(parentHeader.Extra))
 		return false, 0, err
 	}
-	parentRound := round
+	if round <= parentRound {
+		// this round is no larger than parentRound, should return false
+		return false, epochNum, nil
+	}
+
 	epochStartRound := round - round%utils.Round(x.config.Epoch)
 	return parentRound < epochStartRound, epochNum, nil
 }
