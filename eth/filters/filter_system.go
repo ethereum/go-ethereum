@@ -257,7 +257,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	return es.subscribe(sub)
 }
 
-// subscribePendingLogs creates a subscription that writes transaction hashes for
+// subscribePendingLogs creates a subscription that writes contract event logs for
 // transactions that enter the transaction pool.
 func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan []*types.Log) *Subscription {
 	sub := &subscription{
