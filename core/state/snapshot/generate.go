@@ -346,7 +346,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, root common.Hash, pref
 	snapFailedRangeProofMeter.Mark(1)
 
 	// Special case, the entire trie is missing. In the original trie scheme,
-	// all the duplicated subtries will be filtered ot(only one copy of data
+	// all the duplicated subtries will be filtered out (only one copy of data
 	// will be stored). While in the snapshot model, all the storage tries
 	// belong to different contracts will be kept even they are duplicated.
 	// Track it to a certain extent remove the noise data used for statistics.
