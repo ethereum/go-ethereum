@@ -21,7 +21,13 @@ Geth uses a datadir to store the blockchain, accounts and some additional inform
 
 #### When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear?
 
-Especially if the password file was created on Windows, it may have a Byte Order Mark or other special encoding that the go-ethereum client doesn't currently recognize.  You can change this behavior with a PowerShell command like `echo "mypasswordhere" | out-file test.txt -encoding ASCII`.  Additional details and/or any updates on more robust handling are at <https://github.com/ethereum/go-ethereum/issues/19905>.
+Especially if the password file was created on Windows, it may have a Byte Order Mark or other special encoding that the go-ethereum client doesn't currently recognize. You can change this behavior with a PowerShell command like:
+
+```sh
+echo "mypasswordhere" | out-file test.txt -encoding ASCII
+```
+
+Additional details and/or any updates on more robust handling are at <https://github.com/ethereum/go-ethereum/issues/19905>.
 
 #### I'm trying to sync my node, but it seems to be stuck at 64 blocks behind mainnet?!
 
