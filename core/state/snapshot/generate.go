@@ -177,7 +177,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, root common.Hash, prefix 
 		min      = append(prefix, origin...)
 	)
 	for iter.Next() {
-		// Ensure the iterated item always larger than the given origin.
+		// Ensure the iterated item is always equal or larger than the given origin.
 		key := iter.Key()
 		if bytes.Compare(key, min) < 0 {
 			return nil, errors.New("invalid iteration position")
