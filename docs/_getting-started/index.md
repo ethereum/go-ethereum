@@ -427,11 +427,7 @@ The balance is in the `return` field in the returned JSON object. However, it is
 
 ```python
 
-hex_value = "0xc7d54951f87f7c0"
-
-in_ether = int(hex_value, 16)/1e18
-
-print(in_ether)
+0xc7d54951f87f7c0 / 1e18
 
 ```
 This returns the balance in ether:
