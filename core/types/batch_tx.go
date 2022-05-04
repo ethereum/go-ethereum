@@ -1,0 +1,79 @@
+package types
+
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+type BatchTx struct {
+	ChainID       *big.Int
+	DecryptionKey []byte
+	BatchIndex    uint64
+	L1BlockNumber *big.Int
+	Timestamp     *big.Int
+	ShutterTxs    [][]byte
+	PlainTextTxs  [][]byte
+}
+
+// copy creates a deep copy of the transaction data and initializes all fields.
+func (tx *BatchTx) copy() TxData {
+	cpy := &BatchTx{
+		ChainID:       new(big.Int),
+		DecryptionKey: []byte{},
+		BatchIndex:    tx.BatchIndex,
+	}
+	if tx.ChainID != nil {
+		cpy.ChainID.Set(tx.ChainID)
+	}
+	if tx.DecryptionKey != nil {
+		cpy.DecryptionKey = make([]byte, len(tx.DecryptionKey))
+		copy(cpy.DecryptionKey, tx.DecryptionKey)
+	}
+	if tx.PlainTextTxs != nil {
+		cpy.PlainTextTxs = make([][]byte, len(tx.PlainTextTxs))
+		for i, b := range tx.PlainTextTxs {
+			c := make([]byte, len(b))
+			copy(c, b)
+			cpy.PlainTextTxs[i] = c
+		}
+	}
+	if tx.ShutterTxs != nil {
+		cpy.ShutterTxs = make([][]byte, len(tx.ShutterTxs))
+		for i, b := range tx.ShutterTxs {
+			c := make([]byte, len(b))
+			copy(c, b)
+			cpy.ShutterTxs[i] = c
+		}
+	}
+	return cpy
+}
+
+// accessors for innerTx.
+func (tx *BatchTx) txType() byte             { return BatchTxType }
+func (tx *BatchTx) chainID() *big.Int        { return tx.ChainID }
+func (tx *BatchTx) protected() bool          { return true }
+func (tx *BatchTx) accessList() AccessList   { return nil }
+func (tx *BatchTx) data() []byte             { return nil }
+func (tx *BatchTx) gas() uint64              { return 0 }
+func (tx *BatchTx) gasFeeCap() *big.Int      { return big.NewInt(0) }
+func (tx *BatchTx) gasTipCap() *big.Int      { return big.NewInt(0) }
+func (tx *BatchTx) gasPrice() *big.Int       { return big.NewInt(0) }
+func (tx *BatchTx) value() *big.Int          { return big.NewInt(0) }
+func (tx *BatchTx) nonce() uint64            { return 0 }
+func (tx *BatchTx) to() *common.Address      { return nil }
+func (tx *BatchTx) encryptedPayload() []byte { return nil }
+func (tx *BatchTx) decryptionKey() []byte    { return tx.DecryptionKey }
+func (tx *BatchTx) batchIndex() uint64       { return tx.BatchIndex }
+func (tx *BatchTx) l1BlockNumber() *big.Int  { return tx.L1BlockNumber }
+func (tx *BatchTx) timestamp() *big.Int      { return tx.Timestamp }
+func (tx *BatchTx) shutterTxs() [][]byte     { return tx.ShutterTxs }
+func (tx *BatchTx) plainTextTxs() [][]byte   { return tx.PlainTextTxs }
+
+func (tx *BatchTx) rawSignatureValues() (v, r, s *big.Int) {
+	return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+}
+
+func (tx *BatchTx) setSignatureValues(chainID, v, r, s *big.Int) {
+	// Decryption key transactions are not signed, so do nothing
+}

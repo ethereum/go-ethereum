@@ -176,7 +176,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 			return errEmptyTypedReceipt
 		}
 		r.Type = b[0]
-		if r.Type == AccessListTxType || r.Type == DynamicFeeTxType || r.Type == ShutterTxType || r.Type == BatchContextTxType {
+		if r.Type == AccessListTxType || r.Type == DynamicFeeTxType || r.Type == ShutterTxType || r.Type == BatchTxType {
 			var dec receiptRLP
 			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
 				return err
@@ -348,8 +348,8 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	case ShutterTxType:
 		w.WriteByte(ShutterTxType)
 		rlp.Encode(w, data)
-	case BatchContextTxType:
-		w.WriteByte(BatchContextTxType)
+	case BatchTxType:
+		w.WriteByte(BatchTxType)
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for

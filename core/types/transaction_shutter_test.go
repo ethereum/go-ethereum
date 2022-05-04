@@ -10,6 +10,16 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func assertAddress(t *testing.T, signer Signer, expected common.Address, tx *Transaction) {
+	recovered, err := signer.Sender(tx)
+	if err != nil {
+		assertNilErr(t, err, "error while recovering address")
+	}
+	if recovered != expected {
+		t.Fatal("recovered sender mismatch")
+	}
+}
+
 func assertNilErr(t *testing.T, err error, message string) {
 	if err != nil {
 		if message == "" {
@@ -29,21 +39,21 @@ func TestShutterTransactionCoding(t *testing.T) {
 	}
 	var (
 		signer        = NewLondonSigner(common.Big1)
-		addr          = common.HexToAddress("0x0000000000000000000000000000000000000001")
+		addr          = crypto.PubkeyToAddress(key.PublicKey)
 		recipient     = common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 		accesses      = AccessList{{Address: addr, StorageKeys: []common.Hash{{0}}}}
 		decryptionKey = bytes.Repeat([]byte("x"), 32)
 	)
 	nonce := uint64(0)
 
-	for j := uint64(0); j < 500; j++ {
+	for j := uint64(0); j < 10; j++ {
 		now := time.Now().Unix()
 
-		shutterTXs := make([]*Transaction, 0)
-		plainTextTXs := make([]*Transaction, 0)
+		shutterTxs := make([]*Transaction, 0)
+		plainTextTxs := make([]*Transaction, 0)
 
-		shutterTXsBytes := make([][]byte, 0)
-		plainTextTXsBytes := make([][]byte, 0)
+		shutterTxsBytes := make([][]byte, 0)
+		plainTextTxsBytes := make([][]byte, 0)
 
 		for i := uint64(0); i < 20; i++ {
 			var txdata TxData
@@ -79,22 +89,22 @@ func TestShutterTransactionCoding(t *testing.T) {
 			assertNilErr(t, err, "can't marshal tx to binary")
 			switch selector {
 			case 0:
-				shutterTXsBytes = append(shutterTXsBytes, data)
-				shutterTXs = append(shutterTXs, tx)
+				shutterTxsBytes = append(shutterTxsBytes, data)
+				shutterTxs = append(shutterTxs, tx)
 			case 1:
-				plainTextTXsBytes = append(plainTextTXsBytes, data)
-				plainTextTXs = append(plainTextTXs, tx)
+				plainTextTxsBytes = append(plainTextTxsBytes, data)
+				plainTextTxs = append(plainTextTxs, tx)
 			}
 			nonce++
 		}
-		txdata := &BatchContextTx{
+		txdata := &BatchTx{
 			ChainID:       big.NewInt(1),
 			DecryptionKey: decryptionKey,
 			BatchIndex:    j,
 			L1BlockNumber: big.NewInt(42),
 			Timestamp:     big.NewInt(now),
-			ShutterTXs:    shutterTXsBytes,
-			PlainTextTXs:  plainTextTXsBytes,
+			ShutterTxs:    shutterTxsBytes,
+			PlainTextTxs:  plainTextTxsBytes,
 		}
 		tx, err := SignNewTx(key, signer, txdata)
 		assertNilErr(t, err, "can't sign tx")
@@ -104,20 +114,31 @@ func TestShutterTransactionCoding(t *testing.T) {
 		assertNilErr(t, err, "encoded/decoded tx not the same as initial tx")
 		assertEqual(parsedTx, tx)
 
+		// check signing
+		assertAddress(t, signer, addr, parsedTx)
+
 		// Now check equality of nested tx's
-		for i, data := range parsedTx.ShutterTXs() {
+		for i, data := range parsedTx.ShutterTxs() {
 			var parsedTx = &Transaction{}
 			err := parsedTx.UnmarshalBinary(data)
 			assertNilErr(t, err, "rlp decoding of nested shutter tx failed")
-			tx := shutterTXs[i]
+			tx := shutterTxs[i]
 			assertEqual(parsedTx, tx)
+			// check signing
+			if recovered, _ := signer.Sender(parsedTx); recovered != addr {
+				t.Fatal("recovered sender mismatch")
+			}
+			// check signing
+			assertAddress(t, signer, addr, parsedTx)
 		}
-		for i, data := range parsedTx.PlainTextTXs() {
+		for i, data := range parsedTx.PlainTextTxs() {
 			var parsedTx = &Transaction{}
 			err := parsedTx.UnmarshalBinary(data)
 			assertNilErr(t, err, "rlp decoding of nested plaintext tx failed")
-			tx := plainTextTXs[i]
+			tx := plainTextTxs[i]
 			assertEqual(parsedTx, tx)
+			// check signing
+			assertAddress(t, signer, addr, parsedTx)
 		}
 	}
 

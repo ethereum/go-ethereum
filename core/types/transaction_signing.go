@@ -182,6 +182,7 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
+	// TODO this also has to include the shutter types
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
@@ -262,7 +263,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		}
 		V = new(big.Int).Sub(V, s.chainIdMul)
 		V.Sub(V, big8)
-	case AccessListTxType, ShutterTxType, BatchContextTxType:
+	case AccessListTxType, ShutterTxType, BatchTxType:
 		// AL txs are defined to use 0 and 1 as their recovery
 		// id, add 27 to become equivalent to unprotected Homestead signatures.
 		V = new(big.Int).Add(V, big.NewInt(27))
@@ -279,7 +280,7 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	switch txdata := tx.inner.(type) {
 	case *LegacyTx:
 		return s.EIP155Signer.SignatureValues(tx, sig)
-	case *AccessListTx, *ShutterTx, *BatchContextTx:
+	case *AccessListTx, *ShutterTx, *BatchTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
 		if txdata.chainID().Sign() != 0 && txdata.chainID().Cmp(s.chainId) != 0 {
@@ -332,7 +333,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				tx.Gas(),
 				tx.EncryptedPayload(),
 			})
-	case BatchContextTxType:
+	case BatchTxType:
 		return prefixedRlpHash(
 			tx.Type(),
 			[]interface{}{
@@ -341,8 +342,8 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				tx.DecryptionKey(),
 				tx.L1BlockNumber(),
 				tx.Timestamp(),
-				tx.ShutterTXs(),
-				tx.PlainTextTXs(),
+				tx.ShutterTxs(),
+				tx.PlainTextTxs(),
 			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
