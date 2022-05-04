@@ -4,9 +4,9 @@ permalink: docs/faq
 sort_key: C
 ---
 
-**Q.**  I noticed my peercount slowly decrease, and now it is at 0.  Restarting doesn't get any peers.
+**Q.**  I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
 
-**A.**  Check and sync your clock with ntp.  [Example](https://askubuntu.com/questions/254826/how-to-force-a-clock-update-using-ntp) `sudo ntpdate -s time.nist.gov`
+**A.**  Check and sync your clock with ntp. For example, you can [force a clock update using ntp](https://askubuntu.com/questions/254826/how-to-force-a-clock-update-using-ntp) like so: `sudo ntpdate -s time.nist.gov`
 
 ---
 
@@ -16,9 +16,9 @@ sort_key: C
 
 ---
 
-**Q.** How do Ethereum syncing work?
+**Q.** How does Ethereum syncing work?
 
-**A.** The current default mode of sync for Geth is called fast sync. Instead of starting from the genesis block and reprocessing all the transactions that ever occurred (which could take weeks), fast sync downloads the blocks, and only verifies the associated proof-of-works. Downloading all the blocks is a straightforward and fast procedure and will relatively quickly reassemble the entire chain.
+**A.** The current default syncing mode used by Geth is called "fast sync". Instead of starting from the genesis block and processing all the transactions that ever occurred (which could take weeks), fast sync downloads the blocks, and only verifies the associated proof-of-works. Downloading all the blocks is a straightforward and fast procedure and will relatively quickly reassemble the entire chain.
 
 Many people falsely assume that because they have the blocks, they are in sync. Unfortunately this is not the case, since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross checked with the latest blocks. This phase is called the state trie download and it actually runs concurrently with the block downloads; alas it take a lot longer nowadays than downloading the blocks.
 
