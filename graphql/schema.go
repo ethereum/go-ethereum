@@ -137,9 +137,12 @@ const schema string = `
         r: BigInt!
         s: BigInt!
         v: BigInt!
-        #Envelope transaction support
+        # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
+        # RawReceipt is the binary encoding of the receipt. For post EIP-2718 typed transactions
+        # this is equivalent to TxType || ReceiptEncoding.
+        rawReceipt: Bytes!
     }
 
     # BlockFilterCriteria encapsulates log filter criteria for a filter applied

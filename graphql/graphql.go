@@ -514,6 +514,14 @@ func (t *Transaction) V(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*v), nil
 }
 
+func (t *Transaction) RawReceipt(ctx context.Context) (hexutil.Bytes, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+	return receipt.MarshalBinary()
+}
+
 type BlockType int
 
 // Block represents an Ethereum block.
