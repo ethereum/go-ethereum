@@ -37,10 +37,10 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 	enc.Op = s.Op
 	enc.Gas = math.HexOrDecimal64(s.Gas)
 	enc.GasCost = math.HexOrDecimal64(s.GasCost)
-	enc.Memory = s.Memory
+	enc.Memory = s.Memory.Bytes()
 	enc.MemorySize = s.MemorySize
 	enc.Stack = s.Stack
-	enc.ReturnData = s.ReturnData
+	enc.ReturnData = s.ReturnData.Bytes()
 	enc.Storage = s.Storage
 	enc.Depth = s.Depth
 	enc.RefundCounter = s.RefundCounter
@@ -83,7 +83,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		s.GasCost = uint64(*dec.GasCost)
 	}
 	if dec.Memory != nil {
-		s.Memory = *dec.Memory
+		s.Memory.Write(*dec.Memory)
 	}
 	if dec.MemorySize != nil {
 		s.MemorySize = *dec.MemorySize
@@ -92,7 +92,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		s.Stack = dec.Stack
 	}
 	if dec.ReturnData != nil {
-		s.ReturnData = *dec.ReturnData
+		s.ReturnData.Write(*dec.ReturnData)
 	}
 	if dec.Storage != nil {
 		s.Storage = dec.Storage

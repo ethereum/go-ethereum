@@ -80,6 +80,11 @@ func NewExtraData() *ExtraData {
 	}
 }
 
+func (e *ExtraData) Clean() {
+	e.CodeList = e.CodeList[:0]
+	e.ProofList = e.ProofList[:0]
+}
+
 // SealExtraData doesn't show empty fields.
 func (e *ExtraData) SealExtraData() *ExtraData {
 	if len(e.CodeList) == 0 {
