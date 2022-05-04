@@ -140,7 +140,11 @@ const schema string = `
         # Envelope transaction support
         type: Int
         accessList: [AccessTuple!]
-        # RawReceipt is the binary encoding of the receipt. For post EIP-2718 typed transactions
+        # Raw is the canonical encoding of the transaction.
+        # For legacy transactions, it returns the RLP encoding.
+        # For EIP-2718 typed transactions, it returns the type and payload.
+        raw: Bytes!
+        # RawReceipt is the canonical encoding of the receipt. For post EIP-2718 typed transactions
         # this is equivalent to TxType || ReceiptEncoding.
         rawReceipt: Bytes!
     }
@@ -238,6 +242,10 @@ const schema string = `
         # EstimateGas estimates the amount of gas that will be required for
         # successful execution of a transaction at the current block's state.
         estimateGas(data: CallData!): Long!
+        # RawHeader is the RLP encoding of the block's header.
+        rawHeader: Bytes!
+        # Raw is the RLP encoding of the block.
+        raw: Bytes!
     }
 
     # CallData represents the data associated with a local contract call.
