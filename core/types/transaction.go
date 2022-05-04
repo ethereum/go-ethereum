@@ -321,12 +321,8 @@ func (tx *Transaction) L1BlockNumber() *big.Int { return tx.inner.l1BlockNumber(
 // Timestamp returns the timestamp ()
 func (tx *Transaction) Timestamp() *big.Int { return tx.inner.timestamp() }
 
-// ShutterTxs returns the list of RLP-byte serialised ShutterTXs included in the batch
-func (tx *Transaction) ShutterTxs() [][]byte { return tx.inner.shutterTxs() }
-
-// PlainTextTxs returns the list of RLP-byte serialised unencrypted Ethereum transactions
-//included in the batch
-func (tx *Transaction) PlainTextTxs() [][]byte { return tx.inner.plainTextTxs() }
+// Transactions returns the list of RLP-byte serialised ShutterTxs and plaintext txs included in the batch
+func (tx *Transaction) Transactions() [][]byte { return tx.inner.transactions() }
 
 // Cost returns gas * gasPrice + value.
 func (tx *Transaction) Cost() *big.Int {

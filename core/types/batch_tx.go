@@ -12,8 +12,7 @@ type BatchTx struct {
 	BatchIndex    uint64
 	L1BlockNumber *big.Int
 	Timestamp     *big.Int
-	ShutterTxs    [][]byte
-	PlainTextTxs  [][]byte
+	Transactions  [][]byte
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -35,20 +34,12 @@ func (tx *BatchTx) copy() TxData {
 		cpy.DecryptionKey = make([]byte, len(tx.DecryptionKey))
 		copy(cpy.DecryptionKey, tx.DecryptionKey)
 	}
-	if tx.PlainTextTxs != nil {
-		cpy.PlainTextTxs = make([][]byte, len(tx.PlainTextTxs))
-		for i, b := range tx.PlainTextTxs {
+	if tx.Transactions != nil {
+		cpy.Transactions = make([][]byte, len(tx.Transactions))
+		for i, b := range tx.Transactions {
 			c := make([]byte, len(b))
 			copy(c, b)
-			cpy.PlainTextTxs[i] = c
-		}
-	}
-	if tx.ShutterTxs != nil {
-		cpy.ShutterTxs = make([][]byte, len(tx.ShutterTxs))
-		for i, b := range tx.ShutterTxs {
-			c := make([]byte, len(b))
-			copy(c, b)
-			cpy.ShutterTxs[i] = c
+			cpy.Transactions[i] = c
 		}
 	}
 	return cpy
@@ -72,8 +63,7 @@ func (tx *BatchTx) decryptionKey() []byte    { return tx.DecryptionKey }
 func (tx *BatchTx) batchIndex() uint64       { return tx.BatchIndex }
 func (tx *BatchTx) l1BlockNumber() *big.Int  { return tx.L1BlockNumber }
 func (tx *BatchTx) timestamp() *big.Int      { return tx.Timestamp }
-func (tx *BatchTx) shutterTxs() [][]byte     { return tx.ShutterTxs }
-func (tx *BatchTx) plainTextTxs() [][]byte   { return tx.PlainTextTxs }
+func (tx *BatchTx) transactions() [][]byte   { return tx.Transactions }
 
 func (tx *BatchTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

@@ -49,16 +49,11 @@ func TestShutterTransactionCoding(t *testing.T) {
 	for j := uint64(0); j < 10; j++ {
 		now := time.Now().Unix()
 
-		shutterTxs := make([]*Transaction, 0)
-		plainTextTxs := make([]*Transaction, 0)
-
-		shutterTxsBytes := make([][]byte, 0)
-		plainTextTxsBytes := make([][]byte, 0)
-
+		transactions := make([]*Transaction, 0)
+		transactionsBytes := make([][]byte, 0)
 		for i := uint64(0); i < 20; i++ {
 			var txdata TxData
-			selector := i % 2
-			switch selector {
+			switch i % 2 {
 			case 0:
 				txdata = &ShutterTx{
 					ChainID:          big.NewInt(1),
@@ -87,14 +82,8 @@ func TestShutterTransactionCoding(t *testing.T) {
 			// RLP
 			data, err := tx.MarshalBinary()
 			assertNilErr(t, err, "can't marshal tx to binary")
-			switch selector {
-			case 0:
-				shutterTxsBytes = append(shutterTxsBytes, data)
-				shutterTxs = append(shutterTxs, tx)
-			case 1:
-				plainTextTxsBytes = append(plainTextTxsBytes, data)
-				plainTextTxs = append(plainTextTxs, tx)
-			}
+			transactionsBytes = append(transactionsBytes, data)
+			transactions = append(transactions, tx)
 			nonce++
 		}
 		txdata := &BatchTx{
@@ -103,8 +92,7 @@ func TestShutterTransactionCoding(t *testing.T) {
 			BatchIndex:    j,
 			L1BlockNumber: big.NewInt(42),
 			Timestamp:     big.NewInt(now),
-			ShutterTxs:    shutterTxsBytes,
-			PlainTextTxs:  plainTextTxsBytes,
+			Transactions:  transactionsBytes,
 		}
 		tx, err := SignNewTx(key, signer, txdata)
 		assertNilErr(t, err, "can't sign tx")
@@ -118,25 +106,16 @@ func TestShutterTransactionCoding(t *testing.T) {
 		assertAddress(t, signer, addr, parsedTx)
 
 		// Now check equality of nested tx's
-		for i, data := range parsedTx.ShutterTxs() {
+		for i, data := range parsedTx.Transactions() {
 			var parsedTx = &Transaction{}
 			err := parsedTx.UnmarshalBinary(data)
-			assertNilErr(t, err, "rlp decoding of nested shutter tx failed")
-			tx := shutterTxs[i]
+			assertNilErr(t, err, "rlp decoding of nested transaction failed")
+			tx := transactions[i]
 			assertEqual(parsedTx, tx)
 			// check signing
 			if recovered, _ := signer.Sender(parsedTx); recovered != addr {
 				t.Fatal("recovered sender mismatch")
 			}
-			// check signing
-			assertAddress(t, signer, addr, parsedTx)
-		}
-		for i, data := range parsedTx.PlainTextTxs() {
-			var parsedTx = &Transaction{}
-			err := parsedTx.UnmarshalBinary(data)
-			assertNilErr(t, err, "rlp decoding of nested plaintext tx failed")
-			tx := plainTextTxs[i]
-			assertEqual(parsedTx, tx)
 			// check signing
 			assertAddress(t, signer, addr, parsedTx)
 		}

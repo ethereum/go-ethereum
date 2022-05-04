@@ -342,8 +342,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 				tx.DecryptionKey(),
 				tx.L1BlockNumber(),
 				tx.Timestamp(),
-				tx.ShutterTxs(),
-				tx.PlainTextTxs(),
+				tx.Transactions(),
 			})
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
