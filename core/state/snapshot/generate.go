@@ -621,10 +621,6 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
 			}
-			// Shift iterator to the interruption position
-			if storeMarker != nil {
-				ctx.seekIterator(snapStorage, accMarker, storeMarker)
-			}
 			if err := generateStorages(ctx, dl, accountHash, acc.Root, storeMarker); err != nil {
 				return err
 			}
@@ -633,9 +629,18 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		accMarker = nil
 		return nil
 	}
-	origin := common.CopyBytes(accMarker)
+	// Always reset the initial account range as 1 whenever recover from the
+	// interruption. TODO(rjl493456442) can we remove it?
+	var accountRange = accountCheckRange
+	if len(accMarker) > 0 {
+		accountRange = 1
+	}
+	var (
+		iterTime = time.Now()
+		origin   = common.CopyBytes(accMarker)
+	)
 	for {
-		exhausted, last, err := dl.generateRange(ctx, dl.root, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountCheckRange, onAccount, FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, dl.root, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
@@ -646,6 +651,11 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if origin == nil || exhausted {
 			ctx.removeStorageLeft()
 			break
+		}
+		// Don't hold iterator too long, re-open them to let compactor works.
+		if time.Since(iterTime) > time.Minute*3 {
+			iterTime = time.Now()
+			ctx.reopenIterators()
 		}
 	}
 	return nil
@@ -666,7 +676,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
 	// Initialize the global generator context
-	ctx := newGeneratorContext(stats, dl.diskdb, accMarker)
+	ctx := newGeneratorContext(stats, dl.diskdb, accMarker, dl.genMarker)
 	defer ctx.close()
 
 	if err := generateAccounts(ctx, dl, accMarker); err != nil {

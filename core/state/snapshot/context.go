@@ -41,6 +41,7 @@ type generatorStats struct {
 	start    time.Time          // Timestamp when generation started
 	accounts uint64             // Number of accounts indexed(generated or recovered)
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
+	dangling uint64             // Number of dangling storage slots
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
 }
 
@@ -66,6 +67,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"accounts", gs.accounts,
 		"slots", gs.slots,
 		"storage", gs.storage,
+		"dangling", gs.dangling,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
 	}...)
 	// Calculate the estimated indexing time based on current stats
@@ -93,28 +95,46 @@ type generatorContext struct {
 }
 
 // newGeneratorContext initializes the context for generation.
-func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte) *generatorContext {
-	// Construct global account and storage snapshot iterators at the
-	// interrupted position. These iterators will be reopened from time
-	// to time to avoid blocking leveldb compaction for a long time.
-	//
-	// Note for the storage iterator, we use the account interruption
-	// position as the iteration start point, because this account can
-	// be deleted since last generation and storages need to wiped in
-	// this case.
-	var (
-		acctIter    = db.NewIterator(rawdb.SnapshotAccountPrefix, accMarker)
-		storageIter = db.NewIterator(rawdb.SnapshotStoragePrefix, accMarker)
-		acctIt      = rawdb.NewKeyLengthIterator(acctIter, 1+common.HashLength)
-		storageIt   = rawdb.NewKeyLengthIterator(storageIter, 1+2*common.HashLength)
-	)
-	return &generatorContext{
-		stats:   stats,
-		db:      db,
-		account: acctIt,
-		storage: storageIt,
-		batch:   db.NewBatch(),
-		logged:  time.Now(),
+func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
+	ctx := &generatorContext{
+		stats:  stats,
+		db:     db,
+		batch:  db.NewBatch(),
+		logged: time.Now(),
+	}
+	ctx.openIterator(snapAccount, accMarker)
+	ctx.openIterator(snapStorage, storageMarker)
+	return ctx
+}
+
+// openIterator constructs global account and storage snapshot iterators
+// at the interrupted position. These iterators should be reopened from time
+// to time to avoid blocking leveldb compaction for a long time.
+func (ctx *generatorContext) openIterator(kind string, start []byte) {
+	if kind == snapAccount {
+		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
+		ctx.account = rawdb.NewKeyLengthIterator(iter, 1+common.HashLength)
+		return
+	}
+	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
+	ctx.storage = rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength)
+}
+
+// reopenIterators releases the held two global database iterators and
+// reopens them in the interruption position. It's aim for not blocking
+// leveldb compaction.
+func (ctx *generatorContext) reopenIterators() {
+	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
+		var (
+			key = iter.Key()
+			cur = key[1:]
+		)
+		kind := snapAccount
+		if i == 1 {
+			kind = snapStorage
+		}
+		iter.Release()
+		ctx.openIterator(kind, cur)
 	}
 }
 
@@ -132,26 +152,16 @@ func (ctx *generatorContext) iterator(kind string) ethdb.Iterator {
 	return ctx.storage
 }
 
-// seekIterator re-opens the database iterator with given start position.
-func (ctx *generatorContext) seekIterator(kind string, prefix []byte, start []byte) {
-	iter := ctx.iterator(kind)
-	iter.Release()
-
-	iter = ctx.db.NewIterator(prefix, start)
-	if kind == snapStorage {
-		ctx.storage = rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength)
-	} else {
-		ctx.account = rawdb.NewKeyLengthIterator(iter, 1+common.HashLength)
-	}
-}
-
 // removeStorageBefore, iterates and deletes all storage snapshots starting
 // from the current iterator position until the specified account. When the
 // iterator touches the storage located in the given account range, or the
 // storage is larger than the given account range, it stops and moves back
 // the iterator a step.
 func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
-	iter := ctx.storage
+	var (
+		count uint64
+		iter  = ctx.storage
+	)
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Compare(key[1:1+common.HashLength], account.Bytes()) >= 0 {
@@ -159,7 +169,9 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 			return
 		}
 		ctx.batch.Delete(key)
+		count += 1
 	}
+	ctx.stats.dangling += count
 }
 
 // removeStorageAt iterates and deletes all storage snapshots which are located
@@ -168,7 +180,10 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 // a step. An error will be returned if the initial position of iterator is not
 // in the given account range.
 func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
-	iter := ctx.iterator(snapStorage)
+	var (
+		count uint64
+		iter  = ctx.iterator(snapStorage)
+	)
 	for iter.Next() {
 		key := iter.Key()
 		cmp := bytes.Compare(key[1:1+common.HashLength], account.Bytes())
@@ -180,15 +195,22 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			break
 		}
 		ctx.batch.Delete(key)
+		count += 1
 	}
+	ctx.stats.dangling += count
 	return nil
 }
 
 // removeStorageLeft starting from the current iterator position, iterate and
 // delete all storage snapshots left.
 func (ctx *generatorContext) removeStorageLeft() {
-	iter := ctx.iterator(snapStorage)
+	var (
+		count uint64
+		iter  = ctx.iterator(snapStorage)
+	)
 	for iter.Next() {
 		ctx.batch.Delete(iter.Key())
+		count += 1
 	}
+	ctx.stats.dangling += count
 }

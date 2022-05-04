@@ -18,108 +18,138 @@ package snapshot
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// DanglingRange describes the range for detecting dangling storages.
-type DanglingRange struct {
-	db    ethdb.KeyValueStore // The database stores the snapshot data
-	start []byte              // The start of the key range
-	limit []byte              // The last of the key range
-
-	result   []common.Hash // The list of account hashes which have the dangling storages
-	duration time.Duration // Total time spent on the iteration
+// CheckDanglingStorage iterates the snap storage data, and verifies that all
+// storage also has corresponding account data.
+func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
+	if err := checkDanglingDiskStorage(chaindb); err != nil {
+		return err
+	}
+	return checkDanglingMemStorage(chaindb)
 }
 
-// NewDanglingRange initializes a dangling storage scanner and detects all the
-// dangling accounts out.
-func NewDanglingRange(db ethdb.KeyValueStore, start, limit []byte, report bool) *DanglingRange {
-	r := &DanglingRange{
-		db:    db,
-		start: start,
-		limit: limit,
-	}
-	r.result, r.duration = r.detect(report)
-
-	if len(r.result) > 0 {
-		log.Warn("Detected dangling storages", "number", len(r.result), "start", hexutil.Encode(start), "limit", hexutil.Encode(limit), "elapsed", common.PrettyDuration(r.duration))
-	} else {
-		logger := log.Debug
-		if report {
-			logger = log.Info
-		}
-		logger("Verified snapshot storages", "start", hexutil.Encode(start), "limit", hexutil.Encode(limit), "elapsed", common.PrettyDuration(r.duration))
-	}
-	return r
-}
-
-// detect iterates the storage snapshot in the specified key range and
-// returns a list of account hash of the dangling storages. Note both
-// start and limit are included for iteration.
-func (r *DanglingRange) detect(report bool) ([]common.Hash, time.Duration) {
+// checkDanglingDiskStorage checks if there is any 'dangling' storage data in the
+// disk-backed snapshot layer.
+func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 	var (
-		checked    []byte
-		result     []common.Hash
-		start      = time.Now()
 		lastReport = time.Now()
+		start      = time.Now()
+		lastKey    []byte
+		it         = rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.SnapshotStoragePrefix, nil), 1+2*common.HashLength)
 	)
-	iter := rawdb.NewKeyLengthIterator(r.db.NewIterator(rawdb.SnapshotStoragePrefix, r.start), len(rawdb.SnapshotStoragePrefix)+2*common.HashLength)
-	defer iter.Release()
+	log.Info("Checking dangling snapshot disk storage")
 
-	for iter.Next() {
-		account := iter.Key()[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
-		if r.limit != nil && bytes.Compare(account, r.limit) > 0 {
-			break
-		}
-		// Skip unnecessary checks for checked storage.
-		if bytes.Equal(account, checked) {
+	defer it.Release()
+	for it.Next() {
+		k := it.Key()
+		accKey := k[1:33]
+		if bytes.Equal(accKey, lastKey) {
+			// No need to look up for every slot
 			continue
 		}
-		checked = common.CopyBytes(account)
-
-		// Check the presence of the corresponding account.
-		accountHash := common.BytesToHash(account)
-		data := rawdb.ReadAccountSnapshot(r.db, accountHash)
-		if len(data) != 0 {
-			continue
-		}
-		result = append(result, accountHash)
-
-		if report {
-			log.Warn("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accountHash))
-		}
-		if time.Since(lastReport) > time.Second*8 && report {
-			log.Info("Detecting dangling storage", "at", fmt.Sprintf("%#x", accountHash), "elapsed", common.PrettyDuration(time.Since(start)))
+		lastKey = common.CopyBytes(accKey)
+		if time.Since(lastReport) > time.Second*8 {
+			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
 		}
+		if data := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
+			log.Warn("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
+			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
+		}
 	}
-	return result, time.Since(start)
+	log.Info("Verified the snapshot disk storage", "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+	return nil
 }
 
-// cleanup wipes the dangling storages which fall within the range before the given key.
-func (r *DanglingRange) cleanup(limit []byte) error {
+// checkDanglingMemStorage checks if there is any 'dangling' storage in the journalled
+// snapshot difflayers.
+func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 	var (
-		err   error
-		wiped int
+		start   = time.Now()
+		journal = rawdb.ReadSnapshotJournal(db)
 	)
-	for _, accountHash := range r.result {
-		if limit != nil && bytes.Compare(accountHash.Bytes(), limit) >= 0 {
-			break
-		}
-		prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
-		keylen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
-		if err = wipeKeyRange(r.db, "storage", prefix, nil, nil, keylen, snapWipedStorageMeter, false); err != nil {
-			break
-		}
-		wiped += 1
+	if len(journal) == 0 {
+		log.Warn("Loaded snapshot journal", "diffs", "missing")
+		return nil
 	}
-	r.result = r.result[wiped:]
-	return err
+	r := rlp.NewStream(bytes.NewReader(journal), 0)
+	// Firstly, resolve the first element as the journal version
+	version, err := r.Uint()
+	if err != nil {
+		log.Warn("Failed to resolve the journal version", "error", err)
+		return nil
+	}
+	if version != journalVersion {
+		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
+		return nil
+	}
+	// Secondly, resolve the disk layer root, ensure it's continuous
+	// with disk layer. Note now we can ensure it's the snapshot journal
+	// correct version, so we expect everything can be resolved properly.
+	var root common.Hash
+	if err := r.Decode(&root); err != nil {
+		return errors.New("missing disk layer root")
+	}
+	// The diff journal is not matched with disk, discard them.
+	// It can happen that Geth crashes without persisting the latest
+	// diff journal.
+	// Load all the snapshot diffs from the journal
+	if err := checkDanglingJournalStorage(r); err != nil {
+		return err
+	}
+	log.Info("Verified the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// loadDiffLayer reads the next sections of a snapshot journal, reconstructing a new
+// diff and verifying that it can be linked to the requested parent.
+func checkDanglingJournalStorage(r *rlp.Stream) error {
+	for {
+		// Read the next diff journal entry
+		var root common.Hash
+		if err := r.Decode(&root); err != nil {
+			// The first read may fail with EOF, marking the end of the journal
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("load diff root: %v", err)
+		}
+		var destructs []journalDestruct
+		if err := r.Decode(&destructs); err != nil {
+			return fmt.Errorf("load diff destructs: %v", err)
+		}
+		var accounts []journalAccount
+		if err := r.Decode(&accounts); err != nil {
+			return fmt.Errorf("load diff accounts: %v", err)
+		}
+		accountData := make(map[common.Hash][]byte)
+		for _, entry := range accounts {
+			if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+				accountData[entry.Hash] = entry.Blob
+			} else {
+				accountData[entry.Hash] = nil
+			}
+		}
+		var storage []journalStorage
+		if err := r.Decode(&storage); err != nil {
+			return fmt.Errorf("load diff storage: %v", err)
+		}
+		for _, entry := range storage {
+			if _, ok := accountData[entry.Hash]; !ok {
+				log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", entry.Hash), "root", root)
+				return fmt.Errorf("dangling journal snapshot storage account %#x", entry.Hash)
+			}
+		}
+	}
 }
