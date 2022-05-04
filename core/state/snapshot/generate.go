@@ -623,7 +623,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			}
 			// Shift iterator to the interruption position
 			if storeMarker != nil {
-				ctx.reopen(snapStorage, accMarker, storeMarker)
+				ctx.seekIterator(snapStorage, accMarker, storeMarker)
 			}
 			if err := generateStorages(ctx, dl, accountHash, acc.Root, storeMarker); err != nil {
 				return err
@@ -644,7 +644,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		// Last step, cleanup the storages after the last account.
 		// All the left storages should be treated as dangling.
 		if origin == nil || exhausted {
-			ctx.removeAllStorage()
+			ctx.removeStorageLeft()
 			break
 		}
 	}

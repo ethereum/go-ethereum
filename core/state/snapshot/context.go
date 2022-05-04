@@ -98,10 +98,10 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 	// interrupted position. These iterators will be reopened from time
 	// to time to avoid blocking leveldb compaction for a long time.
 	//
-	// Note for the storage iterator, we use the interrupted account hash as
-	// the iteration start point instead of the storage interruption position,
-	// because this account can be deleted since last generation and storages
-	// need to wiped in this case.
+	// Note for the storage iterator, we use the account interruption
+	// position as the iteration start point, because this account can
+	// be deleted since last generation and storages need to wiped in
+	// this case.
 	var (
 		acctIter    = db.NewIterator(rawdb.SnapshotAccountPrefix, accMarker)
 		storageIter = db.NewIterator(rawdb.SnapshotStoragePrefix, accMarker)
@@ -132,8 +132,8 @@ func (ctx *generatorContext) iterator(kind string) ethdb.Iterator {
 	return ctx.storage
 }
 
-// reopen re-constructs the database iterator with given start position.
-func (ctx *generatorContext) reopen(kind string, prefix []byte, start []byte) {
+// seekIterator re-opens the database iterator with given start position.
+func (ctx *generatorContext) seekIterator(kind string, prefix []byte, start []byte) {
 	iter := ctx.iterator(kind)
 	iter.Release()
 
@@ -145,10 +145,11 @@ func (ctx *generatorContext) reopen(kind string, prefix []byte, start []byte) {
 	}
 }
 
-// removeStorageBefore starting from the current iterator position, iterate and
-// delete all storage snapshots before the specified account. When the iterator
-// touches the storage located in the account range, or the storage is larger
-// than the account range, it stops and moves back the iterator a step.
+// removeStorageBefore, iterates and deletes all storage snapshots starting
+// from the current iterator position until the specified account. When the
+// iterator touches the storage located in the given account range, or the
+// storage is larger than the given account range, it stops and moves back
+// the iterator a step.
 func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	iter := ctx.storage
 	for iter.Next() {
@@ -161,11 +162,11 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	}
 }
 
-// removeStorageAt starting from the current iterator position, iterate and
-// delete all storage snapshots located in the specified account range. When
-// the iterator touches the storage is larger than the account range, it stops
-// and moves back the iterator a step. An error will be returned if the initial
-// position of iterator is not in the specified account range.
+// removeStorageAt iterates and deletes all storage snapshots which are located
+// in the specified account range. When the iterator touches the storage which
+// is larger than the given account range, it stops and moves back the iterator
+// a step. An error will be returned if the initial position of iterator is not
+// in the given account range.
 func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	iter := ctx.iterator(snapStorage)
 	for iter.Next() {
@@ -183,9 +184,9 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	return nil
 }
 
-// removeAllStorage starting from the current iterator position, iterate and
+// removeStorageLeft starting from the current iterator position, iterate and
 // delete all storage snapshots left.
-func (ctx *generatorContext) removeAllStorage() {
+func (ctx *generatorContext) removeStorageLeft() {
 	iter := ctx.iterator(snapStorage)
 	for iter.Next() {
 		ctx.batch.Delete(iter.Key())
