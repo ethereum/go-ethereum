@@ -312,8 +312,7 @@ func (tx *Transaction) EncryptedPayload() []byte { return tx.inner.encryptedPayl
 func (tx *Transaction) DecryptionKey() []byte { return tx.inner.decryptionKey() }
 
 // BatchIndex returns the batch index (a.k.a sequence number) of a Shutter transaction,
-// a uint32 big-endian encoded as 4 bytes.
-func (tx *Transaction) BatchIndex() []byte { return tx.inner.batchIndex() }
+func (tx *Transaction) BatchIndex() uint64 { return tx.inner.batchIndex() }
 
 // L1BlockNumber returns the Layer 1 block number used for identifying the
 // collator/keyper config

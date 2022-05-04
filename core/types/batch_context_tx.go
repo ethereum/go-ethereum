@@ -9,7 +9,7 @@ import (
 type BatchContextTx struct {
 	ChainID       *big.Int
 	DecryptionKey []byte
-	BatchIndex    []byte
+	BatchIndex    uint64
 	L1BlockNumber *big.Int
 	Timestamp     *big.Int
 	ShutterTXs    [][]byte
@@ -19,8 +19,9 @@ type BatchContextTx struct {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *BatchContextTx) copy() TxData {
 	cpy := &BatchContextTx{
-		ChainID:       tx.ChainID,
+		ChainID:       new(big.Int),
 		DecryptionKey: []byte{},
+		BatchIndex:    tx.BatchIndex,
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
@@ -29,24 +30,20 @@ func (tx *BatchContextTx) copy() TxData {
 		cpy.DecryptionKey = make([]byte, len(tx.DecryptionKey))
 		copy(cpy.DecryptionKey, tx.DecryptionKey)
 	}
-	if tx.BatchIndex != nil {
-		cpy.BatchIndex = make([]byte, len(tx.BatchIndex))
-		copy(cpy.BatchIndex, tx.BatchIndex)
-	}
 	if tx.PlainTextTXs != nil {
 		cpy.PlainTextTXs = make([][]byte, len(tx.PlainTextTXs))
-		for _, b := range tx.PlainTextTXs {
+		for i, b := range tx.PlainTextTXs {
 			c := make([]byte, len(b))
 			copy(c, b)
-			cpy.PlainTextTXs = append(cpy.PlainTextTXs, c)
+			cpy.PlainTextTXs[i] = c
 		}
 	}
 	if tx.ShutterTXs != nil {
 		cpy.ShutterTXs = make([][]byte, len(tx.ShutterTXs))
-		for _, b := range tx.ShutterTXs {
+		for i, b := range tx.ShutterTXs {
 			c := make([]byte, len(b))
 			copy(c, b)
-			cpy.ShutterTXs = append(cpy.ShutterTXs, c)
+			cpy.ShutterTXs[i] = c
 		}
 	}
 	return cpy
@@ -67,7 +64,7 @@ func (tx *BatchContextTx) nonce() uint64            { return 0 }
 func (tx *BatchContextTx) to() *common.Address      { return nil }
 func (tx *BatchContextTx) encryptedPayload() []byte { return nil }
 func (tx *BatchContextTx) decryptionKey() []byte    { return tx.DecryptionKey }
-func (tx *BatchContextTx) batchIndex() []byte       { return tx.BatchIndex }
+func (tx *BatchContextTx) batchIndex() uint64       { return tx.BatchIndex }
 func (tx *BatchContextTx) l1BlockNumber() *big.Int  { return tx.L1BlockNumber }
 func (tx *BatchContextTx) timestamp() *big.Int      { return tx.Timestamp }
 func (tx *BatchContextTx) shutterTXs() [][]byte     { return tx.ShutterTXs }
