@@ -29,15 +29,11 @@ echo "mypasswordhere" | out-file test.txt -encoding ASCII
 
 Additional details and/or any updates on more robust handling are at <https://github.com/ethereum/go-ethereum/issues/19905>.
 
-#### I'm trying to sync my node, but it seems to be stuck at 64 blocks behind mainnet?!
-
-If you see that you are 64 blocks behind mainnet, you aren't yet fully synchronized. You are just done with the block download phase and still haven't finished all other syncing phases.
-
 #### How does Ethereum syncing work?
 
 The current default syncing mode used by Geth is called [snap sync](https://github.com/ethereum/devp2p/blob/master/caps/snap.md). Instead of starting from the genesis block and processing all the transactions that ever occurred (which could take weeks), snap sync downloads the blocks, and only verifies the associated proof-of-works. Downloading all the blocks is a straightforward and fast procedure and will relatively quickly reassemble the entire chain.
 
-Many people falsely assume that because they have the blocks, they are in sync. Unfortunately this is not the case, since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods.
+Many people falsely assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods.
 
 #### So, what's the state trie?
 
@@ -45,19 +41,27 @@ In the Ethereum mainnet, there are a ton of accounts already, which track the ba
 
 This cryptographic linking is done by creating a tree-like data structure, where each leaf corresponds to an account, and each intermediary level aggregates the layer below it into an ever smaller layer, until you reach a single root. This gigantic data structure containing all the accounts and the intermediate cryptographic proofs is called the state trie.
 
-#### Why is the state trie download phase require a special syncing mode?
+#### Why does the state trie download phase require a special syncing mode?
 
 The trie data structure is an intricate interlink of hundreds of millions of tiny cryptographic proofs (trie nodes). To truly have a synchronized node, you need to download all the account data, as well as all the tiny cryptographic proofs to verify that no one in the network is trying to cheat you. This itself is already a crazy number of data items.
 
-The part where it gets even messier is that this data is constantly morphing: at every block (roughly 13s), about 1000 nodes are deleted from this trie and about 2000 new ones are added. This means your node needs to synchronize a dataset that is changing 230 times per second. Until you actually do gather all the data, your local node is not usable since it cannot cryptographically prove anything about any accounts.
+The part where it gets even messier is that this data is constantly morphing: at every block (roughly 13s), about 1000 nodes are deleted from this trie and about 2000 new ones are added. This means your node needs to synchronize a dataset that is changing more than 200 times per second. Until you actually do gather all the data, your local node is not usable since it cannot cryptographically prove anything about any accounts. But while you're syncing the network is moving forward and most nodes on the network keep the state for only a limited number of recent blocks. Any sync algorithm needs to consider this fact.
 
-#### What was the default syncing mode before "snap"?
+#### What happened to fast sync?
 
-Snap syncing was introduced by version [1.10.0](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) and was adopted as the default mode in version [1.10.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.4). Before that, the default was the "fast" syncing mode, which requested each node of the state trie one-by-one.
+Snap syncing was introduced by version [1.10.0](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) and was adopted as the default mode in version [1.10.4](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.4). Before that, the default was the "fast" syncing mode, which was dropped in version [1.10.14](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.14). Even though support for fast sync was dropped, Geth still serves the relevant `eth` requests to other client implementations still relying on it. The reason being that snap sync relies on an alternative data structure called the [snapshot](https://blog.ethereum.org/2020/07/17/ask-about-geth-snapshot-acceleration/) which not all clients implement.
 
-The snap synchronization protocol is not intended to completely replace the fast syncing mode, as it relies on a special data structure that is not inherent to the Ethereum protocol. This data structure is called a [snapshot](https://blog.ethereum.org/2020/07/17/ask-about-geth-snapshot-acceleration/), and it contains a complete view of the Ethereum state at any given block. Although this allows faster syncing, maintaining this data structure requires additional data to be computed and stored.
+You can read more in the article posted above why snap sync replaced fast sync in Geth. Below is a table taken from the article summarising the benefits:
 
-Continuing to maintain both the "fast" and "snap" syncing protocols allows [other Ethereum clients](https://ethereum.org/en/developers/docs/nodes-and-clients) to choose not to utilize snapshots without hindering their capacity to participate in the eth protocol. Some clients even developed other synchronization methods, for example OpenEthereum's [Warp Sync](https://openethereum.github.io/Warp-Sync).
+![snap-fast](https://user-images.githubusercontent.com/129561/109820169-6ee0af00-7c3d-11eb-9721-d8484eee4709.png)
+
+#### When doing a fast sync, the node just hangs on importing state enties?!
+
+The node doesn’t hang, it just doesn’t know how large the state trie is in advance so it keeps on going and going and going until it discovers and downloads the entire thing.
+
+The reason is that a block in Ethereum only contains the state root, a single hash of the root node. When the node begins synchronizing, it knows about exactly 1 node and tries to download it. That node, can refer up to 16 new nodes, so in the next step, we’ll know about 16 new nodes and try to download those. As we go along the download, most of the nodes will reference new ones that we didn’t know about until then. This is why you might be tempted to think it’s stuck on the same numbers. It is not, rather it’s discovering and downloading the trie as it goes along.
+
+During this phase you might see that your node is 64 blocks behind mainnet. You aren't actually synchronized. That's a side-effect of how fast sync works and you need to wait out until all state entries are downloaded.
 
 #### I have good bandwidth, so why does downloading the state take so long when using fast sync?
 
