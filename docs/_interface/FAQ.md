@@ -4,6 +4,8 @@ permalink: docs/faq
 sort_key: C
 ---
 
+* TOC
+{:toc}
 
 #### I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
 
