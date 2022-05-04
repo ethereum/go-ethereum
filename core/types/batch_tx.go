@@ -14,6 +14,11 @@ type BatchTx struct {
 	Timestamp     *big.Int
 	ShutterTxs    [][]byte
 	PlainTextTxs  [][]byte
+
+	// Signature values
+	V *big.Int `json:"v" gencodec:"required"`
+	R *big.Int `json:"r" gencodec:"required"`
+	S *big.Int `json:"s" gencodec:"required"`
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -71,9 +76,9 @@ func (tx *BatchTx) shutterTxs() [][]byte     { return tx.ShutterTxs }
 func (tx *BatchTx) plainTextTxs() [][]byte   { return tx.PlainTextTxs }
 
 func (tx *BatchTx) rawSignatureValues() (v, r, s *big.Int) {
-	return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	return tx.V, tx.R, tx.S
 }
 
 func (tx *BatchTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	// Decryption key transactions are not signed, so do nothing
+	tx.ChainID, tx.V, tx.R, tx.S = chainID, v, r, s
 }
