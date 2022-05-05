@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -3680,7 +3679,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 // Tests the scenario the chain is requested to another point with the missing state.
 // It expects the state is recovered and all relevant chain markers are set correctly.
-func TestSetChainHead(t *testing.T) {
+func TestSetCanonical(t *testing.T) {
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	var (
@@ -3752,10 +3751,10 @@ func TestSetChainHead(t *testing.T) {
 			t.Fatalf("Lost block state %v %x", head.Number(), head.Hash())
 		}
 	}
-	chain.SetChainHead(side[len(side)-1])
+	chain.SetCanonical(side[len(side)-1])
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	chain.SetChainHead(canon[TriesInMemory-1])
+	chain.SetCanonical(canon[TriesInMemory-1])
 	verify(canon[TriesInMemory-1])
 }

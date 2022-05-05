@@ -389,7 +389,7 @@ func (lc *LightChain) InsertHeader(header *types.Header) error {
 	return err
 }
 
-func (lc *LightChain) SetChainHead(header *types.Header) error {
+func (lc *LightChain) SetCanonical(header *types.Header) error {
 	lc.chainmu.Lock()
 	defer lc.chainmu.Unlock()
 
