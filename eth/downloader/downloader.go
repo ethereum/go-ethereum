@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -78,7 +79,6 @@ var (
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errTooOld                  = errors.New("peer's protocol version too old")
 	errNoAncestorFound         = errors.New("no common ancestor found")
-	errCheckpointMismatch      = errors.New("checkpoint mismatch")
 	ErrMergeTransition         = errors.New("legacy sync reached the merge")
 )
 
@@ -144,15 +144,18 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
 
-	// Checkpoint whitelist
-	checkpointWhitelist map[uint64]common.Hash // Checkpoint whitelist, populated by reaching out to heimdall
-	checkpointOrder     []uint64               // Checkpoint order, populated by reaching out to heimdall
+	ChainValidator
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+}
+
+// interface for whitelist service
+type ChainValidator interface {
+	IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -209,7 +212,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
+func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func(), whitelistService ChainValidator) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -226,8 +229,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		quitCh:              make(chan struct{}),
 		SnapSyncer:          snap.NewSyncer(stateDb),
 		stateSyncStart:      make(chan *stateSync),
-		checkpointWhitelist: make(map[uint64]common.Hash),
-		checkpointOrder:     make([]uint64, 0),
+		ChainValidator:		 whitelistService,
 	}
 	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
 
@@ -339,7 +341,7 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 	case nil, errBusy, errCanceled:
 		return err
 	}
-	if errors.Is(err, errCheckpointMismatch) {
+	if errors.Is(err, whitelist.ErrCheckpointMismatch) {
 		// TODO: what better can be done here?
 		log.Warn("Mismatch in last checkpointed block", "peer", id, "err", err)
 	}
@@ -775,38 +777,11 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 	return int64(from), count, span - 1, uint64(max)
 }
 
-// isValidChain checks if the chain we're about to receive from this peer is valid or not
-// in terms of reorgs. We won't reorg beyond the last bor checkpoint submitted to mainchain.
-func (d *Downloader) isValidChain(p *peerConnection, remoteHeader *types.Header) (bool, error) {
-	// We want to validate the chain by comparing the last checkpointed block
-	// we're storing in `checkpointWhitelist` with the peer's block.
-
-	// Check for availaibility of the last checkpointed block.
-	// This can be also be empty if our heimdall is not responsing
-	// or we're running without it.
-	if len(d.checkpointWhitelist) <= 0 {
-		// worst case, we don't have the checkpoints in memory
-		return true, nil
+// curried fetchHeadersByNumber
+func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+	return func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+		return d.fetchHeadersByNumber(p, number, amount, skip, reverse)
 	}
-
-	// Fetch the last checkpoint entry
-	lastCheckpointBlockNum := d.checkpointOrder[len(d.checkpointOrder)-1]
-	lastCheckpointBlockHash := d.checkpointWhitelist[lastCheckpointBlockNum]
-
-	headers, hashes, err := d.fetchHeadersByNumber(p, lastCheckpointBlockNum, 1, 0, false)
-	if err != nil || len(headers) == 0 {
-		// TODO: what better can be done here?
-		return true, nil
-	}
-	reqBlockNum := headers[0].Number.Uint64()
-	reqBlockHash := hashes[0]
-
-	// Check against the checkpointed blocks
-	if reqBlockNum == lastCheckpointBlockNum && reqBlockHash == lastCheckpointBlockHash {
-		return true, nil
-	}
-
-	return false, errCheckpointMismatch
 }
 
 // findAncestor tries to locate the common ancestor link of the local chain and
@@ -816,7 +791,8 @@ func (d *Downloader) isValidChain(p *peerConnection, remoteHeader *types.Header)
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
 	// Check the validity of chain to be downloaded
-	if _, err := d.isValidChain(p, remoteHeader); errors.Is(err, errCheckpointMismatch) {
+	// TODO: we can use a mock and 
+	if _, err := d.IsValidChain(remoteHeader, d.getFetchHeadersByNumber(p)); errors.Is(err, whitelist.ErrCheckpointMismatch) {
 		return 0, err
 	}
 
@@ -1804,37 +1780,4 @@ func (d *Downloader) DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) erro
 	default:
 		return fmt.Errorf("unexpected snap packet type: %T", packet)
 	}
-}
-
-// Helper functions for checkpoint whitelist service
-
-// PurgeWhitelistMap purges data from checkpoint whitelist map
-func (d *Downloader) PurgeWhitelistMap() error {
-	for k := range d.checkpointWhitelist {
-		delete(d.checkpointWhitelist, k)
-	}
-	return nil
-}
-
-// EnqueueWhitelistBlock enqueues blockNumber, blockHash to the checkpoint whitelist map
-func (d *Downloader) EnqueueCheckpointWhitelist(key uint64, val common.Hash) {
-	if _, ok := d.checkpointWhitelist[key]; !ok {
-		log.Debug("Enqueing new checkpoint whitelist", "block number", key, "block hash", val)
-		d.checkpointWhitelist[key] = val
-		d.checkpointOrder = append(d.checkpointOrder, key)
-	}
-}
-
-// DequeueWhitelistBlock dequeues block, blockhash from the checkpoint whitelist map
-func (d *Downloader) DequeueCheckpointWhitelist() {
-	if len(d.checkpointOrder) > 0 {
-		log.Debug("Dequeing checkpoint whitelist", "block number", d.checkpointOrder[0], "block hash", d.checkpointWhitelist[d.checkpointOrder[0]])
-		delete(d.checkpointWhitelist, d.checkpointOrder[0])
-		d.checkpointOrder = d.checkpointOrder[1:]
-	}
-}
-
-// GetCheckpointWhitelist returns the checkpoints whitelisted.
-func (d *Downloader) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return d.checkpointWhitelist
 }
