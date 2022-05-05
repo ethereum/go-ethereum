@@ -42,6 +42,15 @@ func (tx *BatchTx) copy() TxData {
 			cpy.Transactions[i] = c
 		}
 	}
+	if tx.V != nil {
+		cpy.V.Set(tx.V)
+	}
+	if tx.R != nil {
+		cpy.R.Set(tx.R)
+	}
+	if tx.S != nil {
+		cpy.S.Set(tx.S)
+	}
 	return cpy
 }
 
