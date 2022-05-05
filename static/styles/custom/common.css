@@ -11,6 +11,12 @@ pre code {
     white-space: pre;
 }
 
+pre {
+    display: block;
+    margin-top: 4rem;
+    margin-bottom: 4rem;
+}
+
 code {
     color: #4b5a5b;
     background-color: #ecf0f1;
