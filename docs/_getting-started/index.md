@@ -63,7 +63,6 @@ This is important information. The `geth-tutorial/keystore` directory will soon 
 
 Typing `ok` into the terminal and pressing `enter` causes Clef to prompt for a password. Clef requires a password that is at least 10 characters long, and best practise would be to use a combination of numbers, characters and special characters. Entering a suitable password and pressing `enter` returns the following result to the terminal:
 
-
 ```terminal
 -----------------------
 DEBUG[02-10|13:46:46.436] FS scan times                            list="92.081µs" set="12.629µs" diff="2.129µs"
@@ -79,7 +78,7 @@ It is important to save the account address and the password somewhere secure. T
 
 The previous commands used Clef's `newaccount` function to add new key pairs to the keystore. Clef uses the private key(s) saved in the keystore is used to sign transactions. In order to do this, Clef needs to be started and left running while Geth is running simultaneously, so that the two programs can communicate between one another. 
 
-To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config dirctory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial the Chain ID is 5 which is for the Goerli testnet. It is very important that this chain ID parameter is set to 5. The following command starts Clef on Goerli:
+To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config directory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial Chain ID 5 is used which is that of the Goerli testnet. It is very important that this chain ID parameter is set to 5. The following command starts Clef on Goerli:
 
 ```shell
 
@@ -88,8 +87,6 @@ clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 
 ```
 
 After running the command above, Clef requests the user to type “ok” to proceed. On typing "ok" and pressing enter, Clef returns the following to the terminal:  
-
-A successful call will give you the result below:
 
 ```terminal
 INFO [02-10|13:55:30.812] Using CLI as UI-channel
@@ -126,7 +123,6 @@ geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syn
 
 Running the above command starts Geth. The terminal should rapidly fill with status updates, starting with:
 
-
 ```terminal
 INFO [02-10|13:59:06.649] Starting Geth on goerli testnet...
 INFO [02-10|13:59:06.649] Dropping default light client cache      provided=1024 updated=128
@@ -151,7 +147,7 @@ WARN [02-10|13:59:06.999] Failed to open wallet                    url=extapi://
 INFO [02-10|13:59:08.793] Block synchronisation started
 ```
 
-This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in leveldb files in `/go-ethereum/geth-tutorial/geth/chaindata/`. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
+This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
 
 ```terminal
 
@@ -171,6 +167,7 @@ curl http://localhost:8545
 
 If there is no error message reported to the terminal, everything is OK. Geth must be running in order for a user to interact with the Ethereum network. If this terminal is closed down then Geth must be restarted in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir ... ..`.
 
+{% include note.html content="Snap syncing Goerli will take some time and until the sync is finished you can't use the node to transfer funds. You can also try doing a [light sync](interface/les) which will be much quicker but depends on light servers being available to serve your node the data it needs." %}
 
 ## Step 4:  Get Testnet Ether
 
@@ -187,7 +184,7 @@ Geth provides a Javascript console that exposes the Web3.js API. This means that
 
 - IPC (Inter-Process Communication): This provides unrestricted access to all APIs, but only works when the console is run on the same host as the geth node.
   
-- HTTP: This connection method provides access to the `eth`, `web3` and `net` method namespaces.
+- HTTP: This connection method by default provides access to the `eth`, `web3` and `net` method namespaces.
 
 This tutorial will use the HTTP option. Note that the terminals running Geth and Clef should both still be active. In a new (third) terminal, the following command can be run to start the console and connect it to Geth using the exposed http port:
 
@@ -268,7 +265,6 @@ web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"), "ethe
 
 There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 1<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that received faucet funds):
 
-
 ```terminal
 
 1
@@ -286,7 +282,7 @@ Repeating the command for the other account should yield:
 
 ### Send ether to another account
 
-The command `eth.sendTransaction` can be used to send some ether from one address to another. This command takes three arguments: `from`, `to` and `value`. These define the sender and recipient addresses (as strings) and the amount of Wei to transfer. It is far less error prone to enter the transation value in units of ether rather than Wei, so the value field can take the return value from the `toWei` function. The following command, run in the Javascript console, sends 0.1 ether from one of the accoutns in the Clef keystore to the other. Note that the addresses here are examples - the user must replace the address in the `from` field with the address currently owning 1 ether, and the address in the `to` field with the address currently holding 0 ether.
+The command `eth.sendTransaction` can be used to send some ether from one address to another. This command takes three arguments: `from`, `to` and `value`. These define the sender and recipient addresses (as strings) and the amount of Wei to transfer. It is far less error prone to enter the transation value in units of ether rather than Wei, so the value field can take the return value from the `toWei` function. The following command, run in the Javascript console, sends 0.1 ether from one of the accounts in the Clef keystore to the other. Note that the addresses here are examples - the user must replace the address in the `from` field with the address currently owning 1 ether, and the address in the `to` field with the address currently holding 0 ether.
 
 ```javascript
 eth.sendTransaction({
