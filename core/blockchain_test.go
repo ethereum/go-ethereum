@@ -3676,3 +3676,85 @@ func TestEIP1559Transition(t *testing.T) {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
 }
+
+// Tests the scenario the chain is requested to another point with the missing state.
+// It expects the state is recovered and all relevant chain markers are set correctly.
+func TestSetCanonical(t *testing.T) {
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
+	var (
+		db      = rawdb.NewMemoryDatabase()
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(100000000000000000)
+		gspec   = &Genesis{
+			Config:  params.TestChainConfig,
+			Alloc:   GenesisAlloc{address: {Balance: funds}},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		genesis = gspec.MustCommit(db)
+		signer  = types.LatestSigner(gspec.Config)
+		engine  = ethash.NewFaker()
+	)
+	// Generate and import the canonical chain
+	canon, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, func(i int, gen *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.header.BaseFee, nil), signer, key)
+		if err != nil {
+			panic(err)
+		}
+		gen.AddTx(tx)
+	})
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(canon); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Generate the side chain and import them
+	side, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*TriesInMemory, func(i int, gen *BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
+		if err != nil {
+			panic(err)
+		}
+		gen.AddTx(tx)
+	})
+	for _, block := range side {
+		err := chain.InsertBlockWithoutSetHead(block)
+		if err != nil {
+			t.Fatalf("Failed to insert into chain: %v", err)
+		}
+	}
+	for _, block := range side {
+		got := chain.GetBlockByHash(block.Hash())
+		if got == nil {
+			t.Fatalf("Lost the inserted block")
+		}
+	}
+
+	// Set the chain head to the side chain, ensure all the relevant markers are updated.
+	verify := func(head *types.Block) {
+		if chain.CurrentBlock().Hash() != head.Hash() {
+			t.Fatalf("Unexpected block hash, want %x, got %x", head.Hash(), chain.CurrentBlock().Hash())
+		}
+		if chain.CurrentFastBlock().Hash() != head.Hash() {
+			t.Fatalf("Unexpected fast block hash, want %x, got %x", head.Hash(), chain.CurrentFastBlock().Hash())
+		}
+		if chain.CurrentHeader().Hash() != head.Hash() {
+			t.Fatalf("Unexpected head header, want %x, got %x", head.Hash(), chain.CurrentHeader().Hash())
+		}
+		if !chain.HasState(head.Root()) {
+			t.Fatalf("Lost block state %v %x", head.Number(), head.Hash())
+		}
+	}
+	chain.SetCanonical(side[len(side)-1])
+	verify(side[len(side)-1])
+
+	// Reset the chain head to original chain
+	chain.SetCanonical(canon[TriesInMemory-1])
+	verify(canon[TriesInMemory-1])
+}
