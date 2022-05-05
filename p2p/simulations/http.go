@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"html"
 	"strconv"
 	"strings"
 	"sync"
@@ -336,7 +337,7 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	mockerType := req.FormValue("mocker-type")
 	mockerFn := LookupMocker(mockerType)
 	if mockerFn == nil {
-		http.Error(w, fmt.Sprintf("unknown mocker type %q", mockerType), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown mocker type %q", html.EscapeString(mockerType)), http.StatusBadRequest)
 		return
 	}
 	nodeCount, err := strconv.Atoi(req.FormValue("node-count"))
