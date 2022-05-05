@@ -329,12 +329,8 @@ func (it *iterator) Error() error {
 // should not modify the contents of the returned slice, and its contents may
 // change on the next call to Next.
 func (it *iterator) Key() []byte {
-	// Short circuit if iterator is not initialized yet.
-	if it.index == -1 {
-		return nil
-	}
-	// Short circuit if iterator is already exhausted
-	if it.index >= len(it.keys) {
+	// Short circuit if iterator is not in a valid position
+	if it.index < 0 || it.index >= len(it.keys) {
 		return nil
 	}
 	return []byte(it.keys[it.index])
@@ -344,12 +340,8 @@ func (it *iterator) Key() []byte {
 // caller should not modify the contents of the returned slice, and its contents
 // may change on the next call to Next.
 func (it *iterator) Value() []byte {
-	// Short circuit if iterator is not initialized yet.
-	if it.index == -1 {
-		return nil
-	}
-	// Short circuit if iterator is already exhausted
-	if it.index >= len(it.keys) {
+	// Short circuit if iterator is not in a valid position
+	if it.index < 0 || it.index >= len(it.keys) {
 		return nil
 	}
 	return it.values[it.index]
