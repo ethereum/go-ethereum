@@ -36,8 +36,8 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			order   []string
 		}{
 			// Empty databases should be iterable
-			//{map[string]string{}, "", "", nil},
-			//{map[string]string{}, "non-existent-prefix", "", nil},
+			{map[string]string{}, "", "", nil},
+			{map[string]string{}, "non-existent-prefix", "", nil},
 
 			// Single-item databases should be iterable
 			{map[string]string{"key": "val"}, "", "", []string{"key"}},
