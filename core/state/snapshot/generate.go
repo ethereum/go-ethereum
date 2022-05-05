@@ -705,7 +705,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	ctx.batch.Reset()
 
 	log.Info("Generated state snapshot", "accounts", stats.accounts, "slots", stats.slots,
-		"storage", stats.storage, "elapsed", common.PrettyDuration(time.Since(stats.start)))
+		"storage", stats.storage, "dangling", stats.dangling, "elapsed", common.PrettyDuration(time.Since(stats.start)))
 
 	dl.lock.Lock()
 	dl.genMarker = nil
