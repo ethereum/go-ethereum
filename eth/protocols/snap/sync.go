@@ -637,7 +637,9 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			s.assignTrienodeHealTasks(trienodeHealResps, trienodeHealReqFails, cancel)
 			s.assignBytecodeHealTasks(bytecodeHealResps, bytecodeHealReqFails, cancel)
 		}
-		p := &SyncProgress{
+		// Update sync progress
+		s.lock.Lock()
+		s.extProgress = &SyncProgress{
 			AccountSynced:      s.accountSynced,
 			AccountBytes:       s.accountBytes,
 			BytecodeSynced:     s.bytecodeSynced,
@@ -649,8 +651,6 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			BytecodeHealSynced: s.bytecodeHealSynced,
 			BytecodeHealBytes:  s.bytecodeHealBytes,
 		}
-		s.lock.Lock()
-		s.extProgress = p
 		s.lock.Unlock()
 		// Wait for something to happen
 		select {
@@ -824,13 +824,12 @@ func (s *Syncer) saveSyncStatus() {
 func (s *Syncer) Progress() (*SyncProgress, *SyncPending) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	progress := s.extProgress
 	pending := new(SyncPending)
 	if s.healer != nil {
 		pending.TrienodeHeal = uint64(len(s.healer.trieTasks))
 		pending.BytecodeHeal = uint64(len(s.healer.codeTasks))
 	}
-	return progress, pending
+	return s.extProgress, pending
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
