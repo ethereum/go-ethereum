@@ -296,12 +296,12 @@ func (it *iterator) Prev() bool {
 	if len(it.keys) == 0 {
 		return false
 	}
-	// Short circuit if the iterator is not yet initialized
+	// Short circuit if the iterator is already exhausted in the backward direction.
 	if it.index == -1 {
 		return false
 	}
 	it.index -= 1
-	return true
+	return it.index != -1
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the
@@ -311,12 +311,12 @@ func (it *iterator) Next() bool {
 	if len(it.keys) == 0 {
 		return false
 	}
-	// Short circuit if iterator is already exhausted.
-	if it.index == len(it.keys)-1 {
+	// Short circuit if iterator is already exhausted in the forward direction.
+	if it.index == len(it.keys) {
 		return false
 	}
 	it.index += 1
-	return true
+	return it.index != len(it.keys)
 }
 
 // Error returns any accumulated error. Exhausting all the key/value pairs
@@ -333,6 +333,10 @@ func (it *iterator) Key() []byte {
 	if it.index == -1 {
 		return nil
 	}
+	// Short circuit if iterator is already exhausted
+	if it.index >= len(it.keys) {
+		return nil
+	}
 	return []byte(it.keys[it.index])
 }
 
@@ -342,6 +346,10 @@ func (it *iterator) Key() []byte {
 func (it *iterator) Value() []byte {
 	// Short circuit if iterator is not initialized yet.
 	if it.index == -1 {
+		return nil
+	}
+	// Short circuit if iterator is already exhausted
+	if it.index >= len(it.keys) {
 		return nil
 	}
 	return it.values[it.index]
