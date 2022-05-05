@@ -2,6 +2,7 @@ package whitelist
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -12,16 +13,19 @@ var (
 	ErrCheckpointMismatch = errors.New("checkpoint mismatch")
 )
 
+// Checkpoint whitelist
 type Service struct {
-	// Checkpoint whitelist
+	m 					sync.RWMutex
 	checkpointWhitelist map[uint64]common.Hash // Checkpoint whitelist, populated by reaching out to heimdall
 	checkpointOrder     []uint64               // Checkpoint order, populated by reaching out to heimdall
+	maxCapacity 		uint
 }
 
-func NewService() *Service {
+func NewService(maxCapacity uint) *Service {
 	return &Service{
 		checkpointWhitelist: make(map[uint64]common.Hash),
 		checkpointOrder:     []uint64{},
+		maxCapacity: 		 maxCapacity,
 	}
 }
 
@@ -61,6 +65,18 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 	return false, ErrCheckpointMismatch
 }
 
+func (w *Service) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	w.EnqueueCheckpointWhitelist(endBlockNum, endBlockHash)
+	// If size of checkpoint whitelist map is greater than 10, remove the oldest entry.
+
+	if len(w.GetCheckpointWhitelist()) > int(w.maxCapacity) {
+		w.DequeueCheckpointWhitelist()
+	}
+}
+
 // PurgeWhitelistMap purges data from checkpoint whitelist map
 func (w *Service) PurgeWhitelistMap() error {
 	for k := range w.checkpointWhitelist {
@@ -73,6 +89,7 @@ func (w *Service) PurgeWhitelistMap() error {
 func (w *Service) EnqueueCheckpointWhitelist(key uint64, val common.Hash) {
 	if _, ok := w.checkpointWhitelist[key]; !ok {
 		log.Debug("Enqueing new checkpoint whitelist", "block number", key, "block hash", val)
+
 		w.checkpointWhitelist[key] = val
 		w.checkpointOrder = append(w.checkpointOrder, key)
 	}

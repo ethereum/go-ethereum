@@ -616,8 +616,6 @@ Loop:
 
 // handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
 func (s *Ethereum) handleWhitelistCheckpoint() error {
-	var m sync.Mutex
-
 	ethHandler := (*ethHandler)(s.handler)
 
 	if !ethHandler.chain.Engine().(*bor.Bor).WithoutHeimdall {
@@ -626,14 +624,8 @@ func (s *Ethereum) handleWhitelistCheckpoint() error {
 			return err
 		}
 
-		m.Lock()
 		// Update the checkpoint whitelist map.
-		ethHandler.downloader.EnqueueCheckpointWhitelist(endBlockNum, endBlockHash)
-		// If size of checkpoint whitelist map is greater than 10, remove the oldest entry.
-		if len(ethHandler.downloader.GetCheckpointWhitelist()) > 10 {
-			ethHandler.downloader.DequeueCheckpointWhitelist()
-		}
-		m.Unlock()
+		ethHandler.downloader.ProcessCheckpoint(endBlockNum, endBlockHash)
 	}
 
 	return nil

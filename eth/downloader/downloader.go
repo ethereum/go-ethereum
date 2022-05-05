@@ -156,6 +156,7 @@ type Downloader struct {
 // interface for whitelist service
 type ChainValidator interface {
 	IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
+	ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash)
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
