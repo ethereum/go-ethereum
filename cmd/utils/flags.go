@@ -240,13 +240,13 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	EthPeerRequiredBlocksFlag = cli.StringFlag{
+	EthRequiredBlocksFlag = cli.StringFlag{
 		Name:  "eth.requiredblocks",
 		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 	}
 	LegacyWhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --peer.requiredblocks)",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
 	}
 	BloomFilterSizeFlag = cli.Uint64Flag{
 		Name:  "bloomfilter.size",
@@ -1501,33 +1501,31 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
-func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
-	peerRequiredBlocks := ctx.GlobalString(EthPeerRequiredBlocksFlag.Name)
-
-	if peerRequiredBlocks == "" {
+func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
+	requiredBlocks := ctx.GlobalString(EthRequiredBlocksFlag.Name)
+	if requiredBlocks == "" {
 		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
-			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
-			peerRequiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
+			log.Warn("The flag --whitelist is deprecated and will be removed, please use --eth.requiredblocks")
+			requiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
 		} else {
 			return
 		}
 	}
-
-	cfg.PeerRequiredBlocks = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(peerRequiredBlocks, ",") {
+	cfg.RequiredBlocks = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(requiredBlocks, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid peer required block entry: %s", entry)
+			Fatalf("Invalid required block entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid peer required block number %s: %v", parts[0], err)
+			Fatalf("Invalid required block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid peer required block hash %s: %v", parts[1], err)
+			Fatalf("Invalid required block hash %s: %v", parts[1], err)
 		}
-		cfg.PeerRequiredBlocks[number] = hash
+		cfg.RequiredBlocks[number] = hash
 	}
 }
 
@@ -1594,7 +1592,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
-	setPeerRequiredBlocks(ctx, cfg)
+	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
