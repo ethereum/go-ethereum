@@ -49,8 +49,8 @@ Returns leveldb properties of the key-value database.
 
 | Client  | Method invocation                                              |
 |:--------|----------------------------------------------------------------|
-| Console | `debug.chaindbProperty(property string)`                            |
-| RPC     | `{"method": "debug_chaindbProperty", "params": [property]}` |
+| Console | `debug.chaindbProperty(property string)`                       |
+| RPC     | `{"method": "debug_chaindbProperty", "params": [property]}`    |
 
 
 
@@ -71,8 +71,8 @@ Returns the raw value of a key stored in the database.
 
 | Client  | Method invocation                                              |
 |:--------|----------------------------------------------------------------|
-| Console | `debug.dbGet(key string)`                            |
-| RPC     | `{"method": "debug_dbGet", "params": [key]}` |
+| Console | `debug.dbGet(key string)`                                      |
+| RPC     | `{"method": "debug_dbGet", "params": [key]}`                   |
 
 
 
@@ -125,16 +125,15 @@ Forces garbage collection
 
 
 
-### debug_FreezeClient
+### debug_freezeClient
 
 Forces a temporary client freeze, normally when the server is overloaded.
-Available as part of LES light server PrivateDebugAPI.
+Available as part of LES light server.
 
 | Client  | Method invocation                                    |
 |:--------|------------------------------------------------------|
 | Console | `debug.freezeClient(node string)`                    |
 | RPC     | `{"method": "debug_freezeClient", "params": [node]}` |
-
 
 
 
