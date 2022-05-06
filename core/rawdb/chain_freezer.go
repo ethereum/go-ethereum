@@ -43,12 +43,15 @@ const (
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
 type chainFreezer struct {
-	*Freezer
-
+	// WARNING: The `threshold` field is accessed atomically. On 32 bit platforms, only
+	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
+	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
-	quit      chan struct{}
-	wg        sync.WaitGroup
-	trigger   chan chan struct{} // Manual blocking freeze trigger, test determinism
+
+	*Freezer
+	quit    chan struct{}
+	wg      sync.WaitGroup
+	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
