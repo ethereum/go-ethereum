@@ -372,8 +372,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{}, // zero-length pathset should 'abort' and kick us off
-				snap.TrieNodePathSet{[]byte{0}},
+				{}, // zero-length pathset should 'abort' and kick us off
+				{[]byte{0}},
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{},
@@ -382,8 +382,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
 			nBytes: 5000,
 			//0x6b3724a41b8c38b46d4d02fba2bb2074c47a507eb16a9a4b978f91d32e406faf
@@ -392,7 +392,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{ // nonsensically long path
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+				{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
 					0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8}},
 			},
 			nBytes:    5000,
@@ -401,8 +401,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(0),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{},

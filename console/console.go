@@ -179,12 +179,10 @@ func (c *Console) initConsoleObject() {
 }
 
 func (c *Console) initWeb3(bridge *bridge) error {
-	bnJS := string(deps.MustAsset("bignumber.js"))
-	web3JS := string(deps.MustAsset("web3.js"))
-	if err := c.jsre.Compile("bignumber.js", bnJS); err != nil {
+	if err := c.jsre.Compile("bignumber.js", deps.BigNumberJS); err != nil {
 		return fmt.Errorf("bignumber.js: %v", err)
 	}
-	if err := c.jsre.Compile("web3.js", web3JS); err != nil {
+	if err := c.jsre.Compile("web3.js", deps.Web3JS); err != nil {
 		return fmt.Errorf("web3.js: %v", err)
 	}
 	if _, err := c.jsre.Run("var Web3 = require('web3');"); err != nil {

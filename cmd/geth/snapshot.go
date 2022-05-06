@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -58,16 +60,10 @@ var (
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+				Flags: utils.GroupFlags([]cli.Flag{
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
-				},
+				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot prune-state <state-root>
 will prune historical state data with the help of the state snapshot.
@@ -89,14 +85,7 @@ the trie clean cache with default directory will be deleted.
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(verifyState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-				},
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot verify-state <state-root>
 will traverse the whole accounts and storages set based on the specified
@@ -105,19 +94,24 @@ In other words, this command does the snapshot to trie conversion.
 `,
 			},
 			{
+				Name:      "check-dangling-storage",
+				Usage:     "Check that there is no 'dangling' snap storage",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(checkDanglingStorage),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
+				Description: `
+geth snapshot check-dangling-storage <state-root> traverses the snap storage 
+data, and verifies that all snapshot storage data has a corresponding account. 
+`,
+			},
+			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash for verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-				},
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-state <state-root>
 will traverse the whole state from the given state root and will abort if any
@@ -133,14 +127,7 @@ It's also usable without snapshot enabled.
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseRawState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-				},
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-rawstate <state-root>
 will traverse the whole state from the given root and will abort if any referenced
@@ -157,18 +144,12 @@ It's also usable without snapshot enabled.
 				ArgsUsage: "[? <blockHash> | <blockNum>]",
 				Action:    utils.MigrateFlags(dumpState),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+				Flags: utils.GroupFlags([]cli.Flag{
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
 					utils.DumpLimitFlag,
-				},
+				}, utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 This command is semantically equivalent to 'geth dump', but uses the snapshots
 as the backend data source, making this command a lot faster. 
@@ -242,6 +223,72 @@ func verifyState(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Verified the state", "root", root)
+	if err := checkDanglingDiskStorage(chaindb); err != nil {
+		log.Error("Dangling snap disk-storage check failed", "root", root, "err", err)
+		return err
+	}
+	if err := checkDanglingMemStorage(chaindb); err != nil {
+		log.Error("Dangling snap mem-storage check failed", "root", root, "err", err)
+		return err
+	}
+	return nil
+}
+
+// checkDanglingStorage iterates the snap storage data, and verifies that all
+// storage also has corresponding account data.
+func checkDanglingStorage(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	if err := checkDanglingDiskStorage(chaindb); err != nil {
+		return err
+	}
+	return checkDanglingMemStorage(chaindb)
+
+}
+
+// checkDanglingDiskStorage checks if there is any 'dangling' storage data in the
+// disk-backed snapshot layer.
+func checkDanglingDiskStorage(chaindb ethdb.Database) error {
+	log.Info("Checking dangling snapshot disk storage")
+	var (
+		lastReport = time.Now()
+		start      = time.Now()
+		lastKey    []byte
+		it         = rawdb.NewKeyLengthIterator(chaindb.NewIterator(rawdb.SnapshotStoragePrefix, nil), 1+2*common.HashLength)
+	)
+	defer it.Release()
+	for it.Next() {
+		k := it.Key()
+		accKey := k[1:33]
+		if bytes.Equal(accKey, lastKey) {
+			// No need to look up for every slot
+			continue
+		}
+		lastKey = common.CopyBytes(accKey)
+		if time.Since(lastReport) > time.Second*8 {
+			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
+			lastReport = time.Now()
+		}
+		if data := rawdb.ReadAccountSnapshot(chaindb, common.BytesToHash(accKey)); len(data) == 0 {
+			log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accKey), "storagekey", fmt.Sprintf("%#x", k))
+			return fmt.Errorf("dangling snapshot storage account %#x", accKey)
+		}
+	}
+	log.Info("Verified the snapshot disk storage", "time", common.PrettyDuration(time.Since(start)), "err", it.Error())
+	return nil
+}
+
+// checkDanglingMemStorage checks if there is any 'dangling' storage in the journalled
+// snapshot difflayers.
+func checkDanglingMemStorage(chaindb ethdb.Database) error {
+	start := time.Now()
+	log.Info("Checking dangling snapshot difflayer journalled storage")
+	if err := snapshot.CheckJournalStorage(chaindb); err != nil {
+		return err
+	}
+	log.Info("Verified the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
 	return nil
 }
 

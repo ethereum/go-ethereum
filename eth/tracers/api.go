@@ -452,7 +452,7 @@ func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *
 
 // TraceBlock returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *API) TraceBlock(ctx context.Context, blob []byte, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *TraceConfig) ([]*txTraceResult, error) {
 	block := new(types.Block)
 	if err := rlp.Decode(bytes.NewReader(blob), block); err != nil {
 		return nil, fmt.Errorf("could not decode block: %v", err)
@@ -862,71 +862,46 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
-	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer    vm.EVMLogger
+		tracer    Tracer
 		err       error
+		timeout   = defaultTraceTimeout
 		txContext = core.NewEVMTxContext(message)
 	)
-	switch {
-	case config == nil:
-		tracer = logger.NewStructLogger(nil)
-	case config.Tracer != nil:
-		// Define a meaningful timeout of a single transaction trace
-		timeout := defaultTraceTimeout
-		if config.Timeout != nil {
-			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
-				return nil, err
-			}
-		}
-		if t, err := New(*config.Tracer, txctx); err != nil {
-			return nil, err
-		} else {
-			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-			go func() {
-				<-deadlineCtx.Done()
-				if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
-					t.Stop(errors.New("execution timeout"))
-				}
-			}()
-			defer cancel()
-			tracer = t
-		}
-	default:
-		tracer = logger.NewStructLogger(config.Config)
+	if config == nil {
+		config = &TraceConfig{}
 	}
+	// Default tracer is the struct logger
+	tracer = logger.NewStructLogger(config.Config)
+	if config.Tracer != nil {
+		tracer, err = New(*config.Tracer, txctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Define a meaningful timeout of a single transaction trace
+	if config.Timeout != nil {
+		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+	go func() {
+		<-deadlineCtx.Done()
+		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+			tracer.Stop(errors.New("execution timeout"))
+		}
+	}()
+	defer cancel()
+
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
-
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
-
-	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
-	if err != nil {
+	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-
-	// Depending on the tracer type, format and return the output.
-	switch tracer := tracer.(type) {
-	case *logger.StructLogger:
-		// If the result contains a revert reason, return it.
-		returnVal := fmt.Sprintf("%x", result.Return())
-		if len(result.Revert()) > 0 {
-			returnVal = fmt.Sprintf("%x", result.Revert())
-		}
-		return &ethapi.ExecutionResult{
-			Gas:         result.UsedGas,
-			Failed:      result.Failed(),
-			ReturnValue: returnVal,
-			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
-		}, nil
-
-	case Tracer:
-		return tracer.GetResult()
-
-	default:
-		panic(fmt.Sprintf("bad tracer type %T", tracer))
-	}
+	return tracer.GetResult()
 }
 
 // APIs return the collection of RPC services the tracer package offers.

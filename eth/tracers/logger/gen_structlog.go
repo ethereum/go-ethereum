@@ -21,16 +21,16 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Op            vm.OpCode                   `json:"op"`
 		Gas           math.HexOrDecimal64         `json:"gas"`
 		GasCost       math.HexOrDecimal64         `json:"gasCost"`
-		Memory        hexutil.Bytes               `json:"memory"`
+		Memory        hexutil.Bytes               `json:"memory,omitempty"`
 		MemorySize    int                         `json:"memSize"`
 		Stack         []uint256.Int               `json:"stack"`
-		ReturnData    hexutil.Bytes               `json:"returnData"`
+		ReturnData    hexutil.Bytes               `json:"returnData,omitempty"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
 		OpName        string                      `json:"opName"`
-		ErrorString   string                      `json:"error"`
+		ErrorString   string                      `json:"error,omitempty"`
 	}
 	var enc StructLog
 	enc.Pc = s.Pc
@@ -57,10 +57,10 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Op            *vm.OpCode                  `json:"op"`
 		Gas           *math.HexOrDecimal64        `json:"gas"`
 		GasCost       *math.HexOrDecimal64        `json:"gasCost"`
-		Memory        *hexutil.Bytes              `json:"memory"`
+		Memory        *hexutil.Bytes              `json:"memory,omitempty"`
 		MemorySize    *int                        `json:"memSize"`
 		Stack         []uint256.Int               `json:"stack"`
-		ReturnData    *hexutil.Bytes              `json:"returnData"`
+		ReturnData    *hexutil.Bytes              `json:"returnData,omitempty"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         *int                        `json:"depth"`
 		RefundCounter *uint64                     `json:"refund"`

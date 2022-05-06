@@ -399,6 +399,21 @@ func TestEncodeToBytes(t *testing.T) {
 	runEncTests(t, EncodeToBytes)
 }
 
+func TestEncodeAppendToBytes(t *testing.T) {
+	buffer := make([]byte, 20)
+	runEncTests(t, func(val interface{}) ([]byte, error) {
+		w := NewEncoderBuffer(nil)
+		defer w.Flush()
+
+		err := Encode(w, val)
+		if err != nil {
+			return nil, err
+		}
+		output := w.AppendToBytes(buffer[:0])
+		return output, nil
+	})
+}
+
 func TestEncodeToReader(t *testing.T) {
 	runEncTests(t, func(val interface{}) ([]byte, error) {
 		_, r, err := EncodeToReader(val)

@@ -542,6 +542,19 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						}
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
+						if newHeadBlock.NumberU64() == 0 {
+							// Recommit the genesis state into disk in case the rewinding destination
+							// is genesis block and the relevant state is gone. In the future this
+							// rewinding destination can be the earliest block stored in the chain
+							// if the historical chain pruning is enabled. In that case the logic
+							// needs to be improved here.
+							if !bc.HasState(bc.genesisBlock.Root()) {
+								if err := CommitGenesisState(bc.db, bc.genesisBlock.Hash()); err != nil {
+									log.Crit("Failed to commit genesis state", "err", err)
+								}
+								log.Debug("Recommitted genesis state to disk")
+							}
+						}
 						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
 					}
@@ -592,7 +605,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 		if num+1 <= frozen {
 			// Truncate all relative data(header, total difficulty, body, receipt
 			// and canonical hash) from ancient store.
-			if err := bc.db.TruncateAncients(num); err != nil {
+			if err := bc.db.TruncateHead(num); err != nil {
 				log.Crit("Failed to truncate ancient data", "number", num, "err", err)
 			}
 			// Remove the hash <-> number mapping from the active store.
@@ -991,7 +1004,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				size += int64(batch.ValueSize())
 				if err = batch.Write(); err != nil {
 					fastBlock := bc.CurrentFastBlock().NumberU64()
-					if err := bc.db.TruncateAncients(fastBlock + 1); err != nil {
+					if err := bc.db.TruncateHead(fastBlock + 1); err != nil {
 						log.Error("Can't truncate ancient store after failed insert", "err", err)
 					}
 					return 0, err
@@ -1009,7 +1022,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		if !updateHead(blockChain[len(blockChain)-1]) {
 			// We end up here if the header chain has reorg'ed, and the blocks/receipts
 			// don't match the canonical chain.
-			if err := bc.db.TruncateAncients(previousFastBlock + 1); err != nil {
+			if err := bc.db.TruncateHead(previousFastBlock + 1); err != nil {
 				log.Error("Can't truncate ancient store after failed insert", "err", err)
 			}
 			return 0, errSideChainReceipts
@@ -1253,7 +1266,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	return nil
 }
 
-// WriteBlockWithState writes the block and all associated state to the database.
+// WriteBlockAndSetHead writes the given block and all associated state to the database,
+// and applies the block as the new chain head.
 func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errChainStopped
@@ -1263,9 +1277,8 @@ func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types
 	return bc.writeBlockAndSetHead(block, receipts, logs, state, emitHeadEvent)
 }
 
-// writeBlockAndSetHead writes the block and all associated state to the database,
-// and also it applies the given block as the new chain head. This function expects
-// the chain mutex to be held.
+// writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
+// This function expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if err := bc.writeBlockWithState(block, receipts, logs, state); err != nil {
 		return NonStatTy, err
@@ -1646,12 +1659,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		if !setHead {
-			// We did not setHead, so we don't have any stats to update
-			log.Info("Inserted block", "number", block.Number(), "hash", block.Hash(), "txs", len(block.Transactions()), "elapsed", common.PrettyDuration(time.Since(start)))
-			return it.index, nil
-		}
+		// Report the import stats before returning the various results
+		stats.processed++
+		stats.usedGas += usedGas
 
+		dirty, _ := bc.stateCache.TrieDB().Size()
+		stats.report(chain, it.index, dirty, setHead)
+
+		if !setHead {
+			return it.index, nil // Direct block insertion of a single block
+		}
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
@@ -1678,11 +1695,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()),
 				"root", block.Root())
 		}
-		stats.processed++
-		stats.usedGas += usedGas
-
-		dirty, _ := bc.stateCache.TrieDB().Size()
-		stats.report(chain, it.index, dirty)
 	}
 
 	// Any blocks remaining here? The only ones we care about are the future ones
@@ -2063,7 +2075,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 // InsertBlockWithoutSetHead executes the block, runs the necessary verification
 // upon it and then persist the block and the associate state into the database.
 // The key difference between the InsertChain is it won't do the canonical chain
-// updating. It relies on the additional SetChainHead call to finalize the entire
+// updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
 func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 	if !bc.chainmu.TryLock() {
@@ -2075,32 +2087,49 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 	return err
 }
 
-// SetChainHead rewinds the chain to set the new head block as the specified
-// block. It's possible that after the reorg the relevant state of head
-// is missing. It can be fixed by inserting a new block which triggers
-// the re-execution.
-func (bc *BlockChain) SetChainHead(newBlock *types.Block) error {
+// SetCanonical rewinds the chain to set the new head block as the specified
+// block. It's possible that the state of the new head is missing, and it will
+// be recovered in this function as well.
+func (bc *BlockChain) SetCanonical(head *types.Block) error {
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
+	// Re-execute the reorged chain in case the head state is missing.
+	if !bc.HasState(head.Root()) {
+		if err := bc.recoverAncestors(head); err != nil {
+			return err
+		}
+		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
+	}
 	// Run the reorg if necessary and set the given block as new head.
-	if newBlock.ParentHash() != bc.CurrentBlock().Hash() {
-		if err := bc.reorg(bc.CurrentBlock(), newBlock); err != nil {
+	start := time.Now()
+	if head.ParentHash() != bc.CurrentBlock().Hash() {
+		if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
 			return err
 		}
 	}
-	bc.writeHeadBlock(newBlock)
+	bc.writeHeadBlock(head)
 
 	// Emit events
-	logs := bc.collectLogs(newBlock.Hash(), false)
-	bc.chainFeed.Send(ChainEvent{Block: newBlock, Hash: newBlock.Hash(), Logs: logs})
+	logs := bc.collectLogs(head.Hash(), false)
+	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: newBlock})
-	log.Info("Set the chain head", "number", newBlock.Number(), "hash", newBlock.Hash())
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: head})
+
+	context := []interface{}{
+		"number", head.Number(),
+		"hash", head.Hash(),
+		"root", head.Root(),
+		"elapsed", time.Since(start),
+	}
+	if timestamp := time.Unix(int64(head.Time()), 0); time.Since(timestamp) > time.Minute {
+		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+	}
+	log.Info("Chain head was updated", context...)
 	return nil
 }
 
@@ -2286,6 +2315,9 @@ Error: %v
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	if len(chain) == 0 {
+		return 0, nil
+	}
 	start := time.Now()
 	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err

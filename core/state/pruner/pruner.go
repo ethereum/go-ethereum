@@ -497,7 +497,7 @@ Check the command description "geth snapshot prune-state --help" for more detail
 `
 
 func deleteCleanTrieCache(path string) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if !common.FileExist(path) {
 		log.Warn(warningLog)
 		return
 	}

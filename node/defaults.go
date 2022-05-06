@@ -50,7 +50,9 @@ var (
 var DefaultConfig = Config{
 	DataDir:             DefaultDataDir(),
 	HTTPPort:            DefaultHTTPPort,
+	AuthAddr:            DefaultAuthHost,
 	AuthPort:            DefaultAuthPort,
+	AuthVirtualHosts:    DefaultAuthVhosts,
 	HTTPModules:         []string{"net", "web3"},
 	HTTPVirtualHosts:    []string{"localhost"},
 	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,

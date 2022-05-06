@@ -113,9 +113,6 @@ type Config struct {
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
 
-	// Authport is the port number on which the authenticated API is provided.
-	AuthPort int `toml:",omitempty"`
-
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
 	// useless for custom HTTP clients.
@@ -141,6 +138,16 @@ type Config struct {
 
 	// HTTPPathPrefix specifies a path prefix on which http-rpc is to be served.
 	HTTPPathPrefix string `toml:",omitempty"`
+
+	// AuthAddr is the listening address on which authenticated APIs are provided.
+	AuthAddr string `toml:",omitempty"`
+
+	// AuthPort is the port number on which authenticated APIs are provided.
+	AuthPort int `toml:",omitempty"`
+
+	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
+	// for the authenticated api. This is by default {'localhost'}.
+	AuthVirtualHosts []string `toml:",omitempty"`
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.

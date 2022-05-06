@@ -184,11 +184,7 @@ func TestAndroid(t *testing.T) {
 		t.Logf("initialization took %v", time.Since(start))
 	}
 	// Create and switch to a temporary workspace
-	workspace, err := ioutil.TempDir("", "geth-android-")
-	if err != nil {
-		t.Fatalf("failed to create temporary workspace: %v", err)
-	}
-	defer os.RemoveAll(workspace)
+	workspace := t.TempDir()
 
 	pwd, err := os.Getwd()
 	if err != nil {
