@@ -18,6 +18,7 @@ package core
 
 import (
 	//"bytes"
+	"bytes"
 	"crypto/ecdsa"
 	//"fmt"
 	"math/big"
@@ -353,7 +354,7 @@ var (
 	codeWithExtCodeCopyGas = uint64(192372)
 )
 
-func TestProcessStateless(t *testing.T) {
+func TestProcessVerkle(t *testing.T) {
 	var (
 		config = &params.ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -440,4 +441,122 @@ func TestProcessStateless(t *testing.T) {
 			t.Fatalf("expected block txs to use %d, got %d\n", blockGasUsagesExpected[i], b.GasUsed())
 		}
 	}
+}
+
+func TestProcessVerkleCodeDeployExec(t *testing.T) {
+	var (
+		config = &params.ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
+			BerlinBlock:         big.NewInt(0),
+			LondonBlock:         big.NewInt(0),
+			Ethash:              new(params.EthashConfig),
+			CancunBlock:         big.NewInt(0),
+		}
+		signer     = types.LatestSigner(config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		db         = rawdb.NewMemoryDatabase()
+		gspec      = &Genesis{
+			Config: config,
+			Alloc: GenesisAlloc{
+				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+					Nonce:   0,
+				},
+			},
+		}
+	)
+	// Verkle trees use the snapshot, which must be enabled before the
+	// data is saved into the tree+database.
+	genesis := gspec.MustCommit(db)
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+
+	// compiled Storage.sol
+	contractCreationInput := common.FromHex(`608060405234801561001057600080fd5b50610150806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033`)
+	callStoreInput := common.FromHex(`6057361d00000000000000000000000000000000000000000000000000000000deadbeef`)
+	contractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
+	chain, _ := GenerateVerkleChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, gen *BlockGen) {
+		if i == 0 {
+			// Create the contract in block #1
+			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 3000000, big.NewInt(875000000), contractCreationInput), signer, testKey)
+			gen.AddTx(tx)
+		} else {
+			// Call the contract's `store` function in block #2
+			tx, _ := types.SignTx(types.NewTransaction(1, contractAddr, big.NewInt(16), 3000000, big.NewInt(875000000), callStoreInput), signer, testKey)
+			gen.AddTx(tx)
+		}
+	})
+
+	_, err := blockchain.InsertChain(chain)
+	if err != nil {
+		t.Fatalf("block imported with error: %v", err)
+	}
+
+	// Check that the location for the contract is availabe in the witness
+	// and is reported as not present.
+	b1 := blockchain.GetBlockByNumber(1)
+	if b1 == nil {
+		t.Fatalf("expected block %d to be present in chain", 1)
+	}
+	var (
+		hascode      bool
+		contractStem [31]byte
+	)
+
+	// Look for the stem that the contract will be deployed to
+	for _, kv := range b1.Header().VerkleKeyVals {
+		if kv.Key[31] == 0x80 {
+			// Make sure there is only one contract deployment
+			if hascode {
+				t.Fatalf("found two contract deployments, one at %x and one at %x. There can be only one.", contractStem[:], kv.Key[:31])
+			}
+
+			hascode = true
+			copy(contractStem[:], kv.Key[:31])
+		}
+	}
+
+	if !hascode {
+		t.Fatal("could not find a contract deployment")
+	}
+
+	// Check that the code pages show up in the second block
+	b2 := blockchain.GetBlockByNumber(2)
+	if b2 == nil {
+		t.Fatalf("expected block %d to be present in chain", 2)
+	}
+
+	hascode = false
+	for _, kv := range b2.Header().VerkleKeyVals {
+		if bytes.Equal(contractStem[:], kv.Key[:31]) && kv.Key[31] >= 128 {
+			hascode = true
+
+			if len(kv.Value) == 0 {
+				t.Fatal("chunk value for called code should not be empty in witness")
+			}
+
+			// check that the code isn't full 0s
+			var notallzeros bool
+			for _, b := range kv.Value {
+				notallzeros = notallzeros || (b != 0)
+			}
+			if !notallzeros {
+				t.Fatalf("0-filled code chunk %x", kv.Key)
+			}
+		}
+	}
+
+	if !hascode {
+		t.Fatal("could not find contract code in the witness of the calling block")
+	}
+
 }
