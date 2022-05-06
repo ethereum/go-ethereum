@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"errors"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -65,6 +66,7 @@ type chainSyncer struct {
 	handler     *handler
 	force       *time.Timer
 	forced      bool // true when force timer fired
+	warned      time.Time
 	peerEventCh chan struct{}
 	doneCh      chan error // non-nil when sync is running
 }
@@ -119,10 +121,18 @@ func (cs *chainSyncer) loop() {
 		select {
 		case <-cs.peerEventCh:
 			// Peer information changed, recheck.
-		case <-cs.doneCh:
+		case err := <-cs.doneCh:
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
+
+			// If we've reached the merge transition but no beacon client is available, or
+			// it has not yet switched us over, keep warning the user that their infra is
+			// potentially flaky.
+			if errors.Is(err, downloader.ErrMergeTransition) && time.Since(cs.warned) > 10*time.Second {
+				log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
+				cs.warned = time.Now()
+			}
 		case <-cs.force.C:
 			cs.forced = true
 
@@ -143,9 +153,19 @@ func (cs *chainSyncer) loop() {
 // nextSyncOp determines whether sync is required at this time.
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
-		return nil // Sync already running.
+		return nil // Sync already running
 	}
-
+	// If a beacon client once took over control, disable the entire legacy sync
+	// path from here on end. Note, there is a slight "race" between reaching TTD
+	// and the beacon client taking over. The downloader will enforce that nothing
+	// above the first TTD will be delivered to the chain for import.
+	//
+	// An alternative would be to check the local chain for exceeding the TTD and
+	// avoid triggering a sync in that case, but that could also miss sibling or
+	// other family TTD block being accepted.
+	if cs.handler.merger.TDDReached() {
+		return nil
+	}
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
 	if cs.forced {
@@ -156,19 +176,24 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
-	// We have enough peers, check TD
+	// We have enough peers, pick the one with the highest TD, but avoid going
+	// over the terminal total difficulty. Above that we expect the consensus
+	// clients to direct the chain head to sync to.
 	peer := cs.handler.peers.peerWithHighestTD()
 	if peer == nil {
 		return nil
 	}
 	mode, ourTD := cs.modeAndLocalHead()
-	if mode == downloader.FastSync && atomic.LoadUint32(&cs.handler.snapSync) == 1 {
-		// Fast sync via the snap protocol
-		mode = downloader.SnapSync
-	}
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
-		return nil // We're in sync.
+		// We seem to be in sync according to the legacy rules. In the merge
+		// world, it can also mean we're stuck on the merge block, waiting for
+		// a beacon client. In the latter case, notify the user.
+		if ttd := cs.handler.chain.Config().TerminalTotalDifficulty; ttd != nil && ourTD.Cmp(ttd) >= 0 && time.Since(cs.warned) > 10*time.Second {
+			log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
+			cs.warned = time.Now()
+		}
+		return nil // We're in sync
 	}
 	return op
 }
@@ -179,19 +204,19 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 }
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
-	// If we're in fast sync mode, return that directly
-	if atomic.LoadUint32(&cs.handler.fastSync) == 1 {
+	// If we're in snap sync mode, return that directly
+	if atomic.LoadUint32(&cs.handler.snapSync) == 1 {
 		block := cs.handler.chain.CurrentFastBlock()
 		td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
-		return downloader.FastSync, td
+		return downloader.SnapSync, td
 	}
 	// We are probably in full sync, but we might have rewound to before the
-	// fast sync pivot, check if we should reenable
+	// snap sync pivot, check if we should reenable
 	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
 		if head := cs.handler.chain.CurrentBlock(); head.NumberU64() < *pivot {
 			block := cs.handler.chain.CurrentFastBlock()
 			td := cs.handler.chain.GetTd(block.Hash(), block.NumberU64())
-			return downloader.FastSync, td
+			return downloader.SnapSync, td
 		}
 	}
 	// Nope, we're really full syncing
@@ -208,15 +233,15 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
-	if op.mode == downloader.FastSync || op.mode == downloader.SnapSync {
-		// Before launch the fast sync, we have to ensure user uses the same
+	if op.mode == downloader.SnapSync {
+		// Before launch the snap sync, we have to ensure user uses the same
 		// txlookup limit.
-		// The main concern here is: during the fast sync Geth won't index the
+		// The main concern here is: during the snap sync Geth won't index the
 		// block(generate tx indices) before the HEAD-limit. But if user changes
-		// the limit in the next fast sync(e.g. user kill Geth manually and
+		// the limit in the next snap sync(e.g. user kill Geth manually and
 		// restart) then it will be hard for Geth to figure out the oldest block
 		// has been indexed. So here for the user-experience wise, it's non-optimal
-		// that user can't change limit during the fast sync. If changed, Geth
+		// that user can't change limit during the snap sync. If changed, Geth
 		// will just blindly use the original one.
 		limit := h.chain.TxLookupLimit()
 		if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
@@ -226,14 +251,10 @@ func (h *handler) doSync(op *chainSyncOp) error {
 			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
 		}
 	}
-	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
+	// Run the sync cycle, and disable snap sync if we're past the pivot block
+	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.Config().TerminalTotalDifficulty, op.mode)
 	if err != nil {
 		return err
-	}
-	if atomic.LoadUint32(&h.fastSync) == 1 {
-		log.Info("Fast sync complete, auto disabling")
-		atomic.StoreUint32(&h.fastSync, 0)
 	}
 	if atomic.LoadUint32(&h.snapSync) == 1 {
 		log.Info("Snap sync complete, auto disabling")

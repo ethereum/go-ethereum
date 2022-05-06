@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -139,8 +140,10 @@ type Config struct {
 
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
-	// Whitelist of required block number -> hash values to accept
-	Whitelist map[uint64]common.Hash `toml:"-"`
+	// PeerRequiredBlocks is a set of block number -> hash mappings which must be in the
+	// canonical chain of all remote peers. Setting the option makes geth verify the
+	// presence of these blocks for every new peer connection.
+	PeerRequiredBlocks map[uint64]common.Hash `toml:"-"`
 
 	// Light client options
 	LightServ          int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
@@ -210,51 +213,53 @@ type Config struct {
 	// No heimdall service
 	WithoutHeimdall bool
 
-	// Berlin block override (TODO: remove after the fork)
-	OverrideBerlin *big.Int `toml:",omitempty"`
-	OverrideLondon *big.Int `toml:",omitempty"`
-
 	// Bor logs flag
 	BorLogs bool
+
+	// Arrow Glacier block override (TODO: remove after the fork)
+	OverrideArrowGlacier *big.Int `toml:",omitempty"`
+
+	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
+	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, ethConfig *Config, db ethdb.Database, blockchainAPI *ethapi.PublicBlockChainAPI) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, ethConfig *Config, notify []string, noverify bool, db ethdb.Database, blockchainAPI *ethapi.PublicBlockChainAPI) consensus.Engine {
 	config := &ethConfig.Ethash
-	notify := ethConfig.Miner.Notify
-	noverify := ethConfig.Miner.Noverify
 
 	// If proof-of-authority is requested, set it up
+	var engine consensus.Engine
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
+
 	// If Matic bor consensus is requested, set it up
 	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
 	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
 	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
 		return bor.New(chainConfig, db, blockchainAPI, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
+	} else {
+		switch config.PowMode {
+		case ethash.ModeFake:
+			log.Warn("Ethash used in fake mode")
+		case ethash.ModeTest:
+			log.Warn("Ethash used in test mode")
+		case ethash.ModeShared:
+			log.Warn("Ethash used in shared mode")
+		}
+		engine = ethash.New(ethash.Config{
+			PowMode:          config.PowMode,
+			CacheDir:         stack.ResolvePath(config.CacheDir),
+			CachesInMem:      config.CachesInMem,
+			CachesOnDisk:     config.CachesOnDisk,
+			CachesLockMmap:   config.CachesLockMmap,
+			DatasetDir:       config.DatasetDir,
+			DatasetsInMem:    config.DatasetsInMem,
+			DatasetsOnDisk:   config.DatasetsOnDisk,
+			DatasetsLockMmap: config.DatasetsLockMmap,
+			NotifyFull:       config.NotifyFull,
+		}, notify, noverify)
+		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-	}
-	engine := ethash.New(ethash.Config{
-		PowMode:          config.PowMode,
-		CacheDir:         stack.ResolvePath(config.CacheDir),
-		CachesInMem:      config.CachesInMem,
-		CachesOnDisk:     config.CachesOnDisk,
-		CachesLockMmap:   config.CachesLockMmap,
-		DatasetDir:       config.DatasetDir,
-		DatasetsInMem:    config.DatasetsInMem,
-		DatasetsOnDisk:   config.DatasetsOnDisk,
-		DatasetsLockMmap: config.DatasetsLockMmap,
-		NotifyFull:       config.NotifyFull,
-	}, notify, noverify)
-	engine.SetThreads(-1) // Disable CPU mining
-	return engine
+	return beacon.New(engine)
 }

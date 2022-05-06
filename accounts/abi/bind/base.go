@@ -370,7 +370,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx, err = c.createLegacyTx(opts, contract, input)
 	} else {
 		// Only query for basefee if gasPrice not specified
-		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); err != nil {
+		if head, errHead := c.transactor.HeaderByNumber(ensureContext(opts.Context), nil); errHead != nil {
 			return nil, errHead
 		} else if head.BaseFee != nil {
 			rawTx, err = c.createDynamicTx(opts, contract, input, head)

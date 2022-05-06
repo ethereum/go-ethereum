@@ -86,7 +86,7 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
 	var r Receipt
 	err := rlp.DecodeBytes(input, &r)
-	if err != errEmptyTypedReceipt {
+	if err != errShortTypedReceipt {
 		t.Fatal("wrong error:", err)
 	}
 }

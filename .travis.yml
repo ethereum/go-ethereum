@@ -16,7 +16,7 @@ jobs:
     - stage: lint
       os: linux
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - lint
       git:
@@ -31,7 +31,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - docker
       services:
@@ -48,7 +48,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - docker
       services:
@@ -65,7 +65,7 @@ jobs:
       if: type = push
       os: linux
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - ubuntu-ppa
         - GO111MODULE=on
@@ -90,7 +90,7 @@ jobs:
       os: linux
       dist: bionic
       sudo: required
-      go: 1.17.x
+      go: 1.18.x
       env:
         - azure-linux
         - GO111MODULE=on
@@ -120,36 +120,6 @@ jobs:
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
-    # This builder does the Linux Azure MIPS xgo uploads
-    - stage: build
-      if: type = push
-      os: linux
-      dist: bionic
-      services:
-        - docker
-      go: 1.17.x
-      env:
-        - azure-linux-mips
-        - GO111MODULE=on
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
-        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
-        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
-        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY signify SIGNIFY_KEY -upload gethstore/builds
-
-        - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
-        - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
-        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
     # This builder does the Android Maven and Azure uploads
     - stage: build
       if: type = push
@@ -178,7 +148,7 @@ jobs:
         - sdkmanager "platform-tools" "platforms;android-15" "platforms;android-19" "platforms;android-24" "ndk-bundle"
 
         # Install Go to allow building with
-        - curl https://dl.google.com/go/go1.16.linux-amd64.tar.gz | tar -xz
+        - curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -192,7 +162,7 @@ jobs:
     - stage: build
       if: type = push
       os: osx
-      go: 1.17.x
+      go: 1.18.x
       env:
         - azure-osx
         - azure-ios
@@ -224,7 +194,7 @@ jobs:
       os: linux
       arch: amd64
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - GO111MODULE=on
       script:
@@ -235,7 +205,7 @@ jobs:
       os: linux
       arch: arm64
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - GO111MODULE=on
       script:
@@ -244,7 +214,7 @@ jobs:
     - stage: build
       os: linux
       dist: bionic
-      go: 1.16.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:
@@ -255,7 +225,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - azure-purge
         - GO111MODULE=on
@@ -269,7 +239,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.17.x
+      go: 1.18.x
       env:
         - GO111MODULE=on
       script:

@@ -168,7 +168,7 @@ type bytecodeResponse struct {
 // to actual requests and to validate any security constraints.
 //
 // Concurrency note: storage requests and responses are handled concurrently from
-// the main runloop to allow Merkel proof verifications on the peer's thread and
+// the main runloop to allow Merkle proof verifications on the peer's thread and
 // to drop on invalid response. The request struct must contain all the data to
 // construct the response without accessing runloop internals (i.e. tasks). That
 // is only included to allow the runloop to match a response to the task being
@@ -325,10 +325,10 @@ type healTask struct {
 	codeTasks map[common.Hash]struct{}      // Set of byte code tasks currently queued for retrieval
 }
 
-// syncProgress is a database entry to allow suspending and resuming a snapshot state
+// SyncProgress is a database entry to allow suspending and resuming a snapshot state
 // sync. Opposed to full and fast sync, there is no way to restart a suspended
 // snap sync without prior knowledge of the suspension point.
-type syncProgress struct {
+type SyncProgress struct {
 	Tasks []*accountTask // The suspended account tasks (contract tasks within)
 
 	// Status report during syncing phase
@@ -342,12 +342,15 @@ type syncProgress struct {
 	// Status report during healing phase
 	TrienodeHealSynced uint64             // Number of state trie nodes downloaded
 	TrienodeHealBytes  common.StorageSize // Number of state trie bytes persisted to disk
-	TrienodeHealDups   uint64             // Number of state trie nodes already processed
-	TrienodeHealNops   uint64             // Number of state trie nodes not requested
 	BytecodeHealSynced uint64             // Number of bytecodes downloaded
 	BytecodeHealBytes  common.StorageSize // Number of bytecodes persisted to disk
-	BytecodeHealDups   uint64             // Number of bytecodes already processed
-	BytecodeHealNops   uint64             // Number of bytecodes not requested
+}
+
+// SyncPending is analogous to SyncProgress, but it's used to report on pending
+// ephemeral sync progress that doesn't get persisted into the database.
+type SyncPending struct {
+	TrienodeHeal uint64 // Number of state trie nodes pending
+	BytecodeHeal uint64 // Number of bytecodes pending
 }
 
 // SyncPeer abstracts out the methods required for a peer to be synced against
@@ -543,7 +546,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	s.lock.Lock()
 	s.root = root
 	s.healer = &healTask{
-		scheduler: state.NewStateSync(root, s.db, nil, s.onHealState),
+		scheduler: state.NewStateSync(root, s.db, s.onHealState),
 		trieTasks: make(map[common.Hash]trie.SyncPath),
 		codeTasks: make(map[common.Hash]struct{}),
 	}
@@ -671,7 +674,7 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 // loadSyncStatus retrieves a previously aborted sync status from the database,
 // or generates a fresh one if none is available.
 func (s *Syncer) loadSyncStatus() {
-	var progress syncProgress
+	var progress SyncProgress
 
 	if status := rawdb.ReadSnapshotSyncStatus(s.db); status != nil {
 		if err := json.Unmarshal(status, &progress); err != nil {
@@ -775,7 +778,7 @@ func (s *Syncer) saveSyncStatus() {
 		}
 	}
 	// Store the actual progress markers
-	progress := &syncProgress{
+	progress := &SyncProgress{
 		Tasks:              s.tasks,
 		AccountSynced:      s.accountSynced,
 		AccountBytes:       s.accountBytes,
@@ -793,6 +796,31 @@ func (s *Syncer) saveSyncStatus() {
 		panic(err) // This can only fail during implementation
 	}
 	rawdb.WriteSnapshotSyncStatus(s.db, status)
+}
+
+// Progress returns the snap sync status statistics.
+func (s *Syncer) Progress() (*SyncProgress, *SyncPending) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	progress := &SyncProgress{
+		AccountSynced:      s.accountSynced,
+		AccountBytes:       s.accountBytes,
+		BytecodeSynced:     s.bytecodeSynced,
+		BytecodeBytes:      s.bytecodeBytes,
+		StorageSynced:      s.storageSynced,
+		StorageBytes:       s.storageBytes,
+		TrienodeHealSynced: s.trienodeHealSynced,
+		TrienodeHealBytes:  s.trienodeHealBytes,
+		BytecodeHealSynced: s.bytecodeHealSynced,
+		BytecodeHealBytes:  s.bytecodeHealBytes,
+	}
+	pending := new(SyncPending)
+	if s.healer != nil {
+		pending.TrienodeHeal = uint64(len(s.healer.trieTasks))
+		pending.BytecodeHeal = uint64(len(s.healer.codeTasks))
+	}
+	return progress, pending
 }
 
 // cleanAccountTasks removes account range retrieval tasks that have already been
@@ -1753,7 +1781,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
 		if !bytes.Equal(account.CodeHash, emptyCode[:]) {
-			if code := rawdb.ReadCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)); code == nil {
+			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
 				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
 				res.task.needCode[i] = true
 				res.task.pend++
@@ -1761,7 +1789,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 		}
 		// Check if the account is a contract with an unknown storage trie
 		if account.Root != emptyRoot {
-			if node, err := s.db.Get(account.Root[:]); err != nil || node == nil {
+			if ok, err := s.db.Has(account.Root[:]); err != nil || !ok {
 				// If there was a previous large state retrieval in progress,
 				// don't restart it from scratch. This happens if a sync cycle
 				// is interrupted and resumed later. However, *do* update the
@@ -2798,7 +2826,10 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
 		accountFills,
 	).Uint64())
-
+	// Don't report anything until we have a meaningful progress
+	if estBytes < 1.0 {
+		return
+	}
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)
 

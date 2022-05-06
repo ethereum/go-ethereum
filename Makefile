@@ -2,11 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios geth-cross evm all test clean
-.PHONY: geth-linux geth-linux-386 geth-linux-amd64 geth-linux-mips64 geth-linux-mips64le
-.PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
-.PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
-.PHONY: geth-windows geth-windows-386 geth-windows-amd64
+.PHONY: geth android ios evm all test clean
 
 GOBIN = ./build/bin
 GO ?= latest
@@ -164,7 +160,7 @@ geth-windows-amd64:
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
 
 PACKAGE_NAME          := github.com/maticnetwork/bor
-GOLANG_CROSS_VERSION  ?= v1.17.2
+GOLANG_CROSS_VERSION  ?= v1.18.1
 
 .PHONY: release-dry-run
 release-dry-run:
@@ -178,7 +174,7 @@ release-dry-run:
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v `pwd`:/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
-		ghcr.io/troian/golang-cross:${GOLANG_CROSS_VERSION} \
+		goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
 		--rm-dist --skip-validate --skip-publish
 
 .PHONY: release
@@ -194,5 +190,5 @@ release:
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v `pwd`:/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
-		ghcr.io/troian/golang-cross:${GOLANG_CROSS_VERSION} \
+		goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \
 		--rm-dist --skip-validate

@@ -41,6 +41,15 @@ func RopstenGenesis() string {
 	return string(enc)
 }
 
+// SepoliaGenesis returns the JSON spec to use for the Sepolia test network.
+func SepoliaGenesis() string {
+	enc, err := json.Marshal(core.DefaultSepoliaGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
+}
+
 // RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
 func RinkebyGenesis() string {
 	enc, err := json.Marshal(core.DefaultRinkebyGenesisBlock())

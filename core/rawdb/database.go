@@ -89,13 +89,18 @@ func (db *nofreezedb) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errNotSupported
 }
 
-// ReadAncients returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) ReadAncients(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+// AncientRange returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
 	return nil, errNotSupported
 }
 
 // Ancients returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Ancients() (uint64, error) {
+	return 0, errNotSupported
+}
+
+// Tail returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) Tail() (uint64, error) {
 	return 0, errNotSupported
 }
 
@@ -109,13 +114,40 @@ func (db *nofreezedb) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, e
 	return 0, errNotSupported
 }
 
-// TruncateAncients returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) TruncateAncients(items uint64) error {
+// TruncateHead returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) TruncateHead(items uint64) error {
+	return errNotSupported
+}
+
+// TruncateTail returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) TruncateTail(items uint64) error {
 	return errNotSupported
 }
 
 // Sync returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Sync() error {
+	return errNotSupported
+}
+
+func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReader) error) (err error) {
+	// Unlike other ancient-related methods, this method does not return
+	// errNotSupported when invoked.
+	// The reason for this is that the caller might want to do several things:
+	// 1. Check if something is in freezer,
+	// 2. If not, check leveldb.
+	//
+	// This will work, since the ancient-checks inside 'fn' will return errors,
+	// and the leveldb work will continue.
+	//
+	// If we instead were to return errNotSupported here, then the caller would
+	// have to explicitly check for that, having an extra clause to do the
+	// non-ancient operations.
+	return fn(db)
+}
+
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 	return errNotSupported
 }
 
@@ -195,7 +227,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 				// Block #1 is still in the database, we're allowed to init a new feezer
 			}
 			// Otherwise, the head header is still the genesis, we're allowed to init a new
-			// feezer.
+			// freezer.
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
@@ -305,6 +337,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		storageSnaps    stat
 		preimages       stat
 		bloomBits       stat
+		beaconHeaders   stat
 		cliqueSnaps     stat
 
 		// Ancient store statistics
@@ -355,14 +388,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			accountSnaps.Add(size)
 		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
 			storageSnaps.Add(size)
-		case bytes.HasPrefix(key, preimagePrefix) && len(key) == (len(preimagePrefix)+common.HashLength):
+		case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
 			preimages.Add(size)
 		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
+			metadata.Add(size)
+		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
 			metadata.Add(size)
 		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
 			bloomBits.Add(size)
 		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
 			bloomBits.Add(size)
+		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
+			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, []byte("clique-")) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
 		case bytes.HasPrefix(key, []byte("cht-")) ||
@@ -377,9 +414,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			var accounted bool
 			for _, meta := range [][]byte{
 				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, lastPivotKey,
-				fastTrieProgressKey, snapshotDisabledKey, snapshotRootKey, snapshotJournalKey,
+				fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey,
+				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -425,6 +462,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
+		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
 		{"Ancient store", "Headers", ancientHeadersSize.String(), ancients.String()},

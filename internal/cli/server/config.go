@@ -723,7 +723,7 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 
 	// whitelist
 	{
-		n.Whitelist = map[uint64]common.Hash{}
+		n.PeerRequiredBlocks = map[uint64]common.Hash{}
 		for k, v := range c.Whitelist {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
@@ -733,7 +733,7 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 			if err = hash.UnmarshalText([]byte(v)); err != nil {
 				return nil, fmt.Errorf("invalid whitelist hash %s: %v", v, err)
 			}
-			n.Whitelist[number] = hash
+			n.PeerRequiredBlocks[number] = hash
 		}
 	}
 
@@ -785,8 +785,6 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 	// sync mode. It can either be "fast", "full" or "snap". We disable
 	// for now the "light" mode.
 	switch c.SyncMode {
-	case "fast":
-		n.SyncMode = downloader.FastSync
 	case "full":
 		n.SyncMode = downloader.FullSync
 	case "snap":

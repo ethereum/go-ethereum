@@ -52,35 +52,35 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 func (s *Suite) AllEthTests() []utesting.Test {
 	return []utesting.Test{
 		// status
-		{Name: "TestStatus", Fn: s.TestStatus},
+		{Name: "TestStatus65", Fn: s.TestStatus65},
 		{Name: "TestStatus66", Fn: s.TestStatus66},
 		// get block headers
-		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestGetBlockHeaders65", Fn: s.TestGetBlockHeaders65},
 		{Name: "TestGetBlockHeaders66", Fn: s.TestGetBlockHeaders66},
 		{Name: "TestSimultaneousRequests66", Fn: s.TestSimultaneousRequests66},
 		{Name: "TestSameRequestID66", Fn: s.TestSameRequestID66},
 		{Name: "TestZeroRequestID66", Fn: s.TestZeroRequestID66},
 		// get block bodies
-		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "TestGetBlockBodies65", Fn: s.TestGetBlockBodies65},
 		{Name: "TestGetBlockBodies66", Fn: s.TestGetBlockBodies66},
 		// broadcast
-		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestBroadcast65", Fn: s.TestBroadcast65},
 		{Name: "TestBroadcast66", Fn: s.TestBroadcast66},
-		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestLargeAnnounce65", Fn: s.TestLargeAnnounce65},
 		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce66},
-		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestOldAnnounce65", Fn: s.TestOldAnnounce65},
 		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce66},
-		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
+		{Name: "TestBlockHashAnnounce65", Fn: s.TestBlockHashAnnounce65},
 		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce66},
 		// malicious handshakes + status
-		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousHandshake65", Fn: s.TestMaliciousHandshake65},
+		{Name: "TestMaliciousStatus65", Fn: s.TestMaliciousStatus65},
 		{Name: "TestMaliciousHandshake66", Fn: s.TestMaliciousHandshake66},
 		{Name: "TestMaliciousStatus66", Fn: s.TestMaliciousStatus66},
 		// test transactions
-		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestTransaction65", Fn: s.TestTransaction65},
 		{Name: "TestTransaction66", Fn: s.TestTransaction66},
-		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+		{Name: "TestMaliciousTx65", Fn: s.TestMaliciousTx65},
 		{Name: "TestMaliciousTx66", Fn: s.TestMaliciousTx66},
 		{Name: "TestLargeTxRequest66", Fn: s.TestLargeTxRequest66},
 		{Name: "TestNewPooledTxs66", Fn: s.TestNewPooledTxs66},
@@ -89,17 +89,17 @@ func (s *Suite) AllEthTests() []utesting.Test {
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-		{Name: "TestStatus", Fn: s.TestStatus},
-		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
-		{Name: "TestBroadcast", Fn: s.TestBroadcast},
-		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
-		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
-		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
-		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
-		{Name: "TestTransaction", Fn: s.TestTransaction},
-		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+		{Name: "TestStatus65", Fn: s.TestStatus65},
+		{Name: "TestGetBlockHeaders65", Fn: s.TestGetBlockHeaders65},
+		{Name: "TestGetBlockBodies65", Fn: s.TestGetBlockBodies65},
+		{Name: "TestBroadcast65", Fn: s.TestBroadcast65},
+		{Name: "TestLargeAnnounce65", Fn: s.TestLargeAnnounce65},
+		{Name: "TestOldAnnounce65", Fn: s.TestOldAnnounce65},
+		{Name: "TestBlockHashAnnounce65", Fn: s.TestBlockHashAnnounce65},
+		{Name: "TestMaliciousHandshake65", Fn: s.TestMaliciousHandshake65},
+		{Name: "TestMaliciousStatus65", Fn: s.TestMaliciousStatus65},
+		{Name: "TestTransaction65", Fn: s.TestTransaction65},
+		{Name: "TestMaliciousTx65", Fn: s.TestMaliciousTx65},
 	}
 }
 
@@ -125,14 +125,24 @@ func (s *Suite) Eth66Tests() []utesting.Test {
 	}
 }
 
+func (s *Suite) SnapTests() []utesting.Test {
+	return []utesting.Test{
+		{Name: "TestSnapStatus", Fn: s.TestSnapStatus},
+		{Name: "TestSnapAccountRange", Fn: s.TestSnapGetAccountRange},
+		{Name: "TestSnapGetByteCodes", Fn: s.TestSnapGetByteCodes},
+		{Name: "TestSnapGetTrieNodes", Fn: s.TestSnapTrieNodes},
+		{Name: "TestSnapGetStorageRanges", Fn: s.TestSnapGetStorageRanges},
+	}
+}
+
 var (
 	eth66 = true  // indicates whether suite should negotiate eth66 connection
 	eth65 = false // indicates whether suite should negotiate eth65 connection or below.
 )
 
-// TestStatus attempts to connect to the given node and exchange
+// TestStatus65 attempts to connect to the given node and exchange
 // a status message with it.
-func (s *Suite) TestStatus(t *utesting.T) {
+func (s *Suite) TestStatus65(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -156,9 +166,9 @@ func (s *Suite) TestStatus66(t *utesting.T) {
 	}
 }
 
-// TestGetBlockHeaders tests whether the given node can respond to
+// TestGetBlockHeaders65 tests whether the given node can respond to
 // a `GetBlockHeaders` request accurately.
-func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
+func (s *Suite) TestGetBlockHeaders65(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -392,9 +402,9 @@ func (s *Suite) TestZeroRequestID66(t *utesting.T) {
 	}
 }
 
-// TestGetBlockBodies tests whether the given node can respond to
+// TestGetBlockBodies65 tests whether the given node can respond to
 // a `GetBlockBodies` request and that the response is accurate.
-func (s *Suite) TestGetBlockBodies(t *utesting.T) {
+func (s *Suite) TestGetBlockBodies65(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -460,9 +470,9 @@ func (s *Suite) TestGetBlockBodies66(t *utesting.T) {
 	}
 }
 
-// TestBroadcast tests whether a block announcement is correctly
+// TestBroadcast65 tests whether a block announcement is correctly
 // propagated to the given node's peer(s).
-func (s *Suite) TestBroadcast(t *utesting.T) {
+func (s *Suite) TestBroadcast65(t *utesting.T) {
 	if err := s.sendNextBlock(eth65); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
@@ -476,8 +486,8 @@ func (s *Suite) TestBroadcast66(t *utesting.T) {
 	}
 }
 
-// TestLargeAnnounce tests the announcement mechanism with a large block.
-func (s *Suite) TestLargeAnnounce(t *utesting.T) {
+// TestLargeAnnounce65 tests the announcement mechanism with a large block.
+func (s *Suite) TestLargeAnnounce65(t *utesting.T) {
 	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
 		{
@@ -569,8 +579,8 @@ func (s *Suite) TestLargeAnnounce66(t *utesting.T) {
 	}
 }
 
-// TestOldAnnounce tests the announcement mechanism with an old block.
-func (s *Suite) TestOldAnnounce(t *utesting.T) {
+// TestOldAnnounce65 tests the announcement mechanism with an old block.
+func (s *Suite) TestOldAnnounce65(t *utesting.T) {
 	if err := s.oldAnnounce(eth65); err != nil {
 		t.Fatal(err)
 	}
@@ -584,9 +594,9 @@ func (s *Suite) TestOldAnnounce66(t *utesting.T) {
 	}
 }
 
-// TestBlockHashAnnounce sends a new block hash announcement and expects
+// TestBlockHashAnnounce65 sends a new block hash announcement and expects
 // the node to perform a `GetBlockHeaders` request.
-func (s *Suite) TestBlockHashAnnounce(t *utesting.T) {
+func (s *Suite) TestBlockHashAnnounce65(t *utesting.T) {
 	if err := s.hashAnnounce(eth65); err != nil {
 		t.Fatalf("block hash announcement failed: %v", err)
 	}
@@ -600,8 +610,8 @@ func (s *Suite) TestBlockHashAnnounce66(t *utesting.T) {
 	}
 }
 
-// TestMaliciousHandshake tries to send malicious data during the handshake.
-func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
+// TestMaliciousHandshake65 tries to send malicious data during the handshake.
+func (s *Suite) TestMaliciousHandshake65(t *utesting.T) {
 	if err := s.maliciousHandshakes(t, eth65); err != nil {
 		t.Fatal(err)
 	}
@@ -614,8 +624,8 @@ func (s *Suite) TestMaliciousHandshake66(t *utesting.T) {
 	}
 }
 
-// TestMaliciousStatus sends a status package with a large total difficulty.
-func (s *Suite) TestMaliciousStatus(t *utesting.T) {
+// TestMaliciousStatus65 sends a status package with a large total difficulty.
+func (s *Suite) TestMaliciousStatus65(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
@@ -641,9 +651,9 @@ func (s *Suite) TestMaliciousStatus66(t *utesting.T) {
 	}
 }
 
-// TestTransaction sends a valid transaction to the node and
+// TestTransaction65 sends a valid transaction to the node and
 // checks if the transaction gets propagated.
-func (s *Suite) TestTransaction(t *utesting.T) {
+func (s *Suite) TestTransaction65(t *utesting.T) {
 	if err := s.sendSuccessfulTxs(t, eth65); err != nil {
 		t.Fatal(err)
 	}
@@ -657,9 +667,9 @@ func (s *Suite) TestTransaction66(t *utesting.T) {
 	}
 }
 
-// TestMaliciousTx sends several invalid transactions and tests whether
+// TestMaliciousTx65 sends several invalid transactions and tests whether
 // the node will propagate them.
-func (s *Suite) TestMaliciousTx(t *utesting.T) {
+func (s *Suite) TestMaliciousTx65(t *utesting.T) {
 	if err := s.sendMaliciousTxs(t, eth65); err != nil {
 		t.Fatal(err)
 	}
