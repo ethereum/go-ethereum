@@ -558,5 +558,4 @@ func TestProcessVerkleCodeDeployExec(t *testing.T) {
 	if !hascode {
 		t.Fatal("could not find contract code in the witness of the calling block")
 	}
-
 }
