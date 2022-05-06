@@ -113,7 +113,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]bool{"test": true}
-	f2, err := newFreezer(dir, "", false, 2049, tables)
+	f2, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -277,19 +277,19 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 
 	// Re-openening as readonly should fail when validating
 	// table lengths.
-	f, err = newFreezer(dir, "", true, 2049, tables)
+	f, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
 }
 
-func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
+func newFreezerForTesting(t *testing.T, tables map[string]bool) (*Freezer, string) {
 	t.Helper()
 
 	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -297,7 +297,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, strin
 }
 
 // checkAncientCount verifies that the freezer contains n items.
-func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
+func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	t.Helper()
 
 	if frozen, _ := f.Ancients(); frozen != n {
