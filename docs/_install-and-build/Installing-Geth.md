@@ -3,171 +3,190 @@ title: Installing Geth
 sort_key: A
 ---
 
-You can install the Go implementation of Ethereum using a variety of ways. These include
-installing it via your favorite package manager; downloading a standalone pre-built
-bundle; running as a docker container; or building it yourself. This document details all
-of the possibilities to get you joining the Ethereum network using whatever means you
-prefer. A list of stable releases can be found [here][geth-releases].
+There are several ways to install Geth, including via a package manager, downloading a pre-built bundle, running as a docker container or building from downloaded source code. On this page the various installation options are explained for several major operating systems. Users prioritizing ease of installation should choose to use a package manager or prebuilt bundle. Users prioritizing customization should build from source. It is important to run the latest version of Geth because each release includes bugfixes and improvement over the previous versions. The stable releases are recommended for most users because they have been fully tested. A list of stable releases can be found [here][geth-releases]. Instructions for updating existing Geth installations are also provided in each section.
+
 
 {:toc}
 
 -   this will be removed by the toc
 
-## Updating Geth
+## Package managers
 
-Updating go-ethereum is as easy as it gets. You just need to download and install the
-newer version of geth, shutdown your node and restart with the new software. Geth will
-automatically use the data of your old node and sync the latest blocks that were mined
-since you shutdown the old software.
+### MacOS via Homebrew
 
-## Install from a package manager
+The easiest way to install go-ethereum is to use the Geth Homebrew tap. The first step is to check that Homebrew is installed. The following command should return a version number.
 
-### Install on macOS via Homebrew
+```shell
+brew -v
+```
 
-The easiest way to install go-ethereum is to use our Homebrew tap. If you don't have
-Homebrew, [install it first][brew].
+If a version number is returned, then Homebrew is installed. If not, Homebrew can be installed by following the instructions [here][brew]. With Homebrew installed, the following commands add the Geth tap and install Geth:
 
-Run the following commands to add the tap and install `geth`:
 
 ```shell
 brew tap ethereum/ethereum
 brew install ethereum
 ```
 
-You can install the master branch using the `--devel` parameter:
+The previous command installs the latest stable release. Developers that wish to install the most up-to-date version can install the Geth repository's master branch by adding the `--devel` parameter to the install command:
 
 ```shell
 brew install ethereum --devel
 ```
 
-The `abigen`, `bootnode`, `checkpoint-admin`, `clef`, `devp2p`, `ethkey`, `evm`, `faucet`, `geth`, `p2psim`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
-Find the different options and commands available with `geth --help`.
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
-### Install on Ubuntu via PPAs
+```shell
+brew update 
+brew upgrade 
+brew reinstall ethereum
+```
 
-The easiest way to install go-ethereum on Ubuntu-based distributions is with the built-in
-launchpad PPAs (Personal Package Archives). We provide a single PPA repository that
-contains both our stable and development releases for Ubuntu versions `trusty`, `xenial`,
-`zesty` and `artful`.
+When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
-To enable our launchpad repository run:
+
+### Ubuntu via PPAs
+
+The easiest way to install Geth on Ubuntu-based distributions is with the built-in launchpad PPAs (Personal Package Archives). A single PPA repository is provided, containing stable and development releases for Ubuntu versions `xenial`, `trusty`, `impish`, `focal`, `bionic`.
+
+The following command enables the launchpad repository:
 
 ```shell
 sudo add-apt-repository -y ppa:ethereum/ethereum
 ```
 
-Then install the stable version of go-ethereum:
+Then, to install the stable version of go-ethereum:
 
 ```shell
 sudo apt-get update
 sudo apt-get install ethereum
 ```
 
-Or the develop version via:
+Or, alternatively the develop version:
 
 ```shell
 sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
-Find the different options and commands available with `geth --help`.
 
-### Install on Windows
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
-The easiest way to install go-ethereum is to download a pre-compiled binary from the
-[downloads][geth-dl] page. The page provides an installer as well as a zip file. The
-installer puts `geth` into your `PATH` automatically. The zip file contains the command
-`.exe` files that you can use without installing by runnning it from the command prompt.
+```shell
+sudo apt-get update
+sudo apt-get install ethereum
+sudo apt-get upgrade geth
+```
 
-### Install on FreeBSD via pkg
+When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+
+
+### Windows
+
+The easiest way to install Geth is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+
+Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version followign the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+
+### FreeBSD via pkg
+
+Geth can be installed on FreeBSD using the package manager `pkg`. The following command downloads and installs Geth:
 
 ```shell
 pkg install go-ethereum
 ```
 
-The `geth` command is then available on your system in `/usr/local/bin/`. You can create a new account on your node with:
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. 
+
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+
+
+Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
 ```shell
-geth account new
+pkg upgrade
 ```
 
-Find the different options and commands available with `geth --help`.
+When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
-### Install on FreeBSD via ports
 
-Go to the `net-p2p/go-ethereum` ports directory:
+### FreeBSD via ports
+
+Installing Geth using ports, simply requires navigating to the `net-p2p/go-ethereum` ports directory and running `make install` as root:
 
 ```shell
 cd /usr/ports/net-p2p/go-ethereum
-```
-
-Then build it the standard way (as root):
-
-```shell
 make install
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/local/bin/`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. 
 
-Find the different options and commands available with `geth --help`.
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
-### Install on Arch Linux via `pacman`
 
-The `geth` package is available from the [community repo][geth-archlinux].
+Updating an existing Geth installation can be achieved by stopping the node and running the following command:
 
-You can install it using:
+```shell
+portsnap fetch
+```
+
+When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+
+### Arch Linux via pacman
+
+The Geth package is available from the [community repo][geth-archlinux]. It can be installed by running:
 
 ```shell
 pacman -S geth
 ```
 
-The `abigen`, `bootnode`, `clef`, `evm`, `geth`, `puppeth`, `rlpdump`, and `wnode` commands are then available on your system in `/usr/bin/`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/bin/`. 
 
-Find the different options and commands available with `geth --help`.
+The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
-## Download standalone bundle
+Updating an existing Geth installation can be achieved by stopping the node and running the following command:
 
-We distribute our stable releases and development builds as standalone bundles. These are
-useful when you'd like to: a) install a specific version of our code (e.g., for
-reproducible environments); b) install on machines without internet access (e.g.,
-air-gapped computers); or c) do not like automatic updates and would rather manually
-install software.
+```shell
+sudo pacman -Sy
+```
 
-We create the following standalone bundles:
+When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+
+## Standalone bundle
+
+Stable releases and development builds are provided as standalone bundles. These are useful for users who: a) wish to install a specific version of Geth (e.g., for reproducible environments); b) wish to install on machines without internet access (e.g. air-gapped computers); or c) wish to avoid automatic updates and instead prefer to manually install software.
+
+The following standalone bundles are available:
 
 -   32bit, 64bit, ARMv5, ARMv6, ARMv7 and ARM64 archives (`.tar.gz`) on Linux
 -   64bit archives (`.tar.gz`) on macOS
 -   32bit and 64bit archives (`.zip`) and installers (`.exe`) on Windows
 
-We provide archives containing only Geth, and archives containing Geth along with the
-developer tools from our repository (`abigen`, `bootnode`, `disasm`, `evm`, `rlpdump`).
-Read our [`README`][geth-readme-exe] for more information about these executables.
 
-Download these bundles from the [Go Ethereum Downloads][geth-dl] page.
+Some archives contain only Geth, while other archives containing Geth and the various developer tools (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`). More information about these executables is available at the [`README`][geth-readme-exe].
 
-## Run inside Docker container
+The standalone bundles can be downloaded from the [Geth Downloads][geth-dl] page. To update an existing installation, download and manually install the latest version.
 
-If you prefer containerized processes, we maintain a Docker image with recent snapshot
-builds from our `develop` branch on DockerHub. We maintain four different Docker images
-for running the latest stable or development versions of Geth.
+## Docker container
+
+A Docker image with recent snapshot builds from our `develop` branch is maintained on DockerHub to support users who prefer to run containerized processes. There four different Docker images available for running the latest stable or development versions of Geth.
 
 -   `ethereum/client-go:latest` is the latest development version of Geth (default)
 -   `ethereum/client-go:stable` is the latest stable version of Geth
 -   `ethereum/client-go:{version}` is the stable version of Geth at a specific version number
 -   `ethereum/client-go:release-{version}` is the latest stable version of Geth at a specific version family
 
-To pull an image and start a node, run these commands:
+Pulling an image and starting a node is achieved by running these commands:
 
 ```shell
 docker pull ethereum/client-go
 docker run -it -p 30303:30303 ethereum/client-go
 ```
 
-We also maintain four different Docker images for running the latest stable or development
-versions of miscellaneous Ethereum tools.
+There are also four different Docker images for running the latest stable or development versions of miscellaneous Ethereum tools.
 
 -   `ethereum/client-go:alltools-latest` is the latest development version of the Ethereum tools
 -   `ethereum/client-go:alltools-stable` is the latest stable version of the Ethereum tools
@@ -181,21 +200,26 @@ The image has the following ports automatically exposed:
 -   `8547` TCP, used by the GraphQL API
 -   `30303` TCP and UDP, used by the P2P protocol running the network
 
-_Note, if you are running an Ethereum client inside a Docker container, you should mount a
-data volume as the client's data directory (located at `/root/.ethereum` inside the
-container) to ensure that downloaded data is preserved between restarts and/or container
-life-cycles._
 
-## Build go-ethereum from source code
+**Note:** if you are running an Ethereum client inside a Docker container, you should mount a data volume as the client's data directory (located at `/root/.ethereum` inside the container) to ensure that downloaded data is preserved between restarts and/or container life-cycles.
+
+
+Updating Geth to the latest version simply requires stopping the container, pulling the latest version from Docker and running it:
+
+```shell
+docker stop ethereum/client-go
+docker pull ethereum/client-go:latest
+docker run -it -p 30303:30303 ethereum/client-go
+```
+
+## Build from source code
 
 ### Most Linux systems and macOS
 
-Go Ethereum is written in [Go][go], so to build from source code you need the most recent
-version of Go. This guide doesn't cover how to install Go itself, for details read the [Go
-installation instructions][go-install] and grab any needed bundles from the [Go download
-page][go-dl].
+Geth is written in [Go][go], so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page][go-install] and necessary bundles can be downloaded from the [Go download page][go-dl].
 
-With Go installed, you can download the project into you `GOPATH` workspace via:
+With Go installed, Geth can be downloaded into a `GOPATH` workspace via:
+
 
 ```shell
 go get -d github.com/ethereum/go-ethereum
@@ -207,29 +231,35 @@ You can also install specific versions via:
 go get -d github.com/ethereum/go-ethereum@v1.9.21
 ```
 
+
 The above commands do not build any executables. To do that you can either build one specifically:
 
 ```shell
 go install github.com/ethereum/go-ethereum/cmd/geth
 ```
 
-Or you can build the entire project and install `geth` along with all developer tools by
-running `go install ./...` in the `ethereum/go-ethereum` repository root inside your
-`GOPATH` workspace.
 
-If you are using macOS and see errors related to macOS header files, install XCode Command
-Line Tools with `xcode-select --install`, and try again.
+Alternatively, the following command, run in the project root directory (`ethereum/go-ethereum`) in the GO workspace, builds the entire project and installs Geth and all the developer tools:
 
-If you encounter `go: cannot use path@version syntax in GOPATH mode` or similar errors,
-enable gomodules using `export GO111MODULE=on`.
+
+```shell
+go install ./...
+```
+
+For macOS users, errors related to macOS header files are usually fixed by installing XCode Command Line Tools with `xcode-select --install`.
+Another common error is: `go: cannot use path@version syntax in GOPATH mode`. This and other similar errors can often be fixed by enabling gomodules using `export GO111MODULE=on`.
+
+Updating an existing Geth installation can be achieved using `go get`:
+
+```shell
+go get -u github.com/ethereum/go-ethereum
+```
+
 
 ### Windows
 
-The Chocolatey package manager provides an easy way to get the required build tools
-installed. If you don't have chocolatey, [follow the instructions][chocolatey] to install
-it first.
+The Chocolatey package manager provides an easy way to install the required build tools. Chocolatey can be installed by following these [instructions][chocolatey]. Then, to install the build tool the following commands can be run in an Administrator command prompt:
 
-Then open an Administrator command prompt and install the build tools you need:
 
 ```
 C:\Windows\system32> choco install git
@@ -237,11 +267,7 @@ C:\Windows\system32> choco install golang
 C:\Windows\system32> choco install mingw
 ```
 
-Installing these packages sets up the path environment variables, you need to open a new
-command prompt to get the new path.
-
-The following steps don't need Administrator privileges. First create and set up a Go
-workspace directory layout, then clone the source and build it.
+Installing these packages sets up the path environment variables. To get the new path a new command prompt must be opened. To install Geth, a Go workspace directory must first be created, then the Geth source code can be created and built.
 
 ```
 C:\Users\xxx> mkdir src\github.com\ethereum
@@ -253,42 +279,44 @@ C:\Users\xxx\src\github.com\ethereum\go-ethereum> go install -v ./cmd/...
 
 ### FreeBSD
 
-Ports are slightly more up to date (1.8.14 at the time of writing)
+To build Geth from source code on FreeBSD, the Geth Github repository can be cloned into a local directory.
 
-Clone the repository to a directory of your choosing:
 
 ```shell
 git clone https://github.com/ethereum/go-ethereum
-```
 
-Building `geth` requires the Go compiler:
+
+Then, the Go compiler can be used to build Geth:
 
 ```shell
 pkg install go
 ```
 
-If your golang version is >= 1.5, build the `geth` program using the following command:
+
+If the Go version currently installed is >= 1.5, Geth can be built using the following command:
 
 ```shell
 cd go-ethereum
 make geth
 ```
 
-If your golang version is &lt; 1.5 (quarterly packages, for example), use the following command instead:
+If the installed Go version is &lt; 1.5 (quarterly packages, for example), the following command can be used instead:
 
 ```shell
 cd go-ethereum
 CC=clang make geth
 ```
 
-You can now run `build/bin/geth` to start your node.
+To start the node, the followijng command can be run:
+
+```shell
+build/bin/geth
+```
 
 ### Building without a Go workflow
 
-If you do not want to set up Go workspaces on your machine, but only build `geth` and
-forget about the build process, you can clone our repository and use the `make` command,
-which configures everything for a temporary build and cleans up afterwards. This method of
-building only works on UNIX-like operating systems, and you still need Go installed.
+Geth can also be built without using Go workspaces. In this case, the repository should be cloned to a local repository. Then, the command
+`make geth` configures everything for a temporary build and cleans up afterwards. This method of building only works on UNIX-like operating systems, and a Go installation is still required.
 
 ```shell
 git clone https://github.com/ethereum/go-ethereum.git
@@ -296,17 +324,23 @@ cd go-ethereum
 make geth
 ```
 
-These commands create a `geth` executable file in the `go-ethereum/build/bin` folder that
-you can move wherever you want to run from. The binary is standalone and doesn't require
-any additional files.
+These commands create a Geth executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
 
-Additionally you can compile all additional tools go-ethereum comes with by running `make
-all`. A list of all tools can be found [here][geth-readme-exe].
+To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth Github repository. then rebuild and restart the node.
 
-If you want to cross-compile to another architecture check out the [cross-compilation guide](./cross-compile).
+```shell
+cd go-ethereum
+git pull
+make geth
+```
 
-If you want to build a stable release, the v1.9.21 release for example, you can use `git
-checkout v1.9.21` before running `make geth` to switch to a stable branch.
+Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`) can be compiled by running `make all`. More information about these tools can be found [here][geth-readme-exe].
+
+Instructions for cross-compiling to another architecture are available in the [cross-compilation guide](./cross-compile).
+
+To build a stable release, e.g. v1.9.21, the command `git checkout v1.9.21` retrieves that specific version. Executing that command before running `make geth` switches Geth to a stable branch.
+
+
 
 [brew]: https://brew.sh/
 [go]: https://golang.org/
@@ -315,5 +349,8 @@ checkout v1.9.21` before running `make geth` to switch to a stable branch.
 [chocolatey]: https://chocolatey.org
 [geth-releases]: https://github.com/ethereum/go-ethereum/releases
 [geth-readme-exe]: https://github.com/ethereum/go-ethereum#executables
+[geth-cl-options]: https://geth.ethereum.org/docs/interface/command-line-options
 [geth-archlinux]: https://www.archlinux.org/packages/community/x86_64/geth/
 [geth-dl]: ../../downloads/
+
+
