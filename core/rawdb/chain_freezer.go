@@ -123,7 +123,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		}
 		number := ReadHeaderNumber(nfdb, hash)
 		threshold := atomic.LoadUint64(&f.threshold)
-
+		frozen := atomic.LoadUint64(&f.frozen)
 		switch {
 		case number == nil:
 			log.Error("Current full block number unavailable", "hash", hash)
@@ -135,8 +135,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 
-		case *number-threshold <= f.frozen:
-			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", f.frozen)
+		case *number-threshold <= frozen:
+			log.Debug("Ancient blocks frozen already", "number", *number, "hash", hash, "frozen", frozen)
 			backoff = true
 			continue
 		}
@@ -184,7 +184,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Wipe out side chains also and track dangling side chains
 		var dangling []common.Hash
-		for number := first; number < f.frozen; number++ {
+		frozen = atomic.LoadUint64(&f.frozen) // Needs reload after during freezeRange
+		for number := first; number < frozen; number++ {
 			// Always keep the genesis block in active database
 			if number != 0 {
 				dangling = ReadAllHashes(db, number)
@@ -200,8 +201,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		batch.Reset()
 
 		// Step into the future and delete and dangling side chains
-		if f.frozen > 0 {
-			tip := f.frozen
+		if frozen > 0 {
+			tip := frozen
 			for len(dangling) > 0 {
 				drop := make(map[common.Hash]struct{})
 				for _, hash := range dangling {
@@ -235,7 +236,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 
 		// Log something friendly for the user
 		context := []interface{}{
-			"blocks", f.frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", f.frozen - 1,
+			"blocks", frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", frozen - 1,
 		}
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
@@ -243,7 +244,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		log.Info("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
-		if f.frozen-first < freezerBatchLimit {
+		if frozen-first < freezerBatchLimit {
 			backoff = true
 		}
 	}

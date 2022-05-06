@@ -63,11 +63,12 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 //   reserving it for go-ethereum. This would also reduce the memory requirements
 //   of Geth, and thus also GC overhead.
 type Freezer struct {
-	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
+	// WARNING: The `frozen` and `tail` fields are accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
-	frozen  uint64 // Number of blocks already frozen
-	tail    uint64 // Number of the first stored item in the freezer
+	frozen uint64 // Number of blocks already frozen
+	tail   uint64 // Number of the first stored item in the freezer
+
 	datadir string // Path of root directory of ancient store
 
 	// This lock synchronizes writers and the truncate operation, as well as
@@ -242,7 +243,7 @@ func (f *Freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize
 	defer f.writeLock.Unlock()
 
 	// Roll back all tables to the starting position in case of error.
-	prevItem := f.frozen
+	prevItem := atomic.LoadUint64(&f.frozen)
 	defer func() {
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
