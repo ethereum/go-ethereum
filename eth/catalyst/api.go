@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -348,12 +347,4 @@ func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.Pa
 		return nil, err
 	}
 	return beacon.BlockToExecutableData(block), nil
-}
-
-// Used in tests to add a the list of transactions from a block to the tx pool.
-func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
-	for _, tx := range txs {
-		api.eth.TxPool().AddLocal(tx)
-	}
-	return nil
 }
