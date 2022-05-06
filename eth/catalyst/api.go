@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -344,7 +345,7 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 // invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
 // if no latestValid block was provided.
 func (api *ConsensusAPI) invalid(err error, latestValid *types.Block) beacon.PayloadStatusV1 {
-	currentHash := api.eth.BlockChain().CurrentHeader().Hash()
+	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
 	if latestValid != nil {
 		currentHash = latestValid.Hash()
 	}

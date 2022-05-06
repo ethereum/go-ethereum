@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -33,9 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -395,13 +395,17 @@ func TestEth2DeepReorg(t *testing.T) {
 func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
 	t.Helper()
 
-	// Disable verbose log output which is noise to some extent.
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	n, err := node.New(&node.Config{})
+	n, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		}})
 	if err != nil {
 		t.Fatal("can't create node:", err)
 	}
-	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
+
+	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, SyncMode: downloader.SnapSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
@@ -531,8 +535,8 @@ We expect
 (3) If the parent is unavailable, the LVH should not be set.
 
 CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
-                │
-                └── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
+				│
+				└── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
 				│
 				└── P1''
 */
@@ -664,7 +668,7 @@ func TestEmptyBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status.Status != beacon.ACCEPTED {
-		t.Errorf("invalid status: expected INVALID got: %v", status.Status)
+		t.Errorf("invalid status: expected ACCEPTED got: %v", status.Status)
 	}
 	if status.LatestValidHash != nil {
 		t.Fatalf("invalid LVH: got %v wanted nil", status.LatestValidHash)
@@ -678,21 +682,9 @@ func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *beacon
 		SuggestedFeeRecipient: parent.Coinbase(),
 	}
 
-	fcState := beacon.ForkchoiceStateV1{
-		HeadBlockHash:      parent.Hash(),
-		SafeBlockHash:      common.Hash{},
-		FinalizedBlockHash: common.Hash{},
-	}
-	resp, err := api.ForkchoiceUpdatedV1(fcState, &params)
+	payload, err := api.assembleBlock(parent.Hash(), &params)
 	if err != nil {
-		t.Fatalf("error preparing payload, err=%v", err)
-	}
-	if resp.PayloadStatus.Status != beacon.VALID {
-		t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
-	}
-	payload, err := api.GetPayloadV1(*resp.PayloadID)
-	if err != nil {
-		t.Fatalf("can't get payload: %v", err)
+		t.Fatal(err)
 	}
 	return payload
 }
@@ -735,4 +727,70 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 		txs[i] = &tx
 	}
 	return txs, nil
+}
+
+func TestTrickRemoteBlockCache(t *testing.T) {
+	// Setup two nodes
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	nodeA, ethserviceA := startEthService(t, genesis, preMergeBlocks)
+	nodeB, ethserviceB := startEthService(t, genesis, preMergeBlocks)
+	ethserviceA.Merger().ReachTTD()
+	ethserviceB.Merger().ReachTTD()
+	defer nodeA.Close()
+	defer nodeB.Close()
+	for nodeB.Server().NodeInfo().Ports.Listener == 0 {
+		time.Sleep(250 * time.Millisecond)
+	}
+	nodeA.Server().AddPeer(nodeB.Server().Self())
+	nodeB.Server().AddPeer(nodeA.Server().Self())
+	apiA := NewConsensusAPI(ethserviceA)
+	apiB := NewConsensusAPI(ethserviceB)
+
+	commonAncestor := ethserviceA.BlockChain().CurrentBlock()
+
+	// Setup 10 blocks on the canonical chain
+	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Block) {})
+	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
+
+	var invalidChain []*beacon.ExecutableDataV1
+	// create a valid payload (P1)
+	//payload1 := getNewPayload(t, apiA, commonAncestor)
+	//invalidChain = append(invalidChain, payload1)
+
+	// create an invalid payload2 (P2)
+	payload2 := getNewPayload(t, apiA, commonAncestor)
+	//payload2.ParentHash = payload1.BlockHash
+	payload2.GasUsed += 1
+	payload2 = setBlockhash(payload2)
+	invalidChain = append(invalidChain, payload2)
+
+	head := payload2
+	// create some valid payloads on top
+	for i := 0; i < 10; i++ {
+		payload := getNewPayload(t, apiA, commonAncestor)
+		payload.ParentHash = head.BlockHash
+		payload = setBlockhash(payload)
+		invalidChain = append(invalidChain, payload)
+		head = payload
+	}
+
+	// feed the payloads to node B
+	for _, payload := range invalidChain {
+		status, err := apiB.NewPayloadV1(*payload)
+		if err != nil {
+			panic(err)
+		}
+		if status.Status == beacon.INVALID {
+			panic("success")
+		}
+		// Now reorg to the head of the invalid chain
+		resp, err := apiB.ForkchoiceUpdatedV1(beacon.ForkchoiceStateV1{HeadBlockHash: payload.BlockHash, SafeBlockHash: payload.BlockHash, FinalizedBlockHash: payload.ParentHash}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.PayloadStatus.Status == beacon.VALID {
+			t.Errorf("invalid status: expected INVALID got: %v", resp.PayloadStatus.Status)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
