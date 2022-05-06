@@ -791,3 +791,104 @@ flag.
 |:--------|-------------------------------------------------------------|
 | Console | `debug.writeMemProfile(file string)`                        |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |
+
+### debug_intermediateRoots
+
+Executes a block (bad- or canon- or side-), and returns a list of intermediate roots: the stateroot after each transaction.
+
+| Client  | Method invocation                                                  |
+|:--------|--------------------------------------------------------------------|
+| Console | `debug.intermediateRoots(blockHash, [options])`                    |
+| RPC     | `{"method": "debug_intermediateRoots", "params": [blockHash, {}]}` |
+
+### debug_traceBadBlock
+
+Returns the structured logs created during the execution of EVM against a block pulled from the pool of bad ones and returns them as a JSON object.
+
+| Client  | Method invocation                                              |
+|:--------|----------------------------------------------------------------|
+| Console | `debug.traceBadBlock(blockHash, [options])`                    |
+| RPC     | `{"method": "debug_traceBadBlock", "params": [blockHash, {}]}` |
+
+### debug_chaindbCompact
+
+Flattens the entire key-value database into a single level, removing all unused slots and merging all keys.
+
+| Client  | Method invocation                                  |
+|:--------|----------------------------------------------------|
+| Console | `debug.chaindbCompact()`                           |
+| RPC     | `{"method": "debug_chaindbCompact", "params": []}` |
+
+### debug_getHeaderRlp
+
+Returns an RLP-encoded header.
+
+| Client  | Method invocation                                   |
+|:--------|-----------------------------------------------------|
+| Console | `debug.getHeaderRlp(blockNum)`                      |
+| RPC     | `{"method": "debug_getHeaderRlp", "params": [num]}` |
+
+### debug_accountRange
+
+Enumerates all accounts at a given block with paging capability. `maxResults` are returned in the page and the items have keys that come after the `start` key (hashed address).
+
+If `incompletes` is false, then accounts for which the key preimage (i.e: the `address`) doesn't exist in db are skipped. NB: geth by default does not store preimages.
+
+| Client  | Method invocation                                                                                                |
+|:--------|------------------------------------------------------------------------------------------------------------------|
+| Console | `debug.accountRange(blockNrOrHash, start, maxResults, nocode, nostorage, incompletes)`                           |
+| RPC     | `{"method": "debug_getHeaderRlp", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
+
+### debug_setMutexProfileFraction
+
+Sets the rate of mutex profiling.
+
+| Client  | Method invocation                                               |
+|:--------|-----------------------------------------------------------------|
+| Console | `debug.setMutexProfileFraction(rate int)`                       |
+| RPC     | `{"method": "debug_setMutexProfileFraction", "params": [rate]}` |
+
+### debug_getModifiedAccountsByHash
+
+Returns all accounts that have changed between the two blocks specified. A change is defined as a difference in nonce, balance, code hash, or storage hash. With one parameter, returns the list of accounts modified in the specified block.
+
+| Client  | Method invocation                                                               |
+|:--------|---------------------------------------------------------------------------------|
+| Console | `debug.getModifiedAccountsByHash(startHash, endHash)`                           |
+| RPC     | `{"method": "debug_getModifiedAccountsByHash", "params": [startHash, endHash]}` |
+
+### debug_mutexProfile
+
+Turns on mutex profiling for nsec seconds and writes profile data to file. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually.
+
+| Client  | Method invocation                                          |
+|:--------|------------------------------------------------------------|
+| Console | `debug.mutexProfile(file, nsec)`                           |
+| RPC     | `{"method": "debug_mutexProfile", "params": [file, nsec]}` |
+
+### debug_preimage
+
+Returns the preimage for a sha3 hash, if known.
+
+| Client  | Method invocation                                |
+|:--------|--------------------------------------------------|
+| Console | `debug.preimage(hash)`                           |
+| RPC     | `{"method": "debug_preimage", "params": [hash]}` |
+
+### debug_writeMutexProfile
+
+Writes a goroutine blocking profile to the given file.
+
+| Client  | Method invocation                                         |
+|:--------|-----------------------------------------------------------|
+| Console | `debug.writeMutexProfile(file)`                           |
+| RPC     | `{"method": "debug_writeMutexProfile", "params": [file]}` |
+
+### debug_storageRangeAt
+
+Returns the storage at the given block height and transaction index. The result can be paged by providing a `maxResult` to cap the number of storage slots returned as well as specifying the offset via `keyStart` (hash of storage key).
+
+| Client  | Method invocation                                                                                        |
+|:--------|----------------------------------------------------------------------------------------------------------|
+| Console | `debug.storageRangeAt(blockHash, txIdx, contractAddress, keyStart, maxResult)`                           |
+| RPC     | `{"method": "debug_storageRangeAt", "params": [blockHash, txIdx, contractAddress, keyStart, maxResult]}` |
