@@ -175,9 +175,7 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 		prometheusMux := http.NewServeMux()
 
-		prometheusMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-			prometheus.Handler(metrics.DefaultRegistry)
-		})
+		prometheusMux.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 
 		promServer := &http.Server{
 			Addr:    config.PrometheusAddr,
