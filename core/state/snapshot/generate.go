@@ -219,13 +219,13 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, root common.Hash, prefix 
 		}
 	}
 	// Update metrics for database iteration and merkle proving
-	if kind == "storage" {
+	if kind == snapStorage {
 		snapStorageSnapReadCounter.Inc(time.Since(start).Nanoseconds())
 	} else {
 		snapAccountSnapReadCounter.Inc(time.Since(start).Nanoseconds())
 	}
 	defer func(start time.Time) {
-		if kind == "storage" {
+		if kind == snapStorage {
 			snapStorageProveCounter.Inc(time.Since(start).Nanoseconds())
 		} else {
 			snapAccountProveCounter.Inc(time.Since(start).Nanoseconds())

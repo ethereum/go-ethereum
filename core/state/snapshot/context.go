@@ -180,7 +180,10 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 // a step. An error will be returned if the initial position of iterator is not
 // in the given account range.
 func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
-	var iter = ctx.iterator(snapStorage)
+	var (
+		count int64
+		iter  = ctx.iterator(snapStorage)
+	)
 	for iter.Next() {
 		key := iter.Key()
 		cmp := bytes.Compare(key[1:1+common.HashLength], account.Bytes())
@@ -192,7 +195,9 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			break
 		}
 		ctx.batch.Delete(key)
+		count += 1
 	}
+	snapWipedStorageMeter.Mark(count)
 	return nil
 }
 
@@ -208,4 +213,5 @@ func (ctx *generatorContext) removeStorageLeft() {
 		count += 1
 	}
 	ctx.stats.dangling += count
+	snapDanglingStorageMeter.Mark(int64(count))
 }
