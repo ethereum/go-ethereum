@@ -495,6 +495,8 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 			ctx.stats.Log("Aborting state snapshot generation", dl.root, current)
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
+		// Don't hold the iterators too long, release them to let compactor works
+		ctx.reopenIterators()
 	}
 	if time.Since(ctx.logged) > 8*time.Second {
 		ctx.stats.Log("Generating state snapshot", dl.root, current)
@@ -635,10 +637,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	if len(accMarker) > 0 {
 		accountRange = 1
 	}
-	var (
-		iterTime = time.Now()
-		origin   = common.CopyBytes(accMarker)
-	)
+	origin := common.CopyBytes(accMarker)
 	for {
 		exhausted, last, err := dl.generateRange(ctx, dl.root, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
 		if err != nil {
@@ -651,11 +650,6 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if origin == nil || exhausted {
 			ctx.removeStorageLeft()
 			break
-		}
-		// Don't hold iterator too long, re-open them to let compactor works.
-		if time.Since(iterTime) > time.Minute*3 {
-			iterTime = time.Now()
-			ctx.reopenIterators()
 		}
 	}
 	return nil
