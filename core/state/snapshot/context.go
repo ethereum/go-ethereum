@@ -43,6 +43,8 @@ type generatorStats struct {
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
 	dangling uint64             // Number of dangling storage slots
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
+	reopens  int                // Counter of re-open iterators
+	reopen   time.Duration      // Total time spent on re-open iterations
 }
 
 // Log creates an contextual log with the given message and the context pulled
@@ -69,6 +71,16 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"storage", gs.storage,
 		"dangling", gs.dangling,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
+		"reopen", gs.reopens,
+		"reopen-time", common.PrettyDuration(gs.reopen),
+		"account-prove", common.PrettyDuration(snapAccountProveCounter.Count()),
+		"account-trieread", common.PrettyDuration(snapAccountTrieReadCounter.Count()),
+		"account-snapread", common.PrettyDuration(snapAccountSnapReadCounter.Count()),
+		"account-write", common.PrettyDuration(snapAccountWriteCounter.Count()),
+		"storage-prove", common.PrettyDuration(snapStorageProveCounter.Count()),
+		"storage-trieread", common.PrettyDuration(snapStorageTrieReadCounter.Count()),
+		"storage-snapread", common.PrettyDuration(snapStorageSnapReadCounter.Count()),
+		"storage-write", common.PrettyDuration(snapStorageWriteCounter.Count()),
 	}...)
 	// Calculate the estimated indexing time based on current stats
 	if len(marker) > 0 {
@@ -96,6 +108,7 @@ type generatorContext struct {
 
 // newGeneratorContext initializes the context for generation.
 func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
+	start := time.Now()
 	ctx := &generatorContext{
 		stats:  stats,
 		db:     db,
@@ -104,6 +117,7 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 	}
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
+	ctx.stats.reopen += time.Since(start)
 	return ctx
 }
 
@@ -124,9 +138,10 @@ func (ctx *generatorContext) openIterator(kind string, start []byte) {
 // reopens them in the interruption position. It's aim for not blocking
 // leveldb compaction.
 func (ctx *generatorContext) reopenIterators() {
+	start := time.Now()
 	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
 		var (
-			key = iter.Key()
+			key = iter.Key() // It will panic if iterator is exhausted
 			cur = key[1:]
 		)
 		kind := snapAccount
@@ -136,6 +151,8 @@ func (ctx *generatorContext) reopenIterators() {
 		iter.Release()
 		ctx.openIterator(kind, cur)
 	}
+	ctx.stats.reopens += 1
+	ctx.stats.reopen += time.Since(start)
 }
 
 // close releases all the held resources.

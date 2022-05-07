@@ -599,9 +599,11 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			ctx.stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			ctx.stats.accounts++
 		}
-		marker := accountHash[:]
+		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
+
 		// If the snap generation goes here after interrupted, genMarker may go backward
 		// when last genMarker is consisted of accountHash and storageHash
+		marker := accountHash[:]
 		if accMarker != nil && bytes.Equal(marker, accMarker) && len(dl.genMarker) > common.HashLength {
 			marker = dl.genMarker[:]
 		}
@@ -609,8 +611,6 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err := dl.checkAndFlush(ctx, marker); err != nil {
 			return err
 		}
-		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
-
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root == emptyRoot {
