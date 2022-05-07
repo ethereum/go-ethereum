@@ -160,6 +160,7 @@ func (ctx *generatorContext) iterator(kind string) ethdb.Iterator {
 func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	var (
 		count uint64
+		start = time.Now()
 		iter  = ctx.storage
 	)
 	for iter.Next() {
@@ -172,6 +173,7 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 		count += 1
 	}
 	ctx.stats.dangling += count
+	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 }
 
 // removeStorageAt iterates and deletes all storage snapshots which are located
@@ -182,6 +184,7 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	var (
 		count int64
+		start = time.Now()
 		iter  = ctx.iterator(snapStorage)
 	)
 	for iter.Next() {
@@ -198,6 +201,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 		count += 1
 	}
 	snapWipedStorageMeter.Mark(count)
+	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 	return nil
 }
 
@@ -206,6 +210,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 func (ctx *generatorContext) removeStorageLeft() {
 	var (
 		count uint64
+		start = time.Now()
 		iter  = ctx.iterator(snapStorage)
 	)
 	for iter.Next() {
@@ -214,4 +219,5 @@ func (ctx *generatorContext) removeStorageLeft() {
 	}
 	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))
+	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
 }

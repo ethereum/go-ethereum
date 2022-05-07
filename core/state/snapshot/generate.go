@@ -556,19 +556,17 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, account common.Hash,
 // from the given origin position.
 func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) error {
 	onAccount := func(key []byte, val []byte, write bool, delete bool) error {
-		var (
-			start       = time.Now()
-			accountHash = common.BytesToHash(key)
-		)
 		// Make sure to clear all dangling storages before processing this account
+		accountHash := common.BytesToHash(key)
 		ctx.removeStorageBefore(accountHash)
 
+		start := time.Now()
 		if delete {
 			rawdb.DeleteAccountSnapshot(ctx.batch, accountHash)
 			snapWipedAccountMeter.Mark(1)
+			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
 			ctx.removeStorageAt(accountHash)
-			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
@@ -611,14 +609,13 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err := dl.checkAndFlush(ctx, marker); err != nil {
 			return err
 		}
+		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
+
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root == emptyRoot {
 			ctx.removeStorageAt(accountHash)
-			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 		} else {
-			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
-
 			var storeMarker []byte
 			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
