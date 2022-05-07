@@ -140,16 +140,16 @@ func (ctx *generatorContext) openIterator(kind string, start []byte) {
 func (ctx *generatorContext) reopenIterators() {
 	start := time.Now()
 	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
-		var (
-			key = iter.Key() // It will panic if iterator is exhausted
-			cur = key[1:]
-		)
+		key := iter.Key()
+		if len(key) == 0 { // nil or []byte{}
+			continue // the iterator may be already exhausted
+		}
 		kind := snapAccount
 		if i == 1 {
 			kind = snapStorage
 		}
 		iter.Release()
-		ctx.openIterator(kind, cur)
+		ctx.openIterator(kind, key[1:])
 	}
 	ctx.stats.reopens += 1
 	ctx.stats.reopen += time.Since(start)
