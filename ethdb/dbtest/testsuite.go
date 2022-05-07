@@ -124,28 +124,6 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if idx != len(tt.order) {
 				t.Errorf("test %d: iteration terminated prematurely: have %d, want %d", i, idx, len(tt.order))
 			}
-
-			// Backward iteration since the last position
-			idx = len(tt.order)
-			for it.Prev() {
-				idx--
-				if idx < 0 {
-					t.Errorf("test %d: prefix=%q more items than expected: checking idx=%d (key %q), expecting len=%d", i, tt.prefix, idx, it.Key(), len(tt.order))
-					break
-				}
-				if !bytes.Equal(it.Key(), []byte(tt.order[idx])) {
-					t.Errorf("test %d: item %d: key mismatch: have %s, want %s", i, idx, string(it.Key()), tt.order[idx])
-				}
-				if !bytes.Equal(it.Value(), []byte(tt.content[tt.order[idx]])) {
-					t.Errorf("test %d: item %d: value mismatch: have %s, want %s", i, idx, string(it.Value()), tt.content[tt.order[idx]])
-				}
-			}
-			if err := it.Error(); err != nil {
-				t.Errorf("test %d: iteration failed: %v", i, err)
-			}
-			if idx != 0 {
-				t.Errorf("test %d: iteration terminated prematurely: have %d, want %d", i, idx, len(tt.order))
-			}
 			db.Close()
 		}
 	})

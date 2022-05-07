@@ -43,8 +43,6 @@ type generatorStats struct {
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
 	dangling uint64             // Number of dangling storage slots
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
-	reopens  int                // Counter of re-open iterators
-	reopen   time.Duration      // Total time spent on re-open iterations
 }
 
 // Log creates an contextual log with the given message and the context pulled
@@ -71,8 +69,6 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"storage", gs.storage,
 		"dangling", gs.dangling,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
-		"reopen", gs.reopens,
-		"reopen-time", common.PrettyDuration(gs.reopen),
 		"account-prove", common.PrettyDuration(snapAccountProveCounter.Count()),
 		"account-trieread", common.PrettyDuration(snapAccountTrieReadCounter.Count()),
 		"account-snapread", common.PrettyDuration(snapAccountSnapReadCounter.Count()),
@@ -81,6 +77,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"storage-trieread", common.PrettyDuration(snapStorageTrieReadCounter.Count()),
 		"storage-snapread", common.PrettyDuration(snapStorageSnapReadCounter.Count()),
 		"storage-write", common.PrettyDuration(snapStorageWriteCounter.Count()),
+		"storage-clean", common.PrettyDuration(snapStorageCleanCounter.Count()),
 	}...)
 	// Calculate the estimated indexing time based on current stats
 	if len(marker) > 0 {
@@ -100,15 +97,14 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 type generatorContext struct {
 	stats   *generatorStats     // Generation statistic collection
 	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
-	account ethdb.Iterator      // Iterator of account snapshot data
-	storage ethdb.Iterator      // Iterator of storage snapshot data
+	account *snapIter           // Iterator of account snapshot data
+	storage *snapIter           // Iterator of storage snapshot data
 	batch   ethdb.Batch         // Database batch for writing batch data atomically
 	logged  time.Time           // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
 func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
-	start := time.Now()
 	ctx := &generatorContext{
 		stats:  stats,
 		db:     db,
@@ -117,7 +113,6 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 	}
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
-	ctx.stats.reopen += time.Since(start)
 	return ctx
 }
 
@@ -127,22 +122,21 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
 		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
-		ctx.account = rawdb.NewKeyLengthIterator(iter, 1+common.HashLength)
+		ctx.account = newSnapIter(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
 		return
 	}
 	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
-	ctx.storage = rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength)
+	ctx.storage = newSnapIter(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
 
 // reopenIterators releases the held two global database iterators and
 // reopens them in the interruption position. It's aim for not blocking
 // leveldb compaction.
 func (ctx *generatorContext) reopenIterators() {
-	start := time.Now()
 	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
 		key := iter.Key()
 		if len(key) == 0 { // nil or []byte{}
-			continue // the iterator may be already exhausted
+			continue // the iterator may already be exhausted
 		}
 		kind := snapAccount
 		if i == 1 {
@@ -151,8 +145,6 @@ func (ctx *generatorContext) reopenIterators() {
 		iter.Release()
 		ctx.openIterator(kind, key[1:])
 	}
-	ctx.stats.reopens += 1
-	ctx.stats.reopen += time.Since(start)
 }
 
 // close releases all the held resources.
@@ -162,7 +154,7 @@ func (ctx *generatorContext) close() {
 }
 
 // iterator returns the corresponding iterator specified by the kind.
-func (ctx *generatorContext) iterator(kind string) ethdb.Iterator {
+func (ctx *generatorContext) iterator(kind string) *snapIter {
 	if kind == snapAccount {
 		return ctx.account
 	}
@@ -183,14 +175,14 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Compare(key[1:1+common.HashLength], account.Bytes()) >= 0 {
-			iter.Prev()
-			return
+			iter.Discard()
+			break
 		}
 		ctx.batch.Delete(key)
 		count += 1
 	}
 	ctx.stats.dangling += count
-	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
+	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 }
 
 // removeStorageAt iterates and deletes all storage snapshots which are located
@@ -202,7 +194,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	var (
 		count int64
 		start = time.Now()
-		iter  = ctx.iterator(snapStorage)
+		iter  = ctx.storage
 	)
 	for iter.Next() {
 		key := iter.Key()
@@ -211,14 +203,14 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			return errors.New("invalid iterator position")
 		}
 		if cmp > 0 {
-			iter.Prev()
+			iter.Discard()
 			break
 		}
 		ctx.batch.Delete(key)
 		count += 1
 	}
 	snapWipedStorageMeter.Mark(count)
-	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
+	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 	return nil
 }
 
@@ -228,7 +220,7 @@ func (ctx *generatorContext) removeStorageLeft() {
 	var (
 		count uint64
 		start = time.Now()
-		iter  = ctx.iterator(snapStorage)
+		iter  = ctx.storage
 	)
 	for iter.Next() {
 		ctx.batch.Delete(iter.Key())
@@ -236,5 +228,5 @@ func (ctx *generatorContext) removeStorageLeft() {
 	}
 	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))
-	snapStorageWriteCounter.Inc(time.Since(start).Nanoseconds())
+	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 }

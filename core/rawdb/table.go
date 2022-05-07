@@ -270,12 +270,6 @@ type tableIterator struct {
 	prefix string
 }
 
-// Prev moves the iterator to the previous key/value pair. It returns false
-// if the iterator is exhausted.
-func (iter *tableIterator) Prev() bool {
-	return iter.iter.Prev()
-}
-
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
 func (iter *tableIterator) Next() bool {

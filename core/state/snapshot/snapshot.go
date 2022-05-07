@@ -21,9 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"sync"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -31,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"sync"
+	"sync/atomic"
 )
 
 var (

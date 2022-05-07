@@ -46,6 +46,8 @@ var (
 	snapStorageTrieReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/trieread", nil)
 	// snapStorageSnapReadCounter measures time spent on the snapshot storage iteration
 	snapStorageSnapReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/snapread", nil)
-	// snapStorageWriteCounter measures time spent on writing/updating/deleting storages
+	// snapStorageWriteCounter measures time spent on writing/updating storages
 	snapStorageWriteCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/write", nil)
+	// snapStorageCleanCounter measures time spent on deleting storages
+	snapStorageCleanCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/clean", nil)
 )

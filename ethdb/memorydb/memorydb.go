@@ -289,21 +289,6 @@ type iterator struct {
 	values [][]byte
 }
 
-// Prev moves the iterator to the previous key/value pair. It returns whether the
-// iterator is exhausted.
-func (it *iterator) Prev() bool {
-	// Short circuit if iterator has nothing to iterate.
-	if len(it.keys) == 0 {
-		return false
-	}
-	// Short circuit if the iterator is already exhausted in the backward direction.
-	if it.index == -1 {
-		return false
-	}
-	it.index -= 1
-	return it.index != -1
-}
-
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
 func (it *iterator) Next() bool {
