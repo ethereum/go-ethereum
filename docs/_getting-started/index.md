@@ -211,7 +211,7 @@ The console is now active and connected to Geth. It can now be used to interact 
 
 ### List of accounts
 
-In this tutorial, the accounts are managed using Clef. This means that requesting information about the accounts requires explicit approval in Clef, which should still be running in its own terminal. Earlier in this tutorial, two accoutns were created using Clef. The following command will display the addresses of those two accounts and any others that might have been added to the keystore before or since. 
+In this tutorial, the accounts are managed using Clef. This means that requesting information about the accounts requires explicit approval in Clef, which should still be running in its own terminal. Earlier in this tutorial, two accounts were created using Clef. The following command will display the addresses of those two accounts and any others that might have been added to the keystore before or since. 
 
 ```javascript
 
