@@ -491,7 +491,7 @@ func TestProcessVerkleCodeDeployExec(t *testing.T) {
 			gen.AddTx(tx)
 		} else {
 			// Call the contract's `store` function in block #2
-			tx, _ := types.SignTx(types.NewTransaction(1, contractAddr, big.NewInt(16), 3000000, big.NewInt(875000000), callStoreInput), signer, testKey)
+			tx, _ := types.SignTx(types.NewTransaction(1, contractAddr, big.NewInt(0), 3000000, big.NewInt(875000000), callStoreInput), signer, testKey)
 			gen.AddTx(tx)
 		}
 	})
@@ -536,9 +536,11 @@ func TestProcessVerkleCodeDeployExec(t *testing.T) {
 	}
 
 	hascode = false
+	codeCount := 0
 	for _, kv := range b2.Header().VerkleKeyVals {
 		if bytes.Equal(contractStem[:], kv.Key[:31]) && kv.Key[31] >= 128 {
 			hascode = true
+			codeCount++
 
 			if len(kv.Value) == 0 {
 				t.Fatal("chunk value for called code should not be empty in witness")
@@ -557,5 +559,9 @@ func TestProcessVerkleCodeDeployExec(t *testing.T) {
 
 	if !hascode {
 		t.Fatal("could not find contract code in the witness of the calling block")
+	}
+
+	if codeCount != 10 {
+		t.Fatalf("got %d code chunks, expected 10", codeCount)
 	}
 }
