@@ -135,6 +135,7 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 }
 
 func (db *Database) Close() error {
+	db.remote.Close()
 	return nil
 }
 
