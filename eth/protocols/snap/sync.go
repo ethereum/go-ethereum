@@ -2952,31 +2952,26 @@ func (t *healRequestSort) Swap(i, j int) {
 // same account are merged into one, to reduce bandwidth.
 // OBS: This operation is moot if t has not first been sorted.
 func (t *healRequestSort) Merge() []TrieNodePathSet {
-	var (
-		pathsets []TrieNodePathSet
-		last     TrieNodePathSet
-	)
+	var result []TrieNodePathSet
 	for _, path := range t.paths {
 		pathset := TrieNodePathSet([][]byte(path))
 		if len(path) == 1 {
 			// It's an account reference.
-			pathsets = append(pathsets, pathset)
-			last = nil
+			result = append(result, pathset)
 		} else {
 			// It's a storage reference.
-			if last == nil || !bytes.Equal(pathset[0], last[0]) {
+			end := len(result) - 1
+			if len(result) == 0 || !bytes.Equal(pathset[0], result[end][0]) {
 				// The account doesn't doesn't match last, create a new entry.
-				pathsets = append(pathsets, pathset)
-				last = pathset
+				result = append(result, pathset)
 			} else {
 				// It's the same account as the previous one, add to the storage
 				// paths of that request.
-				last = append(last, pathset[1])
-				pathsets[len(pathsets)-1] = last
+				result[end] = append(result[end], pathset[1])
 			}
 		}
 	}
-	return pathsets
+	return result
 }
 
 // sortByAccountPath takes hashes and paths, and sorts them. After that, it generates
