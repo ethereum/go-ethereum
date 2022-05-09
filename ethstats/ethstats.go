@@ -366,7 +366,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 		// If the network packet is a system ping, respond to it directly
 		var ping string
 		if err := json.Unmarshal(blob, &ping); err == nil && strings.HasPrefix(ping, "primus::ping::") {
-			if err := conn.WriteJSON(strings.Replace(ping, "ping", "pong", -1)); err != nil {
+			if err := conn.WriteJSON(strings.ReplaceAll(ping, "ping", "pong")); err != nil {
 				log.Warn("Failed to respond to system ping message", "err", err)
 				return
 			}
