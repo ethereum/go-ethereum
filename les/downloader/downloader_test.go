@@ -1577,8 +1577,8 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 			}
 		}
 		if failed {
-			res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
-			exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
+			res := strings.ReplaceAll(fmt.Sprint(data), " ", ",")
+			exp := strings.ReplaceAll(fmt.Sprint(tt.expected), " ", ",")
 			t.Logf("got: %v\n", res)
 			t.Logf("exp: %v\n", exp)
 			t.Errorf("test %d: wrong values", i)
