@@ -51,113 +51,91 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 }
 
 func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Ancient(kind string, number uint64) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Ancients() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Tail() (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) AncientSize(kind string) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) ReadAncients(fn func(op ethdb.AncientReaderOp) error) (err error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Put(key []byte, value []byte) error {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Delete(key []byte) error {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) ModifyAncients(f func(ethdb.AncientWriteOp) error) (int64, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) TruncateHead(n uint64) error {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) TruncateTail(n uint64) error {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Sync() error {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (db *Database) MigrateTable(s string, f func([]byte) ([]byte, error)) error {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) NewBatch() ethdb.Batch {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Stat(property string) (string, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) AncientDatadir() (string, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Compact(start []byte, limit []byte) error {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	//TODO implement me
-	panic("implement me")
+	panic("not supported")
 }
 
 func (db *Database) Close() error {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func dialRPC(endpoint string) (*rpc.Client, error) {
