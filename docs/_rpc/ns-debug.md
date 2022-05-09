@@ -119,7 +119,7 @@ Forces garbage collection
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
-| Go      | `debug.freeOSMemory()`                            |
+| Go      | `debug.FreeOSMemory()`                            |
 | Console | `debug.freeOSMemory()`                            |
 | RPC     | `{"method": "debug_freeOSMemory", "params": []}`  |
 
@@ -153,11 +153,11 @@ the fields of the returned object.
 ### debug_getBadBlocks
 
 Returns a list of the last 'bad blocks' that the client has seen on
-the network and returns them as a JSON list of block-hashes
+the network and returns them as a JSON list of block-hashes.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
-| Console | `debug.debug_getBadBlocks()`                      |
+| Console | `debug.getBadBlocks()`                      |
 | RPC     | `{"method": "debug_getBadBlocks", "params": []}`  |
 
 
@@ -166,12 +166,12 @@ the network and returns them as a JSON list of block-hashes
 Returns the first number where the node has accessible state on disk. 
 This is the post-state of that block and the pre-state of the next 
 block. The (from, to) parameters are the sequence of blocks 
-to search, which can go either forwards or backwards
+to search, which can go either forwards or backwards.
 
 | Client  | Method invocation                                                     |
 |:--------|-----------------------------------------------------------------------|
-| Console | `debug.debug_debug_getAccessibleState(from, to rpc.BlockNumber)`      |
-| RPC     | `{"method": "debug_debug_getAccessibleState", "params": [from, to]}`  |
+| Console | `debug.getAccessibleState(from, to rpc.BlockNumber)`      |
+| RPC     | `{"method": "debug_getAccessibleState", "params": [from, to]}`  |
 
 
 ### debug_getBlockRlp
@@ -228,8 +228,8 @@ Retrieves a block and returns its pretty printed form.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
-| Console | `debug.printBlock(ctx context.Context, number uint64)`                                |
-| RPC     | `{"method": "debug_printBlock", "params": [ctx, number]}`      |
+| Console | `debug.printBlock(number uint64)`                                |
+| RPC     | `{"method": "debug_printBlock", "params": [number]}`      |
 
 
 ### debug_seedHash
@@ -250,7 +250,7 @@ collection.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
-| Go      | `debug.setGCPercent(v int)`                    |
+| Go      | `debug.SetGCPercent(v int)`                    |
 | Console | `debug.setGCPercent(v)`                           |
 | RPC     | `{"method": "debug_setGCPercent", "params": [v]}` |
 
