@@ -36,10 +36,6 @@ var (
 	// the provided memory database.
 	errMemorydbNotFound = errors.New("not found")
 
-	// errIteratorReleased is returned if callers want to retrieve data from a
-	// released iterator.
-	errIteratorReleased = errors.New("iterator released")
-
 	// errSnapshotReleased is returned if callers want to retrieve data from a
 	// released snapshot.
 	errSnapshotReleased = errors.New("snapshot released")

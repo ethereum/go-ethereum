@@ -68,7 +68,12 @@ func (it *snapIter) Error() error { return it.it.Error() }
 
 // Release releases associated resources. Release should always succeed and can
 // be called multiple times without causing error.
-func (it *snapIter) Release() { it.it.Release() }
+func (it *snapIter) Release() {
+	it.checkLast = false
+	it.key = nil
+	it.val = nil
+	it.it.Release()
+}
 
 // Key returns the key of the current key/value pair, or nil if done. The caller
 // should not modify the contents of the returned slice, and its contents may
