@@ -2956,22 +2956,25 @@ func (t *healRequestSort) Merge() []TrieNodePathSet {
 		pathsets []TrieNodePathSet
 		last     TrieNodePathSet
 	)
-
 	for _, path := range t.paths {
 		pathset := TrieNodePathSet([][]byte(path))
 		if len(path) == 1 {
+			// It's an account reference.
 			pathsets = append(pathsets, pathset)
 			last = nil
-			continue
+		} else {
+			// It's a storage reference.
+			if last == nil || !bytes.Equal(pathset[0], last[0]) {
+				// The account doesn't doesn't match last, create a new entry.
+				pathsets = append(pathsets, pathset)
+				last = pathset
+			} else {
+				// It's the same account as the previous one, add to the storage
+				// paths of that request.
+				last = append(last, pathset[1])
+				pathsets[len(pathsets)-1] = last
+			}
 		}
-		if last == nil || !bytes.Equal(pathset[0], last[0]) {
-			pathsets = append(pathsets, pathset)
-			last = pathset
-			continue
-		}
-		// we can merge this into the last one
-		last = append(last, pathset[1])
-		pathsets[len(pathsets)-1] = last
 	}
 	return pathsets
 }
