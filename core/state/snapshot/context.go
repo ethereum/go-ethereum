@@ -69,15 +69,6 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"storage", gs.storage,
 		"dangling", gs.dangling,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
-		"account-prove", common.PrettyDuration(snapAccountProveCounter.Count()),
-		"account-trieread", common.PrettyDuration(snapAccountTrieReadCounter.Count()),
-		"account-snapread", common.PrettyDuration(snapAccountSnapReadCounter.Count()),
-		"account-write", common.PrettyDuration(snapAccountWriteCounter.Count()),
-		"storage-prove", common.PrettyDuration(snapStorageProveCounter.Count()),
-		"storage-trieread", common.PrettyDuration(snapStorageTrieReadCounter.Count()),
-		"storage-snapread", common.PrettyDuration(snapStorageSnapReadCounter.Count()),
-		"storage-write", common.PrettyDuration(snapStorageWriteCounter.Count()),
-		"storage-clean", common.PrettyDuration(snapStorageCleanCounter.Count()),
 	}...)
 	// Calculate the estimated indexing time based on current stats
 	if len(marker) > 0 {
