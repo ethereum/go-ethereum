@@ -133,9 +133,9 @@ func (ctx *generatorContext) reopenIterator(kind string) {
 	if !hasNext {
 		return // iterator is exhausted now
 	}
-	nextKey := iter.Key()
+	next := iter.Key()
 	iter.Release()
-	ctx.openIterator(kind, nextKey[1:])
+	ctx.openIterator(kind, next[1:])
 }
 
 // close releases all the held resources.
@@ -168,8 +168,12 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 			iter.Hold()
 			break
 		}
-		ctx.batch.Delete(key) // TODO(rjl493456442) avoid accumulating too much data
 		count++
+		ctx.batch.Delete(key)
+		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+			ctx.batch.Write()
+			ctx.batch.Reset()
+		}
 	}
 	ctx.stats.dangling += count
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
@@ -195,8 +199,12 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			iter.Hold()
 			break
 		}
-		ctx.batch.Delete(key) // TODO(rjl493456442) avoid accumulating too much data
 		count++
+		ctx.batch.Delete(key)
+		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+			ctx.batch.Write()
+			ctx.batch.Reset()
+		}
 	}
 	snapWipedStorageMeter.Mark(count)
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
@@ -212,8 +220,12 @@ func (ctx *generatorContext) removeStorageLeft() {
 		iter  = ctx.storage
 	)
 	for iter.Next() {
-		ctx.batch.Delete(iter.Key()) // TODO(rjl493456442) avoid accumulating too much data
 		count++
+		ctx.batch.Delete(iter.Key())
+		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+			ctx.batch.Write()
+			ctx.batch.Reset()
+		}
 	}
 	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))

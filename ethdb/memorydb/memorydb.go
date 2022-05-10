@@ -288,16 +288,12 @@ type iterator struct {
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
 func (it *iterator) Next() bool {
-	// Short circuit if iterator has nothing to iterate.
-	if len(it.keys) == 0 {
-		return false
-	}
 	// Short circuit if iterator is already exhausted in the forward direction.
-	if it.index == len(it.keys) {
+	if it.index >= len(it.keys) {
 		return false
 	}
 	it.index += 1
-	return it.index != len(it.keys)
+	return it.index < len(it.keys)
 }
 
 // Error returns any accumulated error. Exhausting all the key/value pairs

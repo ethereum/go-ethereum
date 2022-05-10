@@ -557,17 +557,17 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, account common.Hash,
 // from the given origin position.
 func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) error {
 	onAccount := func(key []byte, val []byte, write bool, delete bool) error {
-		// Make sure to clear all dangling storages before processing this account
-		accountHash := common.BytesToHash(key)
-		ctx.removeStorageBefore(accountHash)
+		// Make sure to clear all dangling storages before this account
+		account := common.BytesToHash(key)
+		ctx.removeStorageBefore(account)
 
 		start := time.Now()
 		if delete {
-			rawdb.DeleteAccountSnapshot(ctx.batch, accountHash)
+			rawdb.DeleteAccountSnapshot(ctx.batch, account)
 			snapWipedAccountMeter.Mark(1)
 			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
-			ctx.removeStorageAt(accountHash)
+			ctx.removeStorageAt(account)
 			return nil
 		}
 		// Retrieve the current account and flatten it into the internal format
@@ -581,7 +581,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			log.Crit("Invalid account encountered during snapshot creation", "err", err)
 		}
 		// If the account is not yet in-progress, write it out
-		if accMarker == nil || !bytes.Equal(accountHash[:], accMarker) {
+		if accMarker == nil || !bytes.Equal(account[:], accMarker) {
 			dataLen := len(val) // Approximate size, saves us a round of RLP-encoding
 			if !write {
 				if bytes.Equal(acc.CodeHash, emptyCode[:]) {
@@ -594,17 +594,15 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			} else {
 				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
 				dataLen = len(data)
-				rawdb.WriteAccountSnapshot(ctx.batch, accountHash, data)
+				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
 				snapGeneratedAccountMeter.Mark(1)
 			}
 			ctx.stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			ctx.stats.accounts++
 		}
-		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
-
 		// If the snap generation goes here after interrupted, genMarker may go backward
 		// when last genMarker is consisted of accountHash and storageHash
-		marker := accountHash[:]
+		marker := account[:]
 		if accMarker != nil && bytes.Equal(marker, accMarker) && len(dl.genMarker) > common.HashLength {
 			marker = dl.genMarker[:]
 		}
@@ -612,16 +610,18 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		if err := dl.checkAndFlush(ctx, marker); err != nil {
 			return err
 		}
+		snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds()) // let's count flush time as well
+
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root == emptyRoot {
-			ctx.removeStorageAt(accountHash)
+			ctx.removeStorageAt(account)
 		} else {
 			var storeMarker []byte
-			if accMarker != nil && bytes.Equal(accountHash[:], accMarker) && len(dl.genMarker) > common.HashLength {
+			if accMarker != nil && bytes.Equal(account[:], accMarker) && len(dl.genMarker) > common.HashLength {
 				storeMarker = dl.genMarker[common.HashLength:]
 			}
-			if err := generateStorages(ctx, dl, accountHash, acc.Root, storeMarker); err != nil {
+			if err := generateStorages(ctx, dl, account, acc.Root, storeMarker); err != nil {
 				return err
 			}
 		}
