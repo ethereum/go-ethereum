@@ -505,6 +505,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 func (bc *BlockChain) SetFinalized(block *types.Block) {
 	bc.currentFinalizedBlock.Store(block)
 	rawdb.WriteFinalizedBlockHash(bc.db, block.Hash())
+	headFinalizedBlockGauge.Update(int64(block.NumberU64()))
 }
 
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
