@@ -164,7 +164,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return beacon.STATUS_INVALID, errors.New("final block not canonical")
 		}
 		// Set the finalized block
-		api.eth.BlockChain().SetFinalized(block)
+		api.eth.BlockChain().SetFinalized(finalBlock)
 	}
 	// Check if the safe block hash is in our canonical tree, if not somethings wrong
 	if update.SafeBlockHash != (common.Hash{}) {
