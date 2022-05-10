@@ -76,7 +76,7 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
 		pc++
-		if op < PUSH1 || op > PUSH32 {
+		if !op.IsPush() {
 			continue
 		}
 		numbits := op - PUSH1 + 1
