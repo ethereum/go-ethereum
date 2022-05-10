@@ -51,11 +51,19 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 }
 
 func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
-	panic("not supported")
+	if _, err := db.Ancient(kind, number); err != nil {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (db *Database) Ancient(kind string, number uint64) ([]byte, error) {
-	panic("not supported")
+	var resp hexutil.Bytes
+	err := db.remote.Call(&resp, "debug_dbAncient", kind, number)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (db *Database) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
@@ -63,7 +71,9 @@ func (db *Database) AncientRange(kind string, start, count, maxBytes uint64) ([]
 }
 
 func (db *Database) Ancients() (uint64, error) {
-	panic("not supported")
+	var resp uint64
+	err := db.remote.Call(&resp, "debug_dbAncients")
+	return resp, err
 }
 
 func (db *Database) Tail() (uint64, error) {
@@ -75,7 +85,7 @@ func (db *Database) AncientSize(kind string) (uint64, error) {
 }
 
 func (db *Database) ReadAncients(fn func(op ethdb.AncientReaderOp) error) (err error) {
-	panic("not supported")
+	return fn(db)
 }
 
 func (db *Database) Put(key []byte, value []byte) error {

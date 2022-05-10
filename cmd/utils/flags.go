@@ -1959,15 +1959,14 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		err     error
 		chainDb ethdb.Database
 	)
-	if ctx.GlobalIsSet(RemoteDBFlag.Name) {
+	switch {
+	case ctx.GlobalIsSet(RemoteDBFlag.Name):
+		log.Info("Using remote db", "url", ctx.GlobalString(RemoteDBFlag.Name))
 		chainDb, err = remotedb.New(ctx.GlobalString(RemoteDBFlag.Name))
-	}
-	if ctx.GlobalString(SyncModeFlag.Name) == "light" {
-		name := "lightchaindata"
-		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
-	} else {
-		name := "chaindata"
-		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
+	case ctx.GlobalString(SyncModeFlag.Name) == "light":
+		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
+	default:
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
