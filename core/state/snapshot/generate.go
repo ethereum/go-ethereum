@@ -187,14 +187,14 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, root common.Hash, prefix 
 		// Move the iterator a step back since we iterate one extra element
 		// out.
 		if !bytes.Equal(key[:len(prefix)], prefix) {
-			iter.Discard()
+			iter.Hold()
 			break
 		}
 		// Break if we've reached the max size, and signal that we're not
 		// done yet. Move the iterator a step back since we iterate one
 		// extra element out.
 		if len(keys) == max {
-			iter.Discard()
+			iter.Hold()
 			diskMore = true
 			break
 		}

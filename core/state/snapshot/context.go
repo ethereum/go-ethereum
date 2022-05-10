@@ -88,8 +88,8 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 type generatorContext struct {
 	stats   *generatorStats     // Generation statistic collection
 	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
-	account *snapIter           // Iterator of account snapshot data
-	storage *snapIter           // Iterator of storage snapshot data
+	account *holdableIterator   // Iterator of account snapshot data
+	storage *holdableIterator   // Iterator of storage snapshot data
 	batch   ethdb.Batch         // Database batch for writing batch data atomically
 	logged  time.Time           // The timestamp when last generation progress was displayed
 }
@@ -113,15 +113,15 @@ func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarke
 func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	if kind == snapAccount {
 		iter := ctx.db.NewIterator(rawdb.SnapshotAccountPrefix, start)
-		ctx.account = newSnapIter(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
+		ctx.account = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+common.HashLength))
 		return
 	}
 	iter := ctx.db.NewIterator(rawdb.SnapshotStoragePrefix, start)
-	ctx.storage = newSnapIter(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
+	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
 
 // reopenIterators releases the held two global database iterators and
-// reopens them in the interruption position. It's aim for not blocking
+// reopens them at the current position. It's aimed for not blocking
 // leveldb compaction.
 func (ctx *generatorContext) reopenIterators() {
 	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
@@ -145,18 +145,17 @@ func (ctx *generatorContext) close() {
 }
 
 // iterator returns the corresponding iterator specified by the kind.
-func (ctx *generatorContext) iterator(kind string) *snapIter {
+func (ctx *generatorContext) iterator(kind string) *holdableIterator {
 	if kind == snapAccount {
 		return ctx.account
 	}
 	return ctx.storage
 }
 
-// removeStorageBefore, iterates and deletes all storage snapshots starting
-// from the current iterator position until the specified account. When the
-// iterator touches the storage located in the given account range, or the
-// storage is larger than the given account range, it stops and moves back
-// the iterator a step.
+// removeStorageBefore deletes all storage entries which are located before
+// the specified account. When the iterator touches the storage entry which
+// is located in or outside the given account, it stops and holds the current
+// iterated element locally.
 func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	var (
 		count uint64
@@ -166,21 +165,20 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 	for iter.Next() {
 		key := iter.Key()
 		if bytes.Compare(key[1:1+common.HashLength], account.Bytes()) >= 0 {
-			iter.Discard()
+			iter.Hold()
 			break
 		}
 		ctx.batch.Delete(key)
-		count += 1
+		count++
 	}
 	ctx.stats.dangling += count
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 }
 
-// removeStorageAt iterates and deletes all storage snapshots which are located
-// in the specified account range. When the iterator touches the storage which
-// is larger than the given account range, it stops and moves back the iterator
-// a step. An error will be returned if the initial position of iterator is not
-// in the given account range.
+// removeStorageAt deletes all storage entries which are located in the specified
+// account. When the iterator touches the storage entry which is outside the given
+// account, it stops and holds the current iterated element locally. An error will
+// be returned if the initial position of iterator is not in the given account.
 func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	var (
 		count int64
@@ -194,19 +192,19 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			return errors.New("invalid iterator position")
 		}
 		if cmp > 0 {
-			iter.Discard()
+			iter.Hold()
 			break
 		}
 		ctx.batch.Delete(key)
-		count += 1
+		count++
 	}
 	snapWipedStorageMeter.Mark(count)
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
 	return nil
 }
 
-// removeStorageLeft starting from the current iterator position, iterate and
-// delete all storage snapshots left.
+// removeStorageLeft deletes all storage entries which are located after
+// the current iterator position.
 func (ctx *generatorContext) removeStorageLeft() {
 	var (
 		count uint64
@@ -215,7 +213,7 @@ func (ctx *generatorContext) removeStorageLeft() {
 	)
 	for iter.Next() {
 		ctx.batch.Delete(iter.Key())
-		count += 1
+		count++
 	}
 	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))

@@ -36,10 +36,10 @@ func TestIteratorDiscard(t *testing.T) {
 		}
 	}
 	// Iterate over the database with the given configs and verify the results
-	it, idx := newSnapIter(db.NewIterator(nil, nil)), 0
+	it, idx := newHoldableIterator(db.NewIterator(nil, nil)), 0
 
 	// Nothing should be affected for calling Discard on non-initialized iterator
-	it.Discard()
+	it.Hold()
 
 	for it.Next() {
 		if len(content) <= idx {
@@ -53,8 +53,8 @@ func TestIteratorDiscard(t *testing.T) {
 			t.Errorf("item %d: value mismatch: have %s, want %s", idx, string(it.Value()), content[order[idx]])
 		}
 		// Should be safe to call discard multiple times
-		it.Discard()
-		it.Discard()
+		it.Hold()
+		it.Hold()
 
 		// Shift iterator to the discarded element
 		it.Next()
@@ -66,7 +66,7 @@ func TestIteratorDiscard(t *testing.T) {
 		}
 
 		// Discard/Next combo should work always
-		it.Discard()
+		it.Hold()
 		it.Next()
 		if !bytes.Equal(it.Key(), []byte(order[idx])) {
 			t.Errorf("item %d: key mismatch: have %s, want %s", idx, string(it.Key()), order[idx])
