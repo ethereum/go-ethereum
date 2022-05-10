@@ -328,13 +328,14 @@ func checkStateContent(ctx *cli.Context) error {
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
-	it := rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
-	hasher := crypto.NewKeccakState()
-	t := time.Now()
 	var (
-		got   = make([]byte, 32)
-		errs  int
-		count int
+		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
+		hasher    = crypto.NewKeccakState()
+		got       = make([]byte, 32)
+		errs      int
+		count     int
+		startTime = time.Now()
+		lastLog   = time.Now()
 	)
 	for it.Next() {
 		count++
@@ -349,9 +350,9 @@ func checkStateContent(ctx *cli.Context) error {
 			fmt.Printf("  Hash:  0x%x\n", got)
 			fmt.Printf("  Data:  0x%x\n", v)
 		}
-		if time.Since(t) > 8*time.Second {
-			log.Info("Iterating the database", "at", k)
-			t = time.Now()
+		if time.Since(lastLog) > 8*time.Second {
+			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", time.Since(startTime))
+			lastLog = time.Now()
 		}
 	}
 	if err := it.Error(); err != nil {
