@@ -1205,7 +1205,7 @@ func (c *Bor) CommitStates(
 
 		lastStateID++
 	}
-	log.Info("StateSyncGas", "gas", totalGas, "Block-number", number, "FromStateID", lastStateID+1)
+	log.Info("StateSyncGas", "gas", totalGas, "Block-number", number, "FromStateID", lastStateID+1, "TotalRecords", len(eventRecords))
 	return stateSyncs, nil
 }
 
