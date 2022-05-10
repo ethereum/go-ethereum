@@ -27,6 +27,10 @@ func Run(args []string) int {
 	mappedCommands := make(map[string]cli.CommandFactory)
 
 	for k, v := range commands {
+		// Declare a new v to limit the scope of v to inside the block, so the anonymous function below
+		// can get the "current" value of v, instead of the value of last v in the loop.
+		// See this post: https://stackoverflow.com/questions/10116507/go-transfer-var-into-anonymous-function for more explanation
+		v := v
 		mappedCommands[k] = func() (cli.Command, error) {
 			cmd, err := v()
 			return cmd.(cli.Command), err
@@ -151,6 +155,11 @@ func Commands() map[string]MarkDownCommandFactory {
 				UI:    ui,
 				Meta:  meta,
 				Meta2: meta2,
+			}, nil
+		},
+		"bootnode": func() (MarkDownCommand, error) {
+			return &BootnodeCommand{
+				UI: ui,
 			}, nil
 		},
 	}
