@@ -22,14 +22,14 @@ Users that need to revisit these fundamentals can find helpful resources relatin
 
 ## Background
 
-Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being managed by a central server. Nodes compete to generate new blocks of transactions to send to its peers because they are rewarded for doing so in Ethereum's native token, ether (ETH). On receiving a new block, each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called a "blockchain". The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guiude the user through creating an account, funding it with ether and sending some to another address.
+Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being managed by a central server. Nodes compete to generate new blocks of transactions to send to its peers because they are rewarded for doing so in Ethereum's native token, ether (ETH). On receiving a new block, each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called a "blockchain". The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guide the user through creating an account, funding it with ether and sending some to another address.
 
 Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs/accounts/).
 
 
 ## Step 1: Generating accounts
 
-There are several methods for generating accounts in Geth. This tutorial demonstrates how to generate accounts using Clef, as this is considered best practise, largely because it decouples the users' key management from Geth, making it more modular and flexible. It can also be run from secure USB sticks or virtual machines, offering security benefits. For convenience, this tutorial will execute Clef on the same computer that will also run Geth, although more secure options are available (see [here](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/docs/setup.md)).
+There are several methods for generating accounts in Geth. This tutorial demonstrates how to generate accounts using Clef, as this is considered best practice, largely because it decouples the users' key management from Geth, making it more modular and flexible. It can also be run from secure USB sticks or virtual machines, offering security benefits. For convenience, this tutorial will execute Clef on the same computer that will also run Geth, although more secure options are available (see [here](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/docs/setup.md)).
 
 An account is a pair of keys (public and private). Clef needs to know where to save these keys to so that they can be retrieved later. This information is passed to Clef as an argument. This is achieved using the following command:
 
@@ -61,7 +61,7 @@ Enter 'ok' to proceed:
 This is important information. The `geth-tutorial/keystore` directory will soon contain a secret key that can be used to access any funds held in the new account. If it is compromised, the funds can be stolen. If it is lost, there is no way to retrieve the funds. This tutorial will only use dummy funds with no real world value, but when these steps are repeated on Ethereum mainnet is critical that the keystore is kept secure and backed up.
 
 
-Typing `ok` into the terminal and pressing `enter` causes Clef to prompt for a password. Clef requires a password that is at least 10 characters long, and best practise would be to use a combination of numbers, characters and special characters. Entering a suitable password and pressing `enter` returns the following result to the terminal:
+Typing `ok` into the terminal and pressing `enter` causes Clef to prompt for a password. Clef requires a password that is at least 10 characters long, and best practice would be to use a combination of numbers, characters and special characters. Entering a suitable password and pressing `enter` returns the following result to the terminal:
 
 ```terminal
 -----------------------
@@ -282,7 +282,7 @@ Repeating the command for the other account should yield:
 
 ### Send ether to another account
 
-The command `eth.sendTransaction` can be used to send some ether from one address to another. This command takes three arguments: `from`, `to` and `value`. These define the sender and recipient addresses (as strings) and the amount of Wei to transfer. It is far less error prone to enter the transation value in units of ether rather than Wei, so the value field can take the return value from the `toWei` function. The following command, run in the Javascript console, sends 0.1 ether from one of the accounts in the Clef keystore to the other. Note that the addresses here are examples - the user must replace the address in the `from` field with the address currently owning 1 ether, and the address in the `to` field with the address currently holding 0 ether.
+The command `eth.sendTransaction` can be used to send some ether from one address to another. This command takes three arguments: `from`, `to` and `value`. These define the sender and recipient addresses (as strings) and the amount of Wei to transfer. It is far less error prone to enter the transaction value in units of ether rather than Wei, so the value field can take the return value from the `toWei` function. The following command, run in the Javascript console, sends 0.1 ether from one of the accounts in the Clef keystore to the other. Note that the addresses here are examples - the user must replace the address in the `from` field with the address currently owning 1 ether, and the address in the `to` field with the address currently holding 0 ether.
 
 ```javascript
 eth.sendTransaction({
@@ -292,7 +292,7 @@ eth.sendTransaction({
 })
 ```
 
-Note that submitting this transaction requires approval in Clef. In the Clef terminal, Clef will prompt for approval and request the account password. If the password is correctly entered, Geth proceeds with the transaction. The transaction request summary is presented by Clef in the Clef terminal. this is an opportunity for the sender to review the details and ensure they are correct.
+Note that submitting this transaction requires approval in Clef. In the Clef terminal, Clef will prompt for approval and request the account password. If the password is correctly entered, Geth proceeds with the transaction. The transaction request summary is presented by Clef in the Clef terminal. This is an opportunity for the sender to review the details and ensure they are correct.
 
 ```terminal
 --------- Transaction request-------------
@@ -346,7 +346,7 @@ Transaction signed:
 
 ```
 
-In the Javascript console, the transation hash is displayed. This will be used in the next section to retrieve the transaction details.
+In the Javascript console, the transaction hash is displayed. This will be used in the next section to retrieve the transaction details.
 
 ```terminal
 
