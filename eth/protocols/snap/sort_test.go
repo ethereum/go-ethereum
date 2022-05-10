@@ -17,10 +17,10 @@
 package snap
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 
-	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -32,7 +32,7 @@ func hexToNibbles(s string) []byte {
 	var s2 []byte
 	for _, ch := range []byte(s) {
 		s2 = append(s2, '0')
-		s2 = append(s2, byte(ch))
+		s2 = append(s2, ch)
 	}
 	return common.Hex2Bytes(string(s2))
 }
@@ -72,7 +72,7 @@ func TestRequestSorting(t *testing.T) {
 		paths = append(paths, sp)
 		pathsets = append(pathsets, tnps)
 	}
-	hashes, paths, pathsets = sortByAccountPath(hashes, paths)
+	_, paths, pathsets = sortByAccountPath(hashes, paths)
 	{
 		var b = new(bytes.Buffer)
 		for i := 0; i < len(paths); i++ {
