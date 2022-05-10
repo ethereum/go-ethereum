@@ -1174,7 +1174,7 @@ func (c *Bor) CommitStates(
 		}
 	}
 
-	totalGas := 10000000 /// limit on gas for state sync per block
+	totalGas := 0 /// limit on gas for state sync per block
 
 	chainID := c.chainConfig.ChainID.String()
 	for _, eventRecord := range eventRecords {
@@ -1198,13 +1198,14 @@ func (c *Bor) CommitStates(
 		if err != nil {
 			return nil, err
 		}
-		totalGas -= int(gasUsed)
-		if totalGas < 0 {
-			break
-		}
+		totalGas += int(gasUsed)
+		// if totalGas < 0 {
+		// 	break
+		// }
 
 		lastStateID++
 	}
+	log.Info("StateSyncGas", "gas", totalGas, "Block-number", number, "FromStateID", lastStateID+1)
 	return stateSyncs, nil
 }
 
