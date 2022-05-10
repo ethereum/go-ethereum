@@ -496,7 +496,8 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
 		// Don't hold the iterators too long, release them to let compactor works
-		ctx.reopenIterators()
+		ctx.reopenIterator(snapAccount)
+		ctx.reopenIterator(snapStorage)
 	}
 	if time.Since(ctx.logged) > 8*time.Second {
 		ctx.stats.Log("Generating state snapshot", dl.root, current)
@@ -667,7 +668,14 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	}
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
-	// Initialize the global generator context
+	// Initialize the global generator context. The snapshot iterators are
+	// opened at the interrupted position because the assumption is held
+	// that all the snapshot data are generated correctly before the marker.
+	// Even if the snapshot data is updated during the interruption (before
+	// or at the marker), the assumption is still held.
+	// For the account or storage slot at the interruption, they will be
+	// processed twice by the generator(they are already processed in the
+	// last run) but it's fine.
 	ctx := newGeneratorContext(stats, dl.diskdb, accMarker, dl.genMarker)
 	defer ctx.close()
 

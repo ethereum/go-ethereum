@@ -120,22 +120,22 @@ func (ctx *generatorContext) openIterator(kind string, start []byte) {
 	ctx.storage = newHoldableIterator(rawdb.NewKeyLengthIterator(iter, 1+2*common.HashLength))
 }
 
-// reopenIterators releases the held two global database iterators and
-// reopens them at the current position. It's aimed for not blocking
-// leveldb compaction.
-func (ctx *generatorContext) reopenIterators() {
-	for i, iter := range []ethdb.Iterator{ctx.account, ctx.storage} {
-		key := iter.Key()
-		if len(key) == 0 { // nil or []byte{}
-			continue // the iterator may already be exhausted
-		}
-		kind := snapAccount
-		if i == 1 {
-			kind = snapStorage
-		}
-		iter.Release()
-		ctx.openIterator(kind, key[1:])
+// reopenIterator releases the specified snapshot iterator and re-open it
+// in the next position. It's aimed for not blocking leveldb compaction.
+func (ctx *generatorContext) reopenIterator(kind string) {
+	// Shift iterator one more step, so that we can reopen
+	// the iterator at the right position.
+	var iter = ctx.account
+	if kind == snapStorage {
+		iter = ctx.storage
 	}
+	hasNext := iter.Next()
+	if !hasNext {
+		return // iterator is exhausted now
+	}
+	nextKey := iter.Key()
+	iter.Release()
+	ctx.openIterator(kind, nextKey[1:])
 }
 
 // close releases all the held resources.
@@ -168,7 +168,7 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 			iter.Hold()
 			break
 		}
-		ctx.batch.Delete(key)
+		ctx.batch.Delete(key) // TODO(rjl493456442) avoid accumulating too much data
 		count++
 	}
 	ctx.stats.dangling += count
@@ -195,7 +195,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 			iter.Hold()
 			break
 		}
-		ctx.batch.Delete(key)
+		ctx.batch.Delete(key) // TODO(rjl493456442) avoid accumulating too much data
 		count++
 	}
 	snapWipedStorageMeter.Mark(count)
@@ -212,7 +212,7 @@ func (ctx *generatorContext) removeStorageLeft() {
 		iter  = ctx.storage
 	)
 	for iter.Next() {
-		ctx.batch.Delete(iter.Key())
+		ctx.batch.Delete(iter.Key()) // TODO(rjl493456442) avoid accumulating too much data
 		count++
 	}
 	ctx.stats.dangling += count

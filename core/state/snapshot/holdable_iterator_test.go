@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
-func TestIteratorDiscard(t *testing.T) {
+func TestIteratorHold(t *testing.T) {
 	// Create the key-value data store
 	var (
 		content = map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"}
@@ -83,4 +84,80 @@ func TestIteratorDiscard(t *testing.T) {
 		t.Errorf("iteration terminated prematurely: have %d, want %d", idx, len(order))
 	}
 	db.Close()
+}
+
+func TestReopenIterator(t *testing.T) {
+	var (
+		content = map[common.Hash]string{
+			common.HexToHash("a1"): "v1",
+			common.HexToHash("a2"): "v2",
+			common.HexToHash("a3"): "v3",
+			common.HexToHash("a4"): "v4",
+			common.HexToHash("a5"): "v5",
+			common.HexToHash("a6"): "v6",
+		}
+		order = []common.Hash{
+			common.HexToHash("a1"),
+			common.HexToHash("a2"),
+			common.HexToHash("a3"),
+			common.HexToHash("a4"),
+			common.HexToHash("a5"),
+			common.HexToHash("a6"),
+		}
+		db = rawdb.NewMemoryDatabase()
+	)
+	for key, val := range content {
+		rawdb.WriteAccountSnapshot(db, key, []byte(val))
+	}
+	checkVal := func(it *holdableIterator, index int) {
+		if !bytes.Equal(it.Key(), append(rawdb.SnapshotAccountPrefix, order[index].Bytes()...)) {
+			t.Fatalf("Unexpected data entry key, want %v got %v", order[index], it.Key())
+		}
+		if !bytes.Equal(it.Value(), []byte(content[order[index]])) {
+			t.Fatalf("Unexpected data entry key, want %v got %v", []byte(content[order[index]]), it.Value())
+		}
+	}
+	// Iterate over the database with the given configs and verify the results
+	ctx, idx := newGeneratorContext(&generatorStats{}, db, nil, nil), -1
+
+	idx++
+	ctx.account.Next()
+	checkVal(ctx.account, idx)
+
+	ctx.reopenIterator(snapAccount)
+	idx++
+	ctx.account.Next()
+	checkVal(ctx.account, idx)
+
+	// reopen twice
+	ctx.reopenIterator(snapAccount)
+	ctx.reopenIterator(snapAccount)
+	idx++
+	ctx.account.Next()
+	checkVal(ctx.account, idx)
+
+	// reopen iterator with held value
+	ctx.account.Next()
+	ctx.account.Hold()
+	ctx.reopenIterator(snapAccount)
+	idx++
+	ctx.account.Next()
+	checkVal(ctx.account, idx)
+
+	// reopen twice iterator with held value
+	ctx.account.Next()
+	ctx.account.Hold()
+	ctx.reopenIterator(snapAccount)
+	ctx.reopenIterator(snapAccount)
+	idx++
+	ctx.account.Next()
+	checkVal(ctx.account, idx)
+
+	// shift to the end and reopen
+	ctx.account.Next() // the end
+	ctx.reopenIterator(snapAccount)
+	ctx.account.Next()
+	if ctx.account.Key() != nil {
+		t.Fatal("Unexpected iterated entry")
+	}
 }
