@@ -99,6 +99,17 @@ func (h *HeimdallClient) FetchWithRetry(rawPath string, rawQuery string) (*Respo
 	u.Path = rawPath
 	u.RawQuery = rawQuery
 
+	// attempt counter
+	attempt := 1
+
+	// request data once
+	res, err := h.internalFetch(u)
+	if err == nil && res != nil {
+		return res, nil
+	}
+	log.Info("Retrying again in 5 seconds to fetch data from Heimdall", "path", u.Path, "attempt", attempt)
+	attempt++
+
 	// create a new ticker for retrying the request
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -113,7 +124,8 @@ func (h *HeimdallClient) FetchWithRetry(rawPath string, rawQuery string) (*Respo
 			if err == nil && res != nil {
 				return res, nil
 			}
-			log.Info("Retrying again in 5 seconds to fetch data from Heimdall", "path", u.Path)
+			log.Info("Retrying again in 5 seconds to fetch data from Heimdall", "path", u.Path, "attempt", attempt)
+			attempt++
 		}
 	}
 }
