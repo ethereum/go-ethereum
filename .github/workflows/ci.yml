@@ -8,6 +8,11 @@ on:
     branches:
       - master
     types: [opened, synchronize, closed]
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
     if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
