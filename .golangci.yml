@@ -12,27 +12,63 @@ run:
     - .*_gen.go
 
 linters:
-  disable-all: true
   enable:
-    - deadcode
     - goconst
     - goimports
-    - gosimple
-    - govet
-    - ineffassign
     - misspell
-    # - staticcheck
     - unconvert
-    # - unused
-    - varcheck
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - decorder
+    - durationcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gocognit
+    - gofmt
+    - gomnd
+    - gomoddirectives
+    - gosec
+    - makezero
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    #- nosprintfhostport # TODO: do we use IPv6?
+    - paralleltest
+    - prealloc
+    - predeclared
+    #- promlinter
+    #- revive
+    - tagliatelle
+    - tenv
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - wsl
 
 linters-settings:
   gofmt:
     simplify: true
     auto-fix: false
+
   goconst:
     min-len: 3 # minimum length of string constant
     min-occurrences: 2 # minimum number of occurrences
+    numbers: true
+
+  goimports:
+    local-prefixes: github.com/ethereum/go-ethereum
+  
+  nestif:
+    min-complexity: 3
+  
+  prealloc:
+    for-loops: true
 
   gocritic:
     # Which checks should be enabled; can't be combined with 'disabled-checks';
@@ -93,6 +129,18 @@ linters-settings:
       - fieldalignment
       - shadow
       - unsafeptr
+    check-shadowing: true
+    enable-all: true
+    settings:
+      printf:
+        # Run `go tool vet help printf` to see available settings for `printf` analyzer.
+        funcs:
+          - (github.com/ethereum/go-ethereum/log.Logger).Trace
+          - (github.com/ethereum/go-ethereum/log.Logger).Debug
+          - (github.com/ethereum/go-ethereum/log.Logger).Info
+          - (github.com/ethereum/go-ethereum/log.Logger).Warn
+          - (github.com/ethereum/go-ethereum/log.Logger).Error
+          - (github.com/ethereum/go-ethereum/log.Logger).Crit
 
 issues:
   exclude-rules:
