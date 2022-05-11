@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -91,9 +90,8 @@ func (b *testBackend) close() {
 	b.chain.Stop()
 }
 
-func (b *testBackend) Chain() *core.BlockChain     { return b.chain }
-func (b *testBackend) StateBloom() *trie.SyncBloom { return nil }
-func (b *testBackend) TxPool() TxPool              { return b.txpool }
+func (b *testBackend) Chain() *core.BlockChain { return b.chain }
+func (b *testBackend) TxPool() TxPool          { return b.txpool }
 
 func (b *testBackend) RunPeer(peer *Peer, handler Handler) error {
 	// Normally the backend would do peer mainentance and handshakes. All that
@@ -138,11 +136,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		query  *GetBlockHeadersPacket // The query to execute for header retrieval
 		expect []common.Hash          // The hashes of the block whose headers are expected
 	}{
-		// A single random block should be retrievable by hash and number too
+		// A single random block should be retrievable by hash
 		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Hash: backend.chain.GetBlockByNumber(limit / 2).Hash()}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
-		}, {
+		},
+		// A single random block should be retrievable by number
+		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: limit / 2}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(limit / 2).Hash()},
 		},
@@ -182,8 +182,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: 0}, Amount: 1},
 			[]common.Hash{backend.chain.GetBlockByNumber(0).Hash()},
-		}, {
+		},
+		{
 			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 1},
+			[]common.Hash{backend.chain.CurrentBlock().Hash()},
+		},
+		{ // If the peer requests a bit into the future, we deliver what we have
+			&GetBlockHeadersPacket{Origin: HashOrNumber{Number: backend.chain.CurrentBlock().NumberU64()}, Amount: 10},
 			[]common.Hash{backend.chain.CurrentBlock().Hash()},
 		},
 		// Ensure protocol limits are honored
@@ -259,11 +264,11 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			headers = append(headers, backend.chain.GetBlockByHash(hash).Header())
 		}
 		// Send the hash request and verify the response
-		p2p.Send(peer.app, GetBlockHeadersMsg, GetBlockHeadersPacket66{
+		p2p.Send(peer.app, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 			RequestId:             123,
 			GetBlockHeadersPacket: tt.query,
 		})
-		if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, BlockHeadersPacket66{
+		if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, &BlockHeadersPacket66{
 			RequestId:          123,
 			BlockHeadersPacket: headers,
 		}); err != nil {
@@ -274,15 +279,13 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 			if origin := backend.chain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
 				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
 
-				p2p.Send(peer.app, GetBlockHeadersMsg, GetBlockHeadersPacket66{
+				p2p.Send(peer.app, GetBlockHeadersMsg, &GetBlockHeadersPacket66{
 					RequestId:             456,
 					GetBlockHeadersPacket: tt.query,
 				})
-				if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, BlockHeadersPacket66{
-					RequestId:          456,
-					BlockHeadersPacket: headers,
-				}); err != nil {
-					t.Errorf("test %d: headers mismatch: %v", i, err)
+				expected := &BlockHeadersPacket66{RequestId: 456, BlockHeadersPacket: headers}
+				if err := p2p.ExpectMsg(peer.app, BlockHeadersMsg, expected); err != nil {
+					t.Errorf("test %d by hash: headers mismatch: %v", i, err)
 				}
 			}
 		}
@@ -359,11 +362,11 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 			}
 		}
 		// Send the hash request and verify the response
-		p2p.Send(peer.app, GetBlockBodiesMsg, GetBlockBodiesPacket66{
+		p2p.Send(peer.app, GetBlockBodiesMsg, &GetBlockBodiesPacket66{
 			RequestId:            123,
 			GetBlockBodiesPacket: hashes,
 		})
-		if err := p2p.ExpectMsg(peer.app, BlockBodiesMsg, BlockBodiesPacket66{
+		if err := p2p.ExpectMsg(peer.app, BlockBodiesMsg, &BlockBodiesPacket66{
 			RequestId:         123,
 			BlockBodiesPacket: bodies,
 		}); err != nil {
@@ -431,7 +434,7 @@ func testGetNodeData(t *testing.T, protocol uint) {
 	it.Release()
 
 	// Request all hashes.
-	p2p.Send(peer.app, GetNodeDataMsg, GetNodeDataPacket66{
+	p2p.Send(peer.app, GetNodeDataMsg, &GetNodeDataPacket66{
 		RequestId:         123,
 		GetNodeDataPacket: hashes,
 	})
@@ -541,11 +544,11 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 		receipts = append(receipts, backend.chain.GetReceiptsByHash(block.Hash()))
 	}
 	// Send the hash request and verify the response
-	p2p.Send(peer.app, GetReceiptsMsg, GetReceiptsPacket66{
+	p2p.Send(peer.app, GetReceiptsMsg, &GetReceiptsPacket66{
 		RequestId:         123,
 		GetReceiptsPacket: hashes,
 	})
-	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, ReceiptsPacket66{
+	if err := p2p.ExpectMsg(peer.app, ReceiptsMsg, &ReceiptsPacket66{
 		RequestId:      123,
 		ReceiptsPacket: receipts,
 	}); err != nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -100,6 +101,14 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 }
 
 func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
+	// Ask transaction pool for the nonce which includes pending transactions
+	if blockNr, ok := a.blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
+		nonce, err := a.backend.GetPoolNonce(ctx, a.address)
+		if err != nil {
+			return 0, err
+		}
+		return hexutil.Uint64(nonce), nil
+	}
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
@@ -245,6 +254,10 @@ func (t *Transaction) EffectiveGasPrice(ctx context.Context) (*hexutil.Big, erro
 	if err != nil || tx == nil {
 		return nil, err
 	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
+	}
 	header, err := t.block.resolveHeader(ctx)
 	if err != nil || header == nil {
 		return nil, err
@@ -283,6 +296,30 @@ func (t *Transaction) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 	default:
 		return nil, nil
 	}
+}
+
+func (t *Transaction) EffectiveTip(ctx context.Context) (*hexutil.Big, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+	// Pending tx
+	if t.block == nil {
+		return nil, nil
+	}
+	header, err := t.block.resolveHeader(ctx)
+	if err != nil || header == nil {
+		return nil, err
+	}
+	if header.BaseFee == nil {
+		return (*hexutil.Big)(tx.GasPrice()), nil
+	}
+
+	tip, err := tx.EffectiveGasTip(header.BaseFee)
+	if err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(tip), nil
 }
 
 func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
@@ -371,6 +408,9 @@ func (t *Transaction) Status(ctx context.Context) (*Long, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
+	}
+	if len(receipt.PostState) != 0 {
+		return nil, nil
 	}
 	ret := Long(receipt.Status)
 	return &ret, nil
@@ -595,22 +635,35 @@ func (b *Block) BaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(header.BaseFee), nil
 }
 
-func (b *Block) Parent(ctx context.Context) (*Block, error) {
-	// If the block header hasn't been fetched, and we'll need it, fetch it.
-	if b.numberOrHash == nil && b.header == nil {
-		if _, err := b.resolveHeader(ctx); err != nil {
-			return nil, err
+func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	chaincfg := b.backend.ChainConfig()
+	if header.BaseFee == nil {
+		// Make sure next block doesn't enable EIP-1559
+		if !chaincfg.IsLondon(new(big.Int).Add(header.Number, common.Big1)) {
+			return nil, nil
 		}
 	}
-	if b.header != nil && b.header.Number.Uint64() > 0 {
-		num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
-		return &Block{
-			backend:      b.backend,
-			numberOrHash: &num,
-			hash:         b.header.ParentHash,
-		}, nil
+	nextBaseFee := misc.CalcBaseFee(chaincfg, header)
+	return (*hexutil.Big)(nextBaseFee), nil
+}
+
+func (b *Block) Parent(ctx context.Context) (*Block, error) {
+	if _, err := b.resolveHeader(ctx); err != nil {
+		return nil, err
 	}
-	return nil, nil
+	if b.header == nil || b.header.Number.Uint64() < 1 {
+		return nil, nil
+	}
+	num := rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(b.header.Number.Uint64() - 1))
+	return &Block{
+		backend:      b.backend,
+		numberOrHash: &num,
+		hash:         b.header.ParentHash,
+	}, nil
 }
 
 func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
@@ -1110,10 +1163,21 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	ret := make([]*Block, 0, to-from+1)
 	for i := from; i <= to; i++ {
 		numberOrHash := rpc.BlockNumberOrHashWithNumber(i)
-		ret = append(ret, &Block{
+		block := &Block{
 			backend:      r.backend,
 			numberOrHash: &numberOrHash,
-		})
+		}
+		// Resolve the header to check for existence.
+		// Note we don't resolve block directly here since it will require an
+		// additional network request for light client.
+		h, err := block.resolveHeader(ctx)
+		if err != nil {
+			return nil, err
+		} else if h == nil {
+			// Blocks after must be non-existent too, break.
+			break
+		}
+		ret = append(ret, block)
 	}
 	return ret, nil
 }
@@ -1220,32 +1284,66 @@ type SyncState struct {
 func (s *SyncState) StartingBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.StartingBlock)
 }
-
 func (s *SyncState) CurrentBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.CurrentBlock)
 }
-
 func (s *SyncState) HighestBlock() hexutil.Uint64 {
 	return hexutil.Uint64(s.progress.HighestBlock)
 }
-
-func (s *SyncState) PulledStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.PulledStates)
-	return &ret
+func (s *SyncState) SyncedAccounts() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccounts)
 }
-
-func (s *SyncState) KnownStates() *hexutil.Uint64 {
-	ret := hexutil.Uint64(s.progress.KnownStates)
-	return &ret
+func (s *SyncState) SyncedAccountBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedAccountBytes)
+}
+func (s *SyncState) SyncedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodes)
+}
+func (s *SyncState) SyncedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedBytecodeBytes)
+}
+func (s *SyncState) SyncedStorage() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorage)
+}
+func (s *SyncState) SyncedStorageBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.SyncedStorageBytes)
+}
+func (s *SyncState) HealedTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodes)
+}
+func (s *SyncState) HealedTrienodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedTrienodeBytes)
+}
+func (s *SyncState) HealedBytecodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodes)
+}
+func (s *SyncState) HealedBytecodeBytes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealedBytecodeBytes)
+}
+func (s *SyncState) HealingTrienodes() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingTrienodes)
+}
+func (s *SyncState) HealingBytecode() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HealingBytecode)
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
-// - startingBlock: block number this node started to synchronise from
-// - currentBlock:  block number this node is currently importing
-// - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
+// - startingBlock:       block number this node started to synchronise from
+// - currentBlock:        block number this node is currently importing
+// - highestBlock:        block number of the highest block header this node has received from peers
+// - syncedAccounts:      number of accounts downloaded
+// - syncedAccountBytes:  number of account trie bytes persisted to disk
+// - syncedBytecodes:     number of bytecodes downloaded
+// - syncedBytecodeBytes: number of bytecode bytes downloaded
+// - syncedStorage:       number of storage slots downloaded
+// - syncedStorageBytes:  number of storage trie bytes persisted to disk
+// - healedTrienodes:     number of state trie nodes downloaded
+// - healedTrienodeBytes: number of state trie bytes persisted to disk
+// - healedBytecodes:     number of bytecodes downloaded
+// - healedBytecodeBytes: number of bytecodes persisted to disk
+// - healingTrienodes:    number of state trie nodes pending
+// - healingBytecode:     number of bytecodes pending
 func (r *Resolver) Syncing() (*SyncState, error) {
 	progress := r.backend.SyncProgress()
 

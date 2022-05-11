@@ -115,7 +115,7 @@ func DeleteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash com
 // IterateStorageSnapshots returns an iterator for walking the entire storage
 // space of a specific account.
 func IterateStorageSnapshots(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
-	return db.NewIterator(storageSnapshotsKey(accountHash), nil)
+	return NewKeyLengthIterator(db.NewIterator(storageSnapshotsKey(accountHash), nil), len(SnapshotStoragePrefix)+2*common.HashLength)
 }
 
 // ReadSnapshotJournal retrieves the serialized in-memory diff layers saved at
@@ -206,13 +206,5 @@ func ReadSnapshotSyncStatus(db ethdb.KeyValueReader) []byte {
 func WriteSnapshotSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 	if err := db.Put(snapshotSyncStatusKey, status); err != nil {
 		log.Crit("Failed to store snapshot sync status", "err", err)
-	}
-}
-
-// DeleteSnapshotSyncStatus deletes the serialized sync status saved at the last
-// shutdown
-func DeleteSnapshotSyncStatus(db ethdb.KeyValueWriter) {
-	if err := db.Delete(snapshotSyncStatusKey); err != nil {
-		log.Crit("Failed to remove snapshot sync status", "err", err)
 	}
 }

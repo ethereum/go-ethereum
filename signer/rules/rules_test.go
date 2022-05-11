@@ -605,7 +605,7 @@ function ApproveSignData(r){
 
 	t.Logf("address %v %v\n", addr.String(), addr.Original())
 
-	nvt := []*core.NameValueType{
+	nvt := []*apitypes.NameValueType{
 		{
 			Name:  "message",
 			Typ:   "text/plain",
