@@ -58,7 +58,7 @@ test:
 	$(GOTEST) --timeout 5m -cover -coverprofile=cover.out
 
 test-race:
-	$(GOTEST) --timeout 5m -race
+	$(GOTEST) --timeout 15m -race
 
 test-integration:
 	$(GOTEST) --timeout 30m -tags integration
