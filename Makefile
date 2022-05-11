@@ -77,6 +77,9 @@ lintci-deps:
 	rm -f ./build/bin/golangci-lint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
 
+goimports:
+	goimports -local "$(PACKAGE)" -w .
+
 clean:
 	env GO111MODULE=on go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
