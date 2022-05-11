@@ -286,6 +286,47 @@ func TestStreamRaw(t *testing.T) {
 	}
 }
 
+func TestStreamReadBytes(t *testing.T) {
+	tests := []struct {
+		input string
+		size  int
+		err   string
+	}{
+		// kind List
+		{input: "C0", size: 1, err: "rlp: expected String or Byte"},
+		// kind Byte
+		{input: "04", size: 0, err: "input value has wrong size 1, want 0"},
+		{input: "04", size: 1},
+		{input: "04", size: 2, err: "input value has wrong size 1, want 2"},
+		// kind String
+		{input: "820102", size: 0, err: "input value has wrong size 2, want 0"},
+		{input: "820102", size: 1, err: "input value has wrong size 2, want 1"},
+		{input: "820102", size: 2},
+		{input: "820102", size: 3, err: "input value has wrong size 2, want 3"},
+	}
+
+	for _, test := range tests {
+		test := test
+		name := fmt.Sprintf("input_%s/size_%d", test.input, test.size)
+		t.Run(name, func(t *testing.T) {
+			s := NewStream(bytes.NewReader(unhex(test.input)), 0)
+			b := make([]byte, test.size)
+			err := s.ReadBytes(b)
+			if test.err == "" {
+				if err != nil {
+					t.Errorf("unexpected error %q", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if err.Error() != test.err {
+					t.Errorf("wrong error %q", err)
+				}
+			}
+		})
+	}
+}
+
 func TestDecodeErrors(t *testing.T) {
 	r := bytes.NewReader(nil)
 
@@ -990,7 +1031,7 @@ func TestInvalidOptionalField(t *testing.T) {
 		v   interface{}
 		err string
 	}{
-		{v: new(invalid1), err: `rlp: struct field rlp.invalid1.B needs "optional" tag`},
+		{v: new(invalid1), err: `rlp: invalid struct tag "" for rlp.invalid1.B (must be optional because preceding field "A" is optional)`},
 		{v: new(invalid2), err: `rlp: invalid struct tag "optional" for rlp.invalid2.T (also has "tail" tag)`},
 		{v: new(invalid3), err: `rlp: invalid struct tag "tail" for rlp.invalid3.T (also has "optional" tag)`},
 	}
