@@ -218,19 +218,19 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		lightchain = chain
 	}
 	dl := &Downloader{
-		stateDB:             stateDb,
-		mux:                 mux,
-		checkpoint:          checkpoint,
-		queue:               newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:               newPeerSet(),
-		blockchain:          chain,
-		lightchain:          lightchain,
-		dropPeer:            dropPeer,
-		headerProcCh:        make(chan *headerTask, 1),
-		quitCh:              make(chan struct{}),
-		SnapSyncer:          snap.NewSyncer(stateDb),
-		stateSyncStart:      make(chan *stateSync),
-		ChainValidator:		 whitelistService,
+		stateDB:        stateDb,
+		mux:            mux,
+		checkpoint:     checkpoint,
+		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:          newPeerSet(),
+		blockchain:     chain,
+		lightchain:     lightchain,
+		dropPeer:       dropPeer,
+		headerProcCh:   make(chan *headerTask, 1),
+		quitCh:         make(chan struct{}),
+		SnapSyncer:     snap.NewSyncer(stateDb),
+		stateSyncStart: make(chan *stateSync),
+		ChainValidator: whitelistService,
 	}
 	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
 
@@ -792,7 +792,7 @@ func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
 	// Check the validity of chain to be downloaded
-	// TODO: we can use a mock and 
+	// TODO: we can use a mock and
 	if _, err := d.IsValidChain(remoteHeader, d.getFetchHeadersByNumber(p)); errors.Is(err, whitelist.ErrCheckpointMismatch) {
 		return 0, err
 	}

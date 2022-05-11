@@ -15,17 +15,17 @@ var (
 
 // Checkpoint whitelist
 type Service struct {
-	m 					sync.RWMutex
+	m                   sync.RWMutex
 	checkpointWhitelist map[uint64]common.Hash // Checkpoint whitelist, populated by reaching out to heimdall
 	checkpointOrder     []uint64               // Checkpoint order, populated by reaching out to heimdall
-	maxCapacity 		uint
+	maxCapacity         uint
 }
 
 func NewService(maxCapacity uint) *Service {
 	return &Service{
 		checkpointWhitelist: make(map[uint64]common.Hash),
 		checkpointOrder:     []uint64{},
-		maxCapacity: 		 maxCapacity,
+		maxCapacity:         maxCapacity,
 	}
 }
 
