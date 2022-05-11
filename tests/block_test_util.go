@@ -16,9 +16,6 @@
 
 // Package tests implements execution of Ethereum JSON tests.
 
-//go:build integration
-// +build integration
-
 package tests
 
 import (
