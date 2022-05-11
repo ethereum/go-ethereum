@@ -24,15 +24,13 @@ Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart co
 
 Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial. 
 
-First, a data directory will be created so that the local blockchain state can be maintained between sessions - without this the local blockchain is ephemeral and only existing in memory for the duration the node is running. In the command below this is achieved by providing the directory name, `dev-chain` as an argument following the `--datadir` flag. 
-
-Next, `http` must be enabled so that the Javascript console can be attached to the Geth node, and some namespaces must be specified so that certain functions can be executed from the Javascript console, specifically `eth`, `web3` and `personal`. 
+First, `http` must be enabled so that the Javascript console can be attached to the Geth node, and some namespaces must be specified so that certain functions can be executed from the Javascript console, specifically `eth`, `web3` and `personal`. 
 
 Finally, Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. The full command is as follows:
 
 ```shell
 
-geth --datadir dev-chain --dev --http --http.api eth,web3,personal,net --http.corsdomain "http://remix.ethereum.org"
+geth --dev --http --http.api eth,web3,personal,net --http.corsdomain "http://remix.ethereum.org"
 
 ```
 
@@ -46,12 +44,7 @@ INFO [05-09|10:49:02.952] Maximum peer count                       ETH=50 LES=0 
 INFO [05-09|10:49:02.952] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
 INFO [05-09|10:49:02.953] Set global gas cap                       cap=50,000,000
 INFO [05-09|10:49:03.133] Using developer account                  address=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62
-INFO [05-09|10:49:03.133] Allocated cache and file handles         database=/home/go-ethereum/dev-chain/geth/chaindata cache=512.00MiB handles=524,288
-INFO [05-09|10:49:03.196] Opened ancient database                  database=/home/go-ethereum/dev-chain/geth/chaindata/ancient readonly=false
-INFO [05-09|10:49:03.196] Freezer shutting down 
 INFO [05-09|10:49:03.196] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
-INFO [05-09|10:49:03.196] Allocated cache and file handles         database=/home/go-ethereum/dev-chain/geth/chaindata cache=512.00MiB handles=524,288
-INFO [05-09|10:49:03.285] Opened ancient database                  database=/home/go-ethereum/dev-chain/geth/chaindata/ancient readonly=false
 INFO [05-09|10:49:03.285] Writing custom genesis block 
 INFO [05-09|10:49:03.286] Persisted trie from memory database      nodes=13 size=1.90KiB time="180.524µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-09|10:49:03.287] Initialised chain configuration          config="{ ChainID: 1337 Homestead: 0 DAO: nil DAOSupport: false EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 0, Muir Glacier: 0, Berlin: 0, London: 0, Arrow Glacier: nil, MergeFork: nil, Terminal TD: nil, Engine: clique}"
@@ -71,7 +64,7 @@ WARN [05-09|10:49:03.292] P2P server will be useless, neither dialing nor listen
 INFO [05-09|10:49:03.292] Stored checkpoint snapshot to disk       number=0 hash=c9c3de..579bb8
 INFO [05-09|10:49:03.312] New local node record                    seq=1,652,089,743,311 id=bfedca74bea20733 ip=127.0.0.1 udp=0 tcp=0
 INFO [05-09|10:49:03.313] Started P2P networking                   self=enode://0544de6446dd5831daa5a391de8d0375d93ac602a95d6a182d499de31f22f75b6645c3f562932cac8328d51321b676c683471e2cf7b3c338bb6930faf6ead389@127.0.0.1:0
-INFO [05-09|10:49:03.314] IPC endpoint opened                      url=/home/go-ethereum/dev-chain/geth.ipc
+INFO [05-09|10:49:03.314] IPC endpoint opened                      url=/tmp/geth.ipc
 INFO [05-09|10:49:03.315] HTTP server started                      endpoint=127.0.0.1:8545 auth=false prefix= cors=http:remix.ethereum.org vhosts=localhost
 INFO [05-09|10:49:03.315] Transaction pool price threshold updated price=0
 INFO [05-09|10:49:03.315] Updated mining threads                   threads=0
@@ -80,8 +73,6 @@ INFO [05-09|10:49:03.315] Etherbase automatically configured       address=0x7Aa
 INFO [05-09|10:49:03.316] Commit new sealing work                  number=1 sealhash=2372a2..7fb8e7 uncles=0 txs=0 gas=0 fees=0 elapsed="202.366µs"
 WARN [05-09|10:49:03.316] Block sealing failed                     err="sealing paused while waiting for transactions"
 INFO [05-09|10:49:03.316] Commit new sealing work                  number=1 sealhash=2372a2..7fb8e7 uncles=0 txs=0 gas=0 fees=0 elapsed="540.054µs"
-
-
 
 ```
 
@@ -332,8 +323,19 @@ This returns a value that looks like the following:
 ```
 
 
-The returned value is a left-padded hexadecimal value. For example, the return value `0x000000000000000000000000000000000000000000000000000000000000000038` corresponds to a value of `56` entered as a uint256 to Remix. After convertinfrom hexadecimal string to decimal number the returned value should be equal to that provided to Remix in the previous step.
+The returned value is a left-padded hexadecimal value. For example, the return value `0x000000000000000000000000000000000000000000000000000000000000000038` corresponds to a value of `56` entered as a uint256 to Remix. After converting from hexadecimal string to decimal number the returned value should be equal to that provided to Remix in the previous step.
+
+## Reusing --datadir
+
+This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create a persistent blockchain that can be restarted across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode. However, if there is already an account in Geth's keystore, Geth will not start because it cannot automatically unlock that existing account. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
+
+```shell
+
+geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
+
+```
+
 
 ## Summary
 
-This tutorial has demonstrated how to spin up a local developer network usign Geth. Having started this development network, a simple contract was deployed to the developer network. Then, Remix was connected to the local Geth node and used to deploy and interact with a contract. Remix was used to add a value to the contract storage and then the value was retrieved using Remix and also using the lower level commands in the Javascript console.
+This tutorial has demonstrated how to spin up a local developer network using Geth. Having started this development network, a simple contract was deployed to the developer network. Then, Remix was connected to the local Geth node and used to deploy and interact with a contract. Remix was used to add a value to the contract storage and then the value was retrieved using Remix and also using the lower level commands in the Javascript console.
