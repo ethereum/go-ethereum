@@ -88,7 +88,7 @@ Remove blockchain and state databases`,
 	dbCheckStateContentCmd = cli.Command{
 		Action:    utils.MigrateFlags(checkStateContent),
 		Name:      "check-state-content",
-		ArgsUsage: "<prefix> <start>",
+		ArgsUsage: "<start (optional)>",
 		Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 		Usage:     "Verify that state data is cryptographically correct",
 		Description: `This command iterates the entire database for 32-byte keys, looking for rlp-encoded trie nodes.
@@ -306,18 +306,11 @@ func checkStateContent(ctx *cli.Context) error {
 		prefix []byte
 		start  []byte
 	)
-	if ctx.NArg() > 2 {
+	if ctx.NArg() > 1 {
 		return fmt.Errorf("Max 2 arguments: %v", ctx.Command.ArgsUsage)
 	}
-	if ctx.NArg() >= 1 {
-		if d, err := hexutil.Decode(ctx.Args().Get(0)); err != nil {
-			return fmt.Errorf("failed to hex-decode 'prefix': %v", err)
-		} else {
-			prefix = d
-		}
-	}
-	if ctx.NArg() >= 2 {
-		if d, err := hexutil.Decode(ctx.Args().Get(1)); err != nil {
+	if ctx.NArg() > 0 {
+		if d, err := hexutil.Decode(ctx.Args().First()); err != nil {
 			return fmt.Errorf("failed to hex-decode 'start': %v", err)
 		} else {
 			start = d
@@ -351,7 +344,7 @@ func checkStateContent(ctx *cli.Context) error {
 			fmt.Printf("  Data:  0x%x\n", v)
 		}
 		if time.Since(lastLog) > 8*time.Second {
-			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", time.Since(startTime))
+			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", common.PrettyDuration(time.Since(startTime)))
 			lastLog = time.Now()
 		}
 	}
