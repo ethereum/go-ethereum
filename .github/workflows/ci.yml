@@ -56,6 +56,7 @@ jobs:
             version: v1.46
             skip-pkg-cache: true
             skip-build-cache: true
+            only-new-issues: true
 
         - name: Test
           run: make test
