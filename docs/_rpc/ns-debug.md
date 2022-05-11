@@ -9,6 +9,17 @@ to inspect, debug and set certain debugging flags during runtime.
 * TOC
 {:toc}
 
+### debug_accountRange
+
+Enumerates all accounts at a given block with paging capability. `maxResults` are returned in the page and the items have keys that come after the `start` key (hashed address).
+
+If `incompletes` is false, then accounts for which the key preimage (i.e: the `address`) doesn't exist in db are skipped. NB: geth by default does not store preimages.
+
+| Client  | Method invocation                                                                                                |
+|:--------|------------------------------------------------------------------------------------------------------------------|
+| Console | `debug.accountRange(blockNrOrHash, start, maxResults, nocode, nostorage, incompletes)`                           |
+| RPC     | `{"method": "debug_getHeaderRlp", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
+
 ### debug_backtraceAt
 
 Sets the logging backtrace location. When a backtrace location
@@ -42,6 +53,15 @@ the rate and write the profile manually using
 | RPC     | `{"method": "debug_blockProfile", "params": [string, number]}` |
 
 
+### debug_chaindbCompact
+
+Flattens the entire key-value database into a single level, removing all unused slots and merging all keys.
+
+| Client  | Method invocation                                  |
+|:--------|----------------------------------------------------|
+| Console | `debug.chaindbCompact()`                           |
+| RPC     | `{"method": "debug_chaindbCompact", "params": []}` |
+
 
 ### debug_chaindbProperty
 
@@ -51,7 +71,6 @@ Returns leveldb properties of the key-value database.
 |:--------|----------------------------------------------------------------|
 | Console | `debug.chaindbProperty(property string)`                       |
 | RPC     | `{"method": "debug_chaindbProperty", "params": [property]}`    |
-
 
 
 ### debug_cpuProfile
@@ -150,17 +169,6 @@ the fields of the returned object.
 | RPC     | `{"method": "debug_gcStats", "params": []}`       |
 
 
-### debug_getBadBlocks
-
-Returns a list of the last 'bad blocks' that the client has seen on
-the network and returns them as a JSON list of block-hashes.
-
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.getBadBlocks()`                      |
-| RPC     | `{"method": "debug_getBadBlocks", "params": []}`  |
-
-
 ### debug_getAccessibleState
 
 Returns the first number where the node has accessible state on disk. 
@@ -172,6 +180,17 @@ to search, which can go either forwards or backwards.
 |:--------|-----------------------------------------------------------------------|
 | Console | `debug.getAccessibleState(from, to rpc.BlockNumber)`      |
 | RPC     | `{"method": "debug_getAccessibleState", "params": [from, to]}`  |
+
+
+### debug_getBadBlocks
+
+Returns a list of the last 'bad blocks' that the client has seen on
+the network and returns them as a JSON list of block-hashes.
+
+| Client  | Method invocation                                 |
+|:--------|---------------------------------------------------|
+| Console | `debug.getBadBlocks()`                      |
+| RPC     | `{"method": "debug_getBadBlocks", "params": []}`  |
 
 
 ### debug_getBlockRlp
@@ -186,6 +205,23 @@ Retrieves and returns the RLP encoded block by number.
 
 References: [RLP](https://github.com/ethereum/wiki/wiki/RLP)
 
+### debug_getHeaderRlp
+
+Returns an RLP-encoded header.
+
+| Client  | Method invocation                                   |
+|:--------|-----------------------------------------------------|
+| Console | `debug.getHeaderRlp(blockNum)`                      |
+| RPC     | `{"method": "debug_getHeaderRlp", "params": [num]}` |
+
+### debug_getModifiedAccountsByHash
+
+Returns all accounts that have changed between the two blocks specified. A change is defined as a difference in nonce, balance, code hash, or storage hash. With one parameter, returns the list of accounts modified in the specified block.
+
+| Client  | Method invocation                                                               |
+|:--------|---------------------------------------------------------------------------------|
+| Console | `debug.getModifiedAccountsByHash(startHash, endHash)`                           |
+| RPC     | `{"method": "debug_getModifiedAccountsByHash", "params": [startHash, endHash]}` |
 
 ### debug_getModifiedAccountsByNumber
 
@@ -209,6 +245,15 @@ trace data to disk.
 | Console | `debug.goTrace(file, seconds)`                            |
 | RPC     | `{"method": "debug_goTrace", "params": [string, number]}` |
 
+### debug_intermediateRoots
+
+Executes a block (bad- or canon- or side-), and returns a list of intermediate roots: the stateroot after each transaction.
+
+| Client  | Method invocation                                                  |
+|:--------|--------------------------------------------------------------------|
+| Console | `debug.intermediateRoots(blockHash, [options])`                    |
+| RPC     | `{"method": "debug_intermediateRoots", "params": [blockHash, {}]}` |
+
 ### debug_memStats
 
 Returns detailed runtime memory statistics.
@@ -220,6 +265,24 @@ the fields of the returned object.
 |:--------|---------------------------------------------------|
 | Console | `debug.memStats()`                                |
 | RPC     | `{"method": "debug_memStats", "params": []}`      |
+
+### debug_mutexProfile
+
+Turns on mutex profiling for nsec seconds and writes profile data to file. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually.
+
+| Client  | Method invocation                                          |
+|:--------|------------------------------------------------------------|
+| Console | `debug.mutexProfile(file, nsec)`                           |
+| RPC     | `{"method": "debug_mutexProfile", "params": [file, nsec]}` |
+
+### debug_preimage
+
+Returns the preimage for a sha3 hash, if known.
+
+| Client  | Method invocation                                |
+|:--------|--------------------------------------------------|
+| Console | `debug.preimage(hash)`                           |
+| RPC     | `{"method": "debug_preimage", "params": [hash]}` |
 
 
 ### debug_printBlock
@@ -242,6 +305,17 @@ Fetches and retrieves the seed hash of the block by number
 | Console | `debug.seedHash(number, [options])`                |
 | RPC     | `{"method": "debug_seedHash", "params": [number]}` |
 
+### debug_setBlockProfileRate
+
+Sets the rate (in samples/sec) of goroutine block profile
+data collection. A non-zero rate enables block profiling,
+setting it to zero stops the profile. Collected profile data
+can be written using `debug_writeBlockProfile`.
+
+| Client  | Method invocation                                             |
+|:--------|---------------------------------------------------------------|
+| Console | `debug.setBlockProfileRate(rate)`                             |
+| RPC     | `{"method": "debug_setBlockProfileRate", "params": [number]}` |
 
 ### debug_setGCPercent
 
@@ -269,17 +343,14 @@ destructive action and may severely damage your chain. Use with *extreme* cautio
 References:
 [Ethash](https://eth.wiki/en/concepts/ethash/ethash)
 
-### debug_setBlockProfileRate
+### debug_setMutexProfileFraction
 
-Sets the rate (in samples/sec) of goroutine block profile
-data collection. A non-zero rate enables block profiling,
-setting it to zero stops the profile. Collected profile data
-can be written using `debug_writeBlockProfile`.
+Sets the rate of mutex profiling.
 
-| Client  | Method invocation                                             |
-|:--------|---------------------------------------------------------------|
-| Console | `debug.setBlockProfileRate(rate)`                             |
-| RPC     | `{"method": "debug_setBlockProfileRate", "params": [number]}` |
+| Client  | Method invocation                                               |
+|:--------|-----------------------------------------------------------------|
+| Console | `debug.setMutexProfileFraction(rate int)`                       |
+| RPC     | `{"method": "debug_setMutexProfileFraction", "params": [rate]}` |
 
 ### debug_stacks
 
@@ -345,7 +416,6 @@ type StdTraceConfig struct {
 This method is similar to `debug_standardTraceBlockToFile`, but can be used to obtain info about a block which has been _rejected_ as invalid (for some reason).
 
 
-
 ### debug_startCPUProfile
 
 Turns on CPU profiling indefinitely, writing to the given file.
@@ -382,7 +452,23 @@ Stops writing the Go runtime trace.
 | Console | `debug.startGoTrace(file)`                        |
 | RPC     | `{"method": "debug_stopGoTrace", "params": []}`   |
 
+### debug_storageRangeAt
 
+Returns the storage at the given block height and transaction index. The result can be paged by providing a `maxResult` to cap the number of storage slots returned as well as specifying the offset via `keyStart` (hash of storage key).
+
+| Client  | Method invocation                                                                                        |
+|:--------|----------------------------------------------------------------------------------------------------------|
+| Console | `debug.storageRangeAt(blockHash, txIdx, contractAddress, keyStart, maxResult)`                           |
+| RPC     | `{"method": "debug_storageRangeAt", "params": [blockHash, txIdx, contractAddress, keyStart, maxResult]}` |
+
+### debug_traceBadBlock
+
+Returns the structured logs created during the execution of EVM against a block pulled from the pool of bad ones and returns them as a JSON object.
+
+| Client  | Method invocation                                              |
+|:--------|----------------------------------------------------------------|
+| Console | `debug.traceBadBlock(blockHash, [options])`                    |
+| RPC     | `{"method": "debug_traceBadBlock", "params": [blockHash, {}]}` |
 
 ### debug_traceBlock
 
@@ -477,6 +563,52 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a
 References:
 [RLP](https://github.com/ethereum/wiki/wiki/RLP)
 
+### debug_traceCall
+
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
+It returns the same output as `debug_traceTransaction`. A tracer can be specified as a third argument, similar to `debug_traceTransaction`.
+
+`Object` - The transaction call object
+- `from`: `DATA`, 20 Bytes - (optional) The address the transaction is sent from.
+- `to`: `DATA`, 20 Bytes - The address the transaction is directed to.
+- `gas`: `QUANTITY` - (optional) Integer of the gas provided for the transaction execution. eth_call consumes zero gas, but this parameter may be needed by some executions.
+- `gasPrice`: `QUANTITY` - (optional) Integer of the gasPrice used for each paid gas
+- `value`: `QUANTITY` - (optional) Integer of the value sent with this transaction
+- `data`: `DATA` - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
+
+| Client  | Method invocation                 |
+|:-------:|-----------------------------------|
+| Go      | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceCall(object, blockNrOrHash, [options])`                   |
+| RPC     | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`     |
+
+#### Example
+
+No specific call options:
+```
+> debug.traceCall(null, "0x0")
+{
+  failed: false,
+  gas: 53000,
+  returnValue: "",
+  structLogs: []
+}
+```
+Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
+```
+debug.traceCall({
+	"from": "0xdeadbeef29292929192939494959594933929292",
+	"to": "0xde929f939d939d393f939393f93939f393929023",
+	"gas": "0x7a120",
+	"data": "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
+	},
+	"latest", {"disableStorage": true, "disableMemory": true})
+```
+Curl example: 
+```
+> curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
+{"jsonrpc":"2.0","id":1,"result":{"gas":53000,"failed":false,"returnValue":"","structLogs":[]}}
+```
 
 ### debug_traceChain
 
@@ -669,53 +801,6 @@ Usage example, returns the top element of the stack at each CALL opcode only:
 
     debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
 
-### debug_traceCall
-
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
-It returns the same output as `debug_traceTransaction`. A tracer can be specified as a third argument, similar to `debug_traceTransaction`.
-
-`Object` - The transaction call object
-- `from`: `DATA`, 20 Bytes - (optional) The address the transaction is sent from.
-- `to`: `DATA`, 20 Bytes - The address the transaction is directed to.
-- `gas`: `QUANTITY` - (optional) Integer of the gas provided for the transaction execution. eth_call consumes zero gas, but this parameter may be needed by some executions.
-- `gasPrice`: `QUANTITY` - (optional) Integer of the gasPrice used for each paid gas
-- `value`: `QUANTITY` - (optional) Integer of the value sent with this transaction
-- `data`: `DATA` - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
-
-| Client  | Method invocation                 |
-|:-------:|-----------------------------------|
-| Go      | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
-| Console | `debug.traceCall(object, blockNrOrHash, [options])`                   |
-| RPC     | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`     |
-
-#### Example
-
-No specific call options:
-```
-> debug.traceCall(null, "0x0")
-{
-  failed: false,
-  gas: 53000,
-  returnValue: "",
-  structLogs: []
-}
-```
-Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
-```
-debug.traceCall({
-	"from": "0xdeadbeef29292929192939494959594933929292",
-	"to": "0xde929f939d939d393f939393f93939f393929023",
-	"gas": "0x7a120",
-	"data": "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
-	},
-	"latest", {"disableStorage": true, "disableMemory": true})
-```
-Curl example: 
-```
-> curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
-{"jsonrpc":"2.0","id":1,"result":{"gas":53000,"failed":false,"returnValue":"","structLogs":[]}}
-```
-
 
 ### debug_verbosity
 
@@ -791,3 +876,12 @@ flag.
 |:--------|-------------------------------------------------------------|
 | Console | `debug.writeMemProfile(file string)`                        |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |
+
+### debug_writeMutexProfile
+
+Writes a goroutine blocking profile to the given file.
+
+| Client  | Method invocation                                         |
+|:--------|-----------------------------------------------------------|
+| Console | `debug.writeMutexProfile(file)`                           |
+| RPC     | `{"method": "debug_writeMutexProfile", "params": [file]}` |
