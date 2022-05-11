@@ -4,10 +4,20 @@
 
 .PHONY: geth android ios evm all test clean
 
-GOBIN = ./build/bin
 GO ?= latest
+GOBIN = $(CURDIR)/build/bin
 GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
+
+GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_TAG    ?= $(shell git describe --tags `git rev-list --tags="v*" --max-count=1`)
+
+PACKAGE = github.com/ethereum/go-ethereum
+GO_FLAGS += -trimpath -buildvcs=false
+GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+
+GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) ./... -p 1 -shuffle=on
 
 bor:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -45,8 +55,16 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test:
-	# Skip mobile and cmd tests since they are being deprecated
-	go test -v $$(go list ./... | grep -v go-ethereum/cmd/) -cover -coverprofile=cover.out
+	$(GOTEST) --timeout 5m -cover -coverprofile=cover.out
+
+test-race:
+	$(GOTEST) --timeout 5m -race
+
+test-integration:
+	$(GOTEST) --timeout 30m -tags integration
+
+escape:
+	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

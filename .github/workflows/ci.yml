@@ -1,20 +1,53 @@
 name: CI
 on: [push, pull_request]
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  tests:
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, macos-11 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17
-      - name: "Build binaries"
-        run: make all
-      - name: "Run tests"
-        run: make test
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
-        with:
-          file: ./cover.out
+        - uses: actions/checkout@v3
+        - run: git submodule update --init --recursive --force
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.18.x
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: sudo apt update && sudo apt install build-essential
 
+        - uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              ~/Library/Caches/go-build
+              ~/go/pkg/mod
+            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+            restore-keys: ${{ runner.os }}-go-
+
+        - name: Build
+          run: make all
+
+        - name: Reproducible build test
+          run: |
+            make geth
+            shasum -a256 ./build/bin/geth > bor1.sha256
+            make geth
+            shasum -a256 ./build/bin/geth > bor2.sha256
+            if ! cmp -s bor1.sha256 bor2.sha256; then
+              echo >&2 "Reproducible build broken"; cat bor1.sha256; cat bor2.sha256; exit 1
+            fi
+
+        - name: Lint
+          if: runner.os == 'Linux'
+          uses: golangci/golangci-lint-action@v3
+          with:
+            version: v1.46
+            skip-pkg-cache: true
+            skip-build-cache: true
+
+        - name: Test
+          run: make test
+
+        - name: Data race tests
+          run: make test-race
