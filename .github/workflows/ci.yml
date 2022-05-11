@@ -61,3 +61,6 @@ jobs:
 
         - name: Data race tests
           run: make test-race
+
+        - name: test-integration
+          run: make test-integration 
