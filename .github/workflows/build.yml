@@ -1,20 +1,21 @@
-name: "Release new artifacts"
+name: "Build new artifacts"
 
 on:
-  release:
-    types:
-      - created
+  pull_request:
+    branches:
+      - 'debank'
   workflow_dispatch:
 
 env:
   BUILT_BINARY_PATH: build/bin
   BUILT_BINARY_NAME: geth
+  ARCHIVE_FILE_NAME: eth-latest-linux-amd64
   ARCHIVE_BUCKET: debank-build-artifacts
   ARCHIVE_FILE_PREFIX: downloads/ethereum
   AWS_REGION: ap-northeast-1
 
 jobs:
-  release-artifacts:
+  build-artifacts:
     runs-on: [self-hosted, general]
     steps:
       - name: Install Go
@@ -40,7 +41,7 @@ jobs:
 
       - name: Set env
         run: |
-          echo "ARCHIVE_FILE_NAME=eth-${GITHUB_REF#refs/*/}-linux-amd64" >> $GITHUB_ENV
+          echo "ARCHIVE_FILE_NAME=eth-$(git rev-parse --short HEAD)-linux-amd64" >> $GITHUB_ENV
 
       - name: Archive artifacts
         run: |
@@ -59,3 +60,12 @@ jobs:
       - name: Copy artifacts to s3
         run: |
           aws s3 cp $ARCHIVE_FILE_NAME.tar.gz s3://$ARCHIVE_BUCKET/$ARCHIVE_FILE_PREFIX/$ARCHIVE_FILE_NAME.tar.gz --acl public-read
+
+      - name: comment PR
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          msg: "Artifacts uploaded, click or copy [this link](https://${{ env.ARCHIVE_BUCKET }}.s3.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ARCHIVE_FILE_PREFIX }}/${{ env.ARCHIVE_FILE_NAME }}.tar.gz) to download. :tada:"
+          check_for_duplicate_msg: true
+        continue-on-error: true
