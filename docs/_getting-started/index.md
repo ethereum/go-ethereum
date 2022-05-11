@@ -263,7 +263,7 @@ web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"), "ethe
 
 ```
 
-There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 1<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that received faucet funds):
+There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 10<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that received faucet funds):
 
 ```terminal
 
@@ -452,7 +452,7 @@ This requires approval in Clef. Once approved, the following information is retu
 
 ### Sending Transactions
 
-Sending a transaction between accounts can also be achieved using Curl. Notice that the value of the transaction is a hexadecimal string in units of Wei. To transfer 0.1 ether, it is first necessary to convert this to Wei by multiplying by 1<sup>18</sup> then converting to hex. 0.1 ether is `"0x16345785d8a0000"` in hex. As before, update the `to` and `from` fields with the addresses in the Clef keystore.  
+Sending a transaction between accounts can also be achieved using Curl. Notice that the value of the transaction is a hexadecimal string in units of Wei. To transfer 0.1 ether, it is first necessary to convert this to Wei by multiplying by 10<sup>18</sup> then converting to hex. 0.1 ether is `"0x16345785d8a0000"` in hex. As before, update the `to` and `from` fields with the addresses in the Clef keystore.  
 
 
 ```shell
