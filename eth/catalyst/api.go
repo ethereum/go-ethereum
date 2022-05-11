@@ -176,6 +176,14 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return beacon.STATUS_INVALID, errors.New("safe head not canonical")
 		}
 	}
+
+	valid := func(id *beacon.PayloadID) beacon.ForkChoiceResponse {
+		return beacon.ForkChoiceResponse{
+			PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &update.HeadBlockHash},
+			PayloadID:     id,
+		}
+	}
+
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
@@ -186,25 +194,15 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
-			return api.validForkChoiceResponse(nil), err // valid setHead, invalid payload
+			return valid(nil), err // valid setHead, invalid payload
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
 		api.localBlocks.put(id, data)
 
 		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
-		return api.validForkChoiceResponse(&id), nil
+		return valid(&id), nil
 	}
-	return api.validForkChoiceResponse(nil), nil
-}
-
-// validForkChoiceResponse returns the ForkChoiceResponse{VALID}
-// with the latest valid hash and an optional payloadID.
-func (api *ConsensusAPI) validForkChoiceResponse(id *beacon.PayloadID) beacon.ForkChoiceResponse {
-	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
-	return beacon.ForkChoiceResponse{
-		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},
-		PayloadID:     id,
-	}
+	return valid(nil), nil
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against
