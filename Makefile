@@ -17,7 +17,9 @@ PACKAGE = github.com/ethereum/go-ethereum
 GO_FLAGS += -trimpath -buildvcs=false
 GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
 
-GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1 $$(go list ./... | grep -v go-ethereum/cmd/) -shuffle=on
+TESTALL = $$(go list ./... | grep -v go-ethereum/cmd/)
+TESTE2E = ./tests/...
+GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1
 
 bor:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -55,13 +57,13 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test:
-	$(GOTEST) --timeout 5m -cover -coverprofile=cover.out
+	$(GOTEST) --timeout 5m -shuffle=on -cover -coverprofile=cover.out $(TESTALL)
 
 test-race:
-	$(GOTEST) --timeout 15m -race
+	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
 
 test-integration:
-	$(GOTEST) --timeout 30m -tags integration
+	$(GOTEST) --timeout 30m -tags integration -count=1 $(TESTE2E) 
 
 escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
