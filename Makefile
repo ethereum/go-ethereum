@@ -66,8 +66,16 @@ test-integration:
 escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
 
-lint: ## Run linters.
-	$(GORUN) build/ci.go lint
+lint:
+	@./build/bin/golangci-lint run --config ./.golangci.yml
+
+lintci:
+	@echo "--> Running linter for code"
+	@./build/bin/golangci-lint run --config ./.golangci.yml
+
+lintci-deps:
+	rm -f ./build/bin/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
 
 clean:
 	env GO111MODULE=on go clean -cache

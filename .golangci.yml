@@ -8,6 +8,8 @@ run:
   skip-dirs-use-default: true
   skip-files:
     - core/genesis_alloc.go
+    - gen_.*.go
+    - .*_gen.go
 
 linters:
   disable-all: true
@@ -27,9 +29,70 @@ linters:
 linters-settings:
   gofmt:
     simplify: true
+    auto-fix: false
   goconst:
     min-len: 3 # minimum length of string constant
-    min-occurrences: 6 # minimum number of occurrences
+    min-occurrences: 2 # minimum number of occurrences
+
+  gocritic:
+    # Which checks should be enabled; can't be combined with 'disabled-checks';
+    # See https://go-critic.github.io/overview#checks-overview
+    # To check which checks are enabled run `GL_DEBUG=gocritic ./build/bin/golangci-lint run`
+    # By default list of stable checks is used.
+    enabled-checks:
+      - badLock
+      - filepathJoin	
+      - sortSlice
+      - sprintfQuotedString
+      - syncMapLoadAndDelete
+      - weakCond
+      - boolExprSimplify
+      - httpNoBody
+      - ioutilDeprecated
+      - nestingReduce
+      - preferFilepathJoin
+      - redundantSprint
+      - stringConcatSimplify
+      - timeExprSimplify
+      - typeAssertChain
+      - yodaStyleExpr
+      - truncateCmp
+      - equalFold
+      - preferDecodeRune
+      - preferFprint
+      - preferStringWriter
+      - preferWriteByte
+      - sliceClear
+      #- ruleguard
+
+    # Which checks should be disabled; can't be combined with 'enabled-checks'; default is empty
+    disabled-checks:
+      - regexpMust
+      - exitAfterDefer
+      - dupBranchBody
+      - singleCaseSwitch
+      - unlambda
+      - captLocal
+      - commentFormatting
+      - ifElseChain
+      - importShadow
+      - builtinShadow
+
+    # Enable multiple checks by tags, run `GL_DEBUG=gocritic golangci-lint run` to see all tags and checks.
+    # Empty list by default. See https://github.com/go-critic/go-critic#usage -> section "Tags".
+    enabled-tags:
+      - performance
+      - diagnostic
+      - opinionated
+      - style
+    disabled-tags:
+      - experimental
+  govet:
+    disable:
+      - deepequalerrors
+      - fieldalignment
+      - shadow
+      - unsafeptr
 
 issues:
   exclude-rules:
@@ -48,3 +111,24 @@ issues:
     - path: cmd/faucet/
       linters:
         - deadcode
+    # Exclude some linters from running on tests files.
+    - path: test\.go
+      linters:
+        - gosec
+        - unused
+        - deadcode
+        - gocritic
+    - path: cmd/devp2p
+      linters:
+        - gosec
+        - unused
+        - deadcode
+        - gocritic
+    - path: metrics/sample\.go
+      linters:
+        - gosec
+        - gocritic
+    - path: p2p/simulations
+      linters:
+        - gosec
+        - gocritic

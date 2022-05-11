@@ -23,10 +23,12 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
+	github.com/go-critic/go-critic v0.6.3 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.0 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-stack/stack v1.8.0
+	github.com/go-toolsmith/astcopy v1.0.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.3.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
@@ -59,6 +61,8 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/prometheus/tsdb v0.7.1
+	github.com/quasilyte/gogrep v0.0.0-20220429205452-5e2753ee08f9 // indirect
+	github.com/quasilyte/regex/syntax v0.0.0-20210819130434-b3f0c404a727 // indirect
 	github.com/rjeczalik/notify v0.9.1
 	github.com/rs/cors v1.7.0
 	github.com/ryanuber/columnize v2.1.2+incompatible
@@ -72,12 +76,13 @@ require (
 	go.opentelemetry.io/otel v1.2.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.2.0
 	go.opentelemetry.io/otel/sdk v1.2.0
-	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
+	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210816183151-1e6c022a8912
+	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
-	golang.org/x/tools v0.1.0
+	golang.org/x/tools v0.1.10
+	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	google.golang.org/grpc v1.42.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
