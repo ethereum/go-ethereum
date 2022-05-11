@@ -17,7 +17,7 @@ PACKAGE = github.com/ethereum/go-ethereum
 GO_FLAGS += -trimpath -buildvcs=false
 GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
 
-GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1 ./... -shuffle=on
+GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1 $$(go list ./... | grep -v go-ethereum/cmd/) -shuffle=on
 
 bor:
 	$(GORUN) build/ci.go install ./cmd/geth
