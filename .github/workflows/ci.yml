@@ -49,6 +49,15 @@ jobs:
         #       echo >&2 "Reproducible build broken"; cat bor1.sha256; cat bor2.sha256; exit 1
         #     fi
 
+        - name: Test
+          run: make test
+
+        - name: Data race tests
+          run: make test-race
+
+        - name: test-integration
+          run: make test-integration
+
         - name: Lint
           if: runner.os == 'Linux'
           uses: golangci/golangci-lint-action@v3
@@ -57,12 +66,3 @@ jobs:
             skip-pkg-cache: true
             skip-build-cache: true
             only-new-issues: true
-
-        - name: Test
-          run: make test
-
-        - name: Data race tests
-          run: make test-race
-
-        - name: test-integration
-          run: make test-integration 
