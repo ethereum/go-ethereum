@@ -638,12 +638,6 @@ func convertToVerkle(ctx *cli.Context) error {
 		root = headBlock.Root()
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
-	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
-	if err != nil {
-		log.Error("Failed to open trie", "root", root, "error", err)
-		return err
-	}
 	var (
 		accounts   int
 		lastReport time.Time
@@ -672,12 +666,22 @@ func convertToVerkle(ctx *cli.Context) error {
 	}
 
 	vRoot := verkle.New()
-	accIter := trie.NewIterator(t.NodeIterator(nil))
-	for accIter.Next() {
+
+	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, root, false, false, false)
+	if err != nil {
+		return err
+	}
+	accIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIt.Release()
+
+	for accIt.Next() {
 		accounts += 1
 
 		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accIter.Value, &acc); err != nil {
+		if err := rlp.DecodeBytes(accIt.Account(), &acc); err != nil {
 			log.Error("Invalid account encountered during traversal", "error", err)
 			return err
 		}
@@ -688,8 +692,8 @@ func convertToVerkle(ctx *cli.Context) error {
 		for i, b := range acc.Balance.Bytes() {
 			balance[len(acc.Balance.Bytes())-1-i] = b
 		}
-		// XXX use preimages, accIter is the hash of the address
-		versionkey := trieUtils.GetTreeKeyVersion(accIter.Key[:])
+		// XXX use preimages, accItis the hash of the address
+		versionkey := trieUtils.GetTreeKeyVersion(accIt.Hash().Bytes())
 		vRoot.Insert(versionkey, version[:], convdb.Get)
 		var balanceKey [32]byte
 		copy(balanceKey[:31], versionkey[:31])
@@ -717,7 +721,7 @@ func convertToVerkle(ctx *cli.Context) error {
 			laststem := make([]byte, 31)
 			copy(laststem, versionkey[:31])
 			for i, chunk := range chunks {
-				chunkkey := trieUtils.GetTreeKeyCodeChunk(accIter.Key[:], uint256.NewInt(uint64(i)))
+				chunkkey := trieUtils.GetTreeKeyCodeChunk(accIt.Hash().Bytes(), uint256.NewInt(uint64(i)))
 
 				// if this chunk is inserted into a new group, and the previous group isn't
 				// that of the account header, flush the previous group.
@@ -742,14 +746,12 @@ func convertToVerkle(ctx *cli.Context) error {
 		if acc.Root != emptyRoot {
 			laststem := make([]byte, 31)
 			copy(laststem, versionkey[:31])
-			storageTrie, err := trie.NewSecure(acc.Root, triedb)
+			storageIt, err := snaptree.StorageIterator(root, acc.Root, common.Hash{})
 			if err != nil {
-				log.Error("Failed to open storage trie", "root", acc.Root, "error", err)
-				return err
+				panic(err)
 			}
-			storageIter := trie.NewIterator(storageTrie.NodeIterator(nil))
-			for storageIter.Next() {
-				slotkey := trieUtils.GetTreeKeyStorageSlot(accIter.Key, uint256.NewInt(0).SetBytes(storageIter.Key))
+			for storageIt.Next() {
+				slotkey := trieUtils.GetTreeKeyStorageSlot(accIt.Hash().Bytes(), uint256.NewInt(0).SetBytes(storageIt.Hash().Bytes()))
 
 				// if this slot is inserted into a new group, and the previous group isn't
 				// that of the account header, flush the previous group.
@@ -761,7 +763,7 @@ func convertToVerkle(ctx *cli.Context) error {
 					laststem = slotkey[:31]
 				}
 				var value [32]byte
-				copy(value[:len(storageIter.Value)-1], storageIter.Value)
+				copy(value[:len(storageIt.Slot())-1], storageIt.Slot())
 				// XXX use preimages, accIter is the hash of the address
 				err = vRoot.Insert(slotkey, value[:], convdb.Get)
 				if err != nil {
@@ -773,9 +775,9 @@ func convertToVerkle(ctx *cli.Context) error {
 			if !bytes.Equal(laststem, versionkey[:31]) {
 				vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
 			}
-			if storageIter.Err != nil {
-				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIter.Err)
-				return storageIter.Err
+			if storageIt.Error() != nil {
+				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIt.Error())
+				return storageIt.Error()
 			}
 		}
 
@@ -787,9 +789,9 @@ func convertToVerkle(ctx *cli.Context) error {
 			flushIfNeeded(vRoot, saveverkle)
 		}
 	}
-	if accIter.Err != nil {
-		log.Error("Failed to compute commitment", "root", root, "error", accIter.Err)
-		return accIter.Err
+	if accIt.Error() != nil {
+		log.Error("Failed to compute commitment", "root", root, "error", accIt.Error())
+		return accIt.Error()
 	}
 	log.Info("Conversion complete", "root commitment", vRoot.ComputeCommitment(), "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
