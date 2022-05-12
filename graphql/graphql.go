@@ -65,6 +65,8 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 		*b = Long(input)
 	case int64:
 		*b = Long(input)
+	case float64:
+		*b = Long(input)
 	default:
 		err = fmt.Errorf("unexpected type %T for Long", input)
 	}
