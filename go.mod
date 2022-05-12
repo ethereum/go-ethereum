@@ -60,6 +60,7 @@ require (
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
+	github.com/polyfloyd/go-errorlint v0.0.0-20220510153142-36539f2bdac3 // indirect
 	github.com/prometheus/tsdb v0.7.1
 	github.com/quasilyte/gogrep v0.0.0-20220429205452-5e2753ee08f9 // indirect
 	github.com/quasilyte/regex/syntax v0.0.0-20210819130434-b3f0c404a727 // indirect

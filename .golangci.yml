@@ -24,7 +24,6 @@ linters:
     - durationcheck
     - errchkjson
     - errname
-    - errorlint
     - exhaustive
     - exportloopref
     - gocognit
@@ -50,6 +49,7 @@ linters:
     - unconvert
     - unparam
     - wsl
+    #- errorlint causes stack overflow. TODO: recheck after each golangci update
 
 linters-settings:
   gofmt:
@@ -180,3 +180,7 @@ issues:
       linters:
         - gosec
         - gocritic
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  #new: true
+  new-from-rev: origin/master
