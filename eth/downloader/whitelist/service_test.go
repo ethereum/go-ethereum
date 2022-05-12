@@ -1,9 +1,12 @@
 package whitelist
 
 import (
+	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"gotest.tools/assert"
 )
 
@@ -29,4 +32,65 @@ func TestWhitelistCheckpoint(t *testing.T) {
 	s.EnqueueCheckpointWhitelist(11, common.Hash{})
 	s.DequeueCheckpointWhitelist()
 	assert.Equal(t, len(s.GetCheckpointWhitelist()), 10, "expected 10 items in whitelist")
+}
+
+// TestIsValidChain checks che IsValidChain function in isolation
+// for different cases by providing a mock fetchHeadersByNumber function
+func TestIsValidChain(t *testing.T) {
+	t.Parallel()
+
+	s := NewMockService(10)
+
+	// case1: no checkpoint whitelist, should consider the chain as valid
+	res, err := s.IsValidChain(nil, nil)
+	assert.Equal(t, res, true, "expected chain to be valid")
+	assert.NilError(t, err, "expected no error")
+
+	// add checkpoint entries and mock fetchHeadersByNumber function
+	s.ProcessCheckpoint(uint64(0), common.Hash{})
+	s.ProcessCheckpoint(uint64(1), common.Hash{})
+	assert.Equal(t, len(s.GetCheckpointWhitelist()), 2, "expected 2 items in whitelist")
+
+	// create a false function, returning absolutely nothing
+	falseFetchHeadersByNumber := func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+		return nil, nil, nil
+	}
+
+	// create a mock function, returning a the required header
+	fetchHeadersByNumber := func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+		hash := common.Hash{}
+		header := types.Header{Number: big.NewInt(0)}
+		switch number {
+		case 0:
+			return []*types.Header{&header}, []common.Hash{hash}, nil
+		case 1:
+			header.Number = big.NewInt(1)
+			return []*types.Header{&header}, []common.Hash{hash}, nil
+		case 2:
+			header.Number = big.NewInt(1) // sending wrong header for misamatch
+			return []*types.Header{&header}, []common.Hash{hash}, nil
+		default:
+			return nil, nil, errors.New("invalid number")
+		}
+	}
+
+	// case2: false fetchHeadersByNumber function provided, should consider the chain as valid
+	res, err = s.IsValidChain(nil, falseFetchHeadersByNumber)
+	assert.Equal(t, res, true, "expected chain to be valid")
+	assert.NilError(t, err, "expected no error")
+
+	// case3: correct fetchHeadersByNumber function provided, should consider the chain as valid
+	res, err = s.IsValidChain(nil, fetchHeadersByNumber)
+	assert.Equal(t, res, true, "expected chain to be valid")
+	assert.NilError(t, err, "expected no error")
+
+	// add one more checkpoint whitelist entry
+	s.ProcessCheckpoint(uint64(2), common.Hash{})
+	assert.Equal(t, len(s.GetCheckpointWhitelist()), 3, "expected 3 items in whitelist")
+
+	// case4: correct fetchHeadersByNumber function provided with wrong header
+	// for block number 2. Should consider the chain as invalid and throw an error
+	res, err = s.IsValidChain(nil, fetchHeadersByNumber)
+	assert.Equal(t, res, false, "expected chain to be invalid")
+	assert.Equal(t, err, ErrCheckpointMismatch, "expected checkpoint mismatch error")
 }

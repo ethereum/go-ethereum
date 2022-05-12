@@ -38,7 +38,7 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 	// Check for availaibility of the last checkpointed block.
 	// This can be also be empty if our heimdall is not responsing
 	// or we're running without it.
-	if len(w.checkpointWhitelist) <= 0 {
+	if len(w.checkpointWhitelist) == 0 {
 		// worst case, we don't have the checkpoints in memory
 		return true, nil
 	}
