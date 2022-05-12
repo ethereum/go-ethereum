@@ -188,18 +188,28 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
-		log.Info("Creating new payload for sealing")
-		start := time.Now()
-
-		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
+		// Create an empty block
+		emptyBlock, err := api.createEmptyBlock(update.HeadBlockHash, payloadAttributes)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
 			return valid(nil), err // valid setHead, invalid payload
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, data)
+		api.localBlocks.put(id, emptyBlock)
+		// Now start the real block production async
+		go func() {
+			log.Info("Creating new payload for sealing")
+			start := time.Now()
+			data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
+			if err != nil {
+				log.Error("Failed to create sealing payload", "err", err)
+			}
 
-		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
+			id := computePayloadId(update.HeadBlockHash, payloadAttributes)
+			api.localBlocks.put(id, data)
+			log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
+		}()
+
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -341,6 +351,17 @@ func (api *ConsensusAPI) invalid(err error) beacon.PayloadStatusV1 {
 func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
 	log.Info("Producing block", "parentHash", parentHash)
 	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
+	if err != nil {
+		return nil, err
+	}
+	return beacon.BlockToExecutableData(block), nil
+}
+
+// createEmptyBlock creates a new empty block and returns the "execution
+// data" required for beacon clients to process the new block.
+func (api *ConsensusAPI) createEmptyBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
+	log.Info("Producing empty block", "parentHash", parentHash)
+	block, err := api.eth.Miner().GetEmptyBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
 	if err != nil {
 		return nil, err
 	}

@@ -246,3 +246,20 @@ func (miner *Miner) GetSealingBlock(parent common.Hash, timestamp uint64, coinba
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
+
+func (miner *Miner) GetEmptyBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*types.Block, error) {
+	params := &generateParams{
+		timestamp:  timestamp,
+		forceTime:  true,
+		parentHash: parent,
+		coinbase:   coinbase,
+		random:     random,
+		noUncle:    true,
+		noExtra:    true,
+	}
+	work, err := miner.worker.prepareWork(params)
+	if err != nil {
+		return nil, err
+	}
+	return miner.worker.engine.FinalizeAndAssemble(miner.worker.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+}
