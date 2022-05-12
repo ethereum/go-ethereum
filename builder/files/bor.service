@@ -24,7 +24,7 @@
     # -miner.etherbase [VALIDATOR ADDRESS] \
     # -mine
   Type=simple
-  User=root
+  User=ubuntu
   KillSignal=SIGINT
   TimeoutStopSec=120
 
