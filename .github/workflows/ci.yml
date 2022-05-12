@@ -22,7 +22,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v3
-        - run: git submodule update --init --recursive --force
+        - run: |
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
         - uses: actions/setup-go@v3
           with:
             go-version: 1.18.x
@@ -54,14 +56,13 @@ jobs:
         #       echo >&2 "Reproducible build broken"; cat bor1.sha256; cat bor2.sha256; exit 1
         #     fi
 
+        - name: Golang-ci install
+          if: runner.os == 'Linux'
+          run: make lintci-deps
+
         - name: Lint
           if: runner.os == 'Linux'
-          uses: golangci/golangci-lint-action@v3
-          with:
-            version: v1.46
-            skip-pkg-cache: true
-            skip-build-cache: true
-            only-new-issues: true
+          run: make lint
 
         - name: Test
           run: make test
