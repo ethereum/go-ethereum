@@ -679,11 +679,9 @@ func convertToVerkle(ctx *cli.Context) error {
 
 	for accIt.Next() {
 		accounts += 1
-
-		var acc types.StateAccount
-		if err := rlp.DecodeBytes(accIt.Account(), &acc); err != nil {
-			log.Error("Invalid account encountered during traversal", "error", err)
-			return err
+		acc, err := snapshot.FullAccount(accIt.Account())
+		if err != nil {
+			panic(err)
 		}
 
 		// Store the basic account data
@@ -732,8 +730,8 @@ func convertToVerkle(ctx *cli.Context) error {
 		}
 
 		// Save every slot into the tree
-		if acc.Root != emptyRoot {
-			storageIt, err := snaptree.StorageIterator(root, acc.Root, common.Hash{})
+		if !bytes.Equal(acc.Root, emptyRoot[:]) {
+			storageIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 			if err != nil {
 				panic(err)
 			}
