@@ -327,13 +327,25 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 
 ## Reusing --datadir
 
-This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create a persistent blockchain that can be restarted across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode. However, if there is already an account in Geth's keystore, Geth will not start because it cannot automatically unlock that existing account. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
+This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode. 
+
+```shell
+
+geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org"
+
+```
+
+## Re-using accounts
+
+Geth will fail to start in dev-mode if keys have been manually created or imported into the keystore in the `--datadir` directory. This is because the account cannot be automatically unlocked. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
 
 ```shell
 
 geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
 
 ```
+**Note** that this is an edge-case that applies when both the `--datadir` and `--dev` flags are used and a key has been manually created or imported into the keystore.
+
 
 
 ## Summary
