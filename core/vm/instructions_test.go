@@ -305,9 +305,9 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	}
 
 	for i, arg := range args {
-		origArg := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
-		if !origArg.Eq(intArgs[i]) {
-			bench.Fatalf("input #%d mutated", i)
+		want := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
+		if have:= intArgs[i]; !want.Eq(have) {
+			bench.Fatalf("input #%d mutated, have %x want %x", i, have, want)
 		}
 	}
 }
