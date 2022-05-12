@@ -718,20 +718,9 @@ func convertToVerkle(ctx *cli.Context) error {
 			if err != nil {
 				panic(err)
 			}
-			laststem := make([]byte, 31)
-			copy(laststem, versionkey[:31])
 			for i, chunk := range chunks {
 				chunkkey := trieUtils.GetTreeKeyCodeChunk(accIt.Hash().Bytes(), uint256.NewInt(uint64(i)))
 
-				// if this chunk is inserted into a new group, and the previous group isn't
-				// that of the account header, flush the previous group.
-				if !bytes.Equal(laststem, chunkkey[:31]) {
-					if !bytes.Equal(laststem, versionkey[:31]) {
-						vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
-					}
-
-					laststem = chunkkey[:31]
-				}
 				vRoot.Insert(chunkkey, chunk[:], convdb.Get)
 			}
 			var size [32]byte
@@ -744,8 +733,6 @@ func convertToVerkle(ctx *cli.Context) error {
 
 		// Save every slot into the tree
 		if acc.Root != emptyRoot {
-			laststem := make([]byte, 31)
-			copy(laststem, versionkey[:31])
 			storageIt, err := snaptree.StorageIterator(root, acc.Root, common.Hash{})
 			if err != nil {
 				panic(err)
@@ -753,15 +740,6 @@ func convertToVerkle(ctx *cli.Context) error {
 			for storageIt.Next() {
 				slotkey := trieUtils.GetTreeKeyStorageSlot(accIt.Hash().Bytes(), uint256.NewInt(0).SetBytes(storageIt.Hash().Bytes()))
 
-				// if this slot is inserted into a new group, and the previous group isn't
-				// that of the account header, flush the previous group.
-				if !bytes.Equal(laststem, slotkey[:31]) {
-					if !bytes.Equal(laststem, versionkey[:31]) {
-						vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
-					}
-
-					laststem = slotkey[:31]
-				}
 				var value [32]byte
 				copy(value[:len(storageIt.Slot())-1], storageIt.Slot())
 				// XXX use preimages, accIter is the hash of the address
@@ -772,16 +750,12 @@ func convertToVerkle(ctx *cli.Context) error {
 
 				flushIfNeeded(vRoot, saveverkle)
 			}
-			if !bytes.Equal(laststem, versionkey[:31]) {
-				vRoot.(*verkle.InternalNode).FlushStem(laststem, saveverkle)
-			}
 			if storageIt.Error() != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIt.Error())
 				return storageIt.Error()
 			}
 		}
 
-		vRoot.(*verkle.InternalNode).FlushStem(versionkey[:31], saveverkle)
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
