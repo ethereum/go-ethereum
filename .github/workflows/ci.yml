@@ -74,3 +74,8 @@ jobs:
 
         - name: test-integration
           run: make test-integration
+        
+        - name: Upload coverage to Codecov
+          uses: codecov/codecov-action@v1
+          with:
+            file: ./cover.out
