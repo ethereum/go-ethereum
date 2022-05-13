@@ -77,6 +77,8 @@ func openTSDB(c *OpenTSDBConfig) error {
 			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
 		case GaugeFloat64:
 			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
+		case GaugeInfo:
+			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.ValueJsonString(), shortHostname)
 		case Histogram:
 			h := metric.Snapshot()
 			ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})

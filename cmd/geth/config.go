@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
+	"strconv"
 	"unicode"
 
 	"github.com/urfave/cli/v2"
@@ -35,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -160,6 +163,24 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
 	applyMetricConfig(ctx, &cfg)
+
+	// Create Info Gauge with geth system and build information
+	gethInfoGauge := metrics.NewRegisteredGaugeInfo("geth/info", nil)
+	protocolVersions := ""
+	for idx, val := range eth.ProtocolVersions {
+		protocolVersions += strconv.FormatUint(uint64(val), 10)
+		if idx < len(eth.ProtocolVersions)-1 {
+			protocolVersions += ","
+		}
+	}
+	gethInfo := metrics.GaugeInfoValue{
+		metrics.NewGaugeInfoEntry("version", params.VersionWithMeta),
+		metrics.NewGaugeInfoEntry("arch", runtime.GOARCH),
+		metrics.NewGaugeInfoEntry("os", runtime.GOOS),
+		metrics.NewGaugeInfoEntry("commit", gitCommit),
+		metrics.NewGaugeInfoEntry("protocol_versions", protocolVersions),
+	}
+	gethInfoGauge.Update(gethInfo)
 
 	return stack, cfg
 }

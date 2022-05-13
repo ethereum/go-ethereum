@@ -51,6 +51,8 @@ func Handler(reg metrics.Registry) http.Handler {
 				c.addGauge(name, m.Snapshot())
 			case metrics.GaugeFloat64:
 				c.addGaugeFloat64(name, m.Snapshot())
+			case metrics.GaugeInfo:
+				c.addGaugeInfo(name, m.Snapshot())
 			case metrics.Histogram:
 				c.addHistogram(name, m.Snapshot())
 			case metrics.Meter:

@@ -32,6 +32,16 @@ func TestCollector(t *testing.T) {
 	gaugeFloat64.Update(34567.89)
 	c.addGaugeFloat64("test/gauge_float64", gaugeFloat64)
 
+	gaugeInfo := metrics.NewGaugeInfo()
+	gaugeInfo.Update(metrics.GaugeInfoValue{
+		metrics.NewGaugeInfoEntry("version", "1.10.18-unstable"),
+		metrics.NewGaugeInfoEntry("arch", "amd64"),
+		metrics.NewGaugeInfoEntry("os", "linux"),
+		metrics.NewGaugeInfoEntry("commit", "7caa2d8163ae3132c1c2d6978c76610caee2d949"),
+		metrics.NewGaugeInfoEntry("protocol_versions", "64 65 66"),
+	})
+	c.addGaugeInfo("geth/info", gaugeInfo)
+
 	histogram := metrics.NewHistogram(&metrics.NilSample{})
 	c.addHistogram("test/histogram", histogram)
 
@@ -73,6 +83,9 @@ test_gauge 23456
 
 # TYPE test_gauge_float64 gauge
 test_gauge_float64 34567.89
+
+# TYPE geth_info gauge
+geth_info {version="1.10.18-unstable", arch="amd64", os="linux", commit="7caa2d8163ae3132c1c2d6978c76610caee2d949", protocol_versions="64 65 66"} 1 
 
 # TYPE test_histogram_count counter
 test_histogram_count 0
