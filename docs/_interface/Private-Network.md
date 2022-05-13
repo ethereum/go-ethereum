@@ -158,11 +158,11 @@ The modification to `genesis.json` is as follows:
 ```json
 {
   "config": {
-    ...
+  
     "istanbulBlock": 40000,
-    ...
+    
   },
-  ...
+  
 }
 ```
 
@@ -333,18 +333,6 @@ This should be repeated for both nodes. The following will be returned to the te
 
 ```terminal
 
-INFO [05-13|15:41:42.700] Maximum peer count                       ETH=50 LES=0 total=50
-INFO [05-13|15:41:42.700] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
-INFO [05-13|15:41:42.701] Set global gas cap                       cap=50,000,000
-INFO [05-13|15:41:42.701] Allocated cache and file handles         database=/home/go-ethereum/node1/geth/chaindata cache=16.00MiB handles=16
-INFO [05-13|15:41:42.725] Writing custom genesis block 
-INFO [05-13|15:41:42.726] Persisted trie from memory database      nodes=3 size=397.00B time="45.811µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [05-13|15:41:42.726] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
-INFO [05-13|15:41:42.726] Allocated cache and file handles         database=/home/joe/go-ethereum/node1/geth/lightchaindata cache=16.00MiB handles=16
-INFO [05-13|15:41:42.740] Writing custom genesis block 
-INFO [05-13|15:41:42.742] Persisted trie from memory database      nodes=3 size=397.00B time="93.45µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [05-13|15:41:42.742] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
-joe@joe-ThinkPad-T470p:~/go-ethereum$ ./geth init --datadir node2 genesis.json
 INFO [05-13|15:41:47.520] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [05-13|15:41:47.520] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
 INFO [05-13|15:41:47.520] Set global gas cap                       cap=50,000,000
@@ -356,7 +344,6 @@ INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/hom
 INFO [05-13|15:41:47.556] Writing custom genesis block 
 INFO [05-13|15:41:47.557] Persisted trie from memory database      nodes=3 size=397.00B time="81.801µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
-
 
 ```
 
@@ -383,7 +370,7 @@ The choice of port passed to `-addr` is arbitrary, but public Ethereum networks 
 enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305
 Note: you're using cmd/bootnode, a developer tool.
 We recommend using a regular node as bootstrap node for production deployments.
-INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=<nil> udp=0 tcp=0
+INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
 
 ```
 
@@ -404,7 +391,7 @@ INFO [05-13|16:17:40.061] Set global gas cap                       cap=50,000,00
 INFO [05-13|16:17:40.061] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
 INFO [05-13|16:17:40.061] Allocated cache and file handles         database=/home/go-ethereum/node1/geth/chaindata cache=512.00MiB handles=524,288
 INFO [05-13|16:17:40.094] Opened ancient database                  database=/home/go-ethereum/node1/geth/chaindata/ancient readonly=false
-INFO [05-13|16:17:40.095] Initialised chain configuration          config="{ChainID: 123454321 Homestead: 0 DAO: <nil> DAOSupport: false EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: <nil>, Muir Glacier: <nil>, Berlin: <nil>, London: <nil>, Arrow Glacier: <nil>, MergeFork: <nil>, Terminal TD: <nil>, Engine: clique}"
+INFO [05-13|16:17:40.095] Initialised chain configuration          config="{ChainID: 123454321 Homestead: 0 DAO: nil DAOSupport: false EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: nil, Muir Glacier: nil, Berlin: nil, London: nil, Arrow Glacier: nil, MergeFork: nil, Terminal TD: nil, Engine: clique}"
 INFO [05-13|16:17:40.096] Initialising Ethereum protocol           network=123,454,321 dbversion=8
 INFO [05-13|16:17:40.098] Loaded most recent local header          number=0 hash=c9a158..d415a0 td=1 age=53y1mo2w
 INFO [05-13|16:17:40.098] Loaded most recent local full block      number=0 hash=c9a158..d415a0 td=1 age=53y1mo2w
@@ -432,7 +419,7 @@ In the first terminal that is currently running the logs resembling the followin
 
 ```terminal
 
-INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=<nil> udp=0 tcp=0
+INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
 TRACE[05-13|16:15:49.228] << PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:49.229] >> PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:49.229] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
@@ -450,7 +437,6 @@ TRACE[05-13|16:15:51.232] >> NEIGHBORS/v4                          id=f1364e6d06
 TRACE[05-13|16:15:52.591] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:52.591] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:57.767] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-
 
 ```
 
@@ -474,6 +460,7 @@ net.peerCount
 The details of this peer can also be queried and used to check that the peer really is Node 2:
 
 ```
+
 admin.peers
 
 ```
@@ -506,7 +493,6 @@ This should return the following:
     }
 }]
 
-
 ```
 
 The account associated with Node 1 was supposed to be funded with some ether at the chain genesis. This can be checked easily using `eth.getBalance()`:
@@ -521,7 +507,6 @@ This account can then be unlocked and some ether sent to Node 2, using the follo
 
 
 ```javascript
-
 // unlock account
 personal.unlock(eth.accounts[0])
 
@@ -538,4 +523,4 @@ The same steps can then be repeated to attach a console to Node 2.
 
 ## Summary
 
-This page explored the various options for configuring a local provate network. A step by step guide showed how to set up and launch a private network, unlock the associated accounts, attach a console to check the network status and make some basic interactions.
+This page explored the various options for configuring a local private network. A step by step guide showed how to set up and launch a private network, unlock the associated accounts, attach a console to check the network status and make some basic interactions.
