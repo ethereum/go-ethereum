@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - "master"
-    types: [synchronize, closed]
+    types: [opened, synchronize, closed]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
