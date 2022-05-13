@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - master
-    types: [opened, synchronize, closed]
+    types: [closed]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   tests:
-    if: (!(github.event.action == 'closed' && github.event.pull_request.merged != true))
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
         os: [ ubuntu-20.04, macos-11 ] # list of os: https://github.com/actions/virtual-environments
