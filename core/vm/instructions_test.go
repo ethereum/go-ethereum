@@ -303,10 +303,11 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 		op(&pc, evmInterpreter, scope)
 		stack.pop()
 	}
+	bench.StopTimer()
 
 	for i, arg := range args {
 		want := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
-		if have:= intArgs[i]; !want.Eq(have) {
+		if have := intArgs[i]; !want.Eq(have) {
 			bench.Fatalf("input #%d mutated, have %x want %x", i, have, want)
 		}
 	}
