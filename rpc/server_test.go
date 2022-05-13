@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,7 +71,7 @@ func TestServer(t *testing.T) {
 
 func runTestScript(t *testing.T, file string) {
 	server := newTestServer()
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}

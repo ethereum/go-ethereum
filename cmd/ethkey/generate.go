@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -116,7 +115,7 @@ If you want to encrypt an existing private key, it can be specified by setting
 		if err := os.MkdirAll(filepath.Dir(keyfilepath), 0700); err != nil {
 			utils.Fatalf("Could not create directory %s", filepath.Dir(keyfilepath))
 		}
-		if err := ioutil.WriteFile(keyfilepath, keyjson, 0600); err != nil {
+		if err := os.WriteFile(keyfilepath, keyjson, 0600); err != nil {
 			utils.Fatalf("Failed to write keyfile to %s: %v", keyfilepath, err)
 		}
 

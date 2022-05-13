@@ -17,7 +17,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -76,7 +76,7 @@ func TestCustomGenesis(t *testing.T) {
 
 		// Initialize the data directory with the custom genesis block
 		json := filepath.Join(datadir, "genesis.json")
-		if err := ioutil.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
+		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
 		}
 		runGeth(t, "--datadir", datadir, "init", json).WaitExit()

@@ -17,13 +17,12 @@
 package rawdb
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func TestReadWriteFreezerTableMeta(t *testing.T) {
-	f, err := ioutil.TempFile(os.TempDir(), "*")
+	f, err := os.CreateTemp(os.TempDir(), "*")
 	if err != nil {
 		t.Fatalf("Failed to create file %v", err)
 	}
@@ -44,7 +43,7 @@ func TestReadWriteFreezerTableMeta(t *testing.T) {
 }
 
 func TestInitializeFreezerTableMeta(t *testing.T) {
-	f, err := ioutil.TempFile(os.TempDir(), "*")
+	f, err := os.CreateTemp(os.TempDir(), "*")
 	if err != nil {
 		t.Fatalf("Failed to create file %v", err)
 	}

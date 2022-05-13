@@ -17,7 +17,6 @@
 package ethash
 
 import (
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -59,7 +58,7 @@ func TestTestMode(t *testing.T) {
 func TestCacheFileEvict(t *testing.T) {
 	// TODO: t.TempDir fails to remove the directory on Windows
 	// \AppData\Local\Temp\1\TestCacheFileEvict2179435125\001\cache-R23-0000000000000000: Access is denied.
-	tmpdir, err := ioutil.TempDir("", "ethash-test")
+	tmpdir, err := os.MkdirTemp("", "ethash-test")
 	if err != nil {
 		t.Fatal(err)
 	}

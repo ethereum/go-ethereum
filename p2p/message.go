@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"sync/atomic"
 	"time"
 
@@ -66,7 +65,7 @@ func (msg Msg) String() string {
 
 // Discard reads any remaining payload data into a black hole.
 func (msg Msg) Discard() error {
-	_, err := io.Copy(ioutil.Discard, msg.Payload)
+	_, err := io.Copy(io.Discard, msg.Payload)
 	return err
 }
 
@@ -245,7 +244,7 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	if int(msg.Size) != len(contentEnc) {
 		return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
 	}
-	actualContent, err := ioutil.ReadAll(msg.Payload)
+	actualContent, err := io.ReadAll(msg.Payload)
 	if err != nil {
 		return err
 	}

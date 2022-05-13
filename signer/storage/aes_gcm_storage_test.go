@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -125,7 +125,7 @@ func TestSwappedKeys(t *testing.T) {
 	// Now make a modified copy
 
 	creds := make(map[string]storedCredential)
-	raw, err := ioutil.ReadFile(s1.filename)
+	raw, err := os.ReadFile(s1.filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestSwappedKeys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = ioutil.WriteFile(s1.filename, raw, 0600); err != nil {
+		if err = os.WriteFile(s1.filename, raw, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

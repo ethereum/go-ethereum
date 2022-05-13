@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -155,9 +155,9 @@ func abigen(c *cli.Context) error {
 		)
 		input := c.GlobalString(abiFlag.Name)
 		if input == "-" {
-			abi, err = ioutil.ReadAll(os.Stdin)
+			abi, err = io.ReadAll(os.Stdin)
 		} else {
-			abi, err = ioutil.ReadFile(input)
+			abi, err = os.ReadFile(input)
 		}
 		if err != nil {
 			utils.Fatalf("Failed to read input ABI: %v", err)
@@ -166,7 +166,7 @@ func abigen(c *cli.Context) error {
 
 		var bin []byte
 		if binFile := c.GlobalString(binFlag.Name); binFile != "" {
-			if bin, err = ioutil.ReadFile(binFile); err != nil {
+			if bin, err = os.ReadFile(binFile); err != nil {
 				utils.Fatalf("Failed to read input bytecode: %v", err)
 			}
 			if strings.Contains(string(bin), "//") {
@@ -213,7 +213,7 @@ func abigen(c *cli.Context) error {
 			}
 
 		case c.GlobalIsSet(jsonFlag.Name):
-			jsonOutput, err := ioutil.ReadFile(c.GlobalString(jsonFlag.Name))
+			jsonOutput, err := os.ReadFile(c.GlobalString(jsonFlag.Name))
 			if err != nil {
 				utils.Fatalf("Failed to read combined-json from compiler: %v", err)
 			}
@@ -263,7 +263,7 @@ func abigen(c *cli.Context) error {
 		fmt.Printf("%s\n", code)
 		return nil
 	}
-	if err := ioutil.WriteFile(c.GlobalString(outFlag.Name), []byte(code), 0600); err != nil {
+	if err := os.WriteFile(c.GlobalString(outFlag.Name), []byte(code), 0600); err != nil {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}
 	return nil

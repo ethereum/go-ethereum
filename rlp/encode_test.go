@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"runtime"
 	"sync"
@@ -420,7 +419,7 @@ func TestEncodeToReader(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.ReadAll(r)
+		return io.ReadAll(r)
 	})
 }
 
@@ -461,7 +460,7 @@ func TestEncodeToReaderReturnToPool(t *testing.T) {
 		go func() {
 			for i := 0; i < 1000; i++ {
 				_, r, _ := EncodeToReader("foo")
-				ioutil.ReadAll(r)
+				io.ReadAll(r)
 				r.Read(buf)
 				r.Read(buf)
 				r.Read(buf)
