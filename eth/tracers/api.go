@@ -219,6 +219,40 @@ type txTraceTask struct {
 	index   int            // Transaction offset in the block
 }
 
+type BlockArgs struct {
+	Number       *hexutil.Big
+	Difficulty   *hexutil.Big
+	Time         *hexutil.Big
+	GasLimit     *hexutil.Uint64
+	Coinbase     *common.Address
+	Random       *common.Hash
+	Transactions []*ethapi.TransactionArgs
+}
+
+func (diff *BlockArgs) Apply(blockCtx *vm.BlockContext) {
+	if diff == nil {
+		return
+	}
+	if diff.Number != nil {
+		blockCtx.BlockNumber = diff.Number.ToInt()
+	}
+	if diff.Difficulty != nil {
+		blockCtx.Difficulty = diff.Difficulty.ToInt()
+	}
+	if diff.Time != nil {
+		blockCtx.Time = diff.Time.ToInt()
+	}
+	if diff.GasLimit != nil {
+		blockCtx.GasLimit = uint64(*diff.GasLimit)
+	}
+	if diff.Coinbase != nil {
+		blockCtx.Coinbase = *diff.Coinbase
+	}
+	if diff.Random != nil {
+		blockCtx.Random = diff.Random
+	}
+}
+
 // TraceChain returns the structured logs created during the execution of EVM
 // between two blocks (excluding start) and returns them as a JSON object.
 func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, config *TraceConfig) (*rpc.Subscription, error) { // Fetch the block interval that we want to trace
@@ -856,6 +890,66 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		}
 	}
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
+}
+
+func (api *API) TraceCallBlock(ctx context.Context, args BlockArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) ([]*txTraceResult, error) {
+	// Try to retrieve the specified block
+	var (
+		err   error
+		block *types.Block
+	)
+	if hash, ok := blockNrOrHash.Hash(); ok {
+		block, err = api.blockByHash(ctx, hash)
+	} else if number, ok := blockNrOrHash.Number(); ok {
+		block, err = api.blockByNumber(ctx, number)
+	} else {
+		return nil, errors.New("invalid arguments; neither block nor hash specified")
+	}
+	if err != nil {
+		return nil, err
+	}
+	// try to recompute the state
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	statedb, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	// Apply the customized state rules if required.
+	if config != nil {
+		if err := config.StateOverrides.Apply(statedb); err != nil {
+			return nil, err
+		}
+	}
+	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	args.Apply(&vmctx)
+	results := make([]*txTraceResult, len(args.Transactions))
+	for i, txArgs := range args.Transactions {
+		// Execute the trace
+		msg, err := txArgs.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+		if err != nil {
+			return nil, err
+		}
+
+		var traceConfig *TraceConfig
+		if config != nil {
+			traceConfig = &TraceConfig{
+				Config:  config.Config,
+				Tracer:  config.Tracer,
+				Timeout: config.Timeout,
+				Reexec:  config.Reexec,
+			}
+		}
+		res, err := api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
+		if err != nil {
+			results[i] = &txTraceResult{Error: err.Error()}
+			continue
+		}
+		results[i] = &txTraceResult{Result: res}
+	}
+	return results, nil
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
