@@ -14,7 +14,7 @@ GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GIT_TAG    ?= $(shell git describe --tags `git rev-list --tags="v*" --max-count=1`)
 
 PACKAGE = github.com/ethereum/go-ethereum
-GO_FLAGS += -trimpath -buildvcs=false
+GO_FLAGS += -buildvcs=false
 GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
 
 TESTALL = $$(go list ./... | grep -v go-ethereum/cmd/)

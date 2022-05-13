@@ -7,7 +7,9 @@ func IgnoreList() []goleak.Option {
 		// a list of goroutne leaks that hard to fix due to external dependencies or too big refactoring needed
 		goleak.IgnoreTopFunction("github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache"),
 		goleak.IgnoreTopFunction("github.com/rjeczalik/notify.(*recursiveTree).dispatch"),
+		goleak.IgnoreTopFunction("github.com/rjeczalik/notify.(*recursiveTree).internal"),
 		goleak.IgnoreTopFunction("github.com/rjeczalik/notify.(*nonrecursiveTree).dispatch"),
+		goleak.IgnoreTopFunction("github.com/rjeczalik/notify.(*nonrecursiveTree).internal"),
 		goleak.IgnoreTopFunction("github.com/rjeczalik/notify._Cfunc_CFRunLoopRun"),
 
 		// todo: this leaks should be fixed
