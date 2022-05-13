@@ -602,10 +602,12 @@ func dumpState(ctx *cli.Context) error {
 	return nil
 }
 
-func flushIfNeeded(root verkle.VerkleNode, flush verkle.NodeFlushFn) {
+func flushIfNeeded(root verkle.VerkleNode, flush verkle.NodeFlushFn, db ethdb.Database) {
 	v, _ := mem.VirtualMemory()
-	if v.UsedPercent > 80.0 {
+	if v.UsedPercent > 20.0 {
+		log.Info("flushing", "percent", v.UsedPercent)
 		root.(*verkle.InternalNode).FlushAtDepth(2, flush)
+		db.Sync()
 	}
 }
 
@@ -649,20 +651,17 @@ func convertToVerkle(ctx *cli.Context) error {
 		panic(err)
 	}
 
-	count := 0
-	batch := convdb.NewBatch()
 	saveverkle := func(n verkle.VerkleNode) {
 		s, err := n.Serialize()
 		if err != nil {
 			panic(err)
 		}
 		comm := n.ComputeCommitment().Bytes()
-		batch.Put(comm[:], s)
-		count++
-		if count%10000 == 0 {
-			batch.Write()
-			batch = convdb.NewBatch()
+		err = convdb.Put(comm[:], s)
+		if err != nil {
+			panic(err)
 		}
+		convdb.Sync()
 	}
 
 	vRoot := verkle.New()
@@ -746,7 +745,7 @@ func convertToVerkle(ctx *cli.Context) error {
 					panic(err)
 				}
 
-				flushIfNeeded(vRoot, saveverkle)
+				flushIfNeeded(vRoot, saveverkle, convdb)
 			}
 			if storageIt.Error() != nil {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIt.Error())
@@ -757,9 +756,8 @@ func convertToVerkle(ctx *cli.Context) error {
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
-
-			flushIfNeeded(vRoot, saveverkle)
 		}
+		flushIfNeeded(vRoot, saveverkle, convdb)
 	}
 	if accIt.Error() != nil {
 		log.Error("Failed to compute commitment", "root", root, "error", accIt.Error())
