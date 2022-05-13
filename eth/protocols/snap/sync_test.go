@@ -334,13 +334,14 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 				break
 			}
 		}
-		hashes = append(hashes, keys)
-		slots = append(slots, vals)
-
+		if len(keys) > 0 {
+			hashes = append(hashes, keys)
+			slots = append(slots, vals)
+		}
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
 		// in the response, no need for any proofs.
-		if originHash != (common.Hash{}) || abort {
+		if originHash != (common.Hash{}) || (abort && len(keys) > 0) {
 			// If we're aborting, we need to prove the first and last item
 			// This terminates the response (and thus the loop)
 			proof := light.NewNodeSet()

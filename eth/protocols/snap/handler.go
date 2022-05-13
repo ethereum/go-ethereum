@@ -404,13 +404,15 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				break
 			}
 		}
-		slots = append(slots, storage)
+		if len(storage) > 0 {
+			slots = append(slots, storage)
+		}
 		it.Release()
 
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
 		// in the response, no need for any proofs.
-		if origin != (common.Hash{}) || abort {
+		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
 			accTrie, err := trie.New(req.Root, chain.StateCache().TrieDB())
