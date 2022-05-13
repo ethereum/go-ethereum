@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  arm64:
+    name: Release Go Binary arm64
+    runs-on: [self-hosted, arm64]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build geth
+        run: |
+          cd cmd/geth && /opt/go/1.18.1/bin/go build
+          tar -czvf geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz geth
+          echo $(md5sum geth | awk '{print $1}') > geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz.md5
+      - name: Upload geth to release page
+        run: |
+          github-assets-uploader -logtostderr -f cmd/geth/geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz -mediatype application/gzip -repo ${GITHUB_REPOSITORY} -token ${{ secrets.GITHUB_TOKEN }} -tag=$(basename ${GITHUB_REF}) -releasename="" -retry 3
+          github-assets-uploader -logtostderr -f cmd/geth/geth-$(basename ${GITHUB_REF})-linux-arm64.tar.gz.md5 -mediatype text/plain -repo ${GITHUB_REPOSITORY} -token ${{ secrets.GITHUB_TOKEN }} -tag=$(basename ${GITHUB_REF}) -releasename="" -retry 3
+  amd64:
+    name: Release Go Binary amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: wangyoucao577/go-release-action@v1.26
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: linux
+          goarch: amd64
+          project_path: ./cmd/geth
+          binary_name: geth
