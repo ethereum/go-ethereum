@@ -333,7 +333,30 @@ This should be repeated for both nodes. The following will be returned to the te
 
 ```terminal
 
-ADD INIT-LOGS.TXT
+INFO [05-13|15:41:42.700] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [05-13|15:41:42.700] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
+INFO [05-13|15:41:42.701] Set global gas cap                       cap=50,000,000
+INFO [05-13|15:41:42.701] Allocated cache and file handles         database=/home/go-ethereum/node1/geth/chaindata cache=16.00MiB handles=16
+INFO [05-13|15:41:42.725] Writing custom genesis block 
+INFO [05-13|15:41:42.726] Persisted trie from memory database      nodes=3 size=397.00B time="45.811µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [05-13|15:41:42.726] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
+INFO [05-13|15:41:42.726] Allocated cache and file handles         database=/home/joe/go-ethereum/node1/geth/lightchaindata cache=16.00MiB handles=16
+INFO [05-13|15:41:42.740] Writing custom genesis block 
+INFO [05-13|15:41:42.742] Persisted trie from memory database      nodes=3 size=397.00B time="93.45µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [05-13|15:41:42.742] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
+joe@joe-ThinkPad-T470p:~/go-ethereum$ ./geth init --datadir node2 genesis.json
+INFO [05-13|15:41:47.520] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [05-13|15:41:47.520] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
+INFO [05-13|15:41:47.520] Set global gas cap                       cap=50,000,000
+INFO [05-13|15:41:47.520] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/chaindata cache=16.00MiB handles=16
+INFO [05-13|15:41:47.542] Writing custom genesis block 
+INFO [05-13|15:41:47.542] Persisted trie from memory database      nodes=3 size=397.00B time="41.246µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [05-13|15:41:47.543] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
+INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/lightchaindata cache=16.00MiB handles=16
+INFO [05-13|15:41:47.556] Writing custom genesis block 
+INFO [05-13|15:41:47.557] Persisted trie from memory database      nodes=3 size=397.00B time="81.801µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
+
 
 ```
 
@@ -357,7 +380,10 @@ The choice of port passed to `-addr` is arbitrary, but public Ethereum networks 
 
 ```terminal
 
-ADD BOOTNODE LOGS
+enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305
+Note: you're using cmd/bootnode, a developer tool.
+We recommend using a regular node as bootstrap node for production deployments.
+INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=<nil> udp=0 tcp=0
 
 ```
 
@@ -365,22 +391,66 @@ The two nodes can now be started. Open separate terminals for each node, leaving
 
 ```shell
 
-ADD START_NODE_COMMAND
+./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt
 
 ```
 
 This will start the node using the bootnode as an entry point. Repeat the same command with the information appropriate to node 2. In each terminal, the following logs indicate success:
 
-```
-ADD START NODE LOGS
+```terminal
+INFO [05-13|16:17:40.061] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [05-13|16:17:40.061] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
+INFO [05-13|16:17:40.061] Set global gas cap                       cap=50,000,000
+INFO [05-13|16:17:40.061] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
+INFO [05-13|16:17:40.061] Allocated cache and file handles         database=/home/go-ethereum/node1/geth/chaindata cache=512.00MiB handles=524,288
+INFO [05-13|16:17:40.094] Opened ancient database                  database=/home/go-ethereum/node1/geth/chaindata/ancient readonly=false
+INFO [05-13|16:17:40.095] Initialised chain configuration          config="{ChainID: 123454321 Homestead: 0 DAO: <nil> DAOSupport: false EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: <nil>, Muir Glacier: <nil>, Berlin: <nil>, London: <nil>, Arrow Glacier: <nil>, MergeFork: <nil>, Terminal TD: <nil>, Engine: clique}"
+INFO [05-13|16:17:40.096] Initialising Ethereum protocol           network=123,454,321 dbversion=8
+INFO [05-13|16:17:40.098] Loaded most recent local header          number=0 hash=c9a158..d415a0 td=1 age=53y1mo2w
+INFO [05-13|16:17:40.098] Loaded most recent local full block      number=0 hash=c9a158..d415a0 td=1 age=53y1mo2w
+INFO [05-13|16:17:40.098] Loaded most recent local fast block      number=0 hash=c9a158..d415a0 td=1 age=53y1mo2w
+INFO [05-13|16:17:40.099] Loaded local transaction journal         transactions=0 dropped=0
+INFO [05-13|16:17:40.100] Regenerated local transaction journal    transactions=0 accounts=0
+INFO [05-13|16:17:40.100] Gasprice oracle is ignoring threshold set threshold=2
+WARN [05-13|16:17:40.100] Unclean shutdown detected                booted=2022-05-13T16:16:46+0100 age=54s
+INFO [05-13|16:17:40.100] Starting peer-to-peer node               instance=Geth/v1.10.18-unstable-8d84a701-20220503/linux-amd64/go1.18.1
+INFO [05-13|16:17:40.130] New local node record                    seq=1,652,454,949,228 id=f1364e6d060c4625 ip=127.0.0.1 udp=30306 tcp=30306
+INFO [05-13|16:17:40.130] Started P2P networking                   self=enode://87606cd0b27c9c47ca33541d4b68cf553ae6765e22800f0df340e9788912b1e3d2759b3d1933b6f739c720701a56ce26f672823084420746d04c25fc7b8c6824@127.0.0.1:30306
+INFO [05-13|16:17:40.133] IPC endpoint opened                      url=/home/go-ethereum/node1/geth.ipc
+INFO [05-13|16:17:40.785] Unlocked account                         address=0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b
+INFO [05-13|16:17:42.636] New local node record                    seq=1,652,454,949,229 id=f1364e6d060c4625 ip=82.11.59.221 udp=30306 tcp=30306
+INFO [05-13|16:17:43.309] Mapped network port                      proto=tcp extport=30306 intport=30306 interface="UPNP IGDv1-IP1"
+INFO [05-13|16:17:43.822] Mapped network port                      proto=udp extport=30306 intport=30306 interface="UPNP IGDv1-IP1"
+[05-13|16:17:50.150] Looking for peers                        peercount=0 tried=0 static=0
+INFO [05-13|16:18:00.164] Looking for peers                        peercount=0 tried=0 static=0
+
+
 
 ```
 
 In the first terminal that is currently running the logs resembling the following will be displayed, showing the discovery process in action:
 
-```
+```terminal
 
-ADD PING PONG LOGS
+INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=<nil> udp=0 tcp=0
+TRACE[05-13|16:15:49.228] << PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.229] >> PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.229] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.230] << PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.730] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.731] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.231] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.231] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.561] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.561] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.731] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.731] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:51.231] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:51.232] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:52.591] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:52.591] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:57.767] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+
 
 ```
 
@@ -412,11 +482,34 @@ This should return the following:
 
 ```terminal
 
-ADD ADMIN-PEERS.txt
+[{
+    caps: ["eth/66", "snap/1"],
+    enode: "enode://6a4576fb12004aa13949dbf25de978102483a6521e6d5d87c5b7ccb1944bbf8995dc730303ae891732410b1dd2e684277e9292fc0a17372a789bb4e87bdf366b@127.0.0.1:30307",
+    id: "d300c59ba301abcb5f4a3866aab6f833857c3ddf2f0febb583410b1dc466f175",
+    name: "Geth/v1.10.18-unstable-8d84a701-20220503/linux-amd64/go1.18.1",
+    network: {
+      inbound: false,
+      localAddress: "127.0.0.1:56620",
+      remoteAddress: "127.0.0.1:30307",
+      static: false,
+      trusted: false
+    },
+    protocols: {
+      eth: {
+        difficulty: 1,
+        head: "0xc9a158a687eff8a46128bd5b9aaf6b2f04f10f0683acbd7f031514db9ad415a0",
+        version: 66
+      },
+      snap: {
+        version: 1
+      }
+    }
+}]
+
 
 ```
 
-The account associedt with Node 1 was supposed to be funded with some ether at the chain genesis. This can be checked easily using `eth.getBalance()`:
+The account associated with Node 1 was supposed to be funded with some ether at the chain genesis. This can be checked easily using `eth.getBalance()`:
 
 ```shell
 
