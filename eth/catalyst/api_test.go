@@ -527,3 +527,75 @@ func TestExchangeTransitionConfig(t *testing.T) {
 		t.Fatalf("expected no error on valid config, got %v", err)
 	}
 }
+
+func TestEmptyBlocks(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+	var (
+		api    = NewConsensusAPI(ethservice)
+		parent = ethservice.BlockChain().CurrentBlock()
+		// This EVM code generates a log when the contract is created.
+		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	for i := 0; i < 10; i++ {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		nonce := statedb.GetNonce(testAddr)
+		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		ethservice.TxPool().AddLocal(tx)
+
+		params := beacon.PayloadAttributesV1{
+			Timestamp:             parent.Time() + 1,
+			Random:                crypto.Keccak256Hash([]byte{byte(i)}),
+			SuggestedFeeRecipient: parent.Coinbase(),
+		}
+
+		fcState := beacon.ForkchoiceStateV1{
+			HeadBlockHash:      parent.Hash(),
+			SafeBlockHash:      common.Hash{},
+			FinalizedBlockHash: common.Hash{},
+		}
+		resp, err := api.ForkchoiceUpdatedV1(fcState, &params)
+		if err != nil {
+			t.Fatalf("error preparing payload, err=%v", err)
+		}
+		if resp.PayloadStatus.Status != beacon.VALID {
+			t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
+		}
+		payload, err := api.GetPayloadV1(*resp.PayloadID)
+		if err != nil {
+			t.Fatalf("can't get payload: %v", err)
+		}
+		if len(payload.Transactions) != 0 {
+			t.Fatalf("payload should be empty")
+		}
+		time.Sleep(10 * time.Millisecond)
+		payload, err = api.GetPayloadV1(*resp.PayloadID)
+		if err != nil {
+			t.Fatalf("can't get payload: %v", err)
+		}
+		if len(payload.Transactions) == 0 {
+			t.Fatalf("payload should not be empty")
+		}
+		execResp, err := api.NewPayloadV1(*payload)
+		if err != nil {
+			t.Fatalf("can't execute payload: %v", err)
+		}
+		if execResp.Status != beacon.VALID {
+			t.Fatalf("invalid status: %v", execResp.Status)
+		}
+		fcState = beacon.ForkchoiceStateV1{
+			HeadBlockHash:      payload.BlockHash,
+			SafeBlockHash:      payload.ParentHash,
+			FinalizedBlockHash: payload.ParentHash,
+		}
+		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
+			t.Fatalf("Chain head should be updated")
+		}
+		parent = ethservice.BlockChain().CurrentBlock()
+	}
+}
