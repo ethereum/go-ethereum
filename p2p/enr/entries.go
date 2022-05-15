@@ -17,6 +17,7 @@
 package enr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -174,7 +175,7 @@ type KeyError struct {
 
 // Error implements error.
 func (err *KeyError) Error() string {
-	if err.Err == errNotFound {
+	if errors.Is(err.Err, errNotFound) {
 		return fmt.Sprintf("missing ENR key %q", err.Key)
 	}
 	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
@@ -184,5 +185,5 @@ func (err *KeyError) Error() string {
 // missing from a record.
 func IsNotFound(err error) bool {
 	kerr, ok := err.(*KeyError)
-	return ok && kerr.Err == errNotFound
+	return ok && errors.Is(kerr.Err, errNotFound)
 }
