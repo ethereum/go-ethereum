@@ -39,7 +39,7 @@ type Compiler struct {
 	debug bool
 }
 
-// newCompiler returns a new allocated compiler.
+// NewCompiler returns a new allocated compiler.
 func NewCompiler(debug bool) *Compiler {
 	return &Compiler{
 		labels: make(map[string]int),
@@ -105,16 +105,16 @@ func (c *Compiler) Compile() (string, []error) {
 	}
 
 	// turn the binary to hex
-	var bin string
+	var bin strings.Builder
 	for _, v := range c.binary {
 		switch v := v.(type) {
 		case vm.OpCode:
-			bin += fmt.Sprintf("%x", []byte{byte(v)})
+			bin.WriteString(fmt.Sprintf("%x", []byte{byte(v)}))
 		case []byte:
-			bin += fmt.Sprintf("%x", v)
+			bin.WriteString(fmt.Sprintf("%x", v))
 		}
 	}
-	return bin, errors
+	return bin.String(), errors
 }
 
 // next returns the next token and increments the
