@@ -3,10 +3,13 @@ on:
   push:
     branches:
       - "**"
+      - "!main"
   pull_request:
     branches:
       - "**"
-    types: [opened, synchronize]
+    types: [opened, synchronize, closed]
+
+  workflow_dispatch: 
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
