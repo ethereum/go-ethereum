@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -58,7 +58,7 @@ make sure to use this feature with great caution!`,
 		keyfilepath := ctx.Args().First()
 
 		// Read key from file.
-		keyjson, err := ioutil.ReadFile(keyfilepath)
+		keyjson, err := os.ReadFile(keyfilepath)
 		if err != nil {
 			utils.Fatalf("Failed to read the keyfile at '%s': %v", keyfilepath, err)
 		}

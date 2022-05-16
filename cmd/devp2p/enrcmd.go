@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -54,9 +53,9 @@ func enrdump(ctx *cli.Context) error {
 		var b []byte
 		var err error
 		if file == "-" {
-			b, err = ioutil.ReadAll(os.Stdin)
+			b, err = io.ReadAll(os.Stdin)
 		} else {
-			b, err = ioutil.ReadFile(file)
+			b, err = os.ReadFile(file)
 		}
 		if err != nil {
 			return err

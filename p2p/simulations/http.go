@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,7 +111,7 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		response, _ := ioutil.ReadAll(res.Body)
+		response, _ := io.ReadAll(res.Body)
 		res.Body.Close()
 		return nil, fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
@@ -252,7 +251,7 @@ func (c *Client) Send(method, path string, in, out interface{}) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
-		response, _ := ioutil.ReadAll(res.Body)
+		response, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
 	if out != nil {

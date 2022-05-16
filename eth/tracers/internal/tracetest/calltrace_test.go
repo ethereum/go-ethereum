@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -152,7 +153,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk
-			if blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
+			if blob, err := os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
@@ -250,7 +251,7 @@ func BenchmarkTracers(b *testing.B) {
 		}
 		file := file // capture range variable
 		b.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(b *testing.B) {
-			blob, err := ioutil.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
+			blob, err := os.ReadFile(filepath.Join("testdata", "call_tracer", file.Name()))
 			if err != nil {
 				b.Fatalf("failed to read testcase: %v", err)
 			}

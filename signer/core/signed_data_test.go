@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -362,7 +363,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
-		data, err := ioutil.ReadFile(path.Join("testdata", fInfo.Name()))
+		data, err := os.ReadFile(path.Join("testdata", fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
@@ -394,7 +395,7 @@ func TestFuzzerFiles(t *testing.T) {
 	}
 	verbose := false
 	for i, fInfo := range testfiles {
-		data, err := ioutil.ReadFile(path.Join(corpusdir, fInfo.Name()))
+		data, err := os.ReadFile(path.Join(corpusdir, fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue

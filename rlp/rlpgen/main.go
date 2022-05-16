@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"os"
 
 	"golang.org/x/tools/go/packages"
@@ -52,7 +51,7 @@ func main() {
 	}
 	if *output == "-" {
 		os.Stdout.Write(code)
-	} else if err := ioutil.WriteFile(*output, code, 0644); err != nil {
+	} else if err := os.WriteFile(*output, code, 0644); err != nil {
 		fatal(err)
 	}
 }

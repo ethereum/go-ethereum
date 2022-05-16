@@ -19,7 +19,7 @@ package compiler
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"regexp"
 )
 
@@ -55,7 +55,7 @@ type ContractInfo struct {
 func slurpFiles(files []string) (string, error) {
 	var concat bytes.Buffer
 	for _, file := range files {
-		content, err := ioutil.ReadFile(file)
+		content, err := os.ReadFile(file)
 		if err != nil {
 			return "", err
 		}

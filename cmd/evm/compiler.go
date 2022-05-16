@@ -19,7 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 
@@ -41,7 +41,7 @@ func compileCmd(ctx *cli.Context) error {
 	}
 
 	fn := ctx.Args().First()
-	src, err := ioutil.ReadFile(fn)
+	src, err := os.ReadFile(fn)
 	if err != nil {
 		return err
 	}

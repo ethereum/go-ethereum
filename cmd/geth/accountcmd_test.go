@@ -18,6 +18,7 @@ package main
 
 import (
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -113,11 +114,11 @@ func TestAccountImport(t *testing.T) {
 func importAccountWithExpect(t *testing.T, key string, expected string) {
 	dir := t.TempDir()
 	keyfile := filepath.Join(dir, "key.prv")
-	if err := ioutil.WriteFile(keyfile, []byte(key), 0600); err != nil {
+	if err := os.WriteFile(keyfile, []byte(key), 0600); err != nil {
 		t.Error(err)
 	}
 	passwordFile := filepath.Join(dir, "password.txt")
-	if err := ioutil.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
+	if err := os.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
 		t.Error(err)
 	}
 	geth := runGeth(t, "--lightkdf", "account", "import", keyfile, "-password", passwordFile)
