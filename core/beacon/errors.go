@@ -16,7 +16,10 @@
 
 package beacon
 
-import "github.com/ethereum/go-ethereum/rpc"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
+)
 
 var (
 	// VALID is returned by the engine API in the following calls:
@@ -38,13 +41,13 @@ var (
 	//   - newPayloadV1: if the payload was accepted, but not processed (side chain)
 	ACCEPTED = "ACCEPTED"
 
-	INVALIDBLOCKHASH     = "INVALID_BLOCK_HASH"
-	INVALIDTERMINALBLOCK = "INVALID_TERMINAL_BLOCK"
+	INVALIDBLOCKHASH = "INVALID_BLOCK_HASH"
 
 	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
 	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
 	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
 
-	STATUS_INVALID = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
-	STATUS_SYNCING = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
+	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
+	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
+	INVALID_TERMINAL_BLOCK = PayloadStatusV1{Status: INVALID, LatestValidHash: &common.Hash{}}
 )
