@@ -3,11 +3,10 @@ on:
   push:
     branches:
       - "**"
-      - "!master"
   pull_request:
     branches:
-      - "master"
-    types: [closed]
+      - "**"
+    types: [opened, synchronize]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
