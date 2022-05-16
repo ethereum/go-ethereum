@@ -436,6 +436,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
+	// Validate code if it claims to be EOF-formatted.
+	if hasEIP3540(&evm.Config) && hasEOFMagic(codeAndHash.code) && !validateEOF(codeAndHash.code) {
+		return nil, common.Address{}, gas, ErrInvalidCodeFormat
+	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
 	evm.StateDB.CreateAccount(address)
