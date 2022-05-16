@@ -3,7 +3,7 @@ title: Private Networks
 sort_key: B
 ---
 
-This guide explains how to set up a private network of multiple Geth nodes. that are not able to connect to external peers. This page describes the setup process and configuration options required to establish a private network. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
+This guide explains how to set up a private network of multiple Geth nodes that are not able to connect to external peers. The setup process and configuration options required to establish a private network are explained on this page. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
 
 
 ## Background
@@ -29,16 +29,16 @@ geth --networkid 012345
 
 ### Choosing A Consensus Algorithm
 
-While the main network uses proof-of-work to secure the blockchain, Geth also supports the the 'clique' proof-of-authority consensus algorithm as an alternative for private
-networks. Clique is strongly recommended for private testnets because it is far less resource-intensive than proof-of-work. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
+Ethereum Mainnet uses a proof-of-work (PoW) algorithm called "Ethash" to secure the blockchain, Geth also supports the the 'clique' proof-of-authority (PoA) consensus algorithm as an alternative for private
+networks. Clique is strongly recommended for private testnets because it is far less resource-intensive than PoW. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
 
 #### Ethash
 
-Geth's proof-of-work algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash), is a system that allows open participation by anyone willing to dedicate resources to mining. While this is a critical property for a public network, the overall security of the blockchain strictly depends on the total amount of resources used to secure it. As such, proof-of-work is a poor choice for private networks with few miners. The Ethash mining 'difficulty' is adjusted automatically so that new blocks are created approximately 12 seconds apart. As more mining resources are deployed on the network, creating a new block becomes harder so that the average block time matches the target block time.
+Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash), is a system that allows open participation by anyone willing to dedicate resources to mining. While this is a critical property for a public network, the overall security of the blockchain strictly depends on the total amount of resources used to secure it. As such, PoW is a poor choice for private networks with few miners. The Ethash mining 'difficulty' is adjusted automatically so that new blocks are created approximately 12 seconds apart. As more mining resources are deployed on the network, creating a new block becomes harder so that the average block time matches the target block time.
 
 #### Clique
 
-Clique consensus is a proof-of-authority system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing
+Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing
 the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty
 adjustment.
 
@@ -55,14 +55,14 @@ network, it is generally preferable to use a different genesis block. The genesi
 - Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a
   [good choice][gaslimit-chart]. The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
 
-- Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses you list in the genesis block. Additional ether can be created through
+- Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through
   mining as the chain progresses.
 
 
 
 #### Clique Example
 
-This is an example of a genesis.json file for a proof-of-authority network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for clique to work.
+Below is an example of a `genesis.json` file for a PoA network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for Clique to work.
 
 First create the signer account keys using the [geth account](./managing-your-accounts) command (run this command multiple times to create more than one signer key).
 
@@ -74,12 +74,12 @@ geth account new --datadir data
 
 The Ethereum address printed by this command should be recorded. To encode the signer addresses in `extradata`, concatenate 32 zero bytes, all signer addresses and 65 further zero bytes. The result of this concatenation is then used as the value accompanying the `extradata` key in `genesis.json`. In the example below, `extradata` contains a single initial signer address, `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82`.
 
-You can use the `period` configuration option to set the target block time of the chain.
+The `period` configuration option sets the target block time of the chain.
 
 ```json
 {
   "config": {
-    "chainId": 12345,
+    "chainId": 012345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -104,13 +104,13 @@ You can use the `period` configuration option to set the target block time of th
 
 #### Ethash Example
 
-Since Ethash is the default consensus algorithm, no additional parameters need to be configured in order to use it. You can influence the initial mining difficulty using the
-`difficulty` parameter, but note that the difficulty adjustment algorithm will quickly adapt to the amount of mining resources you deploy on the chain.
+Since Ethash is the default consensus algorithm, no additional parameters need to be configured in order to use it. The initial mining difficulty is influenced using the
+`difficulty` parameter, but note that the difficulty adjustment algorithm will quickly adapt to the amount of mining resources deployed on the chain.
 
 ```json
 {
   "config": {
-    "chainId": 12345,
+    "chainId": 012345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -243,7 +243,7 @@ Mining can be further configured by changing the default gas limit blocks conver
 
 ### Running A Miner (Ethash)
 
-For proof-of-work in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for
+For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for
 mining, it can be run with all the usual flags plus the following to configure mining:
 
 ```shell
@@ -261,7 +261,7 @@ This section will run through the commands for setting up a simple private netwo
 `mkdir node1 node2`
 ```
 
-Each node will have an associated accoutn that will receive some ether at launch. The following command creates an account for Node 1:
+Each node will have an associated account that will receive some ether at launch. The following command creates an account for Node 1:
 
 ```shell
 
@@ -288,7 +288,7 @@ Path of the secret key file: node1/keystore/UTC--2022-05-13T14-25-49.229126160Z-
 
 ```
 
-The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each accoutn should be saved to a text file in eachnode's data directory.
+The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in eachnode's data directory.
 
 In each data directory save a copy of the following `genesis.json` to the top level project directory. The account addresses in the `alloc` field should be replaced with those created for each node in the previous step (without the leading `0x`).
 
@@ -419,23 +419,23 @@ In the first terminal that is currently running the logs resembling the followin
 ```terminal
 
 INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
-TRACE[05-13|16:15:49.228] << PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.229] >> PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.229] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.230] << PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.730] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:49.731] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.231] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.231] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.561] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.561] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.731] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:50.731] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:51.231] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:51.232] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:52.591] << FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:52.591] >> NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-TRACE[05-13|16:15:57.767] >> PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.228]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.229]  PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.229]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.230]  PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.730]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:49.731]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.231]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.231]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.561]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.561]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.731]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:50.731]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:51.231]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:51.232]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:52.591]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:52.591]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
+TRACE[05-13|16:15:57.767]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 
 ```
 
