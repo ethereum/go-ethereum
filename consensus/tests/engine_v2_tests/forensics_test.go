@@ -125,7 +125,7 @@ func TestForensicsMonitoring(t *testing.T) {
 	assert.Nil(t, err)
 	var newIncomingQcHeaders []types.Header
 	newIncomingQcHeaders = append(newIncomingQcHeaders, *blockchain.GetHeaderByNumber(913), *blockchain.GetHeaderByNumber(914))
-	err = forensics.ForensicsMonitoring(blockchain, newIncomingQcHeaders, *incomingQC)
+	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, newIncomingQcHeaders, *incomingQC)
 	assert.Nil(t, err)
 }
 
@@ -156,7 +156,7 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 	parentOfForkedHeader := blockchain.GetBlockByHash(currentForkBlock.ParentHash()).Header()
 	grandParentOfForkedHeader := blockchain.GetBlockByHash(parentOfForkedHeader.ParentHash).Header()
 	forkedHeaders = append(forkedHeaders, *grandParentOfForkedHeader, *parentOfForkedHeader)
-	err = forensics.ForensicsMonitoring(blockchain, forkedHeaders, *incomingQC)
+	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, forkedHeaders, *incomingQC)
 	assert.Nil(t, err)
 	// TODO: Check SendForensicProof triggered
 }
@@ -190,7 +190,7 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 	grandParentOfForkedHeader := blockchain.GetBlockByHash(parentOfForkedHeader.ParentHash).Header()
 	forkedHeaders = append(forkedHeaders, *grandParentOfForkedHeader, *parentOfForkedHeader)
 
-	err = forensics.ForensicsMonitoring(blockchain, forkedHeaders, *incomingQC)
+	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, forkedHeaders, *incomingQC)
 	assert.Nil(t, err)
 	// TODO: Check SendForensicProof triggered
 }

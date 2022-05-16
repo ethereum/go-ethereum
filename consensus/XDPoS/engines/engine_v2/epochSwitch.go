@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -99,5 +100,42 @@ func (x *XDPoS_v2) isEpochSwitchAtRound(round utils.Round, parentHeader *types.H
 	}
 
 	epochStartRound := round - round%utils.Round(x.config.Epoch)
+	return parentRound < epochStartRound, epochNum, nil
+}
+
+func (x *XDPoS_v2) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, blockNum *big.Int) (uint64, uint64, error) {
+	header := chain.GetHeaderByNumber(blockNum.Uint64())
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
+	if err != nil {
+		log.Error("[GetCurrentEpochSwitchBlock] Fail to get epoch switch info", "Num", header.Number, "Hash", header.Hash())
+		return 0, 0, err
+	}
+
+	currentCheckpointNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
+	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+	return currentCheckpointNumber, epochNum, nil
+}
+
+func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
+	// Return true directly if we are examing the last v1 block. This could happen if the calling function is examing parent block
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		log.Info("[IsEpochSwitch] examing last v1 block")
+		return true, header.Number.Uint64() / x.config.Epoch, nil
+	}
+
+	quorumCert, round, _, err := x.getExtraFields(header)
+	if err != nil {
+		log.Error("[IsEpochSwitch] decode header error", "err", err, "header", header, "extra", common.Bytes2Hex(header.Extra))
+		return false, 0, err
+	}
+	parentRound := quorumCert.ProposedBlockInfo.Round
+	epochStartRound := round - round%utils.Round(x.config.Epoch)
+	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
+	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
+	if quorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
+		return true, epochNum, nil
+	}
+	log.Info("[IsEpochSwitch]", "parent round", parentRound, "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
 	return parentRound < epochStartRound, epochNum, nil
 }

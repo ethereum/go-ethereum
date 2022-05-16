@@ -67,81 +67,6 @@ func getSignerAndSignFn(pk *ecdsa.PrivateKey) (common.Address, func(account acco
 	return a1.Address, ks.SignHash, nil
 }
 
-func TestFindCommonSigners(t *testing.T) {
-	forensics := &Forensics{}
-	proposedBlockInfo := &utils.BlockInfo{
-		Hash:   common.StringToHash("123"),
-		Round:  utils.Round(10),
-		Number: big.NewInt(910),
-	}
-	gapNumber := 450
-	voteForSign := &utils.VoteForSign{
-		ProposedBlockInfo: proposedBlockInfo,
-		GapNumber:         uint64(gapNumber),
-	}
-	signatureFromSigner1 := SignHashByPK(signer1, utils.VoteSigHash(voteForSign).Bytes())
-	signatureFromSigner2 := SignHashByPK(signer2, utils.VoteSigHash(voteForSign).Bytes())
-	signatureFromSigner3 := SignHashByPK(signer3, utils.VoteSigHash(voteForSign).Bytes())
-
-	// If ONE in common
-	var signaturesForQC1 []utils.Signature
-	qc1 := &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC1, signatureFromSigner1, signatureFromSigner2),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	var signaturesForQC2 []utils.Signature
-	qc2 := &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC2, signatureFromSigner2, signatureFromSigner3),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	commonSigners := forensics.findCommonSigners(*qc1, *qc2)
-	assert.Equal(t, 1, len(commonSigners))
-	assert.Equal(t, crypto.PubkeyToAddress(signer2.PublicKey), commonSigners[0])
-
-	// If none in common
-	var signaturesForQC1NoneInCommon []utils.Signature
-	qc1 = &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC1NoneInCommon, signatureFromSigner1),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	var signaturesForQC2NoneInCommon []utils.Signature
-	qc2 = &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC2NoneInCommon, signatureFromSigner2, signatureFromSigner3),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	commonSigners = forensics.findCommonSigners(*qc1, *qc2)
-	assert.Equal(t, 0, len(commonSigners))
-
-	// All in common
-	var signaturesForQC1AllInCommon []utils.Signature
-	qc1 = &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC1AllInCommon, signatureFromSigner1, signatureFromSigner2, signatureFromSigner3),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	var signaturesForQC2AllInCommon []utils.Signature
-	qc2 = &utils.QuorumCert{
-		ProposedBlockInfo: proposedBlockInfo,
-		Signatures:        append(signaturesForQC2AllInCommon, signatureFromSigner1, signatureFromSigner2, signatureFromSigner3),
-		GapNumber:         uint64(gapNumber),
-	}
-
-	commonSigners = forensics.findCommonSigners(*qc1, *qc2)
-	assert.Equal(t, 3, len(commonSigners))
-	assert.Equal(t, crypto.PubkeyToAddress(signer1.PublicKey), commonSigners[0])
-	assert.Equal(t, crypto.PubkeyToAddress(signer2.PublicKey), commonSigners[1])
-	assert.Equal(t, crypto.PubkeyToAddress(signer3.PublicKey), commonSigners[2])
-}
-
 func TestFindQCsInSameRound(t *testing.T) {
 	forensics := &Forensics{}
 	gapNumber := 450
@@ -216,3 +141,6 @@ func TestFindQCsInSameRound(t *testing.T) {
 	assert.Equal(t, *qc2, first)
 	assert.Equal(t, *qc4, second)
 }
+
+// TODO: Add test for FindAncestorBlockHash
+// TODO: Add test for SendForensicProof

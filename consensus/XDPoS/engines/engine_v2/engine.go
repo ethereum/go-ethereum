@@ -933,7 +933,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		// Perform forensics related operation
 		var headerQcToBeCommitted []types.Header
 		headerQcToBeCommitted = append(headerQcToBeCommitted, *parentBlock, *proposedBlockHeader)
-		go x.forensics.ForensicsMonitoring(blockChainReader, headerQcToBeCommitted, *incomingQc)
+		go x.forensics.ForensicsMonitoring(blockChainReader, x, headerQcToBeCommitted, *incomingQc)
 		return true, nil
 	}
 	// Everything else, fail to commit
@@ -954,30 +954,6 @@ func (x *XDPoS_v2) GetMasternodesFromEpochSwitchHeader(epochSwitchHeader *types.
 	return masternodes
 }
 
-func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
-	// Return true directly if we are examing the last v1 block. This could happen if the calling function is examing parent block
-	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
-		log.Info("[IsEpochSwitch] examing last v1 block")
-		return true, header.Number.Uint64() / x.config.Epoch, nil
-	}
-
-	quorumCert, round, _, err := x.getExtraFields(header)
-	if err != nil {
-		log.Error("[IsEpochSwitch] decode header error", "err", err, "header", header, "extra", common.Bytes2Hex(header.Extra))
-		return false, 0, err
-	}
-	parentRound := quorumCert.ProposedBlockInfo.Round
-	epochStartRound := round - round%utils.Round(x.config.Epoch)
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
-	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
-	if quorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
-		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
-		return true, epochNum, nil
-	}
-	log.Info("[IsEpochSwitch]", "parent round", parentRound, "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
-	return parentRound < epochStartRound, epochNum, nil
-}
-
 // Given header, get master node from the epoch switch block of that epoch
 func (x *XDPoS_v2) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
@@ -986,19 +962,6 @@ func (x *XDPoS_v2) GetMasternodes(chain consensus.ChainReader, header *types.Hea
 		return []common.Address{}
 	}
 	return epochSwitchInfo.Masternodes
-}
-
-func (x *XDPoS_v2) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, blockNum *big.Int) (uint64, uint64, error) {
-	header := chain.GetHeaderByNumber(blockNum.Uint64())
-	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, header, header.Hash())
-	if err != nil {
-		log.Error("[GetCurrentEpochSwitchBlock] Fail to get epoch switch info", "Num", header.Number, "Hash", header.Hash())
-		return 0, 0, err
-	}
-
-	currentCheckpointNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
-	return currentCheckpointNumber, epochNum, nil
 }
 
 func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.Int, parentHash common.Hash) ([]common.Address, []common.Address, error) {
