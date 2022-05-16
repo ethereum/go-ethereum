@@ -4,7 +4,7 @@ sort_key: B
 ---
 
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this
-context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for network integration testing for core developers working on issues realting to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
+context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
 
 This page describes the setup process and configuration options required to establish a private network. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
 
@@ -25,7 +25,7 @@ Ethereum Mainnet has Network ID = 1. There are also many other networks that Get
 
 ```shell
 
-geth --networkid 012345
+geth --networkid 12345
 
 ```
 
@@ -297,7 +297,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
 ```json
 {
   "config": {
-    "chainId": 0012345,
+    "chainId": 12345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
