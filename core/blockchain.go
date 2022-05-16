@@ -133,6 +133,7 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
+	TraceCacheLimit     int
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -140,11 +141,12 @@ type CacheConfig struct {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
+	TrieCleanLimit:  256,
+	TrieDirtyLimit:  256,
+	TrieTimeLimit:   5 * time.Minute,
+	SnapshotLimit:   256,
+	SnapshotWait:    true,
+	TraceCacheLimit: 32,
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -231,6 +233,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	blockResultCache, _ := lru.New(blockResultCacheLimit)
+	if cacheConfig.TraceCacheLimit != 0 {
+		blockResultCache, _ = lru.New(cacheConfig.TraceCacheLimit)
+	}
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,

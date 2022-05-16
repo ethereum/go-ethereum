@@ -87,11 +87,12 @@ var Defaults = Config{
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool:        core.DefaultTxPoolConfig,
-	RPCGasCap:     50000000,
-	RPCEVMTimeout: 5 * time.Second,
-	GPO:           FullNodeGPO,
-	RPCTxFeeCap:   1, // 1 ether
+	TxPool:          core.DefaultTxPoolConfig,
+	RPCGasCap:       50000000,
+	RPCEVMTimeout:   5 * time.Second,
+	GPO:             FullNodeGPO,
+	RPCTxFeeCap:     1, // 1 ether
+	TraceCacheLimit: 32,
 }
 
 func init() {
@@ -204,6 +205,9 @@ type Config struct {
 
 	// Arrow Glacier block override (TODO: remove after the fork)
 	OverrideArrowGlacier *big.Int `toml:",omitempty"`
+
+	// Trace option
+	TraceCacheLimit int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
