@@ -3,21 +3,18 @@ title: Private Networks
 sort_key: B
 ---
 
-This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this
-context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for network integration testing for core developers working on issues realting to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
+This guide explains how to set up a private network of multiple Geth nodes. that are not able to connect to external peers. This page describes the setup process and configuration options required to establish a private network. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
 
-This page describes the setup process and configuration options required to establish a private network. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
 
+## Background
+
+A private network is composed of multiple Ethereum nodes that connect to each other but not to external peers. A fully controlled, private Ethereum network is useful as a backend for network integration testing for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. The nodes on a private network do not necessarily have to be run from the same machine but they can be. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`), a different `eth` and `http` port and a unique `ipc` endpoint. The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. 
+
+The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
 
 ## Prerequisites
 
 To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](../../_site/docs/install-and-build/installing-geth.html)). It is also helpful to understand Geth fundamentals (see [Getting Started](../../docs/_getting-started/index.md)).
-
-
-## Private Networks
-
-A private network is composed of multiple Ethereum nodes that are all run on the local machine. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`), a different `eth` and `http` port and a unique `ipc` endpoint. The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
-
 
 ### Choosing A Network ID
 
@@ -54,12 +51,14 @@ Every blockchain starts with a genesis block. When Geth is run with default sett
 network, it is generally preferable to use a different genesis block. The genesis block is configured using a _genesis.json_ file whose path must be provided to Geth on start-up. When creating a genesis block, a few initial parameters for the private blockchain must be defined:
 
 - Ethereum platform features enabled at launch (`config`). Enabling and disabling features once the blockchain is running requires scheduling a [hard fork](https://ethereum.org/en/glossary/#hard-fork).
+  
 - Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a
   [good choice][gaslimit-chart]. The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
+
 - Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses you list in the genesis block. Additional ether can be created through
   mining as the chain progresses.
 
-[gaslimit-chart]: https://etherscan.io/chart/gaslimit
+
 
 #### Clique Example
 
@@ -524,3 +523,8 @@ The same steps can then be repeated to attach a console to Node 2.
 ## Summary
 
 This page explored the various options for configuring a local private network. A step by step guide showed how to set up and launch a private network, unlock the associated accounts, attach a console to check the network status and make some basic interactions.
+
+
+
+
+[gaslimit-chart]: https://etherscan.io/chart/gaslimit
