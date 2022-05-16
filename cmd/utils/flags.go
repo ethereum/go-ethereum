@@ -1724,6 +1724,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
 	case ctx.GlobalBool(RinkebyFlag.Name):
+		log.Warn("")
+		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("Please note, Rinkeby has been deprecated. It will still work for the time being,")
+		log.Warn("but there will be no further hard-forks shipped for it. Eventually the network")
+		log.Warn("will be permanently halted after the other networks transition through the merge")
+		log.Warn("and prove stable enough. For the most future proof testnet, choose Sepolia as")
+		log.Warn("your replacement environment (--sepolia instead of --rinkeby).")
+		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("")
+
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
