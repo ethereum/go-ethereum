@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -55,7 +54,7 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 		t.Fatal(err)
 	}
 	// Signatures, with and without comments, both trusted and untrusted
-	files, err := ioutil.ReadDir(sigdir)
+	files, err := os.ReadDir(sigdir)
 	if err != nil {
 		t.Fatal(err)
 	}

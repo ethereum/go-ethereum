@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -354,7 +353,7 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 }
 
 func TestJsonFiles(t *testing.T) {
-	testfiles, err := ioutil.ReadDir("testdata/")
+	testfiles, err := os.ReadDir("testdata/")
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
@@ -389,7 +388,7 @@ func TestJsonFiles(t *testing.T) {
 // crashes or hangs.
 func TestFuzzerFiles(t *testing.T) {
 	corpusdir := path.Join("testdata", "fuzzing")
-	testfiles, err := ioutil.ReadDir(corpusdir)
+	testfiles, err := os.ReadDir(corpusdir)
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
