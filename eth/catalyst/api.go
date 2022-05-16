@@ -189,27 +189,13 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		// Create an empty block
-		emptyBlock, err := api.createEmptyBlock(update.HeadBlockHash, payloadAttributes)
+		req, err := api.eth.Miner().RequestSealingBlock(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
 			return valid(nil), err // valid setHead, invalid payload
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, emptyBlock)
-		// Now start the real block production async
-		go func() {
-			log.Info("Creating new payload for sealing")
-			start := time.Now()
-			data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
-			if err != nil {
-				log.Error("Failed to create sealing payload", "err", err)
-			}
-
-			id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-			api.localBlocks.put(id, data)
-			log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
-		}()
-
+		api.localBlocks.put(id, req)
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -243,11 +229,15 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.localBlocks.get(payloadID)
-	if data == nil {
+	req := api.localBlocks.get(payloadID)
+	if req == nil {
 		return nil, &beacon.UnknownPayload
 	}
-	return data, nil
+	block, err := api.eth.Miner().GetSealingBlock(req)
+	if err != nil {
+		return nil, err
+	}
+	return beacon.BlockToExecutableData(block), nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -344,26 +334,4 @@ func (api *ConsensusAPI) invalid(err error) beacon.PayloadStatusV1 {
 	currentHash := api.eth.BlockChain().CurrentHeader().Hash()
 	errorMsg := err.Error()
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
-}
-
-// assembleBlock creates a new block and returns the "execution
-// data" required for beacon clients to process the new block.
-func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	log.Info("Producing block", "parentHash", parentHash)
-	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	return beacon.BlockToExecutableData(block), nil
-}
-
-// createEmptyBlock creates a new empty block and returns the "execution
-// data" required for beacon clients to process the new block.
-func (api *ConsensusAPI) createEmptyBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	log.Info("Producing empty block", "parentHash", parentHash)
-	block, err := api.eth.Miner().GetEmptyBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	return beacon.BlockToExecutableData(block), nil
 }

@@ -93,7 +93,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	execData, err := api.assembleBlock(blocks[9].Hash(), &blockParams)
+	execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
 	}
@@ -114,7 +114,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	execData, err := api.assembleBlock(blocks[8].Hash(), &blockParams)
+	execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams)
 	if err != nil {
 		t.Fatalf("error producing block, err=%v", err)
 	}
@@ -273,7 +273,7 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
 		})
 		if err != nil {
@@ -313,7 +313,7 @@ func TestEth2NewBlock(t *testing.T) {
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
-		execData, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 6,
 		})
 		if err != nil {
@@ -567,14 +567,6 @@ func TestEmptyBlocks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
-		if len(payload.Transactions) != 0 {
-			t.Fatalf("payload should be empty")
-		}
-		time.Sleep(10 * time.Millisecond)
-		payload, err = api.GetPayloadV1(*resp.PayloadID)
-		if err != nil {
-			t.Fatalf("can't get payload: %v", err)
-		}
 		if len(payload.Transactions) == 0 {
 			t.Fatalf("payload should not be empty")
 		}
@@ -598,4 +590,17 @@ func TestEmptyBlocks(t *testing.T) {
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
 	}
+}
+
+func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
+	req, err := api.eth.Miner().RequestSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(10 * time.Millisecond)
+	block, err := api.eth.Miner().GetSealingBlock(req)
+	if err != nil {
+		return nil, err
+	}
+	return beacon.BlockToExecutableData(block), nil
 }

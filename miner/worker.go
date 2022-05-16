@@ -167,8 +167,8 @@ type newWorkReq struct {
 	timestamp int64
 }
 
-// getWorkReq represents a request for getting a new sealing work with provided parameters.
-type getWorkReq struct {
+// GetWorkReq represents a request for getting a new sealing work with provided parameters.
+type GetWorkReq struct {
 	params *generateParams
 	err    error
 	result chan *types.Block
@@ -203,7 +203,7 @@ type worker struct {
 
 	// Channels
 	newWorkCh          chan *newWorkReq
-	getWorkCh          chan *getWorkReq
+	getWorkCh          chan *GetWorkReq
 	taskCh             chan *task
 	resultCh           chan *types.Block
 	startCh            chan struct{}
@@ -268,7 +268,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
+		getWorkCh:          make(chan *GetWorkReq),
 		taskCh:             make(chan *task),
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
@@ -1176,29 +1176,60 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 	return nil
 }
 
-// getSealingBlock generates the sealing block based on the given parameters.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*types.Block, error) {
-	req := &getWorkReq{
-		params: &generateParams{
-			timestamp:  timestamp,
-			forceTime:  true,
-			parentHash: parent,
-			coinbase:   coinbase,
-			random:     random,
-			noUncle:    true,
-			noExtra:    true,
-		},
+// requestSealingBlock starts generating the sealing block based on the given parameters.
+func (w *worker) requestSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*GetWorkReq, error) {
+	params := &generateParams{
+		timestamp:  timestamp,
+		forceTime:  true,
+		parentHash: parent,
+		coinbase:   coinbase,
+		random:     random,
+		noUncle:    true,
+		noExtra:    true,
+	}
+
+	// Do the pre-checks, discard the result
+	env, err := w.prepareWork(params)
+	if err != nil {
+		return nil, err
+	}
+	defer env.discard()
+
+	req := &GetWorkReq{
+		params: params,
 		result: make(chan *types.Block, 1),
 	}
+
 	select {
 	case w.getWorkCh <- req:
-		block := <-req.result
-		if block == nil {
-			return nil, req.err
-		}
+		return req, nil
+	case <-w.exitCh:
+		return nil, errors.New("miner closed")
+	}
+}
+
+func (w *worker) getSealingBlock(req *GetWorkReq) (*types.Block, error) {
+	if req == nil {
+		return nil, errors.New("invalid getWork request")
+	}
+	if req.err != nil {
+		return nil, req.err
+	}
+	timeout := time.NewTimer(100 * time.Millisecond)
+	select {
+	case block := <-req.result:
 		return block, nil
 	case <-w.exitCh:
 		return nil, errors.New("miner closed")
+	case <-timeout.C:
+		// return an empty block if the block production times out
+		work, err := w.prepareWork(req.params)
+		if err != nil {
+			return nil, err
+		}
+		defer work.discard()
+
+		return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 	}
 }
 

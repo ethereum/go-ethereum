@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/miner"
 )
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
@@ -38,7 +39,7 @@ const maxTrackedHeaders = 10
 // or evicted.
 type payloadQueueItem struct {
 	id      beacon.PayloadID
-	payload *beacon.ExecutableDataV1
+	payload *miner.GetWorkReq
 }
 
 // payloadQueue tracks the latest handful of constructed payloads to be retrieved
@@ -57,19 +58,19 @@ func newPayloadQueue() *payloadQueue {
 }
 
 // put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id beacon.PayloadID, data *beacon.ExecutableDataV1) {
+func (q *payloadQueue) put(id beacon.PayloadID, req *miner.GetWorkReq) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	copy(q.payloads[1:], q.payloads)
 	q.payloads[0] = &payloadQueueItem{
 		id:      id,
-		payload: data,
+		payload: req,
 	}
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
+func (q *payloadQueue) get(id beacon.PayloadID) *miner.GetWorkReq {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
