@@ -210,13 +210,13 @@ func decodeRecord(s *rlp.Stream) (dec Record, raw []byte, err error) {
 		return dec, raw, err
 	}
 	if err = s.Decode(&dec.signature); err != nil {
-		if errors.Is(err, rlp.EOL) {
+		if err == rlp.EOL {
 			err = errIncompleteList
 		}
 		return dec, raw, err
 	}
 	if err = s.Decode(&dec.seq); err != nil {
-		if errors.Is(err, rlp.EOL) {
+		if err == rlp.EOL {
 			err = errIncompleteList
 		}
 		return dec, raw, err
@@ -226,13 +226,13 @@ func decodeRecord(s *rlp.Stream) (dec Record, raw []byte, err error) {
 	for i := 0; ; i++ {
 		var kv pair
 		if err := s.Decode(&kv.k); err != nil {
-			if errors.Is(err, rlp.EOL) {
+			if err == rlp.EOL {
 				break
 			}
 			return dec, raw, err
 		}
 		if err := s.Decode(&kv.v); err != nil {
-			if errors.Is(err, rlp.EOL) {
+			if err == rlp.EOL {
 				return dec, raw, errIncompletePair
 			}
 			return dec, raw, err
