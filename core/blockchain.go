@@ -2109,7 +2109,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	start := time.Now()
 	if head.ParentHash() != bc.CurrentBlock().Hash() {
 		if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
-			return head.Hash(), err
+			return common.Hash{}, err
 		}
 	}
 	bc.writeHeadBlock(head)

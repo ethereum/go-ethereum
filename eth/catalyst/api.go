@@ -138,8 +138,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
-		if lvh, err := api.eth.BlockChain().SetCanonical(block); err != nil {
-			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &lvh}}, err
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &latestValid}}, err
 		}
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
