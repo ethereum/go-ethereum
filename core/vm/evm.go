@@ -223,7 +223,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			addrCopy := addr
 
 			var header EOF1Header
-			if hasEIP3540(&evm.Config) && hasEOFMagic(code) {
+			if hasEIP3540And3670(&evm.Config) && hasEOFMagic(code) {
 				header = readValidEOF1Header(code)
 			}
 
@@ -288,7 +288,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		code := evm.StateDB.GetCode(addrCopy)
 
 		var header EOF1Header
-		if hasEIP3540(&evm.Config) && hasEOFMagic(code) {
+		if hasEIP3540And3670(&evm.Config) && hasEOFMagic(code) {
 			header = readValidEOF1Header(code)
 		}
 
@@ -337,7 +337,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		code := evm.StateDB.GetCode(addrCopy)
 
 		var header EOF1Header
-		if hasEIP3540(&evm.Config) && hasEOFMagic(code) {
+		if hasEIP3540And3670(&evm.Config) && hasEOFMagic(code) {
 			header = readValidEOF1Header(code)
 		}
 
@@ -397,7 +397,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		code := evm.StateDB.GetCode(addrCopy)
 
 		var header EOF1Header
-		if hasEIP3540(&evm.Config) && hasEOFMagic(code) {
+		if hasEIP3540And3670(&evm.Config) && hasEOFMagic(code) {
 			header = readValidEOF1Header(code)
 		}
 
@@ -432,13 +432,17 @@ func (c *codeAndHash) Hash() common.Hash {
 	return c.hash
 }
 
-func hasEIP3540(vmConfig *Config) bool {
+func hasEIP3540And3670(vmConfig *Config) bool {
+	eip3540 := false
+	eip3670 := false
 	for _, eip := range vmConfig.ExtraEips {
 		if eip == 3540 {
-			return true
+			eip3540 = true
+		} else if eip == 3670 {
+			eip3670 = true
 		}
 	}
-	return false
+	return eip3540 && eip3670
 }
 
 // create creates a new contract using code as deployment code.
@@ -468,11 +472,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	// Try to read code header if it claims to be EOF-formatted.
 	var header EOF1Header
-	if hasEIP3540(&evm.Config) && hasEOFMagic(codeAndHash.code) {
+	if hasEIP3540And3670(&evm.Config) && hasEOFMagic(codeAndHash.code) {
 		var err error
-		header, err = readEOF1Header(codeAndHash.code)
+		header, err = validateEOF(codeAndHash.code, evm.interpreter.cfg.JumpTable)
 		if err != nil {
-			return nil, common.Address{}, gas, ErrInvalidCodeFormat
+			return nil, common.Address{}, gas, ErrInvalidEOFCode
 		}
 	}
 	// Create a new account on the state
@@ -506,11 +510,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if err == nil && hasFormatByte(ret) {
-		if hasEIP3540(&evm.Config) {
-			// Allow only valid EOF1 if EIP-3540 is enabled.
+		if hasEIP3540And3670(&evm.Config) {
+			// Allow only valid EOF1 if EIP-3540 and EIP-3670 are enabled.
 			if hasEOFMagic(ret) {
-				if !validateEOF(ret) {
-					err = ErrInvalidCodeFormat
+				_, err = validateEOF(ret, evm.interpreter.cfg.JumpTable)
+				if err != nil {
+					err = ErrInvalidEOFCode
 				}
 			} else {
 				// Reject non-EOF code starting with 0xEF.

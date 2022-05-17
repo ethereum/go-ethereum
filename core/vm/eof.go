@@ -19,6 +19,7 @@ package vm
 import (
 	"bytes"
 	"encoding/binary"
+	"reflect"
 )
 
 const (
@@ -117,10 +118,39 @@ sectionLoop:
 	return header, nil
 }
 
-// validateEOF returns true if code has valid format
-func validateEOF(code []byte) bool {
-	_, err := readEOF1Header(code)
-	return err == nil
+// validateInstructions checks that there're no undefined instructions and code ends with a terminating instruction
+func validateInstructions(code []byte, header *EOF1Header, jumpTable *JumpTable) error {
+	i := header.CodeBeginOffset()
+	var opcode OpCode
+	for i < header.CodeEndOffset() {
+		opcode = OpCode(code[i])
+		if reflect.ValueOf(jumpTable[opcode].execute).Pointer() == reflect.ValueOf(opUndefined).Pointer() {
+			return ErrEOF1UndefinedInstruction
+		}
+		if opcode >= PUSH1 && opcode <= PUSH32 {
+			i += uint64(opcode) - uint64(PUSH1) + 1
+		}
+		i += 1
+	}
+
+	if !opcode.isTerminating() {
+		return ErrEOF1TerminatingInstructionMissing
+	}
+
+	return nil
+}
+
+// validateEOF returns true if code has valid format and code section
+func validateEOF(code []byte, jumpTable *JumpTable) (EOF1Header, error) {
+	header, err := readEOF1Header(code)
+	if err != nil {
+		return EOF1Header{}, err
+	}
+	err = validateInstructions(code, &header, jumpTable)
+	if err != nil {
+		return EOF1Header{}, err
+	}
+	return header, nil
 }
 
 // readValidEOF1Header parses EOF1-formatted code header, assuming that it is already validated

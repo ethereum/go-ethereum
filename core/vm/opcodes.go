@@ -546,3 +546,12 @@ var stringToOp = map[string]OpCode{
 func StringToOp(str string) OpCode {
 	return stringToOp[str]
 }
+
+// IsTerminating specifies if an opcode is a valid terminating instruction in EOF.
+func (op OpCode) isTerminating() bool {
+	switch op {
+	case STOP, RETURN, REVERT, INVALID, SELFDESTRUCT:
+		return true
+	}
+	return false
+}

@@ -30,11 +30,11 @@ type eof1Test struct {
 
 var eof1ValidTests = []eof1Test{
 	{"EF00010100010000", 1, 0},
-	{"EF0001010002006000", 2, 0},
-	{"EF0001010002020001006000AA", 2, 1},
-	{"EF0001010002020004006000AABBCCDD", 2, 4},
-	{"EF00010100040200020060006001AABB", 4, 2},
-	{"EF000101000602000400600060016002AABBCCDD", 6, 4},
+	{"EF0001010002000000", 2, 0},
+	{"EF0001010002020001000000AA", 2, 1},
+	{"EF0001010002020004000000AABBCCDD", 2, 4},
+	{"EF0001010005020002006000600100AABB", 5, 2},
+	{"EF00010100070200040060006001600200AABBCCDD", 7, 4},
 }
 
 type eof1InvalidTest struct {
@@ -130,14 +130,17 @@ func TestReadEOF1Header(t *testing.T) {
 }
 
 func TestValidateEOF(t *testing.T) {
+	jt := &mergeInstructionSet
 	for _, test := range eof1ValidTests {
-		if !validateEOF(common.Hex2Bytes(test.code)) {
+		_, err := validateEOF(common.Hex2Bytes(test.code), jt)
+		if err != nil {
 			t.Errorf("code %v expected to be valid", test.code)
 		}
 	}
 
 	for _, test := range eof1InvalidTests {
-		if validateEOF(common.Hex2Bytes(test.code)) {
+		_, err := validateEOF(common.Hex2Bytes(test.code), jt)
+		if err == nil {
 			t.Errorf("code %v expected to be invalid", test.code)
 		}
 	}
