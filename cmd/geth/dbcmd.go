@@ -307,7 +307,7 @@ func checkStateContent(ctx *cli.Context) error {
 		start  []byte
 	)
 	if ctx.NArg() > 1 {
-		return fmt.Errorf("Max 2 arguments: %v", ctx.Command.ArgsUsage)
+		return fmt.Errorf("Max 1 argument: %v", ctx.Command.ArgsUsage)
 	}
 	if ctx.NArg() > 0 {
 		if d, err := hexutil.Decode(ctx.Args().First()); err != nil {
