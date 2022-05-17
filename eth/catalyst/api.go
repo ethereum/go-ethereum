@@ -188,14 +188,20 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
-		// Create an empty block
-		req, err := api.eth.Miner().RequestSealingBlock(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random)
+		// Create an empty block first which can be used as a fallback
+		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
+		if err != nil {
+			return valid(nil), err
+		}
+		// Send a request to generate a full block in the background.
+		// The result can be obtained via the returned channel.
+		res, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
 		if err != nil {
 			log.Error("Failed to create sealing payload", "err", err)
 			return valid(nil), err // valid setHead, invalid payload
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, req)
+		api.localBlocks.put(id, &payload{empty: empty, result: res})
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -229,15 +235,11 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	req := api.localBlocks.get(payloadID)
-	if req == nil {
+	data := api.localBlocks.get(payloadID)
+	if data == nil {
 		return nil, &beacon.UnknownPayload
 	}
-	block, err := api.eth.Miner().GetSealingBlock(req)
-	if err != nil {
-		return nil, err
-	}
-	return beacon.BlockToExecutableData(block), nil
+	return data, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.

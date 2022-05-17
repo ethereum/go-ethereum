@@ -241,14 +241,40 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
 
-// GetSealingBlock retrieves a sealing block based on the given parameters.
-// The returned block is not sealed but all other fields should be filled.
-func (miner *Miner) RequestSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash) (*GetWorkReq, error) {
-	return miner.worker.requestSealingBlock(parent, timestamp, coinbase, random)
+// GetSealingBlockAsync requests to generate a sealing block according to the
+// given parameters. Regardless of whether the generation is successful or not,
+// there is always a result that will be returned through the result channel.
+// The difference is that if the execution fails, the returned result is nil
+// and the concrete error is dropped silently.
+func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, error) {
+	ch := make(chan *blockOrError)
+	if err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs, ch); err != nil {
+		return nil, err // worker is closed
+	}
+	// Spin up a translation go-routine to feed back the result returned
+	// by the background generator. It's safe to do it since the result
+	// will always be returned in a reasonable time allowance if the request
+	// is accepted.
+	ret := make(chan *types.Block, 1)
+	go func() {
+		result := <-ch
+		if result.err != nil {
+			ret <- nil
+		} else {
+			ret <- result.block
+		}
+	}()
+	return ret, nil
 }
 
-// GetEmptyBlock creates an empty block based on the given parameters.
-// The returned block is not sealed, but all other fields should be filled.
-func (miner *Miner) GetSealingBlock(req *GetWorkReq) (*types.Block, error) {
-	return miner.worker.getSealingBlock(req)
+// GetSealingBlockSync creates a sealing block according to the given parameters.
+// If the generation is failed or the underlying work is already closed, an error
+// will be returned.
+func (miner *Miner) GetSealingBlockSync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (*types.Block, error) {
+	ch := make(chan *blockOrError, 1)
+	if err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs, ch); err != nil {
+		return nil, err
+	}
+	result := <-ch
+	return result.block, result.err
 }

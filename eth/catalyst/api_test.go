@@ -567,6 +567,8 @@ func TestEmptyBlocks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
+		// TODO(493456442, marius) this test can be flaky since we rely on a 100ms
+		// allowance for block generation internally.
 		if len(payload.Transactions) == 0 {
 			t.Fatalf("payload should not be empty")
 		}
@@ -593,12 +595,7 @@ func TestEmptyBlocks(t *testing.T) {
 }
 
 func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	req, err := api.eth.Miner().RequestSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	time.Sleep(10 * time.Millisecond)
-	block, err := api.eth.Miner().GetSealingBlock(req)
+	block, err := api.eth.Miner().GetSealingBlockSync(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random, false)
 	if err != nil {
 		return nil, err
 	}
