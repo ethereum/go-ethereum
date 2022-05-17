@@ -136,7 +136,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	}
 	if resp, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("fork choice updated should not error: %v", err)
-	} else if resp.PayloadStatus.Status != beacon.INVALIDTERMINALBLOCK {
+	} else if resp.PayloadStatus.Status != beacon.INVALID_TERMINAL_BLOCK.Status {
 		t.Errorf("fork choice updated before total terminal difficulty should be INVALID")
 	}
 }

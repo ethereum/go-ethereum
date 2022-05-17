@@ -1480,7 +1480,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		} else {
 			// We're post-merge and the parent is pruned, try to recover the parent state
 			log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
-			return it.index, bc.recoverAncestors(block)
+			_, err := bc.recoverAncestors(block)
+			return it.index, err
 		}
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case errors.Is(err, consensus.ErrFutureBlock) || (errors.Is(err, consensus.ErrUnknownAncestor) && bc.futureBlocks.Contains(it.first().ParentHash())):
@@ -1849,7 +1850,8 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 // recoverAncestors finds the closest ancestor with available state and re-execute
 // all the ancestor blocks since that.
 // recoverAncestors is only used post-merge.
-func (bc *BlockChain) recoverAncestors(block *types.Block) error {
+// We return the hash of the latest block that we could correctly validate.
+func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) {
 	// Gather all the sidechain hashes (full blocks may be memory heavy)
 	var (
 		hashes  []common.Hash
@@ -1864,18 +1866,18 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) error {
 		// If the chain is terminating, stop iteration
 		if bc.insertStopped() {
 			log.Debug("Abort during blocks iteration")
-			return errInsertionInterrupted
+			return common.Hash{}, errInsertionInterrupted
 		}
 	}
 	if parent == nil {
-		return errors.New("missing parent")
+		return common.Hash{}, errors.New("missing parent")
 	}
 	// Import all the pruned blocks to make the state available
 	for i := len(hashes) - 1; i >= 0; i-- {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
 			log.Debug("Abort during blocks processing")
-			return errInsertionInterrupted
+			return common.Hash{}, errInsertionInterrupted
 		}
 		var b *types.Block
 		if i == 0 {
@@ -1884,10 +1886,10 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) error {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
 		if _, err := bc.insertChain(types.Blocks{b}, false, false); err != nil {
-			return err
+			return b.ParentHash(), err
 		}
 	}
-	return nil
+	return block.Hash(), nil
 }
 
 // collectLogs collects the logs that were generated or removed during
@@ -2090,16 +2092,16 @@ func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
 // SetCanonical rewinds the chain to set the new head block as the specified
 // block. It's possible that the state of the new head is missing, and it will
 // be recovered in this function as well.
-func (bc *BlockChain) SetCanonical(head *types.Block) error {
+func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	if !bc.chainmu.TryLock() {
-		return errChainStopped
+		return common.Hash{}, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
 	// Re-execute the reorged chain in case the head state is missing.
 	if !bc.HasState(head.Root()) {
-		if err := bc.recoverAncestors(head); err != nil {
-			return err
+		if latestValidHash, err := bc.recoverAncestors(head); err != nil {
+			return latestValidHash, err
 		}
 		log.Info("Recovered head state", "number", head.Number(), "hash", head.Hash())
 	}
@@ -2107,7 +2109,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) error {
 	start := time.Now()
 	if head.ParentHash() != bc.CurrentBlock().Hash() {
 		if err := bc.reorg(bc.CurrentBlock(), head); err != nil {
-			return err
+			return common.Hash{}, err
 		}
 	}
 	bc.writeHeadBlock(head)
@@ -2130,7 +2132,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) error {
 		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 	}
 	log.Info("Chain head was updated", context...)
-	return nil
+	return head.Hash(), nil
 }
 
 func (bc *BlockChain) updateFutureBlocks() {
