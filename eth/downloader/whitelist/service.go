@@ -2,15 +2,12 @@ package whitelist
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-)
-
-var (
-	ErrCheckpointMismatch = errors.New("checkpoint mismatch")
 )
 
 // Checkpoint whitelist
@@ -29,6 +26,11 @@ func NewService(maxCapacity uint) *Service {
 	}
 }
 
+var (
+	ErrCheckpointMismatch = errors.New("checkpoint mismatch")
+	ErrNoRemoteCheckoint  = errors.New("remote peer doesn't have a checkoint")
+)
+
 // IsValidChain checks if the chain we're about to receive from this peer is valid or not
 // in terms of reorgs. We won't reorg beyond the last bor checkpoint submitted to mainchain.
 func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
@@ -36,7 +38,7 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 	// we're storing in `checkpointWhitelist` with the peer's block.
 
 	// Check for availaibility of the last checkpointed block.
-	// This can be also be empty if our heimdall is not responsing
+	// This can be also be empty if our heimdall is not responding
 	// or we're running without it.
 	if len(w.checkpointWhitelist) == 0 {
 		// worst case, we don't have the checkpoints in memory
@@ -49,9 +51,11 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 
 	// todo: we can extract this as an interface and mock as well or just test IsValidChain in isolation from downloader passing fake fetchHeadersByNumber functions
 	headers, hashes, err := fetchHeadersByNumber(lastCheckpointBlockNum, 1, 0, false)
-	if err != nil || len(headers) == 0 {
-		// TODO: what better can be done here?
-		return true, nil
+	if err != nil {
+		return false, fmt.Errorf("%w: last checkpoint %d, err %v", ErrNoRemoteCheckoint, lastCheckpointBlockNum, err)
+	}
+	if len(headers) == 0 {
+		return true, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckoint, lastCheckpointBlockNum)
 	}
 
 	reqBlockNum := headers[0].Number.Uint64()
@@ -69,16 +73,16 @@ func (w *Service) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash
 	w.m.Lock()
 	defer w.m.Unlock()
 
-	w.EnqueueCheckpointWhitelist(endBlockNum, endBlockHash)
+	w.enqueueCheckpointWhitelist(endBlockNum, endBlockHash)
 	// If size of checkpoint whitelist map is greater than 10, remove the oldest entry.
 
-	if len(w.GetCheckpointWhitelist()) > int(w.maxCapacity) {
-		w.DequeueCheckpointWhitelist()
+	if w.length() > int(w.maxCapacity) {
+		w.dequeueCheckpointWhitelist()
 	}
 }
 
 // PurgeWhitelistMap purges data from checkpoint whitelist map
-func (w *Service) PurgeWhitelistMap() error {
+func (w *Service) purgeWhitelistMap() error {
 	for k := range w.checkpointWhitelist {
 		delete(w.checkpointWhitelist, k)
 	}
@@ -86,7 +90,7 @@ func (w *Service) PurgeWhitelistMap() error {
 }
 
 // EnqueueWhitelistBlock enqueues blockNumber, blockHash to the checkpoint whitelist map
-func (w *Service) EnqueueCheckpointWhitelist(key uint64, val common.Hash) {
+func (w *Service) enqueueCheckpointWhitelist(key uint64, val common.Hash) {
 	if _, ok := w.checkpointWhitelist[key]; !ok {
 		log.Debug("Enqueing new checkpoint whitelist", "block number", key, "block hash", val)
 
@@ -96,15 +100,16 @@ func (w *Service) EnqueueCheckpointWhitelist(key uint64, val common.Hash) {
 }
 
 // DequeueWhitelistBlock dequeues block, blockhash from the checkpoint whitelist map
-func (w *Service) DequeueCheckpointWhitelist() {
+func (w *Service) dequeueCheckpointWhitelist() {
 	if len(w.checkpointOrder) > 0 {
 		log.Debug("Dequeing checkpoint whitelist", "block number", w.checkpointOrder[0], "block hash", w.checkpointWhitelist[w.checkpointOrder[0]])
+
 		delete(w.checkpointWhitelist, w.checkpointOrder[0])
 		w.checkpointOrder = w.checkpointOrder[1:]
 	}
 }
 
-// GetCheckpointWhitelist returns the checkpoints whitelisted.
-func (w *Service) GetCheckpointWhitelist() map[uint64]common.Hash {
-	return w.checkpointWhitelist
+// length returns the len of the whitelist.
+func (w *Service) length() int {
+	return len(w.checkpointWhitelist)
 }

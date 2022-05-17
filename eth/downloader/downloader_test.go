@@ -82,6 +82,10 @@ func newTester() *downloadTester {
 	return tester
 }
 
+func (dl *downloadTester) setWhitelist(w ChainValidator) {
+	dl.downloader.ChainValidator = w
+}
+
 // terminate aborts any operations on the embedded downloader and releases all
 // held resources.
 func (dl *downloadTester) terminate() {
@@ -158,7 +162,7 @@ func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
 }
 
 func unmarshalRlpHeaders(rlpdata []rlp.RawValue) []*types.Header {
-	var headers = make([]*types.Header, len(rlpdata))
+	headers := make([]*types.Header, len(rlpdata))
 	for i, data := range rlpdata {
 		var h types.Header
 		if err := rlp.DecodeBytes(data, &h); err != nil {
@@ -620,9 +624,11 @@ func testBoundedForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestBoundedHeavyForkedSync66Full(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH66, FullSync)
 }
+
 func TestBoundedHeavyForkedSync66Snap(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH66, SnapSync)
 }
+
 func TestBoundedHeavyForkedSync66Light(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH66, LightSync)
 }
@@ -714,7 +720,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Create peers of every type
 	tester.newPeer("peer 66", eth.ETH66, chain.blocks[1:])
-	//tester.newPeer("peer 65", eth.ETH67, chain.blocks[1:)
+	// tester.newPeer("peer 65", eth.ETH67, chain.blocks[1:)
 
 	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil, mode); err != nil {
@@ -916,9 +922,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 func TestHighTDStarvationAttack66Full(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH66, FullSync)
 }
+
 func TestHighTDStarvationAttack66Snap(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH66, SnapSync)
 }
+
 func TestHighTDStarvationAttack66Light(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH66, LightSync)
 }
@@ -1271,36 +1279,45 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 		expected     []int
 	}{
 		// Remote is way higher. We should ask for the remote head and go backwards
-		{1500, 1000,
+		{
+			1500, 1000,
 			[]int{1323, 1339, 1355, 1371, 1387, 1403, 1419, 1435, 1451, 1467, 1483, 1499},
 		},
-		{15000, 13006,
+		{
+			15000, 13006,
 			[]int{14823, 14839, 14855, 14871, 14887, 14903, 14919, 14935, 14951, 14967, 14983, 14999},
 		},
 		// Remote is pretty close to us. We don't have to fetch as many
-		{1200, 1150,
+		{
+			1200, 1150,
 			[]int{1149, 1154, 1159, 1164, 1169, 1174, 1179, 1184, 1189, 1194, 1199},
 		},
 		// Remote is equal to us (so on a fork with higher td)
 		// We should get the closest couple of ancestors
-		{1500, 1500,
+		{
+			1500, 1500,
 			[]int{1497, 1499},
 		},
 		// We're higher than the remote! Odd
-		{1000, 1500,
+		{
+			1000, 1500,
 			[]int{997, 999},
 		},
 		// Check some weird edgecases that it behaves somewhat rationally
-		{0, 1500,
+		{
+			0, 1500,
 			[]int{0, 2},
 		},
-		{6000000, 0,
+		{
+			6000000, 0,
 			[]int{5999823, 5999839, 5999855, 5999871, 5999887, 5999903, 5999919, 5999935, 5999951, 5999967, 5999983, 5999999},
 		},
-		{0, 0,
+		{
+			0, 0,
 			[]int{0, 2},
 		},
 	}
+
 	reqs := func(from, count, span int) []int {
 		var r []int
 		num := from
@@ -1310,32 +1327,38 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 		}
 		return r
 	}
-	for i, tt := range testCases {
-		from, count, span, max := calculateRequestSpan(tt.remoteHeight, tt.localHeight)
-		data := reqs(int(from), count, span)
 
-		if max != uint64(data[len(data)-1]) {
-			t.Errorf("test %d: wrong last value %d != %d", i, data[len(data)-1], max)
-		}
-		failed := false
-		if len(data) != len(tt.expected) {
-			failed = true
-			t.Errorf("test %d: length wrong, expected %d got %d", i, len(tt.expected), len(data))
-		} else {
-			for j, n := range data {
-				if n != tt.expected[j] {
-					failed = true
-					break
+	for i, tt := range testCases {
+		i := i
+		tt := tt
+
+		t.Run("", func(t *testing.T) {
+			from, count, span, max := calculateRequestSpan(tt.remoteHeight, tt.localHeight)
+			data := reqs(int(from), count, span)
+
+			if max != uint64(data[len(data)-1]) {
+				t.Errorf("test %d: wrong last value %d != %d", i, data[len(data)-1], max)
+			}
+			failed := false
+			if len(data) != len(tt.expected) {
+				failed = true
+				t.Errorf("test %d: length wrong, expected %d got %d", i, len(tt.expected), len(data))
+			} else {
+				for j, n := range data {
+					if n != tt.expected[j] {
+						failed = true
+						break
+					}
 				}
 			}
-		}
-		if failed {
-			res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
-			exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
-			t.Logf("got: %v\n", res)
-			t.Logf("exp: %v\n", exp)
-			t.Errorf("test %d: wrong values", i)
-		}
+			if failed {
+				res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
+				exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
+				t.Logf("got: %v\n", res)
+				t.Logf("exp: %v\n", exp)
+				t.Errorf("test %d: wrong values", i)
+			}
+		})
 	}
 }
 
@@ -1370,4 +1393,90 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 	} else {
 		assertOwnChain(t, tester, len(chain.blocks))
 	}
+}
+
+type whitelistFake struct {
+	err error
+	res bool
+}
+
+func newWhitelistFake(res bool, err error) *whitelistFake {
+	return &whitelistFake{err, res}
+}
+
+func (w *whitelistFake) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
+	return w.res, w.err
+}
+
+func (w *whitelistFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
+
+func TestFakedSyncProgress66Whitelist(t *testing.T) {
+	protocol := uint(eth.ETH66)
+	mode := FullSync
+	tester := newTester()
+	defer tester.terminate()
+
+	chain := testChainBase.shorten(blockCacheMaxItems - 15)
+
+	// Set a sync init hook to catch progress changes
+	starting := make(chan struct{})
+	progress := make(chan struct{})
+	tester.downloader.syncInitHook = func(_, _ uint64) {
+		starting <- struct{}{}
+		<-progress
+	}
+	checkProgress(t, tester.downloader, "pristine", ethereum.SyncProgress{})
+
+	// Create and sync with an attacker that promises a higher chain than available.
+	attacker := tester.newPeer("attack", protocol, chain.blocks[1:])
+	numMissing := 5
+	for i := len(chain.blocks) - 2; i > len(chain.blocks)-numMissing; i-- {
+		attacker.withholdHeaders[chain.blocks[i].Hash()] = struct{}{}
+	}
+	attacker.dl.setWhitelist(newWhitelistFake(false, whitelist.ErrCheckpointMismatch))
+
+	pending := new(sync.WaitGroup)
+	pending.Add(1)
+	go func() {
+		defer pending.Done()
+		if err := tester.sync("attack", nil, mode); err == nil {
+			panic("succeeded attacker synchronisation")
+		}
+	}()
+	<-starting
+
+	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
+		HighestBlock: uint64(len(chain.blocks) - 1),
+	})
+	progress <- struct{}{}
+	pending.Wait()
+
+	afterFailedSync := tester.downloader.Progress()
+
+	// Synchronise with a good peer and check that the progress height has been reduced to
+	// the true value.
+	validChain := chain.shorten(len(chain.blocks) - numMissing)
+	tester.newPeer("valid", protocol, validChain.blocks[1:])
+	pending.Add(1)
+
+	go func() {
+		defer pending.Done()
+		if err := tester.sync("valid", nil, mode); err != nil {
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
+		}
+	}()
+	<-starting
+
+	checkProgress(t, tester.downloader, "completing", ethereum.SyncProgress{
+		CurrentBlock: afterFailedSync.CurrentBlock,
+		HighestBlock: uint64(len(validChain.blocks) - 1),
+	})
+	// Check final progress after successful sync.
+	progress <- struct{}{}
+	pending.Wait()
+
+	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
+		CurrentBlock: uint64(len(validChain.blocks) - 1),
+		HighestBlock: uint64(len(validChain.blocks) - 1),
+	})
 }
