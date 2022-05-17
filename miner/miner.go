@@ -246,22 +246,21 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 // there is always a result that will be returned through the result channel.
 // The difference is that if the execution fails, the returned result is nil
 // and the concrete error is dropped silently.
-// The caller of this method needs to set up a non-blocking result channel.
-func (miner *Miner) GetSealingBlockAsync(resultChan chan *types.Block, parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) error {
-	_, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs, resultChan)
-	return err
+func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, error) {
+	resChan, _, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs)
+	if err != nil {
+		return nil, err
+	}
+	return resChan, nil
 }
 
 // GetSealingBlockSync creates a sealing block according to the given parameters.
 // If the generation is failed or the underlying work is already closed, an error
 // will be returned.
 func (miner *Miner) GetSealingBlockSync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (*types.Block, error) {
-	resultChan := make(chan *types.Block, 1)
-	errChan, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs, resultChan)
+	resChan, errChan, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs)
 	if err != nil {
 		return nil, err
 	}
-	result := <-resultChan
-	err = <-errChan
-	return result, err
+	return <-resChan, <-errChan
 }
