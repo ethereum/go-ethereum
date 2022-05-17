@@ -903,6 +903,95 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	return tracer.GetResult()
 }
 
+// TraceTransactionStream subscribes to the traces generated for a transaction.
+func (api *API) TraceTransactionStream(ctx context.Context, hash common.Hash, config *TraceConfig) (*rpc.Subscription, error) {
+	_, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	// It shouldn't happen in practice.
+	if blockNumber == 0 {
+		return nil, errors.New("genesis is not traceable")
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	sub := notifier.CreateSubscription()
+	notifier.Notify(sub.ID, "hi")
+
+	stream := make(chan interface{})
+	go func() {
+		reexec := defaultTraceReexec
+		if config != nil && config.Reexec != nil {
+			reexec = *config.Reexec
+		}
+		block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
+		if err != nil {
+			log.Warn("trace failed", "err", err)
+			return
+		}
+		msg, vmctx, statedb, err := api.backend.StateAtTransaction(ctx, block, int(index), reexec)
+		if err != nil {
+			log.Warn("trace failed", "err", err)
+			return
+		}
+		var (
+			txctx = &Context{
+				BlockHash: blockHash,
+				TxIndex:   int(index),
+				TxHash:    hash,
+			}
+			timeout   = defaultTraceTimeout
+			txContext = core.NewEVMTxContext(msg)
+		)
+		if config == nil {
+			config = &TraceConfig{}
+		}
+		// TODO: only supporting struct logger for now
+		tracer := logger.NewStructLoggerStream(config.Config, stream)
+		// Define a meaningful timeout of a single transaction trace
+		if config.Timeout != nil {
+			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+				log.Warn("trace failed", "err", err)
+				return
+			}
+		}
+		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		go func() {
+			<-deadlineCtx.Done()
+			if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+				tracer.Stop(errors.New("execution timeout"))
+			}
+		}()
+		defer cancel()
+
+		// Run the transaction with tracing enabled.
+		vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+		// Call Prepare to clear out the statedb access list
+		statedb.Prepare(txctx.TxHash, txctx.TxIndex)
+		if _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+			log.Warn("trace failed", "err", err)
+			return
+		}
+		res, err := tracer.GetResult()
+		if err != nil {
+			log.Warn("tracer err", "err", err)
+		}
+		stream <- res
+		close(stream)
+	}()
+
+	go func() {
+		for log := range stream {
+			notifier.Notify(sub.ID, log)
+		}
+	}()
+
+	return sub, nil
+}
+
 // APIs return the collection of RPC services the tracer package offers.
 func APIs(backend Backend) []rpc.API {
 	// Append all the local APIs and return

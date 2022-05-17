@@ -119,12 +119,25 @@ type StructLogger struct {
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
+
+	stream chan interface{}
 }
 
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *Config) *StructLogger {
 	logger := &StructLogger{
 		storage: make(map[common.Address]Storage),
+	}
+	if cfg != nil {
+		logger.cfg = *cfg
+	}
+	return logger
+}
+
+func NewStructLoggerStream(cfg *Config, stream chan interface{}) *StructLogger {
+	logger := &StructLogger{
+		storage: make(map[common.Address]Storage),
+		stream:  stream,
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -211,7 +224,11 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
-	l.logs = append(l.logs, log)
+	if l.stream == nil {
+		l.logs = append(l.logs, log)
+	} else {
+		l.stream <- formatLogs([]StructLog{log})[0]
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault
