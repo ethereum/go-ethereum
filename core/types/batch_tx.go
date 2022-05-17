@@ -26,6 +26,8 @@ func (tx *BatchTx) copy() TxData {
 		ChainID:       new(big.Int),
 		DecryptionKey: []byte{},
 		BatchIndex:    tx.BatchIndex,
+		L1BlockNumber: new(big.Int),
+		Timestamp:     new(big.Int),
 	}
 	if tx.ChainID != nil {
 		cpy.ChainID.Set(tx.ChainID)
@@ -33,6 +35,12 @@ func (tx *BatchTx) copy() TxData {
 	if tx.DecryptionKey != nil {
 		cpy.DecryptionKey = make([]byte, len(tx.DecryptionKey))
 		copy(cpy.DecryptionKey, tx.DecryptionKey)
+	}
+	if tx.L1BlockNumber != nil {
+		cpy.L1BlockNumber.Set(tx.L1BlockNumber)
+	}
+	if tx.Timestamp != nil {
+		cpy.Timestamp.Set(tx.Timestamp)
 	}
 	if tx.Transactions != nil {
 		cpy.Transactions = make([][]byte, len(tx.Transactions))
