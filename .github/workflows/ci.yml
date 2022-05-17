@@ -1,8 +1,12 @@
 name: CI
-on:
+=on:
   push:
     branches:
+      - "master"
+  pull_request:
+    branches:
       - "**"
+    types: [opened, synchronize]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
