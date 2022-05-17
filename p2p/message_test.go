@@ -18,7 +18,6 @@ package p2p
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -56,7 +55,7 @@ loop:
 		go func() {
 			if err := SendItems(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
-			} else if !errors.Is(err, ErrPipeClosed) {
+			} else if err != ErrPipeClosed {
 				t.Errorf("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
 			}
 			close(done)
@@ -92,7 +91,7 @@ func TestEOFSignal(t *testing.T) {
 	// empty reader
 	eof := make(chan struct{}, 1)
 	sig := &eofSignal{new(bytes.Buffer), 0, eof}
-	if n, err := sig.Read(rb); n != 0 || !errors.Is(err, io.EOF) {
+	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
 		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
 	}
 	select {
@@ -119,7 +118,7 @@ func TestEOFSignal(t *testing.T) {
 	if n, err := sig.Read(rb); n != 4 || err != nil {
 		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
 	}
-	if n, err := sig.Read(rb); n != 0 || !errors.Is(err, io.EOF) {
+	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
 		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
 	}
 	select {

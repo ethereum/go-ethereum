@@ -17,7 +17,6 @@
 package dnsdisc
 
 import (
-	"errors"
 	"reflect"
 	"testing"
 
@@ -55,7 +54,7 @@ func TestParseRoot(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
-		if !errors.Is(err, test.err) {
+		if err != test.err {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
 	}
@@ -126,7 +125,7 @@ func TestParseEntry(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
-		if !errors.Is(err, test.err) {
+		if err != test.err {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
 	}

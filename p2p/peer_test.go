@@ -138,7 +138,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 
 	select {
 	case err := <-errc:
-		if !errors.Is(err, errProtocolReturned) {
+		if err != errProtocolReturned {
 			t.Errorf("peer returned error: %v", err)
 		}
 	case <-time.After(2 * time.Second):
