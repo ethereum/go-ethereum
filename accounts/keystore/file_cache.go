@@ -98,7 +98,7 @@ func nonKeyFile(fi os.DirEntry) bool {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || fi.Type()&os.ModeType != 0 {
+	if fi.IsDir() || !fi.Type().IsRegular() {
 		return true
 	}
 	return false
