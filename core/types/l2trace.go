@@ -19,7 +19,9 @@ type ExecutionResult struct {
 	Failed      bool   `json:"failed"`
 	ReturnValue string `json:"returnValue,omitempty"`
 	// Sender's account proof.
-	Sender *AccountProofWrapper `json:"sender,omitempty"`
+	From *AccountProofWrapper `json:"from,omitempty"`
+	// Receiver's account proof.
+	To *AccountProofWrapper `json:"to,omitempty"`
 	// It's exist only when tx is a contract call.
 	CodeHash *common.Hash `json:"codeHash,omitempty"`
 	// If it is a contract call, the contract code is returned.

@@ -794,6 +794,17 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		Balance:  (*hexutil.Big)(w.current.state.GetBalance(from)),
 		CodeHash: w.current.state.GetCodeHash(from),
 	}
+	// Get receiver's address.
+	var receiver *types.AccountProofWrapper
+	if tx.To() != nil {
+		to := *tx.To()
+		receiver = &types.AccountProofWrapper{
+			Address:  to,
+			Nonce:    w.current.state.GetNonce(to),
+			Balance:  (*hexutil.Big)(w.current.state.GetBalance(to)),
+			CodeHash: w.current.state.GetCodeHash(to),
+		}
+	}
 
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
@@ -805,7 +816,8 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	w.current.receipts = append(w.current.receipts, receipt)
 	w.current.executionResults = append(w.current.executionResults, &types.ExecutionResult{
 		Gas:         receipt.GasUsed,
-		Sender:      sender,
+		From:        sender,
+		To:          receiver,
 		Failed:      receipt.Status != types.ReceiptStatusSuccessful,
 		ReturnValue: fmt.Sprintf("%x", receipt.ReturnValue),
 		StructLogs:  vm.FormatLogs(tracer.StructLogs()),

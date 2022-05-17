@@ -1375,16 +1375,30 @@ func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block,
 	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, &coinbase)
 	for i, tx := range block.Transactions() {
 		evmTrace := blockResult.ExecutionResults[i]
-		from := evmTrace.Sender.Address
 
+		from := evmTrace.From.Address
 		// Get proof
 		proof, err := state.GetProof(from)
 		if err != nil {
 			log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", from.String(), "err", err)
 		} else {
-			evmTrace.Sender.Proof = make([]string, len(proof))
+			evmTrace.From.Proof = make([]string, len(proof))
 			for i := range proof {
-				evmTrace.Sender.Proof[i] = hexutil.Encode(proof[i])
+				evmTrace.From.Proof[i] = hexutil.Encode(proof[i])
+			}
+		}
+
+		if evmTrace.To != nil {
+			to := evmTrace.To.Address
+			// Get proof
+			proof, err = state.GetProof(to)
+			if err != nil {
+				log.Error("Failed to get proof", "blockNumber", block.NumberU64(), "address", to.String(), "err", err)
+			} else {
+				evmTrace.To.Proof = make([]string, len(proof))
+				for i := range proof {
+					evmTrace.To.Proof[i] = hexutil.Encode(proof[i])
+				}
 			}
 		}
 
