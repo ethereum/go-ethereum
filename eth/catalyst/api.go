@@ -61,8 +61,8 @@ type ConsensusAPI struct {
 	eth          *eth.Ethereum
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
-	// Lock for the FCU method
-	mu *sync.Mutex
+	// Lock for the forkChoiceUpdated method
+	forkChoiceLock *sync.Mutex
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -72,10 +72,10 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 		panic("Catalyst started without valid total difficulty")
 	}
 	return &ConsensusAPI{
-		eth:          eth,
-		remoteBlocks: newHeaderQueue(),
-		localBlocks:  newPayloadQueue(),
-		mu:           new(sync.Mutex),
+		eth:            eth,
+		remoteBlocks:   newHeaderQueue(),
+		localBlocks:    newPayloadQueue(),
+		forkChoiceLock: new(sync.Mutex),
 	}
 }
 
@@ -90,8 +90,8 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // If there are payloadAttributes:
 // 		we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
-	api.mu.Lock()
-	defer api.mu.Unlock()
+	api.forkChoiceLock.Lock()
+	defer api.forkChoiceLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
 	if update.HeadBlockHash == (common.Hash{}) {

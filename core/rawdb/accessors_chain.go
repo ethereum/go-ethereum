@@ -228,7 +228,7 @@ func ReadFinalizedBlockHash(db ethdb.KeyValueReader) common.Hash {
 // WriteFinalizedBlockHash stores the hash of the finalized block.
 func WriteFinalizedBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headFinalizedBlockKey, hash.Bytes()); err != nil {
-		log.Crit("Failed to store last fast block's hash", "err", err)
+		log.Crit("Failed to store last finalized block's hash", "err", err)
 	}
 }
 
