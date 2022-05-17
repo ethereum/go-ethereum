@@ -1425,7 +1425,7 @@ func TestFakedSyncProgress66Whitelist(t *testing.T) {
 		starting <- struct{}{}
 		<-progress
 	}
-	checkProgress(t, tester.downloader, "pristine", ethereum.SyncProgress{})
+	checkProgress(t, tester.downloader, "pristine", ethereum.SyncProgress{}) // FIXME: WIP deadlock
 
 	// Create and sync with an attacker that promises a higher chain than available.
 	attacker := tester.newPeer("attack", protocol, chain.blocks[1:])
