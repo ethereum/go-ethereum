@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -71,6 +72,7 @@ Remove blockchain and state databases`,
 			dbExportCmd,
 			dbMetadataCmd,
 			dbMigrateFreezerCmd,
+			dbCheckStateContentCmd,
 		},
 	}
 	dbInspectCmd = cli.Command{
@@ -82,6 +84,16 @@ Remove blockchain and state databases`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbCheckStateContentCmd = cli.Command{
+		Action:    utils.MigrateFlags(checkStateContent),
+		Name:      "check-state-content",
+		ArgsUsage: "<start (optional)>",
+		Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
+		Usage:     "Verify that state data is cryptographically correct",
+		Description: `This command iterates the entire database for 32-byte keys, looking for rlp-encoded trie nodes.
+For each trie node encountered, it checks that the key corresponds to the keccak256(value). If this is not true, this indicates
+a data corruption.`,
 	}
 	dbStatCmd = cli.Command{
 		Action: utils.MigrateFlags(dbStats),
@@ -287,6 +299,60 @@ func inspect(ctx *cli.Context) error {
 	defer db.Close()
 
 	return rawdb.InspectDatabase(db, prefix, start)
+}
+
+func checkStateContent(ctx *cli.Context) error {
+	var (
+		prefix []byte
+		start  []byte
+	)
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("Max 1 argument: %v", ctx.Command.ArgsUsage)
+	}
+	if ctx.NArg() > 0 {
+		if d, err := hexutil.Decode(ctx.Args().First()); err != nil {
+			return fmt.Errorf("failed to hex-decode 'start': %v", err)
+		} else {
+			start = d
+		}
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+	var (
+		it        = rawdb.NewKeyLengthIterator(db.NewIterator(prefix, start), 32)
+		hasher    = crypto.NewKeccakState()
+		got       = make([]byte, 32)
+		errs      int
+		count     int
+		startTime = time.Now()
+		lastLog   = time.Now()
+	)
+	for it.Next() {
+		count++
+		v := it.Value()
+		k := it.Key()
+		hasher.Reset()
+		hasher.Write(v)
+		hasher.Read(got)
+		if !bytes.Equal(k, got) {
+			errs++
+			fmt.Printf("Error at 0x%x\n", k)
+			fmt.Printf("  Hash:  0x%x\n", got)
+			fmt.Printf("  Data:  0x%x\n", v)
+		}
+		if time.Since(lastLog) > 8*time.Second {
+			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", common.PrettyDuration(time.Since(startTime)))
+			lastLog = time.Now()
+		}
+	}
+	if err := it.Error(); err != nil {
+		return err
+	}
+	log.Info("Iterated the state content", "errors", errs, "items", count)
+	return nil
 }
 
 func showLeveldbStats(db ethdb.KeyValueStater) {
