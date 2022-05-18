@@ -197,18 +197,19 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
-		log.Info("Creating new payload for sealing")
-		start := time.Now()
-
-		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
+		// Create an empty block first which can be used as a fallback
+		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
 		if err != nil {
-			log.Error("Failed to create sealing payload", "err", err)
-			return valid(nil), err // valid setHead, invalid payload
+			return valid(nil), err
+		}
+		// Send a request to generate a full block in the background.
+		// The result can be obtained via the returned channel.
+		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
+		if err != nil {
+			return valid(nil), err
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, data)
-
-		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
+		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -343,15 +344,4 @@ func (api *ConsensusAPI) invalid(err error) beacon.PayloadStatusV1 {
 	currentHash := api.eth.BlockChain().CurrentHeader().Hash()
 	errorMsg := err.Error()
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
-}
-
-// assembleBlock creates a new block and returns the "execution
-// data" required for beacon clients to process the new block.
-func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	log.Info("Producing block", "parentHash", parentHash)
-	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	return beacon.BlockToExecutableData(block), nil
 }
