@@ -62,7 +62,7 @@ type ConsensusAPI struct {
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
 	// Lock for the forkChoiceUpdated method
-	forkChoiceLock *sync.Mutex
+	forkChoiceLock sync.Mutex
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -72,10 +72,9 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 		panic("Catalyst started without valid total difficulty")
 	}
 	return &ConsensusAPI{
-		eth:            eth,
-		remoteBlocks:   newHeaderQueue(),
-		localBlocks:    newPayloadQueue(),
-		forkChoiceLock: new(sync.Mutex),
+		eth:          eth,
+		remoteBlocks: newHeaderQueue(),
+		localBlocks:  newPayloadQueue(),
 	}
 }
 
