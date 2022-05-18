@@ -476,7 +476,10 @@ func TestFullAPI(t *testing.T) {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
 		if ethservice.BlockChain().CurrentBlock().NumberU64() != payload.Number {
-			t.Fatalf("Chain head should be updated")
+			t.Fatal("Chain head should be updated")
+		}
+		if ethservice.BlockChain().CurrentFinalizedBlock().NumberU64() != payload.Number-1 {
+			t.Fatal("Finalized block should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
 	}

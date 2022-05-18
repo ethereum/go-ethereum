@@ -216,6 +216,22 @@ func WriteHeadFastBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadFinalizedBlockHash retrieves the hash of the finalized block.
+func ReadFinalizedBlockHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(headFinalizedBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
+// WriteFinalizedBlockHash stores the hash of the finalized block.
+func WriteFinalizedBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(headFinalizedBlockKey, hash.Bytes()); err != nil {
+		log.Crit("Failed to store last finalized block's hash", "err", err)
+	}
+}
+
 // ReadLastPivotNumber retrieves the number of the last pivot block. If the node
 // full synced, the last pivot will always be nil.
 func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
