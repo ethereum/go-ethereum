@@ -153,7 +153,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	api := NewConsensusAPI(ethservice)
 
 	// Put the 10th block's tx in the pool and produce a new block
-	api.eth.TxPool().AddLocals(blocks[9].Transactions())
+	ethservice.TxPool().AddLocals(blocks[9].Transactions())
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
@@ -682,7 +682,7 @@ func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *beacon
 		SuggestedFeeRecipient: parent.Coinbase(),
 	}
 
-	payload, err := api.assembleBlock(parent.Hash(), &params)
+	payload, err := assembleBlock(api, parent.Hash(), &params)
 	if err != nil {
 		t.Fatal(err)
 	}
