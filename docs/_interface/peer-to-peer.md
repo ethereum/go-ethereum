@@ -54,7 +54,7 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 ## Checking Connectivity
 
-The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](../_interface/JavaScript-Console.md). These are `net.listening` which reports whether the Geth node is listening for inbound requests,a nd `peerCount` which returns the number of active peers the node is connected to.
+The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](../_interface/JavaScript-Console.md). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
 
 ```javascript
