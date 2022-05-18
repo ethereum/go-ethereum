@@ -161,12 +161,13 @@ func getWrappedProofForStorage(l *StructLogger, address common.Address, key comm
 	}, nil
 }
 
-func encodeProof(proof [][]byte) (res []string) {
+func encodeProof(proof [][]byte) []string {
 	if len(proof) == 0 {
 		return nil
 	}
+	res := make([]string, 0, len(proof))
 	for _, node := range proof {
 		res = append(res, hexutil.Encode(node))
 	}
-	return
+	return res
 }

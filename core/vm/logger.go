@@ -441,11 +441,29 @@ func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Addre
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
+var (
+	formatPool = sync.Pool{
+		New: func() interface{} {
+			return make([]types.StructLogRes, 0, 128)
+		},
+	}
+)
+
 // FormatLogs formats EVM returned structured logs for json output
 func FormatLogs(logs []StructLog) []types.StructLogRes {
-	formatted := make([]types.StructLogRes, len(logs))
+	formatted := formatPool.Get().([]types.StructLogRes)
+	runtime.SetFinalizer(&formatted, func(format *[]types.StructLogRes) {
+		for _, res := range *format {
+			res.ExtraData = nil
+			res.Storage = nil
+			res.Stack = res.Stack[:0]
+			res.Memory = res.Memory[:0]
+		}
+		formatPool.Put(*format)
+	})
+
 	for index, trace := range logs {
-		formatted[index] = types.StructLogRes{
+		formatted = append(formatted, types.StructLogRes{
 			Pc:            trace.Pc,
 			Op:            trace.Op.String(),
 			Gas:           trace.Gas,
@@ -453,27 +471,29 @@ func FormatLogs(logs []StructLog) []types.StructLogRes {
 			Depth:         trace.Depth,
 			RefundCounter: trace.RefundCounter,
 			Error:         trace.ErrorString(),
-		}
+		})
 		if len(trace.Stack) != 0 {
-			stack := make([]string, len(trace.Stack))
-			for i, stackValue := range trace.Stack {
-				stack[i] = stackValue.Hex()
+			if formatted[index].Stack == nil {
+				formatted[index].Stack = make([]string, 0, len(trace.Stack))
 			}
-			formatted[index].Stack = &stack
+			for _, stackValue := range trace.Stack {
+				formatted[index].Stack = append(formatted[index].Stack, stackValue.Hex())
+			}
 		}
 		if trace.Memory.Len() != 0 {
-			memory := make([]string, 0, (trace.Memory.Len()+31)/32)
-			for i := 0; i+32 <= trace.Memory.Len(); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory.Bytes()[i:i+32]))
+			if formatted[index].Memory == nil {
+				formatted[index].Memory = make([]string, 0, (trace.Memory.Len()+31)/32)
 			}
-			formatted[index].Memory = &memory
+			for i := 0; i+32 <= trace.Memory.Len(); i += 32 {
+				formatted[index].Memory = append(formatted[index].Memory, common.Bytes2Hex(trace.Memory.Bytes()[i:i+32]))
+			}
 		}
 		if len(trace.Storage) != 0 {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+				storage[i.Hex()] = storageValue.Hex()
 			}
-			formatted[index].Storage = &storage
+			formatted[index].Storage = storage
 		}
 		if trace.ExtraData != nil {
 			formatted[index].ExtraData = trace.ExtraData.SealExtraData()
