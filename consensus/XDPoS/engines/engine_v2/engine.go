@@ -171,13 +171,13 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	}
 
 	// Initial first v2 snapshot
-	if header.Number.Uint64() < x.config.V2.SwitchBlock.Uint64()+x.config.Gap {
+	lastGapNum := x.config.V2.SwitchBlock.Uint64() - x.config.Gap
+	lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
 
-		checkpointBlockNumber := header.Number.Uint64() - header.Number.Uint64()%x.config.Epoch
-		checkpointHeader := chain.GetHeaderByNumber(checkpointBlockNumber)
+	snap, _ := loadSnapshot(x.db, lastGapHeader.Hash())
 
-		lastGapNum := checkpointBlockNumber - x.config.Gap
-		lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
+	if snap == nil {
+		checkpointHeader := chain.GetHeaderByNumber(x.config.V2.SwitchBlock.Uint64())
 
 		log.Info("[Initial] init first snapshot")
 		_, _, masternodes, err := x.getExtraFields(checkpointHeader)
