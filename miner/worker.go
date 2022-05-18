@@ -1182,8 +1182,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // the generation itself succeeds or not.
 func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
 	var (
-		resChan = make(chan *types.Block, 1)
-		errChan = make(chan error, 1)
+		resCh = make(chan *types.Block, 1)
+		errCh = make(chan error, 1)
 	)
 	req := &getWorkReq{
 		params: &generateParams{
@@ -1196,12 +1196,12 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			noExtra:    true,
 			noTxs:      noTxs,
 		},
-		result: resChan,
-		err:    errChan,
+		result: resCh,
+		err:    errCh,
 	}
 	select {
 	case w.getWorkCh <- req:
-		return resChan, errChan, nil
+		return resCh, errCh, nil
 	case <-w.exitCh:
 		return nil, nil, errors.New("miner closed")
 	}

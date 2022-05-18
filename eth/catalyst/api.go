@@ -195,12 +195,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		}
 		// Send a request to generate a full block in the background.
 		// The result can be obtained via the returned channel.
-		resChan, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
+		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
 		if err != nil {
 			return valid(nil), err
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, &payload{empty: empty, result: resChan})
+		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
 		return valid(&id), nil
 	}
 	return valid(nil), nil
