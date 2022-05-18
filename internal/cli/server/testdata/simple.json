@@ -1,6 +1,6 @@
 {
     "data-dir": "./data",
-    "whitelist": {
+    "requiredblocks": {
         "a": "b"
     },
     "p2p": {

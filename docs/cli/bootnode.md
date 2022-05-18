@@ -14,4 +14,4 @@
 
 - ```save-key```: path to save the ecdsa private key
 
-- ```dry-run```
+- ```dry-run```: validates parameters and prints bootnode configurations, but does not start bootnode
