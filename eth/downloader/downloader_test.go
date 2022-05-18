@@ -77,7 +77,6 @@ func newTester() *downloadTester {
 		peers:   make(map[string]*downloadTesterPeer),
 	}
 
-	// TODO: here we can inject a mock
 	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, nil, whitelist.NewService(10))
 	return tester
 }
@@ -1410,73 +1409,20 @@ func (w *whitelistFake) IsValidChain(remoteHeader *types.Header, fetchHeadersByN
 
 func (w *whitelistFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
 
-func TestFakedSyncProgress66Whitelist(t *testing.T) {
+func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
 	protocol := uint(eth.ETH66)
 	mode := FullSync
+
 	tester := newTester()
+	tester.downloader.ChainValidator = newWhitelistFake(true, whitelist.ErrCheckpointMismatch)
+
 	defer tester.terminate()
 
-	chain := testChainBase.shorten(blockCacheMaxItems - 15)
+	chainA := testChainForkLightA.blocks
+	tester.newPeer("light", protocol, chainA[1:])
 
-	// Set a sync init hook to catch progress changes
-	starting := make(chan struct{})
-	progress := make(chan struct{})
-	tester.downloader.syncInitHook = func(_, _ uint64) {
-		starting <- struct{}{}
-		<-progress
+	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("light", nil, mode); err == nil {
+		t.Fatal("succeeded attacker synchronisation")
 	}
-	checkProgress(t, tester.downloader, "pristine", ethereum.SyncProgress{}) // FIXME: WIP deadlock
-
-	// Create and sync with an attacker that promises a higher chain than available.
-	attacker := tester.newPeer("attack", protocol, chain.blocks[1:])
-	numMissing := 5
-	for i := len(chain.blocks) - 2; i > len(chain.blocks)-numMissing; i-- {
-		attacker.withholdHeaders[chain.blocks[i].Hash()] = struct{}{}
-	}
-	attacker.dl.setWhitelist(newWhitelistFake(false, whitelist.ErrCheckpointMismatch))
-
-	pending := new(sync.WaitGroup)
-	pending.Add(1)
-	go func() {
-		defer pending.Done()
-		if err := tester.sync("attack", nil, mode); err == nil {
-			panic("succeeded attacker synchronisation")
-		}
-	}()
-	<-starting
-
-	checkProgress(t, tester.downloader, "initial", ethereum.SyncProgress{
-		HighestBlock: uint64(len(chain.blocks) - 1),
-	})
-	progress <- struct{}{}
-	pending.Wait()
-
-	afterFailedSync := tester.downloader.Progress()
-
-	// Synchronise with a good peer and check that the progress height has been reduced to
-	// the true value.
-	validChain := chain.shorten(len(chain.blocks) - numMissing)
-	tester.newPeer("valid", protocol, validChain.blocks[1:])
-	pending.Add(1)
-
-	go func() {
-		defer pending.Done()
-		if err := tester.sync("valid", nil, mode); err != nil {
-			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
-		}
-	}()
-	<-starting
-
-	checkProgress(t, tester.downloader, "completing", ethereum.SyncProgress{
-		CurrentBlock: afterFailedSync.CurrentBlock,
-		HighestBlock: uint64(len(validChain.blocks) - 1),
-	})
-	// Check final progress after successful sync.
-	progress <- struct{}{}
-	pending.Wait()
-
-	checkProgress(t, tester.downloader, "final", ethereum.SyncProgress{
-		CurrentBlock: uint64(len(validChain.blocks) - 1),
-		HighestBlock: uint64(len(validChain.blocks) - 1),
-	})
 }
