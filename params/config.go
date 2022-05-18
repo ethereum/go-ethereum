@@ -272,6 +272,15 @@ var (
 	TestRules       = TestChainConfig.Rules(new(big.Int), false)
 )
 
+// NetworkNames are user friendly names to use in the chain spec banner.
+var NetworkNames = map[string]string{
+	MainnetChainConfig.ChainID.String(): "mainnet",
+	RopstenChainConfig.ChainID.String(): "ropsten",
+	RinkebyChainConfig.ChainID.String(): "rinkeby",
+	GoerliChainConfig.ChainID.String():  "goerli",
+	SepoliaChainConfig.ChainID.String(): "sepolia",
+}
+
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
 // BloomTrie) associated with the appropriate section index and head hash. It is
 // used to start light syncing from this checkpoint and avoid downloading the
@@ -380,35 +389,66 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	var engine interface{}
+	var banner string
+
+	// Create some basinc network config output
+	network := NetworkNames[c.ChainID.String()]
+	if network == "" {
+		network = "unknown"
+	}
+	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
 	switch {
 	case c.Ethash != nil:
-		engine = c.Ethash
+		if c.TerminalTotalDifficulty == nil {
+			banner += fmt.Sprintf("Consensus: Ethash (proof-of-work)\n")
+		} else {
+			banner += fmt.Sprintf("Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n")
+		}
 	case c.Clique != nil:
-		engine = c.Clique
+		if c.TerminalTotalDifficulty == nil {
+			banner += fmt.Sprintf("Consensus: Clique (proof-of-authority)\n")
+		} else {
+			banner += fmt.Sprintf("Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n")
+		}
 	default:
-		engine = "unknown"
+		banner += fmt.Sprintf("Consensus: unknown\n")
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, MergeFork: %v, Terminal TD: %v, Engine: %v}",
-		c.ChainID,
-		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
-		c.EIP150Block,
-		c.EIP155Block,
-		c.EIP158Block,
-		c.ByzantiumBlock,
-		c.ConstantinopleBlock,
-		c.PetersburgBlock,
-		c.IstanbulBlock,
-		c.MuirGlacierBlock,
-		c.BerlinBlock,
-		c.LondonBlock,
-		c.ArrowGlacierBlock,
-		c.MergeForkBlock,
-		c.TerminalTotalDifficulty,
-		engine,
-	)
+	banner += "\n"
+
+	// Create a list of forks with a short description of them. Forks that only
+	// makes sense for mainnet should be optional at printing to avoid bloating
+	// the output for testnets and private networks.
+	banner += "Pre-Merge hard forks:\n"
+	banner += fmt.Sprintf(" - Homestead:                   %-8v (delegatecall)\n", c.HomesteadBlock)
+	if c.DAOForkBlock != nil {
+		banner += fmt.Sprintf(" - DAO Fork:                    %-8v (TheDAO attack neutralization)\n", c.DAOForkBlock)
+	}
+	banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): %-8v (Shanghai attack neutralization)\n", c.EIP150Block)
+	banner += fmt.Sprintf(" - Spurious Dragon/1 (EIP 155): %-8v (replay protection)\n", c.EIP155Block)
+	banner += fmt.Sprintf(" - Spurious Dragon/2 (EIP 158): %-8v (Shanghai attack cleanup)\n", c.EIP155Block)
+	banner += fmt.Sprintf(" - Byzantium:                   %-8v (revert, bn256, returndata, staticcall, status code)\n", c.ByzantiumBlock)
+	banner += fmt.Sprintf(" - Constantinople:              %-8v (bitshifts, create2, extcodehash, net metering)\n", c.ConstantinopleBlock)
+	banner += fmt.Sprintf(" - Petersburg:                  %-8v (undo faulty net metering)\n", c.PetersburgBlock)
+	banner += fmt.Sprintf(" - Istanbul:                    %-8v (blake2, chainid, fixed net metering)\n", c.IstanbulBlock)
+	if c.MuirGlacierBlock != nil {
+		banner += fmt.Sprintf(" - Muir Glacier:                %-8v (ice age delay)\n", c.MuirGlacierBlock)
+	}
+	banner += fmt.Sprintf(" - Berlin:                      %-8v (typed transaction, access lists)\n", c.BerlinBlock)
+	banner += fmt.Sprintf(" - London:                      %-8v (fee burn, basefee)\n", c.LondonBlock)
+	if c.ArrowGlacierBlock != nil {
+		banner += fmt.Sprintf(" - Arrow Glacier:               %-8v (ice age delay)\n", c.ArrowGlacierBlock)
+	}
+	banner += "\n"
+
+	// Add a special section for the merge as it's non-obvious
+	if c.TerminalTotalDifficulty == nil {
+		banner += "Merge not configured!"
+	} else {
+		banner += "Merge configured:\n"
+		banner += fmt.Sprintf(" - Total terminal difficulty: %v (proof-of-stake switchover threshold)\n", c.TerminalTotalDifficulty)
+		banner += fmt.Sprintf(" - Merge fork block:          %-8v (network partitioning point)", c.MergeForkBlock)
+	}
+	return banner
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
