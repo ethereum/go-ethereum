@@ -663,6 +663,25 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 		}
 	}
 
+	// unlock accounts
+	if len(c.Accounts.Unlock) > 0 {
+		if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
+			return nil, fmt.Errorf("Account unlock with HTTP access is forbidden!")
+		}
+		ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+		passwords, err := MakePasswordListFromFile(c.Accounts.PasswordFile)
+		if err != nil {
+			return nil, err
+		}
+		if len(passwords) < len(c.Accounts.Unlock) {
+			return nil, fmt.Errorf("Number of passwords provided (%v) is less than number of accounts (%v) to unlock",
+				len(passwords), len(c.Accounts.Unlock))
+		}
+		for i, account := range c.Accounts.Unlock {
+			ks.Unlock(accounts.Account{Address: common.HexToAddress(account)}, passwords[i])
+		}
+	}
+
 	// update for developer mode
 	if c.Developer.Enabled {
 		// Get a keystore
@@ -989,4 +1008,17 @@ func Hostname() string {
 		return "bor"
 	}
 	return hostname
+}
+
+func MakePasswordListFromFile(path string) ([]string, error) {
+	text, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read password file: %v", err)
+	}
+	lines := strings.Split(string(text), "\n")
+	// Sanitise DOS line endings.
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return lines, nil
 }

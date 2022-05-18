@@ -153,3 +153,10 @@ func TestConfigBootnodesDefault(t *testing.T) {
 		assert.Len(t, cfg.P2P.BootstrapNodes, 1)
 	})
 }
+
+func TestMakePasswordListFromFile(t *testing.T) {
+	t.Run("ReadPasswordFile", func(t *testing.T) {
+		result, _ := MakePasswordListFromFile("./testdata/password.txt")
+		assert.Equal(t, []string{"test1", "test2"}, result)
+	})
+}
