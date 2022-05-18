@@ -37,9 +37,9 @@ type Database struct {
 
 func (db *Database) Has(key []byte) (bool, error) {
 	if _, err := db.Get(key); err != nil {
-		return true, nil
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {
@@ -53,9 +53,9 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 
 func (db *Database) HasAncient(kind string, number uint64) (bool, error) {
 	if _, err := db.Ancient(kind, number); err != nil {
-		return true, nil
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (db *Database) Ancient(kind string, number uint64) ([]byte, error) {
