@@ -175,15 +175,21 @@ type KeyError struct {
 
 // Error implements error.
 func (err *KeyError) Error() string {
-	if errors.Is(err.Err, errNotFound) {
+	if err.Err == errNotFound {
 		return fmt.Sprintf("missing ENR key %q", err.Key)
 	}
 	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
 }
 
+func (err *KeyError) Unwrap() error {
+	return err.Err	
+}
+
 // IsNotFound reports whether the given error means that a key/value pair is
 // missing from a record.
 func IsNotFound(err error) bool {
-	kerr, ok := err.(*KeyError)
-	return ok && errors.Is(kerr.Err, errNotFound)
+	var keyErr *KeyError
+	if errors.As(err, keyErr) {
+		return keyErr.Err == errNotFound
+	}
 }
