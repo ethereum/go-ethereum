@@ -17,6 +17,7 @@ const (
 	MaxMasternodes             = 18
 	MaxMasternodesV2           = 108
 	LimitPenaltyEpoch          = 4
+	LimitPenaltyEpochV2        = 0
 	BlocksPerYearTest          = uint64(200000)
 	BlocksPerYear              = uint64(15768000)
 	LimitThresholdNonceInQueue = 10
