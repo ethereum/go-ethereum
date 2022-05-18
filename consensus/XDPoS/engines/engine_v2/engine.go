@@ -664,12 +664,6 @@ func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader
 		return err
 	}
 
-	err = x.verifyQC(chain, quorumCert, nil)
-	if err != nil {
-		log.Error("[ProposedBlockHandler] Fail to verify QC", "Extra round", round, "QC proposed BlockInfo Hash", quorumCert.ProposedBlockInfo.Hash)
-		return err
-	}
-
 	// Generate blockInfo
 	blockInfo := &utils.BlockInfo{
 		Hash:   blockHeader.Hash(),
