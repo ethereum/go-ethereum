@@ -475,6 +475,16 @@ web3._extend({
 			call: 'debug_dbGet',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'dbAncient',
+			call: 'debug_dbAncient',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'dbAncients',
+			call: 'debug_dbAncients',
+			params: 0
+		}),
 	],
 	properties: []
 });
