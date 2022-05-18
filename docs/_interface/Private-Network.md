@@ -16,7 +16,7 @@ To follow the tutorial on this page it is necessary to have a working Geth insta
 
 ## Private Networks
 
-A private network is composed of multiple Ethereum nodes that are all run on the local machine. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`), a different `eth` and `http` port and a unique `ipc` endpoint. The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
+A private network is composed of multiple Ethereum nodes that can only connect to each other. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`). The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
 
 
 ### Choosing A Network ID
