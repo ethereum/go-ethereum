@@ -84,10 +84,6 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 
 type tracerCtor = func(string, *tracers.Context) (tracers.Tracer, error)
 
-func TestDuktapeTracer(t *testing.T) {
-	testTracer(t, newJsTracer)
-}
-
 func TestGojaTracer(t *testing.T) {
 	testTracer(t, newGojaTracer)
 }
@@ -154,11 +150,6 @@ func testTracer(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestHaltDuktape(t *testing.T) {
-	t.Skip("duktape doesn't support abortion")
-	testHalt(t, newJsTracer)
-}
-
 func TestHaltGoja(t *testing.T) {
 	testHalt(t, newGojaTracer)
 }
@@ -176,10 +167,6 @@ func testHalt(t *testing.T, newTracer tracerCtor) {
 	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); !strings.Contains(err.Error(), "stahp") {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
-}
-
-func TestHaltBetweenStepsDuktape(t *testing.T) {
-	testHaltBetweenSteps(t, newJsTracer)
 }
 
 func TestHaltBetweenStepsGoja(t *testing.T) {
@@ -204,10 +191,6 @@ func testHaltBetweenSteps(t *testing.T, newTracer tracerCtor) {
 	if _, err := tracer.GetResult(); !strings.Contains(err.Error(), timeout.Error()) {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
-}
-
-func TestNoStepExecDuktape(t *testing.T) {
-	testNoStepExec(t, newJsTracer)
 }
 
 func TestNoStepExecGoja(t *testing.T) {
@@ -247,10 +230,6 @@ func testNoStepExec(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestIsPrecompileDuktape(t *testing.T) {
-	testIsPrecompile(t, newJsTracer)
-}
-
 func TestIsPrecompileGoja(t *testing.T) {
 	testIsPrecompile(t, newGojaTracer)
 }
@@ -286,10 +265,6 @@ func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestEnterExitDuktape(t *testing.T) {
-	testEnterExit(t, newJsTracer)
-}
-
 func TestEnterExitGoja(t *testing.T) {
 	testEnterExit(t, newGojaTracer)
 }
@@ -320,22 +295,5 @@ func testEnterExit(t *testing.T, newTracer tracerCtor) {
 	want := `{"enters":1,"exits":1,"enterGas":1000,"gasUsed":400}`
 	if string(have) != want {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
-	}
-}
-
-// Tests too deep object / serialization crash for duktape
-func TestRecursionLimit(t *testing.T) {
-	code := "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<1000; i++){  o.foo={}; o=o.foo; } return x; }}"
-	fail := "RangeError: json encode recursion limit    in server-side tracer function 'result'"
-	tracer, err := newJsTracer(code, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := ""
-	if _, err := runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
-		got = err.Error()
-	}
-	if got != fail {
-		t.Errorf("expected error to be '%s' got '%s'\n", fail, got)
 	}
 }

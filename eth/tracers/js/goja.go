@@ -856,3 +856,74 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("contract", l.contract.setupObject())
 	return o
 }
+
+// opWrapper provides a JavaScript wrapper around OpCode.
+type opWrapper struct {
+	op vm.OpCode
+}
+
+// memoryWrapper provides a JavaScript wrapper around vm.Memory.
+type memoryWrapper struct {
+	memory *vm.Memory
+}
+
+// slice returns the requested range of memory as a byte slice.
+func (mw *memoryWrapper) slice(begin, end int64) []byte {
+	if end == begin {
+		return []byte{}
+	}
+	if end < begin || begin < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "offset", begin, "end", end)
+		return nil
+	}
+	if mw.memory.Len() < int(end) {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", begin, "size", end-begin)
+		return nil
+	}
+	return mw.memory.GetCopy(begin, end-begin)
+}
+
+// getUint returns the 32 bytes at the specified address interpreted as a uint.
+func (mw *memoryWrapper) getUint(addr int64) *big.Int {
+	if mw.memory.Len() < int(addr)+32 || addr < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", addr, "size", 32)
+		return new(big.Int)
+	}
+	return new(big.Int).SetBytes(mw.memory.GetPtr(addr, 32))
+}
+
+// stackWrapper provides a JavaScript wrapper around vm.Stack.
+type stackWrapper struct {
+	stack *vm.Stack
+}
+
+// peek returns the nth-from-the-top element of the stack.
+func (sw *stackWrapper) peek(idx int) *big.Int {
+	if len(sw.stack.Data()) <= idx || idx < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound stack", "size", len(sw.stack.Data()), "index", idx)
+		return new(big.Int)
+	}
+	return sw.stack.Back(idx).ToBig()
+}
+
+// dbWrapper provides a JavaScript wrapper around vm.Database.
+type dbWrapper struct {
+	db vm.StateDB
+}
+
+// contractWrapper provides a JavaScript wrapper around vm.Contract
+type contractWrapper struct {
+	contract *vm.Contract
+}
+
+func wrapError(context string, err error) error {
+	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
+}
