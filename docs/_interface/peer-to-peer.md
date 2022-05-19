@@ -122,7 +122,7 @@ It is often useful for developers to connect to private test networks rather tha
 
 ## Static nodes
 
-Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be statc nodes by saving their enode addresses to a json file and providing the file path to Gteh at startup:
+Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by saving their enode addresses to a json file and providing the file path to Geth at startup:
 
 ```shell
 
