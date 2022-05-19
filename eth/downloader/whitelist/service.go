@@ -12,7 +12,7 @@ import (
 
 // Checkpoint whitelist
 type Service struct {
-	m                   sync.RWMutex
+	m                   sync.Mutex
 	checkpointWhitelist map[uint64]common.Hash // Checkpoint whitelist, populated by reaching out to heimdall
 	checkpointOrder     []uint64               // Checkpoint order, populated by reaching out to heimdall
 	maxCapacity         uint
@@ -54,6 +54,7 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 	if err != nil {
 		return false, fmt.Errorf("%w: last checkpoint %d, err %v", ErrNoRemoteCheckoint, lastCheckpointBlockNum, err)
 	}
+
 	if len(headers) == 0 {
 		return true, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckoint, lastCheckpointBlockNum)
 	}
