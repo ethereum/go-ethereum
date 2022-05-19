@@ -184,7 +184,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// END: Bor changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-	var dbVer = "<nil>"
+	dbVer := "<nil>"
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
@@ -598,22 +598,25 @@ func (s *Ethereum) Start() error {
 // StartCheckpointWhitelistService starts the goroutine to fetch checkpoints and update the
 // checkpoint whitelist map.
 func (s *Ethereum) startCheckpointWhitelistService() {
-	every := time.Duration(100) * time.Second
-	ticker := time.NewTicker(every)
-	defer ticker.Stop()
-
 	// first run the checkpoint whitelist
 	err := s.handleWhitelistCheckpoint()
 	if err != nil {
+		if errors.Is(err, ErrBorConsensusWithoutHeimdall) || errors.Is(err, ErrNotBorConsensus) {
+			return
+		}
+
 		log.Warn("the first run", "err", err)
 	}
+
+	ticker := time.NewTicker(100 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			err := s.handleWhitelistCheckpoint()
 			if err != nil {
-				log.Warn(err.Error())
+				log.Warn("couldn't get whitelist checkpoint", "err", err)
 			}
 		case <-s.closeCh:
 			return
@@ -621,19 +624,31 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	}
 }
 
+var (
+	ErrNotBorConsensus             = errors.New("not Bor consensus was given")
+	ErrBorConsensusWithoutHeimdall = errors.New("Bor consensus without Heimdall")
+)
+
 // handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
 func (s *Ethereum) handleWhitelistCheckpoint() error {
 	ethHandler := (*ethHandler)(s.handler)
 
-	if !ethHandler.chain.Engine().(*bor.Bor).WithoutHeimdall {
-		endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint()
-		if err != nil {
-			return err
-		}
-
-		// Update the checkpoint whitelist map.
-		ethHandler.downloader.ProcessCheckpoint(endBlockNum, endBlockHash)
+	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
+	if !ok {
+		return ErrNotBorConsensus
 	}
+
+	if bor.WithoutHeimdall {
+		return ErrBorConsensusWithoutHeimdall
+	}
+
+	endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint(bor)
+	if err != nil {
+		return err
+	}
+
+	// Update the checkpoint whitelist map.
+	ethHandler.downloader.ProcessCheckpoint(endBlockNum, endBlockHash)
 
 	return nil
 }

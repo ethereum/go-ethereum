@@ -2,8 +2,8 @@ package eth
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,9 +14,9 @@ import (
 
 // fetchWhitelistCheckpoint fetched the latest checkpoint from it's local heimdall
 // and verifies the data against bor data.
-func (h *ethHandler) fetchWhitelistCheckpoint() (uint64, common.Hash, error) {
+func (h *ethHandler) fetchWhitelistCheckpoint(bor *bor.Bor) (uint64, common.Hash, error) {
 	// check for checkpoint whitelisting: bor
-	checkpoint, err := h.chain.Engine().(*bor.Bor).HeimdallClient.FetchLatestCheckpoint()
+	checkpoint, err := bor.HeimdallClient.FetchLatestCheckpoint()
 	if err != nil {
 		log.Debug("Failed to fetch latest checkpoint for whitelisting")
 		return 0, common.Hash{}, errors.New("failed to fetch latest checkpoint")
@@ -47,6 +47,8 @@ func (h *ethHandler) fetchWhitelistCheckpoint() (uint64, common.Hash, error) {
 		log.Debug("Failed to get end block hash of checkpoint while whitelisting")
 		return 0, common.Hash{}, errors.New("failed to get end block")
 	}
+
 	hash := fmt.Sprintf("%v", block["hash"])
+
 	return checkpoint.EndBlock.Uint64(), common.HexToHash(hash), nil
 }
