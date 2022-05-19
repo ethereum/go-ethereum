@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -49,7 +50,7 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 	)
 
 	// We need to generate as many blocks +1 as uncles
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, uncles+1,
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, state.NewDatabase(db), uncles+1,
 		func(n int, b *BlockGen) {
 			if n == uncles {
 				// Add transactions and stuff on the last block

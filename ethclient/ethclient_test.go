@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -250,7 +251,7 @@ func generateTestChain() []*types.Block {
 	}
 	gblock := genesis.ToBlock(db)
 	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(genesis.Config, gblock, engine, db, 2, generate)
+	blocks, _ := core.GenerateChain(genesis.Config, gblock, engine, state.NewDatabase(db), 2, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
 	return blocks
 }

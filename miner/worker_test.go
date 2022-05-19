@@ -141,8 +141,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
+	sdb := state.NewDatabase(db)
 	if n > 0 {
-		blocks, _ := core.GenerateChain(chainConfig, genesis, engine, db, n, func(i int, gen *core.BlockGen) {
+		blocks, _ := core.GenerateChain(chainConfig, genesis, engine, sdb, n, func(i int, gen *core.BlockGen) {
 			gen.SetCoinbase(testBankAddress)
 		})
 		if _, err := chain.InsertChain(blocks); err != nil {
@@ -153,7 +154,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	if n > 0 {
 		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
 	}
-	blocks, _ := core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
+	blocks, _ := core.GenerateChain(chainConfig, parent, engine, sdb, 1, func(i int, gen *core.BlockGen) {
 		gen.SetCoinbase(testUserAddress)
 	})
 
@@ -180,7 +181,7 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	} else {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
 	}
-	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), state.NewDatabase(b.db), 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
 		rand.Read(addr)
 		gen.SetCoinbase(common.BytesToAddress(addr))

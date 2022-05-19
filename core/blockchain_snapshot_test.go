@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -52,14 +53,13 @@ type snapshotTestBasic struct {
 	// share fields, set in runtime
 	datadir string
 	db      ethdb.Database
-	gendb   ethdb.Database
+	gendb   state.Database
 	engine  consensus.Engine
 }
 
 func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Block) {
 	// Create a temporary persistent database
 	datadir := t.TempDir()
-
 	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
@@ -68,7 +68,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	var (
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
 		engine  = ethash.NewFullFaker()
-		gendb   = rawdb.NewMemoryDatabase()
+		gendb   = state.NewDatabase(rawdb.NewMemoryDatabase())
 
 		// Snapshot is enabled, the first snapshot is created from the Genesis.
 		// The snapshot memory allowance is 256MB, it means no snapshot flush
@@ -200,7 +200,7 @@ func (basic *snapshotTestBasic) dump() string {
 
 func (basic *snapshotTestBasic) teardown() {
 	basic.db.Close()
-	basic.gendb.Close()
+	basic.gendb.TrieDB().DiskDB().Close()
 	os.RemoveAll(basic.datadir)
 }
 

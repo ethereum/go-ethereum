@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -67,7 +68,7 @@ func getChain() *core.BlockChain {
 		Alloc:  ga,
 	}
 	genesis := gspec.MustCommit(db)
-	blocks, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 2,
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), state.NewDatabase(db), 2,
 		func(i int, gen *core.BlockGen) {})
 	cacheConf := &core.CacheConfig{
 		TrieCleanLimit:      0,

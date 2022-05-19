@@ -71,7 +71,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		gendb   = rawdb.NewMemoryDatabase()
 		genesis = gspec.MustCommit(gendb)
 	)
-	blocks, _ := core.GenerateChain(backend.chainConfig, genesis, backend.engine, gendb, n, generator)
+	blocks, _ := core.GenerateChain(backend.chainConfig, genesis, backend.engine, state.NewDatabase(gendb), n, generator)
 
 	// Import the canonical chain
 	gspec.MustCommit(backend.chaindb)

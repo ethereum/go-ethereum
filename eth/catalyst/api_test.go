@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -71,7 +72,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 	}
 	gblock := genesis.ToBlock(db)
 	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
+	blocks, _ := core.GenerateChain(config, gblock, engine, state.NewDatabase(db), n, generate)
 	totalDifficulty := big.NewInt(0)
 	for _, b := range blocks {
 		totalDifficulty.Add(totalDifficulty, b.Difficulty())
