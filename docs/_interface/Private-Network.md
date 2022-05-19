@@ -1,6 +1,6 @@
 ---
 title: Private Networks
-sort_key: B
+sort_key: D
 ---
 
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this
