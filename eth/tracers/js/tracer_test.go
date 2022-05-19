@@ -85,7 +85,7 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 type tracerCtor = func(string, *tracers.Context) (tracers.Tracer, error)
 
 func TestGojaTracer(t *testing.T) {
-	testTracer(t, newGojaTracer)
+	testTracer(t, newJsTracer)
 }
 
 func testTracer(t *testing.T, newTracer tracerCtor) {
@@ -151,7 +151,7 @@ func testTracer(t *testing.T, newTracer tracerCtor) {
 }
 
 func TestHaltGoja(t *testing.T) {
-	testHalt(t, newGojaTracer)
+	testHalt(t, newJsTracer)
 }
 
 func testHalt(t *testing.T, newTracer tracerCtor) {
@@ -170,7 +170,7 @@ func testHalt(t *testing.T, newTracer tracerCtor) {
 }
 
 func TestHaltBetweenStepsGoja(t *testing.T) {
-	testHaltBetweenSteps(t, newGojaTracer)
+	testHaltBetweenSteps(t, newJsTracer)
 }
 
 func testHaltBetweenSteps(t *testing.T, newTracer tracerCtor) {
@@ -194,7 +194,7 @@ func testHaltBetweenSteps(t *testing.T, newTracer tracerCtor) {
 }
 
 func TestNoStepExecGoja(t *testing.T) {
-	testNoStepExec(t, newGojaTracer)
+	testNoStepExec(t, newJsTracer)
 }
 
 // testNoStepExec tests a regular value transfer (no exec), and accessing the statedb
@@ -231,7 +231,7 @@ func testNoStepExec(t *testing.T, newTracer tracerCtor) {
 }
 
 func TestIsPrecompileGoja(t *testing.T) {
-	testIsPrecompile(t, newGojaTracer)
+	testIsPrecompile(t, newJsTracer)
 }
 
 func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
@@ -266,7 +266,7 @@ func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 }
 
 func TestEnterExitGoja(t *testing.T) {
-	testEnterExit(t, newGojaTracer)
+	testEnterExit(t, newJsTracer)
 }
 
 func testEnterExit(t *testing.T, newTracer tracerCtor) {

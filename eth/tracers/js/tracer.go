@@ -42,7 +42,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	tracers.RegisterLookup(true, newGojaTracer)
+	tracers.RegisterLookup(true, newJsTracer)
 }
 
 // bigIntProgram is compiled once and the exported function mostly invoked to convert
@@ -90,6 +90,8 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 	return nil, fmt.Errorf("invalid buffer type")
 }
 
+// jsTracer is an implementation of the Tracer interface which evaluates
+// JS functions on the relevant EVM hooks. It uses Goja as its JS engine.
 type jsTracer struct {
 	vm                *goja.Runtime
 	env               *vm.EVM
@@ -123,7 +125,13 @@ type jsTracer struct {
 	frameResultValue goja.Value
 }
 
-func newGojaTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
+// newJsTracer instantiates a new JS tracer instance. code is either
+// the name of a built-in JS tracer or a Javascript snippet which
+// evaluates to an expression returning an object with certain methods.
+// The methods `result` and `fault` are required to be present.
+// The methods `step`, `enter`, and `exit` are optional, but note that
+// `enter` and `exit` always go together.
+func newJsTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
 	if c, ok := assetTracers[code]; ok {
 		code = c
 	}
