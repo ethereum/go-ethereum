@@ -125,6 +125,9 @@ func testTracer(t *testing.T, newTracer tracerCtor) {
 		}, { // tests that depth is reported correctly
 			code: "{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}",
 			want: `[0,1,2]`,
+		}, { // tests memory length
+			code: "{lengths: [], step: function(log) { this.lengths.push(log.memory.length()); }, fault: function() {}, result: function() { return this.lengths; }}",
+			want: `[0,0,0]`,
 		}, { // tests to-string of opcodes
 			code: "{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}",
 			want: `["PUSH1","PUSH1","STOP"]`,
