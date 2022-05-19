@@ -3,7 +3,7 @@ title: Connecting To The Network
 sort_key: B
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](../_interface/Private-Network.md) and [local testnets](../_getting-started/dev-mode.md). Command line flags are provided for connecting to the popular public testnets:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). Command line flags are provided for connecting to the popular public testnets:
 
 - `--ropsten`, Ropsten proof-of-work test network
 - `--rinkeby`, Rinkeby proof-of-authority test network
@@ -49,12 +49,12 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - The public network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
-- Running Geth in [light mode](../_interface/les.md) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode.
+- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode.
 
 
 ## Checking Connectivity
 
-The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](../_interface/JavaScript-Console.md). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
+The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
 
 ```javascript
@@ -117,7 +117,7 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks
 
-It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](../_interface/Private-Network.md).
+It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
 
 ```shell
 
@@ -185,4 +185,4 @@ admin.addTrustedPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5
 
 ## Summary
 
-Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks. 
+Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks.
