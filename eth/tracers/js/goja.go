@@ -517,10 +517,15 @@ func (mo *memoryObj) GetUint(addr int64) goja.Value {
 	return res
 }
 
+func (mo *memoryObj) Length() int {
+	return mo.w.memory.Len()
+}
+
 func (m *memoryObj) setupObject() *goja.Object {
 	o := m.vm.NewObject()
 	o.Set("slice", m.vm.ToValue(m.Slice))
 	o.Set("getUint", m.vm.ToValue(m.GetUint))
+	o.Set("length", m.vm.ToValue(m.Length))
 	return o
 }
 

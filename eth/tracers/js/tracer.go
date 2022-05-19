@@ -148,6 +148,10 @@ func (mw *memoryWrapper) getUint(addr int64) *big.Int {
 func (mw *memoryWrapper) pushObject(vm *duktape.Context) {
 	obj := vm.PushObject()
 
+	// Generate the `length` method which returns the memory length
+	vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushInt(mw.memory.Len()); return 1 })
+	vm.PutPropString(obj, "length")
+
 	// Generate the `slice` method which takes two ints and returns a buffer
 	vm.PushGoFunction(func(ctx *duktape.Context) int {
 		blob := mw.slice(int64(ctx.GetInt(-2)), int64(ctx.GetInt(-1)))
