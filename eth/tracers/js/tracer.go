@@ -90,7 +90,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 	return nil, fmt.Errorf("invalid buffer type")
 }
 
-type gojaTracer struct {
+type jsTracer struct {
 	vm                *goja.Runtime
 	env               *vm.EVM
 	toBig             toBigFn               // Converts a hex string into a JS bigint
@@ -130,7 +130,7 @@ func newGojaTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
-	t := &gojaTracer{
+	t := &jsTracer{
 		vm:  vm,
 		ctx: make(map[string]goja.Value),
 	}
@@ -193,16 +193,16 @@ func newGojaTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
 
 // CaptureTxStart implements the Tracer interface and is invoked at the beginning of
 // transaction processing.
-func (t *gojaTracer) CaptureTxStart(gasLimit uint64) {
+func (t *jsTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
 // CaptureTxStart implements the Tracer interface and is invoked at the end of
 // transaction processing.
-func (t *gojaTracer) CaptureTxEnd(restGas uint64) {}
+func (t *jsTracer) CaptureTxEnd(restGas uint64) {}
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (t *gojaTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
@@ -230,7 +230,7 @@ func (t *gojaTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (t *gojaTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -254,7 +254,7 @@ func (t *gojaTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 }
 
 // CaptureFault implements the Tracer interface to trace an execution fault
-func (t *gojaTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 	if t.err != nil {
 		return
 	}
@@ -266,7 +266,7 @@ func (t *gojaTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, sco
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *gojaTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Duration, err error) {
+func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Duration, err error) {
 	t.ctx["output"] = t.vm.ToValue(output)
 	t.ctx["time"] = t.vm.ToValue(duration.String())
 	t.ctx["gasUsed"] = t.vm.ToValue(gasUsed)
@@ -276,7 +276,7 @@ func (t *gojaTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Dur
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *gojaTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if !t.traceFrame {
 		return
 	}
@@ -301,7 +301,7 @@ func (t *gojaTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *gojaTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	if !t.traceFrame {
 		return
 	}
@@ -316,7 +316,7 @@ func (t *gojaTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
-func (t *gojaTracer) GetResult() (json.RawMessage, error) {
+func (t *jsTracer) GetResult() (json.RawMessage, error) {
 	ctx := t.vm.ToValue(t.ctx)
 	res, err := t.result(t.obj, ctx, t.dbValue)
 	if err != nil {
@@ -330,14 +330,14 @@ func (t *gojaTracer) GetResult() (json.RawMessage, error) {
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *gojaTracer) Stop(err error) {
+func (t *jsTracer) Stop(err error) {
 	t.vm.Interrupt(err)
 	t.env.Cancel()
 }
 
 // setBuiltinFunctions injects Go functions which are available to tracers into the environment.
 // It depends on type converters having been set up.
-func (t *gojaTracer) setBuiltinFunctions() {
+func (t *jsTracer) setBuiltinFunctions() {
 	vm := t.vm
 	// TODO: load console from goja-nodejs
 	vm.Set("toHex", func(v goja.Value) string {
@@ -435,7 +435,7 @@ func (t *gojaTracer) setBuiltinFunctions() {
 
 // setTypeConverters sets up utilities for converting Go types into those
 // suitable for JS consumption.
-func (t *gojaTracer) setTypeConverters() error {
+func (t *jsTracer) setTypeConverters() error {
 	// Inject bigint logic.
 	// TODO: To be replaced after goja adds support for native JS bigint.
 	toBigCode, err := t.vm.RunProgram(bigIntProgram)
