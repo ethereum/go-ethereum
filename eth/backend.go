@@ -586,10 +586,12 @@ func (s *Ethereum) Start() error {
 		}
 		maxPeers -= s.config.LightPeers
 	}
+
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
 
 	go s.startCheckpointWhitelistService()
+
 	return nil
 }
 
@@ -600,7 +602,12 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	ticker := time.NewTicker(every)
 	defer ticker.Stop()
 
-Loop:
+	// first run the checkpoint whitelist
+	err := s.handleWhitelistCheckpoint()
+	if err != nil {
+		log.Warn("the first run", "err", err)
+	}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -609,7 +616,7 @@ Loop:
 				log.Warn(err.Error())
 			}
 		case <-s.closeCh:
-			break Loop
+			return
 		}
 	}
 }
