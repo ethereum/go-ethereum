@@ -122,15 +122,7 @@ It is often useful for developers to connect to private test networks rather tha
 
 ## Static nodes
 
-Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by saving their enode addresses to a json file and providing the file path to Geth at startup:
-
-```shell
-
-geth <other flags> datadir/geth/static-nodes.json
-
-```
-
-The content of `static-nodes.json` should be formatted as follows:
+Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by saving their enode addresses to a json file which must be stored in `datadir/geth/static-nodes.json`. The content of `static-nodes.json` should be formatted as follows:
 
 ```javascript
 [
@@ -159,16 +151,7 @@ geth <otherflags> --maxpeers 15
 
 ## Trusted nodes
 
-Geth supports trusted nodes that are always allowed to reconnect, even if the peer limit is reached. They can be added persistently via a config file `<datadir>/geth/trusted-nodes.json` or temporarily using the Javascript console.
-
-The format for the config file is identical to the one used for static nodes.
-
-```shell
-
-geth <other flags> datadir/geth/trusted-nodes.json
-
-```
-
+Geth supports trusted nodes that are always allowed to reconnect, even if the peer limit is reached. They can be added persistently via a config file `<datadir>/geth/trusted-nodes.json` or temporarily using the Javascript console. The format for the config file is identical to the one used for static nodes.
 
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
