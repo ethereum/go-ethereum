@@ -132,12 +132,12 @@ var (
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
 	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite
 	debDistroGoBoots = map[string]string{
-		"trusty":  "golang-1.11", // EOL: 04/2024
-		"xenial":  "golang-go",   // EOL: 04/2026
-		"bionic":  "golang-go",   // EOL: 04/2028
-		"focal":   "golang-go",   // EOL: 04/2030
-		"impish":  "golang-go",   // EOL: 07/2022
-		"jammy":   "golang-go",   // EOL: 04/2032
+		"trusty": "golang-1.11", // EOL: 04/2024
+		"xenial": "golang-go",   // EOL: 04/2026
+		"bionic": "golang-go",   // EOL: 04/2028
+		"focal":  "golang-go",   // EOL: 04/2030
+		"impish": "golang-go",   // EOL: 07/2022
+		"jammy":  "golang-go",   // EOL: 04/2032
 		//"kinetic": "golang-go",   //  EOL: 07/2023
 	}
 
@@ -461,7 +461,7 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a cron job")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+	if env.Branch != "master" && env.Branch != "buildbot-testing" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
