@@ -569,7 +569,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
-		{name: "mergeNetwplitBlock", block: c.MergeNetsplitBlock, optional: true},
+		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
