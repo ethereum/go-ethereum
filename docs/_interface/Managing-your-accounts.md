@@ -3,7 +3,10 @@ title: Account Management
 sort_key: C
 ---
 
-It is recommended to use the external key manager `Clef` for interacting with Geth. Instructions for setting up and using Clef can be found on our Clef page. However, Geth also has its own convenient built-in account management tools that are acceptably secure for many use-cases. This page will describe how to manage accounts using Geth's built in tools.
+It is recommended to use the external key manager Clef for interacting with Geth because it can be run from secure external devices and has additional security benefits such as the ability to sign transactions according to custom rules. Instructions for setting up and using Clef can be found on the [Clef page](../clef/tutorial). However, Geth also has its own convenient built-in account management tools that are more convenient and secure enough for many use-cases. This page will describe how to manage accounts using Geth's built in tools. The command line is considered first and then managing accounts from the Javascript console is considered in a [separate section](#accounts-in-the-javascript-console).
+
+
+## Account command
 
 Interacting with accounts is achieved using Geth's `account` command:
 
@@ -37,9 +40,6 @@ OPTIONS:
   --keystore                   Directory for the keystore (default = inside the datadir)
 
 ```
-
-Accounts can also be managed using RPC via Curl or via the [Javascript Console](../interface/javascript-console).
-
 
 
 ## Creating new accounts
