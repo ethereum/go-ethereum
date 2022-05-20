@@ -23,7 +23,7 @@ type EventRecordWithTime struct {
 	Time time.Time `json:"record_time" yaml:"record_time"`
 }
 
-// String returns the string representatin of span
+// String returns the string representations of span
 func (e *EventRecordWithTime) String() string {
 	return fmt.Sprintf(
 		"id %v, contract %v, data: %v, txHash: %v, logIndex: %v, chainId: %v, time %s",

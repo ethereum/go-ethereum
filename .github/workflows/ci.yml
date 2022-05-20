@@ -6,7 +6,7 @@ on:
   pull_request:
     branches:
       - "**"
-    types: [opened, synchronize]
+    types: [opened, synchronize, edited]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}

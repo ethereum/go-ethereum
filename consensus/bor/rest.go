@@ -40,39 +40,49 @@ func NewHeimdallClient(urlString string) (*HeimdallClient, error) {
 	h := &HeimdallClient{
 		urlString: urlString,
 		client: http.Client{
-			Timeout: time.Duration(5 * time.Second),
+			Timeout: 5 * time.Second,
 		},
 		closeCh: make(chan struct{}),
 	}
+
 	return h, nil
 }
 
 func (h *HeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*EventRecordWithTime, error) {
 	eventRecords := make([]*EventRecordWithTime, 0)
+
 	for {
 		queryParams := fmt.Sprintf("from-id=%d&to-time=%d&limit=%d", fromID, to, stateFetchLimit)
 		log.Info("Fetching state sync events", "queryParams", queryParams)
 		response, err := h.FetchWithRetry("clerk/event-record/list", queryParams)
+
 		if err != nil {
 			return nil, err
 		}
+
 		var _eventRecords []*EventRecordWithTime
+
 		if response.Result == nil { // status 204
 			break
 		}
+
 		if err := json.Unmarshal(response.Result, &_eventRecords); err != nil {
 			return nil, err
 		}
+
 		eventRecords = append(eventRecords, _eventRecords...)
+
 		if len(_eventRecords) < stateFetchLimit {
 			break
 		}
+
 		fromID += uint64(stateFetchLimit)
 	}
 
 	sort.SliceStable(eventRecords, func(i, j int) bool {
 		return eventRecords[i].ID < eventRecords[j].ID
 	})
+
 	return eventRecords, nil
 }
 
@@ -130,7 +140,7 @@ func (h *HeimdallClient) FetchWithRetry(rawPath string, rawQuery string) (*Respo
 
 // internal fetch method
 func (h *HeimdallClient) internalFetch(u *url.URL) (*ResponseWithHeight, error) {
-	res, err := h.client.Get(u.String())
+	res, err := h.client.Get(u.String()) // nolint: noctx
 	if err != nil {
 		return nil, err
 	}
