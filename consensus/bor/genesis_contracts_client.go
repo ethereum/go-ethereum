@@ -66,9 +66,10 @@ func (gc *GenesisContractsClient) CommitState(
 		log.Error("Unable to pack tx for commitState", "error", err)
 		return 0, err
 	}
-	log.Info("→ committing new state", "eventRecord", event.String())
 	msg := getSystemMessage(common.HexToAddress(gc.StateReceiverContract), data)
 	gasUsed, err := applyMessage(msg, state, header, gc.chainConfig, chCtx)
+	// Logging event log with time and individual gasUsed
+	log.Info("→ committing new state", "eventRecord", event.String(gasUsed))
 	if err != nil {
 		return 0, err
 	}
