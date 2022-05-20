@@ -43,9 +43,10 @@ var (
 
 	INVALIDBLOCKHASH = "INVALID_BLOCK_HASH"
 
-	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
-	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
-	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
+	GenericServerError       = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
+	UnknownPayload           = rpc.CustomError{Code: -38001, ValidationError: "Unknown payload"}
+	InvalidForkChoiceState   = rpc.CustomError{Code: -38002, ValidationError: "Invalid forkchoice state"}
+	InvalidPayloadAttributes = rpc.CustomError{Code: -38003, ValidationError: "Invalid payload attributes"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
