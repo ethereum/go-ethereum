@@ -909,6 +909,8 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 			}
 		}
 	}
+	// Now commit the changes
+	state.Commit(false)
 	return nil
 }
 

@@ -444,7 +444,7 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetStorage(storage)
+		stateObject.SetStorage(s.db, storage)
 	}
 }
 
