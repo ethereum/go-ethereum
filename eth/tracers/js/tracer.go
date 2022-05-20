@@ -187,8 +187,8 @@ func newJsTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
 	t.log = &steplog{
 		vm:       vm,
 		op:       &opObj{vm: vm},
-		memory:   &memoryObj{w: new(memoryWrapper), vm: vm, toBig: t.toBig, toBuf: t.toBuf},
-		stack:    &stackObj{w: new(stackWrapper), vm: vm, toBig: t.toBig},
+		memory:   &memoryObj{vm: vm, toBig: t.toBig, toBuf: t.toBuf},
+		stack:    &stackObj{vm: vm, toBig: t.toBig},
 		contract: &contractObj{vm: vm, toBig: t.toBig, toBuf: t.toBuf},
 	}
 	t.frame = &callframe{vm: vm, toBig: t.toBig, toBuf: t.toBuf}
@@ -248,8 +248,8 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 
 	log := t.log
 	log.op.op = op
-	log.memory.w.memory = scope.Memory
-	log.stack.w.stack = scope.Stack
+	log.memory.memory = scope.Memory
+	log.stack.stack = scope.Stack
 	log.contract.contract = scope.Contract
 	log.pc = uint(pc)
 	log.gas = uint(gas)
@@ -501,14 +501,14 @@ func (o *opObj) setupObject() *goja.Object {
 }
 
 type memoryObj struct {
-	w     *memoryWrapper
-	vm    *goja.Runtime
-	toBig toBigFn
-	toBuf toBufFn
+	memory *vm.Memory
+	vm     *goja.Runtime
+	toBig  toBigFn
+	toBuf  toBufFn
 }
 
 func (mo *memoryObj) Slice(begin, end int64) goja.Value {
-	b := mo.w.slice(begin, end)
+	b := mo.slice(begin, end)
 	res, err := mo.toBuf(mo.vm, b)
 	if err != nil {
 		panic(err)
@@ -516,8 +516,28 @@ func (mo *memoryObj) Slice(begin, end int64) goja.Value {
 	return res
 }
 
+// slice returns the requested range of memory as a byte slice.
+func (mo *memoryObj) slice(begin, end int64) []byte {
+	if end == begin {
+		return []byte{}
+	}
+	if end < begin || begin < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "offset", begin, "end", end)
+		return nil
+	}
+	if mo.memory.Len() < int(end) {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "available", mo.memory.Len(), "offset", begin, "size", end-begin)
+		return nil
+	}
+	return mo.memory.GetCopy(begin, end-begin)
+}
+
 func (mo *memoryObj) GetUint(addr int64) goja.Value {
-	value := mo.w.getUint(addr)
+	value := mo.getUint(addr)
 	res, err := mo.toBig(mo.vm, value.String())
 	if err != nil {
 		panic(err)
@@ -525,8 +545,19 @@ func (mo *memoryObj) GetUint(addr int64) goja.Value {
 	return res
 }
 
+// getUint returns the 32 bytes at the specified address interpreted as a uint.
+func (mo *memoryObj) getUint(addr int64) *big.Int {
+	if mo.memory.Len() < int(addr)+32 || addr < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound memory", "available", mo.memory.Len(), "offset", addr, "size", 32)
+		return new(big.Int)
+	}
+	return new(big.Int).SetBytes(mo.memory.GetPtr(addr, 32))
+}
+
 func (mo *memoryObj) Length() int {
-	return mo.w.memory.Len()
+	return mo.memory.Len()
 }
 
 func (m *memoryObj) setupObject() *goja.Object {
@@ -538,13 +569,13 @@ func (m *memoryObj) setupObject() *goja.Object {
 }
 
 type stackObj struct {
-	w     *stackWrapper
+	stack *vm.Stack
 	vm    *goja.Runtime
 	toBig toBigFn
 }
 
 func (s *stackObj) Peek(idx int) goja.Value {
-	value := s.w.peek(idx)
+	value := s.peek(idx)
 	res, err := s.toBig(s.vm, value.String())
 	if err != nil {
 		panic(err)
@@ -552,8 +583,19 @@ func (s *stackObj) Peek(idx int) goja.Value {
 	return res
 }
 
+// peek returns the nth-from-the-top element of the stack.
+func (s *stackObj) peek(idx int) *big.Int {
+	if len(s.stack.Data()) <= idx || idx < 0 {
+		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+		// runtime goes belly up https://github.com/golang/go/issues/15639.
+		log.Warn("Tracer accessed out of bound stack", "size", len(s.stack.Data()), "index", idx)
+		return new(big.Int)
+	}
+	return s.stack.Back(idx).ToBig()
+}
+
 func (s *stackObj) Length() int {
-	return len(s.w.stack.Data())
+	return len(s.stack.Data())
 }
 
 func (s *stackObj) setupObject() *goja.Object {
@@ -863,73 +905,6 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("memory", l.memory.setupObject())
 	o.Set("contract", l.contract.setupObject())
 	return o
-}
-
-// opWrapper provides a JavaScript wrapper around OpCode.
-type opWrapper struct {
-	op vm.OpCode
-}
-
-// memoryWrapper provides a JavaScript wrapper around vm.Memory.
-type memoryWrapper struct {
-	memory *vm.Memory
-}
-
-// slice returns the requested range of memory as a byte slice.
-func (mw *memoryWrapper) slice(begin, end int64) []byte {
-	if end == begin {
-		return []byte{}
-	}
-	if end < begin || begin < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "offset", begin, "end", end)
-		return nil
-	}
-	if mw.memory.Len() < int(end) {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", begin, "size", end-begin)
-		return nil
-	}
-	return mw.memory.GetCopy(begin, end-begin)
-}
-
-// getUint returns the 32 bytes at the specified address interpreted as a uint.
-func (mw *memoryWrapper) getUint(addr int64) *big.Int {
-	if mw.memory.Len() < int(addr)+32 || addr < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "available", mw.memory.Len(), "offset", addr, "size", 32)
-		return new(big.Int)
-	}
-	return new(big.Int).SetBytes(mw.memory.GetPtr(addr, 32))
-}
-
-// stackWrapper provides a JavaScript wrapper around vm.Stack.
-type stackWrapper struct {
-	stack *vm.Stack
-}
-
-// peek returns the nth-from-the-top element of the stack.
-func (sw *stackWrapper) peek(idx int) *big.Int {
-	if len(sw.stack.Data()) <= idx || idx < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound stack", "size", len(sw.stack.Data()), "index", idx)
-		return new(big.Int)
-	}
-	return sw.stack.Back(idx).ToBig()
-}
-
-// dbWrapper provides a JavaScript wrapper around vm.Database.
-type dbWrapper struct {
-	db vm.StateDB
-}
-
-// contractWrapper provides a JavaScript wrapper around vm.Contract
-type contractWrapper struct {
-	contract *vm.Contract
 }
 
 func wrapError(context string, err error) error {
