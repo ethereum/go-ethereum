@@ -142,11 +142,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, genesisErr
 	}
 	log.Info("")
-	log.Info("---------------------------------------------------------------------------------------------")
+	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.String(), "\n") {
 		log.Info(line)
 	}
-	log.Info("---------------------------------------------------------------------------------------------")
+	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
