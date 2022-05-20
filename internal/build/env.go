@@ -97,11 +97,10 @@ func Env() Environment {
 		// we can distinguish them by the git refspec.
 		var branch, tag string
 		branchSpec := os.Getenv("BUILD_BRANCH")
-		switch {
-		case strings.HasPrefix(branchSpec, "refs/heads/"):
-			branch = strings.TrimPrefix(branchSpec, "refs/heads/")
-		case strings.HasPrefix(branchSpec, "refs/tags/"):
+		if strings.HasPrefix(branchSpec, "refs/tags/") {
 			tag = strings.TrimPrefix(branchSpec, "refs/tags/")
+		} else {
+			branch = branchSpec
 		}
 
 		commit := os.Getenv("BUILD_COMMIT")
