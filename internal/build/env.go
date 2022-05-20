@@ -94,7 +94,7 @@ func Env() Environment {
 
 	case os.Getenv("CI") == "true" && os.Getenv("ETH_BUILDBOT") == "true":
 		// For buildbot, the branch variable is the branch OR tag, and
-		// we can distinguish them by the git data prefix.
+		// we can distinguish them by the git refspec.
 		var branch, tag string
 		branchSpec := os.Getenv("BUILD_BRANCH")
 		switch {
