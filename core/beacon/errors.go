@@ -21,6 +21,39 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// EngineAPIError is a standardized error message between consensus and execution
+// clients, also containing any custom error message Geth might include.
+type EngineAPIError struct {
+	code int
+	msg  string
+	err  error
+}
+
+func (e *EngineAPIError) ErrorCode() int { return e.code }
+func (e *EngineAPIError) Error() string  { return e.msg }
+func (e *EngineAPIError) ErrorData() interface{} {
+	if e.err == nil {
+		return nil
+	}
+	return struct {
+		Error string `json:"err"`
+	}{e.err.Error()}
+}
+
+// With returns a copy of the error with a new embedded custom data field.
+func (e *EngineAPIError) With(err error) *EngineAPIError {
+	return &EngineAPIError{
+		code: e.code,
+		msg:  e.msg,
+		err:  err,
+	}
+}
+
+var (
+	_ rpc.Error     = new(EngineAPIError)
+	_ rpc.DataError = new(EngineAPIError)
+)
+
 var (
 	// VALID is returned by the engine API in the following calls:
 	//   - newPayloadV1:       if the payload was already known or was just validated and executed
@@ -43,10 +76,10 @@ var (
 
 	INVALIDBLOCKHASH = "INVALID_BLOCK_HASH"
 
-	GenericServerError       = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
-	UnknownPayload           = rpc.CustomError{Code: -38001, ValidationError: "Unknown payload"}
-	InvalidForkChoiceState   = rpc.CustomError{Code: -38002, ValidationError: "Invalid forkchoice state"}
-	InvalidPayloadAttributes = rpc.CustomError{Code: -38003, ValidationError: "Invalid payload attributes"}
+	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
+	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
+	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
+	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
 
 	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
 	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
