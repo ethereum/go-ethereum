@@ -400,18 +400,18 @@ func (c *ChainConfig) String() string {
 	switch {
 	case c.Ethash != nil:
 		if c.TerminalTotalDifficulty == nil {
-			banner += fmt.Sprintf("Consensus: Ethash (proof-of-work)\n")
+			banner += "Consensus: Ethash (proof-of-work)\n"
 		} else {
-			banner += fmt.Sprintf("Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n")
+			banner += "Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n"
 		}
 	case c.Clique != nil:
 		if c.TerminalTotalDifficulty == nil {
-			banner += fmt.Sprintf("Consensus: Clique (proof-of-authority)\n")
+			banner += "Consensus: Clique (proof-of-authority)\n"
 		} else {
-			banner += fmt.Sprintf("Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n")
+			banner += "Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n"
 		}
 	default:
-		banner += fmt.Sprintf("Consensus: unknown\n")
+		banner += "Consensus: unknown\n"
 	}
 	banner += "\n"
 
