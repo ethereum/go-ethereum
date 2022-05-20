@@ -9,9 +9,14 @@ import (
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/ethereum/go-ethereum/node"
+
 	"github.com/mitchellh/cli"
 	"github.com/ryanuber/columnize"
 	"google.golang.org/grpc"
+)
+
+const (
+	emptyPlaceHolder = "<none>"
 )
 
 type MarkDownCommand interface {
@@ -48,6 +53,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stderr, "Error executing CLI: %s\n", err.Error())
 		return 1
 	}
+
 	return exitCode
 }
 
@@ -64,6 +70,7 @@ func Commands() map[string]MarkDownCommandFactory {
 	meta := &Meta{
 		UI: ui,
 	}
+
 	return map[string]MarkDownCommandFactory{
 		"server": func() (MarkDownCommand, error) {
 			return &server.Command{
@@ -180,6 +187,7 @@ func (m *Meta2) NewFlagSet(n string) *flagset.Flagset {
 		Usage:   "Address of the grpc endpoint",
 		Default: "127.0.0.1:3131",
 	})
+
 	return f
 }
 
@@ -188,6 +196,7 @@ func (m *Meta2) Conn() (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %v", err)
 	}
+
 	return conn, nil
 }
 
@@ -196,6 +205,7 @@ func (m *Meta2) BorConn() (proto.BorClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return proto.NewBorClient(conn), nil
 }
 
@@ -243,18 +253,21 @@ func (m *Meta) GetKeystore() (*keystore.KeyStore, error) {
 	scryptP := keystore.StandardScryptP
 
 	keys := keystore.NewKeyStore(keydir, scryptN, scryptP)
+
 	return keys, nil
 }
 
 func formatList(in []string) string {
 	columnConf := columnize.DefaultConfig()
-	columnConf.Empty = "<none>"
+	columnConf.Empty = emptyPlaceHolder
+
 	return columnize.Format(in, columnConf)
 }
 
 func formatKV(in []string) string {
 	columnConf := columnize.DefaultConfig()
-	columnConf.Empty = "<none>"
+	columnConf.Empty = emptyPlaceHolder
 	columnConf.Glue = " = "
+
 	return columnize.Format(in, columnConf)
 }

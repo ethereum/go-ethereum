@@ -21,6 +21,7 @@ func (a *PeersCommand) MarkDown() string {
 		"- [```peers remove```](./peers_remove.md): Disconnects the local client from a connected peer if exists.",
 		"- [```peers status```](./peers_status.md): Display the status of a peer by its id.",
 	}
+
 	return strings.Join(items, "\n\n")
 }
 

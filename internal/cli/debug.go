@@ -18,8 +18,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
-	"github.com/golang/protobuf/jsonpb"
-	gproto "github.com/golang/protobuf/proto"
+
+	"github.com/golang/protobuf/jsonpb"       // nolint:staticcheck
+	gproto "github.com/golang/protobuf/proto" // nolint:staticcheck
 	"github.com/golang/protobuf/ptypes/empty"
 	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
 )
@@ -55,6 +56,7 @@ func (d *DebugCommand) MarkDown() string {
 		d.Flags().MarkDown(),
 	}
 	items = append(items, examples...)
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -112,6 +114,7 @@ func (d *DebugCommand) Run(args []string) int {
 		// User specified output directory
 		tmp = filepath.Join(d.output, stamped)
 		_, err := os.Stat(tmp)
+
 		if !os.IsNotExist(err) {
 			d.UI.Error("Output directory already exists")
 			return 1
@@ -139,6 +142,7 @@ func (d *DebugCommand) Run(args []string) int {
 		req := &proto.PprofRequest{
 			Seconds: int64(d.seconds),
 		}
+
 		switch profile {
 		case "cpu":
 			req.Type = proto.PprofRequest_CPU
@@ -148,7 +152,9 @@ func (d *DebugCommand) Run(args []string) int {
 			req.Type = proto.PprofRequest_LOOKUP
 			req.Profile = profile
 		}
+
 		stream, err := clt.Pprof(ctx, req)
+
 		if err != nil {
 			return err
 		}
@@ -157,6 +163,7 @@ func (d *DebugCommand) Run(args []string) int {
 		if err != nil {
 			return err
 		}
+
 		if _, ok := msg.Event.(*proto.PprofResponse_Open_); !ok {
 			return fmt.Errorf("expected open message")
 		}
@@ -179,6 +186,7 @@ func (d *DebugCommand) Run(args []string) int {
 		if _, err := io.Copy(file, conn); err != nil {
 			return err
 		}
+
 		return nil
 	}
 
@@ -210,7 +218,7 @@ func (d *DebugCommand) Run(args []string) int {
 			d.UI.Output(err.Error())
 			return 1
 		}
-		if err := ioutil.WriteFile(filepath.Join(tmp, "status.json"), []byte(data), 0644); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(tmp, "status.json"), []byte(data), 0600); err != nil {
 			d.UI.Output(fmt.Sprintf("Failed to write status: %v", err))
 			return 1
 		}
@@ -230,6 +238,7 @@ func (d *DebugCommand) Run(args []string) int {
 	}
 
 	d.UI.Output(fmt.Sprintf("Created debug archive: %s", archiveFile))
+
 	return 0
 }
 

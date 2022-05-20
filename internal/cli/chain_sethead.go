@@ -26,6 +26,7 @@ func (a *ChainSetHeadCommand) MarkDown() string {
 		"- ```number```: The block number to roll back.",
 		a.Flags().MarkDown(),
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -45,6 +46,7 @@ func (c *ChainSetHeadCommand) Flags() *flagset.Flagset {
 		Default: false,
 		Value:   &c.yes,
 	})
+
 	return flags
 }
 
@@ -88,6 +90,7 @@ func (c *ChainSetHeadCommand) Run(args []string) int {
 			c.UI.Error(err.Error())
 			return 1
 		}
+
 		if response != "y" {
 			c.UI.Output("set head aborted")
 			return 0
@@ -100,5 +103,6 @@ func (c *ChainSetHeadCommand) Run(args []string) int {
 	}
 
 	c.UI.Output("Done!")
+
 	return 0
 }

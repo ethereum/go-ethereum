@@ -19,6 +19,7 @@ func (c *ChainCommand) MarkDown() string {
 		"- [```chain sethead```](./chain_sethead.md): Set the current chain to a certain block.",
 		"- [```chain watch```](./chain_watch.md): Watch the chainHead, reorg and fork events in real-time.",
 	}
+
 	return strings.Join(items, "\n\n")
 }
 

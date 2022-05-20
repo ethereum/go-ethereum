@@ -24,6 +24,7 @@ func (c *ChainWatchCommand) MarkDown() string {
 		"# Chain watch",
 		"The ```chain watch``` command is used to view the chainHead, reorg and fork events in real-time.",
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -70,7 +71,10 @@ func (c *ChainWatchCommand) Run(args []string) int {
 
 	go func() {
 		<-signalCh
-		sub.CloseSend()
+
+		if err := sub.CloseSend(); err != nil {
+			c.UI.Error(err.Error())
+		}
 	}()
 
 	for {
@@ -80,6 +84,7 @@ func (c *ChainWatchCommand) Run(args []string) int {
 			c.UI.Output(err.Error())
 			break
 		}
+
 		c.UI.Output(formatHeadEvent(msg))
 	}
 
@@ -95,5 +100,6 @@ func formatHeadEvent(msg *proto.ChainWatchResponse) string {
 	} else if msg.Type == core.Chain2HeadReorgEvent {
 		out = fmt.Sprintf("Reorg Detected \nAdded : %v \nRemoved : %v", msg.Newchain, msg.Oldchain)
 	}
+
 	return out
 }

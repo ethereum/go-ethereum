@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/mitchellh/cli"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -25,6 +26,7 @@ func (c *FingerprintCommand) MarkDown() string {
 		"# Fingerprint",
 		"Display the system fingerprint",
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -45,6 +47,7 @@ func getCoresCount(cp []cpu.InfoStat) int {
 	for i := 0; i < len(cp); i++ {
 		cores += int(cp[i].Cores)
 	}
+
 	return cores
 }
 
@@ -76,6 +79,7 @@ func formatFingerprint(borFingerprint *BorFingerprint) string {
 		fmt.Sprintf("RAM :: total : %v GB, free : %v GB, used : %v GB", borFingerprint.MemoryDetails.TotalMem, borFingerprint.MemoryDetails.FreeMem, borFingerprint.MemoryDetails.UsedMem),
 		fmt.Sprintf("STORAGE :: total : %v GB, free : %v GB, used : %v GB", borFingerprint.DiskDetails.TotalDisk, borFingerprint.DiskDetails.FreeDisk, borFingerprint.DiskDetails.UsedDisk),
 	})
+
 	return base
 }
 
@@ -85,13 +89,13 @@ func convertBytesToGB(bytesValue uint64) float64 {
 
 // Checks if fio exists on the node
 func (c *FingerprintCommand) checkFio() error {
-
 	cmd := exec.Command("/bin/sh", "-c", "fio -v")
 
 	_, err := cmd.CombinedOutput()
 	if err != nil {
 		message := "\nFio package not installed. Install Fio for IOPS Benchmarking :\n\nDebianOS  :  'sudo apt-get update && sudo apt-get install fio -y'\nAWS AMI/CentOS  :  'sudo yum install fio -y'\nOracle LinuxOS  :  'sudo dnf install fio -y'\n"
 		c.UI.Output(message)
+
 		return err
 	}
 
@@ -101,9 +105,12 @@ func (c *FingerprintCommand) checkFio() error {
 // Run the IOPS benchmark for the node
 func (c *FingerprintCommand) benchmark() error {
 	var b []byte
+
 	err := c.checkFio()
+
 	if err != nil {
-		return nil
+		// Missing Fio is not a fatal error. A message will be logged in console when it is missing in "checkFio()".
+		return nil //nolint:nilerr
 	}
 
 	c.UI.Output("\nRunning a 10 second test...\n")
@@ -123,7 +130,6 @@ func (c *FingerprintCommand) benchmark() error {
 
 // Run implements the cli.Command interface
 func (c *FingerprintCommand) Run(args []string) int {
-
 	v, err := mem.VirtualMemory()
 	if err != nil {
 		c.UI.Error(err.Error())

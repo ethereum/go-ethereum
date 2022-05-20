@@ -22,6 +22,7 @@ func (p *PeersRemoveCommand) MarkDown() string {
 		"The ```peers remove <enode>``` command disconnects the local client from a connected peer if exists.",
 		p.Flags().MarkDown(),
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -79,5 +80,6 @@ func (c *PeersRemoveCommand) Run(args []string) int {
 		c.UI.Error(err.Error())
 		return 1
 	}
+
 	return 0
 }

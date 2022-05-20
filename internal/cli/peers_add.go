@@ -22,6 +22,7 @@ func (p *PeersAddCommand) MarkDown() string {
 		"The ```peers add <enode>``` command joins the local client to another remote peer.",
 		p.Flags().MarkDown(),
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -79,5 +80,6 @@ func (c *PeersAddCommand) Run(args []string) int {
 		c.UI.Error(err.Error())
 		return 1
 	}
+
 	return 0
 }

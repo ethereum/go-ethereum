@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/mitchellh/cli"
 )
 
@@ -27,6 +28,7 @@ func (d *VersionCommand) MarkDown() string {
 		"The ```bor version``` command outputs the version of the binary.",
 	}
 	items = append(items, examples...)
+
 	return strings.Join(items, "\n\n")
 }
 
