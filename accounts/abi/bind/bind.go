@@ -111,9 +111,16 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized.Name = normalizedName
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
+			// Used to save duplicated field name
+			inputNames := make(map[string]uint)
 			for j, input := range normalized.Inputs {
 				if input.Name == "" {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+				}
+				camelName := abi.ToCamelCase(input.Name)
+				inputNames[camelName] += 1
+				if inputNames[camelName] > 1 {
+					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, inputNames[camelName]-1)
 				}
 				if hasStruct(input.Type) {
 					bindStructType[lang](input.Type, structs)
@@ -154,9 +161,17 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
+
+			// Used to save duplicated field name
+			inputNames := make(map[string]uint)
 			for j, input := range normalized.Inputs {
 				if input.Name == "" {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+				}
+				camelName := abi.ToCamelCase(input.Name)
+				inputNames[camelName] += 1
+				if inputNames[camelName] > 1 {
+					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, inputNames[camelName]-1)
 				}
 				if hasStruct(input.Type) {
 					bindStructType[lang](input.Type, structs)
