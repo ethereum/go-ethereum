@@ -42,7 +42,7 @@ func skipWithoutSolc(t *testing.T) {
 func TestSolidityCompiler(t *testing.T) {
 	skipWithoutSolc(t)
 
-	contracts, err := CompileSolidityString("", testSource)
+	contracts, err := CompileSolidityString("", testSource, nil)
 	if err != nil {
 		t.Fatalf("error compiling source. result %v: %v", contracts, err)
 	}
@@ -70,7 +70,7 @@ func TestSolidityCompiler(t *testing.T) {
 func TestSolidityCompileError(t *testing.T) {
 	skipWithoutSolc(t)
 
-	contracts, err := CompileSolidityString("", testSource[4:])
+	contracts, err := CompileSolidityString("", testSource[4:], nil)
 	if err == nil {
 		t.Errorf("error expected compiling source. got none. result %v", contracts)
 	}

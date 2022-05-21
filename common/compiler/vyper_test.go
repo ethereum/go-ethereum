@@ -35,7 +35,7 @@ func TestVyperCompiler(t *testing.T) {
 	if err != nil {
 		t.Error("couldn't read test files")
 	}
-	contracts, err := CompileVyper("", testSource...)
+	contracts, err := CompileVyper("", testSource, nil)
 	if err != nil {
 		t.Fatalf("error compiling test.v.py. result %v: %v", contracts, err)
 	}
@@ -63,7 +63,7 @@ func TestVyperCompiler(t *testing.T) {
 func TestVyperCompileError(t *testing.T) {
 	skipWithoutVyper(t)
 
-	contracts, err := CompileVyper("", "test_bad.v.py")
+	contracts, err := CompileVyper("", []string{"test_bad.v.py"}, nil)
 	if err == nil {
 		t.Errorf("error expected compiling test_bad.v.py. got none. result %v", contracts)
 	}

@@ -77,6 +77,10 @@ var (
 		Usage: "Vyper compiler to use if source builds are requested",
 		Value: "vyper",
 	}
+	compilerArgsFlag = cli.StringSliceFlag{
+		Name:  "compiler-args",
+		Usage: "Custom compiler flags to use",
+	}
 	excFlag = cli.StringFlag{
 		Name:  "exc",
 		Usage: "Comma separated types to exclude from binding",
@@ -111,6 +115,7 @@ func init() {
 		solcFlag,
 		vyFlag,
 		vyperFlag,
+		compilerArgsFlag,
 		excFlag,
 		pkgFlag,
 		outFlag,
@@ -191,12 +196,12 @@ func abigen(c *cli.Context) error {
 
 		switch {
 		case c.GlobalIsSet(solFlag.Name):
-			contracts, err = compiler.CompileSolidity(c.GlobalString(solcFlag.Name), c.GlobalString(solFlag.Name))
+			contracts, err = compiler.CompileSolidity(c.GlobalString(solcFlag.Name), []string{c.GlobalString(solFlag.Name)}, c.GlobalStringSlice(compilerArgsFlag.Name))
 			if err != nil {
 				utils.Fatalf("Failed to build Solidity contract: %v", err)
 			}
 		case c.GlobalIsSet(vyFlag.Name):
-			output, err := compiler.CompileVyper(c.GlobalString(vyperFlag.Name), c.GlobalString(vyFlag.Name))
+			output, err := compiler.CompileVyper(c.GlobalString(vyperFlag.Name), []string{c.GlobalString(vyFlag.Name)}, c.GlobalStringSlice(compilerArgsFlag.Name))
 			if err != nil {
 				utils.Fatalf("Failed to build Vyper contract: %v", err)
 			}

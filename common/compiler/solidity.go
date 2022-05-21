@@ -67,7 +67,7 @@ func (s *Solidity) allowedPaths() string {
 	return strings.Join(paths, ", ")
 }
 
-func (s *Solidity) makeArgs() []string {
+func (s *Solidity) DefaultArgs() []string {
 	p := []string{
 		"--combined-json", "bin,bin-runtime,srcmap,srcmap-runtime,abi,userdoc,devdoc",
 		"--optimize", // code optimizer switched on
@@ -109,7 +109,7 @@ func SolidityVersion(solc string) (*Solidity, error) {
 }
 
 // CompileSolidityString builds and returns all the contracts contained within a source string.
-func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
+func CompileSolidityString(solc, source string, compilerArgs []string) (map[string]*Contract, error) {
 	if len(source) == 0 {
 		return nil, errors.New("solc: empty source string")
 	}
@@ -117,11 +117,11 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.CompileSource(source)
+	return s.CompileSource(source, compilerArgs)
 }
 
 // CompileSolidity compiles all given Solidity source files.
-func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, error) {
+func CompileSolidity(solc string, sourcefiles []string, compilerArgs []string) (map[string]*Contract, error) {
 	if len(sourcefiles) == 0 {
 		return nil, errors.New("solc: no source files")
 	}
@@ -130,36 +130,42 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 		return nil, err
 	}
 
-	return s.CompileFiles(sourcefiles...)
+	return s.CompileFiles(sourcefiles, compilerArgs)
 }
 
 // CompileSource builds and returns all the contracts contained within a source string.
-func (s *Solidity) CompileSource(source string) (map[string]*Contract, error) {
-	args := append(s.makeArgs(), "--")
-	cmd := exec.Command(s.Path, append(args, "-")...)
+func (s *Solidity) CompileSource(source string, compilerArgs []string) (map[string]*Contract, error) {
+	if len(compilerArgs) == 0 {
+		compilerArgs = s.DefaultArgs()
+	}
+	compilerArgs = append(compilerArgs, "--")
+	cmd := exec.Command(s.Path, append(compilerArgs, "-")...)
 	cmd.Stdin = strings.NewReader(source)
-	return s.run(cmd, source)
+	return s.run(cmd, source, compilerArgs)
 }
 
 // CompileFiles compiles all given Solidity source files.
-func (s *Solidity) CompileFiles(sourcefiles ...string) (map[string]*Contract, error) {
+func (s *Solidity) CompileFiles(sourcefiles []string, compilerArgs []string) (map[string]*Contract, error) {
 	source, err := slurpFiles(sourcefiles)
 	if err != nil {
 		return nil, err
 	}
-	args := append(s.makeArgs(), "--")
-	cmd := exec.Command(s.Path, append(args, sourcefiles...)...)
-	return s.run(cmd, source)
+	if len(compilerArgs) == 0 {
+		compilerArgs = s.DefaultArgs()
+	}
+	compilerArgs = append(compilerArgs, "--")
+	cmd := exec.Command(s.Path, append(compilerArgs, sourcefiles...)...)
+	return s.run(cmd, source, compilerArgs)
 }
 
-func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+func (s *Solidity) run(cmd *exec.Cmd, source string, args []string) (map[string]*Contract, error) {
 	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("solc: %v\n%s", err, stderr.Bytes())
 	}
-	return ParseCombinedJSON(stdout.Bytes(), source, s.Version, s.Version, strings.Join(s.makeArgs(), " "))
+	return ParseCombinedJSON(stdout.Bytes(), source, s.Version, s.Version, strings.Join(args, " "))
 }
 
 // ParseCombinedJSON takes the direct output of a solc --combined-output run and

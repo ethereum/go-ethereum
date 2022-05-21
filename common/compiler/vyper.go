@@ -33,7 +33,7 @@ type Vyper struct {
 	Major, Minor, Patch        int
 }
 
-func (s *Vyper) makeArgs() []string {
+func (s *Vyper) DefaultArgs() []string {
 	p := []string{
 		"-f", "combined_json",
 	}
@@ -70,7 +70,7 @@ func VyperVersion(vyper string) (*Vyper, error) {
 }
 
 // CompileVyper compiles all given Vyper source files.
-func CompileVyper(vyper string, sourcefiles ...string) (map[string]*Contract, error) {
+func CompileVyper(vyper string, sourcefiles []string, compilerArgs []string) (map[string]*Contract, error) {
 	if len(sourcefiles) == 0 {
 		return nil, errors.New("vyper: no source files")
 	}
@@ -82,12 +82,14 @@ func CompileVyper(vyper string, sourcefiles ...string) (map[string]*Contract, er
 	if err != nil {
 		return nil, err
 	}
-	args := s.makeArgs()
-	cmd := exec.Command(s.Path, append(args, sourcefiles...)...)
-	return s.run(cmd, source)
+	if compilerArgs == nil {
+		compilerArgs = s.DefaultArgs()
+	}
+	cmd := exec.Command(s.Path, append(compilerArgs, sourcefiles...)...)
+	return s.run(cmd, source, compilerArgs)
 }
 
-func (s *Vyper) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+func (s *Vyper) run(cmd *exec.Cmd, source string, compilerArgs []string) (map[string]*Contract, error) {
 	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
@@ -95,7 +97,7 @@ func (s *Vyper) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) 
 		return nil, fmt.Errorf("vyper: %v\n%s", err, stderr.Bytes())
 	}
 
-	return ParseVyperJSON(stdout.Bytes(), source, s.Version, s.Version, strings.Join(s.makeArgs(), " "))
+	return ParseVyperJSON(stdout.Bytes(), source, s.Version, s.Version, strings.Join(compilerArgs, " "))
 }
 
 // ParseVyperJSON takes the direct output of a vyper --f combined_json run and
