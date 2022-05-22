@@ -265,7 +265,7 @@ func TestIteratorEmptyTree(t *testing.T) {
 	resolver.add(tree1.ToTXT("n"))
 
 	// Start the iterator.
-	node := make(chan *enode.Node)
+	node := make(chan *enode.Node, 1)
 	it, err := c.NewIterator(url)
 	if err != nil {
 		t.Fatal(err)

@@ -139,7 +139,7 @@ const (
 func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	log := p.log.New("peer.id", peer.ID())
 
-	errC := make(chan error)
+	errC := make(chan error, 1)
 	go func() {
 		for range time.Tick(10 * time.Second) {
 			log.Info("sending ping")
