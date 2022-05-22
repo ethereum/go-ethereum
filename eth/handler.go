@@ -30,7 +30,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -848,7 +847,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.lendingpool.AddRemotes(txs)
 		}
 	case msg.Code == VoteMsg:
-		var vote utils.Vote
+		var vote types.Vote
 		if err := msg.Decode(&vote); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -865,7 +864,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TimeoutMsg:
-		var timeout utils.Timeout
+		var timeout types.Timeout
 		if err := msg.Decode(&timeout); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -884,7 +883,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == SyncInfoMsg:
-		var syncInfo utils.SyncInfo
+		var syncInfo types.SyncInfo
 		if err := msg.Decode(&syncInfo); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
@@ -952,7 +951,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 
 // BroadcastVote will propagate a Vote to all peers which are not known to
 // already have the given vote.
-func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
+func (pm *ProtocolManager) BroadcastVote(vote *types.Vote) {
 	hash := vote.Hash()
 	peers := pm.peers.PeersWithoutVote(hash)
 	if len(peers) > 0 {
@@ -970,7 +969,7 @@ func (pm *ProtocolManager) BroadcastVote(vote *utils.Vote) {
 
 // BroadcastTimeout will propagate a Timeout to all peers which are not known to
 // already have the given timeout.
-func (pm *ProtocolManager) BroadcastTimeout(timeout *utils.Timeout) {
+func (pm *ProtocolManager) BroadcastTimeout(timeout *types.Timeout) {
 	hash := timeout.Hash()
 	peers := pm.peers.PeersWithoutTimeout(hash)
 	if len(peers) > 0 {
@@ -988,7 +987,7 @@ func (pm *ProtocolManager) BroadcastTimeout(timeout *utils.Timeout) {
 
 // BroadcastSyncInfo will propagate a SyncInfo to all peers which are not known to
 // already have the given SyncInfo.
-func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *utils.SyncInfo) {
+func (pm *ProtocolManager) BroadcastSyncInfo(syncInfo *types.SyncInfo) {
 	hash := syncInfo.Hash()
 	peers := pm.peers.PeersWithoutSyncInfo(hash)
 	if len(peers) > 0 {

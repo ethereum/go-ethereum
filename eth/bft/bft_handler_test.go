@@ -11,15 +11,16 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v2"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/stretchr/testify/assert"
 )
 
 // make different votes based on Signatures
-func makeVotes(n int) []utils.Vote {
-	var votes []utils.Vote
+func makeVotes(n int) []types.Vote {
+	var votes []types.Vote
 	for i := 0; i < n; i++ {
-		votes = append(votes, utils.Vote{
-			ProposedBlockInfo: &utils.BlockInfo{},
+		votes = append(votes, types.Vote{
+			ProposedBlockInfo: &types.BlockInfo{},
 			Signature:         []byte{byte(i)},
 			GapNumber:         0,
 		})
@@ -55,17 +56,17 @@ func TestSequentialVotes(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 10
 
-	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *types.Vote) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
 		return true, nil
 	}
 
-	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *types.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
 
-	tester.bfter.broadcast.Vote = func(*utils.Vote) {
+	tester.bfter.broadcast.Vote = func(*types.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
@@ -91,19 +92,19 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 0
 
-	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *types.Vote) (bool, error) {
 		return false, fmt.Errorf("This is invalid vote")
 	}
 
-	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *types.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.Vote = func(*utils.Vote) {
+	tester.bfter.broadcast.Vote = func(*types.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
+	vote := types.Vote{ProposedBlockInfo: &types.BlockInfo{}}
 	tester.bfter.Vote(&vote)
 
 	time.Sleep(50 * time.Millisecond)
@@ -118,19 +119,19 @@ func TestBoardcastButNotProcessDisqualifiedVotes(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 0
 
-	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *utils.Vote) (bool, error) {
+	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *types.Vote) (bool, error) {
 		return false, nil // return false but with nil in error means the message is valid but disqualified
 	}
 
-	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *utils.Vote) error {
+	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *types.Vote) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.Vote = func(*utils.Vote) {
+	tester.bfter.broadcast.Vote = func(*types.Vote) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	vote := utils.Vote{ProposedBlockInfo: &utils.BlockInfo{}}
+	vote := types.Vote{ProposedBlockInfo: &types.BlockInfo{}}
 	tester.bfter.Vote(&vote)
 
 	time.Sleep(50 * time.Millisecond)
@@ -145,19 +146,19 @@ func TestBoardcastButNotProcessDisqualifiedTimeout(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetTimeout := 0
 
-	tester.bfter.consensus.verifyTimeout = func(chain consensus.ChainReader, timeout *utils.Timeout) (bool, error) {
+	tester.bfter.consensus.verifyTimeout = func(chain consensus.ChainReader, timeout *types.Timeout) (bool, error) {
 		return false, nil // return false but with nil in error means the message is valid but disqualified
 	}
 
-	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *types.Timeout) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
+	tester.bfter.broadcast.Timeout = func(*types.Timeout) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	timeout := utils.Timeout{}
+	timeout := types.Timeout{}
 	tester.bfter.Timeout(&timeout)
 
 	time.Sleep(50 * time.Millisecond)
@@ -172,19 +173,19 @@ func TestBoardcastButNotProcessDisqualifiedSyncInfo(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetSyncInfo := 0
 
-	tester.bfter.consensus.verifySyncInfo = func(chain consensus.ChainReader, syncInfo *utils.SyncInfo) (bool, error) {
+	tester.bfter.consensus.verifySyncInfo = func(chain consensus.ChainReader, syncInfo *types.SyncInfo) (bool, error) {
 		return false, nil // return false but with nil in error means the message is valid but disqualified
 	}
 
-	tester.bfter.consensus.syncInfoHandler = func(chain consensus.ChainReader, syncInfo *utils.SyncInfo) error {
+	tester.bfter.consensus.syncInfoHandler = func(chain consensus.ChainReader, syncInfo *types.SyncInfo) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
-	tester.bfter.broadcast.SyncInfo = func(*utils.SyncInfo) {
+	tester.bfter.broadcast.SyncInfo = func(*types.SyncInfo) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	syncInfo := utils.SyncInfo{}
+	syncInfo := types.SyncInfo{}
 	tester.bfter.SyncInfo(&syncInfo)
 
 	time.Sleep(50 * time.Millisecond)
@@ -203,21 +204,21 @@ func TestTimeoutHandler(t *testing.T) {
 	broadcastCounter := uint32(0)
 	targetVotes := 1
 
-	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *utils.Timeout) (bool, error) {
+	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *types.Timeout) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
 		return true, nil
 	}
 
-	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *types.Timeout) error {
 		atomic.AddUint32(&handlerCounter, 1)
 		return nil
 	}
 
-	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {
+	tester.bfter.broadcast.Timeout = func(*types.Timeout) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	timeoutMsg := &utils.Timeout{}
+	timeoutMsg := &types.Timeout{}
 
 	err := tester.bfter.Timeout(timeoutMsg)
 	if err != nil {
@@ -234,21 +235,21 @@ func TestTimeoutHandler(t *testing.T) {
 func TestTimeoutHandlerRoundNotEqual(t *testing.T) {
 	tester := newTester()
 
-	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *utils.Timeout) (bool, error) {
+	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *types.Timeout) (bool, error) {
 		return true, nil
 	}
 
-	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *utils.Timeout) error {
+	tester.bfter.consensus.timeoutHandler = func(chain consensus.ChainReader, timeout *types.Timeout) error {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
 			Type:          "timeout",
-			IncomingRound: utils.Round(1),
-			CurrentRound:  utils.Round(2),
+			IncomingRound: types.Round(1),
+			CurrentRound:  types.Round(2),
 		}
 	}
 
-	tester.bfter.broadcast.Timeout = func(*utils.Timeout) {}
+	tester.bfter.broadcast.Timeout = func(*types.Timeout) {}
 
-	timeoutMsg := &utils.Timeout{}
+	timeoutMsg := &types.Timeout{}
 
 	err := tester.bfter.Timeout(timeoutMsg)
 	assert.Equal(t, "timeout message round number: 1 does not match currentRound: 2", err.Error())

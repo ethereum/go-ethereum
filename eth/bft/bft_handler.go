@@ -5,13 +5,14 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 //Define Boradcast Group functions
-type broadcastVoteFn func(*utils.Vote)
-type broadcastTimeoutFn func(*utils.Timeout)
-type broadcastSyncInfoFn func(*utils.SyncInfo)
+type broadcastVoteFn func(*types.Vote)
+type broadcastTimeoutFn func(*types.Timeout)
+type broadcastSyncInfoFn func(*types.SyncInfo)
 
 type Bfter struct {
 	blockChainReader consensus.ChainReader
@@ -22,14 +23,14 @@ type Bfter struct {
 }
 
 type ConsensusFns struct {
-	verifyVote  func(consensus.ChainReader, *utils.Vote) (bool, error)
-	voteHandler func(consensus.ChainReader, *utils.Vote) error
+	verifyVote  func(consensus.ChainReader, *types.Vote) (bool, error)
+	voteHandler func(consensus.ChainReader, *types.Vote) error
 
-	verifyTimeout  func(consensus.ChainReader, *utils.Timeout) (bool, error)
-	timeoutHandler func(consensus.ChainReader, *utils.Timeout) error
+	verifyTimeout  func(consensus.ChainReader, *types.Timeout) (bool, error)
+	timeoutHandler func(consensus.ChainReader, *types.Timeout) error
 
-	verifySyncInfo  func(consensus.ChainReader, *utils.SyncInfo) (bool, error)
-	syncInfoHandler func(consensus.ChainReader, *utils.SyncInfo) error
+	verifySyncInfo  func(consensus.ChainReader, *types.SyncInfo) (bool, error)
+	syncInfoHandler func(consensus.ChainReader, *types.SyncInfo) error
 }
 
 type BroadcastFns struct {
@@ -62,7 +63,7 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 	}
 }
 
-func (b *Bfter) Vote(vote *utils.Vote) error {
+func (b *Bfter) Vote(vote *types.Vote) error {
 	log.Trace("Receive Vote", "hash", vote.Hash().Hex(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 
 	verified, err := b.consensus.verifyVote(b.blockChainReader, vote)
@@ -88,7 +89,7 @@ func (b *Bfter) Vote(vote *utils.Vote) error {
 
 	return nil
 }
-func (b *Bfter) Timeout(timeout *utils.Timeout) error {
+func (b *Bfter) Timeout(timeout *types.Timeout) error {
 	log.Debug("Receive Timeout", "timeout", timeout)
 
 	verified, err := b.consensus.verifyTimeout(b.blockChainReader, timeout)
@@ -112,7 +113,7 @@ func (b *Bfter) Timeout(timeout *utils.Timeout) error {
 
 	return nil
 }
-func (b *Bfter) SyncInfo(syncInfo *utils.SyncInfo) error {
+func (b *Bfter) SyncInfo(syncInfo *types.SyncInfo) error {
 	log.Debug("Receive SyncInfo", "syncInfo", syncInfo)
 
 	verified, err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
@@ -147,11 +148,11 @@ func (b *Bfter) loop() {
 			return
 		case obj := <-b.broadcastCh:
 			switch v := obj.(type) {
-			case *utils.Vote:
+			case *types.Vote:
 				go b.broadcast.Vote(v)
-			case *utils.Timeout:
+			case *types.Timeout:
 				go b.broadcast.Timeout(v)
-			case *utils.SyncInfo:
+			case *types.SyncInfo:
 				go b.broadcast.SyncInfo(v)
 			default:
 				log.Error("Unknown message type received", "value", v)

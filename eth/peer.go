@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -299,7 +298,7 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	}
 }
 
-func (p *peer) SendVote(vote *utils.Vote) error {
+func (p *peer) SendVote(vote *types.Vote) error {
 	p.knownVote.Add(vote.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, VoteMsg, vote)
@@ -313,7 +312,7 @@ func (p *peer) AsyncSendVote() {
 
 }
 */
-func (p *peer) SendTimeout(timeout *utils.Timeout) error {
+func (p *peer) SendTimeout(timeout *types.Timeout) error {
 	p.knownTimeout.Add(timeout.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, TimeoutMsg, timeout)
@@ -327,7 +326,7 @@ func (p *peer) AsyncSendTimeout() {
 
 }
 */
-func (p *peer) SendSyncInfo(syncInfo *utils.SyncInfo) error {
+func (p *peer) SendSyncInfo(syncInfo *types.SyncInfo) error {
 	p.knownSyncInfo.Add(syncInfo.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, SyncInfoMsg, syncInfo)
