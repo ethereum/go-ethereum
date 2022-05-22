@@ -3,6 +3,7 @@ package utils
 import (
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -10,10 +11,10 @@ func TestPoolAdd(t *testing.T) {
 	assert := assert.New(t)
 
 	pool := NewPool(2) // 2 is the cert threshold
-	timeout1 := Timeout{Round: 1, Signature: []byte{1}}
-	timeout2 := Timeout{Round: 1, Signature: []byte{2}}
-	timeout3 := Timeout{Round: 1, Signature: []byte{3}}
-	timeout4 := Timeout{Round: 1, Signature: []byte{4}}
+	timeout1 := types.Timeout{Round: 1, Signature: []byte{1}}
+	timeout2 := types.Timeout{Round: 1, Signature: []byte{2}}
+	timeout3 := types.Timeout{Round: 1, Signature: []byte{3}}
+	timeout4 := types.Timeout{Round: 1, Signature: []byte{4}}
 	thresholdReached, numOfItems, pooledTimeouts := pool.Add(&timeout1)
 	assert.NotNil(pooledTimeouts)
 	assert.Equal(1, numOfItems)

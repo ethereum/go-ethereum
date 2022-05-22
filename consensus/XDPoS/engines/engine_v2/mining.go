@@ -12,7 +12,7 @@ import (
 )
 
 // Using parent and current round to find the finalised master node list(with penalties applied from last epoch)
-func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round utils.Round, parent *types.Header, signer common.Address) (bool, error) {
+func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, parent *types.Header, signer common.Address) (bool, error) {
 	if round <= x.highestSelfMinedRound {
 		log.Warn("[yourturn] Already mined on this round", "Round", round, "highestSelfMinedRound", x.highestSelfMinedRound, "ParentHash", parent.Hash().Hex(), "ParentNumber", parent.Number)
 		return false, utils.ErrAlreadyMined

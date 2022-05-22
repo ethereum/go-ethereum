@@ -19,7 +19,7 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	// 901 is the first v2 block
 	header901 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch + 1)
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
@@ -54,7 +54,7 @@ func TestHookPenaltyV2Mining(t *testing.T) {
 	}
 	// Force to make the node to be at its round to mine, otherwise won't pass the yourturn masternodes check
 	// We have 19 nodes in total (20 candidates in snapshot - 1 penalty) and the fake signer is always at the 18th(last) in the list. Hence int(config.XDPoS.Epoch)*3+18-900, the +18 means is to force to next 18 round and -900 is the relative round number to block number int(config.XDPoS.Epoch)*3
-	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(int(config.XDPoS.Epoch)*3+18-900), false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(int(config.XDPoS.Epoch)*3+18-900), false)
 	// The test default signer is not in the msaternodes, so we set the faker signer
 	adaptor.EngineV2.AuthorizeFaker(acc1Addr)
 	err = adaptor.Prepare(blockchain, headerMining)
@@ -70,7 +70,7 @@ func TestHookPenaltyV2Comeback(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	// 901 is the first v2 block
 	header901 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch + 1)
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
@@ -99,7 +99,7 @@ func TestHookPenaltyV2Jump(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	hooks.AttachConsensusV2Hooks(adaptor, blockchain, config)
 	assert.NotNil(t, adaptor.EngineV2.HookPenalty)
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	// 901 is the first v2 block
 	header901 := blockchain.GetHeaderByNumber(config.XDPoS.Epoch + 1)
 	err := utils.DecodeBytesExtraFields(header901.Extra, &extraField)
@@ -107,7 +107,7 @@ func TestHookPenaltyV2Jump(t *testing.T) {
 	masternodes := adaptor.GetMasternodesFromCheckpointHeader(header901)
 	assert.Equal(t, 5, len(masternodes))
 	header2085 := blockchain.GetHeaderByNumber(uint64(end))
-	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(config.XDPoS.Epoch*3), false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(config.XDPoS.Epoch*3), false)
 	// round 2085-2100 miss blocks, penalty should work as usual
 	penalty, err := adaptor.EngineV2.HookPenalty(blockchain, header2085.Number, header2085.ParentHash, masternodes)
 	assert.Nil(t, err)

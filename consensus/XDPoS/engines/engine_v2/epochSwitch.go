@@ -6,13 +6,12 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // get epoch switch of the previous `limit` epoch
-func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader, hash common.Hash, limit int) (*utils.EpochSwitchInfo, error) {
+func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader, hash common.Hash, limit int) (*types.EpochSwitchInfo, error) {
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, hash)
 	if err != nil {
 		log.Error("[getPreviousEpochSwitchInfoByHash] Adaptor v2 getEpochSwitchInfo has error, potentially bug", "err", err)
@@ -30,11 +29,11 @@ func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader,
 
 // Given header and its hash, get epoch switch info from the epoch switch block of that epoch,
 // header is allow to be nil.
-func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types.Header, hash common.Hash) (*utils.EpochSwitchInfo, error) {
+func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types.Header, hash common.Hash) (*types.EpochSwitchInfo, error) {
 	e, ok := x.epochSwitches.Get(hash)
 	if ok {
 		log.Debug("[getEpochSwitchInfo] cache hit", "hash", hash.Hex())
-		epochSwitchInfo := e.(*utils.EpochSwitchInfo)
+		epochSwitchInfo := e.(*types.EpochSwitchInfo)
 		return epochSwitchInfo, nil
 	}
 	h := header
@@ -56,9 +55,9 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		if err != nil {
 			return nil, err
 		}
-		epochSwitchInfo := &utils.EpochSwitchInfo{
+		epochSwitchInfo := &types.EpochSwitchInfo{
 			Masternodes: masternodes,
-			EpochSwitchBlockInfo: &utils.BlockInfo{
+			EpochSwitchBlockInfo: &types.BlockInfo{
 				Hash:   hash,
 				Number: h.Number,
 				Round:  round,
@@ -82,7 +81,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 }
 
 // IsEpochSwitchAtRound() is used by miner to check whether it mines a block in the same epoch with parent
-func (x *XDPoS_v2) isEpochSwitchAtRound(round utils.Round, parentHeader *types.Header) (bool, uint64, error) {
+func (x *XDPoS_v2) isEpochSwitchAtRound(round types.Round, parentHeader *types.Header) (bool, uint64, error) {
 	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
 	if parentHeader.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
@@ -99,7 +98,7 @@ func (x *XDPoS_v2) isEpochSwitchAtRound(round utils.Round, parentHeader *types.H
 		return false, epochNum, nil
 	}
 
-	epochStartRound := round - round%utils.Round(x.config.Epoch)
+	epochStartRound := round - round%types.Round(x.config.Epoch)
 	return parentRound < epochStartRound, epochNum, nil
 }
 
@@ -129,7 +128,7 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 		return false, 0, err
 	}
 	parentRound := quorumCert.ProposedBlockInfo.Round
-	epochStartRound := round - round%utils.Round(x.config.Epoch)
+	epochStartRound := round - round%types.Round(x.config.Epoch)
 	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
 	if quorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {

@@ -8,6 +8,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +18,7 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
@@ -29,17 +30,17 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	}
 
 	voteMsg := <-engineV2.BroadcastCh
-	poolSize := engineV2.GetVotePoolSizeFaker(voteMsg.(*utils.Vote))
+	poolSize := engineV2.GetVotePoolSizeFaker(voteMsg.(*types.Vote))
 
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, voteMsg)
-	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
+	assert.Equal(t, currentBlock.Hash(), voteMsg.(*types.Vote).ProposedBlockInfo.Hash)
 
 	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
-	assert.Equal(t, utils.Round(1), round)
+	assert.Equal(t, types.Round(1), round)
 	// Should not update the highestQC
-	assert.Equal(t, utils.Round(0), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(0), highestQC.ProposedBlockInfo.Round)
 
 	// Insert another Block, but it won't trigger commit
 	blockNum := 902
@@ -56,8 +57,8 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	round, _, highestQC, _, _, _ = engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
-	assert.Equal(t, utils.Round(2), round)
-	assert.Equal(t, utils.Round(1), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(2), round)
+	assert.Equal(t, types.Round(1), highestQC.ProposedBlockInfo.Round)
 
 	// Insert one more Block, but still won't trigger commit
 	blockNum = 903
@@ -74,8 +75,8 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	round, _, highestQC, _, _, highestCommitBlock := engineV2.GetPropertiesFaker()
 	// Shoud NOT trigger setNewRound as the new block parent QC is round 1 but the currentRound is already 2
-	assert.Equal(t, utils.Round(3), round)
-	assert.Equal(t, utils.Round(2), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(3), round)
+	assert.Equal(t, types.Round(2), highestQC.ProposedBlockInfo.Round)
 	assert.Nil(t, highestCommitBlock)
 
 	// Insert one more Block, this time will trigger commit
@@ -93,11 +94,11 @@ func TestShouldSendVoteMsgAndCommitGrandGrandParentBlock(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 
-	assert.Equal(t, utils.Round(4), round)
-	assert.Equal(t, utils.Round(3), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(4), round)
+	assert.Equal(t, types.Round(3), highestQC.ProposedBlockInfo.Round)
 	assert.Equal(t, currentBlock.Hash(), highestCommitBlock.Hash)
 	assert.Equal(t, currentBlock.Number(), highestCommitBlock.Number)
-	assert.Equal(t, utils.Round(1), highestCommitBlock.Round)
+	assert.Equal(t, types.Round(1), highestCommitBlock.Round)
 }
 
 func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
@@ -105,7 +106,7 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
@@ -118,17 +119,17 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 
 	voteMsg := <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
+	assert.Equal(t, currentBlock.Hash(), voteMsg.(*types.Vote).ProposedBlockInfo.Hash)
 
 	round, _, highestQC, _, _, highestCommitBlock := engineV2.GetPropertiesFaker()
 
 	grandGrandParentBlock := blockchain.GetBlockByNumber(902)
 	// Shoud trigger setNewRound
-	assert.Equal(t, utils.Round(5), round)
-	assert.Equal(t, utils.Round(4), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(5), round)
+	assert.Equal(t, types.Round(4), highestQC.ProposedBlockInfo.Round)
 	assert.Equal(t, grandGrandParentBlock.Hash(), highestCommitBlock.Hash)
 	assert.Equal(t, grandGrandParentBlock.Number(), highestCommitBlock.Number)
-	assert.Equal(t, utils.Round(2), highestCommitBlock.Round)
+	assert.Equal(t, types.Round(2), highestCommitBlock.Round)
 
 	// Injecting new block which have gaps in the round number (Round 7 instead of 6)
 	blockNum := 906
@@ -146,12 +147,12 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 	grandGrandParentBlock = blockchain.GetBlockByNumber(903)
 
-	assert.Equal(t, utils.Round(6), round)
-	assert.Equal(t, utils.Round(5), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(6), round)
+	assert.Equal(t, types.Round(5), highestQC.ProposedBlockInfo.Round)
 	// It commit its grandgrandparent block
 	assert.Equal(t, grandGrandParentBlock.Hash(), highestCommitBlock.Hash)
 	assert.Equal(t, grandGrandParentBlock.Number(), highestCommitBlock.Number)
-	assert.Equal(t, utils.Round(3), highestCommitBlock.Round)
+	assert.Equal(t, types.Round(3), highestCommitBlock.Round)
 
 	blockNum = 907
 	blockCoinBase = fmt.Sprintf("0x111000000000000000000000000000000%03d", blockNum)
@@ -167,12 +168,12 @@ func TestShouldNotCommitIfRoundsNotContinousFor3Rounds(t *testing.T) {
 	assert.NotNil(t, voteMsg)
 	round, _, highestQC, _, _, highestCommitBlock = engineV2.GetPropertiesFaker()
 
-	assert.Equal(t, utils.Round(8), round)
-	assert.Equal(t, utils.Round(7), highestQC.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(8), round)
+	assert.Equal(t, types.Round(7), highestQC.ProposedBlockInfo.Round)
 	// Should NOT commit, the `grandGrandParentBlock` is still on blockNum 903
 	assert.Equal(t, grandGrandParentBlock.Hash(), highestCommitBlock.Hash)
 	assert.Equal(t, grandGrandParentBlock.Number(), highestCommitBlock.Number)
-	assert.Equal(t, utils.Round(3), highestCommitBlock.Round)
+	assert.Equal(t, types.Round(3), highestCommitBlock.Round)
 
 }
 
@@ -181,9 +182,9 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 5
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
@@ -196,11 +197,11 @@ func TestProposedBlockMessageHandlerSuccessfullyGenerateVote(t *testing.T) {
 
 	voteMsg := <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
+	assert.Equal(t, currentBlock.Hash(), voteMsg.(*types.Vote).ProposedBlockInfo.Hash)
 
 	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
-	assert.Equal(t, utils.Round(6), round)
+	assert.Equal(t, types.Round(6), round)
 	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
 }
 
@@ -211,9 +212,9 @@ func TestShouldNotSetNewRound(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 6
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(6), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(6), false)
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
@@ -226,7 +227,7 @@ func TestShouldNotSetNewRound(t *testing.T) {
 
 	round, _, highestQC, _, _, _ := engineV2.GetPropertiesFaker()
 	// Shoud not trigger setNewRound
-	assert.Equal(t, utils.Round(6), round)
+	assert.Equal(t, types.Round(6), round)
 	assert.Equal(t, extraField.QuorumCert.Signatures, highestQC.Signatures)
 }
 
@@ -235,7 +236,7 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 5
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 
 	err := engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
 	if err != nil {
@@ -244,12 +245,12 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 
 	voteMsg := <-engineV2.BroadcastCh
 	assert.NotNil(t, voteMsg)
-	assert.Equal(t, currentBlock.Hash(), voteMsg.(*utils.Vote).ProposedBlockInfo.Hash)
+	assert.Equal(t, currentBlock.Hash(), voteMsg.(*types.Vote).ProposedBlockInfo.Hash)
 
 	round, _, _, _, highestVotedRound, _ := engineV2.GetPropertiesFaker()
 	// Shoud trigger setNewRound
-	assert.Equal(t, utils.Round(6), round)
-	assert.Equal(t, utils.Round(6), highestVotedRound)
+	assert.Equal(t, types.Round(6), round)
+	assert.Equal(t, types.Round(6), highestVotedRound)
 
 	// Let's send again, this time, it shall not broadcast any vote message, because HigestVoteRound is same as currentRound
 	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
@@ -263,8 +264,8 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, highestVotedRound, _ = engineV2.GetPropertiesFaker()
-		assert.Equal(t, utils.Round(6), round)
-		assert.Equal(t, utils.Round(6), highestVotedRound)
+		assert.Equal(t, types.Round(6), round)
+		assert.Equal(t, types.Round(6), highestVotedRound)
 	}
 }
 
@@ -273,9 +274,9 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set current round to 8
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(8), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(8), false)
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
@@ -292,7 +293,7 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
-		assert.Equal(t, utils.Round(8), round)
+		assert.Equal(t, types.Round(8), round)
 	}
 }
 
@@ -308,23 +309,23 @@ func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
 	blockchain, _, currentBlock, _, _, forkedBlock := PrepareXDCTestBlockChainForV2Engine(t, 906, params.TestXDPoSMockChainConfig, &ForkedBlockOptions{numOfForkedBlocks: numOfForks})
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(forkedBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)
 	}
-	assert.Equal(t, utils.Round(9), extraField.Round)
+	assert.Equal(t, types.Round(9), extraField.Round)
 	// Set the lockQC and other pre-requist properties by block 906
 	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
 	if err != nil {
 		t.Fatal("Error while handling block 16", err)
 	}
 	vote := <-engineV2.BroadcastCh
-	assert.Equal(t, utils.Round(6), vote.(*utils.Vote).ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(6), vote.(*types.Vote).ProposedBlockInfo.Round)
 
 	// Find the first forked block at block 14th
 	firstForkedBlock := blockchain.GetBlockByHash(blockchain.GetBlockByHash(forkedBlock.ParentHash()).ParentHash())
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(7), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(7), false)
 	err = engineV2.ProposedBlockHandler(blockchain, firstForkedBlock.Header())
 	if err != nil {
 		t.Fatal("Fail propose proposedBlock handler", err)
@@ -336,7 +337,7 @@ func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
-		assert.Equal(t, utils.Round(7), round)
+		assert.Equal(t, types.Round(7), round)
 	}
 }
 
@@ -353,9 +354,9 @@ func TestShouldSendVoteMsg(t *testing.T) {
 			t.Fatal(err)
 		}
 		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
-		assert.Equal(t, utils.Round(i-900), round)
+		assert.Equal(t, types.Round(i-900), round)
 		vote := <-engineV2.BroadcastCh
-		assert.Equal(t, round, vote.(*utils.Vote).ProposedBlockInfo.Round)
+		assert.Equal(t, round, vote.(*types.Vote).ProposedBlockInfo.Round)
 	}
 }
 
@@ -368,9 +369,9 @@ func TestProposedBlockMessageHandlerNotGenerateVoteIfSignerNotInMNlist(t *testin
 	engineV2.Authorize(differentSigner, differentSignFn)
 
 	// Set current round to 5
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 
-	var extraField utils.ExtraFields_v2
+	var extraField types.ExtraFields_v2
 	err = utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
 		t.Fatal("Fail to decode extra data", err)

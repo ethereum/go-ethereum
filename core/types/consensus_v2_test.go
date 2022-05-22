@@ -1,14 +1,31 @@
-package utils
+package types
 
 import (
+	"fmt"
 	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/stretchr/testify/assert"
 )
+
+// Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
+func DecodeBytesExtraFields(b []byte, val interface{}) error {
+	if len(b) == 0 {
+		return fmt.Errorf("extra field is 0 length")
+	}
+	switch b[0] {
+	case 1:
+		return fmt.Errorf("consensus version 1 is not applicable for decoding extra fields")
+	case 2:
+		return rlp.DecodeBytes(b[1:], val)
+	default:
+		return fmt.Errorf("consensus version %d is not defined", b[0])
+	}
+}
 
 func toyExtraFields() *ExtraFields_v2 {
 	round := Round(307)

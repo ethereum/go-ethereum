@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
@@ -77,4 +78,14 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	default:
 		return fmt.Errorf("consensus version %d is not defined", b[0])
 	}
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	err := rlp.Encode(hw, x)
+	if err != nil {
+		log.Error("[rlpHash] Fail to hash item", "Error", err)
+	}
+	hw.Sum(h[:0])
+	return h
 }

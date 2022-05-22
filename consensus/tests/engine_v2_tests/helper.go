@@ -583,7 +583,7 @@ func findSignerAndSignFn(bc *BlockChain, header *types.Header, signer common.Add
 
 	// If v2 block, we need to use extra data's round to find who is creating the block in order to verify the validator
 	if header.Number.Cmp(config.XDPoS.V2.SwitchBlock) > 0 {
-		var decodedExtraField utils.ExtraFields_v2
+		var decodedExtraField types.ExtraFields_v2
 		err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
 		if err != nil {
 			panic(fmt.Errorf("fail to seal header for v2 block"))
@@ -632,49 +632,49 @@ func getMasternodesList(signer common.Address) []common.Address {
 }
 
 func generateV2Extra(roundNumber int64, currentBlock *types.Block, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), accKeys []*ecdsa.PrivateKey) []byte {
-	var extraField utils.ExtraFields_v2
-	var round utils.Round
+	var extraField types.ExtraFields_v2
+	var round types.Round
 	err := utils.DecodeBytesExtraFields(currentBlock.Extra(), &extraField)
 	if err != nil {
-		round = utils.Round(0)
+		round = types.Round(0)
 	} else {
 		round = extraField.Round
 	}
 
-	proposedBlockInfo := &utils.BlockInfo{
+	proposedBlockInfo := &types.BlockInfo{
 		Hash:   currentBlock.Hash(),
 		Round:  round,
 		Number: currentBlock.Number(),
 	}
 	gapNumber := currentBlock.Number().Uint64() - currentBlock.Number().Uint64()%params.TestXDPoSMockChainConfig.XDPoS.Epoch - params.TestXDPoSMockChainConfig.XDPoS.Gap
-	voteForSign := &utils.VoteForSign{
+	voteForSign := &types.VoteForSign{
 		ProposedBlockInfo: proposedBlockInfo,
 		GapNumber:         gapNumber,
 	}
 
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
+	signedHash, err := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())
 	if err != nil {
 		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 	}
-	var signatures []utils.Signature
+	var signatures []types.Signature
 	if len(accKeys) == 0 {
 		// Sign from acc 1, 2, 3 by default
 		accKeys = append(accKeys, acc1Key, acc2Key, acc3Key)
 	}
 	for _, acc := range accKeys {
-		h := SignHashByPK(acc, utils.VoteSigHash(voteForSign).Bytes())
+		h := SignHashByPK(acc, types.VoteSigHash(voteForSign).Bytes())
 		signatures = append(signatures, h)
 	}
 	signatures = append(signatures, signedHash)
 
-	quorumCert := &utils.QuorumCert{
+	quorumCert := &types.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
 		GapNumber:         gapNumber,
 	}
 
-	extra := utils.ExtraFields_v2{
-		Round:      utils.Round(roundNumber),
+	extra := types.ExtraFields_v2{
+		Round:      types.Round(roundNumber),
 		QuorumCert: quorumCert,
 	}
 	extraInBytes, err := extra.EncodeToBytes()

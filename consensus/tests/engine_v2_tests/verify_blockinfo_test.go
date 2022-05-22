@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,9 +15,9 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	blockInfo := &utils.BlockInfo{
+	blockInfo := &types.BlockInfo{
 		Hash:   currentBlock.Hash(),
-		Round:  utils.Round(1),
+		Round:  types.Round(1),
 		Number: currentBlock.Number(),
 	}
 	err := engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
@@ -30,33 +30,33 @@ func TestShouldVerifyBlockInfo(t *testing.T) {
 	err = blockchain.InsertBlock(block902)
 	assert.Nil(t, err)
 
-	blockInfo = &utils.BlockInfo{
+	blockInfo = &types.BlockInfo{
 		Hash:   block902.Hash(),
-		Round:  utils.Round(2),
+		Round:  types.Round(2),
 		Number: block902.Number(),
 	}
 	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.Nil(t, err)
 
-	blockInfo = &utils.BlockInfo{
+	blockInfo = &types.BlockInfo{
 		Hash:   currentBlock.Hash(),
-		Round:  utils.Round(2),
+		Round:  types.Round(2),
 		Number: currentBlock.Number(),
 	}
 	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.NotNil(t, err)
 
-	blockInfo = &utils.BlockInfo{
+	blockInfo = &types.BlockInfo{
 		Hash:   block902.Hash(),
-		Round:  utils.Round(3),
+		Round:  types.Round(3),
 		Number: block902.Number(),
 	}
 	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)
 	assert.NotNil(t, err)
 
-	blockInfo = &utils.BlockInfo{
+	blockInfo = &types.BlockInfo{
 		Hash:   block902.Hash(),
-		Round:  utils.Round(2),
+		Round:  types.Round(2),
 		Number: currentBlock.Number(),
 	}
 	err = engineV2.VerifyBlockInfo(blockchain, blockInfo, nil)

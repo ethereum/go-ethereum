@@ -10,10 +10,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
-func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeout *utils.Timeout) error {
+func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeout *types.Timeout) error {
 	// 1. checkRoundNumber
 	if timeout.Round != x.currentRound {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
@@ -47,13 +48,13 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 		3. generateSyncInfo()
 */
 func (x *XDPoS_v2) onTimeoutPoolThresholdReached(blockChainReader consensus.ChainReader, pooledTimeouts map[common.Hash]utils.PoolObj, currentTimeoutMsg utils.PoolObj, gapNumber uint64) error {
-	signatures := []utils.Signature{}
+	signatures := []types.Signature{}
 	for _, v := range pooledTimeouts {
-		signatures = append(signatures, v.(*utils.Timeout).Signature)
+		signatures = append(signatures, v.(*types.Timeout).Signature)
 	}
 	// Genrate TC
-	timeoutCert := &utils.TimeoutCert{
-		Round:      currentTimeoutMsg.(*utils.Timeout).Round,
+	timeoutCert := &types.TimeoutCert{
+		Round:      currentTimeoutMsg.(*types.Timeout).Round,
 		Signatures: signatures,
 		GapNumber:  gapNumber,
 	}
@@ -71,7 +72,7 @@ func (x *XDPoS_v2) onTimeoutPoolThresholdReached(blockChainReader consensus.Chai
 	return nil
 }
 
-func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *utils.TimeoutCert) error {
+func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.TimeoutCert) error {
 	/*
 		1. Get epoch master node list by gapNumber
 		2. Check number of signatures > threshold, as well as it's format. (Same as verifyQC)
@@ -102,13 +103,13 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *utils.Time
 	wg.Add(len(timeoutCert.Signatures))
 	var haveError error
 
-	signedTimeoutObj := utils.TimeoutSigHash(&utils.TimeoutForSign{
+	signedTimeoutObj := types.TimeoutSigHash(&types.TimeoutForSign{
 		Round:     timeoutCert.Round,
 		GapNumber: timeoutCert.GapNumber,
 	})
 
 	for _, signature := range timeoutCert.Signatures {
-		go func(sig utils.Signature) {
+		go func(sig types.Signature) {
 			defer wg.Done()
 			verified, _, err := x.verifyMsgSignature(signedTimeoutObj, sig, snap.NextEpochMasterNodes)
 			if err != nil {
@@ -134,7 +135,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *utils.Time
 	1. Update highestTC
 	2. Check TC round >= node's currentRound. If yes, call setNewRound
 */
-func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert *utils.TimeoutCert) error {
+func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert *types.TimeoutCert) error {
 	if timeoutCert.Round > x.highestTimeoutCert.Round {
 		x.highestTimeoutCert = timeoutCert
 	}
@@ -177,7 +178,7 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 		log.Debug("[sendTimeout] non-epoch-switch block found its epoch block and calculated the gapNumber", "epochSwitchInfo.EpochSwitchBlockInfo.Number", epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64(), "gapNumber", gapNumber)
 	}
 
-	signedHash, err := x.signSignature(utils.TimeoutSigHash(&utils.TimeoutForSign{
+	signedHash, err := x.signSignature(types.TimeoutSigHash(&types.TimeoutForSign{
 		Round:     x.currentRound,
 		GapNumber: gapNumber,
 	}))
@@ -185,7 +186,7 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 		log.Error("[sendTimeout] signSignature when sending out TC", "Error", err)
 		return err
 	}
-	timeoutMsg := &utils.Timeout{
+	timeoutMsg := &types.Timeout{
 		Round:     x.currentRound,
 		Signature: signedHash,
 		GapNumber: gapNumber,

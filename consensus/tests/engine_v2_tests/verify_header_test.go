@@ -108,34 +108,34 @@ func TestShouldVerifyBlock(t *testing.T) {
 	assert.Equal(t, utils.ErrInvalidDifficulty, err)
 
 	// Creat an invalid QC round
-	proposedBlockInfo := &utils.BlockInfo{
+	proposedBlockInfo := &types.BlockInfo{
 		Hash:   blockchain.GetBlockByNumber(902).Hash(),
-		Round:  utils.Round(2),
+		Round:  types.Round(2),
 		Number: blockchain.GetBlockByNumber(902).Number(),
 	}
-	voteForSign := &utils.VoteForSign{
+	voteForSign := &types.VoteForSign{
 		ProposedBlockInfo: proposedBlockInfo,
 		GapNumber:         450,
 	}
 	// Genrate QC
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
+	signedHash, err := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())
 	if err != nil {
 		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
 	}
 	// Sign from acc 1, 2, 3
-	acc1SignedHash := SignHashByPK(acc1Key, utils.VoteSigHash(voteForSign).Bytes())
-	acc2SignedHash := SignHashByPK(acc2Key, utils.VoteSigHash(voteForSign).Bytes())
-	acc3SignedHash := SignHashByPK(acc3Key, utils.VoteSigHash(voteForSign).Bytes())
-	var signatures []utils.Signature
+	acc1SignedHash := SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, types.VoteSigHash(voteForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, types.VoteSigHash(voteForSign).Bytes())
+	var signatures []types.Signature
 	signatures = append(signatures, signedHash, acc1SignedHash, acc2SignedHash, acc3SignedHash)
-	quorumCert := &utils.QuorumCert{
+	quorumCert := &types.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
 		GapNumber:         450,
 	}
 
-	extra := utils.ExtraFields_v2{
-		Round:      utils.Round(2),
+	extra := types.ExtraFields_v2{
+		Round:      types.Round(2),
 		QuorumCert: quorumCert,
 	}
 	extraInBytes, err := extra.EncodeToBytes()
@@ -181,28 +181,28 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	parentBlock := blockchain.GetBlockByNumber(901)
-	proposedBlockInfo := &utils.BlockInfo{
+	proposedBlockInfo := &types.BlockInfo{
 		Hash:   parentBlock.Hash(),
-		Round:  utils.Round(1),
+		Round:  types.Round(1),
 		Number: parentBlock.Number(),
 	}
-	voteForSign := &utils.VoteForSign{
+	voteForSign := &types.VoteForSign{
 		ProposedBlockInfo: proposedBlockInfo,
 		GapNumber:         450,
 	}
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.VoteSigHash(voteForSign).Bytes())
+	signedHash, err := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())
 	assert.Nil(t, err)
-	var signatures []utils.Signature
+	var signatures []types.Signature
 	// Duplicate the signatures
 	signatures = append(signatures, signedHash, signedHash, signedHash, signedHash, signedHash, signedHash)
-	quorumCert := &utils.QuorumCert{
+	quorumCert := &types.QuorumCert{
 		ProposedBlockInfo: proposedBlockInfo,
 		Signatures:        signatures,
 		GapNumber:         450,
 	}
 
-	extra := utils.ExtraFields_v2{
-		Round:      utils.Round(2),
+	extra := types.ExtraFields_v2{
+		Round:      types.Round(2),
 		QuorumCert: quorumCert,
 	}
 	extraInBytes, err := extra.EncodeToBytes()

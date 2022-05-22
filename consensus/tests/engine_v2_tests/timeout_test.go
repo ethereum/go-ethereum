@@ -9,7 +9,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
@@ -20,11 +20,11 @@ func TestCountdownTimeoutToSendTimeoutMessage(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	timeoutMsg := <-engineV2.BroadcastCh
-	poolSize := engineV2.GetTimeoutPoolSizeFaker(timeoutMsg.(*utils.Timeout))
+	poolSize := engineV2.GetTimeoutPoolSizeFaker(timeoutMsg.(*types.Timeout))
 	assert.Equal(t, poolSize, 1)
 	assert.NotNil(t, timeoutMsg)
-	assert.Equal(t, uint64(450), timeoutMsg.(*utils.Timeout).GapNumber)
-	assert.Equal(t, utils.Round(1), timeoutMsg.(*utils.Timeout).Round)
+	assert.Equal(t, uint64(450), timeoutMsg.(*types.Timeout).GapNumber)
+	assert.Equal(t, types.Round(1), timeoutMsg.(*types.Timeout).Round)
 }
 
 func TestCountdownTimeoutNotToSendTimeoutMessageIfNotInMasternodeList(t *testing.T) {
@@ -55,9 +55,9 @@ func TestSyncInfoAfterReachTimeoutSnycThreadhold(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		obj := <-engineV2.BroadcastCh
 		switch v := obj.(type) {
-		case *utils.Timeout:
+		case *types.Timeout:
 			timeoutCounter++
-		case *utils.SyncInfo:
+		case *types.SyncInfo:
 			syncInfoCounter++
 		default:
 			log.Error("Unknown message type received", "value", v)
@@ -71,9 +71,9 @@ func TestSyncInfoAfterReachTimeoutSnycThreadhold(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		obj := <-engineV2.BroadcastCh
 		switch v := obj.(type) {
-		case *utils.Timeout:
+		case *types.Timeout:
 			timeoutCounter++
-		case *utils.SyncInfo:
+		case *types.SyncInfo:
 			syncInfoCounter++
 		default:
 			log.Error("Unknown message type received", "value", v)
@@ -89,10 +89,10 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 1
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(1), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(1), false)
 	// Create two timeout message which will not reach timeout pool threshold
-	timeoutMsg := &utils.Timeout{
-		Round:     utils.Round(1),
+	timeoutMsg := &types.Timeout{
+		Round:     types.Round(1),
 		Signature: []byte{1},
 		GapNumber: 450,
 	}
@@ -100,31 +100,31 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	err := engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ := engineV2.GetPropertiesFaker()
-	assert.Equal(t, utils.Round(1), currentRound)
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(1),
+	assert.Equal(t, types.Round(1), currentRound)
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(1),
 		Signature: []byte{2},
 		GapNumber: 450,
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
-	assert.Equal(t, utils.Round(1), currentRound)
+	assert.Equal(t, types.Round(1), currentRound)
 
 	// Send a timeout with different gap number, it shall not trigger timeout pool hook
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(1),
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(1),
 		Signature: []byte{3},
 		GapNumber: 1350,
 	}
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.Nil(t, err)
 	currentRound, _, _, _, _, _ = engineV2.GetPropertiesFaker()
-	assert.Equal(t, utils.Round(1), currentRound)
+	assert.Equal(t, types.Round(1), currentRound)
 
 	// Create a timeout message that should trigger timeout pool hook
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(1),
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(1),
 		Signature: []byte{4},
 		GapNumber: 450,
 	}
@@ -139,17 +139,17 @@ func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
 	assert.NotNil(t, syncInfoMsg)
 
 	// Shouldn't have QC, however, we did not inilise it, hence will show default empty value
-	qc := syncInfoMsg.(*utils.SyncInfo).HighestQuorumCert
-	assert.Equal(t, utils.Round(0), qc.ProposedBlockInfo.Round)
+	qc := syncInfoMsg.(*types.SyncInfo).HighestQuorumCert
+	assert.Equal(t, types.Round(0), qc.ProposedBlockInfo.Round)
 
-	tc := syncInfoMsg.(*utils.SyncInfo).HighestTimeoutCert
+	tc := syncInfoMsg.(*types.SyncInfo).HighestTimeoutCert
 	assert.NotNil(t, tc)
-	assert.Equal(t, tc.Round, utils.Round(1))
+	assert.Equal(t, tc.Round, types.Round(1))
 	assert.Equal(t, uint64(450), tc.GapNumber)
 	// The signatures shall not include the byte{3} from a different gap number
-	sigatures := []utils.Signature{[]byte{1}, []byte{2}, []byte{4}}
+	sigatures := []types.Signature{[]byte{1}, []byte{2}, []byte{4}}
 	assert.ElementsMatch(t, tc.Signatures, sigatures)
-	assert.Equal(t, utils.Round(2), currentRound)
+	assert.Equal(t, types.Round(2), currentRound)
 }
 
 func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
@@ -157,9 +157,9 @@ func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 3
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(3), false)
-	timeoutMsg := &utils.Timeout{
-		Round:     utils.Round(2),
+	engineV2.SetNewRoundFaker(blockchain, types.Round(3), false)
+	timeoutMsg := &types.Timeout{
+		Round:     types.Round(2),
 		Signature: []byte{1},
 	}
 
@@ -169,7 +169,7 @@ func TestThrowErrorIfTimeoutMsgRoundNotEqualToCurrentRound(t *testing.T) {
 	assert.Equal(t, "timeout message round number: 2 does not match currentRound: 3", err.Error())
 
 	// Set round to 1
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(1), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(1), false)
 	err = engineV2.TimeoutHandler(blockchain, timeoutMsg)
 	assert.NotNil(t, err)
 	// Timeout msg round < currentRound
@@ -180,13 +180,13 @@ func TestShouldVerifyTimeoutMessageForFirstV2Block(t *testing.T) {
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	signedHash, err := signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(1),
+	signedHash, err := signFn(accounts.Account{Address: signer}, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(1),
 		GapNumber: 450,
 	}).Bytes())
 	assert.Nil(t, err)
-	timeoutMsg := &utils.Timeout{
-		Round:     utils.Round(1),
+	timeoutMsg := &types.Timeout{
+		Round:     types.Round(1),
 		GapNumber: 450,
 		Signature: signedHash,
 	}
@@ -195,13 +195,13 @@ func TestShouldVerifyTimeoutMessageForFirstV2Block(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, verified)
 
-	signedHash, err = signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(2),
+	signedHash, err = signFn(accounts.Account{Address: signer}, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(2),
 		GapNumber: 450,
 	}).Bytes())
 	assert.Nil(t, err)
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(2),
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(2),
 		GapNumber: 450,
 		Signature: signedHash,
 	}
@@ -215,12 +215,12 @@ func TestShouldVerifyTimeoutMessage(t *testing.T) {
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 2251, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
-	signedHash := SignHashByPK(acc1Key, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(5000),
+	signedHash := SignHashByPK(acc1Key, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(5000),
 		GapNumber: 2250,
 	}).Bytes())
-	timeoutMsg := &utils.Timeout{
-		Round:     utils.Round(5000),
+	timeoutMsg := &types.Timeout{
+		Round:     types.Round(5000),
 		GapNumber: 2250,
 		Signature: signedHash,
 	}
@@ -235,46 +235,46 @@ func TestTimeoutPoolKeeyGoodHygiene(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Set round to 5
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 	// Inject the first timeout with round 5
 
-	signedHash, _ := signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(5),
+	signedHash, _ := signFn(accounts.Account{Address: signer}, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(5),
 		GapNumber: 450,
 	}).Bytes())
-	timeoutMsg := &utils.Timeout{
-		Round:     utils.Round(5),
+	timeoutMsg := &types.Timeout{
+		Round:     types.Round(5),
 		GapNumber: 450,
 		Signature: signedHash,
 	}
 	engineV2.TimeoutHandler(blockchain, timeoutMsg)
 
 	// Inject a second timeout with round 16
-	signedHash, _ = signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(16),
+	signedHash, _ = signFn(accounts.Account{Address: signer}, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(16),
 		GapNumber: 450,
 	}).Bytes())
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(16),
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(16),
 		GapNumber: 450,
 		Signature: signedHash,
 	}
 	// Set round to 16
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(16), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(16), false)
 	engineV2.TimeoutHandler(blockchain, timeoutMsg)
 
 	// Inject a third timeout with round 17
-	signedHash, _ = signFn(accounts.Account{Address: signer}, utils.TimeoutSigHash(&utils.TimeoutForSign{
-		Round:     utils.Round(17),
+	signedHash, _ = signFn(accounts.Account{Address: signer}, types.TimeoutSigHash(&types.TimeoutForSign{
+		Round:     types.Round(17),
 		GapNumber: 450,
 	}).Bytes())
-	timeoutMsg = &utils.Timeout{
-		Round:     utils.Round(17),
+	timeoutMsg = &types.Timeout{
+		Round:     types.Round(17),
 		GapNumber: 450,
 		Signature: signedHash,
 	}
 	// Set round to 16
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(17), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(17), false)
 	engineV2.TimeoutHandler(blockchain, timeoutMsg)
 
 	// Let's keep good Hygiene

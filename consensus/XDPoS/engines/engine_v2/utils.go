@@ -72,10 +72,10 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 	return masternodes
 }
 
-func UniqueSignatures(signatureSlice []utils.Signature) ([]utils.Signature, []utils.Signature) {
+func UniqueSignatures(signatureSlice []types.Signature) ([]types.Signature, []types.Signature) {
 	keys := make(map[string]bool)
-	list := []utils.Signature{}
-	duplicates := []utils.Signature{}
+	list := []types.Signature{}
+	duplicates := []types.Signature{}
 	for _, signature := range signatureSlice {
 		hexOfSig := common.Bytes2Hex(signature)
 		if _, value := keys[hexOfSig]; !value {
@@ -88,7 +88,7 @@ func UniqueSignatures(signatureSlice []utils.Signature) ([]utils.Signature, []ut
 	return list, duplicates
 }
 
-func (x *XDPoS_v2) signSignature(signingHash common.Hash) (utils.Signature, error) {
+func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, error) {
 	// Don't hold the signFn for the whole signing operation
 	x.signLock.RLock()
 	signer, signFn := x.signer, x.signFn
@@ -101,7 +101,7 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (utils.Signature, erro
 	return signedHash, nil
 }
 
-func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature utils.Signature, masternodes []common.Address) (bool, common.Address, error) {
+func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature types.Signature, masternodes []common.Address) (bool, common.Address, error) {
 	var signerAddress common.Address
 	if len(masternodes) == 0 {
 		return false, signerAddress, fmt.Errorf("Empty masternode list detected when verifying message signatures")
@@ -122,22 +122,22 @@ func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signat
 	return false, signerAddress, fmt.Errorf("Masternodes list does not contain signer address, Signer address: %v", signerAddress.Hex())
 }
 
-func (x *XDPoS_v2) getExtraFields(header *types.Header) (*utils.QuorumCert, utils.Round, []common.Address, error) {
+func (x *XDPoS_v2) getExtraFields(header *types.Header) (*types.QuorumCert, types.Round, []common.Address, error) {
 
 	var masternodes []common.Address
 
 	// last v1 block
 	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		masternodes = decodeMasternodesFromHeaderExtra(header)
-		return nil, utils.Round(0), masternodes, nil
+		return nil, types.Round(0), masternodes, nil
 	}
 
 	// v2 block
 	masternodes = x.GetMasternodesFromEpochSwitchHeader(header)
-	var decodedExtraField utils.ExtraFields_v2
+	var decodedExtraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
 	if err != nil {
-		return nil, utils.Round(0), masternodes, err
+		return nil, types.Round(0), masternodes, err
 	}
 	return decodedExtraField.QuorumCert, decodedExtraField.Round, masternodes, nil
 }

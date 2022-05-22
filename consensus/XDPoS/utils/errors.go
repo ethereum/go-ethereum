@@ -3,6 +3,8 @@ package utils
 import (
 	"errors"
 	"fmt"
+
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -98,8 +100,8 @@ var (
 
 type ErrIncomingMessageRoundNotEqualCurrentRound struct {
 	Type          string
-	IncomingRound Round
-	CurrentRound  Round
+	IncomingRound types.Round
+	CurrentRound  types.Round
 }
 
 func (e *ErrIncomingMessageRoundNotEqualCurrentRound) Error() string {
@@ -108,8 +110,8 @@ func (e *ErrIncomingMessageRoundNotEqualCurrentRound) Error() string {
 
 type ErrIncomingMessageRoundTooFarFromCurrentRound struct {
 	Type          string
-	IncomingRound Round
-	CurrentRound  Round
+	IncomingRound types.Round
+	CurrentRound  types.Round
 }
 
 func (e *ErrIncomingMessageRoundTooFarFromCurrentRound) Error() string {

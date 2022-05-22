@@ -12,7 +12,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/stretchr/testify/assert"
 )
@@ -72,69 +72,69 @@ func TestFindQCsInSameRound(t *testing.T) {
 	gapNumber := 450
 
 	// If ONE in common
-	var sig []utils.Signature
-	qc1 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	var sig []types.Signature
+	qc1 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc1"),
-			Round:  utils.Round(10),
+			Round:  types.Round(10),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	qc2 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	qc2 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc2"),
-			Round:  utils.Round(12),
+			Round:  types.Round(12),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	qc3 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	qc3 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc3"),
-			Round:  utils.Round(13),
+			Round:  types.Round(13),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	qc4 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	qc4 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc4"),
-			Round:  utils.Round(12),
+			Round:  types.Round(12),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	qc5 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	qc5 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc5"),
-			Round:  utils.Round(13),
+			Round:  types.Round(13),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	qc6 := &utils.QuorumCert{
-		ProposedBlockInfo: &utils.BlockInfo{
+	qc6 := &types.QuorumCert{
+		ProposedBlockInfo: &types.BlockInfo{
 			Hash:   common.StringToHash("qc6"),
-			Round:  utils.Round(15),
+			Round:  types.Round(15),
 			Number: big.NewInt(910),
 		},
 		Signatures: sig,
 		GapNumber:  uint64(gapNumber),
 	}
 
-	var qcSet1 []utils.QuorumCert
-	var qcSet2 []utils.QuorumCert
+	var qcSet1 []types.QuorumCert
+	var qcSet2 []types.QuorumCert
 
 	found, first, second := forensics.findQCsInSameRound(append(qcSet1, *qc1, *qc2, *qc3), append(qcSet2, *qc4, *qc5, *qc6))
 	assert.True(t, found)

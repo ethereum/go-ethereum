@@ -20,23 +20,23 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	// Assuming we are getting block 906 which have QC pointing at block 905
-	blockInfo := &utils.BlockInfo{
+	blockInfo := &types.BlockInfo{
 		Hash:   currentBlock.Hash(),
-		Round:  utils.Round(5),
+		Round:  types.Round(5),
 		Number: big.NewInt(905),
 	}
-	voteForSign := &utils.VoteForSign{
+	voteForSign := &types.VoteForSign{
 		ProposedBlockInfo: blockInfo,
 		GapNumber:         450,
 	}
-	voteSigningHash := utils.VoteSigHash(voteForSign)
+	voteSigningHash := types.VoteSigHash(voteForSign)
 
 	// Set round to 5
-	engineV2.SetNewRoundFaker(blockchain, utils.Round(5), false)
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
 	// Create two vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
-	voteMsg := &utils.Vote{
+	voteMsg := &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
 		GapNumber:         450,
@@ -45,7 +45,7 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 	err = engineV2.VoteHandler(blockchain, voteMsg)
 	assert.Nil(t, err)
 	signedHash = SignHashByPK(acc1Key, voteSigningHash.Bytes())
-	voteMsg = &utils.Vote{
+	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
 		GapNumber:         450,
@@ -58,7 +58,7 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 	assert.Nil(t, err)
 	randomlySignedHash, err := randomSignFn(accounts.Account{Address: randomSigner}, voteSigningHash.Bytes())
 	assert.Nil(t, err)
-	voteMsg = &utils.Vote{
+	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         randomlySignedHash,
 		GapNumber:         450,
@@ -68,7 +68,7 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 
 	// Create a vote message that should trigger vote pool hook and increment the round to 6
 	signedHash = SignHashByPK(acc3Key, voteSigningHash.Bytes())
-	voteMsg = &utils.Vote{
+	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
 		Signature:         signedHash,
 		GapNumber:         450,
@@ -86,7 +86,7 @@ func TestSetCommittedQCsInOrder(t *testing.T) {
 	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
 
 	var headers []types.Header
-	var decodedExtraField utils.ExtraFields_v2
+	var decodedExtraField types.ExtraFields_v2
 	// Decode the qc1 and qc2
 	err := utils.DecodeBytesExtraFields(currentBlock.Header().Extra, &decodedExtraField)
 	assert.Nil(t, err)
@@ -110,14 +110,14 @@ func TestSetCommittedQCsInOrder(t *testing.T) {
 func TestForensicsMonitoring(t *testing.T) {
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, params.TestXDPoSMockChainConfig, nil)
 	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
-	var decodedCurrentblockExtraField utils.ExtraFields_v2
+	var decodedCurrentblockExtraField types.ExtraFields_v2
 	// Decode the QC from latest block
 	err := utils.DecodeBytesExtraFields(currentBlock.Header().Extra, &decodedCurrentblockExtraField)
 	assert.Nil(t, err)
 	incomingQC := decodedCurrentblockExtraField.QuorumCert
 	// Now, let's try set committed blocks, where the highestedCommitted blocks are 905, 906 and 907
 	var headers []types.Header
-	var decodedBlock905ExtraField utils.ExtraFields_v2
+	var decodedBlock905ExtraField types.ExtraFields_v2
 	err = utils.DecodeBytesExtraFields(blockchain.GetHeaderByNumber(905).Extra, &decodedBlock905ExtraField)
 	assert.Nil(t, err)
 
@@ -139,13 +139,13 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 
 	// Now, let's try set committed blocks, where the highestedCommitted blocks are 913, 914 and 915
 	var headers []types.Header
-	var decodedBlock915ExtraField utils.ExtraFields_v2
+	var decodedBlock915ExtraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(blockchain.GetHeaderByNumber(915).Extra, &decodedBlock915ExtraField)
 	assert.Nil(t, err)
 	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(913), *blockchain.GetHeaderByNumber(914)), *decodedBlock915ExtraField.QuorumCert)
 	assert.Nil(t, err)
 
-	var decodedExtraField utils.ExtraFields_v2
+	var decodedExtraField types.ExtraFields_v2
 	// Decode the QC from forking chain
 	err = utils.DecodeBytesExtraFields(currentForkBlock.Header().Extra, &decodedExtraField)
 	assert.Nil(t, err)
@@ -173,13 +173,13 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 
 	// Now, let's try set committed blocks, where the highestedCommitted blocks are 913, 914 and 915
 	var headers []types.Header
-	var decodedBlock915ExtraField utils.ExtraFields_v2
+	var decodedBlock915ExtraField types.ExtraFields_v2
 	err := utils.DecodeBytesExtraFields(blockchain.GetHeaderByNumber(915).Extra, &decodedBlock915ExtraField)
 	assert.Nil(t, err)
 	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(913), *blockchain.GetHeaderByNumber(914)), *decodedBlock915ExtraField.QuorumCert)
 	assert.Nil(t, err)
 
-	var decodedExtraField utils.ExtraFields_v2
+	var decodedExtraField types.ExtraFields_v2
 	// Decode the QC from forking chain
 	err = utils.DecodeBytesExtraFields(currentForkBlock.Header().Extra, &decodedExtraField)
 	assert.Nil(t, err)

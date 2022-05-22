@@ -49,7 +49,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 	assert.Nil(t, err)
 	// round=1, so masternode[1] has YourTurn = True
 	assert.True(t, b)
-	assert.Equal(t, adaptor.EngineV2.GetCurrentRoundFaker(), utils.Round(1))
+	assert.Equal(t, adaptor.EngineV2.GetCurrentRoundFaker(), types.Round(1))
 
 	snap, err := adaptor.EngineV2.GetSnapshot(blockchain, block900.Header())
 	assert.Nil(t, err)
@@ -171,7 +171,7 @@ func TestPrepareFail(t *testing.T) {
 	err = adaptor.Prepare(blockchain, notReadyToMine)
 	assert.Equal(t, consensus.ErrNotReadyToMine, err)
 
-	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(4), false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(4), false)
 	header901WithoutCoinbase := &types.Header{
 		ParentHash: currentBlock.Hash(),
 		Number:     big.NewInt(int64(901)),
@@ -201,7 +201,7 @@ func TestPrepareHappyPath(t *testing.T) {
 		Coinbase:   signer,
 	}
 
-	adaptor.EngineV2.SetNewRoundFaker(blockchain, utils.Round(4), false)
+	adaptor.EngineV2.SetNewRoundFaker(blockchain, types.Round(4), false)
 	err = adaptor.Prepare(blockchain, header901)
 	assert.Nil(t, err)
 
@@ -216,9 +216,9 @@ func TestPrepareHappyPath(t *testing.T) {
 	}
 	assert.Equal(t, validators, header901.Validators)
 
-	var decodedExtraField utils.ExtraFields_v2
+	var decodedExtraField types.ExtraFields_v2
 	err = utils.DecodeBytesExtraFields(header901.Extra, &decodedExtraField)
 	assert.Nil(t, err)
-	assert.Equal(t, utils.Round(4), decodedExtraField.Round)
-	assert.Equal(t, utils.Round(0), decodedExtraField.QuorumCert.ProposedBlockInfo.Round)
+	assert.Equal(t, types.Round(4), decodedExtraField.Round)
+	assert.Equal(t, types.Round(0), decodedExtraField.QuorumCert.ProposedBlockInfo.Round)
 }
