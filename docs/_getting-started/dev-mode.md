@@ -9,7 +9,7 @@ It is often convenient for developers to work in an environment where changes to
 -   Sets max peers to 0 (meaning Geth does not search for peers)
 -   Turns off discovery by other nodes (meaning the node is invisible to other nodes)
 -   Sets the gas price to 0 (no cost to send transactions)
--   Uses the Clique proof-of-authority consensus engine with which allows blocks to be mined as-needed without excessive CPU and memory consumption
+-   Uses the Clique proof-of-authority consensus engine which allows blocks to be mined as-needed without excessive CPU and memory consumption
 -   Uses on-demand block generation, producing blocks when transactions are waiting to be mined
 
 This configuration enables developers to experiment with Geth's source code or develop new applications without having to sync to a pre-existing public network. Blocks are only mined when there are pending transactions. Developers can break things on this network without affecting other users. This page will demonstrate how to spin up a local Geth testnet and a simple smart contract will be deployed to it using the Remix online integrated development environment (IDE).
@@ -238,7 +238,7 @@ The Solidity logo is present as an icon in the Remix side-bar. Clicking this ico
 
 ![Remix-compiler](/static/images/remix-compiler.png)
 
-Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these cna be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
+Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
 
 
 ![Remix-deploy](/static/images/remix-deploy.png)
@@ -306,7 +306,7 @@ The transaction hash can be used to retrieve the transaction details using the G
 
 ```
 
-The `from` address is the account that sent the transaction, the `to` address is the deployment address of the contract. The value entered into Remix is now in storage at that contract address. This can be retrieved using Remix by calling the `retrieve` function - to do this simpyl click the `retrieve` button. Alternatively, it can be retrieved using `web3.getStorageAt` using the Geth Javascript console. The following command returns the value in the contract storage (replace the given address with the correct one displayed in the Geth logs).
+The `from` address is the account that sent the transaction, the `to` address is the deployment address of the contract. The value entered into Remix is now in storage at that contract address. This can be retrieved using Remix by calling the `retrieve` function - to do this simply click the `retrieve` button. Alternatively, it can be retrieved using `web3.getStorageAt` using the Geth Javascript console. The following command returns the value in the contract storage (replace the given address with the correct one displayed in the Geth logs).
 
 ```shell
 
