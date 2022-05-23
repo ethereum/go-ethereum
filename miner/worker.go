@@ -414,7 +414,7 @@ func (self *worker) wait() {
 				c := self.engine.(*XDPoS.XDPoS)
 				err = c.HandleProposedBlock(self.chain, block.Header())
 				if err != nil {
-					log.Error("[wait] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
+					log.Warn("[wait] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
 				}
 
 				authorized := c.IsAuthorisedAddress(self.chain, block.Header(), self.coinbase)
@@ -435,7 +435,7 @@ func (self *worker) wait() {
 				// Send tx sign to smart contract blockSigners.
 				if block.NumberU64()%common.MergeSignRange == 0 || !self.config.IsTIP2019(block.Number()) {
 					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb, self.coinbase); err != nil {
-						log.Error("Fail to create tx sign for signer", "error", "err")
+						log.Error("Fail to create tx sign for signer", "error", err)
 					}
 				}
 			}

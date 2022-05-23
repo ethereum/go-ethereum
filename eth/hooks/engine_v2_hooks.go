@@ -19,50 +19,49 @@ import (
 
 func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConfig *params.ChainConfig) {
 	// Hook scans for bad masternodes and decide to penalty them
-	adaptor.EngineV2.HookPenalty = func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error) {
+	adaptor.EngineV2.HookPenalty = func(chain consensus.ChainReader, number *big.Int, currentHash common.Hash, candidates []common.Address) ([]common.Address, error) {
 		start := time.Now()
 		listBlockHash := make([]common.Hash, chain.Config().XDPoS.Epoch)
 
 		// get list block hash & stats total created block
 		statMiners := make(map[common.Address]int)
-		listBlockHash[0] = parentHash
+		listBlockHash[0] = currentHash
 		parentNumber := number.Uint64() - 1
-		pHash := parentHash
+		parentHash := currentHash
 		for i := uint64(1); ; i++ {
-			parentHeader := chain.GetHeader(pHash, parentNumber)
-			b, _, err := adaptor.EngineV2.IsEpochSwitch(parentHeader)
+			parentHeader := chain.GetHeader(parentHash, parentNumber)
+			isEpochSwitch, _, err := adaptor.EngineV2.IsEpochSwitch(parentHeader)
 			if err != nil {
-				log.Error("[HookPenalty]", "err", err)
+				log.Error("[HookPenalty] isEpochSwitch", "err", err)
 				return []common.Address{}, err
 			}
-			if b {
+			if isEpochSwitch {
 				break
 			}
 			miner := parentHeader.Coinbase // we can directly use coinbase, since it's verified (Verification is a TODO)
-			value, exist := statMiners[miner]
+			_, exist := statMiners[miner]
 			if exist {
-				value = value + 1
+				statMiners[miner]++
 			} else {
-				value = 1
+				statMiners[miner] = 1
 			}
-			statMiners[miner] = value
-			pHash = parentHeader.ParentHash
+			parentHash = parentHeader.ParentHash
+			listBlockHash[i] = parentHash
 			parentNumber--
-			listBlockHash[i] = pHash
 		}
 
 		// add list not miner to penalties
-		preMasternodes := adaptor.EngineV2.GetMasternodesByHash(chain, parentHash)
+		preMasternodes := adaptor.EngineV2.GetMasternodesByHash(chain, currentHash)
 		penalties := []common.Address{}
 		for miner, total := range statMiners {
 			if total < common.MinimunMinerBlockPerEpoch {
-				log.Debug("Find a node not enough requirement create block", "addr", miner.Hex(), "total", total)
+				log.Info("[HookPenalty] Find a node does not create enough block", "addr", miner.Hex(), "total", total, "require", common.MinimunMinerBlockPerEpoch)
 				penalties = append(penalties, miner)
 			}
 		}
 		for _, addr := range preMasternodes {
 			if _, exist := statMiners[addr]; !exist {
-				log.Debug("Find a node don't create block", "addr", addr.Hex())
+				log.Info("[HookPenalty] Find a node do not create any block", "addr", addr.Hex())
 				penalties = append(penalties, addr)
 			}
 		}
@@ -72,10 +71,11 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		comebackHeight := (common.LimitPenaltyEpochV2+1)*chain.Config().XDPoS.Epoch + chain.Config().XDPoS.V2.SwitchBlock.Uint64()
 		penComebacks := []common.Address{}
 		if number.Uint64() > comebackHeight {
-			pens := adaptor.EngineV2.GetPreviousPenaltyByHash(chain, parentHash, common.LimitPenaltyEpochV2)
+			pens := adaptor.EngineV2.GetPreviousPenaltyByHash(chain, currentHash, common.LimitPenaltyEpochV2)
 			for _, p := range pens {
 				for _, addr := range candidates {
 					if p == addr {
+						log.Info("[HookPenalty] get previous penalty node and add into comeback list", "addr", addr)
 						penComebacks = append(penComebacks, p)
 						break
 					}
@@ -123,7 +123,6 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			}
 		}
 
-		log.Debug("Time Calculated HookPenaltyV2 ", "block", number, "pen comeback nodes", len(penComebacks), "not enough miner", len(penalties), "time", common.PrettyDuration(time.Since(start)))
 		for _, comeback := range penComebacks {
 			ok := true
 			for _, p := range penalties {
@@ -136,6 +135,11 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 				penalties = append(penalties, comeback)
 			}
 		}
+
+		for i, p := range penalties {
+			log.Info("[HookPenalty] Final penalty list", "index", i, "addr", p)
+		}
+		log.Info("[HookPenalty] Time Calculated HookPenaltyV2 ", "block", number, "time", common.PrettyDuration(time.Since(start)))
 		return penalties, nil
 	}
 

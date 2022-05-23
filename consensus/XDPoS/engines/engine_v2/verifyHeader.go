@@ -164,6 +164,12 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 
 // Verify the header validators address is legit by checking against its snapshot masternode list minutes the penalty list, we also ensure the order matches
 func (x *XDPoS_v2) isValidatorsLegit(chain consensus.ChainReader, header *types.Header, penalties []common.Address) (bool, error) {
+
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
+		log.Info("[isValidatorsLegit] examing last v1 block")
+		return true, nil
+	}
+
 	snap, err := x.getSnapshot(chain, header.Number.Uint64(), false)
 	if err != nil {
 		log.Error("[isValidatorsLegit] Error while trying to get snapshot", "BlockNumber", header.Number.Int64(), "Hash", header.Hash().Hex(), "error", err)

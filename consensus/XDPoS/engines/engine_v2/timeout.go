@@ -25,7 +25,7 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 	}
 	// Collect timeout, generate TC
 	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
-	log.Info("[timeoutHandler] collect timeout", "number", numberOfTimeoutsInPool)
+	log.Debug("[timeoutHandler] collect timeout", "number", numberOfTimeoutsInPool)
 
 	// Threshold reached
 	if isThresholdReached {
@@ -140,10 +140,8 @@ func (x *XDPoS_v2) processTC(blockChainReader consensus.ChainReader, timeoutCert
 		x.highestTimeoutCert = timeoutCert
 	}
 	if timeoutCert.Round >= x.currentRound {
-		err := x.setNewRound(blockChainReader, timeoutCert.Round+1)
-		if err != nil {
-			return err
-		}
+		x.setNewRound(blockChainReader, timeoutCert.Round+1)
+
 	}
 	return nil
 }

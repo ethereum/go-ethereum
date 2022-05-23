@@ -446,7 +446,7 @@ func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *type
 		}
 	}
 
-	log.Warn("Not authorised address", "Address", address.Hex(), "Hash", header.Hash().Hex())
+	log.Warn("Not authorised address", "Address", address.Hex(), "Hash", header.Hash().Hex(), "round", round)
 	for index, mn := range masterNodes {
 		log.Warn("Master node list item", "mn", mn.Hex(), "index", index)
 	}
@@ -466,7 +466,7 @@ func (x *XDPoS_v2) GetSnapshot(chain consensus.ChainReader, header *types.Header
 
 func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []utils.Masternode) error {
 	number := header.Number.Uint64()
-	log.Trace("take snapshot", "number", number, "hash", header.Hash())
+	log.Trace("[UpdateMasternodes]")
 
 	masterNodes := []common.Address{}
 	for _, m := range ms {
@@ -475,6 +475,7 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 
 	x.lock.RLock()
 	snap := newSnapshot(number, header.Hash(), masterNodes)
+	log.Trace("[UpdateMasternodes] take snapshot", "number", number, "hash", header.Hash())
 	x.lock.RUnlock()
 
 	err := storeSnapshot(snap, x.db)
@@ -484,11 +485,10 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 	}
 	x.snapshots.Add(snap.Hash, snap)
 
-	nm := []string{}
-	for _, n := range ms {
-		nm = append(nm, n.Address.String())
+	log.Info("[UpdateMasternodes] New set of masternodes has been updated to snapshot", "number", snap.Number, "hash", snap.Hash)
+	for i, n := range ms {
+		log.Info("masternode", "index", i, "address", n.Address.String())
 	}
-	log.Info("New set of masternodes has been updated to snapshot", "number", snap.Number, "hash", snap.Hash, "new masternodes", nm)
 
 	return nil
 }
@@ -506,7 +506,9 @@ func (x *XDPoS_v2) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 	go func() {
 		for i, header := range headers {
 			err := x.verifyHeader(chain, header, headers[:i], fullVerifies[i])
-			log.Warn("[VerifyHeaders] Fail to verify header", "fullVerify", fullVerifies[i], "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
+			if err != nil {
+				log.Warn("[VerifyHeaders] Fail to verify header", "fullVerify", fullVerifies[i], "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
+			}
 			select {
 			case <-abort:
 				return
@@ -530,18 +532,18 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(chain consensus.ChainReader, syncInfo *
 	*/
 
 	if (x.highestQuorumCert.ProposedBlockInfo.Round >= syncInfo.HighestQuorumCert.ProposedBlockInfo.Round) && (x.highestTimeoutCert.Round >= syncInfo.HighestTimeoutCert.Round) {
-		log.Warn("[VerifySyncInfoMessage] Round from incoming syncInfo message is no longer qualified", "Highest QC Round", x.highestQuorumCert.ProposedBlockInfo.Round, "Incoming SyncInfo QC Round", syncInfo.HighestQuorumCert.ProposedBlockInfo.Round, "highestTimeoutCert Round", x.highestTimeoutCert.Round, "Incoming syncInfo TC Round", syncInfo.HighestTimeoutCert.Round)
+		log.Debug("[VerifySyncInfoMessage] Round from incoming syncInfo message is no longer qualified", "Highest QC Round", x.highestQuorumCert.ProposedBlockInfo.Round, "Incoming SyncInfo QC Round", syncInfo.HighestQuorumCert.ProposedBlockInfo.Round, "highestTimeoutCert Round", x.highestTimeoutCert.Round, "Incoming syncInfo TC Round", syncInfo.HighestTimeoutCert.Round)
 		return false, nil
 	}
 
 	err := x.verifyQC(chain, syncInfo.HighestQuorumCert, nil)
 	if err != nil {
-		log.Warn("SyncInfo message verification failed due to QC", "error", err)
+		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to QC", "error", err)
 		return false, err
 	}
 	err = x.verifyTC(chain, syncInfo.HighestTimeoutCert)
 	if err != nil {
-		log.Warn("SyncInfo message verification failed due to TC", "error", err)
+		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to TC", "error", err)
 		return false, err
 	}
 	return true, nil
@@ -849,11 +851,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuo
 	}
 	// 4. Set new round
 	if incomingQuorumCert.ProposedBlockInfo.Round >= x.currentRound {
-		err := x.setNewRound(blockChainReader, incomingQuorumCert.ProposedBlockInfo.Round+1)
-		if err != nil {
-			log.Error("[processQC] Fail to setNewRound", "new round to set", incomingQuorumCert.ProposedBlockInfo.Round+1)
-			return err
-		}
+		x.setNewRound(blockChainReader, incomingQuorumCert.ProposedBlockInfo.Round+1)
 	}
 	log.Trace("[ProcessQC][After]", "HighQC", x.highestQuorumCert)
 	return nil
@@ -864,14 +862,13 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuo
 	2. Reset timer
 	3. Reset vote and timeout Pools
 */
-func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round types.Round) error {
+func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round types.Round) {
+	log.Info("[setNewRound] new round and reset pools and workers", "round", round)
 	x.currentRound = round
 	x.timeoutCount = 0
-	//TODO: tell miner now it's a new round and start mine if it's leader
 	x.timeoutWorker.Reset(blockChainReader)
 	//TODO: vote pools
 	x.timeoutPool.Clear()
-	return nil
 }
 
 func (x *XDPoS_v2) broadcastToBftChannel(msg interface{}) {

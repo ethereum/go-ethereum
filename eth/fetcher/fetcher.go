@@ -729,9 +729,8 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		}
 		err = f.handleProposedBlock(block.Header())
 		if err != nil {
-			log.Error("[insert] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
+			log.Warn("[insert] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
 		}
-		// TODO: (XIN-101) Add propose block handler
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		if !fastBroadCast {

@@ -66,7 +66,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 
 	// Collect vote
 	thresholdReached, numberOfVotesInPool, pooledVotes := x.votePool.Add(voteMsg)
-	log.Info("[voteHandler] collect votes", "number", numberOfVotesInPool)
+	log.Debug("[voteHandler] collect votes", "number", numberOfVotesInPool)
 	if thresholdReached {
 		log.Info(fmt.Sprintf("[voteHandler] Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 

@@ -32,13 +32,13 @@ func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader,
 func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types.Header, hash common.Hash) (*types.EpochSwitchInfo, error) {
 	e, ok := x.epochSwitches.Get(hash)
 	if ok {
-		log.Debug("[getEpochSwitchInfo] cache hit", "hash", hash.Hex())
 		epochSwitchInfo := e.(*types.EpochSwitchInfo)
+		log.Debug("[getEpochSwitchInfo] cache hit", "number", epochSwitchInfo.EpochSwitchBlockInfo.Number, "hash", hash.Hex())
 		return epochSwitchInfo, nil
 	}
 	h := header
 	if h == nil {
-		log.Debug("[getEpochSwitchInfo] header missing, get header", "hash", hash.Hex())
+		log.Debug("[getEpochSwitchInfo] header doesn't provide, get header by hash", "hash", hash.Hex())
 		h = chain.GetHeaderByHash(hash)
 		if h == nil {
 			log.Warn("[getEpochSwitchInfo] can not find header from db", "hash", hash.Hex())
@@ -135,6 +135,6 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
 		return true, epochNum, nil
 	}
-	log.Info("[IsEpochSwitch]", "parent round", parentRound, "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
+	log.Info("[IsEpochSwitch]", "is", parentRound < epochStartRound, "parentRound", parentRound, "round", round, "number", header.Number.Uint64(), "epochNum", epochNum, "hash", header.Hash())
 	return parentRound < epochStartRound, epochNum, nil
 }
