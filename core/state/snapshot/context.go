@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -131,7 +132,14 @@ func (ctx *generatorContext) reopenIterator(kind string) {
 	}
 	hasNext := iter.Next()
 	if !hasNext {
-		return // iterator is exhausted now
+		// Iterator exhausted, release forever and create an already exhausted virtual iterator
+		iter.Release()
+		if kind == snapAccount {
+			ctx.account = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+			return
+		}
+		ctx.storage = newHoldableIterator(memorydb.New().NewIterator(nil, nil))
+		return
 	}
 	next := iter.Key()
 	iter.Release()
