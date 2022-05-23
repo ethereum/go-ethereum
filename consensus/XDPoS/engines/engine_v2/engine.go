@@ -582,6 +582,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 	snapshot, err := x.getSnapshot(chain, vote.GapNumber, true)
 	if err != nil {
 		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "BlockNum", vote.ProposedBlockInfo.Number, "Hash", vote.ProposedBlockInfo.Hash, "Error", err.Error())
+		return false, err
 	}
 	verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
 		ProposedBlockInfo: vote.ProposedBlockInfo,
