@@ -615,7 +615,7 @@ func (c *Config) loadChain() error {
 	return nil
 }
 
-func (c *Config) buildEth(accountManager *accounts.Manager) (*ethconfig.Config, error) {
+func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*ethconfig.Config, error) {
 	dbHandles, err := makeDatabaseHandles()
 	if err != nil {
 		return nil, err
@@ -670,15 +670,15 @@ func (c *Config) buildEth(accountManager *accounts.Manager) (*ethconfig.Config, 
 	// unlock accounts
 	if len(c.Accounts.Unlock) > 0 {
 		if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
-			return nil, fmt.Errorf("Account unlock with HTTP access is forbidden!")
+			return nil, fmt.Errorf("account unlock with HTTP access is forbidden")
 		}
-		ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+		ks := accountManager.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 		passwords, err := MakePasswordListFromFile(c.Accounts.PasswordFile)
 		if err != nil {
 			return nil, err
 		}
 		if len(passwords) < len(c.Accounts.Unlock) {
-			return nil, fmt.Errorf("Number of passwords provided (%v) is less than number of accounts (%v) to unlock",
+			return nil, fmt.Errorf("number of passwords provided (%v) is less than number of accounts (%v) to unlock",
 				len(passwords), len(c.Accounts.Unlock))
 		}
 		for i, account := range c.Accounts.Unlock {

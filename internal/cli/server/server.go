@@ -95,7 +95,7 @@ func NewServer(config *Config) (*Server, error) {
 		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
 
 		// register the ethereum backend
-		ethCfg, err := config.buildEth(stack.AccountManager())
+		ethCfg, err := config.buildEth(stack, stack.AccountManager())
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +106,7 @@ func NewServer(config *Config) (*Server, error) {
 		srv.backend = backend
 	} else {
 		// register the ethereum backend (with temporary created account manager)
-		ethCfg, err := config.buildEth(accountManager)
+		ethCfg, err := config.buildEth(stack, accountManager)
 		if err != nil {
 			return nil, err
 		}
