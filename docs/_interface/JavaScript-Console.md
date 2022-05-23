@@ -1,43 +1,80 @@
 ---
 title: JavaScript Console
-sort_key: B
+sort_key: D
 ---
 
-The Geth JavaScript console exposes the full [web3 JavaScript Dapp
-API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and further administrative
-APIs.
+Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](../_rpc/). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed. 
 
-(note: the web3 version bundled within geth is very old, and not up to date with official docs)
+```
+curl --data '{"jsonrpc":"2.0","method":"eth_getBalance", "params": ["0x9b1d35635cc34752ca54713bb99d38614f63c955", "latest"], "id":2}' -H "Content-Type: application/json" localhost:8545
 
-## Interactive Use: The Console
+```
 
-The geth JavaScript console is started with the `console` or `attach` geth sub-commands.
-The `console` subcommands starts the geth node and then opens the console. The `attach`
-subcommand attaches to the console to an already-running geth instance.
+This returns a result which is also a JSON object, with values expressed as hexadecimal strings, for example:
 
-    geth console
-    geth attach
+```terminal
 
-Attach mode accepts an endpoint in case the geth node is running with a non default
-ipc endpoint or you would like to connect over the rpc interface.
+{"id":2,"jsonrpc":"2.0","result":"0x1639e49bba16280000"}
 
-    geth attach /some/custom/path.ipc
-    geth attach http://191.168.1.1:8545
-    geth attach ws://191.168.1.1:8546
+```
 
-Note that by default the geth node doesn't start the HTTP and WebSocket servers and not
-all functionality is provided over these interfaces for security reasons. These defaults
-can be overridden with the `--http.api` and `--ws.api` arguments when the geth node is
-started, or with [admin.startRPC](../rpc/ns-admin#admin_startrpc) and
-[admin.startWS](../rpc/ns-admin#admin_startws).
+While this approach is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). This is a collection of Javascript libraries for interacting with an Ethereum node at a higher level than sending raw JSON objects to the node. The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
-If you need log information, start with:
+{% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.jc documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](../_rpc/)" %}
 
-    geth console --verbosity 5 2>> /tmp/eth.log
 
-Otherwise mute your logs, so that it does not pollute your console:
+## Starting the console
 
-    geth console 2> /dev/null
+There are two ways to start an interactive session using Geth console. The first is to provide the `console` flag when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
+
+```shell
+# to mute logs
+geth <other commands> console 2 > /dev/null
+
+# to save logs to file
+geth <other commands> --verbosity 3 2 > geth-logs.log
+
+```
+
+Alternatively, a Javascript console can be attached to an existing Geth instance (i.e. one that is running in another terminal or remotely). In this case, `geth attach` can be used to open a Javascript console connected to the Geth node. It is also necessary to define the method used to connect the console to the node. Geth supports websockets, HTTP or local IPC. To use HTTP or Websockets, these must be enabled at the node by providing the following flags at startup:
+
+```shell
+
+# enable websockets
+geth <other commands> --ws 
+
+# enable http
+
+geth <other commands> --http
+
+```
+
+The commands above use default HTTP/WS endpoints and only enables the default JSON-RPC libraries. To update the Websockets or HTTP endpoints used, or to add support for additional libraries, the `.addr` `.port` and `.api` flags can be used as follows:
+
+```shell
+
+# define a custom http adress, custom http port and enable libraries
+geth <other commands> --http --http.addr 192.60.52.21 --http.port 8552 --http.api eth,web3,admin
+
+# define a custom Websockets address and enable libraries
+geth <other commands> --ws --ws.addr 192.60.52.21 --ws.port 8552 --ws.api eth,web3,admin
+
+```
+
+It is important to note that by default some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is not recommended if there is any chance of the node connecting to Ethereum Mainnet. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**"
+
+The Javascript console can also be connected to a Geth node using IPC. When Geth is started, a `geth.ipc` file is automatically generated and saved to the data directory. This file, or a custom path to a specific ipc file can be passed to `geth attach` as follows:
+
+```shell
+
+geth attach datadir/geth.ipc
+
+```
+
+
+
+
+
 
 Geth has support to load custom JavaScript files into the console through the `--preload`
 option. This can be used to load often used functions, or to setup web3 contract objects.
