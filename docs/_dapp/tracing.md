@@ -177,7 +177,7 @@ tracers*.
 
 ### Pruning
 
-Geth by default does in-memory pruning of state, discarding state entries that it deems is
+Geth by default does in-memory pruning of state, discarding state entries that it deems are
 no longer necessary to maintain. This is configured via the `--gcmode` option. Often,
 people run into the error that state is not available.
 
