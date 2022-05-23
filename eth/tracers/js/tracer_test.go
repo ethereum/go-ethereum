@@ -98,6 +98,7 @@ func TestTracer(t *testing.T) {
 	for i, tt := range []struct {
 		code string
 		want string
+		fail string
 	}{
 		{ // tests that we don't panic on bad arguments to memory access
 			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}",
@@ -137,12 +138,8 @@ func TestTracer(t *testing.T) {
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,
 		},
 	} {
-		have, err := execTracer(tt.code)
-		if err != "" {
-			t.Errorf("testcase %d: failed with error '%s'\n", i, err)
-		}
-		if tt.want != string(have) {
-			t.Errorf("testcase %d: expected return value to be '%s' got '%s'\n\tcode: %v", i, tt.want, string(have), tt.code)
+		if have, err := execTracer(tt.code); tt.want != string(have) || tt.fail != err {
+			t.Errorf("testcase %d: expected return value to be '%s' got '%s', error to be '%s' got '%s'\n\tcode: %v", i, tt.want, string(have), tt.fail, err, tt.code)
 		}
 	}
 }
