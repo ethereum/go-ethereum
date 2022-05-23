@@ -530,6 +530,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value: &c.cliConfig.Accounts.UseLightweightKDF,
 		Group: "Account Management",
 	})
+	f.BoolFlag((&flagset.BoolFlag{
+		Name:  "disable-bor-wallet",
+		Usage: "Disable the personal wallet endpoints",
+		Value: &c.cliConfig.Accounts.DisableBorWallet,
+	}))
 
 	// grpc
 	f.StringFlag(&flagset.StringFlag{

@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethstats"
@@ -67,50 +71,115 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	srv.node = stack
 
 	// setup account manager (only keystore)
-	{
-		keydir := stack.KeyStoreDir()
-		n, p := keystore.StandardScryptN, keystore.StandardScryptP
-		if config.Accounts.UseLightweightKDF {
-			n, p = keystore.LightScryptN, keystore.LightScryptP
-		}
+	// create a new account manager, only for the scope of this function
+	accountManager := accounts.NewManager(&accounts.Config{})
+
+	// register backend to account manager with keystore for signing
+	keydir := stack.KeyStoreDir()
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	if config.Accounts.UseLightweightKDF {
+		n, p = keystore.LightScryptN, keystore.LightScryptP
+	}
+
+	// proceed to authorize the local account manager in any case
+	accountManager.AddBackend(keystore.NewKeyStore(keydir, n, p))
+
+	// flag to set if we're authorizing consensus here
+	authorized := false
+
+	// check if personal wallet endpoints are disabled or not
+	if !config.Accounts.DisableBorWallet {
+		// add keystore globally to the node's account manager if personal wallet is enabled
 		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
+
+		// register the ethereum backend
+		ethCfg, err := config.buildEth(stack.AccountManager())
+		if err != nil {
+			return nil, err
+		}
+		backend, err := eth.New(stack, ethCfg)
+		if err != nil {
+			return nil, err
+		}
+		srv.backend = backend
+	} else {
+		// register the ethereum backend (with temporary created account manager)
+		ethCfg, err := config.buildEth(accountManager)
+		if err != nil {
+			return nil, err
+		}
+		backend, err := eth.New(stack, ethCfg)
+		if err != nil {
+			return nil, err
+		}
+		srv.backend = backend
+
+		// authorize only if mining or in developer mode
+		if config.Sealer.Enabled || config.Developer.Enabled {
+			// get the etherbase
+			eb, err := srv.backend.Etherbase()
+			if err != nil {
+				log.Error("Cannot start mining without etherbase", "err", err)
+				return nil, fmt.Errorf("etherbase missing: %v", err)
+			}
+
+			// Authorize the clique consensus (if chosen) to sign using wallet signer
+			var cli *clique.Clique
+			if c, ok := srv.backend.Engine().(*clique.Clique); ok {
+				cli = c
+			} else if cl, ok := srv.backend.Engine().(*beacon.Beacon); ok {
+				if c, ok := cl.InnerEngine().(*clique.Clique); ok {
+					cli = c
+				}
+			}
+			if cli != nil {
+				wallet, err := accountManager.Find(accounts.Account{Address: eb})
+				if wallet == nil || err != nil {
+					log.Error("Etherbase account unavailable locally", "err", err)
+					return nil, fmt.Errorf("signer missing: %v", err)
+				}
+				cli.Authorize(eb, wallet.SignData)
+				authorized = true
+			}
+
+			// Authorize the bor consensus (if chosen) to sign using wallet signer
+			if bor, ok := srv.backend.Engine().(*bor.Bor); ok {
+				wallet, err := accountManager.Find(accounts.Account{Address: eb})
+				if wallet == nil || err != nil {
+					log.Error("Etherbase account unavailable locally", "err", err)
+					return nil, fmt.Errorf("signer missing: %v", err)
+				}
+				bor.Authorize(eb, wallet.SignData)
+				authorized = true
+			}
+		}
 	}
 
-	// register the ethereum backend
-	ethCfg, err := config.buildEth(stack)
-	if err != nil {
-		return nil, err
-	}
-
-	backend, err := eth.New(stack, ethCfg)
-	if err != nil {
-		return nil, err
-	}
-	srv.backend = backend
+	// set the auth status in backend
+	srv.backend.SetAuthorized(authorized)
 
 	// debug tracing is enabled by default
-	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
+	stack.RegisterAPIs(tracers.APIs(srv.backend.APIBackend))
 
 	// graphql is started from another place
 	if config.JsonRPC.Graphql.Enabled {
-		if err := graphql.New(stack, backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.VHost); err != nil {
+		if err := graphql.New(stack, srv.backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.VHost); err != nil {
 			return nil, fmt.Errorf("failed to register the GraphQL service: %v", err)
 		}
 	}
 
 	// register ethash service
 	if config.Ethstats != "" {
-		if err := ethstats.New(stack, backend.APIBackend, backend.Engine(), config.Ethstats); err != nil {
+		if err := ethstats.New(stack, srv.backend.APIBackend, srv.backend.Engine(), config.Ethstats); err != nil {
 			return nil, err
 		}
 	}
 
 	// sealing (if enabled) or in dev mode
 	if config.Sealer.Enabled || config.Developer.Enabled {
-		if err := backend.StartMining(1); err != nil {
+		if err := srv.backend.StartMining(1); err != nil {
 			return nil, err
 		}
 	}
@@ -118,6 +187,9 @@ func NewServer(config *Config) (*Server, error) {
 	if err := srv.setupMetrics(config.Telemetry, config.Name); err != nil {
 		return nil, err
 	}
+
+	// Set the node instance
+	srv.node = stack
 
 	// start the node
 	if err := srv.node.Start(); err != nil {

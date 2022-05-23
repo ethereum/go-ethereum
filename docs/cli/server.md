@@ -36,6 +36,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```gpo.ignoreprice```: Gas price below which gpo will ignore transactions
 
+- ```disable-bor-wallet```: Disable the personal wallet endpoints
+
 - ```grpc.addr```: Address and port to bind the GRPC server
 
 - ```dev```: Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled
