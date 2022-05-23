@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var assetTracers = make(map[string]string)
@@ -351,7 +350,8 @@ func (t *jsTracer) setBuiltinFunctions() {
 	vm.Set("toHex", func(v goja.Value) string {
 		b, err := t.fromBuf(vm, v, false)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return ""
 		}
 		return hexutil.Encode(b)
 	})
@@ -359,63 +359,73 @@ func (t *jsTracer) setBuiltinFunctions() {
 		// TODO: add test with []byte len < 32 or > 32
 		b, err := t.fromBuf(vm, v, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		b = common.BytesToHash(b).Bytes()
 		res, err := t.toBuf(vm, b)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		return res
 	})
 	vm.Set("toAddress", func(v goja.Value) goja.Value {
 		a, err := t.fromBuf(vm, v, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		a = common.BytesToAddress(a).Bytes()
 		res, err := t.toBuf(vm, a)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		return res
 	})
 	vm.Set("toContract", func(from goja.Value, nonce uint) goja.Value {
 		a, err := t.fromBuf(vm, from, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		addr := common.BytesToAddress(a)
 		b := crypto.CreateAddress(addr, uint64(nonce)).Bytes()
 		res, err := t.toBuf(vm, b)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		return res
 	})
 	vm.Set("toContract2", func(from goja.Value, salt string, initcode goja.Value) goja.Value {
 		a, err := t.fromBuf(vm, from, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		addr := common.BytesToAddress(a)
 		code, err := t.fromBuf(vm, initcode, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		code = common.CopyBytes(code)
 		codeHash := crypto.Keccak256(code)
 		b := crypto.CreateAddress2(addr, common.HexToHash(salt), codeHash).Bytes()
 		res, err := t.toBuf(vm, b)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		return res
 	})
 	vm.Set("isPrecompiled", func(v goja.Value) bool {
 		a, err := t.fromBuf(vm, v, true)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return false
 		}
 		addr := common.BytesToAddress(a)
 		for _, p := range t.activePrecompiles {
@@ -428,14 +438,17 @@ func (t *jsTracer) setBuiltinFunctions() {
 	vm.Set("slice", func(slice goja.Value, start, end int) goja.Value {
 		b, err := t.fromBuf(vm, slice, false)
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		if start < 0 || start > end || end > len(b) {
-			log.Warn("Tracer accessed out of bound memory", "available", len(b), "offset", start, "size", end-start)
+			vm.Interrupt(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", len(b), start, end-start))
+			return nil
 		}
 		res, err := t.toBuf(vm, b[start:end])
 		if err != nil {
-			panic(err)
+			vm.Interrupt(err)
+			return nil
 		}
 		return res
 	})
@@ -508,52 +521,53 @@ type memoryObj struct {
 }
 
 func (mo *memoryObj) Slice(begin, end int64) goja.Value {
-	b := mo.slice(begin, end)
+	b, err := mo.slice(begin, end)
+	if err != nil {
+		mo.vm.Interrupt(err)
+		return nil
+	}
 	res, err := mo.toBuf(mo.vm, b)
 	if err != nil {
-		panic(err)
+		mo.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
 
 // slice returns the requested range of memory as a byte slice.
-func (mo *memoryObj) slice(begin, end int64) []byte {
+func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end == begin {
-		return []byte{}
+		return []byte{}, nil
 	}
 	if end < begin || begin < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "offset", begin, "end", end)
-		return nil
+		return nil, errors.New(fmt.Sprintf("Tracer accessed out of bound memory: offset %d, end %d", begin, end))
 	}
 	if mo.memory.Len() < int(end) {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "available", mo.memory.Len(), "offset", begin, "size", end-begin)
-		return nil
+		return nil, errors.New(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), begin, end-begin))
 	}
-	return mo.memory.GetCopy(begin, end-begin)
+	return mo.memory.GetCopy(begin, end-begin), nil
 }
 
 func (mo *memoryObj) GetUint(addr int64) goja.Value {
-	value := mo.getUint(addr)
+	value, err := mo.getUint(addr)
+	if err != nil {
+		mo.vm.Interrupt(err)
+		return nil
+	}
 	res, err := mo.toBig(mo.vm, value.String())
 	if err != nil {
-		panic(err)
+		mo.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
 
 // getUint returns the 32 bytes at the specified address interpreted as a uint.
-func (mo *memoryObj) getUint(addr int64) *big.Int {
+func (mo *memoryObj) getUint(addr int64) (*big.Int, error) {
 	if mo.memory.Len() < int(addr)+32 || addr < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound memory", "available", mo.memory.Len(), "offset", addr, "size", 32)
-		return new(big.Int)
+		return nil, errors.New(fmt.Sprintf("Tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), addr, 32))
 	}
-	return new(big.Int).SetBytes(mo.memory.GetPtr(addr, 32))
+	return new(big.Int).SetBytes(mo.memory.GetPtr(addr, 32)), nil
 }
 
 func (mo *memoryObj) Length() int {
@@ -575,23 +589,25 @@ type stackObj struct {
 }
 
 func (s *stackObj) Peek(idx int) goja.Value {
-	value := s.peek(idx)
+	value, err := s.peek(idx)
+	if err != nil {
+		s.vm.Interrupt(err)
+		return nil
+	}
 	res, err := s.toBig(s.vm, value.String())
 	if err != nil {
-		panic(err)
+		s.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
 
 // peek returns the nth-from-the-top element of the stack.
-func (s *stackObj) peek(idx int) *big.Int {
+func (s *stackObj) peek(idx int) (*big.Int, error) {
 	if len(s.stack.Data()) <= idx || idx < 0 {
-		// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
-		// runtime goes belly up https://github.com/golang/go/issues/15639.
-		log.Warn("Tracer accessed out of bound stack", "size", len(s.stack.Data()), "index", idx)
-		return new(big.Int)
+		return nil, errors.New(fmt.Sprintf("Tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data()), idx))
 	}
-	return s.stack.Back(idx).ToBig()
+	return s.stack.Back(idx).ToBig(), nil
 }
 
 func (s *stackObj) Length() int {
@@ -616,13 +632,15 @@ type dbObj struct {
 func (do *dbObj) GetBalance(addrSlice goja.Value) goja.Value {
 	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	addr := common.BytesToAddress(a)
 	value := do.db.GetBalance(addr)
 	res, err := do.toBig(do.vm, value.String())
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -630,7 +648,8 @@ func (do *dbObj) GetBalance(addrSlice goja.Value) goja.Value {
 func (do *dbObj) GetNonce(addrSlice goja.Value) uint64 {
 	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return 0
 	}
 	addr := common.BytesToAddress(a)
 	return do.db.GetNonce(addr)
@@ -639,13 +658,15 @@ func (do *dbObj) GetNonce(addrSlice goja.Value) uint64 {
 func (do *dbObj) GetCode(addrSlice goja.Value) goja.Value {
 	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	addr := common.BytesToAddress(a)
 	code := do.db.GetCode(addr)
 	res, err := do.toBuf(do.vm, code)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -653,18 +674,21 @@ func (do *dbObj) GetCode(addrSlice goja.Value) goja.Value {
 func (do *dbObj) GetState(addrSlice goja.Value, hashSlice goja.Value) goja.Value {
 	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	addr := common.BytesToAddress(a)
 	h, err := do.fromBuf(do.vm, hashSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	hash := common.BytesToHash(h)
 	state := do.db.GetState(addr, hash).Bytes()
 	res, err := do.toBuf(do.vm, state)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -672,7 +696,8 @@ func (do *dbObj) GetState(addrSlice goja.Value, hashSlice goja.Value) goja.Value
 func (do *dbObj) Exists(addrSlice goja.Value) bool {
 	a, err := do.fromBuf(do.vm, addrSlice, false)
 	if err != nil {
-		panic(err)
+		do.vm.Interrupt(err)
+		return false
 	}
 	addr := common.BytesToAddress(a)
 	return do.db.Exist(addr)
@@ -699,7 +724,8 @@ func (co *contractObj) GetCaller() goja.Value {
 	caller := co.contract.Caller().Bytes()
 	res, err := co.toBuf(co.vm, caller)
 	if err != nil {
-		panic(err)
+		co.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -708,7 +734,8 @@ func (co *contractObj) GetAddress() goja.Value {
 	addr := co.contract.Address().Bytes()
 	res, err := co.toBuf(co.vm, addr)
 	if err != nil {
-		panic(err)
+		co.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -717,7 +744,8 @@ func (co *contractObj) GetValue() goja.Value {
 	value := co.contract.Value()
 	res, err := co.toBig(co.vm, value.String())
 	if err != nil {
-		panic(err)
+		co.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -726,7 +754,8 @@ func (co *contractObj) GetInput() goja.Value {
 	input := co.contract.Input
 	res, err := co.toBuf(co.vm, input)
 	if err != nil {
-		panic(err)
+		co.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -761,7 +790,8 @@ func (f *callframe) GetFrom() goja.Value {
 	from := f.from.Bytes()
 	res, err := f.toBuf(f.vm, from)
 	if err != nil {
-		panic(err)
+		f.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -770,7 +800,8 @@ func (f *callframe) GetTo() goja.Value {
 	to := f.to.Bytes()
 	res, err := f.toBuf(f.vm, to)
 	if err != nil {
-		panic(err)
+		f.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -779,7 +810,8 @@ func (f *callframe) GetInput() goja.Value {
 	input := f.input
 	res, err := f.toBuf(f.vm, input)
 	if err != nil {
-		panic(err)
+		f.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -794,7 +826,8 @@ func (f *callframe) GetValue() goja.Value {
 	}
 	res, err := f.toBig(f.vm, f.value.String())
 	if err != nil {
-		panic(err)
+		f.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
@@ -826,7 +859,8 @@ func (r *callframeResult) GetGasUsed() uint {
 func (r *callframeResult) GetOutput() goja.Value {
 	res, err := r.toBuf(r.vm, r.output)
 	if err != nil {
-		panic(err)
+		r.vm.Interrupt(err)
+		return nil
 	}
 	return res
 }
