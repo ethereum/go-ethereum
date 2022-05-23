@@ -8,10 +8,22 @@
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 
-GOBIN = ./build/bin
 GO ?= latest
+GOBIN = $(CURDIR)/build/bin
 GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
+
+GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_TAG    ?= $(shell git describe --tags `git rev-list --tags="v*" --max-count=1`)
+
+PACKAGE = github.com/ethereum/go-ethereum
+GO_FLAGS += -buildvcs=false
+GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+
+TESTALL = $$(go list ./... | grep -v go-ethereum/cmd/)
+TESTE2E = ./tests/...
+GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1
 
 bor:
 	mkdir -p $(GOPATH)/bin/
@@ -41,11 +53,26 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test:
-	# Skip mobile and cmd tests since they are being deprecated
-	go test -v $$(go list ./... | grep -v go-ethereum/cmd/) -cover -coverprofile=cover.out
+	$(GOTEST) --timeout 5m -shuffle=on -cover -coverprofile=cover.out $(TESTALL)
 
-lint: ## Run linters.
-	$(GORUN) build/ci.go lint
+test-race:
+	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
+
+test-integration:
+	$(GOTEST) --timeout 30m -tags integration $(TESTE2E)
+
+escape:
+	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
+
+lint:
+	@./build/bin/golangci-lint run --config ./.golangci.yml
+
+lintci-deps:
+	rm -f ./build/bin/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
+
+goimports:
+	goimports -local "$(PACKAGE)" -w .
 
 docs:
 	$(GORUN) cmd/clidoc/main.go -d ./docs/cli
