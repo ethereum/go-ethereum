@@ -134,7 +134,7 @@ type InvalidStateReceivedError struct {
 
 func (e *InvalidStateReceivedError) Error() string {
 	return fmt.Sprintf(
-		"Received invalid event %s at block %d. Requested events until %s. Last state id was %d",
+		"Received invalid event %v at block %d. Requested events until %s. Last state id was %d",
 		e.Event,
 		e.Number,
 		e.To.Format(time.RFC3339),
