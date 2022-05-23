@@ -2068,7 +2068,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
-	for _, tx := range types.TxDifferenceHash(deletedTxs, addedTxs) {
+	for _, tx := range types.HashDifference(deletedTxs, addedTxs) {
 		rawdb.DeleteTxLookupEntry(indexesBatch, tx)
 	}
 	// Delete any canonical number assignments above the new head

@@ -432,18 +432,18 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
-// TxDifferenceHash returns a new set which is the difference between a and b.
-func TxDifferenceHash(a, b []common.Hash) []common.Hash {
+// HashDifference returns a new set which is the difference between a and b.
+func HashDifference(a, b []common.Hash) []common.Hash {
 	keep := make([]common.Hash, 0, len(a))
 
 	remove := make(map[common.Hash]struct{})
-	for _, tx := range b {
-		remove[tx] = struct{}{}
+	for _, hash := range b {
+		remove[hash] = struct{}{}
 	}
 
-	for _, tx := range a {
-		if _, ok := remove[tx]; !ok {
-			keep = append(keep, tx)
+	for _, hash := range a {
+		if _, ok := remove[hash]; !ok {
+			keep = append(keep, hash)
 		}
 	}
 
