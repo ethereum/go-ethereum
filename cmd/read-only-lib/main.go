@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var stack *node.Node
@@ -37,12 +36,12 @@ func open_database(datadir *C.char) C.int {
 func wrapper_call(cargs *C.char, clen C.int) (*C.char, C.int) {
 	rawData := C.GoBytes(unsafe.Pointer(cargs), clen)
 	server, _ := stack.RPCHandler()
-	msg, _ := rpc.ParseMessage(rawData)
-	var test = rpc.NewFuncCodec(nil, nil, nil)
-	h := rpc.NewHandler(context.Background(), test, server.Services())
-	tmp := h.HandleCallMsg(rpc.DefaultCallProc(), msg[0]).String()
-	res := C.CString(tmp)
-	return res, C.int(len(tmp))
+	res, err := server.ServeRawRequest(context.Background(), rawData)
+	if err != nil {
+		return C.CString(""), 0
+	}
+	c_res := C.CString(res)
+	return c_res, C.int(len(res))
 }
 
 //export close_database

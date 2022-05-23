@@ -215,7 +215,7 @@ type httpServerConn struct {
 	r *http.Request
 }
 
-func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
+func NewHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
 	return NewCodec(conn)
@@ -257,7 +257,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// until EOF, writes the response to w, and orders the server to process a
 	// single request.
 	w.Header().Set("content-type", contentType)
-	codec := newHTTPServerConn(r, w)
+	codec := NewHTTPServerConn(r, w)
 	defer codec.close()
 	s.serveSingleRequest(ctx, codec)
 }
