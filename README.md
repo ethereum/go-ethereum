@@ -84,7 +84,7 @@ This command will:
    causing it to download more data in exchange for avoiding processing the entire history
    of the Ethereum network, which is very CPU intensive.
  * Start up `geth`'s built-in interactive [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md) 
+   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md)
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
    as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/rpc/server).
    This tool is optional and if you leave it out you can always attach to an already running
@@ -145,6 +145,15 @@ $ geth --ropsten console
 ```
 
 *Note: Older Geth configurations store the Ropsten database in the `testnet` subdirectory.*
+
+### Sync Mode
+
+Geth supports 3 different methods to sync your node to the network, which can be  set with the `--syncmode fast` flag.
+
+  * Full Sync: Full sync chooses to execute all transactions from genesis to head. It can take +8 days to process all those transactions on a fairly powerful machine.  `--syncmode full`
+  * Fast Sync: Fast sync assumes that a block with 64 valid PoWs on top would be prohibitively expensive for someone to construct, as such it’s ok to download the state associated with HEAD-64.  Trusting the state root from a recent block, it can download the state trie directly. This is faster then the Full sync method and can take a well connected machine +8 hours.   `--syncmode fast`
+  * Snap Sync: Snap Sync downloads the contiguous chunks of useful state data, and reconstructs the Merkle trie locally instead of downloading the entire trie node by node.  Snap sync is about 80% faster then fast sync and will take +3 hours to down load the chain.  Snap is the default mode.  `--syncmode snap`
+
 
 ### Configuration
 
