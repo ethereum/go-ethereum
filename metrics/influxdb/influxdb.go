@@ -129,17 +129,15 @@ func (r *reporter) send() error {
 
 		switch metric := i.(type) {
 		case metrics.Counter:
-			v := metric.Count()
-			l := r.cache[name]
+			count := metric.Count()
 			pts = append(pts, client.Point{
 				Measurement: fmt.Sprintf("%s%s.count", namespace, name),
 				Tags:        r.tags,
 				Fields: map[string]interface{}{
-					"value": v - l,
+					"value": count,
 				},
 				Time: now,
 			})
-			r.cache[name] = v
 		case metrics.Gauge:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{
