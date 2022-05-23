@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -82,20 +82,10 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 	return tracer.GetResult()
 }
 
-type tracerCtor = func(string, *tracers.Context) (tracers.Tracer, error)
-
-func TestDuktapeTracer(t *testing.T) {
-	testTracer(t, newJsTracer)
-}
-
-func TestGojaTracer(t *testing.T) {
-	testTracer(t, newGojaTracer)
-}
-
-func testTracer(t *testing.T, newTracer tracerCtor) {
+func TestTracer(t *testing.T) {
 	execTracer := func(code string) ([]byte, string) {
 		t.Helper()
-		tracer, err := newTracer(code, nil)
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,13 +102,16 @@ func testTracer(t *testing.T, newTracer tracerCtor) {
 	}{
 		{ // tests that we don't panic on bad arguments to memory access
 			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}",
-			want: `[{},{},{}]`,
+			want: ``,
+			fail: "Tracer accessed out of bound memory: offset -1, end -2 at step (<eval>:1:53(15))    in server-side tracer function 'step'",
 		}, { // tests that we don't panic on bad arguments to stack peeks
 			code: "{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, fault: function() {}, result: function() { return this.depths; }}",
-			want: `["0","0","0"]`,
+			want: ``,
+			fail: "Tracer accessed out of bound stack: size 0, index -1 at step (<eval>:1:53(13))    in server-side tracer function 'step'",
 		}, { //  tests that we don't panic on bad arguments to memory getUint
 			code: "{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, fault: function() {}, result: function() { return this.depths; }}",
-			want: `["0","0","0"]`,
+			want: ``,
+			fail: "Tracer accessed out of bound memory: available 0, offset -64, size 32 at step (<eval>:1:58(13))    in server-side tracer function 'step'",
 		}, { // tests some general counting
 			code: "{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}",
 			want: `3`,
@@ -154,18 +147,9 @@ func testTracer(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestHaltDuktape(t *testing.T) {
-	t.Skip("duktape doesn't support abortion")
-	testHalt(t, newJsTracer)
-}
-
-func TestHaltGoja(t *testing.T) {
-	testHalt(t, newGojaTracer)
-}
-
-func testHalt(t *testing.T, newTracer tracerCtor) {
+func TestHalt(t *testing.T) {
 	timeout := errors.New("stahp")
-	tracer, err := newTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil)
+	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,16 +162,8 @@ func testHalt(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestHaltBetweenStepsDuktape(t *testing.T) {
-	testHaltBetweenSteps(t, newJsTracer)
-}
-
-func TestHaltBetweenStepsGoja(t *testing.T) {
-	testHaltBetweenSteps(t, newGojaTracer)
-}
-
-func testHaltBetweenSteps(t *testing.T, newTracer tracerCtor) {
-	tracer, err := newTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil)
+func TestHaltBetweenSteps(t *testing.T) {
+	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,20 +182,12 @@ func testHaltBetweenSteps(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestNoStepExecDuktape(t *testing.T) {
-	testNoStepExec(t, newJsTracer)
-}
-
-func TestNoStepExecGoja(t *testing.T) {
-	testNoStepExec(t, newGojaTracer)
-}
-
 // testNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
-func testNoStepExec(t *testing.T, newTracer tracerCtor) {
+func TestNoStepExec(t *testing.T) {
 	execTracer := func(code string) []byte {
 		t.Helper()
-		tracer, err := newTracer(code, nil)
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -247,21 +215,13 @@ func testNoStepExec(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestIsPrecompileDuktape(t *testing.T) {
-	testIsPrecompile(t, newJsTracer)
-}
-
-func TestIsPrecompileGoja(t *testing.T) {
-	testIsPrecompile(t, newGojaTracer)
-}
-
-func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
+func TestIsPrecompile(t *testing.T) {
 	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
 	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
-	tracer, err := newTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +235,7 @@ func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
 	}
 
-	tracer, _ = newTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
 	if err != nil {
@@ -286,24 +246,16 @@ func testIsPrecompile(t *testing.T, newTracer tracerCtor) {
 	}
 }
 
-func TestEnterExitDuktape(t *testing.T) {
-	testEnterExit(t, newJsTracer)
-}
-
-func TestEnterExitGoja(t *testing.T) {
-	testEnterExit(t, newGojaTracer)
-}
-
-func testEnterExit(t *testing.T, newTracer tracerCtor) {
+func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
-	if _, err := newTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := newTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context)); err != nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context)); err != nil {
 		t.Fatal(err)
 	}
 	// test that the enter and exit method are correctly invoked and the values passed
-	tracer, err := newTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context))
+	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,22 +272,5 @@ func testEnterExit(t *testing.T, newTracer tracerCtor) {
 	want := `{"enters":1,"exits":1,"enterGas":1000,"gasUsed":400}`
 	if string(have) != want {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
-	}
-}
-
-// Tests too deep object / serialization crash for duktape
-func TestRecursionLimit(t *testing.T) {
-	code := "{step: function() {}, fault: function() {}, result: function() { var o={}; var x=o; for (var i=0; i<1000; i++){  o.foo={}; o=o.foo; } return x; }}"
-	fail := "RangeError: json encode recursion limit    in server-side tracer function 'result'"
-	tracer, err := newJsTracer(code, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := ""
-	if _, err := runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
-		got = err.Error()
-	}
-	if got != fail {
-		t.Errorf("expected error to be '%s' got '%s'\n", fail, got)
 	}
 }
