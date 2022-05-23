@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -172,6 +174,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			fieldName, err := overloadedArgName(c.Name, overloadedNames)
 			if err != nil {
 				return Type{}, err
+			}
+			if !isValidFieldName(fieldName) {
+				return Type{}, fmt.Errorf("field %d has invalid name", idx)
 			}
 			overloadedNames[fieldName] = fieldName
 			fields = append(fields, reflect.StructField{
@@ -398,4 +403,31 @@ func getTypeSize(t Type) int {
 		return total
 	}
 	return 32
+}
+
+// isLetter reports whether a given 'rune' is classified as a Letter.
+// This method is copied from reflect/type.go
+func isLetter(ch rune) bool {
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch >= utf8.RuneSelf && unicode.IsLetter(ch)
+}
+
+// isValidFieldName checks if a string is a valid (struct) field name or not.
+//
+// According to the language spec, a field name should be an identifier.
+//
+// identifier = letter { letter | unicode_digit } .
+// letter = unicode_letter | "_" .
+// This method is copied from reflect/type.go
+func isValidFieldName(fieldName string) bool {
+	for i, c := range fieldName {
+		if i == 0 && !isLetter(c) {
+			return false
+		}
+
+		if !(isLetter(c) || unicode.IsDigit(c)) {
+			return false
+		}
+	}
+
+	return len(fieldName) > 0
 }
