@@ -256,7 +256,7 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	log.depth = uint(depth)
 	log.err = err
 	if _, err := t.step(t.obj, t.logValue, t.dbValue); err != nil {
-		t.err = wrapError("step", err)
+		t.onError("step", err)
 	}
 }
 
@@ -268,7 +268,7 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	// Other log fields have been already set as part of the last CaptureState.
 	t.log.err = err
 	if _, err := t.fault(t.obj, t.logValue, t.dbValue); err != nil {
-		t.err = wrapError("fault", err)
+		t.onError("fault", err)
 	}
 }
 
@@ -302,7 +302,7 @@ func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 	}
 
 	if _, err := t.enter(t.obj, t.frameValue); err != nil {
-		t.err = wrapError("enter", err)
+		t.onError("enter", err)
 	}
 }
 
@@ -318,7 +318,7 @@ func (t *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.frameResult.err = err
 
 	if _, err := t.exit(t.obj, t.frameResultValue); err != nil {
-		t.err = wrapError("exit", err)
+		t.onError("exit", err)
 	}
 }
 
@@ -339,7 +339,20 @@ func (t *jsTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *jsTracer) Stop(err error) {
 	t.vm.Interrupt(err)
+}
+
+// onError is called anytime the running JS code is interrupted
+// and returns an error. It in turn pings the EVM to cancel its
+// execution.
+func (t *jsTracer) onError(context string, err error) {
+	t.err = wrapError(context, err)
+	// `env` is set on CaptureStart which comes before any JS execution.
+	// So it should be non-nil.
 	t.env.Cancel()
+}
+
+func wrapError(context string, err error) error {
+	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
 
 // setBuiltinFunctions injects Go functions which are available to tracers into the environment.
@@ -939,8 +952,4 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("memory", l.memory.setupObject())
 	o.Set("contract", l.contract.setupObject())
 	return o
-}
-
-func wrapError(context string, err error) error {
-	return fmt.Errorf("%v    in server-side tracer function '%v'", err, context)
 }
