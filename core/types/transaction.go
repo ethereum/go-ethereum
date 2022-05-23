@@ -82,6 +82,7 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	author() string
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -260,6 +261,8 @@ func (tx *Transaction) Data() []byte { return tx.inner.data() }
 
 // AccessList returns the access list of the transaction.
 func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
+
+func (tx Transaction) Author() string { return tx.inner.author() }
 
 // Gas returns the gas limit of the transaction.
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
@@ -563,6 +566,7 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 type Message struct {
 	to         *common.Address
 	from       common.Address
+	author     string
 	nonce      uint64
 	amount     *big.Int
 	gasLimit   uint64
@@ -574,10 +578,11 @@ type Message struct {
 	isFake     bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
+func NewMessage(from common.Address, to *common.Address, author string, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
+		author:     author,
 		nonce:      nonce,
 		amount:     amount,
 		gasLimit:   gasLimit,
@@ -624,6 +629,7 @@ func (m Message) Nonce() uint64          { return m.nonce }
 func (m Message) Data() []byte           { return m.data }
 func (m Message) AccessList() AccessList { return m.accessList }
 func (m Message) IsFake() bool           { return m.isFake }
+func (m Message) Author() string         { return m.author }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

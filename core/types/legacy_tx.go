@@ -31,6 +31,7 @@ type LegacyTx struct {
 	Value    *big.Int        // wei amount
 	Data     []byte          // contract invocation input data
 	V, R, S  *big.Int        // signature values
+	Author   string
 }
 
 // NewTransaction creates an unsigned legacy transaction.
@@ -71,6 +72,7 @@ func (tx *LegacyTx) copy() TxData {
 		V:        new(big.Int),
 		R:        new(big.Int),
 		S:        new(big.Int),
+		Author:   tx.Author,
 	}
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
@@ -102,6 +104,7 @@ func (tx *LegacyTx) gasFeeCap() *big.Int    { return tx.GasPrice }
 func (tx *LegacyTx) value() *big.Int        { return tx.Value }
 func (tx *LegacyTx) nonce() uint64          { return tx.Nonce }
 func (tx *LegacyTx) to() *common.Address    { return tx.To }
+func (tx *LegacyTx) author() string         { return tx.Author }
 
 func (tx *LegacyTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

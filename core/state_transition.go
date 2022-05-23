@@ -66,6 +66,7 @@ type StateTransition struct {
 type Message interface {
 	From() common.Address
 	To() *common.Address
+	Author() string
 
 	GasPrice() *big.Int
 	GasFeeCap() *big.Int

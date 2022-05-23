@@ -36,6 +36,7 @@ import (
 type TransactionArgs struct {
 	From                 *common.Address `json:"from"`
 	To                   *common.Address `json:"to"`
+	Author               string          `json:"author"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
@@ -60,6 +61,10 @@ func (args *TransactionArgs) from() common.Address {
 		return common.Address{}
 	}
 	return *args.From
+}
+
+func (args *TransactionArgs) author() string {
+	return args.Author
 }
 
 // data retrieves the transaction calldata. Input field is preferred.
@@ -150,6 +155,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		callArgs := TransactionArgs{
 			From:                 args.From,
 			To:                   args.To,
+			Author:               args.Author,
 			GasPrice:             args.GasPrice,
 			MaxFeePerGas:         args.MaxFeePerGas,
 			MaxPriorityFeePerGas: args.MaxPriorityFeePerGas,
@@ -239,7 +245,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+	msg := types.NewMessage(addr, args.To, args.author(), 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
 	return msg, nil
 }
 
@@ -254,6 +260,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			al = *args.AccessList
 		}
 		data = &types.DynamicFeeTx{
+			Author:     args.Author,
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(*args.Nonce),
@@ -266,6 +273,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		}
 	case args.AccessList != nil:
 		data = &types.AccessListTx{
+			Author:     args.Author,
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(*args.Nonce),
@@ -277,6 +285,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 		}
 	default:
 		data = &types.LegacyTx{
+			Author:   args.Author,
 			To:       args.To,
 			Nonce:    uint64(*args.Nonce),
 			Gas:      uint64(*args.Gas),

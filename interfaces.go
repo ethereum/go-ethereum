@@ -140,6 +140,7 @@ type CallMsg struct {
 	GasTipCap *big.Int        // EIP-1559 tip per gas.
 	Value     *big.Int        // amount of wei sent along with the call
 	Data      []byte          // input data, usually an ABI-encoded contract method invocation
+	Author    string
 
 	AccessList types.AccessList // EIP-2930 access list.
 }
