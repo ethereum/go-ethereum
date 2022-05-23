@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -1960,13 +1961,8 @@ func mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
 // Note the new head block won't be processed here, callers need to handle it
 // externally.
 func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
-	type block struct {
-		hash   common.Hash
-		number uint64
-	}
-
 	var (
-		newChain    []block
+		newChain    types.Blocks
 		oldChain    types.Blocks
 		commonBlock *types.Block
 
@@ -1994,7 +1990,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
 		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
-			newChain = append(newChain, block{hash: newBlock.Hash(), number: newBlock.NumberU64()})
+			newChain = append(newChain, newBlock)
 		}
 	}
 	if oldBlock == nil {
@@ -2022,7 +2018,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs)
 		}
-		newChain = append(newChain, block{hash: newBlock.Hash(), number: newBlock.NumberU64()})
+		newChain = append(newChain, newBlock)
 
 		// Step back with both chains
 		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1)
@@ -2034,6 +2030,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return fmt.Errorf("invalid new chain")
 		}
 	}
+	PrintMemUsage()
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
 		logFn := log.Info
@@ -2043,14 +2040,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			logFn = log.Warn
 		}
 		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
-			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].hash)
+			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 		blockReorgDropMeter.Mark(int64(len(oldChain)))
 		blockReorgMeter.Mark(1)
 	} else if len(newChain) > 0 {
 		// Special case happens in the post merge stage that current head is
 		// the ancestor of new head while these two blocks are not consecutive
-		log.Info("Extend chain", "add", len(newChain), "number", newChain[0].number, "hash", newChain[0].hash)
+		log.Info("Extend chain", "add", len(newChain), "number", newChain[0].Number(), "hash", newChain[0].Hash())
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 	} else {
 		// len(newChain) == 0 && len(oldChain) > 0
@@ -2061,15 +2058,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// taking care of the proper incremental order.
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
-		block := bc.GetBlock(newChain[i].hash, newChain[i].number)
+		bc.writeHeadBlock(newChain[i])
 
-		bc.writeHeadBlock(block)
 		// Collect the new added transactions.
-		for _, tx := range block.Transactions() {
+		for _, tx := range newChain[i].Transactions() {
 			addedTxs = append(addedTxs, tx.Hash())
 		}
 	}
 
+	PrintMemUsage()
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
 	indexesBatch := bc.db.NewBatch()
@@ -2092,7 +2089,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// Collect the logs
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Collect reborn logs due to chain reorg
-		logs := bc.collectLogs(newChain[i].hash, false)
+		logs := bc.collectLogs(newChain[i].Hash(), false)
 		if len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs)
 		}
@@ -2101,6 +2098,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// this goroutine if there are no events to fire, but realistcally that only
 	// ever happens if we're reorging empty blocks, which will only happen on idle
 	// networks where performance is not an issue either way.
+
+	PrintMemUsage()
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
 	}
@@ -2113,6 +2112,20 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	return nil
+}
+
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
 }
 
 // InsertBlockWithoutSetHead executes the block, runs the necessary verification
