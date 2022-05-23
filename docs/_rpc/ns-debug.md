@@ -234,6 +234,14 @@ storage hash.
 | Console | `debug.getModifiedAccountsByNumber(startNum uint64, endNum uint64)`             |
 | RPC     | `{"method": "debug_getModifiedAccountsByNumber", "params": [startNum, endNum]}` |
 
+### debug_getRawReceipts
+
+Returns the consensus-encoding of all receipts in a single block.
+
+| Client  | Method invocation                                               |
+|:--------|-----------------------------------------------------------------|
+| Console | `debug.getRawReceipts(blockNrOrHash)`                           |
+| RPC     | `{"method": "debug_getRawReceipts", "params": [blockNrOrHash]}` |
 
 ### debug_goTrace
 
