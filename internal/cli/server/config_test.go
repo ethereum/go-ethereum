@@ -24,7 +24,7 @@ func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
 		Chain:      "0",
 		NoSnapshot: true,
-		Whitelist: map[string]string{
+		RequiredBlocks: map[string]string{
 			"a": "b",
 		},
 		TxPool: &TxPoolConfig{
@@ -40,7 +40,7 @@ func TestConfigMerge(t *testing.T) {
 	}
 	c1 := &Config{
 		Chain: "1",
-		Whitelist: map[string]string{
+		RequiredBlocks: map[string]string{
 			"b": "c",
 		},
 		P2P: &P2PConfig{
@@ -55,7 +55,7 @@ func TestConfigMerge(t *testing.T) {
 	expected := &Config{
 		Chain:      "1",
 		NoSnapshot: true,
-		Whitelist: map[string]string{
+		RequiredBlocks: map[string]string{
 			"a": "b",
 			"b": "c",
 		},
@@ -104,7 +104,7 @@ func TestConfigLoadFile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, config, &Config{
 			DataDir: "./data",
-			Whitelist: map[string]string{
+			RequiredBlocks: map[string]string{
 				"a": "b",
 			},
 			P2P: &P2PConfig{

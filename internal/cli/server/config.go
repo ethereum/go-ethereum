@@ -43,8 +43,8 @@ type Config struct {
 	// Name, or identity of the node
 	Name string `hcl:"name,optional"`
 
-	// Whitelist is a list of required (block number, hash) pairs to accept
-	Whitelist map[string]string `hcl:"whitelist,optional"`
+	// RequiredBlocks is a list of required (block number, hash) pairs to accept
+	RequiredBlocks map[string]string `hcl:"requiredblocks,optional"`
 
 	// LogLevel is the level of the logs to put out
 	LogLevel string `hcl:"log-level,optional"`
@@ -383,11 +383,11 @@ type DeveloperConfig struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Chain:     "mainnet",
-		Name:      Hostname(),
-		Whitelist: map[string]string{},
-		LogLevel:  "INFO",
-		DataDir:   defaultDataDir(),
+		Chain:          "mainnet",
+		Name:           Hostname(),
+		RequiredBlocks: map[string]string{},
+		LogLevel:       "INFO",
+		DataDir:        defaultDataDir(),
 		P2P: &P2PConfig{
 			MaxPeers:     30,
 			MaxPendPeers: 50,
@@ -745,17 +745,17 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.SnapDiscoveryURLs = c.P2P.Discovery.DNS
 	}
 
-	// whitelist
+	// RequiredBlocks
 	{
 		n.PeerRequiredBlocks = map[uint64]common.Hash{}
-		for k, v := range c.Whitelist {
+		for k, v := range c.RequiredBlocks {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid whitelist block number %s: %v", k, err)
+				return nil, fmt.Errorf("invalid required block number %s: %v", k, err)
 			}
 			var hash common.Hash
 			if err = hash.UnmarshalText([]byte(v)); err != nil {
-				return nil, fmt.Errorf("invalid whitelist hash %s: %v", v, err)
+				return nil, fmt.Errorf("invalid required block hash %s: %v", v, err)
 			}
 			n.PeerRequiredBlocks[number] = hash
 		}

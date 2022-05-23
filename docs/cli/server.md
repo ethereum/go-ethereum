@@ -18,7 +18,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive")
 
-- ```whitelist```: Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
+- ```requiredblocks```: Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
 
 - ```no-snapshot```: Disables the snapshot-database mode (default = false)
 
@@ -74,7 +74,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```cache.preimages```: Enable recording the SHA3/keccak preimages of trie keys
 
-- ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)
+- ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
 
 ### JsonRPC Options
 

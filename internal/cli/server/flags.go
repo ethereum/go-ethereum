@@ -45,9 +45,9 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value: &c.cliConfig.GcMode,
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
-		Name:  "whitelist",
+		Name:  "requiredblocks",
 		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
-		Value: &c.cliConfig.Whitelist,
+		Value: &c.cliConfig.RequiredBlocks,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:  "no-snapshot",
