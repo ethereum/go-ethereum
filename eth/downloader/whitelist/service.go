@@ -56,7 +56,7 @@ func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber 
 	}
 
 	if len(headers) == 0 {
-		return true, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckoint, lastCheckpointBlockNum)
+		return false, fmt.Errorf("%w: last checkpoint %d", ErrNoRemoteCheckoint, lastCheckpointBlockNum)
 	}
 
 	reqBlockNum := headers[0].Number.Uint64()
