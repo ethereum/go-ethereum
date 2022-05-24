@@ -23,7 +23,7 @@ Ethereum networks at <https://chainid.network>.
 ### Choosing A Consensus Algorithm
 
 While the main network uses proof-of-work to secure the blockchain, Geth also supports the
-the 'clique' proof-of-authority consensus algorithm as an alternative for private
+'clique' proof-of-authority consensus algorithm as an alternative for private
 networks. We strongly recommend 'clique' for new private network deployments because it is
 much less resource intensive than proof-of-work. The clique system is also used for
 several public Ethereum testnets such as [Rinkeby](https://www.rinkeby.io) and
