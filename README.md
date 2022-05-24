@@ -151,7 +151,7 @@ $ geth --ropsten console
 Geth supports 3 different methods to sync your node to the network, which can be  set with the `--syncmode fast` flag.
 
   * Full Sync: Full sync chooses to execute all transactions from genesis to head. It can take +8 days to process all those transactions on a fairly powerful machine.  `--syncmode full`
-  * Fast Sync: Fast sync assumes that a block with 64 valid PoWs on top would be prohibitively expensive for someone to construct, as such it’s ok to download the state associated with HEAD-64.  Trusting the state root from a recent block, it can download the state trie directly. This is faster then the Full sync method and can take a well connected machine +8 hours.   `--syncmode fast`
+  * Fast Sync - Deprecated: Fast sync assumes that a block with 64 valid PoWs on top would be prohibitively expensive for someone to construct, as such it’s ok to download the state associated with HEAD-64.  Trusting the state root from a recent block, it can download the state trie directly. This is faster then the Full sync method and can take a well connected machine +8 hours.   `--syncmode fast`. Fast sync mode is deprecated and not shipped with the latest version of Geth.
   * Snap Sync: Snap Sync downloads the contiguous chunks of useful state data, and reconstructs the Merkle trie locally instead of downloading the entire trie node by node.  Snap sync is about 80% faster then fast sync and will take +3 hours to down load the chain.  Snap is the default mode.  `--syncmode snap`
 
 
