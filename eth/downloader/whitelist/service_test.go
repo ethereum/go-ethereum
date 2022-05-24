@@ -57,7 +57,8 @@ func TestIsValidChain(t *testing.T) {
 		return nil, nil, nil
 	}
 
-	// case2: false fetchHeadersByNumber function provided, should consider the chain as valid
+	// case2: false fetchHeadersByNumber function provided, should consider the chain as invalid
+	// and throw `ErrNoRemoteCheckoint` error
 	res, err = s.IsValidChain(nil, falseFetchHeadersByNumber)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -67,7 +68,7 @@ func TestIsValidChain(t *testing.T) {
 		t.Fatalf("expected error ErrNoRemoteCheckoint, got %v", err)
 	}
 
-	assert.Equal(t, res, true, "expected chain to be valid")
+	assert.Equal(t, res, false, "expected chain to be invalid")
 
 	// case3: correct fetchHeadersByNumber function provided, should consider the chain as valid
 	// create a mock function, returning a the required header
