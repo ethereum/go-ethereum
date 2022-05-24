@@ -1,7 +1,6 @@
 package bor
 
 import (
-	"bytes"
 	"encoding/json"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -208,7 +207,7 @@ func (s *Snapshot) signers() []common.Address {
 // Difficulty returns the difficulty for a particular signer at the current snapshot number
 func (s *Snapshot) Difficulty(signer common.Address) uint64 {
 	// if signer is empty
-	if bytes.Equal(signer.Bytes(), common.Address{}.Bytes()) {
+	if signer == (common.Address{}) {
 		return 1
 	}
 

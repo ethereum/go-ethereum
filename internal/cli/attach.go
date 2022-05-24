@@ -182,9 +182,10 @@ func (c *AttachCommand) makeConsolePreloads() []string {
 		return nil
 	}
 	// Otherwise resolve absolute paths and return them
-	var preloads []string
+	splitFlags := strings.Split(c.PreloadJSFlag, ",")
+	preloads := make([]string, 0, len(splitFlags))
 
-	for _, file := range strings.Split(c.PreloadJSFlag, ",") {
+	for _, file := range splitFlags {
 		preloads = append(preloads, strings.TrimSpace(file))
 	}
 

@@ -255,7 +255,7 @@ func (vals *ValidatorSet) GetByAddress(address common.Address) (index int, val *
 	idx := sort.Search(len(vals.Validators), func(i int) bool {
 		return bytes.Compare(address.Bytes(), vals.Validators[i].Address.Bytes()) <= 0
 	})
-	if idx < len(vals.Validators) && bytes.Equal(vals.Validators[idx].Address.Bytes(), address.Bytes()) {
+	if idx < len(vals.Validators) && vals.Validators[idx].Address == address {
 		return idx, vals.Validators[idx].Copy()
 	}
 

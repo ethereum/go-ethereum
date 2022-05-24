@@ -472,10 +472,9 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 // nolint: gocognit
 func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
-	var (
-		headers []*types.Header
-		snap    *Snapshot
-	)
+	var snap *Snapshot
+
+	headers := make([]*types.Header, 0, 16)
 
 	//nolint:govet
 	for snap == nil {
@@ -548,6 +547,8 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 		headers = append(headers, header)
 		number, hash = number-1, header.ParentHash
 	}
+
+	log.Info("Snapshot has been found in %d headers depth.", len(headers))
 
 	// check if snapshot is nil
 	if snap == nil {
@@ -701,7 +702,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 	var succession int
 	// if signer is not empty
-	if !bytes.Equal(c.signer.Bytes(), common.Address{}.Bytes()) {
+	if c.signer != (common.Address{}) {
 		succession, err = snap.GetSignerSuccessionNumber(c.signer)
 		if err != nil {
 			return err
@@ -1146,7 +1147,7 @@ func (c *Bor) fetchAndCommitSpan(
 	}
 
 	// get validators bytes
-	var validators []MinimalVal
+	validators := make([]MinimalVal, 0, len(heimdallSpan.ValidatorSet.Validators))
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
 		validators = append(validators, val.MinimalVal())
 	}
@@ -1158,7 +1159,7 @@ func (c *Bor) fetchAndCommitSpan(
 	}
 
 	// get producers bytes
-	var producers []MinimalVal
+	producers := make([]MinimalVal, 0, len(heimdallSpan.SelectedProducers))
 	for _, val := range heimdallSpan.SelectedProducers {
 		producers = append(producers, val.MinimalVal())
 	}
@@ -1401,7 +1402,7 @@ func applyMessage(
 
 func validatorContains(a []*Validator, x *Validator) (*Validator, bool) {
 	for _, n := range a {
-		if bytes.Equal(n.Address.Bytes(), x.Address.Bytes()) {
+		if n.Address == x.Address {
 			return n, true
 		}
 	}
@@ -1413,7 +1414,7 @@ func getUpdatedValidatorSet(oldValidatorSet *ValidatorSet, newVals []*Validator)
 	v := oldValidatorSet
 	oldVals := v.Validators
 
-	var changes []*Validator
+	changes := make([]*Validator, 0, len(oldVals))
 
 	for _, ov := range oldVals {
 		if f, ok := validatorContains(newVals, ov); ok {

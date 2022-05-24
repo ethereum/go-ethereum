@@ -40,7 +40,7 @@ func convertTo32(input []byte) (output [32]byte) {
 }
 
 func convert(input []([32]byte)) [][]byte {
-	var output [][]byte
+	output := make([][]byte, 0, len(input))
 
 	for _, in := range input {
 		newInput := make([]byte, len(in[:]))

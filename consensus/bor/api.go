@@ -61,7 +61,7 @@ type difficultiesKV struct {
 }
 
 func rankMapDifficulties(values map[common.Address]uint64) []difficultiesKV {
-	var ss []difficultiesKV
+	ss := make([]difficultiesKV, 0, len(values))
 	for k, v := range values {
 		ss = append(ss, difficultiesKV{k, v})
 	}

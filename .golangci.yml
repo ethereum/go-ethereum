@@ -38,7 +38,7 @@ linters:
     - noctx
     #- nosprintfhostport # TODO: do we use IPv6?
     - paralleltest
-    # - prealloc
+    - prealloc
     - predeclared
     #- promlinter
     #- revive
