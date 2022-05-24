@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/stretchr/testify/assert"
 )
 
 // downloadTester is a test simulator for mocking out local block chain.
@@ -1460,6 +1461,40 @@ func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
 	tester.newPeer("light", protocol, chainA[1:])
 
 	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("light", nil, mode); err != nil {
+		t.Fatal("succeeded attacker synchronisation")
+	}
+}
+
+// TestFakedSyncProgress66NoRemoteCheckpoint tests if in case of missing/invalid
+// checkpointed blocks with opposite peer, the sync should fail initially but
+// with the retry mechanism, it should succeed eventually.
+func TestFakedSyncProgress66NoRemoteCheckpoint(t *testing.T) {
+	protocol := uint(eth.ETH66)
+	mode := FullSync
+
+	tester := newTester()
+	validate := func(count int) (bool, error) {
+		// only return the `ErrNoRemoteCheckoint` error for the first call
+		if count == 0 {
+			return false, whitelist.ErrNoRemoteCheckoint
+		}
+		return true, nil
+	}
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	chainA := testChainForkLightA.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Synchronise with the peer and make sure all blocks were retrieved
+	// Should fail in first attempt
+	if err := tester.sync("light", nil, mode); err != nil {
+		assert.Equal(t, whitelist.ErrNoRemoteCheckoint, err, "failed synchronisation")
+	}
+
+	// Try syncing again, should succeed
 	if err := tester.sync("light", nil, mode); err != nil {
 		t.Fatal("succeeded attacker synchronisation")
 	}
