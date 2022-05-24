@@ -147,13 +147,11 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
-		// The incoming clique header is already truncated, sent to us with a extradata already shortened
-		if len(header.Extra) < 65 {
-			// Need to add it back, to get a suitable length for hashing
-			newExtra := make([]byte, len(header.Extra)+65)
-			copy(newExtra, header.Extra)
-			header.Extra = newExtra
-		}
+		// Add space in the extradata to put the signature
+		newExtra := make([]byte, len(header.Extra)+65)
+		copy(newExtra, header.Extra)
+		header.Extra = newExtra
+
 		// Get back the rlp data, encoded by us
 		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
 		if err != nil {
