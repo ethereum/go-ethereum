@@ -148,6 +148,9 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
+	if len(params.LogsBloom) != 256 {
+		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
+	}
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,
