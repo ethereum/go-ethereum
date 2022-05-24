@@ -16,15 +16,15 @@ This configuration enables developers to experiment with Geth's source code or d
 
 ## Prerequisites
 
-It is assumed that the user has a working Geth installation (see [installation guide](../_install-and-build/)).
-It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](../_getting-started/).
+It is assumed that the user has a working Geth installation (see [installation guide](/docs/install-and-build/installing-geth)).
+It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/_getting-started/).
 Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart contract deployment](https://ethereum.org/en/developers/tutorials/deploying-your-first-smart-contract/) would be useful.
 
 ## Start Geth in Dev Mode
 
 Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial. 
 
-First, `http` must be enabled so that the Javascript console can be attached to the Geth node, and some namespaces must be specified so that certain functions can be executed from the Javascript console, specifically `eth`, `web3` and `personal`. 
+First, `http` (or `ws`) must be enabled so that the Javascript console can be attached to the Geth node, and some namespaces must be specified so that certain functions can be executed from the Javascript console, specifically `eth`, `web3` and `personal`. Alternatively, Geth can be started with the `console` flag.
 
 Finally, Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. The full command is as follows:
 
@@ -101,7 +101,7 @@ To exit, press ctrl-d or type exit
 
 ```
 
-In the [Getting Started](../_getting-started/) tutorial it was explained that using the external signing and account management tool, Clef, was best practise for generating and securing user accounts. However, Clef cannot be used on a local development network. Therefore, this tutorial will use Geth's built-in account management. First, the existing accounts can be displayed using `eth.accounts`:
+In the [Getting Started](docs/_getting-started/) tutorial it was explained that using the external signing and account management tool, Clef, was best practise for generating and securing user accounts. However, for simplicity this tutorial will use Geth's built-in account management. First, the existing accounts can be displayed using `eth.accounts`:
 
 ```shell
 
