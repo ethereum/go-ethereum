@@ -20,19 +20,19 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/qianbin/directcache"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
 	triedb *trie.Database      // Trie node cache for reconstruction purposes
-	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
+	cache  *directcache.Cache  // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot
 	stale bool        // Signals that the layer became stale (state progressed)
@@ -100,7 +100,7 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	snapshotDirtyAccountMissMeter.Mark(1)
 
 	// Try to retrieve the account from the memory cache
-	if blob, found := dl.cache.HasGet(nil, hash[:]); found {
+	if blob, found := dl.cache.Get(hash[:]); found {
 		snapshotCleanAccountHitMeter.Mark(1)
 		snapshotCleanAccountReadMeter.Mark(int64(len(blob)))
 		return blob, nil
@@ -140,7 +140,7 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	snapshotDirtyStorageMissMeter.Mark(1)
 
 	// Try to retrieve the storage slot from the memory cache
-	if blob, found := dl.cache.HasGet(nil, key); found {
+	if blob, found := dl.cache.Get(key); found {
 		snapshotCleanStorageHitMeter.Mark(1)
 		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
 		return blob, nil

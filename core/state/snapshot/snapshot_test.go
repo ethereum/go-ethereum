@@ -24,10 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/qianbin/directcache"
 )
 
 // randomHash generates a random blob of data and returns it as a hash.
@@ -93,7 +93,7 @@ func TestDiskLayerExternalInvalidationFullFlatten(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -137,7 +137,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -187,7 +187,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -250,7 +250,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -344,7 +344,7 @@ func TestSnaphots(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   makeRoot(1),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -443,7 +443,7 @@ func TestReadStateDuringFlattening(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{

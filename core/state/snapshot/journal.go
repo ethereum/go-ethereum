@@ -24,13 +24,13 @@ import (
 	"io"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/qianbin/directcache"
 )
 
 const journalVersion uint64 = 0
@@ -164,7 +164,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 	base := &diskLayer{
 		diskdb: diskdb,
 		triedb: triedb,
-		cache:  fastcache.New(cache * 1024 * 1024),
+		cache:  directcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)

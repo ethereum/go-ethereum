@@ -21,10 +21,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/qianbin/directcache"
 )
 
 func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} {
@@ -235,7 +235,7 @@ func TestInsertAndMerge(t *testing.T) {
 func emptyLayer() *diskLayer {
 	return &diskLayer{
 		diskdb: memorydb.New(),
-		cache:  fastcache.New(500 * 1024),
+		cache:  directcache.New(500 * 1024),
 	}
 }
 

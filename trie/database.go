@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/qianbin/directcache"
 )
 
 var (
@@ -69,7 +69,7 @@ var (
 type Database struct {
 	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
 
-	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
+	cleans  *directcache.Cache          // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
@@ -279,13 +279,13 @@ func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
 func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database {
-	var cleans *fastcache.Cache
+	var cleans *directcache.Cache
 	if config != nil && config.Cache > 0 {
-		if config.Journal == "" {
-			cleans = fastcache.New(config.Cache * 1024 * 1024)
-		} else {
-			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
-		}
+		// if config.Journal == "" {
+		cleans = directcache.New(config.Cache * 1024 * 1024)
+		// } else {
+		// 	cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
+		// }
 	}
 	db := &Database{
 		diskdb: diskdb,
@@ -361,10 +361,13 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 func (db *Database) node(hash common.Hash) node {
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
+		var node node
+		if db.cleans.AdvGet(hash[:], func(enc []byte) {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc)
+			node = mustDecodeNode(hash[:], enc)
+		}, false) {
+			return node
 		}
 	}
 	// Retrieve the node from the dirty cache if available
@@ -401,7 +404,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	}
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
-		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
+		if enc, ok := db.cleans.Get(hash[:]); ok {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return enc, nil
@@ -846,11 +849,11 @@ func (db *Database) saveCache(dir string, threads int) error {
 	log.Info("Writing clean trie cache to disk", "path", dir, "threads", threads)
 
 	start := time.Now()
-	err := db.cleans.SaveToFileConcurrent(dir, threads)
-	if err != nil {
-		log.Error("Failed to persist clean trie cache", "error", err)
-		return err
-	}
+	// err := db.cleans.SaveToFileConcurrent(dir, threads)
+	// if err != nil {
+	// 	log.Error("Failed to persist clean trie cache", "error", err)
+	// 	return err
+	// }
 	log.Info("Persisted the clean trie cache", "path", dir, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

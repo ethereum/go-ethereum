@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/qianbin/directcache"
 )
 
 var (
@@ -78,7 +78,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache i
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
-		cache:      fastcache.New(cache * 1024 * 1024),
+		cache:      directcache.New(cache * 1024 * 1024),
 		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),

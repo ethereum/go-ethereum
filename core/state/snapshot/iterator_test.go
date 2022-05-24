@@ -23,9 +23,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/qianbin/directcache"
 )
 
 // TestAccountIteratorBasics tests some simple single-layer(diff and disk) iteration
@@ -213,7 +213,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -260,7 +260,7 @@ func TestStorageIteratorTraversal(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -310,7 +310,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -404,7 +404,7 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -514,7 +514,7 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -558,7 +558,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -590,7 +590,7 @@ func TestAccountIteratorSeek(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -653,7 +653,7 @@ func TestStorageIteratorSeek(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -716,7 +716,7 @@ func TestAccountIteratorDeletions(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -762,7 +762,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -840,7 +840,7 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{
@@ -936,7 +936,7 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
 		root:   common.HexToHash("0x01"),
-		cache:  fastcache.New(1024 * 500),
+		cache:  directcache.New(1024 * 500),
 	}
 	snaps := &Tree{
 		layers: map[common.Hash]snapshot{

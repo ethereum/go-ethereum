@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/qianbin/directcache"
 )
 
 // reverse reverses the contents of a byte slice. It's used to update random accs
@@ -103,7 +103,7 @@ func TestDiskMerge(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			baseRoot: &diskLayer{
 				diskdb: db,
-				cache:  fastcache.New(500 * 1024),
+				cache:  directcache.New(500 * 1024),
 				root:   baseRoot,
 			},
 		},
@@ -299,7 +299,7 @@ func TestDiskPartialMerge(t *testing.T) {
 			layers: map[common.Hash]snapshot{
 				baseRoot: &diskLayer{
 					diskdb: db,
-					cache:  fastcache.New(500 * 1024),
+					cache:  directcache.New(500 * 1024),
 					root:   baseRoot,
 				},
 			},
@@ -456,7 +456,7 @@ func TestDiskGeneratorPersistence(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			baseRoot: &diskLayer{
 				diskdb:    db,
-				cache:     fastcache.New(500 * 1024),
+				cache:     directcache.New(500 * 1024),
 				root:      baseRoot,
 				genMarker: genMarker,
 			},
@@ -538,7 +538,7 @@ func TestDiskSeek(t *testing.T) {
 		layers: map[common.Hash]snapshot{
 			baseRoot: &diskLayer{
 				diskdb: db,
-				cache:  fastcache.New(500 * 1024),
+				cache:  directcache.New(500 * 1024),
 				root:   baseRoot,
 			},
 		},
