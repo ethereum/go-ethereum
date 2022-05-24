@@ -147,7 +147,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
-		// add space in the extradata to put the signature
+		// Add space in the extradata to put the signature
 		newExtra := make([]byte, len(header.Extra)+65)
 		copy(newExtra, header.Extra)
 		header.Extra = newExtra
