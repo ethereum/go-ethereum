@@ -1394,27 +1394,42 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 	}
 }
 
+// whitelistFake is a mock for the chain validator service
 type whitelistFake struct {
-	err error
-	res bool
+	// count denotes the number of times the validate function was called
+	count int
+
+	// validate is the dynamic function to be called while syncing
+	validate func(count int) (bool, error)
 }
 
-func newWhitelistFake(res bool, err error) *whitelistFake {
-	return &whitelistFake{err, res}
+// newWhitelistFake returns a new mock whitelist
+func newWhitelistFake(validate func(count int) (bool, error)) *whitelistFake {
+	return &whitelistFake{0, validate}
 }
 
+// IsValidChain is the mock function which the downloader will use to validate the chain
+// to be received from a peer.
 func (w *whitelistFake) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
-	return w.res, w.err
+	defer func() {
+		w.count++
+	}()
+	return w.validate(w.count)
 }
 
 func (w *whitelistFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
 
+// TestFakedSyncProgress66WhitelistMismatch tests if in case of whitelisted
+// checkpoint mismatch with opposite peer, the sync should fail.
 func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
 	protocol := uint(eth.ETH66)
 	mode := FullSync
 
 	tester := newTester()
-	tester.downloader.ChainValidator = newWhitelistFake(true, whitelist.ErrCheckpointMismatch)
+	validate := func(count int) (bool, error) {
+		return false, whitelist.ErrCheckpointMismatch
+	}
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
 
 	defer tester.terminate()
 
@@ -1423,6 +1438,29 @@ func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
 
 	// Synchronise with the peer and make sure all blocks were retrieved
 	if err := tester.sync("light", nil, mode); err == nil {
+		t.Fatal("succeeded attacker synchronisation")
+	}
+}
+
+// TestFakedSyncProgress66WhitelistMatch tests if in case of whitelisted
+// checkpoint match with opposite peer, the sync should succeed.
+func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
+	protocol := uint(eth.ETH66)
+	mode := FullSync
+
+	tester := newTester()
+	validate := func(count int) (bool, error) {
+		return true, nil
+	}
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	chainA := testChainForkLightA.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("light", nil, mode); err != nil {
 		t.Fatal("succeeded attacker synchronisation")
 	}
 }
