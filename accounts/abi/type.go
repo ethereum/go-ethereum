@@ -259,20 +259,6 @@ func (t Type) GetType() reflect.Type {
 	}
 }
 
-func overloadedArgName(rawName string, names map[string]string) (string, error) {
-	fieldName := ToCamelCase(rawName)
-	if fieldName == "" {
-		return "", errors.New("abi: purely anonymous or underscored field is not supported")
-	}
-	// Handle overloaded fieldNames
-	_, ok := names[fieldName]
-	for idx := 0; ok; idx++ {
-		fieldName = fmt.Sprintf("%s%d", ToCamelCase(rawName), idx)
-		_, ok = names[fieldName]
-	}
-	return fieldName, nil
-}
-
 // String implements Stringer.
 func (t Type) String() (out string) {
 	return t.stringKind
