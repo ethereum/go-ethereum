@@ -105,7 +105,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 			},
 			{
 				Name:      "traverse-state",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -121,7 +121,7 @@ It's also usable without snapshot enabled.
 			},
 			{
 				Name:      "traverse-rawstate",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseRawState),
 				Category:  "MISCELLANEOUS COMMANDS",
