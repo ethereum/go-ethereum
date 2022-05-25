@@ -156,9 +156,33 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 	parentOfForkedHeader := blockchain.GetBlockByHash(currentForkBlock.ParentHash()).Header()
 	grandParentOfForkedHeader := blockchain.GetBlockByHash(parentOfForkedHeader.ParentHash).Header()
 	forkedHeaders = append(forkedHeaders, *grandParentOfForkedHeader, *parentOfForkedHeader)
+
+	// Set up forensics events trigger
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	forensics.SubscribeForensicsEvent(forensicsEventCh)
+
 	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, forkedHeaders, *incomingQC)
 	assert.Nil(t, err)
-	// TODO: Check SendForensicProof triggered
+
+	// Check SendForensicProof triggered
+	for {
+		select {
+		case forensics := <-forensicsEventCh:
+			assert.NotNil(t, forensics.ForensicsProof)
+			assert.False(t, forensics.ForensicsProof.AcrossEpochs)
+			assert.Equal(t, types.Round(13), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(913), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 9, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(13), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(912), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 8, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			return
+		case <-time.After(5 * time.Second):
+			t.FailNow()
+		}
+	}
 }
 
 func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
@@ -190,7 +214,86 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 	grandParentOfForkedHeader := blockchain.GetBlockByHash(parentOfForkedHeader.ParentHash).Header()
 	forkedHeaders = append(forkedHeaders, *grandParentOfForkedHeader, *parentOfForkedHeader)
 
+	// Set up forensics events trigger
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	forensics.SubscribeForensicsEvent(forensicsEventCh)
+
 	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, forkedHeaders, *incomingQC)
 	assert.Nil(t, err)
-	// TODO: Check SendForensicProof triggered
+	// Check SendForensicProof triggered
+	for {
+		select {
+		case forensics := <-forensicsEventCh:
+			assert.NotNil(t, forensics.ForensicsProof)
+			assert.False(t, forensics.ForensicsProof.AcrossEpochs)
+			assert.Equal(t, types.Round(14), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(914), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 10, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(16), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(906), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
+			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			return
+		case <-time.After(5 * time.Second):
+			t.FailNow()
+		}
+	}
+}
+
+// "prone to attack" test where the "across epoch" field is true
+func TestForensicsAcrossEpoch(t *testing.T) {
+	var numOfForks = new(int)
+	*numOfForks = 10
+	var forkRoundDifference = new(int)
+	*forkRoundDifference = 10
+	var forkedChainSignersKey []*ecdsa.PrivateKey
+	forkedChainSignersKey = append(forkedChainSignersKey, acc1Key)
+	blockchain, _, _, _, _, currentForkBlock := PrepareXDCTestBlockChainForV2Engine(t, 1801, params.TestXDPoSMockChainConfig, &ForkedBlockOptions{numOfForkedBlocks: numOfForks, forkedRoundDifference: forkRoundDifference, signersKey: forkedChainSignersKey})
+	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
+
+	// Now, let's try set committed blocks, where the highestedCommitted blocks are 1799, 1800 and 1801
+	var headers []types.Header
+	var decodedBlock1801ExtraField types.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(blockchain.GetHeaderByNumber(1801).Extra, &decodedBlock1801ExtraField)
+	assert.Nil(t, err)
+	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(1799), *blockchain.GetHeaderByNumber(1800)), *decodedBlock1801ExtraField.QuorumCert)
+	assert.Nil(t, err)
+
+	var decodedExtraField types.ExtraFields_v2
+	// Decode the QC from forking chain
+	err = utils.DecodeBytesExtraFields(currentForkBlock.Header().Extra, &decodedExtraField)
+	assert.Nil(t, err)
+
+	incomingQC := decodedExtraField.QuorumCert
+	var forkedHeaders []types.Header
+	parentOfForkedHeader := blockchain.GetBlockByHash(currentForkBlock.ParentHash()).Header()
+	grandParentOfForkedHeader := blockchain.GetBlockByHash(parentOfForkedHeader.ParentHash).Header()
+	forkedHeaders = append(forkedHeaders, *grandParentOfForkedHeader, *parentOfForkedHeader)
+
+	// Set up forensics events trigger
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	forensics.SubscribeForensicsEvent(forensicsEventCh)
+
+	err = forensics.ForensicsMonitoring(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, forkedHeaders, *incomingQC)
+	assert.Nil(t, err)
+	// Check SendForensicProof triggered
+	for {
+		select {
+		case forensics := <-forensicsEventCh:
+			assert.NotNil(t, forensics.ForensicsProof)
+			assert.True(t, forensics.ForensicsProof.AcrossEpochs)
+			assert.Equal(t, types.Round(900), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(1800), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 10, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(902), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(1792), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
+			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			return
+		case <-time.After(5 * time.Second):
+			t.FailNow()
+		}
+	}
 }

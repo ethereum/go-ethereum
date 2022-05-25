@@ -58,7 +58,7 @@ type XDPoS_v2 struct {
 	HookReward  func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty func(chain consensus.ChainReader, number *big.Int, parentHash common.Hash, candidates []common.Address) ([]common.Address, error)
 
-	forensics *Forensics
+	ForensicsProcessor *Forensics
 }
 
 func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *XDPoS_v2 {
@@ -107,7 +107,7 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 		},
 		highestVotedRound:  types.Round(0),
 		highestCommitBlock: nil,
-		forensics:          NewForensics(),
+		ForensicsProcessor: NewForensics(),
 	}
 	// Add callback to the timer
 	timeoutTimer.OnTimeoutFn = engine.OnCountdownTimeout
@@ -925,7 +925,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		// Perform forensics related operation
 		var headerQcToBeCommitted []types.Header
 		headerQcToBeCommitted = append(headerQcToBeCommitted, *parentBlock, *proposedBlockHeader)
-		go x.forensics.ForensicsMonitoring(blockChainReader, x, headerQcToBeCommitted, *incomingQc)
+		go x.ForensicsProcessor.ForensicsMonitoring(blockChainReader, x, headerQcToBeCommitted, *incomingQc)
 		return true, nil
 	}
 	// Everything else, fail to commit

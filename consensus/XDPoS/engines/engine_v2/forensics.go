@@ -10,6 +10,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
@@ -17,27 +18,22 @@ const (
 	NUM_OF_FORENSICS_QC = 3
 )
 
-type ForensicsInfo struct {
-	HashPath        []string // HashesTillSmallerRoundQc or HashesTillLargerRoundQc
-	QuorumCert      types.QuorumCert
-	SignerAddresses []string
-}
-
-type ForensicProof struct {
-	SmallerRoundInfo *ForensicsInfo
-	LargerRoundInfo  *ForensicsInfo
-	DivergingHash    common.Hash
-	AcrossEpochs     bool
-}
-
 // Forensics instance. Placeholder for future properties to be added
 type Forensics struct {
 	HighestCommittedQCs []types.QuorumCert
+	forensicsFeed       event.Feed
+	scope               event.SubscriptionScope
 }
 
 // Initiate a forensics process
 func NewForensics() *Forensics {
 	return &Forensics{}
+}
+
+// SubscribeForensicsEvent registers a subscription of ForensicsEvent and
+// starts sending event to the given channel.
+func (f *Forensics) SubscribeForensicsEvent(ch chan<- types.ForensicsEvent) event.Subscription {
+	return f.scope.Track(f.forensicsFeed.Subscribe(ch))
 }
 
 func (f *Forensics) ForensicsMonitoring(chain consensus.ChainReader, engine *XDPoS_v2, headerQcToBeCommitted []types.Header, incomingQC types.QuorumCert) error {
@@ -132,7 +128,7 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 	lowerRoundQC := firstQc
 	higherRoundQC := secondQc
 
-	if (secondQc.ProposedBlockInfo.Round - firstQc.ProposedBlockInfo.Round) < 0 {
+	if secondQc.ProposedBlockInfo.Round < firstQc.ProposedBlockInfo.Round {
 		lowerRoundQC = secondQc
 		higherRoundQC = firstQc
 	}
@@ -146,28 +142,36 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 
 	// Check if two QCs are across epoch, this is used as a indicator for the "prone to attack" scenario
 	lowerRoundQcEpochSwitchInfo, err := engine.getEpochSwitchInfo(chain, nil, lowerRoundQC.ProposedBlockInfo.Hash)
+	if err != nil {
+		log.Error("[SendForensicProof] Errir while trying to find lowerRoundQcEpochSwitchInfo", "lowerRoundQC.ProposedBlockInfo.Hash", lowerRoundQC.ProposedBlockInfo.Hash, "err", err)
+		return err
+	}
 	higherRoundQcEpochSwitchInfo, err := engine.getEpochSwitchInfo(chain, nil, higherRoundQC.ProposedBlockInfo.Hash)
+	if err != nil {
+		log.Error("[SendForensicProof] Errir while trying to find higherRoundQcEpochSwitchInfo", "higherRoundQC.ProposedBlockInfo.Hash", higherRoundQC.ProposedBlockInfo.Hash, "err", err)
+		return err
+	}
 	accrossEpoches := false
 	if lowerRoundQcEpochSwitchInfo.EpochSwitchBlockInfo.Hash != higherRoundQcEpochSwitchInfo.EpochSwitchBlockInfo.Hash {
 		accrossEpoches = true
 	}
 
-	forensicsProof := &ForensicProof{
+	forensicsProof := &types.ForensicProof{
 		DivergingHash: ancestorHash,
 		AcrossEpochs:  accrossEpoches,
-		SmallerRoundInfo: &ForensicsInfo{
+		SmallerRoundInfo: &types.ForensicsInfo{
 			HashPath:        ancestorToLowerRoundPath,
 			QuorumCert:      lowerRoundQC,
 			SignerAddresses: f.getQcSignerAddresses(lowerRoundQC),
 		},
-		LargerRoundInfo: &ForensicsInfo{
+		LargerRoundInfo: &types.ForensicsInfo{
 			HashPath:        ancestorToHigherRoundPath,
 			QuorumCert:      higherRoundQC,
 			SignerAddresses: f.getQcSignerAddresses(higherRoundQC),
 		},
 	}
-	// TODO: send to dedicated channel which will redirect to stats server
 	log.Info("Forensics proof report generated, sending to the stats server", forensicsProof)
+	go f.forensicsFeed.Send(types.ForensicsEvent{ForensicsProof: forensicsProof})
 	return nil
 }
 

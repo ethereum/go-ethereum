@@ -24,6 +24,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v1"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v2"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
+	"github.com/XinFinOrg/XDPoSChain/event"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -63,6 +64,11 @@ type XDPoS struct {
 	// The exact consensus engine with different versions
 	EngineV1 *engine_v1.XDPoS_v1
 	EngineV2 *engine_v2.XDPoS_v2
+}
+
+// Subscribe to consensus engines forensics events. Currently only exist for engine v2
+func (x *XDPoS) SubscribeForensicsEvent(ch chan<- types.ForensicsEvent) event.Subscription {
+	return x.EngineV2.ForensicsProcessor.SubscribeForensicsEvent(ch)
 }
 
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
