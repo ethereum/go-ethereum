@@ -604,6 +604,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		gasFeeCap:  new(big.Int).Set(tx.GasFeeCap()),
 		gasTipCap:  new(big.Int).Set(tx.GasTipCap()),
 		to:         tx.To(),
+		author:     tx.Author(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),

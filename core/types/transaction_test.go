@@ -138,14 +138,14 @@ func TestEIP2930Signer(t *testing.T) {
 			signer:         signer1,
 			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
 			wantSenderErr:  ErrInvalidChainId,
-			wantHash:       common.HexToHash("1ccd12d8bbdb96ea391af49a35ab641e219b2dd638dea375f2bc94dd290f2549"),
+			wantHash:       common.HexToHash("235b2d2101bef0b05e6b7f7a711fe0297e3a2c95da1b6442b439b76c00731090"),
 		},
 		{
 			tx:             tx1,
 			signer:         signer1,
 			wantSenderErr:  ErrInvalidSig,
 			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
-			wantHash:       common.HexToHash("1ccd12d8bbdb96ea391af49a35ab641e219b2dd638dea375f2bc94dd290f2549"),
+			wantHash:       common.HexToHash("235b2d2101bef0b05e6b7f7a711fe0297e3a2c95da1b6442b439b76c00731090"),
 		},
 		{
 			// This checks what happens when trying to sign an unsigned tx for the wrong chain.
