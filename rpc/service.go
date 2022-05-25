@@ -137,7 +137,7 @@ func newCallback(receiver, fn reflect.Value) *callback {
 	fntype := fn.Type()
 	c := &callback{fn: fn, rcvr: receiver, errPos: -1, isSubscribe: isPubSub(fntype)}
 	// Determine parameter types. They must all be exported or builtin types.
-	c.makeArgTypes()
+	c.makeArgTypes(fntype)
 
 	// Verify return types. The function must return at most one error
 	// and/or one other non-error value.
@@ -162,8 +162,7 @@ func newCallback(receiver, fn reflect.Value) *callback {
 }
 
 // makeArgTypes composes the argTypes list.
-func (c *callback) makeArgTypes() {
-	fntype := c.fn.Type()
+func (c *callback) makeArgTypes(fntype reflect.Type) {
 	// Skip receiver and context.Context parameter (if present).
 	firstArg := 0
 	if c.rcvr.IsValid() {
