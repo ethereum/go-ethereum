@@ -4,17 +4,15 @@ sort_key: A2
 ---
 
 As an Execution-Layer (EL) client, Geth supports the transition of Ethereum from proof-of-work (PoW) to
-proof-of-stake (PoS), a.k.a. [The Merge](https://ethereum.org/en/upgrades/merge/). In advance of the Mainnet
-merge, several public testnets will transition from PoW to PoS. The first public testnet to merge will be 
-Ropsten. As the Ropsten merge approaches, Geth users will need to prepare to ensure a smooth transition.
+proof-of-stake (PoS), a.k.a. [The Merge](https://ethereum.org/en/upgrades/merge/).
 
 ### What happens to Geth?
 
-The merge swaps Ethereum's PoW consensus mechanism for a new PoS mechanism. At the moment of the merge, 
+The merge changes Ethereum's PoW consensus mechanism to PoS. At the moment of the merge, 
 Geth switches off its mining algorithm and block gossip functions. Geth's role after the merge is 
-to execute transactions, generate execution payloads and run the [EVM](https://ethereum.org/en/developers/docs/evm).
+executing transactions and generating execution payloads using the [EVM](https://ethereum.org/en/developers/docs/evm).
 
-From a user perspective Geth will not change much at the merge. Responsibility for consensus logic and
+From a user's perspective Geth will not change much at the merge. Responsibility for consensus logic and
 block propagation are handed over to the consensus layer, but all of Geth's other functionality remains
 intact. This means transactions, contract deployments and data queries can still be handled by Geth using
 the same methods as before.
@@ -25,9 +23,17 @@ The transition from PoW to PoS will happen when a pre-announced total difficulty
 This is unlike usual forks which occur at a certain scheduled block number.
 
 The total difficulty threshold that triggers the Merge is also known as the [*Terminal
-Total Difficulty* (TTD)](https://ethereum.org/en/glossary/#terminal-total-difficulty).
+Total Difficulty* (TTD)](https://ethereum.org/en/glossary/#terminal-total-difficulty). In
+case of an emergency delay, the TTD can be overriden using the `--override.totalterminaldifficulty` command-line
+flag.
 
-{% include note.html content="In case of an emergency delay, the TTD can be overriden using `--override.totalterminaldifficulty`." %}
+#### Ropsten Transition
+
+In advance of the Mainnet merge, several public testnets will transition from PoW to PoS.
+The first public testnet to merge will be Ropsten. As the Ropsten merge approaches, Geth
+users will need to prepare to ensure a smooth transition.
+
+{% include note.html content="The merge event did not go smoothly on Ropsten. Use `--override.terminaltotaldifficulty 100000000000000000000000` when launching Geth for Ropsten." }
 
 ### Consensus client
 
@@ -76,17 +82,13 @@ INFO [05-25|11:04:41.628] HTTP server started                      endpoint=127.
 The listening address of the engine API is configurable. It is also possible to self-generate the JWT secret and feed the resulting file to Geth. To generate the secret, run:
 
 ```shell
-
 openssl rand -hex 32 | tr -d "\n" > "/tmp/jwtsecret"
-
 ```
 
 Now configure authentication using Geth flags:
 
 ```shell
-
 geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret --override.terminaltotaldifficulty 100000000000000000000000
-
 ```
 
 [engineapi]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
