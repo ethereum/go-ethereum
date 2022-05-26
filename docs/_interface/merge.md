@@ -14,6 +14,11 @@ The merge swaps Ethereum's PoW consensus mechanism for a new PoS mechanism. At t
 Geth switches off its mining algorithm and block gossip functions. Geth's role after the merge is 
 to execute transactions, generate execution payloads and run the [EVM](https://ethereum.org/en/developers/docs/evm).
 
+From a user perspective Geth will not change much at the merge. Responsibility for consensus logic and
+block propagation are handed over to the consensus layer, but all of Geth's other functionality remains
+intact. This means transactions, contract deployments and data queries can still be handled by Geth using
+the same methods as before.
+
 ### Transition
 
 The transition from PoW to PoS will happen when a pre-announced total difficulty is reached by the chain. 
@@ -83,13 +88,6 @@ Now configure authentication using Geth flags:
 geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret
 
 ```
-
-### Using Geth post-merge
-
-From a user perspective Geth will not change much at the merge. Responsibility for consensus logic and block propagation are handed over to the
-consensus layer, but all of Geth's other functionality remains intact. This means transactions, contract deployments and data queries can still be handled by Geth using the same methods as pre-merge.
-
-
 
 [engineapi]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
 [cl-list]: https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients
