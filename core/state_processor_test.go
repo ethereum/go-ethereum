@@ -61,7 +61,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
 	)
 	var makeTx = func(key *ecdsa.PrivateKey, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *types.Transaction {
-		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data), signer, key)
+		tx, _ := types.SignTx(types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data, "author"), signer, key)
 		return tx
 	}
 	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {

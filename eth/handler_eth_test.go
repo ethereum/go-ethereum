@@ -275,7 +275,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
+	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil, "author")
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 	if err := src.SendTransactions([]*types.Transaction{tx}); err != nil {
@@ -305,7 +305,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 	insert := make([]*types.Transaction, 100)
 	for nonce := range insert {
-		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240))
+		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240), "author")
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		insert[nonce] = tx
@@ -429,7 +429,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// Fill the source pool with transactions and wait for them at the sinks
 	txs := make([]*types.Transaction, 1024)
 	for nonce := range txs {
-		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
+		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil, "author")
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		txs[nonce] = tx

@@ -149,7 +149,7 @@ func main() {
 func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signer, baseFee *big.Int) *types.Transaction {
 	// Generate legacy transaction
 	if rand.Intn(2) == 0 {
-		tx, err := types.SignTx(types.NewTransaction(nonce, crypto.PubkeyToAddress(privKey.PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil), signer, privKey)
+		tx, err := types.SignTx(types.NewTransaction(nonce, crypto.PubkeyToAddress(privKey.PublicKey), new(big.Int), 21000, big.NewInt(100000000000+rand.Int63n(65536)), nil, "author"), signer, privKey)
 		if err != nil {
 			panic(err)
 		}

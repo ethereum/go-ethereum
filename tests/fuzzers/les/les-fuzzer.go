@@ -70,11 +70,11 @@ func makechain() (bc *core.BlockChain, addrHashes, txHashes []common.Hash) {
 			)
 			nonce := uint64(i)
 			if i%4 == 0 {
-				tx, _ = types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 200000, big.NewInt(0), testContractCode), signer, bankKey)
+				tx, _ = types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 200000, big.NewInt(0), testContractCode, "author"), signer, bankKey)
 				addr = crypto.CreateAddress(bankAddr, nonce)
 			} else {
 				addr = common.BigToAddress(big.NewInt(int64(i)))
-				tx, _ = types.SignTx(types.NewTransaction(nonce, addr, big.NewInt(10000), params.TxGas, big.NewInt(params.GWei), nil), signer, bankKey)
+				tx, _ = types.SignTx(types.NewTransaction(nonce, addr, big.NewInt(10000), params.TxGas, big.NewInt(params.GWei), nil, "author"), signer, bankKey)
 			}
 			gen.AddTx(tx)
 			addrHashes = append(addrHashes, crypto.Keccak256Hash(addr[:]))
@@ -391,7 +391,7 @@ func Fuzz(input []byte) int {
 					nonce = f.nonce
 					f.nonce += 1
 				}
-				req.Txs[i], _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
+				req.Txs[i], _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil, "author"), signer, bankKey)
 			}
 			f.doFuzz(l.SendTxV2Msg, req)
 

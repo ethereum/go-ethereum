@@ -300,7 +300,7 @@ func unknownTx(s *Suite) *types.Transaction {
 	if tx.To() != nil {
 		to = *tx.To()
 	}
-	txNew := types.NewTransaction(tx.Nonce()+1, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
+	txNew := types.NewTransaction(tx.Nonce()+1, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data(), tx.Author())
 	return signWithFaucet(s.chain.chainConfig, txNew)
 }
 
@@ -341,7 +341,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 
 func generateTx(chainConfig *params.ChainConfig, nonce uint64, gas uint64) *types.Transaction {
 	var to common.Address
-	tx := types.NewTransaction(nonce, to, big.NewInt(1), gas, big.NewInt(1), []byte{})
+	tx := types.NewTransaction(nonce, to, big.NewInt(1), gas, big.NewInt(1), []byte{}, "author")
 	return signWithFaucet(chainConfig, tx)
 }
 
@@ -364,7 +364,7 @@ func invalidNonceTx(s *Suite) *types.Transaction {
 	if tx.To() != nil {
 		to = *tx.To()
 	}
-	txNew := types.NewTransaction(tx.Nonce()-2, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data())
+	txNew := types.NewTransaction(tx.Nonce()-2, to, tx.Value(), tx.Gas(), tx.GasPrice(), tx.Data(), tx.Author())
 	return signWithFaucet(s.chain.chainConfig, txNew)
 }
 
@@ -378,7 +378,7 @@ func hugeAmount(s *Suite) *types.Transaction {
 	if tx.To() != nil {
 		to = *tx.To()
 	}
-	txNew := types.NewTransaction(tx.Nonce(), to, amount, tx.Gas(), tx.GasPrice(), tx.Data())
+	txNew := types.NewTransaction(tx.Nonce(), to, amount, tx.Gas(), tx.GasPrice(), tx.Data(), tx.Author())
 	return signWithFaucet(s.chain.chainConfig, txNew)
 }
 
@@ -392,7 +392,7 @@ func hugeGasPrice(s *Suite) *types.Transaction {
 	if tx.To() != nil {
 		to = *tx.To()
 	}
-	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), gasPrice, tx.Data())
+	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), gasPrice, tx.Data(), tx.Author())
 	return signWithFaucet(s.chain.chainConfig, txNew)
 }
 
@@ -405,7 +405,7 @@ func hugeData(s *Suite) *types.Transaction {
 	if tx.To() != nil {
 		to = *tx.To()
 	}
-	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), tx.GasPrice(), largeBuffer(2))
+	txNew := types.NewTransaction(tx.Nonce(), to, tx.Value(), tx.Gas(), tx.GasPrice(), largeBuffer(2), tx.Author())
 	return signWithFaucet(s.chain.chainConfig, txNew)
 }
 

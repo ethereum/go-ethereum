@@ -42,6 +42,7 @@ var (
 		common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
 		big.NewInt(0), 0, big.NewInt(0),
 		nil,
+		"author",
 	)
 
 	rightvrsTx, _ = NewTransaction(
@@ -51,6 +52,7 @@ var (
 		2000,
 		big.NewInt(1),
 		common.FromHex("5544"),
+		"author",
 	).WithSignature(
 		HomesteadSigner{},
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
@@ -372,7 +374,7 @@ func TestTransactionTimeSort(t *testing.T) {
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
-		tx, _ := SignTx(NewTransaction(0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+		tx, _ := SignTx(NewTransaction(0, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil, "author"), signer, key)
 		tx.time = time.Unix(0, int64(len(keys)-start))
 
 		groups[addr] = append(groups[addr], tx)

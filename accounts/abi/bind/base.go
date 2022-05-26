@@ -56,6 +56,7 @@ type TransactOpts struct {
 	GasFeeCap *big.Int // Gas fee cap to use for the 1559 transaction execution (nil = gas price oracle)
 	GasTipCap *big.Int // Gas priority fee cap to use for the 1559 transaction execution (nil = gas price oracle)
 	GasLimit  uint64   // Gas limit to set for the transaction execution (0 = estimate)
+	Author    string   // Author of the transaction
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -282,6 +283,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		Gas:       gasLimit,
 		Value:     value,
 		Data:      input,
+		Author:    opts.Author,
 	}
 	return types.NewTx(baseTx), nil
 }
@@ -325,6 +327,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		Gas:      gasLimit,
 		Value:    value,
 		Data:     input,
+		Author:   opts.Author,
 	}
 	return types.NewTx(baseTx), nil
 }

@@ -82,6 +82,7 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	author() string
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -278,6 +279,9 @@ func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value
 
 // Nonce returns the sender account nonce of the transaction.
 func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
+
+// Author returns author of the transaction
+func (tx *Transaction) Author() string { return tx.inner.author() }
 
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.

@@ -55,7 +55,7 @@ func TestBlockEncoding(t *testing.T) {
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 
-	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
+	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil, "author")
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
 	check("len(Transactions)", len(block.Transactions()), 1)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())
@@ -93,7 +93,7 @@ func TestEIP1559BlockEncoding(t *testing.T) {
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 	check("BaseFee", block.BaseFee(), new(big.Int).SetUint64(params.InitialBaseFee))
 
-	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
+	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil, "author")
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
 
 	addr := common.HexToAddress("0x0000000000000000000000000000000000000001")
@@ -261,7 +261,7 @@ func makeBenchBlock() *Block {
 		amount := math.BigPow(2, int64(i))
 		price := big.NewInt(300000)
 		data := make([]byte, 100)
-		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data)
+		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data, "author")
 		signedTx, err := SignTx(tx, signer, key)
 		if err != nil {
 			panic(err)

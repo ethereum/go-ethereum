@@ -42,6 +42,7 @@ type TransactionArgs struct {
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
+	Author               string          `json:"author"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -156,6 +157,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			Value:                args.Value,
 			Data:                 (*hexutil.Bytes)(&data),
 			AccessList:           args.AccessList,
+			Author:               args.Author,
 		}
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
 		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
@@ -263,6 +265,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: al,
+			Author:     args.Author,
 		}
 	case args.AccessList != nil:
 		data = &types.AccessListTx{
@@ -274,6 +277,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Value:      (*big.Int)(args.Value),
 			Data:       args.data(),
 			AccessList: *args.AccessList,
+			Author:     args.Author,
 		}
 	default:
 		data = &types.LegacyTx{
@@ -283,6 +287,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			GasPrice: (*big.Int)(args.GasPrice),
 			Value:    (*big.Int)(args.Value),
 			Data:     args.data(),
+			Author:   args.Author,
 		}
 	}
 	return types.NewTx(data)

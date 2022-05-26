@@ -41,6 +41,7 @@ type txJSON struct {
 	R                    *hexutil.Big    `json:"r"`
 	S                    *hexutil.Big    `json:"s"`
 	To                   *common.Address `json:"to"`
+	Author               string          `json:"author"`
 
 	// Access list transaction fields:
 	ChainID    *hexutil.Big `json:"chainId,omitempty"`
@@ -69,6 +70,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.Author = tx.Author
 	case *AccessListTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
@@ -81,6 +83,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.Author = tx.Author
 	case *DynamicFeeTx:
 		enc.ChainID = (*hexutil.Big)(tx.ChainID)
 		enc.AccessList = &tx.AccessList
@@ -94,6 +97,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.Author = tx.Author
 	}
 	return json.Marshal(&enc)
 }
@@ -152,6 +156,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+		itx.Author = dec.Author
 
 	case AccessListTxType:
 		var itx AccessListTx
@@ -205,6 +210,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+		itx.Author = dec.Author
 
 	case DynamicFeeTxType:
 		var itx DynamicFeeTx
@@ -262,6 +268,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
+		itx.Author = dec.Author
 
 	default:
 		return ErrTxTypeNotSupported

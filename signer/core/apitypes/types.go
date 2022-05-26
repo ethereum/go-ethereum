@@ -90,6 +90,7 @@ type SendTxArgs struct {
 	MaxPriorityFeePerGas *hexutil.Big             `json:"maxPriorityFeePerGas"`
 	Value                hexutil.Big              `json:"value"`
 	Nonce                hexutil.Uint64           `json:"nonce"`
+	Author               string                   `json:"author"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -143,6 +144,7 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			Value:      (*big.Int)(&args.Value),
 			Data:       input,
 			AccessList: al,
+			Author:     args.Author,
 		}
 	case args.AccessList != nil:
 		data = &types.AccessListTx{
@@ -154,6 +156,7 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			Value:      (*big.Int)(&args.Value),
 			Data:       input,
 			AccessList: *args.AccessList,
+			Author:     args.Author,
 		}
 	default:
 		data = &types.LegacyTx{
@@ -163,6 +166,7 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			GasPrice: (*big.Int)(args.GasPrice),
 			Value:    (*big.Int)(&args.Value),
 			Data:     input,
+			Author:   args.Author,
 		}
 	}
 	return types.NewTx(data)
