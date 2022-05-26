@@ -59,7 +59,7 @@ case for Ropsten, Geth will:
 This is what it looks like by default:
 
 ```shell
-geth --ropsten --datadir ~/.ropsten
+geth --ropsten --datadir ~/.ropsten --override.terminaltotaldifficulty 100000000000000000000000
 ```
 
 ```terminal
@@ -85,7 +85,7 @@ Now configure authentication using Geth flags:
 
 ```shell
 
-geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret
+geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret --override.terminaltotaldifficulty 100000000000000000000000
 
 ```
 
