@@ -36,7 +36,7 @@ type LegacyTx struct {
 
 // NewTransaction creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func NewTransaction(nonce uint64, to common.Address, author string, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	return NewTx(&LegacyTx{
 		Nonce:    nonce,
 		To:       &to,
@@ -44,6 +44,7 @@ func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit u
 		Gas:      gasLimit,
 		GasPrice: gasPrice,
 		Data:     data,
+		Author:   author,
 	})
 }
 
