@@ -935,8 +935,14 @@ func (c *Config) buildNode() (*node.Config, error) {
 		if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
 			return nil, err
 		}
+		if len(cfg.P2P.StaticNodes) == 0 {
+			cfg.P2P.StaticNodes = cfg.StaticNodes()
+		}
 		if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
 			return nil, err
+		}
+		if len(cfg.P2P.TrustedNodes) == 0 {
+			cfg.P2P.TrustedNodes = cfg.TrustedNodes()
 		}
 	}
 
