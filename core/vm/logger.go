@@ -85,15 +85,14 @@ var (
 	loggerPool = sync.Pool{
 		New: func() interface{} {
 			return &StructLog{
-				Stack:     make([]uint256.Int, 0),
-				ExtraData: types.NewExtraData(),
+				// init arrays here; other types are inited with default values
+				Stack: make([]uint256.Int, 0),
 			}
 		},
 	}
 )
 
 func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int) *StructLog {
-
 	structlog := loggerPool.Get().(*StructLog)
 	structlog.Pc, structlog.Op, structlog.Gas, structlog.GasCost, structlog.Depth = pc, op, gas, cost, depth
 
@@ -109,7 +108,14 @@ func (s *StructLog) clean() {
 	s.Stack = s.Stack[:0]
 	s.ReturnData.Reset()
 	s.Storage = nil
-	s.ExtraData.Clean()
+	s.ExtraData = nil
+}
+
+func (s *StructLog) getOrInitExtraData() *types.ExtraData {
+	if s.ExtraData == nil {
+		s.ExtraData = &types.ExtraData{}
+	}
+	return s.ExtraData
 }
 
 // overrides for gencodec
@@ -236,7 +242,7 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		l.storage[contractAddress][storageKey] = storageValue
 		structlog.Storage = l.storage[contractAddress].Copy()
 
-		if err := traceStorageProof(l, scope, structlog.ExtraData); err != nil {
+		if err := traceStorageProof(l, scope, structlog.getOrInitExtraData()); err != nil {
 			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 		}
 	}
@@ -247,7 +253,7 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	if ok {
 		// execute trace func list.
 		for _, exec := range execFuncList {
-			if err = exec(l, scope, structlog.ExtraData); err != nil {
+			if err = exec(l, scope, structlog.getOrInitExtraData()); err != nil {
 				log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 			}
 		}
@@ -441,63 +447,28 @@ func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Addre
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-var (
-	formatPool = sync.Pool{
-		New: func() interface{} {
-			return make([]types.StructLogRes, 0, 128)
-		},
-	}
-)
-
 // FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []StructLog) []types.StructLogRes {
-	formatted := formatPool.Get().([]types.StructLogRes)
-	runtime.SetFinalizer(&formatted, func(format *[]types.StructLogRes) {
-		for _, res := range *format {
-			res.ExtraData = nil
-			res.Storage = nil
-			res.Stack = res.Stack[:0]
-			res.Memory = res.Memory[:0]
-		}
-		formatPool.Put(*format)
-	})
+func FormatLogs(logs []StructLog) []*types.StructLogRes {
+	formatted := make([]*types.StructLogRes, 0, len(logs))
 
-	for index, trace := range logs {
-		formatted = append(formatted, types.StructLogRes{
-			Pc:            trace.Pc,
-			Op:            trace.Op.String(),
-			Gas:           trace.Gas,
-			GasCost:       trace.GasCost,
-			Depth:         trace.Depth,
-			RefundCounter: trace.RefundCounter,
-			Error:         trace.ErrorString(),
-		})
-		if len(trace.Stack) != 0 {
-			if formatted[index].Stack == nil {
-				formatted[index].Stack = make([]string, 0, len(trace.Stack))
-			}
-			for _, stackValue := range trace.Stack {
-				formatted[index].Stack = append(formatted[index].Stack, stackValue.Hex())
-			}
+	for _, trace := range logs {
+		logRes := types.NewStructLogResBasic(trace.Pc, trace.Op.String(), trace.Gas, trace.GasCost, trace.Depth, trace.RefundCounter, trace.Err)
+		for _, stackValue := range trace.Stack {
+			logRes.Stack = append(logRes.Stack, stackValue.Hex())
 		}
-		if trace.Memory.Len() != 0 {
-			if formatted[index].Memory == nil {
-				formatted[index].Memory = make([]string, 0, (trace.Memory.Len()+31)/32)
-			}
-			for i := 0; i+32 <= trace.Memory.Len(); i += 32 {
-				formatted[index].Memory = append(formatted[index].Memory, common.Bytes2Hex(trace.Memory.Bytes()[i:i+32]))
-			}
+		for i := 0; i+32 <= trace.Memory.Len(); i += 32 {
+			logRes.Memory = append(logRes.Memory, common.Bytes2Hex(trace.Memory.Bytes()[i:i+32]))
 		}
 		if len(trace.Storage) != 0 {
 			storage := make(map[string]string)
 			for i, storageValue := range trace.Storage {
 				storage[i.Hex()] = storageValue.Hex()
 			}
-			formatted[index].Storage = storage
+			logRes.Storage = storage
 		}
-		if trace.ExtraData != nil {
-			formatted[index].ExtraData = trace.ExtraData.SealExtraData()
-		}
+		logRes.ExtraData = trace.ExtraData
+
+		formatted = append(formatted, logRes)
 	}
 	return formatted
 }
