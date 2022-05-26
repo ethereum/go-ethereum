@@ -16,6 +16,8 @@ const (
 )
 
 func TestGetSignerSuccessionNumber_ProposerIsSigner(t *testing.T) {
+	t.Parallel()
+
 	validators := buildRandomValidatorSet(numVals)
 	validatorSet := NewValidatorSet(validators)
 	snap := Snapshot{
@@ -25,17 +27,22 @@ func TestGetSignerSuccessionNumber_ProposerIsSigner(t *testing.T) {
 	// proposer is signer
 	signer := validatorSet.Proposer.Address
 	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
+
 	assert.Equal(t, 0, successionNumber)
 }
 
 func TestGetSignerSuccessionNumber_SignerIndexIsLarger(t *testing.T) {
+	t.Parallel()
+
 	validators := buildRandomValidatorSet(numVals)
 
 	// sort validators by address, which is what NewValidatorSet also does
 	sort.Sort(ValidatorsByAddress(validators))
+
 	proposerIndex := 32
 	signerIndex := 56
 	// give highest ProposerPriority to a particular val, so that they become the proposer
@@ -47,13 +54,17 @@ func TestGetSignerSuccessionNumber_SignerIndexIsLarger(t *testing.T) {
 	// choose a signer at an index greater than proposer index
 	signer := snap.ValidatorSet.Validators[signerIndex].Address
 	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
+
 	assert.Equal(t, signerIndex-proposerIndex, successionNumber)
 }
 
 func TestGetSignerSuccessionNumber_SignerIndexIsSmaller(t *testing.T) {
+	t.Parallel()
+
 	validators := buildRandomValidatorSet(numVals)
 	proposerIndex := 98
 	signerIndex := 11
@@ -66,13 +77,17 @@ func TestGetSignerSuccessionNumber_SignerIndexIsSmaller(t *testing.T) {
 	// choose a signer at an index greater than proposer index
 	signer := snap.ValidatorSet.Validators[signerIndex].Address
 	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
+
 	assert.Equal(t, signerIndex+numVals-proposerIndex, successionNumber)
 }
 
 func TestGetSignerSuccessionNumber_ProposerNotFound(t *testing.T) {
+	t.Parallel()
+
 	validators := buildRandomValidatorSet(numVals)
 	snap := Snapshot{
 		ValidatorSet: NewValidatorSet(validators),
@@ -89,6 +104,8 @@ func TestGetSignerSuccessionNumber_ProposerNotFound(t *testing.T) {
 }
 
 func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
+	t.Parallel()
+
 	validators := buildRandomValidatorSet(numVals)
 	snap := Snapshot{
 		ValidatorSet: NewValidatorSet(validators),
@@ -101,9 +118,12 @@ func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
 	assert.Equal(t, dummySignerAddress.Bytes(), e.Signer)
 }
 
+// nolint: unparam
 func buildRandomValidatorSet(numVals int) []*Validator {
 	rand.Seed(time.Now().Unix())
+
 	validators := make([]*Validator, numVals)
+
 	for i := 0; i < numVals; i++ {
 		validators[i] = &Validator{
 			Address: randomAddress(),
@@ -114,11 +134,13 @@ func buildRandomValidatorSet(numVals int) []*Validator {
 
 	// sort validators by address, which is what NewValidatorSet also does
 	sort.Sort(ValidatorsByAddress(validators))
+
 	return validators
 }
 
 func randomAddress() common.Address {
 	bytes := make([]byte, 32)
 	rand.Read(bytes)
+
 	return common.BytesToAddress(bytes)
 }

@@ -7,6 +7,7 @@ import (
 )
 
 func TestCodeBlock(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 
 	lines := []string{

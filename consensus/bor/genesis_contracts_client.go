@@ -38,6 +38,7 @@ func NewGenesisContractsClient(
 ) *GenesisContractsClient {
 	vABI, _ := abi.JSON(strings.NewReader(validatorsetABI))
 	sABI, _ := abi.JSON(strings.NewReader(stateReceiverABI))
+
 	return &GenesisContractsClient{
 		validatorSetABI:       vABI,
 		stateReceiverABI:      sABI,
@@ -56,21 +57,27 @@ func (gc *GenesisContractsClient) CommitState(
 ) error {
 	eventRecord := event.BuildEventRecord()
 	recordBytes, err := rlp.EncodeToBytes(eventRecord)
+
 	if err != nil {
 		return err
 	}
+
 	method := "commitState"
 	t := event.Time.Unix()
 	data, err := gc.stateReceiverABI.Pack(method, big.NewInt(0).SetInt64(t), recordBytes)
+
 	if err != nil {
 		log.Error("Unable to pack tx for commitState", "error", err)
 		return err
 	}
+
 	log.Info("→ committing new state", "eventRecord", event.String())
+
 	msg := getSystemMessage(common.HexToAddress(gc.StateReceiverContract), data)
 	if err := applyMessage(msg, state, header, gc.chainConfig, chCtx); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -78,6 +85,7 @@ func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, 
 	blockNr := rpc.BlockNumber(snapshotNumber)
 	method := "lastStateId"
 	data, err := gc.stateReceiverABI.Pack(method)
+
 	if err != nil {
 		log.Error("Unable to pack tx for LastStateId", "error", err)
 		return nil, err
@@ -91,6 +99,7 @@ func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, 
 		To:   &toAddress,
 		Data: &msgData,
 	}, rpc.BlockNumberOrHash{BlockNumber: &blockNr}, nil)
+
 	if err != nil {
 		return nil, err
 	}
@@ -99,5 +108,6 @@ func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, 
 	if err := gc.stateReceiverABI.UnpackIntoInterface(ret, method, result); err != nil {
 		return nil, err
 	}
+
 	return *ret, nil
 }

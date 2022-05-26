@@ -28,7 +28,7 @@ linters:
     - exportloopref
     - gocognit
     - gofmt
-    - gomnd
+    # - gomnd
     - gomoddirectives
     - gosec
     - makezero
@@ -42,7 +42,7 @@ linters:
     - predeclared
     #- promlinter
     #- revive
-    - tagliatelle
+    # - tagliatelle
     - tenv
     - thelper
     - tparallel
@@ -65,7 +65,7 @@ linters-settings:
     local-prefixes: github.com/ethereum/go-ethereum
   
   nestif:
-    min-complexity: 3
+    min-complexity: 5
   
   prealloc:
     for-loops: true
@@ -183,4 +183,4 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   #new: true
-  new-from-rev: origin/master
+  # new-from-rev: origin/master

@@ -19,6 +19,7 @@ func (a *Account) MarkDown() string {
 		"- [```account list```](./account_list.md): List the wallets in the Bor client.",
 		"- [```account import```](./account_import.md): Import an account to the Bor client.",
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
