@@ -799,6 +799,12 @@ var (
 		Value:    "",
 		Category: flags.NetworkingCategory,
 	}
+	DiscPortFlag = &cli.IntFlag{
+		Name:     "discport",
+		Usage:    "Use a custom UDP port for P2P discovery",
+		Value:    30303,
+		Category: flags.NetworkingCategory,
+	}
 	NodeKeyFileFlag = &cli.StringFlag{
 		Name:     "nodekey",
 		Usage:    "P2P node key file",
@@ -1116,11 +1122,14 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// setListenAddress creates a TCP listening address string from set command
-// line flags.
+// setListenAddress creates TCP/UDP listening address strings from set command
+// line flags
 func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
 		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
+	}
+	if ctx.GlobalIsSet(DiscPortFlag.Name) {
+		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.GlobalInt(DiscPortFlag.Name))
 	}
 }
 
