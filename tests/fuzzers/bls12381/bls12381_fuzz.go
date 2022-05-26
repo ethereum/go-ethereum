@@ -64,18 +64,14 @@ func FuzzCrossPairing(data []byte) int {
 		panic("pairing mismatch gnark / geth ")
 	}
 
-	_ = blG1
-	_ = blG2
-	/*
-		var b []byte
-		ctx := blst.PairingCtx(false, b)
-		// compute pairing using blst
-		blst.PairingRawAggregate(ctx, blG2, blG1)
-		blstResult := blst.PairingAsFp12(ctx)
-		if !(bytes.Equal(blstResult, bls12381.NewGT().ToBytes(kResult))) {
-			panic("pairing mismatch blst / geth ")
-		}
-	*/
+	var b []byte
+	ctx := blst.PairingCtx(false, b)
+	// compute pairing using blst
+	blst.PairingRawAggregate(ctx, blG2, blG1)
+	blstResult := blst.PairingAsFp12(ctx)
+	if !(bytes.Equal(blstResult.ToBendian(), bls12381.NewGT().ToBytes(kResult))) {
+		panic("pairing mismatch blst / geth ")
+	}
 
 	return 1
 }
