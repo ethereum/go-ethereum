@@ -1006,7 +1006,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		header.MixDigest = genParams.random
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
+	if !misc.ZeroGasPriceChain(w.chainConfig) && w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
 		if !w.chainConfig.IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier

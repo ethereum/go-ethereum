@@ -125,3 +125,80 @@ func TestSealHash(t *testing.T) {
 		t.Errorf("have %x, want %x", have, want)
 	}
 }
+
+func TestHeaderVerificationZeroGasPriceChain(t *testing.T) {
+	cliqueConfigZeroGasPrice := *params.AllCliqueProtocolChanges
+	cliqueConfigZeroGasPrice.LondonBlock = big.NewInt(0)
+	cliqueConfigZeroGasPrice.Clique.ZeroGasPrice = true
+
+	// Initialize a Clique chain with a single signer
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		engine = New(cliqueConfigZeroGasPrice.Clique, db)
+		signer = new(types.HomesteadSigner)
+	)
+	genspec := &core.Genesis{
+		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
+		Alloc: map[common.Address]core.GenesisAccount{
+			addr: {Balance: big.NewInt(10000000000000000)},
+		},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	copy(genspec.ExtraData[extraVanity:], addr[:])
+	genesis := genspec.MustCommit(db)
+
+	// Generate a batch of blocks, each properly signed
+	chain, _ := core.NewBlockChain(db, nil, &cliqueConfigZeroGasPrice, engine, vm.Config{}, nil, nil)
+	defer chain.Stop()
+
+	blocks, _ := core.GenerateChain(&cliqueConfigZeroGasPrice, genesis, engine, db, 3, func(i int, block *core.BlockGen) {
+		// The chain maker doesn't have access to a chain, so the difficulty will be
+		// lets unset (nil). Set it here to the correct value.
+		block.SetDifficulty(diffInTurn)
+
+		// We want to simulate an empty middle block, having the same state as the
+		// first one. The last is needs a state change again to force a reorg.
+		if i != 1 {
+			// Create a zero gas price transaction
+			txn := types.NewTx(&types.LegacyTx{
+				Nonce:    block.TxNonce(addr),
+				GasPrice: new(big.Int),
+				Gas:      params.TxGas,
+				To:       &common.Address{0x00},
+				Value:    new(big.Int),
+			})
+			tx, err := types.SignTx(txn, signer, key)
+			if err != nil {
+				panic(err)
+			}
+			block.AddTxWithChain(chain, tx)
+		}
+	})
+	for i, block := range blocks {
+		header := block.Header()
+		if i > 0 {
+			header.ParentHash = blocks[i-1].Hash()
+		}
+		header.Extra = make([]byte, extraVanity+extraSeal)
+		header.Difficulty = diffInTurn
+
+		sig, _ := crypto.Sign(SealHash(header).Bytes(), key)
+		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+		blocks[i] = block.WithSeal(header)
+	}
+	// Insert the first two blocks and make sure the chain is valid
+	db = rawdb.NewMemoryDatabase()
+	genspec.MustCommit(db)
+
+	chain, _ = core.NewBlockChain(db, nil, &cliqueConfigZeroGasPrice, engine, vm.Config{}, nil, nil)
+	defer chain.Stop()
+
+	if _, err := chain.InsertChain(blocks[:2]); err != nil {
+		t.Fatalf("failed to insert initial blocks: %v", err)
+	}
+	if head := chain.CurrentBlock().NumberU64(); head != 2 {
+		t.Fatalf("chain head mismatch: have %d, want %d", head, 2)
+	}
+}

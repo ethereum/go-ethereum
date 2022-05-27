@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -233,7 +234,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
+	if !misc.ZeroGasPriceChain(st.evm.ChainConfig()) && st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
 		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
 		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
 			if l := st.gasFeeCap.BitLen(); l > 256 {
@@ -325,7 +326,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
-	if !london {
+	if !london || !misc.ZeroGasPriceChain(st.evm.ChainConfig()) {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)
 	} else {
@@ -333,7 +334,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
 	effectiveTip := st.gasPrice
-	if london {
+	if london && !misc.ZeroGasPriceChain(st.evm.ChainConfig()) {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
 	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))

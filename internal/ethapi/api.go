@@ -1345,7 +1345,9 @@ func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, conf
 	var baseFee *big.Int
 	blockNumber := uint64(0)
 	if current != nil {
-		baseFee = misc.CalcBaseFee(config, current)
+		if !misc.ZeroGasPriceChain(config) {
+			baseFee = misc.CalcBaseFee(config, current)
+		}
 		blockNumber = current.Number.Uint64()
 	}
 	return newRPCTransaction(tx, common.Hash{}, blockNumber, 0, baseFee, config)
@@ -1639,7 +1641,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"type":              hexutil.Uint(tx.Type()),
 	}
 	// Assign the effective gas price paid
-	if !s.b.ChainConfig().IsLondon(bigblock) {
+	if !s.b.ChainConfig().IsLondon(bigblock) || misc.ZeroGasPriceChain(s.b.ChainConfig()) {
 		fields["effectiveGasPrice"] = hexutil.Uint64(tx.GasPrice().Uint64())
 	} else {
 		header, err := s.b.HeaderByHash(ctx, blockHash)
