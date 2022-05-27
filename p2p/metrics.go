@@ -86,9 +86,6 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // Close delegates a close operation to the underlying connection, unregisters
 // the peer from the traffic registries and emits close event.
 func (c *meteredConn) Close() error {
-	err := c.Conn.Close()
-	if err == nil {
-		activePeerGauge.Dec(1)
-	}
-	return err
+	defer activePeerGauge.Dec(1)
+	return c.Conn.Close()
 }
