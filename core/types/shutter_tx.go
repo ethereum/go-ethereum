@@ -15,6 +15,7 @@ type ShutterTx struct {
 
 	EncryptedPayload []byte
 	BatchIndex       uint64
+	L1BlockNumber    *big.Int
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -34,6 +35,7 @@ func (tx *ShutterTx) copy() TxData {
 		GasFeeCap:        new(big.Int),
 		EncryptedPayload: []byte{},
 		BatchIndex:       tx.BatchIndex,
+		L1BlockNumber:    new(big.Int),
 		V:                new(big.Int),
 		R:                new(big.Int),
 		S:                new(big.Int),
@@ -46,6 +48,9 @@ func (tx *ShutterTx) copy() TxData {
 	}
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
+	}
+	if tx.L1BlockNumber != nil {
+		cpy.L1BlockNumber.Set(tx.L1BlockNumber)
 	}
 	if tx.EncryptedPayload != nil {
 		cpy.EncryptedPayload = make([]byte, len(tx.EncryptedPayload))
@@ -79,7 +84,7 @@ func (tx *ShutterTx) to() *common.Address      { return nil }
 func (tx *ShutterTx) encryptedPayload() []byte { return tx.EncryptedPayload }
 func (tx *ShutterTx) decryptionKey() []byte    { return nil }
 func (tx *ShutterTx) batchIndex() uint64       { return tx.BatchIndex }
-func (tx *ShutterTx) l1BlockNumber() *big.Int  { return nil }
+func (tx *ShutterTx) l1BlockNumber() *big.Int  { return tx.L1BlockNumber }
 func (tx *ShutterTx) timestamp() *big.Int      { return nil }
 func (tx *ShutterTx) transactions() [][]byte   { return nil }
 
