@@ -154,7 +154,14 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	for ; l.depth > depth-1; l.depth-- {
+	stack := scope.Stack
+	for i := l.depth - (depth - 1); l.depth > depth-1; l.depth, i = l.depth-1, i-1 {
+		if l.current.error == nil {
+			switch stack.Data()[len(stack.Data())-i].Bytes32()[31] {
+			case 0x00:
+				l.current.error = fmt.Errorf("call failed")
+			}
+		}
 		l.current = l.current.parent
 	}
 	if err != nil {
@@ -177,7 +184,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	}
 
 	memory := scope.Memory
-	stack := scope.Stack
 	contract := scope.Contract
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
