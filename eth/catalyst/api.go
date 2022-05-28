@@ -308,7 +308,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		return beacon.INVALID_TERMINAL_BLOCK, nil
 	}
 	if parent.Difficulty().BitLen() > 0 && gptd != nil && gptd.Cmp(ttd) >= 0 {
-		log.Error("Parent block is already post-ttd", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
+		log.Error("Ignoring pre-merge parent block", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
 		return beacon.INVALID_TERMINAL_BLOCK, nil
 	}
 	if block.Time() <= parent.Time() {
