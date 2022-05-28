@@ -557,7 +557,7 @@ func (srv *Server) setupDiscovery() error {
 
 	// Use an alternate listening address for UDP if
 	// a custom discovery address is configured.
-	if (srv.DiscAddr != "") {
+	if srv.DiscAddr != "" {
 		listenAddr = srv.DiscAddr
 	}
 

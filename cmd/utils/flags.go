@@ -805,6 +805,12 @@ var (
 		Value:    30303,
 		Category: flags.NetworkingCategory,
 	}
+	DiscPortFlag = &cli.IntFlag{
+		Name:     "discport",
+		Usage:    "Use a custom UDP port for P2P discovery",
+		Value:    30303,
+		Category: flags.NetworkingCategory,
+	}
 	NodeKeyFileFlag = &cli.StringFlag{
 		Name:     "nodekey",
 		Usage:    "P2P node key file",
