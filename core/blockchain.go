@@ -352,6 +352,13 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	bc.hc.SetCurrentHeader(currentHeader)
 
+	if engine, ok := bc.Engine().(*XDPoS.XDPoS); ok {
+		err := engine.Initial(bc, currentHeader)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
 	if head := GetHeadFastBlockHash(bc.db); head != (common.Hash{}) {

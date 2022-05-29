@@ -130,6 +130,15 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 	return fakeEngine
 }
 
+func (x *XDPoS) Initial(chain consensus.ChainReader, header *types.Header) error {
+	switch x.config.BlockConsensusVersion(header.Number) {
+	case params.ConsensusEngineVersion2:
+		return x.EngineV2.Initial(chain, header)
+	default: // Default "v1"
+		return nil
+	}
+}
+
 /*
 	Eth Consensus engine interface implementation
 */
