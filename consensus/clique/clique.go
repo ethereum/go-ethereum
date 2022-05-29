@@ -50,7 +50,7 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime = 5000 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Clique proof-of-authority protocol constants.
@@ -161,9 +161,9 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 		return common.Address{}, err
 	}
 	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:]) // 以太坊中并没有直接拿公钥当做账户地址,而是进行了一个简单的转换,具体来说就是hash(公钥)的后20位,这里的hash算法是sha3-256
 
-	sigcache.Add(hash, signer)
+	sigcache.Add(hash, signer) // https://github.com/kaspanet/kaspad/blob/v0.9.0/domain/consensus/utils/txscript/sigcache.go#L32
 	return signer, nil
 }
 
@@ -327,6 +327,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		return consensus.ErrUnknownAncestor
 	}
 	if parent.Time+c.config.Period > header.Time {
+		// log.Info("errInvalidTimestamp", "header.Time", header.Time)
 		return errInvalidTimestamp
 	}
 	// Verify that the gasUsed is <= gasLimit
@@ -428,7 +429,7 @@ func (c *Clique) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 	}
 	// Previous snapshot found, apply any pending headers on top of it
 	for i := 0; i < len(headers)/2; i++ {
-		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
+		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i] // ???
 	}
 	snap, err := snap.apply(headers)
 	if err != nil {
@@ -628,7 +629,9 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
+		delayTime := time.Duration(rand.Int63n(int64(wiggle)))
+		delay += delayTime
+		log.Info("delayTime", "delay ttttttttttttttttttttttttttttttttttttttttttttt", delayTime)
 
 		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
@@ -654,6 +657,11 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		}
 	}()
 
+	// parent := chain.GetHeader(header.ParentHash, number-1)
+	// if parent == nil {
+	// 	return consensus.ErrUnknownAncestor
+	// }
+	// log.Info("time", "--------------parent.Time", parent.Time, "period", c.config.Period, "header.time", header.Time, "number", block.Number)
 	return nil
 }
 
