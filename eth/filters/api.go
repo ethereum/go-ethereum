@@ -136,6 +136,39 @@ func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 
 // NewPendingTransactions creates a subscription that is triggered each time a transaction
 // enters the transaction pool and was signed from one of the transactions this nodes manages.
+// func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Subscription, error) {
+// 	notifier, supported := rpc.NotifierFromContext(ctx)
+// 	if !supported {
+// 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+// 	}
+
+// 	rpcSub := notifier.CreateSubscription()
+
+// 	go func() {
+// 		txHashes := make(chan []common.Hash, 128)
+// 		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
+
+// 		for {
+// 			select {
+// 			case hashes := <-txHashes:
+// 				// To keep the original behaviour, send a single tx hash in one notification.
+// 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
+// 				for _, h := range hashes {
+// 					notifier.Notify(rpcSub.ID, h)
+// 				}
+// 			case <-rpcSub.Err():
+// 				pendingTxSub.Unsubscribe()
+// 				return
+// 			case <-notifier.Closed():
+// 				pendingTxSub.Unsubscribe()
+// 				return
+// 			}
+// 		}
+// 	}()
+
+// 	return rpcSub, nil
+// }
+
 func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -145,16 +178,16 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		txHashes := make(chan []common.Hash, 128)
-		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
+		txsChan := make(chan []*types.Transaction, 128)
+		pendingTxSub := api.events.SubscribePendingTxsFull(txsChan)
 
 		for {
 			select {
-			case hashes := <-txHashes:
+			case txs := <-txsChan:
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
-				for _, h := range hashes {
-					notifier.Notify(rpcSub.ID, h)
+				for _, tx := range txs {
+					notifier.Notify(rpcSub.ID, tx)
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()
@@ -168,6 +201,7 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 
 	return rpcSub, nil
 }
+
 
 // NewPendingTransactions creates a subscription that is triggered each time a transaction
 // enters the transaction pool and was signed from one of the transactions this nodes manages.
