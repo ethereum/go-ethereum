@@ -105,7 +105,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 			},
 			{
 				Name:      "traverse-state",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -121,7 +121,7 @@ It's also usable without snapshot enabled.
 			},
 			{
 				Name:      "traverse-rawstate",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseRawState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -367,6 +367,8 @@ func traverseRawState(ctx *cli.Context) error {
 		codes      int
 		lastReport time.Time
 		start      = time.Now()
+		hasher     = crypto.NewKeccakState()
+		got        = make([]byte, 32)
 	)
 	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
@@ -376,9 +378,17 @@ func traverseRawState(ctx *cli.Context) error {
 		// Check the present for non-empty hash node(embedded node doesn't
 		// have their own hash).
 		if node != (common.Hash{}) {
-			if !rawdb.HasTrieNode(chaindb, node) {
+			blob := rawdb.ReadTrieNode(chaindb, node)
+			if len(blob) == 0 {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
+			}
+			hasher.Reset()
+			hasher.Write(blob)
+			hasher.Read(got)
+			if !bytes.Equal(got, node.Bytes()) {
+				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
+				return errors.New("invalid account node")
 			}
 		}
 		// If it's a leaf node, yes we are touching an account,
@@ -404,9 +414,17 @@ func traverseRawState(ctx *cli.Context) error {
 					// Check the present for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
-						if !rawdb.HasTrieNode(chaindb, node) {
+						blob := rawdb.ReadTrieNode(chaindb, node)
+						if len(blob) == 0 {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
+						}
+						hasher.Reset()
+						hasher.Write(blob)
+						hasher.Read(got)
+						if !bytes.Equal(got, node.Bytes()) {
+							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+							return errors.New("invalid storage node")
 						}
 					}
 					// Bump the counter if it's leaf node.
