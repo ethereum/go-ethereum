@@ -20,19 +20,19 @@ This returns a result which is also a JSON object, with values expressed as hexa
 
 While this approach is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). This is a collection of Javascript libraries for interacting with an Ethereum node at a higher level than sending raw JSON objects to the node. The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
-{% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.jc documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/_rpc/server)" %}
+{% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.jc documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/rpc/server)" %}
 
 
 ## Starting the console
 
-There are two ways to start an interactive session using Geth console. The first is to provide the `console` flag when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
+There are two ways to start an interactive session using Geth console. The first is to provide the `console` command when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
 
 ```shell
 # to mute logs
-geth <other commands> console 2 > /dev/null
+geth <other flags> console 2> /dev/null
 
 # to save logs to file
-geth <other commands> --verbosity 3 2 > geth-logs.log
+geth <other flags> console --verbosity 3 2> geth-logs.log
 
 ```
 
@@ -41,11 +41,11 @@ Alternatively, a Javascript console can be attached to an existing Geth instance
 ```shell
 
 # enable websockets
-geth <other commands> --ws 
+geth <other flags> --ws
 
 # enable http
 
-geth <other commands> --http
+geth <other flags> --http
 
 ```
 
@@ -116,7 +116,7 @@ personal.sendTransaction({to: eth.accounts[0], to: eth.accounts[1], value: web3.
 
 ```
 
-It is also possible to load pre-written Javascript files into the consoleby passing the `--preload` flag
+It is also possible to load pre-written Javascript files into the console by passing the `--preload` flag
 when starting the console. This is useful for setting up complex contract objects or loading frequently-used
 functions.
 
@@ -126,6 +126,8 @@ functions.
 geth console --preload "/my/scripts/folder/utils.js"
 
 ```
+
+Once the interactive session is over, the console can be closed down by typing `exit` or `CTRL-D`.
 
 ## Non-interactive Use: Script Mode
 
@@ -159,8 +161,6 @@ geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("che
 
 The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()`
 that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
-
-Once the interactive session is over, the console can be closed down by typing `exit` or `CTRL-D`.
 
 
 ## Timers
