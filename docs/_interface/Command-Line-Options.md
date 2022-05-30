@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.17-stable-25c9b49f
+   1.10.18-stable-de23cf91
 
 COMMANDS:
    account                            Manage accounts
@@ -43,19 +43,11 @@ COMMANDS:
 
 ETHEREUM OPTIONS:
   --config value                      TOML configuration file
-  --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
-  --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
   --datadir.minfreedisk value         Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)
   --keystore value                    Directory for the keystore (default = inside the datadir)
   --usb                               Enable monitoring and management of USB hardware wallets
   --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file
   --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
-  --mainnet                           Ethereum mainnet
-  --goerli                            Görli network: pre-configured proof-of-authority test network
-  --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
-  --ropsten                           Ropsten network: pre-configured proof-of-work test network
-  --sepolia                           Sepolia network: pre-configured proof-of-work test network
-  --kiln                              Kiln network: pre-configured proof-of-work to proof-of-stake test network
   --syncmode value                    Blockchain sync mode ("snap", "full" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
@@ -64,6 +56,15 @@ ETHEREUM OPTIONS:
   --identity value                    Custom node name
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
   --eth.requiredblocks value          Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
+  --mainnet                           Ethereum mainnet
+  --ropsten                           Ropsten network: pre-configured proof-of-work test network
+  --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
+  --goerli                            Görli network: pre-configured proof-of-authority test network
+  --sepolia                           Sepolia network: pre-configured proof-of-work test network
+  --kiln                              Kiln network: pre-configured proof-of-work to proof-of-stake test network
+  --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
+  --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
+  --remotedb value                    URL for remote database
 
 LIGHT CLIENT OPTIONS:
   --light.serve value                 Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100) (default: 0)
@@ -103,7 +104,7 @@ TRANSACTION POOL OPTIONS:
   --txpool.accountqueue value         Maximum number of non-executable transaction slots permitted per account (default: 64)
   --txpool.globalqueue value          Maximum number of non-executable transaction slots for all accounts (default: 1024)
   --txpool.lifetime value             Maximum amount of time non-executable transaction are queued (default: 3h0m0s)
-
+  
 PERFORMANCE TUNING OPTIONS:
   --cache value                       Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode) (default: 1024)
   --cache.database value              Percentage of cache memory allowance to use for database io (default: 50)
@@ -172,7 +173,7 @@ MINER OPTIONS:
   --miner.notify value                Comma separated HTTP URL list to notify of new work packages
   --miner.notify.full                 Notify with pending block headers instead of work packages
   --miner.gasprice value              Minimum gas price for mining a transaction (default: 1000000000)
-  --miner.gaslimit value              Target gas ceiling for mined blocks (default: 8000000)
+  --miner.gaslimit value              Target gas ceiling for mined blocks (default: 30000000)
   --miner.etherbase value             Public address for block mining rewards (default = first account) (default: "0")
   --miner.extradata value             Block extra data set by the miner (default = client version)
   --miner.recommit value              Time interval to recreate the block being mined (default: 3s)
@@ -221,14 +222,14 @@ METRICS AND STATS OPTIONS:
 
 ALIASED (deprecated) OPTIONS:
   --nousb                             Disables monitoring for and managing USB hardware wallets (deprecated)
-  --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --peer.requiredblocks)
+  --whitelist value                   Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)
 
 MISC OPTIONS:
   --snapshot                                Enables snapshot-database mode (default = enable)
   --bloomfilter.size value                  Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
   --help, -h                                show help
   --override.arrowglacier value             Manually specify Arrow Glacier fork-block, overriding the bundled setting (default: 0)
-  --override.terminaltotaldifficulty value  Manually specify TerminalTotalDifficulty, overriding the bundled setting (default: 0)
+  --override.terminaltotaldifficulty value  Manually specify TerminalTotalDifficulty, overriding the bundled setting (default: <nil>)
 
 
 COPYRIGHT:
