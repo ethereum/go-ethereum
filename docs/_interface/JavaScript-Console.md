@@ -163,6 +163,13 @@ The `--jspath` flag is used to set a library directory for the Javascript script
 that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
 
 
+Another alternative way to run scripts is using Geth's `js` flag. In this case, run Geth with the `js` flag pass the path to the scripts, e.g.
+
+```
+geth js myscript.js
+
+```
+
 ## Timers
 
 In addition to the full functionality of JS (as per ECMA5), the Ethereum Javascript Runtime Environment (JSRE) is augmented with various timers. It implements `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout` which some users will be familiar with from browser windows. It also provides implementation for `admin.sleep(seconds)` and a block based timer, `admin.sleepBlocks(n)` which sleeps till the number of new blocks added is equal to or greater than `n`.
