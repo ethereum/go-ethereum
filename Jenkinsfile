@@ -52,21 +52,15 @@ pipeline {
 
                         stage('Build image') {
                             app = docker.build("${env.DOCKER_CREDENTIALS_USR}/l2geth-img")
-                        }
-
-                        stage('Push image') {  
-                            // Use the Credential ID of the Docker Hub Credentials we added to Jenkins.
-                            docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {                                
-                                // Push image and tag it with our build number for versioning purposes.
-                                app.push("${env.BUILD_NUMBER}")                      
-
-                                // Push the same image and tag it as the latest version (appears at the top of our version list).
-                                app.push("latest")
-                            }
-                        }              
+                        }            
                     }                 
                 }
             }
+        }
+    }
+    post { 
+          always { 
+            cleanWs() 
         }
     }
 }
