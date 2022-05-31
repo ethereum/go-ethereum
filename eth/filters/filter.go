@@ -129,26 +129,35 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		return f.blockLogs(ctx, header)
 	}
+	// Short-cut if all we care about is pending logs
+	if f.begin == rpc.PendingBlockNumber.Int64() {
+		if f.end != rpc.PendingBlockNumber.Int64() {
+			return nil, errors.New("invalid block range")
+		}
+		return f.pendingLogs()
+	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number.Uint64()
-	pending := f.end == rpc.PendingBlockNumber.Int64()
-	if f.begin == rpc.LatestBlockNumber.Int64() || f.begin == rpc.PendingBlockNumber.Int64() {
+	var (
+		head    = header.Number.Uint64()
+		end     = uint64(f.end)
+		pending = f.end == rpc.PendingBlockNumber.Int64()
+	)
+	if f.begin == rpc.LatestBlockNumber.Int64() {
 		f.begin = int64(head)
 	}
-	end := uint64(f.end)
 	if f.end == rpc.LatestBlockNumber.Int64() || f.end == rpc.PendingBlockNumber.Int64() {
 		end = head
 	}
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
-		logs []*types.Log
-		err  error
+		logs           []*types.Log
+		err            error
+		size, sections = f.backend.BloomStatus()
 	)
-	size, sections := f.backend.BloomStatus()
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
 			logs, err = f.indexedLogs(ctx, end)
