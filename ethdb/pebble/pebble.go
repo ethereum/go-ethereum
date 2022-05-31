@@ -74,18 +74,15 @@ type Database struct {
 
 	log log.Logger // Contextual logger tracking the database path
 
-	activeComp int
-
-	compStartTime time.Time
-	compTime      int64
-	seekCompCount int64
-
-	level0Comp    uint32
-	nonLevel0Comp uint32
-
-	writeDelayStartTime time.Time
-	writeDelayCount     int64
-	writeDelayTime      int64
+	activeComp          int       // current number of active compactions
+	compStartTime       time.Time // the start time of the earliest currently-active compaction
+	compTime            int64     // total time spent in compaction in ns
+	seekCompCount       int64     // total number of compactions caused by reads
+	level0Comp          uint32    // total number of level-zero compactions
+	nonLevel0Comp       uint32    // total number of non level-zero compactions
+	writeDelayStartTime time.Time // the start time of the latest write stall
+	writeDelayCount     int64     // total number of write stall counts
+	writeDelayTime      int64     // total time spent in write stalls
 }
 
 func (d *Database) OnCompactionBegin(info pebble.CompactionInfo) {
@@ -96,7 +93,6 @@ func (d *Database) OnCompactionBegin(info pebble.CompactionInfo) {
 		atomic.AddInt64(&d.seekCompCount, 1)
 	}
 
-	// TODO check ldb code to see if this should be info.Output
 	for _, level := range info.Input {
 		if level.Level == 0 {
 			atomic.AddUint32(&d.level0Comp, 1)
