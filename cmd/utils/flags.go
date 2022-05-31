@@ -1315,7 +1315,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setGraphQL(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
-	setDataDir(ctx, cfg)
+	SetDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
 
 	if ctx.GlobalIsSet(JWTSecretFlag.Name) {
@@ -1366,7 +1366,7 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	cfg.SmartCardDaemonPath = path
 }
 
-func setDataDir(ctx *cli.Context, cfg *node.Config) {
+func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)

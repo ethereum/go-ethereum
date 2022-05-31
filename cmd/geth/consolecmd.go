@@ -18,11 +18,9 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -109,31 +107,9 @@ func localConsole(ctx *cli.Context) error {
 func remoteConsole(ctx *cli.Context) error {
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
-		path := node.DefaultDataDir()
-		if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
-			path = ctx.GlobalString(utils.DataDirFlag.Name)
-		}
-		if path != "" {
-			if ctx.GlobalBool(utils.RopstenFlag.Name) {
-				// Maintain compatibility with older Geth configurations storing the
-				// Ropsten database in `testnet` instead of `ropsten`.
-				legacyPath := filepath.Join(path, "testnet")
-				if common.FileExist(legacyPath) {
-					path = legacyPath
-				} else {
-					path = filepath.Join(path, "ropsten")
-				}
-			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
-				path = filepath.Join(path, "rinkeby")
-			} else if ctx.GlobalBool(utils.GoerliFlag.Name) {
-				path = filepath.Join(path, "goerli")
-			} else if ctx.GlobalBool(utils.SepoliaFlag.Name) {
-				path = filepath.Join(path, "sepolia")
-			} else if ctx.GlobalBool(utils.KilnFlag.Name) {
-				path = filepath.Join(path, "kiln")
-			}
-		}
-		endpoint = fmt.Sprintf("%s/geth.ipc", path)
+		cfg := defaultNodeConfig()
+		utils.SetDataDir(ctx, &cfg)
+		endpoint = cfg.IPCEndpoint()
 	}
 	client, err := dialRPC(endpoint)
 	if err != nil {
