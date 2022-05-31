@@ -592,7 +592,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	// (some) events are posted.
 	for i := range testCases {
 		testCases[i].c = make(chan []*types.Log)
-		testCases[i].err = make(chan error)
+		testCases[i].err = make(chan error, 1)
 
 		var err error
 		testCases[i].sub, err = api.events.SubscribeLogs(testCases[i].crit, testCases[i].c)

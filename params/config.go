@@ -114,7 +114,7 @@ var (
 		MuirGlacierBlock:        big.NewInt(7_117_117),
 		BerlinBlock:             big.NewInt(9_812_189),
 		LondonBlock:             big.NewInt(10_499_401),
-		TerminalTotalDifficulty: big.NewInt(43531756765713534),
+		TerminalTotalDifficulty: new(big.Int).SetBytes([]byte{0x15, 0x2D, 0x02, 0xC7, 0xE1, 0x4A, 0xF6, 0x80, 0x00, 0x00}), // 100_000_000_000_000_000_000_000
 		Ethash:                  new(EthashConfig),
 	}
 
