@@ -787,6 +787,30 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	}
 }
 
+func TestInvalidBloom(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	commonAncestor := ethservice.BlockChain().CurrentBlock()
+	api := NewConsensusAPI(ethservice)
+
+	// Setup 10 blocks on the canonical chain
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
+
+	// (1) check LatestValidHash by sending a normal payload (P1'')
+	payload := getNewPayload(t, api, commonAncestor)
+	payload.LogsBloom = append(payload.LogsBloom, byte(1))
+	status, err := api.NewPayloadV1(*payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Status != beacon.INVALIDBLOCKHASH {
+		t.Errorf("invalid status: expected VALID got: %v", status.Status)
+	}
+}
+
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(100)
 	fmt.Println(genesis.Config.TerminalTotalDifficulty)
