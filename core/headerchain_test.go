@@ -72,8 +72,8 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 func TestHeaderInsertion(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
-		statedb = state.NewDatabase(db)
 		genesis = (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+		statedb = state.NewDatabase(db)
 	)
 	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
 	if err != nil {

@@ -68,12 +68,15 @@ func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)
 		Alloc:  core.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 	}).MustCommit(db)
 
+	state := state.NewDatabase(db)
 	chain, _ := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 
-	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), state.NewDatabase(db), blocks, generator)
+	bs, _ := core.GenerateChain(params.TestChainConfig, chain.Genesis(), ethash.NewFaker(), state, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
+	state.TrieDB().Cap(0)
+
 	txconfig := core.DefaultTxPoolConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 

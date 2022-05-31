@@ -39,8 +39,8 @@ var (
 )
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
-	blocks, _ := core.GenerateChain(params.TestChainConfig, types.NewBlockWithHeader(parent), ethash.NewFaker(), state.NewDatabase(db), n, func(i int, b *core.BlockGen) {
+func makeHeaderChain(parent *types.Header, n int, db state.Database, seed int) []*types.Header {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, types.NewBlockWithHeader(parent), ethash.NewFaker(), db, n, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	headers := make([]*types.Header, len(blocks))
@@ -53,20 +53,21 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
-func newCanonical(n int) (ethdb.Database, *LightChain, error) {
+func newCanonical(n int) (state.Database, *LightChain, error) {
 	db := rawdb.NewMemoryDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
+	sdb := state.NewDatabase(db)
 	blockchain, _ := NewLightChain(&dummyOdr{db: db, indexerConfig: TestClientIndexerConfig}, gspec.Config, ethash.NewFaker(), nil)
 
 	// Create and inject the requested chain
 	if n == 0 {
-		return db, blockchain, nil
+		return sdb, blockchain, nil
 	}
 	// Header-only chain requested
-	headers := makeHeaderChain(genesis.Header(), n, db, canonicalSeed)
+	headers := makeHeaderChain(genesis.Header(), n, sdb, canonicalSeed)
 	_, err := blockchain.InsertHeaderChain(headers, 1)
-	return db, blockchain, err
+	return sdb, blockchain, err
 }
 
 // newTestLightChain creates a LightChain that doesn't validate anything.

@@ -34,9 +34,9 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 
 	// Generate a common prefix for both pro-forkers and non-forkers
 	db := rawdb.NewMemoryDatabase()
-	sdb := state.NewDatabase(db)
 	gspec := &Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}
 	genesis := gspec.MustCommit(db)
+	sdb := state.NewDatabase(db)
 	prefix, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
 	// Create the concurrent, conflicting two nodes

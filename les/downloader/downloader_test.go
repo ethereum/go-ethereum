@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -51,7 +52,7 @@ type downloadTester struct {
 
 	genesis *types.Block   // Genesis blocks used by the tester and peers
 	stateDb ethdb.Database // Database used by the tester for syncing from peers
-	peerDb  ethdb.Database // Database of the peers containing all data
+	peerDb  state.Database // Database of the peers containing all data
 	peers   map[string]*downloadTesterPeer
 
 	ownHashes   []common.Hash                  // Hash chain belonging to the tester
@@ -72,7 +73,7 @@ type downloadTester struct {
 func newTester() *downloadTester {
 	tester := &downloadTester{
 		genesis:     testGenesis,
-		peerDb:      testDB,
+		peerDb:      gendb,
 		peers:       make(map[string]*downloadTesterPeer),
 		ownHashes:   []common.Hash{testGenesis.Hash()},
 		ownHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
@@ -474,7 +475,7 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 
 	results := make([][]byte, 0, len(hashes))
 	for _, hash := range hashes {
-		if data, err := dlp.dl.peerDb.Get(hash.Bytes()); err == nil {
+		if data, err := dlp.dl.peerDb.TrieDB().Node(hash); err == nil {
 			if !dlp.missingStates[hash] {
 				results = append(results, data)
 			}

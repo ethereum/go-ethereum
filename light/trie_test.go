@@ -42,19 +42,22 @@ func TestNodeIterator(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(fulldb)
+		state   = state.NewDatabase(fulldb)
 	)
 	gspec.MustCommit(lightdb)
 	blockchain, _ := core.NewBlockChain(fulldb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), state.NewDatabase(fulldb), 4, testChainGen)
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), state, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
+	// Forcible flush out all accumulated states to make them accessible.
+	state.TrieDB().Cap(0)
 
 	ctx := context.Background()
 	odr := &testOdr{sdb: fulldb, ldb: lightdb, indexerConfig: TestClientIndexerConfig}
 	head := blockchain.CurrentHeader()
 	lightTrie, _ := NewStateDatabase(ctx, head, odr).OpenTrie(head.Root)
-	fullTrie, _ := state.NewDatabase(fulldb).OpenTrie(head.Root)
+	fullTrie, _ := state.OpenTrie(head.Root)
 	if err := diffTries(fullTrie, lightTrie); err != nil {
 		t.Fatal(err)
 	}

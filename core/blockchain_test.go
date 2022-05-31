@@ -1420,7 +1420,6 @@ func TestEIP155Transition(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
 		db         = rawdb.NewMemoryDatabase()
-		sdb        = state.NewDatabase(db)
 		key, _     = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address    = crypto.PubkeyToAddress(key.PublicKey)
 		funds      = big.NewInt(1000000000)
@@ -1430,6 +1429,7 @@ func TestEIP155Transition(t *testing.T) {
 			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
 		}
 		genesis = gspec.MustCommit(db)
+		sdb     = state.NewDatabase(db)
 	)
 
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
@@ -1643,8 +1643,8 @@ func TestTrieForkGC(t *testing.T) {
 	engine := ethash.NewFaker()
 
 	db := rawdb.NewMemoryDatabase()
-	sdb := state.NewDatabase(db)
 	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	sdb := state.NewDatabase(db)
 	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, sdb, 2*TriesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
@@ -1876,8 +1876,8 @@ func TestLowDiffLongChain(t *testing.T) {
 	// Generate a canonical chain to act as the main dataset
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	statedb := state.NewDatabase(db)
 	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	statedb := state.NewDatabase(db)
 
 	// We must use a pretty long chain to ensure that the fork doesn't overtake us
 	// until after at least 128 blocks post tip
@@ -1932,9 +1932,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Generate a canonical chain to act as the main dataset
 	var (
-		engine  = beacon.New(ethash.NewFaker())
-		db      = rawdb.NewMemoryDatabase()
-		statedb = state.NewDatabase(db)
+		engine = beacon.New(ethash.NewFaker())
+		db     = rawdb.NewMemoryDatabase()
 
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
@@ -1946,6 +1945,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		}
 		signer     = types.LatestSigner(gspec.Config)
 		genesis, _ = gspec.Commit(db)
+		statedb    = state.NewDatabase(db)
 	)
 	// Generate and import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
@@ -2343,8 +2343,8 @@ func getLongAndShortChains() (bc *BlockChain, longChain []*types.Block, heavyCha
 	// Generate a canonical chain to act as the main dataset
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	statedb := state.NewDatabase(db)
 	genesis := (&Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}).MustCommit(db)
+	statedb := state.NewDatabase(db)
 
 	// Generate and import the canonical chain,
 	// Offset the time, to keep the difficulty low
@@ -2482,7 +2482,6 @@ func TestTransactionIndices(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
 		gendb   = rawdb.NewMemoryDatabase()
-		statedb = state.NewDatabase(gendb)
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(100000000000000000)
@@ -2492,6 +2491,7 @@ func TestTransactionIndices(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(gendb)
+		statedb = state.NewDatabase(gendb)
 		signer  = types.LatestSigner(gspec.Config)
 	)
 	height := uint64(128)
@@ -3540,7 +3540,6 @@ func TestEIP1559Transition(t *testing.T) {
 		// Generate a canonical chain to act as the main dataset
 		engine = ethash.NewFaker()
 		db     = rawdb.NewMemoryDatabase()
-		sdb    = state.NewDatabase(db)
 
 		// A sender who makes transactions, has some funds
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -3571,6 +3570,7 @@ func TestEIP1559Transition(t *testing.T) {
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
 	genesis := gspec.MustCommit(db)
+	sdb := state.NewDatabase(db)
 	signer := types.LatestSigner(gspec.Config)
 
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, sdb, 1, func(i int, b *BlockGen) {
@@ -3685,7 +3685,6 @@ func TestSetCanonical(t *testing.T) {
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
-		sdb     = state.NewDatabase(db)
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(100000000000000000)
@@ -3695,6 +3694,7 @@ func TestSetCanonical(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(db)
+		sdb     = state.NewDatabase(db)
 		signer  = types.LatestSigner(gspec.Config)
 		engine  = ethash.NewFaker()
 	)

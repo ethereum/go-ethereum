@@ -258,14 +258,17 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(sdb)
+		state   = state.NewDatabase(sdb)
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), state.NewDatabase(sdb), 4, testChainGen)
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), state, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
 	}
+	// Forcible flush out all accumulated states to make them accessible.
+	state.TrieDB().Cap(0)
 
 	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker(), nil)

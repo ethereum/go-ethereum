@@ -269,6 +269,9 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
+	// Forcibly flush out all accumulated states.
+	simulation.Blockchain().StateCache().TrieDB().Cap(0)
+
 	txpoolConfig := core.DefaultTxPoolConfig
 	txpoolConfig.Journal = ""
 	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
