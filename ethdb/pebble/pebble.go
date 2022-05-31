@@ -401,14 +401,16 @@ func (db *Database) meter(refresh time.Duration) {
 		compReads        [2]int64
 
 		nWrites [2]int64
-
-		compWrite int64
-		compRead  int64
-		nWrite    int64
 	)
 
 	// Iterate ad infinitum and collect the stats
 	for i := 1; errc == nil; i++ {
+		var (
+			compWrite int64
+			compRead  int64
+			nWrite    int64
+		)
+
 		metrics := db.db.Metrics()
 
 		compTime := atomic.LoadInt64(&db.compTime)
