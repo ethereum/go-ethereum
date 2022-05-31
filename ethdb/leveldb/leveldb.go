@@ -22,6 +22,7 @@ package leveldb
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,18 +64,19 @@ type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	compTimeMeter      metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter      metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter     metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter   metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter    metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge      metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter      metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter     metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge       metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge    metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	compTimeMeter       metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter       metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter      metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter    metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter     metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge       metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter       metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter      metrics.Meter // Meter for measuring the effective amount of data written
+	memCompGauge        metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -101,6 +103,34 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			options.ReadOnly = true
 		}
 	})
+}
+
+func Exists(file string) bool {
+	var (
+		db  *leveldb.DB
+		err error
+	)
+	opts := &opt.Options{
+		ErrorIfMissing: true,
+		ReadOnly:       true,
+	}
+
+	if matches, err := filepath.Glob(file + "/OPTIONS*"); len(matches) > 0 || err != nil {
+		if err != nil {
+			panic(err) // only possible if the pattern is malformed
+		}
+		// existence of this file means this db was created by pebble
+		// have to do this hack because leveldb.OpenFile returns sucessfully
+		// for dbs created by pebble
+		return false
+	}
+
+	if db, err = leveldb.OpenFile(file, opts); err != nil {
+		return false
+	}
+
+	db.Close()
+	return true
 }
 
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the
@@ -143,6 +173,8 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 	ldb.level0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/level0", nil)
 	ldb.nonlevel0CompGauge = metrics.NewRegisteredGauge(namespace+"compact/nonlevel0", nil)
 	ldb.seekCompGauge = metrics.NewRegisteredGauge(namespace+"compact/seek", nil)
+
+	ldb.manualMemAllocGauge = metrics.NewRegisteredGauge(namespace+"memory/manualalloc", nil)
 
 	// Start up the metrics gathering and return
 	go ldb.meter(metricsGatheringInterval)
