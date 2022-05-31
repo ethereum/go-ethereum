@@ -808,9 +808,9 @@ func TestInvalidBloom(t *testing.T) {
 	}
 	if status.Status != beacon.INVALIDBLOCKHASH {
 		t.Errorf("invalid status: expected VALID got: %v", status.Status)
-  }
+	}
 }
-    
+
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(100)
 	fmt.Println(genesis.Config.TerminalTotalDifficulty)
