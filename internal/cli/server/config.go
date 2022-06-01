@@ -956,13 +956,8 @@ func (c *Config) buildNode() (*node.Config, error) {
 
 func (c *Config) Merge(cc ...*Config) error {
 	for _, elem := range cc {
-		if err := mergo.Merge(c, elem, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
+		if err := mergo.Merge(c, elem, mergo.WithOverwriteWithEmptyValue, mergo.WithAppendSlice); err != nil {
 			return fmt.Errorf("failed to merge configurations: %v", err)
-		}
-
-		// override max peers
-		if elem.P2P.MaxPeers == 0 {
-			c.P2P.MaxPeers = 0
 		}
 	}
 	return nil
