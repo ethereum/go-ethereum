@@ -55,6 +55,18 @@ which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://geth.ethereum.org/docs/interface/javascript-console.
 This command allows to open a console on a running geth node.`,
 	}
+
+	javascriptCommand = cli.Command{
+		Action:    utils.MigrateFlags(ephemeralConsole),
+		Name:      "js",
+		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
+		ArgsUsage: "<jsfile> [jsfile...]",
+		Flags:     utils.GroupFlags(nodeFlags, consoleFlags),
+		Category:  "CONSOLE COMMANDS",
+		Description: `
+The JavaScript VM exposes a node admin interface as well as the Ðapp
+JavaScript API. See https://geth.ethereum.org/docs/interface/javascript-console`,
+	}
 )
 
 // localConsole starts a new geth node, attaching a JavaScript console to it at the
@@ -135,6 +147,15 @@ func remoteConsole(ctx *cli.Context) error {
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
+	return nil
+}
+
+// ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
+// console to it, executes each of the files specified as arguments and tears
+// everything down.
+func ephemeralConsole(ctx *cli.Context) error {
+	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:
+geth --exec "loadScript('file.js')" console`)
 	return nil
 }
 
