@@ -329,12 +329,10 @@ func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handle
 		if preexistingDb == Pebble {
 			return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
 		} else {
-			fmt.Println("opening ldb")
 			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println("opened ldb")
 		}
 	} else {
 		if preexistingDb == Pebble {
