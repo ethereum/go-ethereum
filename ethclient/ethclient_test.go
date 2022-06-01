@@ -520,7 +520,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 		Gas:   21000,
 		Value: big.NewInt(1),
 	}
-	gas, err := ec.EstimateGas(context.Background(), msg)
+	gas, err := ec.EstimateGas(context.Background(), msg, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -547,7 +547,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 		Gas:   21000,
 		Value: big.NewInt(1),
 	}
-	gas, err := ec.EstimateGas(context.Background(), msg)
+	gas, err := ec.EstimateGas(context.Background(), msg, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

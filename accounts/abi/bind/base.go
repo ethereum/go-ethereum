@@ -264,7 +264,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	gasLimit := opts.GasLimit
 	if opts.GasLimit == 0 {
 		var err error
-		gasLimit, err = c.estimateGasLimit(opts, contract, input, nil, gasTipCap, gasFeeCap, value)
+		gasLimit, err = c.estimateGasLimit(opts, contract, input, nil, gasTipCap, gasFeeCap, value, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +308,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 	gasLimit := opts.GasLimit
 	if opts.GasLimit == 0 {
 		var err error
-		gasLimit, err = c.estimateGasLimit(opts, contract, input, gasPrice, nil, nil, value)
+		gasLimit, err = c.estimateGasLimit(opts, contract, input, gasPrice, nil, nil, value, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +329,7 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 	return types.NewTx(baseTx), nil
 }
 
-func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value *big.Int) (uint64, error) {
+func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Address, input []byte, gasPrice, gasTipCap, gasFeeCap, value, blockNumber *big.Int) (uint64, error) {
 	if contract != nil {
 		// Gas estimation cannot succeed without code for method invocations.
 		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
@@ -347,7 +347,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 		Value:     value,
 		Data:      input,
 	}
-	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	return c.transactor.EstimateGas(ensureContext(opts.Context), msg, nil)
 }
 
 func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {

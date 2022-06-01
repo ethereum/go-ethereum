@@ -220,11 +220,12 @@ type PendingContractCaller interface {
 }
 
 // GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a
-// specific transaction based on the pending state. There is no guarantee that this is the
-// true gas limit requirement as other transactions may be added or removed by miners, but
-// it should provide a basis for setting a reasonable default.
+// specific transaction based on the block number. Passing `nil` will operate on
+// pending state. There is no guarantee that this is the true gas limit requirement
+// as other transactions may be added or removed by miners, but it should provide a
+// basis for setting a reasonable default.
 type GasEstimator interface {
-	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
+	EstimateGas(ctx context.Context, call CallMsg, blockNumber *big.Int) (uint64, error)
 }
 
 // A PendingStateEventer provides access to real time notifications about changes to the
