@@ -647,7 +647,8 @@ func TestEmptyBlocks(t *testing.T) {
 	if status.Status != beacon.INVALID {
 		t.Errorf("invalid status: expected INVALID got: %v", status.Status)
 	}
-	expected := commonAncestor.Hash()
+	// Expect 0x0 on INVALID block on top of PoW block
+	expected := common.Hash{}
 	if !bytes.Equal(status.LatestValidHash[:], expected[:]) {
 		t.Fatalf("invalid LVH: got %v want %v", status.LatestValidHash, expected)
 	}
