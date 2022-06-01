@@ -22,7 +22,6 @@ package leveldb
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,34 +102,6 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			options.ReadOnly = true
 		}
 	})
-}
-
-func Exists(file string) bool {
-	var (
-		db  *leveldb.DB
-		err error
-	)
-	opts := &opt.Options{
-		ErrorIfMissing: true,
-		ReadOnly:       true,
-	}
-
-	if matches, err := filepath.Glob(file + "/OPTIONS*"); len(matches) > 0 || err != nil {
-		if err != nil {
-			panic(err) // only possible if the pattern is malformed
-		}
-		// existence of this file means this db was created by pebble
-		// have to do this hack because leveldb.OpenFile returns sucessfully
-		// for dbs created by pebble
-		return false
-	}
-
-	if db, err = leveldb.OpenFile(file, opts); err != nil {
-		return false
-	}
-
-	db.Close()
-	return true
 }
 
 // NewCustom returns a wrapped LevelDB object. The namespace is the prefix that the

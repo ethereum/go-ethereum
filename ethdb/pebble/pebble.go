@@ -19,7 +19,6 @@ package pebble
 
 import (
 	"errors"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -119,35 +118,6 @@ func (d *Database) OnWriteStallBegin(b pebble.WriteStallBeginInfo) {
 
 func (d *Database) OnWriteStallEnd() {
 	atomic.AddInt64(&d.writeDelayTime, int64(time.Since(d.writeDelayStartTime)))
-}
-
-// Exists returns whether a valid pebble database exists on the provided path
-func Exists(path string) bool {
-	var (
-		db  *pebble.DB
-		err error
-	)
-	opts := &pebble.Options{
-		ErrorIfNotExists: true,
-		ReadOnly:         true,
-	}
-
-	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) == 0 || err != nil {
-		if err != nil {
-			panic(err) // only possible if the pattern is malformed
-		}
-		// if this file doesn't exist, then the db is ldb
-		// this is a bit of a hack but pebble.Open() will successfully
-		// open leveldb databases.
-		return false
-	}
-
-	if db, err = pebble.Open(path, opts); err != nil {
-		return false
-	}
-
-	db.Close()
-	return true
 }
 
 // New returns a wrapped LevelDB object. The namespace is the prefix that the

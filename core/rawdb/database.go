@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -285,13 +286,38 @@ func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, 
 	return NewDatabase(db), nil
 }
 
+type dbType int
+
+const (
+	Nonexistent dbType = iota
+	Pebble
+	LevelDb
+)
+
+func hasPreexistingDb(path string) dbType {
+	_, err := os.Stat(path + "/CURRENT")
+	if os.IsNotExist(err) || err != nil {
+		return Nonexistent
+	}
+	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
+		if err != nil {
+			panic(err) // only possible if the pattern is malformed
+		}
+		return Pebble
+	}
+	return LevelDb
+}
+
 func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	var (
 		db  ethdb.Database
 		err error
 	)
+
+	preexistingDb := hasPreexistingDb(file)
+
 	if backingdb == "pebble" {
-		if leveldb.Exists(file) {
+		if preexistingDb == LevelDb {
 			return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
 		} else {
 			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
@@ -300,22 +326,19 @@ func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handle
 			}
 		}
 	} else if backingdb == "leveldb" {
-		if pebble.Exists(file) {
+		if preexistingDb == Pebble {
 			return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
 		} else {
+			fmt.Println("opening ldb")
 			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
 			if err != nil {
 				return nil, err
 			}
+			fmt.Println("opened ldb")
 		}
 	} else {
-		if pebble.Exists(file) {
+		if preexistingDb == Pebble {
 			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
-			if err != nil {
-				return nil, err
-			}
-		} else if leveldb.Exists(file) {
-			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
 			if err != nil {
 				return nil, err
 			}
