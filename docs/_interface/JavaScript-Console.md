@@ -111,7 +111,7 @@ Once the interactive session is over, the console can be closed down by typing `
 
 ## Non-interactive Use: Script Mode
 
-It is also possible to execute files to the JavaScript interpreter non-interactively by passing the `--exec` and a JSON-RPC-API endpoint 
+It is also possible to execute JavaScript code non-interactively by passing the `--exec` and a JSON-RPC-API endpoint 
 to `geth attach` or `geth console`. The result is displayed directly in the terminal rather than in an interactive Javascript console.
 
 For example, to display the accounts in the keystore:
@@ -125,7 +125,7 @@ geth attach --exec eth.accounts
 geth attach --exec eth.blockNumber
 ```
 
-The same syntax can be used to execute a local script with more complex statements on a remote node over http, for example:
+The same syntax can be used to execute a local script file with more complex statements on a remote node over http, for example:
 
 ```shell
 geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
