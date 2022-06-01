@@ -91,25 +91,21 @@ func (t *Trie) Copy() *Trie {
 	}
 }
 
-// New creates a trie with an existing root node from db.
-//
-// If root is the zero hash or the sha3 hash of an empty string, the
-// trie is initially empty and does not require a database. Otherwise,
-// New will panic if db is nil and returns a MissingNodeError if root does
-// not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db *Database) (*Trie, error) {
-	return newTrie(common.Hash{}, root, db)
-}
-
-// NewWithOwner creates a trie with an existing root node from db and an assigned
+// New creates a trie with an existing root node from db and an assigned
 // owner for storage proximity.
 //
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func NewWithOwner(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
+func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 	return newTrie(owner, root, db)
+}
+
+// NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
+func NewEmpty(db *Database) *Trie {
+	tr, _ := newTrie(common.Hash{}, common.Hash{}, db)
+	return tr
 }
 
 // newWithRootNode initializes the trie with the given root node.

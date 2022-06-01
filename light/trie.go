@@ -173,7 +173,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			if len(t.id.AccKey) > 0 {
 				owner = common.BytesToHash(t.id.AccKey)
 			}
-			t.trie, err = trie.NewWithOwner(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
 		}
 		if err == nil {
 			err = fn()
@@ -203,7 +203,7 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 			if len(t.id.AccKey) > 0 {
 				owner = common.BytesToHash(t.id.AccKey)
 			}
-			t, err := trie.NewWithOwner(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
 			if err == nil {
 				it.t.trie = t
 			}

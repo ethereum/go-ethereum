@@ -53,23 +53,11 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
+func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
-	trie, err := New(root, db)
-	if err != nil {
-		return nil, err
-	}
-	return &SecureTrie{trie: *trie}, nil
-}
-
-// NewSecureWithOwner creates secure trie with specified trie owner.
-func NewSecureWithOwner(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
-	if db == nil {
-		panic("trie.NewSecure called without a database")
-	}
-	trie, err := NewWithOwner(owner, root, db)
+	trie, err := New(owner, root, db)
 	if err != nil {
 		return nil, err
 	}

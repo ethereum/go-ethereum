@@ -248,7 +248,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, owner common.Hash, root c
 		return &proofResult{keys: keys, vals: vals}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
-	tr, err := trie.NewWithOwner(owner, root, dl.triedb)
+	tr, err := trie.New(owner, root, dl.triedb)
 	if err != nil {
 		ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 		return nil, errMissingTrie
@@ -363,7 +363,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, owner common.Hash, roo
 	if len(result.keys) > 0 {
 		snapNodeCache = memorydb.New()
 		snapTrieDb := trie.NewDatabase(snapNodeCache)
-		snapTrie, _ := trie.NewWithOwner(owner, common.Hash{}, snapTrieDb)
+		snapTrie, _ := trie.New(owner, common.Hash{}, snapTrieDb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
@@ -374,7 +374,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, owner common.Hash, roo
 	// if it's already opened with some nodes resolved.
 	tr := result.tr
 	if tr == nil {
-		tr, err = trie.NewWithOwner(owner, root, dl.triedb)
+		tr, err = trie.New(owner, root, dl.triedb)
 		if err != nil {
 			ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 			return false, nil, errMissingTrie
