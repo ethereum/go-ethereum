@@ -3758,3 +3758,112 @@ func TestSetCanonical(t *testing.T) {
 	chain.SetCanonical(canon[TriesInMemory-1])
 	verify(canon[TriesInMemory-1])
 }
+
+// TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
+// correctly in case reorg is called.
+func TestCanonicalHashMarker(t *testing.T) {
+	var cases = []struct {
+		forkA int
+		forkB int
+	}{
+		// ForkA: 10 blocks
+		// ForkB: 1 blocks
+		//
+		// reorged:
+		//      markers [2, 10] should be deleted
+		//      markers [1] should be updated
+		{10, 1},
+
+		// ForkA: 10 blocks
+		// ForkB: 2 blocks
+		//
+		// reorged:
+		//      markers [3, 10] should be deleted
+		//      markers [1, 2] should be updated
+		{10, 2},
+
+		// ForkA: 10 blocks
+		// ForkB: 10 blocks
+		//
+		// reorged:
+		//      markers [1, 10] should be updated
+		{10, 10},
+
+		// ForkA: 10 blocks
+		// ForkB: 11 blocks
+		//
+		// reorged:
+		//      markers [1, 11] should be updated
+		{10, 11},
+	}
+	for _, c := range cases {
+		var (
+			db    = rawdb.NewMemoryDatabase()
+			gspec = &Genesis{
+				Config:  params.TestChainConfig,
+				Alloc:   GenesisAlloc{},
+				BaseFee: big.NewInt(params.InitialBaseFee),
+			}
+			genesis = gspec.MustCommit(db)
+			engine  = ethash.NewFaker()
+		)
+		forkA, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, c.forkA, func(i int, gen *BlockGen) {})
+		forkB, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, c.forkB, func(i int, gen *BlockGen) {})
+
+		// Initialize test chain
+		diskdb := rawdb.NewMemoryDatabase()
+		gspec.MustCommit(diskdb)
+		chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+		if err != nil {
+			t.Fatalf("failed to create tester chain: %v", err)
+		}
+		// Insert forkA and forkB, the canonical should on forkA still
+		if n, err := chain.InsertChain(forkA); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+		}
+		if n, err := chain.InsertChain(forkB); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+		}
+
+		verify := func(head *types.Block) {
+			if chain.CurrentBlock().Hash() != head.Hash() {
+				t.Fatalf("Unexpected block hash, want %x, got %x", head.Hash(), chain.CurrentBlock().Hash())
+			}
+			if chain.CurrentFastBlock().Hash() != head.Hash() {
+				t.Fatalf("Unexpected fast block hash, want %x, got %x", head.Hash(), chain.CurrentFastBlock().Hash())
+			}
+			if chain.CurrentHeader().Hash() != head.Hash() {
+				t.Fatalf("Unexpected head header, want %x, got %x", head.Hash(), chain.CurrentHeader().Hash())
+			}
+			if !chain.HasState(head.Root()) {
+				t.Fatalf("Lost block state %v %x", head.Number(), head.Hash())
+			}
+		}
+
+		// Switch canonical chain to forkB if necessary
+		if len(forkA) < len(forkB) {
+			verify(forkB[len(forkB)-1])
+		} else {
+			verify(forkA[len(forkA)-1])
+			chain.SetCanonical(forkB[len(forkB)-1])
+			verify(forkB[len(forkB)-1])
+		}
+
+		// Ensure all hash markers are updated correctly
+		for i := 0; i < len(forkB); i++ {
+			block := forkB[i]
+			hash := chain.GetCanonicalHash(block.NumberU64())
+			if hash != block.Hash() {
+				t.Fatalf("Unexpected canonical hash %d", block.NumberU64())
+			}
+		}
+		if c.forkA > c.forkB {
+			for i := uint64(c.forkB) + 1; i <= uint64(c.forkA); i++ {
+				hash := chain.GetCanonicalHash(i)
+				if hash != (common.Hash{}) {
+					t.Fatalf("Unexpected canonical hash %d", i)
+				}
+			}
+		}
+	}
+}
