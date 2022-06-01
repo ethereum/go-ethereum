@@ -332,29 +332,16 @@ Pending name: Contracts in Go!!!
 
 ## Bind Solidity directly
 
-If you've followed the tutorial along until this point you've probably realized that
-every contract modification needs to be recompiled, the produced ABIs and bytecodes
-(especially if you need multiple contracts) individually saved to files and then the
-binding executed for them. This can become a quite bothersome after the Nth iteration,
-so the `abigen` command supports binding from Solidity source files directly (`--sol`),
-which first compiles the source code (via `--solc`, defaulting to `solc`) into it's
-constituent components and binds using that.
-
-Binding the official Token contract [`token.sol`](https://gist.github.com/karalabe/08f4b780e01c8452d989)
-would then entail to running:
-
+In the past, abigen allowed you to compile and bind a Solidity source file directly to a Go package.
+This feature has been discontinued from [v1.10.18](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.18)
+onwards due to maintenance synchronization challenges with the compiler in ```go-ethereum```. 
+Now, to bind a Solidity source file into a go package you will have to compile it first using 
+any of your prefered compilers (e.g. [solc](https://docs.soliditylang.org/en/v0.8.14/installing-solidity.html) 
+or [Remix](https://remix.ethereum.org/)) and bind it later. Binding the official Token contract [`token.sol`](https://gist.github.com/karalabe/08f4b780e01c8452d989) would then entail to running:
 ```
-$ abigen --sol token.sol --pkg main --out token.go
+$ solc --abi --bin token.sol -o tokenDirectory
+$ abigen --abi tokenDirectory/token.abi --bin tokenDirectory/token.bin --pkg main --type token --out token.go
 ```
-
-*Note: Building from Solidity (`--sol`) is mutually exclusive with individually setting
-the bind components (`--abi`, `--bin` and `--type`), as all of them are extracted from
-the Solidity code and produced build results directly.*
-
-Building a contract directly from Solidity has the nice side effect that all contracts
-contained within a Solidity source file are built and bound, so if your file contains many
-contract sources, each and every one of them will be available from Go code. The sample
-Token solidity file results in [`token.go`](https://gist.github.com/karalabe/c22aab73194ba7da834ab5b379621031).
 
 ### Project integration (i.e. `go generate`)
 
