@@ -4,9 +4,9 @@ sort_key: G
 ---
 
 
-Geth includes a variety of optional metrics that can be reported to the user. However, metrics are disabled by default to save on the computational overhead for the average user. Users that do see more detailed metrics can enable them using the `--metrics` flag when starting Geth. Some metrics are classed as especially expensive and are only enabled when the `--metrics.expesive` flag is supplied. For example, per-packed network traffic data is considered expensive.
+Geth includes a variety of optional metrics that can be reported to the user. However, metrics are disabled by default to save on the computational overhead for the average user. Users that do see more detailed metrics can enable them using the `--metrics` flag when starting Geth. Some metrics are classed as especially expensive and are only enabled when the `--metrics.expensive` flag is supplied. For example, per-packet network traffic data is considered expensive.
 
-The goal of the Geth metrics system is that - similar to logs - arbitrary metric collections can be added to any part of the code without requiring fancy constructs to analyze them (counter variables, public interfaces, crossing over the APIs, console hooks, etc). Instead, metrics should be "updated" whenever and wherever needed, and be automatically collected, surfaced through the APIs, queryable and visualizable for analysis.
+The goal of the Geth metrics system is that - similar to logs - arbitrary metric collections can be added to any part of the code without requiring fancy constructs to analyze them (counter variables, public interfaces, crossing over the APIs, console hooks, etc). Instead, metrics should be "updated" whenever and wherever needed and be automatically collected, surfaced through the APIs, queryable and visualizable for analysis.
 
 
 ## Metric types
@@ -15,7 +15,7 @@ Geth's metrics can be classified into four types: meters, timers, counters and g
 
 ### Meters
 
-Analogous to physical meters (electricity, water, etc), Geth's meters are capable of measuring the *amount* of "things" that pass through and at the *rate* at which they do that. A meter doesn't have a specific unit of measure (byte, block, malloc, etc), it just counts arbitrary *events*. At any point in time a meter can report:
+Analogous to physical meters (electricity, water, etc), Geth's meters are capable of measuring the *amount* of "things" that pass through and at the *rate* at which they do. A meter doesn't have a specific unit of measure (byte, block, malloc, etc), it just counts arbitrary *events*. At any point in time a meter can report:
 
 * *Total number of events* that passed through the meter
 * *Mean throughput rate* of the meter since startup (events / second)
@@ -42,7 +42,6 @@ A counter is a single int64 value that can be incremented and decremented. The c
 A gauge is a single int64 value. Its value can increment and decrement - as with a counter - but can also be set arbitrarily.
 
 
-
 ## Querying metrics
 
 Geth collects metrics if the `--metrics` command is provided at startup. Those metrics are available via an HTTP server if the `metrics.addr` command is also provided. By default the metrics are served at `127.0.0.1:6060/debug/metrics` but a custom IP address can be provided. A custom port can also be provided to the `--metrics.port` command. More computationally expensive metrics are toggled on or off by providing or omitting the `--metrics.expensive` flag. For example, to serve all metrics at the default address and port:
@@ -67,7 +66,6 @@ chain/account/commits.five-minute:          0.029134344092314267
 ...
 
 ```
-
 
 Any developer is free to add, remove or modify the available metrics as they see fit. The precise list of available metrics is always available by opening the metrics server in the browser.
 
