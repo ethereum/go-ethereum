@@ -612,6 +612,42 @@ debug.traceCall({
 	},
 	"latest", {"disableStorage": true, "disableMemory": true})
 ```
+
+It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, 
+a call which executes `NUMBER` is performed, and the overridden number is placed on the stack: 
+```
+> debug.traceCall({
+	from: eth.accounts[0], 
+	value:"0x1",
+	gasPrice: "0xffffffff", 
+	gas: "0xffff", 
+	input: "0x43"},
+	"latest", 
+	{"blockoverrides":
+		{"number": "0x50"}
+	})
+{
+  failed: false,
+  gas: 53018,
+  returnValue: "",
+  structLogs: [{
+      depth: 1,
+      gas: 12519,
+      gasCost: 2,
+      op: "NUMBER",
+      pc: 0,
+      stack: []
+  }, {
+      depth: 1,
+      gas: 12517,
+      gasCost: 0,
+      op: "STOP",
+      pc: 1,
+      stack: ["0x50"]
+  }]
+}
+```
+
 Curl example: 
 ```
 > curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
