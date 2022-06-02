@@ -624,7 +624,6 @@ func testBoundedForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 func TestBoundedHeavyForkedSync66Full(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH66, FullSync)
 }
-
 func TestBoundedHeavyForkedSync66Snap(t *testing.T) {
 	testBoundedHeavyForkedSync(t, eth.ETH66, SnapSync)
 }
@@ -922,7 +921,6 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 func TestHighTDStarvationAttack66Full(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH66, FullSync)
 }
-
 func TestHighTDStarvationAttack66Snap(t *testing.T) {
 	testHighTDStarvationAttack(t, eth.ETH66, SnapSync)
 }

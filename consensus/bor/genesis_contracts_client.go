@@ -53,25 +53,27 @@ func (gc *GenesisContractsClient) CommitState(
 	state *state.StateDB,
 	header *types.Header,
 	chCtx chainContext,
-) error {
+) (uint64, error) {
 	eventRecord := event.BuildEventRecord()
 	recordBytes, err := rlp.EncodeToBytes(eventRecord)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	method := "commitState"
 	t := event.Time.Unix()
 	data, err := gc.stateReceiverABI.Pack(method, big.NewInt(0).SetInt64(t), recordBytes)
 	if err != nil {
 		log.Error("Unable to pack tx for commitState", "error", err)
-		return err
+		return 0, err
 	}
-	log.Info("→ committing new state", "eventRecord", event.String())
 	msg := getSystemMessage(common.HexToAddress(gc.StateReceiverContract), data)
-	if err := applyMessage(msg, state, header, gc.chainConfig, chCtx); err != nil {
-		return err
+	gasUsed, err := applyMessage(msg, state, header, gc.chainConfig, chCtx)
+	// Logging event log with time and individual gasUsed
+	log.Info("→ committing new state", "eventRecord", event.String(gasUsed))
+	if err != nil {
+		return 0, err
 	}
-	return nil
+	return gasUsed, nil
 }
 
 func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, error) {
