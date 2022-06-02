@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/VictoriaMetrics/fastcache"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -45,9 +46,12 @@ const RecoveryIDOffset = 64
 // DigestLength sets the signature digest exact length
 const DigestLength = 32
 
+const hashCacheSize = 256 * 1024 * 1024
+
 var (
 	secp256k1N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
 	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
+	hashCache      = fastcache.New(hashCacheSize)
 )
 
 var errInvalidPubkey = errors.New("invalid secp256k1 public key")
@@ -71,6 +75,33 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 	kh.Write(data)
 	kh.Read(h[:])
 	return h
+}
+
+// HashDataWithCache hashes the provided data using the KeccakState and returns a 32 byte hash;
+// when len(data) is belong to (0,96], cache will be used;
+// design for hashing common.Address, common.Hash and opSha3
+func HashDataWithCache(kh KeccakState, data []byte) (h common.Hash) {
+	l := len(data)
+	if l > 0 && l <= 96 {
+		if _, ok := hashCache.HasGet(h[:0], data); ok {
+			return
+		}
+	}
+
+	d := kh
+	if d == nil {
+		d = NewKeccakState()
+	} else {
+		d.Reset()
+	}
+	d.Write(data)
+	d.Read(h[:])
+
+	if l > 0 && l <= 96 {
+		hashCache.Set(data, h[:])
+	}
+
+	return
 }
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
