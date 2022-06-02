@@ -146,7 +146,7 @@ func TestGetHeader(t *testing.T) {
 	err := json.Unmarshal(rr.Body.Bytes(), bid)
 	require.NoError(t, err)
 
-	expectedHeader, err := payloadToPayloadHeader(executableDataToExecutionPayload(forkchoiceData))
+	expectedHeader, err := payloadToPayloadHeader(executableDataToExecutionPayload(forkchoiceData), forkchoiceData)
 	require.NoError(t, err)
 	require.EqualValues(t, &boostTypes.BuilderBid{
 		Header: expectedHeader,

@@ -3,7 +3,6 @@ package builder
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"math/big"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/gorilla/mux"
 
 	"github.com/flashbots/go-boost-utils/bls"
@@ -358,7 +356,7 @@ func (b *Backend) newSealedBlock(data *beacon.ExecutableDataV1, block *types.Blo
 		log.Info("newSealedBlock", "data", string(dataJson))
 	}
 	payload := executableDataToExecutionPayload(data)
-	payloadHeader, err := payloadToPayloadHeader(payload)
+	payloadHeader, err := payloadToPayloadHeader(payload, data)
 	if err != nil {
 		log.Error("could not convert payload to header", "err", err)
 		return
@@ -371,23 +369,13 @@ func (b *Backend) newSealedBlock(data *beacon.ExecutableDataV1, block *types.Blo
 	b.bestDataLock.Unlock()
 }
 
-func decodeTransactions(enc []hexutil.Bytes) ([]*types.Transaction, error) {
-	var txs = make([]*types.Transaction, len(enc))
-	for i, encTx := range enc {
-		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
-			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
-		}
-		txs[i] = &tx
-	}
-	return txs, nil
-}
-
-func payloadToPayloadHeader(p *boostTypes.ExecutionPayload) (*boostTypes.ExecutionPayloadHeader, error) {
-	txs, err := decodeTransactions(p.Transactions)
+func payloadToPayloadHeader(p *boostTypes.ExecutionPayload, data *beacon.ExecutableDataV1) (*boostTypes.ExecutionPayloadHeader, error) {
+	txs := boostTypes.Transactions{data.Transactions}
+	txroot, err := txs.HashTreeRoot()
 	if err != nil {
 		return nil, err
 	}
+
 	return &boostTypes.ExecutionPayloadHeader{
 		ParentHash:       p.ParentHash,
 		FeeRecipient:     p.FeeRecipient,
@@ -399,10 +387,10 @@ func payloadToPayloadHeader(p *boostTypes.ExecutionPayload) (*boostTypes.Executi
 		GasLimit:         p.GasLimit,
 		GasUsed:          p.GasUsed,
 		Timestamp:        p.Timestamp,
-		ExtraData:        []byte(p.ExtraData),
+		ExtraData:        data.ExtraData,
 		BaseFeePerGas:    p.BaseFeePerGas,
 		BlockHash:        p.BlockHash,
-		TransactionsRoot: [32]byte(types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil))),
+		TransactionsRoot: [32]byte(txroot),
 	}, nil
 }
 
