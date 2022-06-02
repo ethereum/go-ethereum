@@ -314,6 +314,11 @@ func TestJWT(t *testing.T) {
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
 		return ss
 	}
+	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
+		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
+	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
+	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
+
 	expOk := []string{
 		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
 		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4})),
@@ -326,6 +331,14 @@ func TestJWT(t *testing.T) {
 			"iat": time.Now().Unix(),
 			"bar": "baz",
 		})),
+	}
+	for i, token := range expOk {
+		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
+			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
+		}
+		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
+			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
+		}
 	}
 	expFail := []string{
 		// future
@@ -350,19 +363,6 @@ func TestJWT(t *testing.T) {
 		fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
 		fmt.Sprintf("Bearer\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
 		fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-	}
-	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
-	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
-	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
-
-	for i, token := range expOk {
-		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
-			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
-		}
-		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
-			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
-		}
 	}
 	for i, token := range expFail {
 		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
