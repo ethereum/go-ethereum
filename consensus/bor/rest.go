@@ -91,17 +91,17 @@ func (h *HeimdallClient) FetchStateSyncEvents(fromID uint64, to int64) ([]*Event
 
 // FetchLatestCheckpoint fetches the latest bor submitted checkpoint from heimdall
 func (h *HeimdallClient) FetchLatestCheckpoint() (*Checkpoint, error) {
-	var checkpoint Checkpoint
+	checkpoint := &Checkpoint{}
 
 	response, err := h.Fetch("/checkpoints/latest", "")
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(response.Result, &checkpoint); err != nil {
+	if err = json.Unmarshal(response.Result, checkpoint); err != nil {
 		return nil, err
 	}
 
-	return &checkpoint, nil
+	return checkpoint, nil
 }
 
 // Fetch fetches response from heimdall

@@ -605,7 +605,7 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 			return
 		}
 
-		log.Warn("the first run", "err", err)
+		log.Warn("unable to whitelist checkpoint - first run", "err", err)
 	}
 
 	ticker := time.NewTicker(100 * time.Second)
@@ -616,7 +616,7 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 		case <-ticker.C:
 			err := s.handleWhitelistCheckpoint()
 			if err != nil {
-				log.Warn("couldn't get whitelist checkpoint", "err", err)
+				log.Warn("unable to whitelist checkpoint", "err", err)
 			}
 		case <-s.closeCh:
 			return
@@ -625,8 +625,8 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 }
 
 var (
-	ErrNotBorConsensus             = errors.New("not Bor consensus was given")
-	ErrBorConsensusWithoutHeimdall = errors.New("Bor consensus without Heimdall")
+	ErrNotBorConsensus             = errors.New("not bor consensus was given")
+	ErrBorConsensusWithoutHeimdall = errors.New("bor consensus without heimdall")
 )
 
 // handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.

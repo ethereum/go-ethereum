@@ -85,11 +85,17 @@ func (w *Service) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash
 // GetCheckpointWhitelist returns the existing whitelisted
 // entries of checkpoint of the form block number -> block hash.
 func (w *Service) GetCheckpointWhitelist() map[uint64]common.Hash {
+	w.m.Lock()
+	defer w.m.Unlock()
+
 	return w.checkpointWhitelist
 }
 
 // PurgeCheckpointWhitelist purges data from checkpoint whitelist map
 func (w *Service) PurgeCheckpointWhitelist() {
+	w.m.Lock()
+	defer w.m.Unlock()
+
 	w.checkpointWhitelist = make(map[uint64]common.Hash)
 	w.checkpointOrder = make([]uint64, 0)
 }
