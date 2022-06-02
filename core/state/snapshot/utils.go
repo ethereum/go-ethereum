@@ -33,7 +33,7 @@ import (
 // storage also has corresponding account data.
 func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
 	if err := checkDanglingDiskStorage(chaindb); err != nil {
-		return err
+		log.Error("Database check error", "err", err)
 	}
 	return checkDanglingMemStorage(chaindb)
 }
@@ -84,7 +84,7 @@ func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 		}
 		return nil
 	})
-	if !errors.Is(err, errNoJournal) {
+	if err != nil {
 		log.Info("Failed to resolve snapshot journal", "err", err)
 		return err
 	}
