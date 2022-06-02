@@ -196,13 +196,12 @@ func TestTraceCall(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	}))
-
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
 		call        ethapi.TransactionArgs
 		config      *TraceCallConfig
 		expectErr   error
-		expect      interface{}
+		expect      string
 	}{
 		// Standard JSON trace upon the genesis, plain transfer.
 		{
@@ -214,12 +213,7 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &logger.ExecutionResult{
-				Gas:         params.TxGas,
-				Failed:      false,
-				ReturnValue: "",
-				StructLogs:  []logger.StructLogRes{},
-			},
+			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
 		// Standard JSON trace upon the head, plain transfer.
 		{
@@ -231,12 +225,7 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &logger.ExecutionResult{
-				Gas:         params.TxGas,
-				Failed:      false,
-				ReturnValue: "",
-				StructLogs:  []logger.StructLogRes{},
-			},
+			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
 		// Standard JSON trace upon the non-existent block, error expects
 		{
@@ -248,7 +237,7 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: fmt.Errorf("block #%d not found", genBlocks+1),
-			expect:    nil,
+			//expect:    nil,
 		},
 		// Standard JSON trace upon the latest block
 		{
@@ -260,14 +249,9 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: nil,
-			expect: &logger.ExecutionResult{
-				Gas:         params.TxGas,
-				Failed:      false,
-				ReturnValue: "",
-				StructLogs:  []logger.StructLogRes{},
-			},
+			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},
-		// Standard JSON trace upon the pending block
+		// Tracing on 'pending' should fail:
 		{
 			blockNumber: rpc.PendingBlockNumber,
 			call: ethapi.TransactionArgs{
@@ -276,36 +260,48 @@ func TestTraceCall(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    nil,
-			expectErr: nil,
-			expect: &logger.ExecutionResult{
-				Gas:         params.TxGas,
-				Failed:      false,
-				ReturnValue: "",
-				StructLogs:  []logger.StructLogRes{},
+			expectErr: errors.New("tracing on top of pending is not supported"),
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From:  &accounts[0].addr,
+				Input: &hexutil.Bytes{0x43}, // blocknumber
 			},
+			config: &TraceCallConfig{
+				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+			},
+			expectErr: nil,
+			expect: ` {"gas":53018,"failed":false,"returnValue":"","structLogs":[
+		{"pc":0,"op":"NUMBER","gas":24946984,"gasCost":2,"depth":1,"stack":[]},
+		{"pc":1,"op":"STOP","gas":24946982,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
 		},
 	}
-	for _, testspec := range testSuite {
+	for i, testspec := range testSuite {
 		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
 		if testspec.expectErr != nil {
 			if err == nil {
-				t.Errorf("Expect error %v, get nothing", testspec.expectErr)
+				t.Errorf("test %d: expect error %v, got nothing", i, testspec.expectErr)
 				continue
 			}
 			if !reflect.DeepEqual(err, testspec.expectErr) {
-				t.Errorf("Error mismatch, want %v, get %v", testspec.expectErr, err)
+				t.Errorf("test %d: error mismatch, want %v, git %v", i, testspec.expectErr, err)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("Expect no error, get %v", err)
+				t.Errorf("test %d: expect no error, got %v", i, err)
 				continue
 			}
 			var have *logger.ExecutionResult
 			if err := json.Unmarshal(result.(json.RawMessage), &have); err != nil {
-				t.Errorf("failed to unmarshal result %v", err)
+				t.Errorf("test %d: failed to unmarshal result %v", i, err)
 			}
-			if !reflect.DeepEqual(have, testspec.expect) {
-				t.Errorf("Result mismatch, want %v, get %v", testspec.expect, have)
+			var want *logger.ExecutionResult
+			if err := json.Unmarshal([]byte(testspec.expect), &want); err != nil {
+				t.Errorf("test %d: failed to unmarshal result %v", i, err)
+			}
+			if !reflect.DeepEqual(have, want) {
+				t.Errorf("test %d: result mismatch, want %v, got %v", i, testspec.expect, string(result.(json.RawMessage)))
 			}
 		}
 	}
@@ -446,7 +442,7 @@ func TestTracingWithOverrides(t *testing.T) {
 	type res struct {
 		Gas         int
 		Failed      bool
-		returnValue string
+		ReturnValue string
 	}
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -457,7 +453,7 @@ func TestTracingWithOverrides(t *testing.T) {
 	}{
 		// Call which can only succeed if state is state overridden
 		{
-			blockNumber: rpc.PendingBlockNumber,
+			blockNumber: rpc.LatestBlockNumber,
 			call: ethapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
@@ -472,7 +468,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		},
 		// Invalid call without state overriding
 		{
-			blockNumber: rpc.PendingBlockNumber,
+			blockNumber: rpc.LatestBlockNumber,
 			call: ethapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
@@ -498,7 +494,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		//      }
 		//  }
 		{
-			blockNumber: rpc.PendingBlockNumber,
+			blockNumber: rpc.LatestBlockNumber,
 			call: ethapi.TransactionArgs{
 				From: &randomAccounts[0].addr,
 				To:   &randomAccounts[2].addr,
@@ -514,6 +510,39 @@ func TestTracingWithOverrides(t *testing.T) {
 				},
 			},
 			want: `{"gas":23347,"failed":false,"returnValue":"000000000000000000000000000000000000000000000000000000000000007b"}`,
+		},
+		{ // Override blocknumber
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From: &accounts[0].addr,
+				// BLOCKNUMBER PUSH1 MSTORE
+				Input: newRPCBytes(common.Hex2Bytes("4360005260206000f3")),
+				//&hexutil.Bytes{0x43}, // blocknumber
+			},
+			config: &TraceCallConfig{
+				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+			},
+			want: `{"gas":59537,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000001337"}`,
+		},
+		{ // Override blocknumber, and query a blockhash
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From: &accounts[0].addr,
+				Input: &hexutil.Bytes{
+					0x60, 0x00, 0x40, // BLOCKHASH(0)
+					0x60, 0x00, 0x52, // STORE memory offset 0
+					0x61, 0x13, 0x36, 0x40, // BLOCKHASH(0x1336)
+					0x60, 0x20, 0x52, // STORE memory offset 32
+					0x61, 0x13, 0x37, 0x40, // BLOCKHASH(0x1337)
+					0x60, 0x40, 0x52, // STORE memory offset 64
+					0x60, 0x60, 0x60, 0x00, 0xf3, // RETURN (0-96)
+
+				}, // blocknumber
+			},
+			config: &TraceCallConfig{
+				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+			},
+			want: `{"gas":72666,"failed":false,"returnValue":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
 		},
 	}
 	for i, tc := range testSuite {
