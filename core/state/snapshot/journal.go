@@ -35,6 +35,9 @@ import (
 
 const journalVersion uint64 = 0
 
+// errNoJournal is returned if there is no snapshot journal in disk.
+var errNoJournal = errors.New("snapshot journal is not-existent")
+
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
 	// Indicator that whether the database was in progress of being wiped.
@@ -108,16 +111,15 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// So if there is no journal, or the journal is invalid(e.g. the journal
 	// is not matched with disk layer; or the it's the legacy-format journal,
 	// etc.), we just discard all diffs and try to recover them later.
-	var parentLayer snapshot
-	parentLayer = base
+	var current snapshot = base
 	err := iterateJournal(db, func(parent common.Hash, root common.Hash, destructSet map[common.Hash]struct{}, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
-		parentLayer = newDiffLayer(parentLayer, root, destructSet, accountData, storageData)
+		current = newDiffLayer(current, root, destructSet, accountData, storageData)
 		return nil
 	})
 	if err != nil {
 		return base, generator, nil
 	}
-	return parentLayer, generator, nil
+	return current, generator, nil
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
@@ -272,7 +274,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 type journalCallback = func(parent common.Hash, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error
 
 // iterateJournal iterates through the journalled difflayers, loading them from
-// the datababase, and invoking the callback for each loaded layer.
+// the database, and invoking the callback for each loaded layer.
 // The order is incremental; starting with the bottom-most difflayer, going towards
 // the most recent layer.
 // This method returns error either if there was some error reading from disk,
@@ -281,7 +283,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
 		log.Warn("Loaded snapshot journal", "diffs", "missing")
-		return errors.New("missing journal")
+		return errNoJournal
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
 	// Firstly, resolve the first element as the journal version
@@ -358,64 +360,4 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		}
 		parent = root
 	}
-}
-
-// CheckJournalAccount shows information about an account, from the disk layer and
-// up through the diff layers.
-func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
-	// Look up the disk layer first
-	baseRoot := rawdb.ReadSnapshotRoot(db)
-	fmt.Printf("Disklayer: Root: %x\n", baseRoot)
-	if data := rawdb.ReadAccountSnapshot(db, hash); data != nil {
-		account := new(Account)
-		if err := rlp.DecodeBytes(data, account); err != nil {
-			panic(err)
-		}
-		fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
-		fmt.Printf("\taccount.balance: %x\n", account.Balance)
-		fmt.Printf("\taccount.root: %x\n", account.Root)
-		fmt.Printf("\taccount.codehash: %x\n", account.CodeHash)
-	}
-	// Check storage
-	{
-		it := rawdb.NewKeyLengthIterator(db.NewIterator(append(rawdb.SnapshotStoragePrefix, hash.Bytes()...), nil), 1+2*common.HashLength)
-		fmt.Printf("\tStorage:\n")
-		for it.Next() {
-			slot := it.Key()[33:]
-			fmt.Printf("\t\t%x: %x\n", slot, it.Value())
-		}
-		it.Release()
-	}
-	var depth = 0
-
-	return iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
-		_, a := accounts[hash]
-		_, b := destructs[hash]
-		_, c := storage[hash]
-		depth++
-		if !a && !b && !c {
-			return nil
-		}
-		fmt.Printf("Disklayer+%d: Root: %x, parent %x\n", depth, root, pRoot)
-		if data, ok := accounts[hash]; ok {
-			account := new(Account)
-			if err := rlp.DecodeBytes(data, account); err != nil {
-				panic(err)
-			}
-			fmt.Printf("\taccount.nonce: %d\n", account.Nonce)
-			fmt.Printf("\taccount.balance: %x\n", account.Balance)
-			fmt.Printf("\taccount.root: %x\n", account.Root)
-			fmt.Printf("\taccount.codehash: %x\n", account.CodeHash)
-		}
-		if _, ok := destructs[hash]; ok {
-			fmt.Printf("\t Destructed!")
-		}
-		if data, ok := storage[hash]; ok {
-			fmt.Printf("\tStorage\n")
-			for k, v := range data {
-				fmt.Printf("\t\t%x: %x\n", k, v)
-			}
-		}
-		return nil
-	})
 }

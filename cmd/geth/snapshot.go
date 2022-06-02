@@ -109,16 +109,9 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				ArgsUsage: "<address | hash>",
 				Action:    utils.MigrateFlags(checkAccount),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: []cli.Flag{
-					utils.DataDirFlag,
-					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
-				},
+				Flags: utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
-geth snapshot inspect-account <address> checks all snapshot layers and prints out
+geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
 information about the specified address. 
 `,
 			},
@@ -543,8 +536,10 @@ func checkAccount(ctx *cli.Context) error {
 	if ctx.NArg() != 1 {
 		return errors.New("need <address|hash> arg")
 	}
-	var addr common.Address
-	var hash common.Hash
+	var (
+		hash common.Hash
+		addr common.Address
+	)
 	switch len(ctx.Args()[0]) {
 	case 40, 42:
 		addr = common.HexToAddress(ctx.Args()[0])
