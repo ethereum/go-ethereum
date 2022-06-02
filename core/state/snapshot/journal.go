@@ -35,9 +35,6 @@ import (
 
 const journalVersion uint64 = 0
 
-// errNoJournal is returned if there is no snapshot journal in disk.
-var errNoJournal = errors.New("snapshot journal is not-existent")
-
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
 	// Indicator that whether the database was in progress of being wiped.
@@ -283,7 +280,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
 		log.Warn("Loaded snapshot journal", "diffs", "missing")
-		return errNoJournal
+		return nil
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)
 	// Firstly, resolve the first element as the journal version
