@@ -343,6 +343,14 @@ $ solc --abi --bin token.sol -o tokenDirectory
 $ abigen --abi tokenDirectory/token.abi --bin tokenDirectory/token.bin --pkg main --type token --out token.go
 ```
 
+You can use the ```solc``` compiler to get a single ```.json``` file containing ABI and bytecode, and then use
+it as input to ```abigen``` to generate the Go package in a shorter command:
+```
+$ solc token.sol --combined-json abi,bin -o .
+$ abigen --combined-json combined.json --pkg main --type token --out token.go
+```
+
+
 ### Project integration (i.e. `go generate`)
 
 The `abigen` command was made in such a way as to play beautifully together with existing
