@@ -118,6 +118,7 @@ func TestGetHeader(t *testing.T) {
 		BlockHash:     common.HexToHash("0xbfbfbfb"),
 		BaseFeePerGas: big.NewInt(12),
 		ExtraData:     []byte{},
+		LogsBloom:     []byte{0x00, 0x05, 0x10},
 	}
 	forkchoiceBlock := &types.Block{
 		Profit: big.NewInt(10),

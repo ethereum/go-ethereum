@@ -399,14 +399,13 @@ func executableDataToExecutionPayload(data *beacon.ExecutableDataV1) *boostTypes
 	for i, tx := range data.Transactions {
 		transactionData[i] = hexutil.Bytes(tx)
 	}
-	logsBloom := boostTypes.Bloom{}
-	logsBloom.FromSlice(data.LogsBloom)
+
 	return &boostTypes.ExecutionPayload{
 		ParentHash:    [32]byte(data.ParentHash),
 		FeeRecipient:  [20]byte(data.FeeRecipient),
 		StateRoot:     [32]byte(data.StateRoot),
 		ReceiptsRoot:  [32]byte(data.ReceiptsRoot),
-		LogsBloom:     logsBloom,
+		LogsBloom:     boostTypes.Bloom(types.BytesToBloom(data.LogsBloom)),
 		Random:        [32]byte(data.Random),
 		BlockNumber:   data.Number,
 		GasLimit:      data.GasLimit,

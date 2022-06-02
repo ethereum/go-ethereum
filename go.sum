@@ -172,10 +172,8 @@ github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c h1:CndMRAH4JIwxbW8KYq
 github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c/go.mod h1:AzA8Lj6YtixmJWL+wkKoBGsLWy9gFrAzi4g+5bCKwpY=
 github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5 h1:FtmdgXiUlNeRsoNMFlKLDt+S+6hbjVMEW6RGQ7aUf7c=
 github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5/go.mod h1:VvhXpOYNQvB+uIk2RvXzuaQtkQJzzIx6lSBe1xv7hi0=
-github.com/flashbots/go-boost-utils v0.1.2 h1:xcwO6rhLmdbZ+ttN8PjHQynqY1pm+RCA56eGP9wPp10=
-github.com/flashbots/go-boost-utils v0.1.2/go.mod h1:v4f01OjPm5jFjzVhcJEKHLFZzX/yTeme9284Tbuah8s=
-github.com/flashbots/go-boost-utils v0.1.3-0.20220601173756-01db408b8c89 h1:3wVzFGJbXm8BjuFav3ZPKFAz01IY6JDjV38b3Ccuk2I=
-github.com/flashbots/go-boost-utils v0.1.3-0.20220601173756-01db408b8c89/go.mod h1:v4f01OjPm5jFjzVhcJEKHLFZzX/yTeme9284Tbuah8s=
+github.com/flashbots/go-boost-utils v0.1.3-0.20220601182529-417a64679a5d h1:hoqkcRKMupXCWW38fDfvNcuIxl9eCAZrguw3dNCw+Qg=
+github.com/flashbots/go-boost-utils v0.1.3-0.20220601182529-417a64679a5d/go.mod h1:v4f01OjPm5jFjzVhcJEKHLFZzX/yTeme9284Tbuah8s=
 github.com/flashbots/go-utils v0.4.4 h1:J0LUifVEpVYE+ZbK/DeGay4E3B6+Yh8pKLgfv5A0Oq0=
 github.com/flashbots/go-utils v0.4.4/go.mod h1:weSbiNnH+xsmK8t3TDDJxluv4+qnwRWmKay2QQa8Yfc=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
