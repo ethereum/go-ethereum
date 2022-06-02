@@ -359,3 +359,11 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(block, txIndex, reexec)
 }
+
+func (b *EthAPIBackend) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return b.eth.Downloader().ChainValidator.GetCheckpointWhitelist()
+}
+
+func (b *EthAPIBackend) PurgeCheckpointWhitelist() {
+	b.eth.Downloader().ChainValidator.PurgeCheckpointWhitelist()
+}

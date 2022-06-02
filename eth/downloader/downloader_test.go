@@ -1420,6 +1420,12 @@ func (w *whitelistFake) IsValidChain(remoteHeader *types.Header, fetchHeadersByN
 
 func (w *whitelistFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
 
+func (w *whitelistFake) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return nil
+}
+
+func (w *whitelistFake) PurgeCheckpointWhitelist() {}
+
 // TestFakedSyncProgress66WhitelistMismatch tests if in case of whitelisted
 // checkpoint mismatch with opposite peer, the sync should fail.
 func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {

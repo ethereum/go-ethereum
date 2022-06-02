@@ -82,12 +82,16 @@ func (w *Service) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash
 	}
 }
 
-// PurgeWhitelistMap purges data from checkpoint whitelist map
-func (w *Service) purgeWhitelistMap() error {
-	for k := range w.checkpointWhitelist {
-		delete(w.checkpointWhitelist, k)
-	}
-	return nil
+// GetCheckpointWhitelist returns the existing whitelisted
+// entries of checkpoint of the form block number -> block hash.
+func (w *Service) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return w.checkpointWhitelist
+}
+
+// PurgeCheckpointWhitelist purges data from checkpoint whitelist map
+func (w *Service) PurgeCheckpointWhitelist() {
+	w.checkpointWhitelist = make(map[uint64]common.Hash)
+	w.checkpointOrder = make([]uint64, 0)
 }
 
 // EnqueueWhitelistBlock enqueues blockNumber, blockHash to the checkpoint whitelist map
