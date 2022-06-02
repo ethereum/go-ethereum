@@ -109,7 +109,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				ArgsUsage: "<address | hash>",
 				Action:    utils.MigrateFlags(checkAccount),
 				Category:  "MISCELLANEOUS COMMANDS",
-				Flags: utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
 information about the specified address. 
