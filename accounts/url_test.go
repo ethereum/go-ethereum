@@ -36,6 +36,11 @@ func TestURLParsing(t *testing.T) {
 	if err == nil {
 		t.Error("expected err, got: nil")
 	}
+
+	_, err = parseURL("")
+	if err == nil {
+		t.Error("expected err, got: nil")
+	}
 }
 
 func TestURLString(t *testing.T) {
