@@ -37,10 +37,18 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer engine.Close()
+
 	h, heimdallSpan, ctrl := getMockedHeimdallClient(t)
 	defer ctrl.Finish()
 
-	h.EXPECT().FetchLatestCheckpoint().Return(&bor.Checkpoint{}, nil).AnyTimes()
+	_, span := loadSpanFromFile(t)
+
+	h.EXPECT().FetchLatestCheckpoint().Return(&bor.Checkpoint{
+		Proposer:   span.SelectedProducers[0].Address,
+		StartBlock: big.NewInt(0),
+		EndBlock:   big.NewInt(int64(spanSize)),
+	}, nil).Times(1)
 
 	_bor.SetHeimdallClient(h)
 

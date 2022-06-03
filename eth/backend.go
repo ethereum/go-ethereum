@@ -598,6 +598,13 @@ func (s *Ethereum) Start() error {
 // StartCheckpointWhitelistService starts the goroutine to fetch checkpoints and update the
 // checkpoint whitelist map.
 func (s *Ethereum) startCheckpointWhitelistService() {
+	// a shortcut helps with tests and early exit
+	select {
+	case <-s.closeCh:
+		return
+	default:
+	}
+
 	// first run the checkpoint whitelist
 	err := s.handleWhitelistCheckpoint()
 	if err != nil {
