@@ -49,7 +49,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 		Proposer:   span.SelectedProducers[0].Address,
 		StartBlock: big.NewInt(0),
 		EndBlock:   big.NewInt(int64(spanSize)),
-	}, nil).Times(1)
+	}, nil).AnyTimes()
 
 	_bor.SetHeimdallClient(h)
 
