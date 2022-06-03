@@ -316,11 +316,11 @@ func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 	helper := newHelper()
 
-	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-2")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-4")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
-	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-6")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-2")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-4")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
+	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-6")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
 	// Trie accounts [acc-1, acc-2, acc-3, acc-4, acc-6]
 	// Extra accounts [acc-0, acc-5, acc-7]
