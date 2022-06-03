@@ -108,6 +108,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: append([]cli.Flag{
+			utils.ExportReceiptsFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 		}, utils.DatabasePathFlags...),
@@ -311,7 +312,7 @@ func exportChain(ctx *cli.Context) error {
 	var err error
 	fp := ctx.Args().First()
 	if len(ctx.Args()) < 3 {
-		err = utils.ExportChain(chain, fp)
+		err = utils.ExportChain(chain, fp, ctx.GlobalBool(utils.ExportReceiptsFlag.Name))
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
@@ -325,7 +326,7 @@ func exportChain(ctx *cli.Context) error {
 		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
 			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
 		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last), ctx.GlobalBool(utils.ExportReceiptsFlag.Name))
 	}
 
 	if err != nil {

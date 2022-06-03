@@ -189,10 +189,10 @@ func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64
 
 	// Export the blockchain
 	if first != nil {
-		if err := api.eth.BlockChain().ExportN(writer, *first, *last); err != nil {
+		if err := api.eth.BlockChain().ExportN(writer, *first, *last, false); err != nil {
 			return false, err
 		}
-	} else if err := api.eth.BlockChain().Export(writer); err != nil {
+	} else if err := api.eth.BlockChain().Export(writer, false); err != nil {
 		return false, err
 	}
 	return true, nil

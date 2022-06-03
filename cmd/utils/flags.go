@@ -829,6 +829,10 @@ var (
 		Usage: "InfluxDB organization name (v2 only)",
 		Value: metrics.DefaultConfig.InfluxDBOrganization,
 	}
+	ExportReceiptsFlag = cli.BoolFlag{
+		Name:  "export.receipts",
+		Usage: "Include receipts in exported blocks",
+	}
 )
 
 var (
