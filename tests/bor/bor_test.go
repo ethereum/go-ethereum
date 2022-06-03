@@ -44,6 +44,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	_, span := loadSpanFromFile(t)
 
+	h.EXPECT().Close().AnyTimes()
 	h.EXPECT().FetchLatestCheckpoint().Return(&bor.Checkpoint{
 		Proposer:   span.SelectedProducers[0].Address,
 		StartBlock: big.NewInt(0),
@@ -80,6 +81,8 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer engine.Close()
+
 	// A. Insert blocks for 0th sprint
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
@@ -97,6 +100,7 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	defer ctrl.Finish()
 
 	h := mocks.NewMockIHeimdallClient(ctrl)
+	h.EXPECT().Close().AnyTimes()
 
 	// B.2 Mock State Sync events
 	fromID := uint64(1)
@@ -123,6 +127,8 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer _bor.Close()
+
 	// Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
 
@@ -130,6 +136,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	defer ctrl.Finish()
 
 	h := mocks.NewMockIHeimdallClient(ctrl)
+	h.EXPECT().Close().AnyTimes()
 	h.EXPECT().FetchWithRetry(spanPath, "").Return(res, nil).AnyTimes()
 
 	// Mock State Sync events
@@ -190,9 +197,12 @@ func TestOutOfTurnSigning(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer _bor.Close()
+
 	h, _, ctrl := getMockedHeimdallClient(t)
 	defer ctrl.Finish()
 
+	h.EXPECT().Close().AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -243,8 +253,12 @@ func TestSignerNotFound(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer _bor.Close()
+
 	h, _, ctrl := getMockedHeimdallClient(t)
 	defer ctrl.Finish()
+
+	h.EXPECT().Close().AnyTimes()
 
 	_bor.SetHeimdallClient(h)
 
