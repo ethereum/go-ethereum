@@ -34,49 +34,6 @@ import (
 )
 
 var (
-	snapshotCleanAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/account/hit", nil)
-	snapshotCleanAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/miss", nil)
-	snapshotCleanAccountInexMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/inex", nil)
-	snapshotCleanAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/account/read", nil)
-	snapshotCleanAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/account/write", nil)
-
-	snapshotCleanStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/clean/storage/hit", nil)
-	snapshotCleanStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/miss", nil)
-	snapshotCleanStorageInexMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/inex", nil)
-	snapshotCleanStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/clean/storage/read", nil)
-	snapshotCleanStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/clean/storage/write", nil)
-
-	snapshotDirtyAccountHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/account/hit", nil)
-	snapshotDirtyAccountMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/miss", nil)
-	snapshotDirtyAccountInexMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/inex", nil)
-	snapshotDirtyAccountReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/account/read", nil)
-	snapshotDirtyAccountWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/account/write", nil)
-
-	snapshotDirtyStorageHitMeter   = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/hit", nil)
-	snapshotDirtyStorageMissMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/miss", nil)
-	snapshotDirtyStorageInexMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/inex", nil)
-	snapshotDirtyStorageReadMeter  = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/read", nil)
-	snapshotDirtyStorageWriteMeter = metrics.NewRegisteredMeter("state/snapshot/dirty/storage/write", nil)
-
-	snapshotDirtyAccountHitDepthHist = metrics.NewRegisteredHistogram("state/snapshot/dirty/account/hit/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
-	snapshotDirtyStorageHitDepthHist = metrics.NewRegisteredHistogram("state/snapshot/dirty/storage/hit/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
-
-	snapshotFlushAccountItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/item", nil)
-	snapshotFlushAccountSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/account/size", nil)
-	snapshotFlushStorageItemMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/item", nil)
-	snapshotFlushStorageSizeMeter = metrics.NewRegisteredMeter("state/snapshot/flush/storage/size", nil)
-
-	snapshotBloomIndexTimer = metrics.NewRegisteredResettingTimer("state/snapshot/bloom/index", nil)
-	snapshotBloomErrorGauge = metrics.NewRegisteredGaugeFloat64("state/snapshot/bloom/error", nil)
-
-	snapshotBloomAccountTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/account/truehit", nil)
-	snapshotBloomAccountFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/account/falsehit", nil)
-	snapshotBloomAccountMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/account/miss", nil)
-
-	snapshotBloomStorageTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/truehit", nil)
-	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
-	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
-
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
@@ -554,13 +511,22 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		rawdb.DeleteAccountSnapshot(batch, hash)
 		base.cache.Set(hash[:], nil)
 
+		snapshotFlushAccountItemMeter.Mark(1)
+		if metrics.EnabledExpensive {
+			snapshotAccountCountGrowthMeter.Mark(-1)
+			snapshotAccountBytesGrowthMeter.Mark(-int64(common.HashLength + len(rawdb.ReadAccountSnapshot(base.diskdb, hash))))
+		}
 		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
 		for it.Next() {
 			key := it.Key()
 			batch.Delete(key)
 			base.cache.Del(key[1:])
-			snapshotFlushStorageItemMeter.Mark(1)
 
+			snapshotFlushStorageItemMeter.Mark(1)
+			if metrics.EnabledExpensive {
+				snapshotStorageCountGrowthMeter.Mark(-1)
+				snapshotStorageBytesGrowthMeter.Mark(-int64(2*common.HashLength + len(it.Value())))
+			}
 			// Ensure we don't delete too much data blindly (contract can be
 			// huge). It's ok to flush, the root will go missing in case of a
 			// crash and we'll detect and regenerate the snapshot.
@@ -582,11 +548,18 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// Push the account to disk
 		rawdb.WriteAccountSnapshot(batch, hash, data)
 		base.cache.Set(hash[:], data)
-		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
+		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
-
+		if metrics.EnabledExpensive {
+			if oldbytes := len(rawdb.ReadAccountSnapshot(base.diskdb, hash)); oldbytes == 0 {
+				snapshotAccountCountGrowthMeter.Mark(1)
+				snapshotAccountBytesGrowthMeter.Mark(common.HashLength + int64(len(data)))
+			} else {
+				snapshotAccountBytesGrowthMeter.Mark(int64(len(data) - oldbytes))
+			}
+		}
 		// Ensure we don't write too much data blindly. It's ok to flush, the
 		// root will go missing in case of a crash and we'll detect and regen
 		// the snapshot.
@@ -614,10 +587,22 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			if len(data) > 0 {
 				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
+
 				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
+				if metrics.EnabledExpensive {
+					if oldbytes := len(rawdb.ReadStorageSnapshot(base.diskdb, accountHash, storageHash)); oldbytes == 0 {
+						snapshotStorageCountGrowthMeter.Mark(1)
+						snapshotStorageBytesGrowthMeter.Mark(2*common.HashLength + int64(len(data)))
+					} else {
+						snapshotStorageBytesGrowthMeter.Mark(int64(len(data) - oldbytes))
+					}
+				}
 			} else {
 				rawdb.DeleteStorageSnapshot(batch, accountHash, storageHash)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), nil)
+
+				snapshotStorageCountGrowthMeter.Mark(-1)
+				snapshotStorageBytesGrowthMeter.Mark(-int64(2*common.HashLength + len(rawdb.ReadStorageSnapshot(base.diskdb, accountHash, storageHash))))
 			}
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
