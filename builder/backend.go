@@ -412,7 +412,7 @@ func executableDataToExecutionPayload(data *beacon.ExecutableDataV1) *boostTypes
 		GasUsed:       data.GasUsed,
 		Timestamp:     data.Timestamp,
 		ExtraData:     data.ExtraData,
-		BaseFeePerGas: [32]byte(common.BytesToHash(data.BaseFeePerGas.Bytes())),
+		BaseFeePerGas: *new(boostTypes.U256Str).FromBig(data.BaseFeePerGas),
 		BlockHash:     [32]byte(data.BlockHash),
 		Transactions:  transactionData,
 	}
