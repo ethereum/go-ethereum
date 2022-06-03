@@ -70,7 +70,17 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 
 	cfg, _ := verkle.GetConfig()
 	ret := cfg.CommitToPoly(poly[:], 0)
-	retb := ret.Bytes()
+
+	// The output of Byte() is big engian for banderwagon. This
+	// introduces an inbalance in the tree, because hashes are
+	// elements of a 253-bit field. This means more than half the
+	// tree would be empty. To avoid this problem, use a little
+	// endian commitment and chop the MSB.
+	var retb [32]byte
+	retb = ret.Bytes()
+	for i := 0; i < 16; i++ {
+		retb[31-i], retb[i] = retb[i], retb[31-i]
+	}
 	retb[31] = subIndex
 	return retb[:]
 
