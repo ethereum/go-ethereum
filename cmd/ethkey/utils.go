@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -34,7 +34,7 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 	// Look for the --passwordfile flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
-		content, err := ioutil.ReadFile(passphraseFile)
+		content, err := os.ReadFile(passphraseFile)
 		if err != nil {
 			utils.Fatalf("Failed to read password file '%s': %v",
 				passphraseFile, err)

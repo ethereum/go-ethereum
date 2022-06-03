@@ -40,6 +40,8 @@ import (
 var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
+	testSlot    = common.HexToHash("0xdeadbeef")
+	testValue   = crypto.Keccak256Hash(testSlot[:])
 	testBalance = big.NewInt(2e15)
 )
 
@@ -73,7 +75,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
 		Config:    config,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
@@ -191,7 +193,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 func testGetProof(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
-	result, err := ec.GetProof(context.Background(), testAddr, []string{}, nil)
+	result, err := ec.GetProof(context.Background(), testAddr, []string{testSlot.String()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,6 +210,19 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if result.Balance.Cmp(balance) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
 	}
+	// test storage
+	if len(result.StorageProof) != 1 {
+		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
+	}
+	proof := result.StorageProof[0]
+	slotValue, _ := ethcl.StorageAt(context.Background(), testAddr, testSlot, nil)
+	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
+		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
+	}
+	if proof.Key != testSlot.String() {
+		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
+	}
+
 }
 
 func testGCStats(t *testing.T, client *rpc.Client) {

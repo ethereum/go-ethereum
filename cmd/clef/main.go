@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"os/signal"
@@ -374,7 +373,7 @@ func initializeSecrets(c *cli.Context) error {
 		return fmt.Errorf("master key %v already exists, will not overwrite", location)
 	}
 	// Write the file and print the usual warning message
-	if err = ioutil.WriteFile(location, cipherSeed, 0400); err != nil {
+	if err = os.WriteFile(location, cipherSeed, 0400); err != nil {
 		return err
 	}
 	fmt.Printf("A master seed has been generated into %s\n", location)
@@ -593,7 +592,7 @@ func signer(c *cli.Context) error {
 
 		// Do we have a rule-file?
 		if ruleFile := c.GlobalString(ruleFlag.Name); ruleFile != "" {
-			ruleJS, err := ioutil.ReadFile(ruleFile)
+			ruleJS, err := os.ReadFile(ruleFile)
 			if err != nil {
 				log.Warn("Could not load rules, disabling", "file", ruleFile, "err", err)
 			} else {
@@ -661,7 +660,7 @@ func signer(c *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)
 		}
-		handler := node.NewHTTPHandlerStack(srv, cors, vhosts)
+		handler := node.NewHTTPHandlerStack(srv, cors, vhosts, nil)
 
 		// set port
 		port := c.Int(rpcPortFlag.Name)
@@ -751,7 +750,7 @@ func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	if err := checkFile(file); err != nil {
 		return nil, err
 	}
-	cipherKey, err := ioutil.ReadFile(file)
+	cipherKey, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}

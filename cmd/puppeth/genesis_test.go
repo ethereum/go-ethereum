@@ -19,7 +19,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,7 +30,7 @@ import (
 
 // Tests the go-ethereum to Aleth chainspec conversion for the Stureby testnet.
 func TestAlethSturebyConverter(t *testing.T) {
-	blob, err := ioutil.ReadFile("testdata/stureby_geth.json")
+	blob, err := os.ReadFile("testdata/stureby_geth.json")
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestAlethSturebyConverter(t *testing.T) {
 		t.Fatalf("failed creating chainspec: %v", err)
 	}
 
-	expBlob, err := ioutil.ReadFile("testdata/stureby_aleth.json")
+	expBlob, err := os.ReadFile("testdata/stureby_aleth.json")
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestAlethSturebyConverter(t *testing.T) {
 
 // Tests the go-ethereum to Parity chainspec conversion for the Stureby testnet.
 func TestParitySturebyConverter(t *testing.T) {
-	blob, err := ioutil.ReadFile("testdata/stureby_geth.json")
+	blob, err := os.ReadFile("testdata/stureby_geth.json")
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestParitySturebyConverter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed encoding chainspec: %v", err)
 	}
-	expBlob, err := ioutil.ReadFile("testdata/stureby_parity.json")
+	expBlob, err := os.ReadFile("testdata/stureby_parity.json")
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)
 	}
