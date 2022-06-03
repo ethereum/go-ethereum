@@ -35,6 +35,7 @@ type Checkpoint struct {
 	Timestamp  uint64         `json:"timestamp"`
 }
 
+//go:generate mockgen -destination=../../tests/bor/mocks/IHeimdallClient.go -package=mocks . IHeimdallClient
 type IHeimdallClient interface {
 	Fetch(path string, query string) (*ResponseWithHeight, error)
 	FetchWithRetry(path string, query string) (*ResponseWithHeight, error)
