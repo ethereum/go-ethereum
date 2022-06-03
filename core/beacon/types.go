@@ -186,12 +186,11 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	return block, nil
 }
 
-// BlockToWrappedExecutableData constructs the executableDataV1 structure by filling the
+// BlockToExecutableData constructs the executableDataV1 structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
 // Additional blob contents are provided as well.
-func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *BlobsBundleV1, error) {
-	txs := encodeTransactions(block.Transactions())
-	execData := &ExecutableDataV1{
+func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
+	return &ExecutableDataV1{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
 		FeeRecipient:  block.Coinbase(),
@@ -203,21 +202,25 @@ func BlockToWrappedExecutableData(block *types.Block) (*ExecutableDataV1, *Blobs
 		Timestamp:     block.Time(),
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  txs,
+		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
-	blobsBundle := &BlobsBundleV1{BlockHash: execData.BlockHash}
+}
+
+func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
+	blockHash := block.Hash()
+	blobsBundle := &BlobsBundleV1{BlockHash: blockHash}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
 			versionedHashes, kzgs, blobs := tx.BlobWrapData()
 			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
-				return nil, nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
-					" / versioned hashes (%d)", i, execData.BlockHash, len(blobs), len(kzgs), len(versionedHashes))
+				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
+					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
 			}
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
 			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
 		}
 	}
-	return execData, blobsBundle, nil
+	return blobsBundle, nil
 }

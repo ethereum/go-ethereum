@@ -260,7 +260,7 @@ func EncodeSSZ(w io.Writer, obj codec.Serializable) error {
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, TxWrapData, error) {
 	if len(b) == 0 {
-		return nil, nil, errEmptyTypedTx
+		return nil, nil, errShortTypedTx
 	}
 	switch b[0] {
 	case BlobTxType:
