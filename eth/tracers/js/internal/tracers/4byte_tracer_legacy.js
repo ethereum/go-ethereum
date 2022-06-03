@@ -46,7 +46,7 @@
 		return false;
 	},
 
-	// store save the given indentifier and datasize.
+	// store save the given identifier and datasize.
 	store: function(id, size){
 		var key = "" + toHex(id) + "-" + size;
 		this.ids[key] = this.ids[key] + 1 || 1;
