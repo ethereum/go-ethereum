@@ -40,6 +40,8 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	h, heimdallSpan, ctrl := getMockedHeimdallClient(t)
 	defer ctrl.Finish()
 
+	h.EXPECT().FetchLatestCheckpoint().Return(&bor.Checkpoint{}, nil).AnyTimes()
+
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
