@@ -378,5 +378,17 @@ func TestProposedBlockMessageHandlerNotGenerateVoteIfSignerNotInMNlist(t *testin
 	}
 
 	err = engineV2.ProposedBlockHandler(blockchain, currentBlock.Header())
-	assert.Equal(t, "Not in the master node list, not suppose to vote", err.Error())
+	if err != nil {
+		t.Fatal("Fail propose proposedBlock handler", err)
+	}
+
+	// Should not receive anything from the channel
+	select {
+	case <-engineV2.BroadcastCh:
+		t.Fatal("Should not trigger vote")
+	case <-time.After(2 * time.Second):
+		// Shoud not trigger setNewRound
+		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
+		assert.Equal(t, types.Round(6), round)
+	}
 }

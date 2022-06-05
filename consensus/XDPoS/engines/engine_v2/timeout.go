@@ -208,12 +208,12 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 	defer x.lock.Unlock()
 
 	// Check if we are within the master node list
-	err := x.allowedToSend(chain.(consensus.ChainReader), chain.(consensus.ChainReader).CurrentHeader(), "timeout")
-	if err != nil {
-		return err
+	allow := x.allowedToSend(chain.(consensus.ChainReader), chain.(consensus.ChainReader).CurrentHeader(), "timeout")
+	if !allow {
+		return nil
 	}
 
-	err = x.sendTimeout(chain.(consensus.ChainReader))
+	err := x.sendTimeout(chain.(consensus.ChainReader))
 	if err != nil {
 		log.Error("Error while sending out timeout message at time: ", time)
 		return err

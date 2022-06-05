@@ -507,7 +507,7 @@ func (s *Ethereum) StartStaking(local bool) error {
 	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
+			log.Error("Etherbase account unavailable locally", "err", err, "address", eb.Hex())
 			return fmt.Errorf("signer missing: %v", err)
 		}
 		XDPoS.Authorize(eb, wallet.SignHash)
