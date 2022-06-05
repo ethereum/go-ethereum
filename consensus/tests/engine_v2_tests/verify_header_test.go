@@ -98,7 +98,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	assert.Equal(t, consensus.ErrUnknownAncestor, err)
 
 	tooFastMinedBlock := blockchain.GetBlockByNumber(902).Header()
-	tooFastMinedBlock.Time = big.NewInt(time.Now().Unix() - 2)
+	tooFastMinedBlock.Time = big.NewInt(time.Now().Unix() - 10)
 	err = adaptor.VerifyHeader(blockchain, tooFastMinedBlock, true)
 	assert.Equal(t, utils.ErrInvalidTimestamp, err)
 
@@ -156,12 +156,17 @@ func TestShouldVerifyBlock(t *testing.T) {
 	err = adaptor.VerifyHeader(blockchain, coinbaseValidatorMismatchBlock, true)
 	assert.Equal(t, utils.ErrCoinbaseAndValidatorMismatch, err)
 
-	// Make the validators not legit by adding something to the penalty
+	// Make the validators not legit by adding something to the validator
 	validatorsNotLegit := blockchain.GetBlockByNumber(901).Header()
-
 	validatorsNotLegit.Validators = append(validatorsNotLegit.Validators, acc1Addr[:]...)
 	err = adaptor.VerifyHeader(blockchain, validatorsNotLegit, true)
 	assert.Equal(t, utils.ErrValidatorsNotLegit, err)
+
+	// Make the penalties not legit by adding something to the penalty
+	penaltiesNotLegit := blockchain.GetBlockByNumber(901).Header()
+	penaltiesNotLegit.Penalties = append(penaltiesNotLegit.Penalties, acc1Addr[:]...)
+	err = adaptor.VerifyHeader(blockchain, penaltiesNotLegit, true)
+	assert.Equal(t, utils.ErrPenaltiesNotLegit, err)
 }
 
 func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {

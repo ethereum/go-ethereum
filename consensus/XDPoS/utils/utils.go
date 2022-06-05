@@ -53,16 +53,27 @@ func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
 // compare 2 signers lists
 // return true if they are same elements, otherwise return false
 func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
-	if len(list1) == 0 && len(list2) == 0 {
+	l1 := make([]common.Address, len(list1))
+	l2 := make([]common.Address, len(list2))
+
+	copy(l1, list1)
+	copy(l2, list2)
+
+	if len(l1) == 0 && len(l2) == 0 {
 		return true
 	}
-	sort.Slice(list1, func(i, j int) bool {
-		return list1[i].String() <= list1[j].String()
+
+	if len(l1) != len(l2) {
+		return false
+	}
+
+	sort.Slice(l1, func(i, j int) bool {
+		return l1[i].String() <= l1[j].String()
 	})
-	sort.Slice(list2, func(i, j int) bool {
-		return list2[i].String() <= list2[j].String()
+	sort.Slice(l2, func(i, j int) bool {
+		return l2[i].String() <= l2[j].String()
 	})
-	return reflect.DeepEqual(list1, list2)
+	return reflect.DeepEqual(l1, l2)
 }
 
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
