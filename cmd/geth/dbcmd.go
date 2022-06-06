@@ -519,7 +519,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 			return err
 		}
 	}
-	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	theTrie, err := trie.New(common.Hash{}, stRoot, trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
