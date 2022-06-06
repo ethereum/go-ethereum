@@ -354,7 +354,12 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 func (api *ConsensusAPI) invalid(err error, latestValid *types.Block) beacon.PayloadStatusV1 {
 	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
 	if latestValid != nil {
-		currentHash = latestValid.Hash()
+		// Set latest valid hash to 0x0 if parent is PoW block
+		currentHash = common.Hash{}
+		if latestValid.Difficulty().BitLen() == 0 {
+			// Otherwise set latest valid hash to parent hash
+			currentHash = latestValid.Hash()
+		}
 	}
 	errorMsg := err.Error()
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
