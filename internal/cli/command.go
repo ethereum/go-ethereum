@@ -84,6 +84,16 @@ func Commands() map[string]MarkDownCommandFactory {
 		},
 		"debug": func() (MarkDownCommand, error) {
 			return &DebugCommand{
+				UI: ui,
+			}, nil
+		},
+		"debug pprof": func() (MarkDownCommand, error) {
+			return &DebugPprofCommand{
+				Meta2: meta2,
+			}, nil
+		},
+		"debug block": func() (MarkDownCommand, error) {
+			return &DebugBlockCommand{
 				Meta2: meta2,
 			}, nil
 		},

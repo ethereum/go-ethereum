@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -43,6 +44,9 @@ type Server struct {
 	grpcServer *grpc.Server
 	tracer     *sdktrace.TracerProvider
 	config     *Config
+
+	// tracerAPI to trace block executions
+	tracerAPI *tracers.API
 }
 
 func NewServer(config *Config) (*Server, error) {
@@ -162,6 +166,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	// debug tracing is enabled by default
 	stack.RegisterAPIs(tracers.APIs(srv.backend.APIBackend))
+	srv.tracerAPI = tracers.NewAPI(srv.backend.APIBackend)
 
 	// graphql is started from another place
 	if config.JsonRPC.Graphql.Enabled {
@@ -200,6 +205,7 @@ func NewServer(config *Config) (*Server, error) {
 
 func (s *Server) Stop() {
 	s.node.Close()
+	s.grpcServer.Stop()
 
 	// shutdown the tracer
 	if s.tracer != nil {
@@ -353,4 +359,12 @@ func setupLogger(logLevel string) {
 		glogger.Verbosity(log.LvlInfo)
 	}
 	log.Root().SetHandler(glogger)
+}
+
+func (s *Server) GetLatestBlockNumber() *big.Int {
+	return s.backend.BlockChain().CurrentBlock().Number()
+}
+
+func (s *Server) GetGrpcAddr() string {
+	return s.config.GRPC.Addr[1:]
 }

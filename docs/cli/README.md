@@ -22,6 +22,10 @@
 
 - [```debug```](./debug.md)
 
+- [```debug block```](./debug_block.md)
+
+- [```debug pprof```](./debug_pprof.md)
+
 - [```fingerprint```](./fingerprint.md)
 
 - [```peers```](./peers.md)

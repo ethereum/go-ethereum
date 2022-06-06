@@ -2,13 +2,9 @@
 
 The ```bor debug``` command takes a debug dump of the running client.
 
-## Options
+- [```bor debug pprof```](./debug_pprof.md): Dumps bor pprof traces.
 
-- ```address```: Address of the grpc endpoint
-
-- ```seconds```: seconds to trace
-
-- ```output```: Output directory
+- [```bor debug block <number>```](./debug_block.md): Dumps bor block traces.
 
 ## Examples
 
