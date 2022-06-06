@@ -171,7 +171,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 		t.Fatalf("snaproot: %#x != trieroot #%x", snapRoot, trieRoot)
 	}
 	if err := CheckDanglingStorage(snap.diskdb); err != nil {
-		t.Fatalf("Detected dangling storages %v", err)
+		t.Fatalf("Detected dangling storages: %v", err)
 	}
 }
 

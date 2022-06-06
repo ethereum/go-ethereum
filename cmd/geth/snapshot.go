@@ -104,6 +104,18 @@ data, and verifies that all snapshot storage data has a corresponding account.
 `,
 			},
 			{
+				Name:      "inspect-account",
+				Usage:     "Check all snapshot layers for the a specific account",
+				ArgsUsage: "<address | hash>",
+				Action:    utils.MigrateFlags(checkAccount),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
+				Description: `
+geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
+information about the specified address. 
+`,
+			},
+			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
@@ -533,5 +545,37 @@ func dumpState(ctx *cli.Context) error {
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// checkAccount iterates the snap data layers, and looks up the given account
+// across all layers.
+func checkAccount(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return errors.New("need <address|hash> arg")
+	}
+	var (
+		hash common.Hash
+		addr common.Address
+	)
+	switch len(ctx.Args()[0]) {
+	case 40, 42:
+		addr = common.HexToAddress(ctx.Args()[0])
+		hash = crypto.Keccak256Hash(addr.Bytes())
+	case 64, 66:
+		hash = common.HexToHash(ctx.Args()[0])
+	default:
+		return errors.New("malformed address or hash")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+	start := time.Now()
+	log.Info("Checking difflayer journal", "address", addr, "hash", hash)
+	if err := snapshot.CheckJournalAccount(chaindb, hash); err != nil {
+		return err
+	}
+	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
 	return nil
 }
