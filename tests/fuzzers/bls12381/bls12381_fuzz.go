@@ -29,6 +29,7 @@ import (
 	gnark "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	blst "github.com/supranational/blst/bindings/go"
 )
@@ -264,7 +265,8 @@ func getG2Points(input io.Reader) (*bls12381.PointG2, *gnark.G2Affine, *blst.P2A
 	// marshal gnark point -> blst point
 	var p2 *blst.P2Affine
 	var scalar *blst.Scalar
-	scalar.Deserialize(s.Bytes())
+	// Left pad the scalar to 32 bytes
+	scalar.Deserialize(common.LeftPadBytes(s.Bytes(), 32))
 	p2.From(scalar)
 	if !bytes.Equal(p2.Serialize(), cpBytes) {
 		panic("bytes(blst.G2) != bytes(geth.G2)")
