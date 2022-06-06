@@ -17,7 +17,7 @@ This configuration enables developers to experiment with Geth's source code or d
 ## Prerequisites
 
 It is assumed that the user has a working Geth installation (see [installation guide](/docs/install-and-build/installing-geth)).
-It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/getting-started/).
+It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/getting-started).
 Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart contract deployment](https://ethereum.org/en/developers/tutorials/deploying-your-first-smart-contract/) would be useful.
 
 ## Start Geth in Dev Mode
