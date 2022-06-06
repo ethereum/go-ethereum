@@ -24,7 +24,7 @@ This is unlike usual forks which occur at a certain scheduled block number.
 
 The total difficulty threshold that triggers the Merge is also known as the [*Terminal
 Total Difficulty* (TTD)](https://ethereum.org/en/glossary/#terminal-total-difficulty). In
-case of an emergency delay, the TTD can be overriden using the `--override.totalterminaldifficulty` command-line
+case of an emergency delay, the TTD can be overriden using the `--override.terminaltotaldifficulty` command-line
 flag.
 
 #### Ropsten Transition
