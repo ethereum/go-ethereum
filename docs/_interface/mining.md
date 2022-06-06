@@ -144,7 +144,7 @@ miner.setEtherbase(eth.accounts[2])
 
 Note that your etherbase does not need to be an address of a local account, it just has to be set to an existing one.
 
-There is an option [to add extra data](../interface/javascript-console) (32 bytes only) to your mined blocks. By convention this is interpreted as a unicode string, so it can be used to add a short vanity tag using `miner.setExtra` in the Javascript console.
+There is an option to add extra data (32 bytes only) to the mined blocks. By convention this is interpreted as a unicode string, so it can be used to add a short vanity tag using `miner.setExtra` in the Javascript console.
 
 ```shell
 miner.setExtra("ΞTHΞЯSPHΞЯΞ")
@@ -164,7 +164,7 @@ eth.getBalance(eth.coinbase).toNumber();
  '34698870000000'
 ```
 
-It is also possible to check which blocks were mined by a particular miner (address) using the following code snippet on the console:
+It is also possible to check which blocks were mined by a particular miner (address) using the following code snippet in the Javascript console:
 
 ```js
 function minedBlocks(lastn, addr) {
