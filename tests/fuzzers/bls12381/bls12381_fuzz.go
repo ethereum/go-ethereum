@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build gofuzz
-// +build gofuzz
-
 package bls
 
 import (
@@ -64,10 +61,7 @@ func FuzzCrossPairing(data []byte) int {
 		panic("pairing mismatch gnark / geth ")
 	}
 
-	b := make([]byte, 32)
-	ctx := blst.PairingCtx(false, b)
 	// compute pairing using blst
-	blst.PairingRawAggregate(ctx, blG2, blG1)
 	blstResult := blst.Fp12MillerLoop(blG2, blG1)
 	blstResult.FinalExp()
 	res := massageBLST(blstResult.ToBendian())
