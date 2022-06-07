@@ -56,6 +56,8 @@ issues:
       linters:
         - deadcode
         - staticcheck
+    - path: internal/build/pgp.go
+      text: 'SA1019: package golang.org/x/crypto/openpgp is deprecated'
     - path: core/vm/contracts.go
       text: 'SA1019: package golang.org/x/crypto/ripemd160 is deprecated'
     - path: accounts/usbwallet/trezor.go

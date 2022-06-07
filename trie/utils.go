@@ -50,6 +50,7 @@ func newTracer() *tracer {
 	}
 }
 
+/*
 // onRead tracks the newly loaded trie node and caches the rlp-encoded blob internally.
 // Don't change the value outside of function since it's not deep-copied.
 func (t *tracer) onRead(key []byte, val []byte) {
@@ -59,6 +60,7 @@ func (t *tracer) onRead(key []byte, val []byte) {
 	}
 	t.origin[string(key)] = val
 }
+*/
 
 // onInsert tracks the newly inserted trie node. If it's already in the deletion set
 // (resurrected node), then just wipe it from the deletion set as the "untouched".
@@ -115,6 +117,7 @@ func (t *tracer) deleteList() [][]byte {
 	return ret
 }
 
+/*
 // getPrev returns the cached original value of the specified node.
 func (t *tracer) getPrev(key []byte) []byte {
 	// Don't panic on uninitialized tracer, it's possible in testing.
@@ -123,6 +126,7 @@ func (t *tracer) getPrev(key []byte) []byte {
 	}
 	return t.origin[string(key)]
 }
+*/
 
 // reset clears the content tracked by tracer.
 func (t *tracer) reset() {
