@@ -182,14 +182,15 @@ func (err *KeyError) Error() string {
 }
 
 func (err *KeyError) Unwrap() error {
-	return err.Err	
+	return err.Err
 }
 
 // IsNotFound reports whether the given error means that a key/value pair is
 // missing from a record.
 func IsNotFound(err error) bool {
-	var keyErr *KeyError
-	if errors.As(err, keyErr) {
-		return keyErr.Err == errNotFound
+	var ke *KeyError
+	if errors.As(err, &ke) {
+		return ke.Err == errNotFound
 	}
+	return false
 }
