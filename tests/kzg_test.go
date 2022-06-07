@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"io/ioutil"
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -235,36 +234,6 @@ func TestVerifyBlobs(t *testing.T) {
 	err = kzg.VerifyBlobs(commitments, blobs)
 	if err == nil {
 		t.Fatal("bad VerifyBlobs actually succeeded, expected error")
-	}
-}
-
-// Helper: Create test vector for the BlobVerification precompile
-func TestBlobVerificationTestVector(t *testing.T) {
-	data := []byte(strings.Repeat("HELPMELOVEME ", 10083))[:params.FieldElementsPerBlob*32]
-
-	inputPoints := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
-
-	var inputPoint [32]byte
-	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		copy(inputPoint[:32], data[i*32:(i+1)*32])
-		bls.FrFrom32(&inputPoints[i], inputPoint)
-	}
-
-	var commitment types.KZGCommitment
-	copy(commitment[:], bls.ToCompressedG1(kzg.BlobToKzg(inputPoints)))
-	versionedHash := commitment.ComputeVersionedHash()
-
-	calldata := append(versionedHash[:], data[:]...)
-	t.Logf("test-vector: %x", calldata)
-
-	precompile := vm.PrecompiledContractsDanksharding[common.BytesToAddress([]byte{0x13})]
-	if _, err := precompile.Run(calldata); err != nil {
-		t.Fatalf("expected blob verification to succeed")
-	}
-	// change a byte of the versioned hash
-	calldata[3] ^= 42
-	if _, err := precompile.Run(calldata); err == nil {
-		t.Fatalf("expected blob verification to fail")
 	}
 }
 

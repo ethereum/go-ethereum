@@ -1048,62 +1048,11 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 var PrecompiledContractsDanksharding = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x13}): &blobVerification{},
 	common.BytesToAddress([]byte{0x14}): &pointEvaluation{},
 }
 
-var (
-	errBlobVerificationInputLength = errors.New("invalid input length")
-	errInvalidVersionedHash        = errors.New("invalid versioned hash")
-	errInvalidChunk                = errors.New("invalid chunk")
-	errBadBlobCommitment           = errors.New("versioned hash did not match")
-)
-
-// DOCDOC
-type blobVerification struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *blobVerification) RequiredGas(input []byte) uint64 {
-	return params.BlobVerificationGas
-}
-
-func (c *blobVerification) Run(input []byte) ([]byte, error) {
-	if len(input) != 32+(32*params.FieldElementsPerBlob) {
-		return nil, errBlobVerificationInputLength
-	}
-
-	var expectedVersionedHash [32]byte
-	copy(expectedVersionedHash[:], input[:32])
-	if expectedVersionedHash[0] != params.BlobCommitmentVersionKZG {
-		return nil, errInvalidVersionedHash
-	}
-
-	input = input[32:] // skip forward to the input points
-
-	inputPoints := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
-	var inputPoint [32]byte
-	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		copy(inputPoint[:32], input[i*32:(i+1)*32])
-		ok := bls.FrFrom32(&inputPoints[i], inputPoint)
-		if ok != true {
-			return nil, errInvalidChunk
-		}
-	}
-
-	// Get versioned hash out of input points
-	commitment := kzg.BlobToKzg(inputPoints)
-	var compressedCommitment types.KZGCommitment
-	copy(compressedCommitment[:], bls.ToCompressedG1(commitment))
-
-	versionedHash := compressedCommitment.ComputeVersionedHash()
-	if versionedHash != expectedVersionedHash {
-		return nil, errBadBlobCommitment
-	}
-
-	return []byte{}, nil
-}
-
-// DOCDOC
+// pointEvaluation implements the EIP-4844 point evaluation precompile
+// to check if a value is part of a blob at a specific point with a KZG proof.
 type pointEvaluation struct{}
 
 var (
@@ -1131,7 +1080,7 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 	copy(versionedHash[:], input[:32])
 	// XXX Should we version check the hash?
 	if versionedHash[0] != params.BlobCommitmentVersionKZG {
-		return nil, errInvalidVersionedHash
+		return nil, errPointEvaluationInvalidVersionedHash
 	}
 
 	var x bls.Fr
