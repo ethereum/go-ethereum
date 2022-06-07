@@ -361,7 +361,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 const AccountRangeMaxResults = 256
 
 // AccountRange enumerates all accounts in the given block and start point in paging request
-func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
+func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
 	var err error
 
@@ -529,11 +529,11 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
+	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), triedb)
+	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
