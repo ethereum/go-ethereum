@@ -2,12 +2,12 @@ package tests
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"io/ioutil"
 	"math"
-	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -28,14 +28,14 @@ func polyFactorDiv(dst *bls.Fr, a *bls.Fr, b *bls.Fr) {
 
 // Helper: Long polynomial division for two polynomials in coefficient form
 func polyLongDiv(dividend []bls.Fr, divisor []bls.Fr) []bls.Fr {
-	a := make([]bls.Fr, len(dividend), len(dividend))
+	a := make([]bls.Fr, len(dividend))
 	for i := 0; i < len(a); i++ {
 		bls.CopyFr(&a[i], &dividend[i])
 	}
 	aPos := len(a) - 1
 	bPos := len(divisor) - 1
 	diff := aPos - bPos
-	out := make([]bls.Fr, diff+1, diff+1)
+	out := make([]bls.Fr, diff+1)
 	for diff >= 0 {
 		quot := &out[diff]
 		polyFactorDiv(quot, &a[aPos], &divisor[bPos])
@@ -95,7 +95,7 @@ func TestGoKzg(t *testing.T) {
 	}
 
 	// Create testing polynomial (in coefficient form)
-	polynomial := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
+	polynomial := make([]bls.Fr, params.FieldElementsPerBlob)
 	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
 		bls.CopyFr(&polynomial[i], bls.RandomFr())
 	}
@@ -136,7 +136,7 @@ func TestKzg(t *testing.T) {
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
 	// Create testing polynomial (in coefficient form)
-	polynomial := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
+	polynomial := make([]bls.Fr, params.FieldElementsPerBlob)
 	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
 		bls.CopyFr(&polynomial[i], bls.RandomFr())
 	}
@@ -238,42 +238,12 @@ func TestVerifyBlobs(t *testing.T) {
 	}
 }
 
-// Helper: Create test vector for the BlobVerification precompile
-func TestBlobVerificationTestVector(t *testing.T) {
-	data := []byte(strings.Repeat("HELPMELOVEME ", 10083))[:params.FieldElementsPerBlob*32]
-
-	inputPoints := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
-
-	var inputPoint [32]byte
-	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		copy(inputPoint[:32], data[i*32:(i+1)*32])
-		bls.FrFrom32(&inputPoints[i], inputPoint)
-	}
-
-	var commitment types.KZGCommitment
-	copy(commitment[:], bls.ToCompressedG1(kzg.BlobToKzg(inputPoints)))
-	versionedHash := commitment.ComputeVersionedHash()
-
-	calldata := append(versionedHash[:], data[:]...)
-	t.Logf("test-vector: %x", calldata)
-
-	precompile := vm.PrecompiledContractsDanksharding[common.BytesToAddress([]byte{0x13})]
-	if _, err := precompile.Run(calldata); err != nil {
-		t.Fatalf("expected blob verification to succeed")
-	}
-	// change a byte of the versioned hash
-	calldata[3] ^= 42
-	if _, err := precompile.Run(calldata); err == nil {
-		t.Fatalf("expected blob verification to fail")
-	}
-}
-
 // Helper: Create test vector for the PointEvaluation precompile
 func TestPointEvaluationTestVector(t *testing.T) {
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
 	// Create testing polynomial
-	polynomial := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
+	polynomial := make([]bls.Fr, params.FieldElementsPerBlob)
 	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
 		bls.CopyFr(&polynomial[i], bls.RandomFr())
 	}

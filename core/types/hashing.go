@@ -18,8 +18,9 @@ package types
 
 import (
 	"bytes"
-	"github.com/protolambda/ztyp/tree"
 	"sync"
+
+	"github.com/protolambda/ztyp/tree"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"

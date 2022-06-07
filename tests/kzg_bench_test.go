@@ -1,12 +1,13 @@
 package tests
 
 import (
+	"math"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
-	"math"
-	"testing"
 )
 
 func randomBlob() []bls.Fr {
@@ -44,7 +45,7 @@ func BenchmarkVerifyKzgProof(b *testing.B) {
 	fs := gokzg.NewFFTSettings(uint8(math.Log2(params.FieldElementsPerBlob)))
 
 	// Create testing polynomial (in coefficient form)
-	polynomial := make([]bls.Fr, params.FieldElementsPerBlob, params.FieldElementsPerBlob)
+	polynomial := make([]bls.Fr, params.FieldElementsPerBlob)
 	for i := uint64(0); i < params.FieldElementsPerBlob; i++ {
 		bls.CopyFr(&polynomial[i], bls.RandomFr())
 	}
