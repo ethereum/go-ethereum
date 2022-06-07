@@ -935,8 +935,14 @@ func (c *Config) buildNode() (*node.Config, error) {
 		if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
 			return nil, err
 		}
+		if len(cfg.P2P.StaticNodes) == 0 {
+			cfg.P2P.StaticNodes = cfg.StaticNodes()
+		}
 		if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
 			return nil, err
+		}
+		if len(cfg.P2P.TrustedNodes) == 0 {
+			cfg.P2P.TrustedNodes = cfg.TrustedNodes()
 		}
 	}
 
@@ -950,13 +956,8 @@ func (c *Config) buildNode() (*node.Config, error) {
 
 func (c *Config) Merge(cc ...*Config) error {
 	for _, elem := range cc {
-		if err := mergo.Merge(c, elem, mergo.WithOverride, mergo.WithAppendSlice); err != nil {
+		if err := mergo.Merge(c, elem, mergo.WithOverwriteWithEmptyValue, mergo.WithAppendSlice); err != nil {
 			return fmt.Errorf("failed to merge configurations: %v", err)
-		}
-
-		// override max peers
-		if elem.P2P.MaxPeers == 0 {
-			c.P2P.MaxPeers = 0
 		}
 	}
 	return nil

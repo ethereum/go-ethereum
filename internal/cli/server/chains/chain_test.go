@@ -19,6 +19,16 @@ func TestChain_ImportFromFile(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "ImportFromFile correct legacy json file",
+			args:    args{filename: "test_files/chain_legacy_test.json"},
+			wantErr: false,
+		},
+		{
+			name:    "ImportFromFile wrong json file",
+			args:    args{filename: "test_files/wrong_chain.json"},
+			wantErr: true,
+		},
+		{
 			name:    "ImportFromFile nonexistent json file",
 			args:    args{filename: "test_files/chain_test_nonexistent.json"},
 			wantErr: true,

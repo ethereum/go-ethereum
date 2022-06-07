@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Chain struct {
@@ -57,6 +58,20 @@ func importChain(content []byte) (*Chain, error) {
 
 	if err := json.Unmarshal(content, &chain); err != nil {
 		return nil, err
+	}
+
+	if chain.Genesis == nil {
+		log.Info("Try reading as legacy genesis")
+		var genesis core.Genesis
+		if err := json.Unmarshal(content, &genesis); err != nil {
+			return nil, err
+		}
+		if genesis.Config != nil {
+			chain.Genesis = &genesis
+			chain.NetworkId = genesis.Config.ChainID.Uint64()
+		} else {
+			return nil, fmt.Errorf("unable to parse chain config")
+		}
 	}
 
 	return chain, nil

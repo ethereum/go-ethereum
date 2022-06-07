@@ -54,13 +54,10 @@ func TestConfigMerge(t *testing.T) {
 	}
 	expected := &Config{
 		Chain:      "1",
-		NoSnapshot: true,
+		NoSnapshot: false,
 		RequiredBlocks: map[string]string{
 			"a": "b",
 			"b": "c",
-		},
-		TxPool: &TxPoolConfig{
-			LifeTime: 5 * time.Second,
 		},
 		P2P: &P2PConfig{
 			MaxPeers: 10,
