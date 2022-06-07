@@ -182,7 +182,12 @@ func (b *Backend) handleRegisterValidator(w http.ResponseWriter, req *http.Reque
 	for _, registerRequest := range payload {
 		pubkeyHex := PubkeyHex(registerRequest.Message.Pubkey.String())
 		if previousValidatorData, ok := b.validators[pubkeyHex]; ok {
-			if registerRequest.Message.Timestamp <= previousValidatorData.Timestamp {
+			if registerRequest.Message.Timestamp < previousValidatorData.Timestamp {
+				respondError(w, http.StatusBadRequest, "invalid timestamp")
+				return
+			}
+
+			if registerRequest.Message.Timestamp == previousValidatorData.Timestamp && (registerRequest.Message.FeeRecipient != previousValidatorData.FeeRecipient || registerRequest.Message.GasLimit != previousValidatorData.GasLimit) {
 				respondError(w, http.StatusBadRequest, "invalid timestamp")
 				return
 			}

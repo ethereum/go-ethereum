@@ -64,8 +64,7 @@ func TestValidatorRegistration(t *testing.T) {
 	require.Equal(t, ValidatorData{FeeRecipient: payload[0].Message.FeeRecipient, GasLimit: payload[0].Message.GasLimit, Timestamp: payload[0].Message.Timestamp}, backend.validators[PubkeyHex(v.Pk.String())])
 
 	rr = testRequest(t, backend, "POST", "/eth/v1/builder/validators", payload)
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Equal(t, `{"code":400,"message":"invalid timestamp"}`+"\n", rr.Body.String())
+	require.Equal(t, http.StatusOK, rr.Code)
 
 	payload[0].Message.Timestamp += 1
 	// Invalid signature
