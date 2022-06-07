@@ -160,7 +160,6 @@ func ephemeralConsole(ctx *cli.Context) error {
 	}
 	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:
 geth --exec "%s" console`, b.String())
-geth --exec "loadScript('file.js')" console`)
 	return nil
 }
 
