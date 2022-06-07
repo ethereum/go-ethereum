@@ -71,9 +71,9 @@ type request struct {
 //   - Path 0x012345678901234567890123456789010123456789012345678901234567890199 -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x0099}
 type SyncPath [][]byte
 
-// newSyncPath converts an expanded trie path from nibble form into a compact
+// NewSyncPath converts an expanded trie path from nibble form into a compact
 // version that can be sent over the network.
-func newSyncPath(path []byte) SyncPath {
+func NewSyncPath(path []byte) SyncPath {
 	// If the hash is from the account trie, append a single item, if it
 	// is from the a storage trie, append a tuple. Note, the length 64 is
 	// clashing between account leaf and storage root. It's fine though
@@ -238,7 +238,7 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		hash := item.(common.Hash)
 		if req, ok := s.nodeReqs[hash]; ok {
 			nodeHashes = append(nodeHashes, hash)
-			nodePaths = append(nodePaths, newSyncPath(req.path))
+			nodePaths = append(nodePaths, NewSyncPath(req.path))
 		} else {
 			codeHashes = append(codeHashes, hash)
 		}

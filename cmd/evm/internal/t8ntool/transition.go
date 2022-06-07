@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path"
@@ -252,11 +251,21 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
-	// Sanity check, to not `panic` in state_transition
-	if prestate.Env.Random != nil && !chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
-		return NewError(ErrorConfig, errors.New("can only apply RANDOM on top of London chainrules"))
-	}
-	if env := prestate.Env; env.Difficulty == nil {
+	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
+	env := prestate.Env
+	if isMerged {
+		// post-merge:
+		// - random must be supplied
+		// - difficulty must be zero
+		switch {
+		case env.Random == nil:
+			return NewError(ErrorConfig, errors.New("post-merge requires currentRandom to be defined in env"))
+		case env.Difficulty != nil && env.Difficulty.BitLen() != 0:
+			return NewError(ErrorConfig, errors.New("post-merge difficulty must be zero (or omitted) in env"))
+		}
+		prestate.Env.Difficulty = nil
+	} else if env.Difficulty == nil {
+		// pre-merge:
 		// If difficulty was not provided by caller, we need to calculate it.
 		switch {
 		case env.ParentDifficulty == nil:
@@ -391,7 +400,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 		return NewError(ErrorJson, fmt.Errorf("failed marshalling output: %v", err))
 	}
 	location := path.Join(baseDir, filename)
-	if err = ioutil.WriteFile(location, b, 0644); err != nil {
+	if err = os.WriteFile(location, b, 0644); err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed writing output: %v", err))
 	}
 	log.Info("Wrote file", "file", location)

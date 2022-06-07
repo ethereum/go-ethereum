@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -34,27 +33,29 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var fileFlag = cli.StringFlag{Name: "file"}
+
 var enrdumpCommand = cli.Command{
 	Name:   "enrdump",
 	Usage:  "Pretty-prints node records",
 	Action: enrdump,
 	Flags: []cli.Flag{
-		cli.StringFlag{Name: "file"},
+		fileFlag,
 	},
 }
 
 func enrdump(ctx *cli.Context) error {
 	var source string
-	if file := ctx.String("file"); file != "" {
+	if file := ctx.String(fileFlag.Name); file != "" {
 		if ctx.NArg() != 0 {
 			return fmt.Errorf("can't dump record from command-line argument in -file mode")
 		}
 		var b []byte
 		var err error
 		if file == "-" {
-			b, err = ioutil.ReadAll(os.Stdin)
+			b, err = io.ReadAll(os.Stdin)
 		} else {
-			b, err = ioutil.ReadFile(file)
+			b, err = os.ReadFile(file)
 		}
 		if err != nil {
 			return err

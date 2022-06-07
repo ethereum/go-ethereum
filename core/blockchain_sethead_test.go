@@ -21,9 +21,7 @@ package core
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1955,11 +1953,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 	// fmt.Println(tt.dump(false))
 
 	// Create a temporary persistent database
-	datadir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary datadir: %v", err)
-	}
-	os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {

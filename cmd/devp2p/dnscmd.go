@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -253,7 +252,7 @@ func dnsNukeRoute53(ctx *cli.Context) error {
 
 // loadSigningKey loads a private key in Ethereum keystore format.
 func loadSigningKey(keyfile string) *ecdsa.PrivateKey {
-	keyjson, err := ioutil.ReadFile(keyfile)
+	keyjson, err := os.ReadFile(keyfile)
 	if err != nil {
 		exit(fmt.Errorf("failed to read the keyfile at '%s': %v", keyfile, err))
 	}
@@ -382,7 +381,7 @@ func writeTreeMetadata(directory string, def *dnsDefinition) {
 		exit(err)
 	}
 	metaFile, _ := treeDefinitionFiles(directory)
-	if err := ioutil.WriteFile(metaFile, metaJSON, 0644); err != nil {
+	if err := os.WriteFile(metaFile, metaJSON, 0644); err != nil {
 		exit(err)
 	}
 }
@@ -411,7 +410,7 @@ func writeTXTJSON(file string, txt map[string]string) {
 		fmt.Println()
 		return
 	}
-	if err := ioutil.WriteFile(file, txtJSON, 0644); err != nil {
+	if err := os.WriteFile(file, txtJSON, 0644); err != nil {
 		exit(err)
 	}
 }

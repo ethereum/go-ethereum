@@ -19,7 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -56,7 +56,7 @@ To sign a message contained in a file, use the --msgfile flag.
 
 		// Load the keyfile.
 		keyfilepath := ctx.Args().First()
-		keyjson, err := ioutil.ReadFile(keyfilepath)
+		keyjson, err := os.ReadFile(keyfilepath)
 		if err != nil {
 			utils.Fatalf("Failed to read the keyfile at '%s': %v", keyfilepath, err)
 		}
@@ -142,11 +142,11 @@ It is possible to refer to a file containing the message.`,
 }
 
 func getMessage(ctx *cli.Context, msgarg int) []byte {
-	if file := ctx.String("msgfile"); file != "" {
+	if file := ctx.String(msgfileFlag.Name); file != "" {
 		if len(ctx.Args()) > msgarg {
 			utils.Fatalf("Can't use --msgfile and message argument at the same time.")
 		}
-		msg, err := ioutil.ReadFile(file)
+		msg, err := os.ReadFile(file)
 		if err != nil {
 			utils.Fatalf("Can't read message file: %v", err)
 		}

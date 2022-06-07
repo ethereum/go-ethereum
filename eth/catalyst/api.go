@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -61,6 +62,8 @@ type ConsensusAPI struct {
 	eth          *eth.Ethereum
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
+	// Lock for the forkChoiceUpdated method
+	forkChoiceLock sync.Mutex
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -87,11 +90,15 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 // If there are payloadAttributes:
 // 		we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+	api.forkChoiceLock.Lock()
+	defer api.forkChoiceLock.Unlock()
+
 	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
 	if update.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
+
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
 	// reason.
@@ -133,14 +140,14 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		}
 		if td.Cmp(ttd) < 0 || (block.NumberU64() > 0 && ptd.Cmp(ttd) > 0) {
 			log.Error("Refusing beacon update to pre-merge", "number", block.NumberU64(), "hash", update.HeadBlockHash, "diff", block.Difficulty(), "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
-			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALIDTERMINALBLOCK}, PayloadID: nil}, nil
+			return beacon.ForkChoiceResponse{PayloadStatus: beacon.INVALID_TERMINAL_BLOCK, PayloadID: nil}, nil
 		}
 	}
 
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
-		if err := api.eth.BlockChain().SetChainHead(block); err != nil {
-			return beacon.STATUS_INVALID, err
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &latestValid}}, err
 		}
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
@@ -155,57 +162,58 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		if merger := api.eth.Merger(); !merger.PoSFinalized() {
 			merger.FinalizePoS()
 		}
-		// TODO (MariusVanDerWijden): If the finalized block is not in our canonical tree, somethings wrong
+		// If the finalized block is not in our canonical tree, somethings wrong
 		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
-			return beacon.STATUS_INVALID, errors.New("final block not available")
+			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("final block not available in database"))
 		} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
 			log.Warn("Final block not in canonical chain", "number", block.NumberU64(), "hash", update.HeadBlockHash)
-			return beacon.STATUS_INVALID, errors.New("final block not canonical")
+			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
 		}
+		// Set the finalized block
+		api.eth.BlockChain().SetFinalized(finalBlock)
 	}
-	// TODO (MariusVanDerWijden): Check if the safe block hash is in our canonical tree, if not somethings wrong
+	// Check if the safe block hash is in our canonical tree, if not somethings wrong
 	if update.SafeBlockHash != (common.Hash{}) {
 		safeBlock := api.eth.BlockChain().GetBlockByHash(update.SafeBlockHash)
 		if safeBlock == nil {
 			log.Warn("Safe block not available in database")
-			return beacon.STATUS_INVALID, errors.New("safe head not available")
+			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not available in database"))
 		}
 		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
 			log.Warn("Safe block not in canonical chain")
-			return beacon.STATUS_INVALID, errors.New("safe head not canonical")
+			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
+		}
+	}
+	valid := func(id *beacon.PayloadID) beacon.ForkChoiceResponse {
+		return beacon.ForkChoiceResponse{
+			PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &update.HeadBlockHash},
+			PayloadID:     id,
 		}
 	}
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
-		log.Info("Creating new payload for sealing")
-		start := time.Now()
-
-		data, err := api.assembleBlock(update.HeadBlockHash, payloadAttributes)
+		// Create an empty block first which can be used as a fallback
+		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
 		if err != nil {
-			log.Error("Failed to create sealing payload", "err", err)
-			return api.validForkChoiceResponse(nil), err // valid setHead, invalid payload
+			log.Error("Failed to create empty sealing payload", "err", err)
+			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
+		}
+		// Send a request to generate a full block in the background.
+		// The result can be obtained via the returned channel.
+		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
+		if err != nil {
+			log.Error("Failed to create async sealing payload", "err", err)
+			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, data)
-
-		log.Info("Created payload for sealing", "id", id, "elapsed", time.Since(start))
-		return api.validForkChoiceResponse(&id), nil
+		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
+		return valid(&id), nil
 	}
-	return api.validForkChoiceResponse(nil), nil
-}
-
-// validForkChoiceResponse returns the ForkChoiceResponse{VALID}
-// with the latest valid hash and an optional payloadID.
-func (api *ConsensusAPI) validForkChoiceResponse(id *beacon.PayloadID) beacon.ForkChoiceResponse {
-	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
-	return beacon.ForkChoiceResponse{
-		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},
-		PayloadID:     id,
-	}
+	return valid(nil), nil
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against
@@ -238,7 +246,7 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID)
 	if data == nil {
-		return nil, &beacon.UnknownPayload
+		return nil, beacon.UnknownPayload
 	}
 	return data, nil
 }
@@ -292,11 +300,11 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	)
 	if td.Cmp(ttd) < 0 {
 		log.Warn("Ignoring pre-merge payload", "number", params.Number, "hash", params.BlockHash, "td", td, "ttd", ttd)
-		return beacon.PayloadStatusV1{Status: beacon.INVALIDTERMINALBLOCK}, nil
+		return beacon.INVALID_TERMINAL_BLOCK, nil
 	}
 	if block.Time() <= parent.Time() {
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
-		return api.invalid(errors.New("invalid timestamp")), nil
+		return api.invalid(errors.New("invalid timestamp"), parent), nil
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
@@ -306,7 +314,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number)
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		log.Warn("NewPayloadV1: inserting block failed", "error", err)
-		return api.invalid(err), nil
+		return api.invalid(err, parent), nil
 	}
 	// We've accepted a valid payload from the beacon client. Mark the local
 	// chain transitions to notify other subsystems (e.g. downloader) of the
@@ -332,28 +340,13 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 	return out
 }
 
-// invalid returns a response "INVALID" with the latest valid hash set to the current head.
-func (api *ConsensusAPI) invalid(err error) beacon.PayloadStatusV1 {
-	currentHash := api.eth.BlockChain().CurrentHeader().Hash()
+// invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
+// if no latestValid block was provided.
+func (api *ConsensusAPI) invalid(err error, latestValid *types.Block) beacon.PayloadStatusV1 {
+	currentHash := api.eth.BlockChain().CurrentBlock().Hash()
+	if latestValid != nil {
+		currentHash = latestValid.Hash()
+	}
 	errorMsg := err.Error()
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
-}
-
-// assembleBlock creates a new block and returns the "execution
-// data" required for beacon clients to process the new block.
-func (api *ConsensusAPI) assembleBlock(parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	log.Info("Producing block", "parentHash", parentHash)
-	block, err := api.eth.Miner().GetSealingBlock(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random)
-	if err != nil {
-		return nil, err
-	}
-	return beacon.BlockToExecutableData(block), nil
-}
-
-// Used in tests to add a the list of transactions from a block to the tx pool.
-func (api *ConsensusAPI) insertTransactions(txs types.Transactions) error {
-	for _, tx := range txs {
-		api.eth.TxPool().AddLocal(tx)
-	}
-	return nil
 }

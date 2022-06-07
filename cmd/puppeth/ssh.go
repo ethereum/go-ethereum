@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/user"
@@ -96,7 +95,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	}
 	if err != nil {
 		path := filepath.Join(user.HomeDir, ".ssh", identity)
-		if buf, err := ioutil.ReadFile(path); err != nil {
+		if buf, err := os.ReadFile(path); err != nil {
 			log.Warn("No SSH key, falling back to passwords", "path", path, "err", err)
 		} else {
 			key, err := ssh.ParsePrivateKey(buf)

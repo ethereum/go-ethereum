@@ -283,7 +283,7 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 	}
 	for i := 0; i < len(extraHeaders); i += 2 {
 		key, value := extraHeaders[i], extraHeaders[i+1]
-		if strings.ToLower(key) == "host" {
+		if strings.EqualFold(key, "host") {
 			req.Host = value
 		} else {
 			req.Header.Set(key, value)

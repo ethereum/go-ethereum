@@ -55,7 +55,7 @@ type fourByteTracer struct {
 
 // newFourByteTracer returns a native go tracer which collects
 // 4 byte-identifiers of a tx, and implements vm.EVMLogger.
-func newFourByteTracer() tracers.Tracer {
+func newFourByteTracer(ctx *tracers.Context) tracers.Tracer {
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}
@@ -130,6 +130,10 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
+
+func (*fourByteTracer) CaptureTxStart(gasLimit uint64) {}
+
+func (*fourByteTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"encoding/json"
 	"math/big"
 	"time"
 
@@ -106,10 +107,6 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
-	}
-
-	if revert := result.Revert(); revert != nil {
-		CacheRevertReason(tx.Hash(), blockHash, revert)
 	}
 
 	// Update the state with pending changes.
@@ -283,7 +280,7 @@ type call struct {
 
 type TracerResult interface {
 	vm.EVMLogger
-	GetResult() (interface{}, error)
+	GetResult() (json.RawMessage, error)
 }
 
 type CallTracer struct {
@@ -304,8 +301,9 @@ func (tracer *CallTracer) i() int {
 	return len(tracer.callStack) - 1
 }
 
-func (tracer *CallTracer) GetResult() (interface{}, error) {
-	return tracer.callStack[0], nil
+func (tracer *CallTracer) GetResult() (json.RawMessage, error) {
+	res, err := json.Marshal(tracer.callStack[0])
+	return json.RawMessage(res), err
 }
 
 func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
@@ -446,3 +444,6 @@ func (tracer *CallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64
 func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
+func (tracer *CallTracer) CaptureTxEnd(restGas uint64) {}
+func (tracer *CallTracer) CaptureTxStart(gasLimit uint64) {}
+func (tracer *CallTracer) Stop(err error) {}

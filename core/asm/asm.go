@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Provides support for dealing with EVM assembly instructions (e.g., disassembling them).
+// Package asm provides support for dealing with EVM assembly instructions (e.g., disassembling them).
 package asm
 
 import (
@@ -34,14 +34,14 @@ type instructionIterator struct {
 	started bool
 }
 
-// Create a new instruction iterator.
+// NewInstructionIterator create a new instruction iterator.
 func NewInstructionIterator(code []byte) *instructionIterator {
 	it := new(instructionIterator)
 	it.code = code
 	return it
 }
 
-// Returns true if there is a next instruction and moves on.
+// Next returns true if there is a next instruction and moves on.
 func (it *instructionIterator) Next() bool {
 	if it.error != nil || uint64(len(it.code)) <= it.pc {
 		// We previously reached an error or the end.
@@ -79,27 +79,27 @@ func (it *instructionIterator) Next() bool {
 	return true
 }
 
-// Returns any error that may have been encountered.
+// Error returns any error that may have been encountered.
 func (it *instructionIterator) Error() error {
 	return it.error
 }
 
-// Returns the PC of the current instruction.
+// PC returns the PC of the current instruction.
 func (it *instructionIterator) PC() uint64 {
 	return it.pc
 }
 
-// Returns the opcode of the current instruction.
+// Op returns the opcode of the current instruction.
 func (it *instructionIterator) Op() vm.OpCode {
 	return it.op
 }
 
-// Returns the argument of the current instruction.
+// Arg returns the argument of the current instruction.
 func (it *instructionIterator) Arg() []byte {
 	return it.arg
 }
 
-// Pretty-print all disassembled EVM instructions to stdout.
+// PrintDisassembled pretty-print all disassembled EVM instructions to stdout.
 func PrintDisassembled(code string) error {
 	script, err := hex.DecodeString(code)
 	if err != nil {
@@ -117,7 +117,7 @@ func PrintDisassembled(code string) error {
 	return it.Error()
 }
 
-// Return all disassembled EVM instructions in human-readable format.
+// Disassemble returns all disassembled EVM instructions in human-readable format.
 func Disassemble(script []byte) ([]string, error) {
 	instrs := make([]string, 0)
 
