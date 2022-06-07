@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -559,7 +560,7 @@ func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
 	config := &adapters.NodeConfig{}
 
 	err := json.NewDecoder(req.Body).Decode(config)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
