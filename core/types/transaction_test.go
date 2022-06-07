@@ -21,14 +21,14 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
-	"github.com/protolambda/ztyp/view"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -494,7 +494,7 @@ func TestTransactionCoding(t *testing.T) {
 			}
 			wrapData = &BlobTxWrapData{
 				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
-				Blobs:    Blobs{make(Blob, params.FieldElementsPerBlob)},
+				Blobs:    Blobs{Blob{}},
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))

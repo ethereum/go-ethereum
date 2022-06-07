@@ -167,7 +167,7 @@ func ReadHashes(dr *codec.DecodingReader, hashes *[]common.Hash, length uint64) 
 		if uint64(cap(*hashes)) >= length {
 			*hashes = (*hashes)[:length]
 		} else {
-			*hashes = make([]common.Hash, length, length)
+			*hashes = make([]common.Hash, length)
 		}
 	}
 	dst := *hashes

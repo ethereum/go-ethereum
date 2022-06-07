@@ -20,8 +20,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -1087,14 +1088,14 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 	var data [32]byte
 	copy(data[:], input[32:64])
 	ok := bls.FrFrom32(&x, data)
-	if ok != true {
+	if !ok {
 		return nil, errPointEvaluationInvalidX
 	}
 
 	var y bls.Fr
 	copy(data[:], input[64:96])
 	ok = bls.FrFrom32(&y, data)
-	if ok != true {
+	if !ok {
 		return nil, errPointEvaluationInvalidY
 	}
 
@@ -1116,7 +1117,7 @@ func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
 		return nil, errPointEvaluationInvalidProof
 	}
 
-	if kzg.VerifyKzgProof(parsedCommitment, &x, &y, parsedProof) != true {
+	if !kzg.VerifyKzgProof(parsedCommitment, &x, &y, parsedProof) {
 		return nil, errPointEvaluationBadProof
 	}
 
