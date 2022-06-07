@@ -65,18 +65,39 @@ func FuzzCrossPairing(data []byte) int {
 		panic("pairing mismatch gnark / geth ")
 	}
 
-	var b []byte
-	ctx := blst.PairingCtx(false, b)
 	// compute pairing using blst
-	blst.PairingRawAggregate(ctx, blG2, blG1)
-	blstResult := blst.PairingAsFp12(ctx)
-	if !(bytes.Equal(blstResult.ToBendian(), bls12381.NewGT().ToBytes(kResult))) {
-		fmt.Printf("geth: %v\n", common.Bytes2Hex(bls12381.NewGT().ToBytes(kResult)))
-		fmt.Printf("blst: %v\n", common.Bytes2Hex(blstResult.ToBendian()))
+	blstResult := blst.Fp12MillerLoop(blG2, blG1)
+	blstResult.FinalExp()
+	res := massageBLST(blstResult.ToBendian())
+	if !(bytes.Equal(res, bls12381.NewGT().ToBytes(kResult))) {
 		panic("pairing mismatch blst / geth")
 	}
 
 	return 1
+}
+
+func massageBLST(in []byte) []byte {
+	out := make([]byte, len(in))
+	len := 12 * 48
+	// 1
+	copy(out[0:], in[len-1*48:len])
+	copy(out[1*48:], in[len-2*48:len-1*48])
+	// 2
+	copy(out[6*48:], in[len-3*48:len-2*48])
+	copy(out[7*48:], in[len-4*48:len-3*48])
+	// 3
+	copy(out[2*48:], in[len-5*48:len-4*48])
+	copy(out[3*48:], in[len-6*48:len-5*48])
+	// 4
+	copy(out[8*48:], in[len-7*48:len-6*48])
+	copy(out[9*48:], in[len-8*48:len-7*48])
+	// 5
+	copy(out[4*48:], in[len-9*48:len-8*48])
+	copy(out[5*48:], in[len-10*48:len-9*48])
+	// 6
+	copy(out[10*48:], in[len-11*48:len-10*48])
+	copy(out[11*48:], in[len-12*48:len-11*48])
+	return out
 }
 
 func FuzzCrossG1Add(data []byte) int {
