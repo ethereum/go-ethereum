@@ -136,7 +136,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty, config.OverrideDeveloperMode)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -205,6 +205,60 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		eth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
+	}
+	if config.OverrideState != nil {
+		lastBlock := eth.blockchain.CurrentBlock()
+		state, err := eth.blockchain.StateAt(lastBlock.Root())
+		if err != nil {
+			return nil, err
+		}
+		err = config.OverrideState.Apply(state)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply state override: %w", err)
+		}
+		newHeader := &types.Header{
+			ParentHash:  lastBlock.Hash(),
+			UncleHash:   types.CalcUncleHash(nil),
+			Coinbase:    [20]byte{},
+			Root:        state.IntermediateRoot(true),
+			TxHash:      [32]byte{},
+			ReceiptHash: [32]byte{},
+			Bloom:       [256]byte{},
+			Difficulty:  new(big.Int).Exp(common.Big2, big.NewInt(128), nil),
+			Number:      new(big.Int).Add(lastBlock.Number(), common.Big1),
+			GasLimit:    lastBlock.GasLimit(),
+			GasUsed:     0,
+			Time:        lastBlock.Time(),
+			Extra:       []byte{},
+			MixDigest:   [32]byte{},
+			Nonce:       [8]byte{},
+			BaseFee:     lastBlock.BaseFee(),
+		}
+		newBlock := types.NewBlockWithHeader(newHeader)
+		_, err = eth.blockchain.WriteBlockAndSetHead(newBlock, nil, nil, state, true)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("Wrote developer mode state override block", "number", newBlock.Number(), "hash", newBlock.Hash())
+	}
+	if config.OverrideDeveloperMode != nil {
+		prevBlock := eth.blockchain.CurrentBlock()
+		state, err := eth.blockchain.StateAt(prevBlock.Root())
+		if err != nil {
+			return nil, err
+		}
+		blocks, err := clique.PrepareForCliqueTakeover(eth.chainDb, prevBlock, eth.blockchain.Config().Clique, config.OverrideDeveloperMode.Signers)
+		if err != nil {
+			return nil, err
+		}
+		for _, block := range blocks {
+			_, err = eth.blockchain.WriteBlockAndSetHead(block, nil, nil, state, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+		newHead := blocks[len(blocks)-1]
+		log.Info("Wrote developer mode clique takeover chain", "before", prevBlock.Number(), "last", newHead.Number(), "hash", newHead.Hash())
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 

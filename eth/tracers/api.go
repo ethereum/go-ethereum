@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -178,7 +179,7 @@ type TraceCallConfig struct {
 	Tracer         *string
 	Timeout        *string
 	Reexec         *uint64
-	StateOverrides *ethapi.StateOverride
+	StateOverrides *ethconfig.StateOverride
 	BlockOverrides *ethapi.BlockOverrides
 }
 

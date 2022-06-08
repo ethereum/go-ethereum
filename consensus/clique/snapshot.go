@@ -19,6 +19,7 @@ package clique
 import (
 	"bytes"
 	"encoding/json"
+	"math/big"
 	"sort"
 	"time"
 
@@ -323,4 +324,35 @@ func (s *Snapshot) inturn(number uint64, signer common.Address) bool {
 		offset++
 	}
 	return (number % uint64(len(signers))) == uint64(offset)
+}
+
+func PrepareForCliqueTakeover(db ethdb.Database, lastBlock *types.Block, config *params.CliqueConfig, signers []common.Address) ([]*types.Block, error) {
+	originalLastBlock := lastBlock
+	var blocks []*types.Block
+	for lastBlock.NumberU64()%checkpointInterval != 0 || lastBlock == originalLastBlock {
+		newHeader := &types.Header{
+			ParentHash:  lastBlock.Hash(),
+			UncleHash:   types.CalcUncleHash(nil),
+			Coinbase:    [20]byte{},
+			Root:        lastBlock.Root(),
+			TxHash:      [32]byte{},
+			ReceiptHash: [32]byte{},
+			Bloom:       [256]byte{},
+			Difficulty:  new(big.Int).Exp(common.Big2, big.NewInt(128), nil),
+			Number:      new(big.Int).Add(lastBlock.Number(), common.Big1),
+			GasLimit:    lastBlock.GasLimit(),
+			GasUsed:     0,
+			Time:        lastBlock.Time(),
+			Extra:       []byte{},
+			MixDigest:   [32]byte{},
+			Nonce:       [8]byte{},
+			BaseFee:     lastBlock.BaseFee(),
+		}
+		newBlock := types.NewBlockWithHeader(newHeader)
+		blocks = append(blocks, newBlock)
+		lastBlock = newBlock
+	}
+	snapshot := newSnapshot(config, nil, lastBlock.NumberU64(), lastBlock.Hash(), signers)
+	err := snapshot.store(db)
+	return blocks, err
 }

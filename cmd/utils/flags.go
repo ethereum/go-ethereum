@@ -19,8 +19,10 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
@@ -180,6 +182,14 @@ var (
 		Name:  "dev.gaslimit",
 		Usage: "Initial block gas limit",
 		Value: 11500000,
+	}
+	DeveloperForkFlag = cli.BoolFlag{
+		Name:  "dev.fork",
+		Usage: "If the database contains a non-developer network, fork it into a developer network",
+	}
+	DeveloperOverridesFlag = cli.StringFlag{
+		Name:  "dev.overrides",
+		Usage: "An optional path to a JSON list of state overrides to apply to the developer network (in the format eth_call accepts)",
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -1806,12 +1816,35 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			// that if so. Otherwise we need to generate a new genesis spec.
 			chaindb := MakeChainDatabase(ctx, stack, readonly)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
-				cfg.Genesis = nil // fallback to db content
+				// Fallback to the db's genesis, but optionally override the
+				// chain id and consensus.
+				if ctx.GlobalIsSet(DeveloperForkFlag.Name) {
+					cfg.OverrideDeveloperMode = &core.OverrideDeveloperMode{
+						ChainID: cfg.Genesis.Config.ChainID,
+						Clique:  cfg.Genesis.Config.Clique,
+						Signers: []common.Address{developer.Address},
+					}
+				}
+				cfg.Genesis = nil
 			}
 			chaindb.Close()
 		}
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
+		}
+		if ctx.GlobalIsSet(DeveloperOverridesFlag.Name) {
+			file, err := os.Open(ctx.GlobalString(DeveloperOverridesFlag.Name))
+			if err != nil {
+				Fatalf("Failed to open developer overrides file: %v", err)
+			}
+			contents, err := ioutil.ReadAll(file)
+			if err != nil {
+				Fatalf("Failed to read developer overrides file: %v", err)
+			}
+			err = json.Unmarshal(contents, &cfg.OverrideState)
+			if err != nil {
+				Fatalf("Failed to decode developer overrides file: %v", err)
+			}
 		}
 	default:
 		if cfg.NetworkId == 1 {

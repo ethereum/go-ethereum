@@ -230,10 +230,16 @@ func (e *GenesisMismatchError) Error() string {
 //
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
+	return SetupGenesisBlockWithOverride(db, genesis, nil, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideArrowGlacier, overrideTerminalTotalDifficulty *big.Int) (*params.ChainConfig, common.Hash, error) {
+type OverrideDeveloperMode struct {
+	ChainID *big.Int
+	Clique  *params.CliqueConfig
+	Signers []common.Address
+}
+
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideArrowGlacier, overrideTerminalTotalDifficulty *big.Int, overrideDeveloperMode *OverrideDeveloperMode) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -285,6 +291,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if overrideTerminalTotalDifficulty != nil {
 		newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 	}
+	if overrideDeveloperMode != nil {
+		newcfg.ChainID = overrideDeveloperMode.ChainID
+		newcfg.Clique = overrideDeveloperMode.Clique
+		newcfg.Ethash = nil
+	}
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -306,6 +317,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		if overrideTerminalTotalDifficulty != nil {
 			newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
+		}
+		if overrideDeveloperMode != nil {
+			newcfg.ChainID = overrideDeveloperMode.ChainID
+			newcfg.Clique = overrideDeveloperMode.Clique
+			newcfg.Ethash = nil
 		}
 	}
 	// Check config compatibility and write the config. Compatibility errors
