@@ -58,7 +58,7 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gc-mode,optional"`
 
-	// NoSnapshot disbales the snapshot database mode
+	// NoSnapshot disables the snapshot database mode
 	NoSnapshot bool `hcl:"no-snapshot,optional"`
 
 	// Ethstats is the address of the ethstats server to send telemetry
@@ -527,18 +527,22 @@ func (c *Config) fillBigInt() error {
 			b := new(big.Int)
 
 			var ok bool
+
 			if strings.HasPrefix(*x.str, "0x") {
 				b, ok = b.SetString((*x.str)[2:], 16)
 			} else {
 				b, ok = b.SetString(*x.str, 10)
 			}
+
 			if !ok {
 				return fmt.Errorf("%s can't parse big int %s", x.path, *x.str)
 			}
+
 			*x.str = ""
 			*x.td = b
 		}
 	}
+
 	return nil
 }
 
@@ -559,10 +563,12 @@ func (c *Config) fillTimeDurations() error {
 			if err != nil {
 				return fmt.Errorf("%s can't parse time duration %s", x.path, *x.str)
 			}
+
 			*x.str = ""
 			*x.td = d
 		}
 	}
+
 	return nil
 }
 
@@ -574,6 +580,7 @@ func readConfigFile(path string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return readLegacyConfig(data)
 	}
 
@@ -582,15 +589,19 @@ func readConfigFile(path string) (*Config, error) {
 		Cache:  &CacheConfig{},
 		Sealer: &SealerConfig{},
 	}
+
 	if err := hclsimple.DecodeFile(path, nil, config); err != nil {
 		return nil, fmt.Errorf("failed to decode config file '%s': %v", path, err)
 	}
+
 	if err := config.fillBigInt(); err != nil {
 		return nil, err
 	}
+
 	if err := config.fillTimeDurations(); err != nil {
 		return nil, err
 	}
+
 	return config, nil
 }
 
@@ -599,6 +610,7 @@ func (c *Config) loadChain() error {
 	if err != nil {
 		return err
 	}
+
 	c.chain = chain
 
 	// preload some default values that depend on the chain file
@@ -612,14 +624,17 @@ func (c *Config) loadChain() error {
 	} else {
 		c.Cache.Cache = 1024
 	}
+
 	return nil
 }
 
+//nolint:gocognit
 func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*ethconfig.Config, error) {
 	dbHandles, err := makeDatabaseHandles()
 	if err != nil {
 		return nil, err
 	}
+
 	n := ethconfig.Defaults
 
 	// only update for non-developer mode as we don't yet
@@ -663,6 +678,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 			if !common.IsHexAddress(etherbase) {
 				return nil, fmt.Errorf("etherbase is not an address: %s", etherbase)
 			}
+
 			n.Miner.Etherbase = common.HexToAddress(etherbase)
 		}
 	}
@@ -672,17 +688,24 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		if !stack.Config().InsecureUnlockAllowed && stack.Config().ExtRPCEnabled() {
 			return nil, fmt.Errorf("account unlock with HTTP access is forbidden")
 		}
+
 		ks := accountManager.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+
 		passwords, err := MakePasswordListFromFile(c.Accounts.PasswordFile)
 		if err != nil {
 			return nil, err
 		}
+
 		if len(passwords) < len(c.Accounts.Unlock) {
 			return nil, fmt.Errorf("number of passwords provided (%v) is less than number of accounts (%v) to unlock",
 				len(passwords), len(c.Accounts.Unlock))
 		}
+
 		for i, account := range c.Accounts.Unlock {
-			ks.Unlock(accounts.Account{Address: common.HexToAddress(account)}, passwords[i])
+			err = ks.Unlock(accounts.Account{Address: common.HexToAddress(account)}, passwords[i])
+			if err != nil {
+				return nil, fmt.Errorf("could not unlock an account %q", account)
+			}
 		}
 	}
 
@@ -700,6 +723,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 			passphrase string
 			err        error
 		)
+
 		// etherbase has been set above, configuring the miner address from command line flags.
 		if n.Miner.Etherbase != (common.Address{}) {
 			developer = accounts.Account{Address: n.Miner.Etherbase}
@@ -714,6 +738,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		if err := ks.Unlock(developer, passphrase); err != nil {
 			return nil, fmt.Errorf("failed to unlock developer account: %v", err)
 		}
+
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Set the Etherbase
@@ -753,10 +778,12 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 			if err != nil {
 				return nil, fmt.Errorf("invalid required block number %s: %v", k, err)
 			}
+
 			var hash common.Hash
 			if err = hash.UnmarshalText([]byte(v)); err != nil {
 				return nil, fmt.Errorf("invalid required block hash %s: %v", v, err)
 			}
+
 			n.PeerRequiredBlocks[number] = hash
 		}
 	}
@@ -775,6 +802,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 				log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
 				mem.Total = 2 * 1024 * 1024 * 1024
 			}
+
 			allowance := uint64(mem.Total / 1024 / 1024 / 3)
 			if cache > allowance {
 				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
@@ -804,6 +832,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	} else {
 		log.Info("Global gas cap disabled")
 	}
+
 	n.RPCTxFeeCap = c.JsonRPC.TxFeeCap
 
 	// sync mode. It can either be "fast", "full" or "snap". We disable
@@ -843,6 +872,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	}
 
 	n.DatabaseHandles = dbHandles
+
 	return &n, nil
 }
 
@@ -906,6 +936,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			cfg.HTTPHost = c.JsonRPC.Http.Host
 			cfg.HTTPPort = int(c.JsonRPC.Http.Port)
 		}
+
 		if c.JsonRPC.Ws.Enabled {
 			cfg.WSHost = c.JsonRPC.Ws.Host
 			cfg.WSPort = int(c.JsonRPC.Ws.Port)
@@ -916,6 +947,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("wrong 'nat' flag: %v", err)
 	}
+
 	cfg.P2P.NAT = natif
 
 	// only check for non-developer modes
@@ -926,21 +958,27 @@ func (c *Config) buildNode() (*node.Config, error) {
 		if len(bootnodes) == 0 {
 			bootnodes = c.chain.Bootnodes
 		}
+
 		if cfg.P2P.BootstrapNodes, err = parseBootnodes(bootnodes); err != nil {
 			return nil, err
 		}
+
 		if cfg.P2P.BootstrapNodesV5, err = parseBootnodes(c.P2P.Discovery.BootnodesV5); err != nil {
 			return nil, err
 		}
+
 		if cfg.P2P.StaticNodes, err = parseBootnodes(c.P2P.Discovery.StaticNodes); err != nil {
 			return nil, err
 		}
+
 		if len(cfg.P2P.StaticNodes) == 0 {
 			cfg.P2P.StaticNodes = cfg.StaticNodes()
 		}
+
 		if cfg.P2P.TrustedNodes, err = parseBootnodes(c.P2P.Discovery.TrustedNodes); err != nil {
 			return nil, err
 		}
+
 		if len(cfg.P2P.TrustedNodes) == 0 {
 			cfg.P2P.TrustedNodes = cfg.TrustedNodes()
 		}
@@ -951,6 +989,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		cfg.P2P.MaxPeers = 0
 		cfg.P2P.NoDiscovery = true
 	}
+
 	return cfg, nil
 }
 
@@ -960,6 +999,7 @@ func (c *Config) Merge(cc ...*Config) error {
 			return fmt.Errorf("failed to merge configurations: %v", err)
 		}
 	}
+
 	return nil
 }
 
@@ -968,10 +1008,12 @@ func makeDatabaseHandles() (int, error) {
 	if err != nil {
 		return -1, err
 	}
+
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
 		return -1, err
 	}
+
 	return int(raised / 2), nil
 }
 
@@ -986,6 +1028,7 @@ func parseBootnodes(urls []string) ([]*enode.Node, error) {
 			dst = append(dst, node)
 		}
 	}
+
 	return dst, nil
 }
 
@@ -996,6 +1039,7 @@ func defaultDataDir() string {
 		// we cannot guess a stable location
 		return ""
 	}
+
 	switch runtime.GOOS {
 	case "darwin":
 		return filepath.Join(home, "Library", "Bor")
@@ -1005,6 +1049,7 @@ func defaultDataDir() string {
 			// Windows XP and below don't have LocalAppData.
 			panic("environment variable LocalAppData is undefined")
 		}
+
 		return filepath.Join(appdata, "Bor")
 	default:
 		return filepath.Join(home, ".bor")
@@ -1016,6 +1061,7 @@ func Hostname() string {
 	if err != nil {
 		return "bor"
 	}
+
 	return hostname
 }
 
@@ -1024,10 +1070,13 @@ func MakePasswordListFromFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read password file: %v", err)
 	}
+
 	lines := strings.Split(string(text), "\n")
+
 	// Sanitise DOS line endings.
 	for i := range lines {
 		lines[i] = strings.TrimRight(lines[i], "\r")
 	}
+
 	return lines, nil
 }

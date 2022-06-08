@@ -8,6 +8,10 @@ import (
 	"reflect"
 	"strings"
 
+	gproto "github.com/golang/protobuf/proto" //nolint:staticcheck,typecheck
+	"github.com/golang/protobuf/ptypes/empty"
+	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -16,9 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	gproto "github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/empty"
-	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
 )
 
 const chunkSize = 1024 * 1024 * 1024
@@ -45,6 +46,7 @@ func sendStreamDebugFile(stream proto.Bor_DebugPprofServer, headers map[string]s
 		Request: &proto.DebugFileResponse_Input{},
 		Encode:  grpc_net_conn.ChunkedEncoder(encoder, chunkSize),
 	}
+
 	if _, err := conn.Write(data); err != nil {
 		return err
 	}
@@ -61,11 +63,14 @@ func sendStreamDebugFile(stream proto.Bor_DebugPprofServer, headers map[string]s
 }
 
 func (s *Server) DebugPprof(req *proto.DebugPprofRequest, stream proto.Bor_DebugPprofServer) error {
-	var payload []byte
-	var headers map[string]string
-	var err error
+	var (
+		payload []byte
+		headers map[string]string
+		err     error
+	)
 
 	ctx := context.Background()
+
 	switch req.Type {
 	case proto.DebugPprofRequest_CPU:
 		payload, headers, err = pprof.CPUProfile(ctx, int(req.Seconds))
@@ -74,6 +79,7 @@ func (s *Server) DebugPprof(req *proto.DebugPprofRequest, stream proto.Bor_Debug
 	case proto.DebugPprofRequest_LOOKUP:
 		payload, headers, err = pprof.Profile(req.Profile, 0, 0)
 	}
+
 	if err != nil {
 		return err
 	}
@@ -82,6 +88,7 @@ func (s *Server) DebugPprof(req *proto.DebugPprofRequest, stream proto.Bor_Debug
 	if err := sendStreamDebugFile(stream, headers, payload); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -192,6 +199,7 @@ func (s *Server) DebugBlock(req *proto.DebugBlockRequest, stream proto.Bor_Debug
 			},
 		},
 	}
+
 	res, err := s.tracerAPI.TraceBorBlock(traceReq)
 	if err != nil {
 		return err
@@ -202,6 +210,7 @@ func (s *Server) DebugBlock(req *proto.DebugBlockRequest, stream proto.Bor_Debug
 	if err != nil {
 		return err
 	}
+
 	if err := sendStreamDebugFile(stream, map[string]string{}, data); err != nil {
 		return err
 	}

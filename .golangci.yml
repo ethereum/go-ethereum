@@ -1,6 +1,7 @@
 # This file configures github.com/golangci/golangci-lint.
 
 run:
+  go: '1.18'
   timeout: 20m
   tests: true
   # default is true. Enables skipping of directories:
@@ -183,4 +184,4 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   #new: true
-  # new-from-rev: origin/master
+  new-from-rev: origin/master

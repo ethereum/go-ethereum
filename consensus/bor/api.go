@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -206,10 +207,10 @@ func (api *API) GetCurrentProposer() (common.Address, error) {
 }
 
 // GetCurrentValidators gets the current validators
-func (api *API) GetCurrentValidators() ([]*Validator, error) {
+func (api *API) GetCurrentValidators() ([]*valset.Validator, error) {
 	snap, err := api.GetSnapshot(nil)
 	if err != nil {
-		return make([]*Validator, 0), err
+		return make([]*valset.Validator, 0), err
 	}
 
 	return snap.ValidatorSet.Validators, nil
@@ -236,7 +237,7 @@ func (api *API) GetRootHash(start uint64, end uint64) (string, error) {
 	currentHeaderNumber := api.chain.CurrentHeader().Number.Uint64()
 
 	if start > end || end > currentHeaderNumber {
-		return "", &InvalidStartEndBlockError{start, end, currentHeaderNumber}
+		return "", &valset.InvalidStartEndBlockError{Start: start, End: end, CurrentHeader: currentHeaderNumber}
 	}
 
 	blockHeaders := make([]*types.Header, end-start+1)

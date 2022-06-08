@@ -1,8 +1,7 @@
-package bor
+package valset
 
 import (
 	"bytes"
-	// "encoding/json"
 	"errors"
 	"fmt"
 	"math/big"

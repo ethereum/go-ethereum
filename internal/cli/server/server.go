@@ -11,6 +11,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -26,15 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"google.golang.org/grpc"
 )
 
 type Server struct {
@@ -71,6 +72,7 @@ func NewServer(config *Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	stack, err := node.New(nodeCfg)
 	if err != nil {
 		return nil, err
@@ -82,6 +84,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	// register backend to account manager with keystore for signing
 	keydir := stack.KeyStoreDir()
+
 	n, p := keystore.StandardScryptN, keystore.StandardScryptP
 	if config.Accounts.UseLightweightKDF {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
@@ -94,6 +97,7 @@ func NewServer(config *Config) (*Server, error) {
 	authorized := false
 
 	// check if personal wallet endpoints are disabled or not
+	// nolint:nestif
 	if !config.Accounts.DisableBorWallet {
 		// add keystore globally to the node's account manager if personal wallet is enabled
 		stack.AccountManager().AddBackend(keystore.NewKeyStore(keydir, n, p))
@@ -103,10 +107,12 @@ func NewServer(config *Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		backend, err := eth.New(stack, ethCfg)
 		if err != nil {
 			return nil, err
 		}
+
 		srv.backend = backend
 	} else {
 		// register the ethereum backend (with temporary created account manager)
@@ -114,10 +120,12 @@ func NewServer(config *Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		backend, err := eth.New(stack, ethCfg)
 		if err != nil {
 			return nil, err
 		}
+
 		srv.backend = backend
 
 		// authorize only if mining or in developer mode
@@ -126,6 +134,7 @@ func NewServer(config *Config) (*Server, error) {
 			eb, err := srv.backend.Etherbase()
 			if err != nil {
 				log.Error("Cannot start mining without etherbase", "err", err)
+
 				return nil, fmt.Errorf("etherbase missing: %v", err)
 			}
 
@@ -142,8 +151,10 @@ func NewServer(config *Config) (*Server, error) {
 				wallet, err := accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
 					log.Error("Etherbase account unavailable locally", "err", err)
+
 					return nil, fmt.Errorf("signer missing: %v", err)
 				}
+
 				cli.Authorize(eb, wallet.SignData)
 				authorized = true
 			}
@@ -155,6 +166,7 @@ func NewServer(config *Config) (*Server, error) {
 					log.Error("Etherbase account unavailable locally", "err", err)
 					return nil, fmt.Errorf("signer missing: %v", err)
 				}
+
 				bor.Authorize(eb, wallet.SignData)
 				authorized = true
 			}
@@ -200,6 +212,7 @@ func NewServer(config *Config) (*Server, error) {
 	if err := srv.node.Start(); err != nil {
 		return nil, err
 	}
+
 	return srv, nil
 }
 
@@ -238,10 +251,12 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 		if v1Enabled {
 			log.Info("Enabling metrics export to InfluxDB (v1)")
+
 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, cfg.Database, cfg.Username, cfg.Password, "geth.", tags)
 		}
 		if v2Enabled {
 			log.Info("Enabling metrics export to InfluxDB (v2)")
+
 			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, cfg.Token, cfg.Bucket, cfg.Organization, "geth.", tags)
 		}
 	}
@@ -328,6 +343,7 @@ func (s *Server) setupGRPCServer(addr string) error {
 	}()
 
 	log.Info("GRPC Server started", "addr", addr)
+
 	return nil
 }
 
@@ -338,16 +354,20 @@ func (s *Server) withLoggingUnaryInterceptor() grpc.ServerOption {
 func (s *Server) loggingServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	start := time.Now()
 	h, err := handler(ctx, req)
+
 	log.Trace("Request", "method", info.FullMethod, "duration", time.Since(start), "error", err)
+
 	return h, err
 }
 
 func setupLogger(logLevel string) {
 	output := io.Writer(os.Stderr)
+
 	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	if usecolor {
 		output = colorable.NewColorableStderr()
 	}
+
 	ostream := log.StreamHandler(output, log.TerminalFormat(usecolor))
 	glogger := log.NewGlogHandler(ostream)
 
@@ -358,6 +378,7 @@ func setupLogger(logLevel string) {
 	} else {
 		glogger.Verbosity(log.LvlInfo)
 	}
+
 	log.Root().SetHandler(glogger)
 }
 

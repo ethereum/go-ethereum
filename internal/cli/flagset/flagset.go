@@ -19,6 +19,7 @@ func NewFlagSet(name string) *Flagset {
 		flags: []*FlagVar{},
 		set:   flag.NewFlagSet(name, flag.ContinueOnError),
 	}
+
 	return f
 }
 
@@ -34,10 +35,12 @@ func (f *Flagset) addFlag(fl *FlagVar) {
 
 func (f *Flagset) Help() string {
 	str := "Options:\n\n"
+
 	items := []string{}
 	for _, item := range f.flags {
 		items = append(items, fmt.Sprintf("  -%s\n    %s", item.Name, item.Usage))
 	}
+
 	return str + strings.Join(items, "\n\n")
 }
 
@@ -53,25 +56,30 @@ func (f *Flagset) MarkDown() string {
 		groups[item.Group] = append(groups[item.Group], item)
 	}
 
-	keys := make([]string, len(groups))
 	i := 0
+	keys := make([]string, len(groups))
+
 	for k := range groups {
 		keys[i] = k
 		i++
 	}
+
 	sort.Strings(keys)
 
 	items := []string{}
+
 	for _, k := range keys {
 		if k == "" {
-			items = append(items, fmt.Sprintf("## Options"))
+			items = append(items, "## Options")
 		} else {
 			items = append(items, fmt.Sprintf("### %s Options", k))
 		}
+
 		for _, item := range groups[k] {
 			items = append(items, fmt.Sprintf("- ```%s```: %s", item.Name, item.Usage))
 		}
 	}
+
 	return strings.Join(items, "\n\n")
 }
 
@@ -162,6 +170,7 @@ func (b *BigIntFlag) String() string {
 	if b.Value == nil {
 		return ""
 	}
+
 	return b.Value.String()
 }
 
@@ -174,10 +183,12 @@ func (b *BigIntFlag) Set(value string) error {
 	} else {
 		num, ok = num.SetString(value, 10)
 	}
+
 	if !ok {
 		return fmt.Errorf("failed to set big int")
 	}
 	b.Value = num
+
 	return nil
 }
 
@@ -201,11 +212,13 @@ func (i *SliceStringFlag) String() string {
 	if i.Value == nil {
 		return ""
 	}
+
 	return strings.Join(*i.Value, ",")
 }
 
 func (i *SliceStringFlag) Set(value string) error {
 	*i.Value = append(*i.Value, strings.Split(value, ",")...)
+
 	return nil
 }
 
@@ -246,10 +259,12 @@ func (m *MapStringFlag) String() string {
 	if m.Value == nil {
 		return ""
 	}
+
 	ls := []string{}
 	for k, v := range *m.Value {
 		ls = append(ls, k+"="+v)
 	}
+
 	return strings.Join(ls, ",")
 }
 
@@ -257,6 +272,7 @@ func (m *MapStringFlag) Set(value string) error {
 	if m.Value == nil {
 		m.Value = &map[string]string{}
 	}
+
 	for _, t := range strings.Split(value, ",") {
 		if t != "" {
 			kv := strings.Split(t, "=")
@@ -266,6 +282,7 @@ func (m *MapStringFlag) Set(value string) error {
 			}
 		}
 	}
+
 	return nil
 }
 

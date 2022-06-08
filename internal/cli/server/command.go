@@ -33,6 +33,7 @@ func (c *Command) MarkDown() string {
 		"The ```bor server``` command runs the Bor client.",
 		c.Flags().MarkDown(),
 	}
+
 	return strings.Join(items, "\n\n")
 }
 

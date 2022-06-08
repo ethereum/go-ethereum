@@ -17,10 +17,13 @@ func findAvailablePort(from int32, count int32) (int32, error) {
 	if count == maxPortCheck {
 		return 0, fmt.Errorf("no available port found")
 	}
+
 	port := atomic.AddInt32(&from, 1)
 	addr := fmt.Sprintf("localhost:%d", port)
-	lis, err := net.Listen("tcp", addr)
+
 	count++
+
+	lis, err := net.Listen("tcp", addr)
 	if err == nil {
 		lis.Close()
 		return port, nil
@@ -36,8 +39,13 @@ func CreateMockServer(config *Config) (*Server, error) {
 
 	// find available port for grpc server
 	rand.Seed(time.Now().UnixNano())
-	var from int32 = 60000 // the min port to start checking from
-	var to int32 = 61000   // the max port to start checking from
+
+	var (
+		from int32 = 60000 // the min port to start checking from
+		to   int32 = 61000 // the max port to start checking from
+	)
+
+	//nolint: gosec
 	port, err := findAvailablePort(rand.Int31n(to-from+1)+from, 0)
 	if err != nil {
 		return nil, err
@@ -53,10 +61,13 @@ func CreateMockServer(config *Config) (*Server, error) {
 	// find available port for http server
 	from = 8545
 	to = 9545
+
+	//nolint: gosec
 	port, err = findAvailablePort(rand.Int31n(to-from+1)+from, 0)
 	if err != nil {
 		return nil, err
 	}
+
 	config.JsonRPC.Http.Port = uint64(port)
 
 	// start the server

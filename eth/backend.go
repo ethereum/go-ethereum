@@ -183,7 +183,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// END: Bor changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-	var dbVer = "<nil>"
+	dbVer := "<nil>"
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
@@ -471,8 +471,10 @@ func (s *Ethereum) StartMining(threads int) error {
 		if threads == 0 {
 			threads = -1 // Disable the miner from within
 		}
+
 		th.SetThreads(threads)
 	}
+
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
 		// Propagate the initial price point to the transaction pool
@@ -485,6 +487,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		eb, err := s.Etherbase()
 		if err != nil {
 			log.Error("Cannot start mining without etherbase", "err", err)
+
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
 
@@ -499,20 +502,26 @@ func (s *Ethereum) StartMining(threads int) error {
 					cli = c
 				}
 			}
+
 			if cli != nil {
 				wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
 					log.Error("Etherbase account unavailable locally", "err", err)
+
 					return fmt.Errorf("signer missing: %v", err)
 				}
+
 				cli.Authorize(eb, wallet.SignData)
 			}
+
 			if bor, ok := s.engine.(*bor.Bor); ok {
 				wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
 					log.Error("Etherbase account unavailable locally", "err", err)
+
 					return fmt.Errorf("signer missing: %v", err)
 				}
+
 				bor.Authorize(eb, wallet.SignData)
 			}
 		}
@@ -522,6 +531,7 @@ func (s *Ethereum) StartMining(threads int) error {
 
 		go s.miner.Start(eb)
 	}
+
 	return nil
 }
 
@@ -575,6 +585,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	if s.config.SnapshotCache > 0 {
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
 	}
+
 	return protos
 }
 
@@ -599,6 +610,7 @@ func (s *Ethereum) Start() error {
 	}
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
+
 	return nil
 }
 

@@ -47,16 +47,19 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	if err != nil {
 		return nil, err
 	}
+
 	res.Block = blockFields
 
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
 	// TODO: discuss consequences of setting preferDisk false.
 	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
@@ -96,6 +99,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 		if len(execRes.Revert()) > 0 {
 			returnVal = fmt.Sprintf("%x", execRes.Revert())
 		}
+
 		result := &ethapi.ExecutionResult{
 			Gas:         execRes.UsedGas,
 			Failed:      execRes.Failed(),
@@ -106,12 +110,14 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 			Result:           result,
 			IntermediateHash: statedb.IntermediateRoot(deleteEmptyObjects),
 		}
+
 		return res
 	}
 
 	for indx, tx := range txs {
 		res.Transactions = append(res.Transactions, traceTxn(indx, tx))
 	}
+
 	return res, nil
 }
 
@@ -139,5 +145,6 @@ func (api *API) TraceBorBlock(req *TraceBlockRequest) (*BlockTraceResult, error)
 	if err != nil {
 		return nil, err
 	}
+
 	return api.traceBorBlock(ctx, block, req.Config)
 }

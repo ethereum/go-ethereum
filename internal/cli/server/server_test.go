@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,9 +19,11 @@ func nextPort() uint64 {
 	log.Info("Checking for new port", "current", initialPort)
 	port := atomic.AddUint64(&initialPort, 1)
 	addr := fmt.Sprintf("localhost:%d", port)
+
 	lis, err := net.Listen("tcp", addr)
 	if err == nil {
 		lis.Close()
+
 		return port
 	} else {
 		return nextPort()
@@ -28,6 +31,8 @@ func nextPort() uint64 {
 }
 
 func TestServer_DeveloperMode(t *testing.T) {
+	t.Parallel()
+
 	// get the default config
 	config := DefaultConfig()
 
@@ -38,6 +43,7 @@ func TestServer_DeveloperMode(t *testing.T) {
 	// start the mock server
 	server, err := CreateMockServer(config)
 	assert.NoError(t, err)
+
 	defer CloseMockServer(server)
 
 	// record the initial block number

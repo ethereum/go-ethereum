@@ -5,9 +5,12 @@ import (
 )
 
 func TestChain_ImportFromFile(t *testing.T) {
+	t.Parallel()
+
 	type args struct {
 		filename string
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -34,8 +37,13 @@ func TestChain_ImportFromFile(t *testing.T) {
 			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := ImportFromFile(tt.args.filename)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ImportFromFile() error = %v, wantErr %v", err, tt.wantErr)

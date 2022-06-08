@@ -17,7 +17,6 @@ const (
 )
 
 func main() {
-
 	commands := cli.Commands()
 
 	dest := flag.String("d", DefaultDir, "Destination directory where the docs will be generated")
@@ -35,10 +34,12 @@ func main() {
 
 	keys := make([]string, len(commands))
 	i := 0
+
 	for k := range commands {
 		keys[i] = k
 		i++
 	}
+
 	sort.Strings(keys)
 
 	for _, name := range keys {
@@ -60,12 +61,17 @@ func main() {
 
 func overwriteFile(filePath string, text string) {
 	log.Printf("Writing to page: %s\n", filePath)
+
 	f, err := os.Create(filePath)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	f.WriteString(text)
-	if err := f.Close(); err != nil {
+
+	if _, err = f.WriteString(text); err != nil {
+		log.Fatalln(err)
+	}
+
+	if err = f.Close(); err != nil {
 		log.Fatalln(err)
 	}
 }

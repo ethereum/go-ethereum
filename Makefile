@@ -65,9 +65,7 @@ escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
 
 lint:
-	@./build/bin/golangci-lint run --config ./.golangci.yml \
-		internal/cli \
-		consensus/bor
+	@./build/bin/golangci-lint run --config ./.golangci.yml
 
 lintci-deps:
 	rm -f ./build/bin/golangci-lint
@@ -87,16 +85,20 @@ clean:
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
 devtools:
-	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
-	env GOBIN= go install github.com/kevinburke/go-bindata/go-bindata@latest
-	env GOBIN= go install github.com/fjl/gencodec@latest
-	env GOBIN= go install github.com/golang/protobuf/protoc-gen-go@latest
-	env GOBIN= go install ./cmd/abigen
+	# Notice! If you adding new binary - add it also to tests/deps/fake.go file
+	$(GOBUILD) -o $(GOBIN)/stringer github.com/golang.org/x/tools/cmd/stringer
+	$(GOBUILD) -o $(GOBIN)/go-bindata github.com/kevinburke/go-bindata/go-bindata
+	$(GOBUILD) -o $(GOBIN)/codecgen github.com/ugorji/go/codec/codecgen
+	$(GOBUILD) -o $(GOBIN)/abigen ./cmd/abigen
+	$(GOBUILD) -o $(GOBIN)/mockgen github.com/golang/mock/mockgen
+	$(GOBUILD) -o $(GOBIN)/protoc-gen-go github.com/golang/protobuf/protoc-gen-go
+	PATH=$(GOBIN):$(PATH) go generate ./common
+	PATH=$(GOBIN):$(PATH) go generate ./core/types
+	PATH=$(GOBIN):$(PATH) go generate ./consensus/bor
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
 
 # Cross Compilation Targets (xgo)
-
 geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
 	@echo "Full cross compilation done:"
 	@ls -ld $(GOBIN)/geth-*

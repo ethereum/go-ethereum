@@ -1,4 +1,4 @@
-package bor
+package clerk
 
 import (
 	"fmt"
@@ -23,10 +23,10 @@ type EventRecordWithTime struct {
 	Time time.Time `json:"record_time" yaml:"record_time"`
 }
 
-// String returns the string representations of span
-func (e *EventRecordWithTime) String() string {
+// String returns the string representation of EventRecord
+func (e *EventRecordWithTime) String(gasUsed uint64) string {
 	return fmt.Sprintf(
-		"id %v, contract %v, data: %v, txHash: %v, logIndex: %v, chainId: %v, time %s",
+		"id %v, contract %v, data: %v, txHash: %v, logIndex: %v, chainId: %v, time %s, gasUsed %d",
 		e.ID,
 		e.Contract.String(),
 		e.Data.String(),
@@ -34,6 +34,7 @@ func (e *EventRecordWithTime) String() string {
 		e.LogIndex,
 		e.ChainID,
 		e.Time.Format(time.RFC3339),
+		gasUsed,
 	)
 }
 
