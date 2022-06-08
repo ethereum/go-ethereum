@@ -8,6 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -19,9 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -35,7 +36,21 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-	h, heimdallSpan := getMockedHeimdallClient(t)
+
+	defer engine.Close()
+
+	h, heimdallSpan, ctrl := getMockedHeimdallClient(t)
+	defer ctrl.Finish()
+
+	_, span := loadSpanFromFile(t)
+
+	h.EXPECT().Close().AnyTimes()
+	h.EXPECT().FetchLatestCheckpoint().Return(&bor.Checkpoint{
+		Proposer:   span.SelectedProducers[0].Address,
+		StartBlock: big.NewInt(0),
+		EndBlock:   big.NewInt(int64(spanSize)),
+	}, nil).AnyTimes()
+
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -48,7 +63,6 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 		insertNewBlock(t, chain, block)
 	}
 
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
 	validators, err := _bor.GetCurrentValidators(block.Hash(), spanSize) // check validator set at the first block of new span
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -67,6 +81,8 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer engine.Close()
+
 	// A. Insert blocks for 0th sprint
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
@@ -79,8 +95,12 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	// B. Before inserting 1st block of the next sprint, mock heimdall deps
 	// B.1 Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	h := mocks.NewMockIHeimdallClient(ctrl)
+	h.EXPECT().Close().AnyTimes()
 
 	// B.2 Mock State Sync events
 	fromID := uint64(1)
@@ -91,14 +111,14 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	sample := getSampleEventRecord(t)
 	sample.Time = time.Unix(to-int64(eventCount+1), 0) // last event.Time will be just < to
 	eventRecords := generateFakeStateSyncEvents(sample, eventCount)
-	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
+
+	// Mock
+	h.EXPECT().FetchWithRetry(spanPath, "").Return(res, nil).AnyTimes()
+	h.EXPECT().FetchStateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 	insertNewBlock(t, chain, block)
-
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {
@@ -107,10 +127,17 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
 
+	defer _bor.Close()
+
 	// Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", spanPath, "").Return(res, nil)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	h := mocks.NewMockIHeimdallClient(ctrl)
+	h.EXPECT().Close().AnyTimes()
+	h.EXPECT().FetchWithRetry(spanPath, "").Return(res, nil).AnyTimes()
 
 	// Mock State Sync events
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
@@ -128,7 +155,8 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		buildStateEvent(sample, 4, 5), // id = 4, time = 5
 		buildStateEvent(sample, 6, 4), // id = 6, time = 4
 	}
-	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
+
+	h.EXPECT().FetchStateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	// Insert blocks for 0th sprint
@@ -138,9 +166,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 		insertNewBlock(t, chain, block)
 	}
-	assert.True(t, h.AssertCalled(t, "FetchWithRetry", spanPath, ""))
-	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
+
 	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(sprintSize)
+
 	// state 6 was not written
 	assert.Equal(t, uint64(4), lastStateID.Uint64())
 
@@ -151,12 +179,14 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		buildStateEvent(sample, 5, 7),
 		buildStateEvent(sample, 6, 4),
 	}
-	h.On("FetchStateSyncEvents", fromID, to).Return(eventRecords, nil)
+
+	h.EXPECT().FetchStateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
+
 	for i := sprintSize + 1; i <= spanSize; i++ {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
 		insertNewBlock(t, chain, block)
 	}
-	assert.True(t, h.AssertCalled(t, "FetchStateSyncEvents", fromID, to))
+
 	lastStateID, _ = _bor.GenesisContractsClient.LastStateId(spanSize)
 	assert.Equal(t, uint64(6), lastStateID.Uint64())
 }
@@ -166,7 +196,13 @@ func TestOutOfTurnSigning(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-	h, _ := getMockedHeimdallClient(t)
+
+	defer _bor.Close()
+
+	h, _, ctrl := getMockedHeimdallClient(t)
+	defer ctrl.Finish()
+
+	h.EXPECT().Close().AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -197,6 +233,7 @@ func TestOutOfTurnSigning(t *testing.T) {
 		bor.CalcProducerDelay(header.Number.Uint64(), 0, init.genesis.Config.Bor))
 	sign(t, header, signerKey, init.genesis.Config.Bor)
 	block = types.NewBlockWithHeader(header)
+
 	_, err = chain.InsertChain([]*types.Block{block})
 	assert.Equal(t,
 		*err.(*bor.WrongDifficultyError),
@@ -205,6 +242,7 @@ func TestOutOfTurnSigning(t *testing.T) {
 	header.Difficulty = new(big.Int).SetUint64(expectedDifficulty)
 	sign(t, header, signerKey, init.genesis.Config.Bor)
 	block = types.NewBlockWithHeader(header)
+
 	_, err = chain.InsertChain([]*types.Block{block})
 	assert.Nil(t, err)
 }
@@ -214,7 +252,14 @@ func TestSignerNotFound(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-	h, _ := getMockedHeimdallClient(t)
+
+	defer _bor.Close()
+
+	h, _, ctrl := getMockedHeimdallClient(t)
+	defer ctrl.Finish()
+
+	h.EXPECT().Close().AnyTimes()
+
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
@@ -233,15 +278,16 @@ func TestSignerNotFound(t *testing.T) {
 		bor.UnauthorizedSignerError{Number: 0, Signer: addr.Bytes()})
 }
 
-func getMockedHeimdallClient(t *testing.T) (*mocks.IHeimdallClient, *bor.HeimdallSpan) {
+func getMockedHeimdallClient(t *testing.T) (*mocks.MockIHeimdallClient, *bor.HeimdallSpan, *gomock.Controller) {
+	ctrl := gomock.NewController(t)
+	h := mocks.NewMockIHeimdallClient(ctrl)
+
 	res, heimdallSpan := loadSpanFromFile(t)
-	h := &mocks.IHeimdallClient{}
-	h.On("FetchWithRetry", "bor/span/1", "").Return(res, nil)
-	h.On(
-		"FetchStateSyncEvents",
-		mock.AnythingOfType("uint64"),
-		mock.AnythingOfType("int64")).Return([]*bor.EventRecordWithTime{getSampleEventRecord(t)}, nil)
-	return h, heimdallSpan
+
+	h.EXPECT().FetchWithRetry(spanPath, "").Return(res, nil).AnyTimes()
+	h.EXPECT().FetchStateSyncEvents(gomock.Any(), gomock.Any()).Return(getEventRecords(t), nil).AnyTimes()
+
+	return h, heimdallSpan, ctrl
 }
 
 func generateFakeStateSyncEvents(sample *bor.EventRecordWithTime, count int) []*bor.EventRecordWithTime {
@@ -274,6 +320,16 @@ func getSampleEventRecord(t *testing.T) *bor.EventRecordWithTime {
 	}
 	_eventRecords[0].Time = time.Unix(1, 0)
 	return _eventRecords[0]
+}
+
+func getEventRecords(t *testing.T) []*bor.EventRecordWithTime {
+	res := stateSyncEventsPayload(t)
+	var _eventRecords []*bor.EventRecordWithTime
+	if err := json.Unmarshal(res.Result, &_eventRecords); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	return _eventRecords
 }
 
 // TestEIP1559Transition tests the following:

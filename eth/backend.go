@@ -100,6 +100,8 @@ type Ethereum struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
+	closeCh chan struct{} // Channel to signal the background processes to exit
+
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
 }
 
@@ -161,6 +163,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		closeCh:           make(chan struct{}),
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 
@@ -181,7 +184,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// END: Bor changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-	var dbVer = "<nil>"
+	dbVer := "<nil>"
 	if bcVersion != nil {
 		dbVer = fmt.Sprintf("%d", *bcVersion)
 	}
@@ -252,6 +255,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:         uint64(cacheLimit),
 		EventMux:           eth.eventMux,
 		Checkpoint:         checkpoint,
+		EthAPI:             ethAPI,
 		PeerRequiredBlocks: config.PeerRequiredBlocks,
 	}); err != nil {
 		return nil, err
@@ -582,8 +586,77 @@ func (s *Ethereum) Start() error {
 		}
 		maxPeers -= s.config.LightPeers
 	}
+
 	// Start the networking layer and the light server if requested
 	s.handler.Start(maxPeers)
+
+	go s.startCheckpointWhitelistService()
+
+	return nil
+}
+
+// StartCheckpointWhitelistService starts the goroutine to fetch checkpoints and update the
+// checkpoint whitelist map.
+func (s *Ethereum) startCheckpointWhitelistService() {
+	// a shortcut helps with tests and early exit
+	select {
+	case <-s.closeCh:
+		return
+	default:
+	}
+
+	// first run the checkpoint whitelist
+	err := s.handleWhitelistCheckpoint()
+	if err != nil {
+		if errors.Is(err, ErrBorConsensusWithoutHeimdall) || errors.Is(err, ErrNotBorConsensus) {
+			return
+		}
+
+		log.Warn("unable to whitelist checkpoint - first run", "err", err)
+	}
+
+	ticker := time.NewTicker(100 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			err := s.handleWhitelistCheckpoint()
+			if err != nil {
+				log.Warn("unable to whitelist checkpoint", "err", err)
+			}
+		case <-s.closeCh:
+			return
+		}
+	}
+}
+
+var (
+	ErrNotBorConsensus             = errors.New("not bor consensus was given")
+	ErrBorConsensusWithoutHeimdall = errors.New("bor consensus without heimdall")
+)
+
+// handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
+func (s *Ethereum) handleWhitelistCheckpoint() error {
+	ethHandler := (*ethHandler)(s.handler)
+
+	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
+	if !ok {
+		return ErrNotBorConsensus
+	}
+
+	if bor.WithoutHeimdall {
+		return ErrBorConsensusWithoutHeimdall
+	}
+
+	endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint(bor)
+	if err != nil {
+		return err
+	}
+
+	// Update the checkpoint whitelist map.
+	ethHandler.downloader.ProcessCheckpoint(endBlockNum, endBlockHash)
+
 	return nil
 }
 
@@ -598,6 +671,9 @@ func (s *Ethereum) Stop() error {
 	// Then stop everything else.
 	s.bloomIndexer.Close()
 	close(s.closeBloomHandler)
+
+	// Close all bg processes
+	close(s.closeCh)
 
 	// closing consensus engine first, as miner has deps on it
 	s.engine.Close()
