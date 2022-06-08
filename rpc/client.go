@@ -17,7 +17,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -75,7 +74,7 @@ type BatchElem struct {
 // Client represents a connection to an RPC server.
 type Client struct {
 	idgen    func() ID // for subscriptions
-	isHTTP   bool
+	isHTTP   bool      // connection type: http, ws or ipc
 	services *serviceRegistry
 
 	idCounter uint32
@@ -110,7 +109,9 @@ type clientConn struct {
 }
 
 func (c *Client) newClientConn(conn ServerCodec) *clientConn {
-	ctx := context.WithValue(context.Background(), clientContextKey{}, c)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, clientContextKey{}, c)
+	ctx = context.WithValue(ctx, peerInfoContextKey{}, conn.peerInfo())
 	handler := newHandler(ctx, conn, c.idgen, c.services)
 	return &clientConn{conn, handler}
 }
@@ -185,7 +186,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 }
 
-// Client retrieves the client from the context, if any. This can be used to perform
+// ClientFromContext retrieves the client from the context, if any. This can be used to perform
 // 'reverse calls' in a handler method.
 func ClientFromContext(ctx context.Context) (*Client, bool) {
 	client, ok := ctx.Value(clientContextKey{}).(*Client)
@@ -205,8 +206,8 @@ func newClient(initctx context.Context, connect reconnectFunc) (*Client, error) 
 func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
 	_, isHTTP := conn.(*httpConn)
 	c := &Client{
-		idgen:       idgen,
 		isHTTP:      isHTTP,
+		idgen:       idgen,
 		services:    services,
 		writeConn:   conn,
 		close:       make(chan struct{}),
@@ -348,7 +349,7 @@ func (c *Client) BatchCall(b []BatchElem) error {
 	return c.BatchCallContext(ctx, b)
 }
 
-// BatchCall sends all given requests as a single batch and waits for the server
+// BatchCallContext sends all given requests as a single batch and waits for the server
 // to return a response for all of them. The wait duration is bounded by the
 // context's deadline.
 //
@@ -358,7 +359,10 @@ func (c *Client) BatchCall(b []BatchElem) error {
 //
 // Note that batch calls may not be executed atomically on the server side.
 func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
-	msgs := make([]*jsonrpcMessage, len(b))
+	var (
+		msgs = make([]*jsonrpcMessage, len(b))
+		byID = make(map[string]int, len(b))
+	)
 	op := &requestOp{
 		ids:  make([]json.RawMessage, len(b)),
 		resp: make(chan *jsonrpcMessage, len(b)),
@@ -370,6 +374,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		}
 		msgs[i] = msg
 		op.ids[i] = msg.ID
+		byID[string(msg.ID)] = i
 	}
 
 	var err error
@@ -389,13 +394,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		// Find the element corresponding to this response.
 		// The element is guaranteed to be present because dispatch
 		// only sends valid IDs to our channel.
-		var elem *BatchElem
-		for i := range msgs {
-			if bytes.Equal(msgs[i].ID, resp.ID) {
-				elem = &b[i]
-				break
-			}
-		}
+		elem := &b[byID[string(resp.ID)]]
 		if resp.Error != nil {
 			elem.Error = resp.Error
 			continue
@@ -428,16 +427,15 @@ func (c *Client) Notify(ctx context.Context, method string, args ...interface{})
 	return c.send(ctx, op, msg)
 }
 
-// EthSubscribe registers a subscripion under the "eth" namespace.
+// EthSubscribe registers a subscription under the "eth" namespace.
 //
 // Args are encoded into the RPC request as ordered array params by default,
 // but can be encoded as a named params object by passing a single NamedParams arg.
-//
 func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
-// ShhSubscribe registers a subscripion under the "shh" namespace.
+// ShhSubscribe registers a subscription under the "shh" namespace.
 //
 // Args are encoded into the RPC request as ordered array params by default,
 // but can be encoded as a named params object by passing a single NamedParams arg.
@@ -466,7 +464,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
-		panic("first argument to Subscribe must be a writable channel")
+		panic(fmt.Sprintf("channel argument of Subscribe has type %T, need writable channel", channel))
 	}
 	if chanVal.IsNil() {
 		panic("channel given to Subscribe must not be nil")
@@ -529,8 +527,8 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 }
 
 func (c *Client) write(ctx context.Context, msg interface{}, retry bool) error {
-	// The previous write failed. Try to establish a new connection.
 	if c.writeConn == nil {
+		// The previous write failed. Try to establish a new connection.
 		if err := c.reconnect(ctx); err != nil {
 			return err
 		}

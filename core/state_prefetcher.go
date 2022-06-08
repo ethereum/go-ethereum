@@ -63,11 +63,11 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return
 		}
 		// Convert the transaction into an executable message and pre-cache its sender
-		msg, err := tx.AsMessage(signer)
+		msg, err := tx.AsMessage(signer, header.BaseFee)
 		if err != nil {
 			return // Also invalid block, bail out
 		}
-		statedb.Prepare(tx.Hash(), block.Hash(), i)
+		statedb.Prepare(tx.Hash(), i)
 		if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}

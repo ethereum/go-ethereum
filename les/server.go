@@ -212,17 +212,25 @@ func (s *LesServer) Stop() error {
 	close(s.closeCh)
 
 	s.clientPool.Stop()
-	s.serverset.close()
+	if s.serverset != nil {
+		s.serverset.close()
+	}
 	s.peers.close()
 	s.fcManager.Stop()
 	s.costTracker.stop()
 	s.handler.stop()
 	s.servingQueue.stop()
-	s.vfluxServer.Stop()
+	if s.vfluxServer != nil {
+		s.vfluxServer.Stop()
+	}
 
 	// Note, bloom trie indexer is closed by parent bloombits indexer.
-	s.chtIndexer.Close()
-	s.lesDb.Close()
+	if s.chtIndexer != nil {
+		s.chtIndexer.Close()
+	}
+	if s.lesDb != nil {
+		s.lesDb.Close()
+	}
 	s.wg.Wait()
 	log.Info("Les server stopped")
 

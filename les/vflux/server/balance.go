@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -358,11 +358,15 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 	if bias > 0 {
 		b = n.reducedBalance(b, now+mclock.AbsTime(future), bias, capacity, 0)
 	}
-	// Note: we subtract one from the estimated priority in order to ensure that biased
-	// estimates are always lower than actual priorities, even if the bias is very small.
+	pri := n.balanceToPriority(now, b, capacity)
+	// Ensure that biased estimates are always lower than actual priorities, even if
+	// the bias is very small.
 	// This ensures that two nodes will not ping-pong update signals forever if both of
 	// them have zero estimated priority drop in the projected future.
-	pri := n.balanceToPriority(now, b, capacity) - 1
+	current := n.balanceToPriority(now, n.balance, capacity)
+	if pri >= current {
+		pri = current - 1
+	}
 	if update {
 		n.addCallback(balanceCallbackUpdate, pri, n.signalPriorityUpdate)
 	}

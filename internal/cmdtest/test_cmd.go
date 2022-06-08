@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -118,6 +117,13 @@ func (tt *TestCmd) Expect(tplsource string) {
 	tt.Logf("Matched stdout text:\n%s", want)
 }
 
+// Output reads all output from stdout, and returns the data.
+func (tt *TestCmd) Output() []byte {
+	var buf []byte
+	tt.withKillTimeout(func() { buf, _ = io.ReadAll(tt.stdout) })
+	return buf
+}
+
 func (tt *TestCmd) matchExactOutput(want []byte) error {
 	buf := make([]byte, len(want))
 	n := 0
@@ -177,7 +183,7 @@ func (tt *TestCmd) ExpectRegexp(regex string) (*regexp.Regexp, []string) {
 func (tt *TestCmd) ExpectExit() {
 	var output []byte
 	tt.withKillTimeout(func() {
-		output, _ = ioutil.ReadAll(tt.stdout)
+		output, _ = io.ReadAll(tt.stdout)
 	})
 	tt.WaitExit()
 	if tt.Cleanup != nil {

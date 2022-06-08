@@ -112,12 +112,13 @@ func memoryMapFile(file *os.File, write bool) (mmap.MMap, []uint32, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	// Yay, we managed to memory map the file, here be dragons
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&mem))
-	header.Len /= 4
-	header.Cap /= 4
-
-	return mem, *(*[]uint32)(unsafe.Pointer(&header)), nil
+	// The file is now memory-mapped. Create a []uint32 view of the file.
+	var view []uint32
+	header := (*reflect.SliceHeader)(unsafe.Pointer(&view))
+	header.Data = (*reflect.SliceHeader)(unsafe.Pointer(&mem)).Data
+	header.Cap = len(mem) / 4
+	header.Len = header.Cap
+	return mem, view, nil
 }
 
 // memoryMapAndGenerate tries to memory map a temporary file of uint32s for write
@@ -135,13 +136,16 @@ func memoryMapAndGenerate(path string, size uint64, lock bool, generator func(bu
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = dump.Truncate(int64(len(dumpMagic))*4 + int64(size)); err != nil {
+	if err = ensureSize(dump, int64(len(dumpMagic))*4+int64(size)); err != nil {
+		dump.Close()
+		os.Remove(temp)
 		return nil, nil, nil, err
 	}
 	// Memory map the file for writing and fill it with the generator
 	mem, buffer, err := memoryMapFile(dump, true)
 	if err != nil {
 		dump.Close()
+		os.Remove(temp)
 		return nil, nil, nil, err
 	}
 	copy(buffer, dumpMagic)
@@ -357,7 +361,7 @@ func (d *dataset) generate(dir string, limit int, lock bool, test bool) {
 		if err != nil {
 			logger.Error("Failed to generate mapped ethash dataset", "err", err)
 
-			d.dataset = make([]uint32, dsize/2)
+			d.dataset = make([]uint32, dsize/4)
 			generateDataset(d.dataset, d.epoch, cache)
 		}
 		// Iterate over all previous instances and delete old ones
@@ -545,6 +549,11 @@ func NewShared() *Ethash {
 
 // Close closes the exit channel to notify all backend threads exiting.
 func (ethash *Ethash) Close() error {
+	return ethash.StopRemoteSealer()
+}
+
+// StopRemoteSealer stops the remote sealer
+func (ethash *Ethash) StopRemoteSealer() error {
 	ethash.closeOnce.Do(func() {
 		// Short circuit if the exit channel is not allocated.
 		if ethash.remote == nil {

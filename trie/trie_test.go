@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -32,6 +31,8 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
@@ -47,12 +48,12 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	trie := NewEmpty(NewDatabase(memorydb.New()))
 	return trie
 }
 
 func TestEmptyTrie(t *testing.T) {
-	var trie Trie
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	res := trie.Hash()
 	exp := emptyRoot
 	if res != exp {
@@ -61,7 +62,7 @@ func TestEmptyTrie(t *testing.T) {
 }
 
 func TestNull(t *testing.T) {
-	var trie Trie
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	key := make([]byte, 32)
 	value := []byte("test")
 	trie.Update(key, value)
@@ -71,7 +72,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(memorydb.New()))
+	trie, err := New(common.Hash{}, common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(memorydb.New()))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -87,35 +88,35 @@ func testMissingNode(t *testing.T, memonly bool) {
 	diskdb := memorydb.New()
 	triedb := NewDatabase(diskdb)
 
-	trie, _ := New(common.Hash{}, triedb)
+	trie := NewEmpty(triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
-	root, _ := trie.Commit(nil)
+	root, _, _ := trie.Commit(nil)
 	if !memonly {
 		triedb.Commit(root, true, nil)
 	}
 
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err := trie.TryGet([]byte("120000"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err = trie.TryGet([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err = trie.TryGet([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	err = trie.TryUpdate([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	err = trie.TryDelete([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -128,27 +129,27 @@ func testMissingNode(t *testing.T, memonly bool) {
 		diskdb.Delete(hash[:])
 	}
 
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err = trie.TryGet([]byte("120000"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err = trie.TryGet([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	_, err = trie.TryGet([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	err = trie.TryUpdate([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-	trie, _ = New(root, triedb)
+	trie, _ = New(common.Hash{}, root, triedb)
 	err = trie.TryDelete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
@@ -172,7 +173,7 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
-	root, err := trie.Commit(nil)
+	root, _, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -270,13 +271,13 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	exp, err := trie.Commit(nil)
+	exp, _, err := trie.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
 
 	// create a new trie on top of the database and check that lookups work.
-	trie2, err := New(exp, trie.db)
+	trie2, err := New(common.Hash{}, exp, trie.db)
 	if err != nil {
 		t.Fatalf("can't recreate trie at %x: %v", exp, err)
 	}
@@ -285,7 +286,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, err := trie2.Commit(nil)
+	hash, _, err := trie2.Commit(nil)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -373,6 +374,7 @@ const (
 	opHash
 	opReset
 	opItercheckhash
+	opNodeDiff
 	opMax // boundary value, not an actual op
 )
 
@@ -407,14 +409,18 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	triedb := NewDatabase(memorydb.New())
-
-	tr, _ := New(common.Hash{}, triedb)
-	values := make(map[string]string) // tracks content of the trie
+	var (
+		triedb   = NewDatabase(memorydb.New())
+		tr       = NewEmpty(triedb)
+		values   = make(map[string]string) // tracks content of the trie
+		origTrie = NewEmpty(triedb)
+	)
+	tr.tracer = newTracer()
 
 	for i, step := range rt {
-		fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
-			step.op, step.key, step.value, i)
+		// fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
+		// 	step.op, step.key, step.value, i)
+
 		switch step.op {
 		case opUpdate:
 			tr.Update(step.key, step.value)
@@ -429,29 +435,86 @@ func runRandTest(rt randTest) bool {
 				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			_, rt[i].err = tr.Commit(nil)
+			_, _, rt[i].err = tr.Commit(nil)
+			origTrie = tr.Copy()
 		case opHash:
 			tr.Hash()
 		case opReset:
-			hash, err := tr.Commit(nil)
+			hash, _, err := tr.Commit(nil)
 			if err != nil {
 				rt[i].err = err
 				return false
 			}
-			newtr, err := New(hash, triedb)
+			newtr, err := New(common.Hash{}, hash, triedb)
 			if err != nil {
 				rt[i].err = err
 				return false
 			}
 			tr = newtr
+			tr.tracer = newTracer()
+
+			origTrie = tr.Copy()
 		case opItercheckhash:
-			checktr, _ := New(common.Hash{}, triedb)
+			checktr := NewEmpty(triedb)
 			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
 				checktr.Update(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
 				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
+			}
+		case opNodeDiff:
+			var (
+				inserted = tr.tracer.insertList()
+				deleted  = tr.tracer.deleteList()
+				origIter = origTrie.NodeIterator(nil)
+				curIter  = tr.NodeIterator(nil)
+				origSeen = make(map[string]struct{})
+				curSeen  = make(map[string]struct{})
+			)
+			for origIter.Next(true) {
+				if origIter.Leaf() {
+					continue
+				}
+				origSeen[string(origIter.Path())] = struct{}{}
+			}
+			for curIter.Next(true) {
+				if curIter.Leaf() {
+					continue
+				}
+				curSeen[string(curIter.Path())] = struct{}{}
+			}
+			var (
+				insertExp = make(map[string]struct{})
+				deleteExp = make(map[string]struct{})
+			)
+			for path := range curSeen {
+				_, present := origSeen[path]
+				if !present {
+					insertExp[path] = struct{}{}
+				}
+			}
+			for path := range origSeen {
+				_, present := curSeen[path]
+				if !present {
+					deleteExp[path] = struct{}{}
+				}
+			}
+			if len(insertExp) != len(inserted) {
+				rt[i].err = fmt.Errorf("insert set mismatch")
+			}
+			if len(deleteExp) != len(deleted) {
+				rt[i].err = fmt.Errorf("delete set mismatch")
+			}
+			for _, insert := range inserted {
+				if _, present := insertExp[string(insert)]; !present {
+					rt[i].err = fmt.Errorf("missing inserted node")
+				}
+			}
+			for _, del := range deleted {
+				if _, present := deleteExp[string(del)]; !present {
+					rt[i].err = fmt.Errorf("missing deleted node")
+				}
 			}
 		}
 		// Abort the test on error.
@@ -479,10 +542,10 @@ func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
 const benchElemCount = 20000
 
 func benchGet(b *testing.B, commit bool) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	if commit {
-		_, tmpdb := tempDB()
-		trie, _ = New(common.Hash{}, tmpdb)
+		tmpdb := tempDB(b)
+		trie = NewEmpty(tmpdb)
 	}
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
@@ -553,13 +616,6 @@ func BenchmarkHash(b *testing.B) {
 	trie.Hash()
 }
 
-type account struct {
-	Nonce   uint64
-	Balance *big.Int
-	Root    common.Hash
-	Code    []byte
-}
-
 // Benchmarks the trie Commit following a Hash. Since the trie caches the result of any operation,
 // we cannot use b.N as the number of hashing rouns, since all rounds apart from
 // the first one will be NOOP. As such, we'll use b.N as the number of account to
@@ -568,8 +624,8 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 	b.Run("no-onleaf", func(b *testing.B) {
 		benchmarkCommitAfterHash(b, nil)
 	})
-	var a account
-	onleaf := func(path []byte, leaf []byte, parent common.Hash) error {
+	var a types.StateAccount
+	onleaf := func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error {
 		rlp.DecodeBytes(leaf, &a)
 		return nil
 	}
@@ -608,7 +664,7 @@ func TestTinyTrie(t *testing.T) {
 	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
-	checktr, _ := New(common.Hash{}, trie.db)
+	checktr := NewEmpty(trie.db)
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		checktr.Update(it.Key, it.Value)
@@ -633,7 +689,7 @@ func TestCommitAfterHash(t *testing.T) {
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
-	root, _ = trie.Commit(nil)
+	root, _, _ = trie.Commit(nil)
 	if exp != root {
 		t.Errorf("got %x, exp %x", root, exp)
 	}
@@ -664,7 +720,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(big.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&account{nonce, balance, root, code})
+		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
 		accounts[i] = data
 	}
 	return addresses, accounts
@@ -681,6 +737,8 @@ func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement 
 func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
 func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
 func (s *spongeDb) NewBatch() ethdb.Batch                    { return &spongeBatch{s} }
+func (s *spongeDb) NewBatchWithSize(size int) ethdb.Batch    { return &spongeBatch{s} }
+func (s *spongeDb) NewSnapshot() (ethdb.Snapshot, error)     { panic("implement me") }
 func (s *spongeDb) Stat(property string) (string, error)     { panic("implement me") }
 func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
 func (s *spongeDb) Close() error                             { return nil }
@@ -732,7 +790,7 @@ func TestCommitSequence(t *testing.T) {
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		db := NewDatabase(s)
-		trie, _ := New(common.Hash{}, db)
+		trie := NewEmpty(db)
 		// Another sponge is used to check the callback-sequence
 		callbackSponge := sha3.NewLegacyKeccak256()
 		// Fill the trie with elements
@@ -740,7 +798,7 @@ func TestCommitSequence(t *testing.T) {
 			trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(c common.Hash) {
 			// And spongify the callback-order
@@ -774,7 +832,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		db := NewDatabase(s)
-		trie, _ := New(common.Hash{}, db)
+		trie := NewEmpty(db)
 		// Another sponge is used to check the callback-sequence
 		callbackSponge := sha3.NewLegacyKeccak256()
 		// Fill the trie with elements
@@ -792,7 +850,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			trie.Update(key, val)
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, func(c common.Hash) {
 			// And spongify the callback-order
@@ -813,7 +871,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "a"}
 		db := NewDatabase(s)
-		trie, _ := New(common.Hash{}, db)
+		trie := NewEmpty(db)
 		// Another sponge is used for the stacktrie commits
 		stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
 		stTrie := NewStackTrie(stackTrieSponge)
@@ -830,11 +888,11 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 				val = make([]byte, 1+prng.Intn(1024))
 			}
 			prng.Read(val)
-			trie.TryUpdate(key, common.CopyBytes(val))
-			stTrie.TryUpdate(key, common.CopyBytes(val))
+			trie.TryUpdate(key, val)
+			stTrie.TryUpdate(key, val)
 		}
 		// Flush trie -> database
-		root, _ := trie.Commit(nil)
+		root, _, _ := trie.Commit(nil)
 		// Flush memdb -> disk (sponge)
 		db.Commit(root, false, nil)
 		// And flush stacktrie -> disk
@@ -869,7 +927,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 func TestCommitSequenceSmallRoot(t *testing.T) {
 	s := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "a"}
 	db := NewDatabase(s)
-	trie, _ := New(common.Hash{}, db)
+	trie := NewEmpty(db)
 	// Another sponge is used for the stacktrie commits
 	stackTrieSponge := &spongeDb{sponge: sha3.NewLegacyKeccak256(), id: "b"}
 	stTrie := NewStackTrie(stackTrieSponge)
@@ -879,7 +937,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	trie.TryUpdate(key, []byte{0x1})
 	stTrie.TryUpdate(key, []byte{0x1})
 	// Flush trie -> database
-	root, _ := trie.Commit(nil)
+	root, _, _ := trie.Commit(nil)
 	// Flush memdb -> disk (sponge)
 	db.Commit(root, false, nil)
 	// And flush stacktrie -> disk
@@ -890,7 +948,8 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	if stRoot != root {
 		t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 	}
-	fmt.Printf("root: %x\n", stRoot)
+
+	t.Logf("root: %x\n", stRoot)
 	if got, exp := stackTrieSponge.sponge.Sum(nil), s.sponge.Sum(nil); !bytes.Equal(got, exp) {
 		t.Fatalf("test, disk write sequence wrong:\ngot %x exp %x\n", got, exp)
 	}
@@ -1055,16 +1114,13 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	b.StopTimer()
 }
 
-func tempDB() (string, *Database) {
-	dir, err := ioutil.TempDir("", "trie-bench")
-	if err != nil {
-		panic(fmt.Sprintf("can't create temporary directory: %v", err))
-	}
+func tempDB(tb testing.TB) *Database {
+	dir := tb.TempDir()
 	diskdb, err := leveldb.New(dir, 256, 0, "", false)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}
-	return dir, NewDatabase(diskdb)
+	return NewDatabase(diskdb)
 }
 
 func getString(trie *Trie, k string) []byte {

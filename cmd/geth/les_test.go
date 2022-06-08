@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -137,14 +153,18 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 		name: name,
 		geth: runGeth(t, args...),
 	}
-	// wait before we can attach to it. TODO: probe for it properly
-	time.Sleep(1 * time.Second)
-	var err error
 	ipcpath := ipcEndpoint(ipcName, g.geth.Datadir)
-	if g.rpc, err = rpc.Dial(ipcpath); err != nil {
-		t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+	// We can't know exactly how long geth will take to start, so we try 10
+	// times over a 5 second period.
+	var err error
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
+			return g
+		}
 	}
-	return g
+	t.Fatalf("%v rpc connect to %v: %v", name, ipcpath, err)
+	return nil
 }
 
 func initGeth(t *testing.T) string {

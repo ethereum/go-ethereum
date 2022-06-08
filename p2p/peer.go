@@ -115,17 +115,35 @@ type Peer struct {
 	disc     chan DiscReason
 
 	// events receives message send / receive events if set
-	events *event.Feed
+	events   *event.Feed
+	testPipe *MsgPipeRW // for testing
 }
 
 // NewPeer returns a peer for testing purposes.
 func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
+	// Generate a fake set of local protocols to match as running caps. Almost
+	// no fields needs to be meaningful here as we're only using it to cross-
+	// check with the "remote" caps array.
+	protos := make([]Protocol, len(caps))
+	for i, cap := range caps {
+		protos[i].Name = cap.Name
+		protos[i].Version = cap.Version
+	}
 	pipe, _ := net.Pipe()
 	node := enode.SignNull(new(enr.Record), id)
 	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
-	peer := newPeer(log.Root(), conn, nil)
+	peer := newPeer(log.Root(), conn, protos)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
+}
+
+// NewPeerPipe creates a peer for testing purposes.
+// The message pipe given as the last parameter is closed when
+// Disconnect is called on the peer.
+func NewPeerPipe(id enode.ID, name string, caps []Cap, pipe *MsgPipeRW) *Peer {
+	p := NewPeer(id, name, caps)
+	p.testPipe = pipe
+	return p
 }
 
 // ID returns the node's public key.
@@ -185,6 +203,10 @@ func (p *Peer) LocalAddr() net.Addr {
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {
+	if p.testPipe != nil {
+		p.testPipe.Close()
+	}
+
 	select {
 	case p.disc <- reason:
 	case <-p.closed:
@@ -310,11 +332,11 @@ func (p *Peer) handle(msg Msg) error {
 		msg.Discard()
 		go SendItems(p.rw, pongMsg)
 	case msg.Code == discMsg:
-		var reason [1]DiscReason
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
-		rlp.Decode(msg.Payload, &reason)
-		return reason[0]
+		var m struct{ R DiscReason }
+		rlp.Decode(msg.Payload, &m)
+		return m.R
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
@@ -394,7 +416,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 			if err == nil {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
 				err = errProtocolReturned
-			} else if err != io.EOF {
+			} else if !errors.Is(err, io.EOF) {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err

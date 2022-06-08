@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -84,7 +84,7 @@ type (
 		ReqID  []byte
 		ENRSeq uint64
 		ToIP   net.IP // These fields should mirror the UDP envelope address of the ping
-		ToPort uint16 // packet, which provides a way to discover the the external address (after NAT).
+		ToPort uint16 // packet, which provides a way to discover the external address (after NAT).
 	}
 
 	// FINDNODE is a query for nodes in the given bucket.

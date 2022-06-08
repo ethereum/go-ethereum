@@ -218,7 +218,7 @@ func (api *privateAdminAPI) StartHTTP(host *string, port *int, cors *string, api
 }
 
 // StartRPC starts the HTTP RPC API server.
-// This method is deprecated. Use StartHTTP instead.
+// Deprecated: use StartHTTP instead.
 func (api *privateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	log.Warn("Deprecation warning", "method", "admin.StartRPC", "use-instead", "admin.StartHTTP")
 	return api.StartHTTP(host, port, cors, apis, vhosts)
@@ -231,7 +231,7 @@ func (api *privateAdminAPI) StopHTTP() (bool, error) {
 }
 
 // StopRPC shuts down the HTTP server.
-// This method is deprecated. Use StopHTTP instead.
+// Deprecated: use StopHTTP instead.
 func (api *privateAdminAPI) StopRPC() (bool, error) {
 	log.Warn("Deprecation warning", "method", "admin.StopRPC", "use-instead", "admin.StopHTTP")
 	return api.StopHTTP()
@@ -274,11 +274,12 @@ func (api *privateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	}
 
 	// Enable WebSocket on the server.
-	server := api.node.wsServerForPort(*port)
+	server := api.node.wsServerForPort(*port, false)
 	if err := server.setListenAddr(*host, *port); err != nil {
 		return false, err
 	}
-	if err := server.enableWS(api.node.rpcAPIs, config); err != nil {
+	openApis, _ := api.node.GetAPIs()
+	if err := server.enableWS(openApis, config); err != nil {
 		return false, err
 	}
 	if err := server.start(); err != nil {

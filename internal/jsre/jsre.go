@@ -20,10 +20,11 @@ package jsre
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/dop251/goja"
@@ -220,26 +221,40 @@ loop:
 }
 
 // Do executes the given function on the JS event loop.
+// When the runtime is stopped, fn will not execute.
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
-	re.evalQueue <- req
-	<-done
+	select {
+	case re.evalQueue <- req:
+		<-done
+	case <-re.closed:
+	}
 }
 
-// stops the event loop before exit, optionally waits for all timers to expire
+// Stop terminates the event loop, optionally waiting for all timers to expire.
 func (re *JSRE) Stop(waitForCallbacks bool) {
-	select {
-	case <-re.closed:
-	case re.stopEventLoop <- waitForCallbacks:
-		<-re.closed
+	timeout := time.NewTimer(10 * time.Millisecond)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-re.closed:
+			return
+		case re.stopEventLoop <- waitForCallbacks:
+			<-re.closed
+			return
+		case <-timeout.C:
+			// JS is blocked, interrupt and try again.
+			re.vm.Interrupt(errors.New("JS runtime stopped"))
+		}
 	}
 }
 
 // Exec(file) loads and runs the contents of a file
 // if a relative path is given, the jsre's assetPath is used
 func (re *JSRE) Exec(file string) error {
-	code, err := ioutil.ReadFile(common.AbsolutePath(re.assetPath, file))
+	code, err := os.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {
 		return err
 	}
@@ -282,6 +297,19 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	})
 }
 
+// Interrupt stops the current JS evaluation.
+func (re *JSRE) Interrupt(v interface{}) {
+	done := make(chan bool)
+	noop := func(*goja.Runtime) {}
+
+	select {
+	case re.evalQueue <- &evalReq{noop, done}:
+		// event loop is not blocked.
+	default:
+		re.vm.Interrupt(v)
+	}
+}
+
 // Compile compiles and then runs a piece of JS code.
 func (re *JSRE) Compile(filename string, src string) (err error) {
 	re.Do(func(vm *goja.Runtime) { _, err = compileAndRun(vm, filename, src) })
@@ -292,7 +320,7 @@ func (re *JSRE) Compile(filename string, src string) (err error) {
 func (re *JSRE) loadScript(call Call) (goja.Value, error) {
 	file := call.Argument(0).ToString().String()
 	file = common.AbsolutePath(re.assetPath, file)
-	source, err := ioutil.ReadFile(file)
+	source, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("Could not read file %s: %v", file, err)
 	}

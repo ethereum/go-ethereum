@@ -20,10 +20,18 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 )
 
 func TestState(t *testing.T) {
@@ -42,6 +50,7 @@ func TestState(t *testing.T) {
 
 	// Very time consuming
 	st.skipLoad(`^stTimeConsuming/`)
+	st.skipLoad(`.*vmPerformance/loop.*`)
 
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
@@ -59,26 +68,36 @@ func TestState(t *testing.T) {
 	for _, dir := range []string{
 		stateTestDir,
 		legacyStateTestDir,
+		benchmarksDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
 			for _, subtest := range test.Subtests() {
 				subtest := subtest
 				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-				name := name + "/" + key
 
 				t.Run(key+"/trie", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						_, _, err := test.Run(subtest, vmconfig, false)
-						return st.checkFailure(t, name+"/trie", err)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
+						return st.checkFailure(t, err)
 					})
 				})
 				t.Run(key+"/snap", func(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
-							return err
+						if snaps != nil && statedb != nil {
+							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+								return err
+							}
 						}
-						return st.checkFailure(t, name+"/snap", err)
+						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+							// Ignore expected errors (TODO MariusVanDerWijden check error string)
+							return nil
+						}
+						return st.checkFailure(t, err)
 					})
 				})
 			}
@@ -91,7 +110,7 @@ const traceErrorLimit = 400000
 
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	// Use config from command line arguments.
-	config := vm.Config{EVMInterpreter: *testEVM, EWASMInterpreter: *testEWASM}
+	config := vm.Config{}
 	err := test(config)
 	if err == nil {
 		return
@@ -105,7 +124,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	tracer := vm.NewJSONLogger(&vm.LogConfig{DisableMemory: true}, w)
+	tracer := logger.NewJSONLogger(&logger.Config{}, w)
 	config.Debug, config.Tracer = true, tracer
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
@@ -117,6 +136,119 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	} else {
 		t.Log("EVM operation log:\n" + buf.String())
 	}
-	//t.Logf("EVM output: 0x%x", tracer.Output())
-	//t.Logf("EVM error: %v", tracer.Error())
+	// t.Logf("EVM output: 0x%x", tracer.Output())
+	// t.Logf("EVM error: %v", tracer.Error())
+}
+
+func BenchmarkEVM(b *testing.B) {
+	// Walk the directory.
+	dir := benchmarksDir
+	dirinfo, err := os.Stat(dir)
+	if os.IsNotExist(err) || !dirinfo.IsDir() {
+		fmt.Fprintf(os.Stderr, "can't find test files in %s, did you clone the evm-benchmarks submodule?\n", dir)
+		b.Skip("missing test files")
+	}
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		if ext := filepath.Ext(path); ext == ".json" {
+			name := filepath.ToSlash(strings.TrimPrefix(strings.TrimSuffix(path, ext), dir+string(filepath.Separator)))
+			b.Run(name, func(b *testing.B) { runBenchmarkFile(b, path) })
+		}
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
+func runBenchmarkFile(b *testing.B, path string) {
+	m := make(map[string]StateTest)
+	if err := readJSONFile(path, &m); err != nil {
+		b.Fatal(err)
+		return
+	}
+	if len(m) != 1 {
+		b.Fatal("expected single benchmark in a file")
+		return
+	}
+	for _, t := range m {
+		runBenchmark(b, &t)
+	}
+}
+
+func runBenchmark(b *testing.B, t *StateTest) {
+	for _, subtest := range t.Subtests() {
+		subtest := subtest
+		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+
+		b.Run(key, func(b *testing.B) {
+			vmconfig := vm.Config{}
+
+			config, eips, err := GetChainConfig(subtest.Fork)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+			vmconfig.ExtraEips = eips
+			block := t.genesis(config).ToBlock(nil)
+			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
+
+			var baseFee *big.Int
+			if config.IsLondon(new(big.Int)) {
+				baseFee = t.json.Env.BaseFee
+				if baseFee == nil {
+					// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
+					// parent - 2 : 0xa as the basefee for 'this' context.
+					baseFee = big.NewInt(0x0a)
+				}
+			}
+			post := t.json.Post[subtest.Fork][subtest.Index]
+			msg, err := t.json.Tx.toMessage(post, baseFee)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+
+			// Try to recover tx with current signer
+			if len(post.TxBytes) != 0 {
+				var ttx types.Transaction
+				err := ttx.UnmarshalBinary(post.TxBytes)
+				if err != nil {
+					b.Error(err)
+					return
+				}
+
+				if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
+					b.Error(err)
+					return
+				}
+			}
+
+			// Prepare the EVM.
+			txContext := core.NewEVMTxContext(msg)
+			context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+			context.GetHash = vmTestBlockHash
+			context.BaseFee = baseFee
+			evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+
+			// Create "contract" for sender to cache code analysis.
+			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
+				nil, 0)
+
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				// Execute the message.
+				snapshot := statedb.Snapshot()
+				_, _, err = evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
+				if err != nil {
+					b.Error(err)
+					return
+				}
+				statedb.RevertToSnapshot(snapshot)
+			}
+
+		})
+	}
 }

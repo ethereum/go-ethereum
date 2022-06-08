@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ import (
 var (
 	ErrNotConnected    = errors.New("client not connected")
 	ErrNoPriority      = errors.New("priority too low to raise capacity")
-	ErrCantFindMaximum = errors.New("Unable to find maximum allowed capacity")
+	ErrCantFindMaximum = errors.New("unable to find maximum allowed capacity")
 )
 
 // ClientPool implements a client database that assigns a priority to each client
@@ -103,14 +103,7 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 			if c, ok := ns.GetField(node, setup.clientField).(clientPeer); ok {
 				timeout = c.InactiveAllowance()
 			}
-			if timeout > 0 {
-				ns.AddTimeout(node, setup.inactiveFlag, timeout)
-			} else {
-				// Note: if capacity is immediately available then priorityPool will set the active
-				// flag simultaneously with removing the inactive flag and therefore this will not
-				// initiate disconnection
-				ns.SetStateSub(node, nodestate.Flags{}, setup.inactiveFlag, 0)
-			}
+			ns.AddTimeout(node, setup.inactiveFlag, timeout)
 		}
 		if oldState.Equals(setup.inactiveFlag) && newState.Equals(setup.inactiveFlag.Or(setup.priorityFlag)) {
 			ns.SetStateSub(node, setup.inactiveFlag, nodestate.Flags{}, 0) // priority gained; remove timeout
@@ -150,8 +143,10 @@ func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias t
 		if oldState.HasAll(cp.setup.activeFlag) && oldState.HasNone(cp.setup.activeFlag) {
 			clientDeactivatedMeter.Mark(1)
 		}
-		_, connected := cp.Active()
-		totalConnectedGauge.Update(int64(connected))
+		activeCount, activeCap := cp.Active()
+		totalActiveCountGauge.Update(int64(activeCount))
+		totalActiveCapacityGauge.Update(int64(activeCap))
+		totalInactiveCountGauge.Update(int64(cp.Inactive()))
 	})
 	return cp
 }
@@ -182,7 +177,7 @@ func (cp *ClientPool) Unregister(peer clientPeer) {
 	cp.ns.SetField(peer.Node(), cp.setup.clientField, nil)
 }
 
-// setConnectedBias sets the connection bias, which is applied to already connected clients
+// SetConnectedBias sets the connection bias, which is applied to already connected clients
 // So that already connected client won't be kicked out very soon and we can ensure all
 // connected clients can have enough time to request or sync some data.
 func (cp *ClientPool) SetConnectedBias(bias time.Duration) {
@@ -246,12 +241,11 @@ func (cp *ClientPool) SetCapacity(node *enode.Node, reqCap uint64, bias time.Dur
 			maxTarget = curve.maxCapacity(func(capacity uint64) int64 {
 				return balance.estimatePriority(capacity, 0, 0, bias, false)
 			})
-			if maxTarget <= capacity {
+			if maxTarget < reqCap {
 				return
 			}
-			if maxTarget > reqCap {
-				maxTarget = reqCap
-			}
+			maxTarget = reqCap
+
 			// Specify a narrow target range that allows a limited number of fine step
 			// iterations
 			minTarget = maxTarget - maxTarget/20

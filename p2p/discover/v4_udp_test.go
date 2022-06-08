@@ -284,6 +284,7 @@ func TestUDPv4_findnode(t *testing.T) {
 		test.waitPacketOut(func(p *v4wire.Neighbors, to *net.UDPAddr, hash []byte) {
 			if len(p.Nodes) != len(want) {
 				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+				return
 			}
 			for i, n := range p.Nodes {
 				if n.ID.ID() != want[i].ID() {
@@ -470,13 +471,13 @@ func TestUDPv4_EIP868(t *testing.T) {
 	// Perform endpoint proof and check for sequence number in packet tail.
 	test.packetIn(nil, &v4wire.Ping{Expiration: futureExp})
 	test.waitPacketOut(func(p *v4wire.Pong, addr *net.UDPAddr, hash []byte) {
-		if p.ENRSeq() != wantNode.Seq() {
-			t.Errorf("wrong sequence number in pong: %d, want %d", p.ENRSeq(), wantNode.Seq())
+		if p.ENRSeq != wantNode.Seq() {
+			t.Errorf("wrong sequence number in pong: %d, want %d", p.ENRSeq, wantNode.Seq())
 		}
 	})
 	test.waitPacketOut(func(p *v4wire.Ping, addr *net.UDPAddr, hash []byte) {
-		if p.ENRSeq() != wantNode.Seq() {
-			t.Errorf("wrong sequence number in ping: %d, want %d", p.ENRSeq(), wantNode.Seq())
+		if p.ENRSeq != wantNode.Seq() {
+			t.Errorf("wrong sequence number in ping: %d, want %d", p.ENRSeq, wantNode.Seq())
 		}
 		test.packetIn(nil, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
 	})

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -370,7 +370,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		block := bc.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, rawdb.ReadRawReceipts(server.db, block.Hash(), block.NumberU64()))
+		receipts = append(receipts, rawdb.ReadReceipts(server.db, block.Hash(), block.NumberU64(), bc.Config()))
 	}
 	// Send the hash request and verify the response
 	sendRequest(rawPeer.app, GetReceiptsMsg, 42, hashes)
@@ -405,7 +405,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	accounts := []common.Address{bankAddr, userAddr1, userAddr2, signerAddr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
-		trie, _ := trie.New(header.Root, trie.NewDatabase(server.db))
+		trie, _ := trie.New(common.Hash{}, header.Root, trie.NewDatabase(server.db))
 
 		for _, acc := range accounts {
 			req := ProofReq{
@@ -456,7 +456,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 		var expected []rlp.RawValue
 		if wantOK {
 			proofsV2 := light.NewNodeSet()
-			t, _ := trie.New(header.Root, trie.NewDatabase(server.db))
+			t, _ := trie.New(common.Hash{}, header.Root, trie.NewDatabase(server.db))
 			t.Prove(account, 0, proofsV2)
 			expected = proofsV2.NodeList()
 		}
@@ -512,7 +512,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		AuxData: [][]byte{rlp},
 	}
 	root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
-	trie, _ := trie.New(root, trie.NewDatabase(rawdb.NewTable(server.db, light.ChtTablePrefix)))
+	trie, _ := trie.New(common.Hash{}, root, trie.NewDatabase(rawdb.NewTable(server.db, light.ChtTablePrefix)))
 	trie.Prove(key, 0, &proofsV2.Proofs)
 	// Assemble the requests for the different protocols
 	requestsV2 := []HelperTrieReq{{
@@ -577,7 +577,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 		var proofs HelperTrieResps
 
 		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomTrieSize-1).Hash())
-		trie, _ := trie.New(root, trie.NewDatabase(rawdb.NewTable(server.db, light.BloomTrieTablePrefix)))
+		trie, _ := trie.New(common.Hash{}, root, trie.NewDatabase(rawdb.NewTable(server.db, light.BloomTrieTablePrefix)))
 		trie.Prove(key, 0, &proofs.Proofs)
 
 		// Send the proof request and verify the response

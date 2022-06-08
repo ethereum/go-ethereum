@@ -68,10 +68,10 @@ func (it tokenType) String() string {
 
 var stringtokenTypes = []string{
 	eof:              "EOF",
+	lineStart:        "new line",
+	lineEnd:          "end of line",
 	invalidStatement: "invalid statement",
 	element:          "element",
-	lineEnd:          "end of line",
-	lineStart:        "new line",
 	label:            "label",
 	labelDef:         "label definition",
 	number:           "number",
@@ -93,7 +93,7 @@ type lexer struct {
 	debug bool // flag for triggering debug output
 }
 
-// lex lexes the program by name with the given source. It returns a
+// Lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
 func Lex(source []byte, debug bool) <-chan token {
 	ch := make(chan token)
@@ -254,7 +254,7 @@ func lexInsideString(l *lexer) stateFn {
 
 func lexNumber(l *lexer) stateFn {
 	acceptance := Numbers
-	if l.accept("0") || l.accept("xX") {
+	if l.accept("xX") {
 		acceptance = HexadecimalNumbers
 	}
 	l.acceptRun(acceptance)

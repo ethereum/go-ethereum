@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -27,12 +28,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -42,10 +47,8 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-		},
-		Category: "BLOCKCHAIN COMMANDS",
+		Flags:     utils.DatabasePathFlags,
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -58,14 +61,8 @@ It expects the genesis file as argument.`,
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
-		Flags: []cli.Flag{
-			utils.MainnetFlag,
-			utils.RopstenFlag,
-			utils.RinkebyFlag,
-			utils.GoerliFlag,
-			utils.YoloV3Flag,
-		},
-		Category: "BLOCKCHAIN COMMANDS",
+		Flags:     utils.NetworkFlags,
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
 	}
@@ -74,8 +71,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
@@ -87,13 +83,17 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.MetricsHTTPFlag,
 			utils.MetricsPortFlag,
 			utils.MetricsEnableInfluxDBFlag,
+			utils.MetricsEnableInfluxDBV2Flag,
 			utils.MetricsInfluxDBEndpointFlag,
 			utils.MetricsInfluxDBDatabaseFlag,
 			utils.MetricsInfluxDBUsernameFlag,
 			utils.MetricsInfluxDBPasswordFlag,
 			utils.MetricsInfluxDBTagsFlag,
+			utils.MetricsInfluxDBTokenFlag,
+			utils.MetricsInfluxDBBucketFlag,
+			utils.MetricsInfluxDBOrganizationFlag,
 			utils.TxLookupLimitFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
@@ -107,11 +107,10 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
@@ -125,47 +124,49 @@ be gzipped.`,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-	The import-preimages command imports hash preimages from an RLP encoded stream.`,
+The import-preimages command imports hash preimages from an RLP encoded stream.
+It's deprecated, please use "geth db import" instead.
+`,
 	}
 	exportPreimagesCommand = cli.Command{
 		Action:    utils.MigrateFlags(exportPreimages),
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The export-preimages command export hash preimages to an RLP encoded stream`,
+The export-preimages command exports hash preimages to an RLP encoded stream.
+It's deprecated, please use "geth db export" instead.
+`,
 	}
 	dumpCommand = cli.Command{
 		Action:    utils.MigrateFlags(dump),
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
-		ArgsUsage: "[<blockHash> | <blockNum>]...",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		ArgsUsage: "[? <blockHash> | <blockNum>]",
+		Flags: append([]cli.Flag{
 			utils.CacheFlag,
-			utils.SyncModeFlag,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
 			utils.ExcludeStorageFlag,
 			utils.IncludeIncompletesFlag,
-		},
+			utils.StartKeyFlag,
+			utils.DumpLimitFlag,
+		}, utils.DatabasePathFlags...),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.`,
+This command dumps out the state for a given block (or latest, if none provided).
+`,
 	}
 )
 
@@ -190,9 +191,8 @@ func initGenesis(ctx *cli.Context) error {
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
-
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
+		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.GlobalString(utils.AncientFlag.Name), "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -359,7 +359,6 @@ func exportPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
@@ -373,47 +372,85 @@ func exportPreimages(ctx *cli.Context) error {
 	return nil
 }
 
+func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	var header *types.Header
+	if ctx.NArg() > 1 {
+		return nil, nil, common.Hash{}, fmt.Errorf("expected 1 argument (number or hash), got %d", ctx.NArg())
+	}
+	if ctx.NArg() == 1 {
+		arg := ctx.Args().First()
+		if hashish(arg) {
+			hash := common.HexToHash(arg)
+			if number := rawdb.ReadHeaderNumber(db, hash); number != nil {
+				header = rawdb.ReadHeader(db, hash, *number)
+			} else {
+				return nil, nil, common.Hash{}, fmt.Errorf("block %x not found", hash)
+			}
+		} else {
+			number, err := strconv.Atoi(arg)
+			if err != nil {
+				return nil, nil, common.Hash{}, err
+			}
+			if hash := rawdb.ReadCanonicalHash(db, uint64(number)); hash != (common.Hash{}) {
+				header = rawdb.ReadHeader(db, hash, uint64(number))
+			} else {
+				return nil, nil, common.Hash{}, fmt.Errorf("header for block %d not found", number)
+			}
+		}
+	} else {
+		// Use latest
+		header = rawdb.ReadHeadHeader(db)
+	}
+	if header == nil {
+		return nil, nil, common.Hash{}, errors.New("no head block found")
+	}
+	startArg := common.FromHex(ctx.String(utils.StartKeyFlag.Name))
+	var start common.Hash
+	switch len(startArg) {
+	case 0: // common.Hash
+	case 32:
+		start = common.BytesToHash(startArg)
+	case 20:
+		start = crypto.Keccak256Hash(startArg)
+		log.Info("Converting start-address to hash", "address", common.BytesToAddress(startArg), "hash", start.Hex())
+	default:
+		return nil, nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
+	}
+	var conf = &state.DumpConfig{
+		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
+		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
+		OnlyWithAddresses: !ctx.Bool(utils.IncludeIncompletesFlag.Name),
+		Start:             start.Bytes(),
+		Max:               ctx.Uint64(utils.DumpLimitFlag.Name),
+	}
+	log.Info("State dump configured", "block", header.Number, "hash", header.Hash().Hex(),
+		"skipcode", conf.SkipCode, "skipstorage", conf.SkipStorage,
+		"start", hexutil.Encode(conf.Start), "limit", conf.Max)
+	return conf, db, header.Root, nil
+}
+
 func dump(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack, true)
-	for _, arg := range ctx.Args() {
-		var header *types.Header
-		if hashish(arg) {
-			hash := common.HexToHash(arg)
-			number := rawdb.ReadHeaderNumber(db, hash)
-			if number != nil {
-				header = rawdb.ReadHeader(db, hash, *number)
-			}
-		} else {
-			number, _ := strconv.Atoi(arg)
-			hash := rawdb.ReadCanonicalHash(db, uint64(number))
-			if hash != (common.Hash{}) {
-				header = rawdb.ReadHeader(db, hash, uint64(number))
-			}
+	conf, db, root, err := parseDumpConfig(ctx, stack)
+	if err != nil {
+		return err
+	}
+	state, err := state.New(root, state.NewDatabase(db), nil)
+	if err != nil {
+		return err
+	}
+	if ctx.Bool(utils.IterativeOutputFlag.Name) {
+		state.IterativeDump(conf, json.NewEncoder(os.Stdout))
+	} else {
+		if conf.OnlyWithAddresses {
+			fmt.Fprintf(os.Stderr, "If you want to include accounts with missing preimages, you need iterative output, since"+
+				" otherwise the accounts will overwrite each other in the resulting mapping.")
+			return fmt.Errorf("incompatible options")
 		}
-		if header == nil {
-			fmt.Println("{}")
-			utils.Fatalf("block not found")
-		} else {
-			state, err := state.New(header.Root, state.NewDatabase(db), nil)
-			if err != nil {
-				utils.Fatalf("could not create new state: %v", err)
-			}
-			excludeCode := ctx.Bool(utils.ExcludeCodeFlag.Name)
-			excludeStorage := ctx.Bool(utils.ExcludeStorageFlag.Name)
-			includeMissing := ctx.Bool(utils.IncludeIncompletesFlag.Name)
-			if ctx.Bool(utils.IterativeOutputFlag.Name) {
-				state.IterativeDump(excludeCode, excludeStorage, !includeMissing, json.NewEncoder(os.Stdout))
-			} else {
-				if includeMissing {
-					fmt.Printf("If you want to include accounts with missing preimages, you need iterative output, since" +
-						" otherwise the accounts will overwrite each other in the resulting mapping.")
-				}
-				fmt.Printf("%v %s\n", includeMissing, state.Dump(excludeCode, excludeStorage, false))
-			}
-		}
+		fmt.Println(string(state.Dump(conf)))
 	}
 	return nil
 }

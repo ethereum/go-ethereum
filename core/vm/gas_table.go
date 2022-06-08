@@ -60,7 +60,7 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 // as argument:
 // CALLDATACOPY (stack position 2)
 // CODECOPY (stack position 2)
-// EXTCODECOPY (stack poition 3)
+// EXTCODECOPY (stack position 3)
 // RETURNDATACOPY (stack position 2)
 func memoryCopierGas(stackpos int) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -247,7 +247,7 @@ func makeGasLog(n uint64) gasFunc {
 	}
 }
 
-func gasSha3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return 0, err
@@ -256,7 +256,7 @@ func gasSha3(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
+	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
@@ -290,7 +290,7 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
+	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
 	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {

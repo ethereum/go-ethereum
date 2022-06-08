@@ -17,14 +17,6 @@
 // Package compiler wraps the Solidity and Vyper compiler executables (solc; vyper).
 package compiler
 
-import (
-	"bytes"
-	"io/ioutil"
-	"regexp"
-)
-
-var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
-
 // Contract contains information about a compiled contract, alongside its code and runtime code.
 type Contract struct {
 	Code        string            `json:"code"`
@@ -50,16 +42,4 @@ type ContractInfo struct {
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
 	Metadata        string      `json:"metadata"`
-}
-
-func slurpFiles(files []string) (string, error) {
-	var concat bytes.Buffer
-	for _, file := range files {
-		content, err := ioutil.ReadFile(file)
-		if err != nil {
-			return "", err
-		}
-		concat.Write(content)
-	}
-	return concat.String(), nil
 }

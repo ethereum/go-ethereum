@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
@@ -79,7 +80,7 @@ func TestProof(t *testing.T) {
 }
 
 func TestOneElementProof(t *testing.T) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	updateString(trie, "k", "v")
 	for i, prover := range makeProvers(trie) {
 		proof := prover([]byte("k"))
@@ -130,7 +131,7 @@ func TestBadProof(t *testing.T) {
 // Tests that missing keys can also be proven. The test explicitly uses a single
 // entry trie and checks for missing keys both before and after the single entry.
 func TestMissingKeyProof(t *testing.T) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	updateString(trie, "k", "v")
 
 	for i, key := range []string{"a", "j", "l", "z"} {
@@ -182,7 +183,7 @@ func TestRangeProof(t *testing.T) {
 			keys = append(keys, entries[i].k)
 			vals = append(vals, entries[i].v)
 		}
-		_, _, _, _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
+		_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
@@ -233,7 +234,7 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 			keys = append(keys, entries[i].k)
 			vals = append(vals, entries[i].v)
 		}
-		_, _, _, _, err := VerifyRangeProof(trie.Hash(), first, last, keys, vals, proof)
+		_, err := VerifyRangeProof(trie.Hash(), first, last, keys, vals, proof)
 		if err != nil {
 			t.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
@@ -254,7 +255,7 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 		k = append(k, entries[i].k)
 		v = append(v, entries[i].v)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
+	_, err := VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
 	if err != nil {
 		t.Fatal("Failed to verify whole rang with non-existent edges")
 	}
@@ -289,7 +290,7 @@ func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 		k = append(k, entries[i].k)
 		v = append(v, entries[i].v)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), first, k[len(k)-1], k, v, proof)
+	_, err := VerifyRangeProof(trie.Hash(), first, k[len(k)-1], k, v, proof)
 	if err == nil {
 		t.Fatalf("Expected to detect the error, got nil")
 	}
@@ -311,7 +312,7 @@ func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 		k = append(k, entries[i].k)
 		v = append(v, entries[i].v)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), k[0], last, k, v, proof)
+	_, err = VerifyRangeProof(trie.Hash(), k[0], last, k, v, proof)
 	if err == nil {
 		t.Fatalf("Expected to detect the error, got nil")
 	}
@@ -335,7 +336,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err := trie.Prove(entries[start].k, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), entries[start].k, entries[start].k, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
+	_, err := VerifyRangeProof(trie.Hash(), entries[start].k, entries[start].k, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -350,7 +351,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err := trie.Prove(entries[start].k, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), first, entries[start].k, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
+	_, err = VerifyRangeProof(trie.Hash(), first, entries[start].k, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -365,7 +366,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err := trie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), entries[start].k, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
+	_, err = VerifyRangeProof(trie.Hash(), entries[start].k, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -380,13 +381,13 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err := trie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
+	_, err = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[start].k}, [][]byte{entries[start].v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
 	// Test the mini trie with only a single element.
-	tinyTrie := new(Trie)
+	tinyTrie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	entry := &kv{randBytes(32), randBytes(20), false}
 	tinyTrie.Update(entry.k, entry.v)
 
@@ -399,7 +400,7 @@ func TestOneElementRangeProof(t *testing.T) {
 	if err := tinyTrie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(tinyTrie.Hash(), first, last, [][]byte{entry.k}, [][]byte{entry.v}, proof)
+	_, err = VerifyRangeProof(tinyTrie.Hash(), first, last, [][]byte{entry.k}, [][]byte{entry.v}, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -421,7 +422,7 @@ func TestAllElementsProof(t *testing.T) {
 		k = append(k, entries[i].k)
 		v = append(v, entries[i].v)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), nil, nil, k, v, nil)
+	_, err := VerifyRangeProof(trie.Hash(), nil, nil, k, v, nil)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -434,7 +435,7 @@ func TestAllElementsProof(t *testing.T) {
 	if err := trie.Prove(entries[len(entries)-1].k, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), k[0], k[len(k)-1], k, v, proof)
+	_, err = VerifyRangeProof(trie.Hash(), k[0], k[len(k)-1], k, v, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -449,7 +450,7 @@ func TestAllElementsProof(t *testing.T) {
 	if err := trie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
+	_, err = VerifyRangeProof(trie.Hash(), first, last, k, v, proof)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -458,7 +459,7 @@ func TestAllElementsProof(t *testing.T) {
 // TestSingleSideRangeProof tests the range starts from zero.
 func TestSingleSideRangeProof(t *testing.T) {
 	for i := 0; i < 64; i++ {
-		trie := new(Trie)
+		trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 		var entries entrySlice
 		for i := 0; i < 4096; i++ {
 			value := &kv{randBytes(32), randBytes(20), false}
@@ -482,7 +483,7 @@ func TestSingleSideRangeProof(t *testing.T) {
 				k = append(k, entries[i].k)
 				v = append(v, entries[i].v)
 			}
-			_, _, _, _, err := VerifyRangeProof(trie.Hash(), common.Hash{}.Bytes(), k[len(k)-1], k, v, proof)
+			_, err := VerifyRangeProof(trie.Hash(), common.Hash{}.Bytes(), k[len(k)-1], k, v, proof)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -493,7 +494,7 @@ func TestSingleSideRangeProof(t *testing.T) {
 // TestReverseSingleSideRangeProof tests the range ends with 0xffff...fff.
 func TestReverseSingleSideRangeProof(t *testing.T) {
 	for i := 0; i < 64; i++ {
-		trie := new(Trie)
+		trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 		var entries entrySlice
 		for i := 0; i < 4096; i++ {
 			value := &kv{randBytes(32), randBytes(20), false}
@@ -518,7 +519,7 @@ func TestReverseSingleSideRangeProof(t *testing.T) {
 				k = append(k, entries[i].k)
 				v = append(v, entries[i].v)
 			}
-			_, _, _, _, err := VerifyRangeProof(trie.Hash(), k[0], last.Bytes(), k, v, proof)
+			_, err := VerifyRangeProof(trie.Hash(), k[0], last.Bytes(), k, v, proof)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -590,7 +591,7 @@ func TestBadRangeProof(t *testing.T) {
 			index = mrand.Intn(end - start)
 			vals[index] = nil
 		}
-		_, _, _, _, err := VerifyRangeProof(trie.Hash(), first, last, keys, vals, proof)
+		_, err := VerifyRangeProof(trie.Hash(), first, last, keys, vals, proof)
 		if err == nil {
 			t.Fatalf("%d Case %d index %d range: (%d->%d) expect error, got nil", i, testcase, index, start, end-1)
 		}
@@ -600,7 +601,7 @@ func TestBadRangeProof(t *testing.T) {
 // TestGappedRangeProof focuses on the small trie with embedded nodes.
 // If the gapped node is embedded in the trie, it should be detected too.
 func TestGappedRangeProof(t *testing.T) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	var entries []*kv // Sorted entries
 	for i := byte(0); i < 10; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
@@ -624,7 +625,7 @@ func TestGappedRangeProof(t *testing.T) {
 		keys = append(keys, entries[i].k)
 		vals = append(vals, entries[i].v)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
+	_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
 	if err == nil {
 		t.Fatal("expect error, got nil")
 	}
@@ -651,7 +652,7 @@ func TestSameSideProofs(t *testing.T) {
 	if err := trie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err := VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
+	_, err := VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
 	if err == nil {
 		t.Fatalf("Expected error, got nil")
 	}
@@ -667,14 +668,14 @@ func TestSameSideProofs(t *testing.T) {
 	if err := trie.Prove(last, 0, proof); err != nil {
 		t.Fatalf("Failed to prove the last node %v", err)
 	}
-	_, _, _, _, err = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
+	_, err = VerifyRangeProof(trie.Hash(), first, last, [][]byte{entries[pos].k}, [][]byte{entries[pos].v}, proof)
 	if err == nil {
 		t.Fatalf("Expected error, got nil")
 	}
 }
 
 func TestHasRightElement(t *testing.T) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	var entries entrySlice
 	for i := 0; i < 4096; i++ {
 		value := &kv{randBytes(32), randBytes(20), false}
@@ -735,7 +736,7 @@ func TestHasRightElement(t *testing.T) {
 			k = append(k, entries[i].k)
 			v = append(v, entries[i].v)
 		}
-		_, _, _, hasMore, err := VerifyRangeProof(trie.Hash(), firstKey, lastKey, k, v, proof)
+		hasMore, err := VerifyRangeProof(trie.Hash(), firstKey, lastKey, k, v, proof)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -768,31 +769,19 @@ func TestEmptyRangeProof(t *testing.T) {
 		if err := trie.Prove(first, 0, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
-		db, tr, not, _, err := VerifyRangeProof(trie.Hash(), first, nil, nil, nil, proof)
+		_, err := VerifyRangeProof(trie.Hash(), first, nil, nil, nil, proof)
 		if c.err && err == nil {
 			t.Fatalf("Expected error, got nil")
 		}
 		if !c.err && err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
-		// If no error was returned, ensure the returned trie and database contains
-		// the entire proof, since there's no value
-		if !c.err {
-			if err := tr.Prove(first, 0, memorydb.New()); err != nil {
-				t.Errorf("returned trie doesn't contain original proof: %v", err)
-			}
-			if memdb := db.(*memorydb.Database); memdb.Len() != proof.Len() {
-				t.Errorf("database entry count mismatch: have %d, want %d", memdb.Len(), proof.Len())
-			}
-			if not == nil {
-				t.Errorf("missing notary")
-			}
-		}
 	}
 }
 
 // TestBloatedProof tests a malicious proof, where the proof is more or less the
-// whole trie.
+// whole trie. Previously we didn't accept such packets, but the new APIs do, so
+// lets leave this test as a bit weird, but present.
 func TestBloatedProof(t *testing.T) {
 	// Use a small trie
 	trie, kvs := nonRandomTrie(100)
@@ -805,6 +794,8 @@ func TestBloatedProof(t *testing.T) {
 	var vals [][]byte
 
 	proof := memorydb.New()
+	// In the 'malicious' case, we add proofs for every single item
+	// (but only one key/value pair used as leaf)
 	for i, entry := range entries {
 		trie.Prove(entry.k, 0, proof)
 		if i == 50 {
@@ -812,13 +803,93 @@ func TestBloatedProof(t *testing.T) {
 			vals = append(vals, entry.v)
 		}
 	}
+	// For reference, we use the same function, but _only_ prove the first
+	// and last element
 	want := memorydb.New()
 	trie.Prove(keys[0], 0, want)
 	trie.Prove(keys[len(keys)-1], 0, want)
 
-	_, _, notary, _, _ := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
-	if used := notary.Accessed().(*memorydb.Database); used.Len() != want.Len() {
-		t.Fatalf("notary proof size mismatch: have %d, want %d", used.Len(), want.Len())
+	if _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof); err != nil {
+		t.Fatalf("expected bloated proof to succeed, got %v", err)
+	}
+}
+
+// TestEmptyValueRangeProof tests normal range proof with both edge proofs
+// as the existent proof, but with an extra empty value included, which is a
+// noop technically, but practically should be rejected.
+func TestEmptyValueRangeProof(t *testing.T) {
+	trie, values := randomTrie(512)
+	var entries entrySlice
+	for _, kv := range values {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	// Create a new entry with a slightly modified key
+	mid := len(entries) / 2
+	key := common.CopyBytes(entries[mid-1].k)
+	for n := len(key) - 1; n >= 0; n-- {
+		if key[n] < 0xff {
+			key[n]++
+			break
+		}
+	}
+	noop := &kv{key, []byte{}, false}
+	entries = append(append(append([]*kv{}, entries[:mid]...), noop), entries[mid:]...)
+
+	start, end := 1, len(entries)-1
+
+	proof := memorydb.New()
+	if err := trie.Prove(entries[start].k, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the first node %v", err)
+	}
+	if err := trie.Prove(entries[end-1].k, 0, proof); err != nil {
+		t.Fatalf("Failed to prove the last node %v", err)
+	}
+	var keys [][]byte
+	var vals [][]byte
+	for i := start; i < end; i++ {
+		keys = append(keys, entries[i].k)
+		vals = append(vals, entries[i].v)
+	}
+	_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, vals, proof)
+	if err == nil {
+		t.Fatalf("Expected failure on noop entry")
+	}
+}
+
+// TestAllElementsEmptyValueRangeProof tests the range proof with all elements,
+// but with an extra empty value included, which is a noop technically, but
+// practically should be rejected.
+func TestAllElementsEmptyValueRangeProof(t *testing.T) {
+	trie, values := randomTrie(512)
+	var entries entrySlice
+	for _, kv := range values {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	// Create a new entry with a slightly modified key
+	mid := len(entries) / 2
+	key := common.CopyBytes(entries[mid-1].k)
+	for n := len(key) - 1; n >= 0; n-- {
+		if key[n] < 0xff {
+			key[n]++
+			break
+		}
+	}
+	noop := &kv{key, []byte{}, false}
+	entries = append(append(append([]*kv{}, entries[:mid]...), noop), entries[mid:]...)
+
+	var keys [][]byte
+	var vals [][]byte
+	for i := 0; i < len(entries); i++ {
+		keys = append(keys, entries[i].k)
+		vals = append(vals, entries[i].v)
+	}
+	_, err := VerifyRangeProof(trie.Hash(), nil, nil, keys, vals, nil)
+	if err == nil {
+		t.Fatalf("Expected failure on noop entry")
 	}
 }
 
@@ -922,15 +993,42 @@ func benchmarkVerifyRangeProof(b *testing.B, size int) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _, _, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, values, proof)
+		_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, values, proof)
 		if err != nil {
 			b.Fatalf("Case %d(%d->%d) expect no error, got %v", i, start, end-1, err)
 		}
 	}
 }
 
+func BenchmarkVerifyRangeNoProof10(b *testing.B)   { benchmarkVerifyRangeNoProof(b, 100) }
+func BenchmarkVerifyRangeNoProof500(b *testing.B)  { benchmarkVerifyRangeNoProof(b, 500) }
+func BenchmarkVerifyRangeNoProof1000(b *testing.B) { benchmarkVerifyRangeNoProof(b, 1000) }
+
+func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
+	trie, vals := randomTrie(size)
+	var entries entrySlice
+	for _, kv := range vals {
+		entries = append(entries, kv)
+	}
+	sort.Sort(entries)
+
+	var keys [][]byte
+	var values [][]byte
+	for _, entry := range entries {
+		keys = append(keys, entry.k)
+		values = append(values, entry.v)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := VerifyRangeProof(trie.Hash(), keys[0], keys[len(keys)-1], keys, values, nil)
+		if err != nil {
+			b.Fatalf("Expected no error, got %v", err)
+		}
+	}
+}
+
 func randomTrie(n int) (*Trie, map[string]*kv) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	vals := make(map[string]*kv)
 	for i := byte(0); i < 100; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
@@ -955,7 +1053,7 @@ func randBytes(n int) []byte {
 }
 
 func nonRandomTrie(n int) (*Trie, map[string]*kv) {
-	trie := new(Trie)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	vals := make(map[string]*kv)
 	max := uint64(0xffffffffffffffff)
 	for i := uint64(0); i < uint64(n); i++ {
@@ -969,4 +1067,37 @@ func nonRandomTrie(n int) (*Trie, map[string]*kv) {
 		vals[string(elem.k)] = elem
 	}
 	return trie, vals
+}
+
+func TestRangeProofKeysWithSharedPrefix(t *testing.T) {
+	keys := [][]byte{
+		common.Hex2Bytes("aa10000000000000000000000000000000000000000000000000000000000000"),
+		common.Hex2Bytes("aa20000000000000000000000000000000000000000000000000000000000000"),
+	}
+	vals := [][]byte{
+		common.Hex2Bytes("02"),
+		common.Hex2Bytes("03"),
+	}
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
+	for i, key := range keys {
+		trie.Update(key, vals[i])
+	}
+	root := trie.Hash()
+	proof := memorydb.New()
+	start := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
+	end := common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	if err := trie.Prove(start, 0, proof); err != nil {
+		t.Fatalf("failed to prove start: %v", err)
+	}
+	if err := trie.Prove(end, 0, proof); err != nil {
+		t.Fatalf("failed to prove end: %v", err)
+	}
+
+	more, err := VerifyRangeProof(root, start, end, keys, vals, proof)
+	if err != nil {
+		t.Fatalf("failed to verify range proof: %v", err)
+	}
+	if more != false {
+		t.Error("expected more to be false")
+	}
 }

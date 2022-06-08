@@ -18,8 +18,8 @@ package rlp
 
 import (
 	"bytes"
+	"errors"
 	"io"
-	"reflect"
 	"testing"
 	"testing/quick"
 )
@@ -54,7 +54,7 @@ func TestCountValues(t *testing.T) {
 		if count != test.count {
 			t.Errorf("test %d: count mismatch, got %d want %d\ninput: %s", i, count, test.count, test.input)
 		}
-		if !reflect.DeepEqual(err, test.err) {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: err mismatch, got %q want %q\ninput: %s", i, err, test.err, test.input)
 		}
 	}
@@ -262,6 +262,12 @@ func TestAppendUint64(t *testing.T) {
 		x := AppendUint64(test.slice, test.input)
 		if !bytes.Equal(x, unhex(test.output)) {
 			t.Errorf("AppendUint64(%v, %d): got %x, want %s", test.slice, test.input, x, test.output)
+		}
+
+		// Check that IntSize returns the appended size.
+		length := len(x) - len(test.slice)
+		if s := IntSize(test.input); s != length {
+			t.Errorf("IntSize(%d): got %d, want %d", test.input, s, length)
 		}
 	}
 }

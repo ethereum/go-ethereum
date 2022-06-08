@@ -24,14 +24,10 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/signer/core"
-	"github.com/ethereum/go-ethereum/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/signer/storage"
-)
-
-var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
 )
 
 // consoleOutput is an override for the console.log and console.error methods to
@@ -99,7 +95,7 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error
 	vm.Set("storage", storageObj)
 
 	// Load bootstrap libraries
-	script, err := goja.Compile("bignumber.js", string(BigNumber_JS), true)
+	script, err := goja.Compile("bignumber.js", deps.BigNumberJS, true)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
 		return goja.Undefined(), err

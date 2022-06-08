@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -117,7 +118,7 @@ func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
 		ll := list
 		enc, _ := rlp.EncodeToBytes(ll)
 
-		reqID := genReqID()
+		reqID := rand.Uint64()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
 				peer := dp.(*serverPeer)

@@ -20,6 +20,7 @@ package miner
 import (
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,10 +35,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Backend wraps all methods required for mining.
+// Backend wraps all methods required for mining. Only full node is capable
+// to offer all the functions here.
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
+	StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error)
 }
 
 // Config is the configuration parameters of mining.
@@ -63,9 +66,11 @@ type Miner struct {
 	exitCh   chan struct{}
 	startCh  chan common.Address
 	stopCh   chan struct{}
+
+	wg sync.WaitGroup
 }
 
-func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(header *types.Header) bool) *Miner {
 	miner := &Miner{
 		eth:     eth,
 		mux:     mux,
@@ -75,8 +80,8 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		stopCh:  make(chan struct{}),
 		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
 	}
+	miner.wg.Add(1)
 	go miner.update()
-
 	return miner
 }
 
@@ -85,6 +90,8 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
 func (miner *Miner) update() {
+	defer miner.wg.Done()
+
 	events := miner.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 	defer func() {
 		if !events.Closed() {
@@ -154,6 +161,7 @@ func (miner *Miner) Stop() {
 
 func (miner *Miner) Close() {
 	close(miner.exitCh)
+	miner.wg.Wait()
 }
 
 func (miner *Miner) Mining() bool {
@@ -194,9 +202,20 @@ func (miner *Miner) PendingBlock() *types.Block {
 	return miner.worker.pendingBlock()
 }
 
+// PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
+func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return miner.worker.pendingBlockAndReceipts()
+}
+
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.coinbase = addr
 	miner.worker.setEtherbase(addr)
+}
+
+// SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.
+// For pre-1559 blocks, it sets the ceiling.
+func (miner *Miner) SetGasCeil(ceil uint64) {
+	miner.worker.setGasCeil(ceil)
 }
 
 // EnablePreseal turns on the preseal mining feature. It's enabled by default.
@@ -220,4 +239,28 @@ func (miner *Miner) DisablePreseal() {
 // to the given channel.
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
+}
+
+// GetSealingBlockAsync requests to generate a sealing block according to the
+// given parameters. Regardless of whether the generation is successful or not,
+// there is always a result that will be returned through the result channel.
+// The difference is that if the execution fails, the returned result is nil
+// and the concrete error is dropped silently.
+func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, error) {
+	resCh, _, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs)
+	if err != nil {
+		return nil, err
+	}
+	return resCh, nil
+}
+
+// GetSealingBlockSync creates a sealing block according to the given parameters.
+// If the generation is failed or the underlying work is already closed, an error
+// will be returned.
+func (miner *Miner) GetSealingBlockSync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (*types.Block, error) {
+	resCh, errCh, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs)
+	if err != nil {
+		return nil, err
+	}
+	return <-resCh, <-errCh
 }

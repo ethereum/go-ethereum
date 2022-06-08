@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -62,6 +63,10 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 	t.conn.SetReadDeadline(time.Now().Add(frameReadTimeout))
 	code, data, wireSize, err := t.conn.Read()
 	if err == nil {
+		// Protocol messages are dispatched to subprotocol handlers asynchronously,
+		// but package rlpx may reuse the returned 'data' buffer on the next call
+		// to Read. Copy the message data to avoid this being an issue.
+		data = common.CopyBytes(data)
 		msg = Msg{
 			ReceivedAt: time.Now(),
 			Code:       code,

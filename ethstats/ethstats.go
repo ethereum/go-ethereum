@@ -24,19 +24,18 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
@@ -68,7 +67,7 @@ type backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
-	Downloader() *downloader.Downloader
+	SyncProgress() ethereum.SyncProgress
 }
 
 // fullNodeBackend encompasses the functionality necessary for a full node
@@ -78,7 +77,7 @@ type fullNodeBackend interface {
 	Miner() *miner.Miner
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	CurrentBlock() *types.Block
-	SuggestPrice(ctx context.Context) (*big.Int, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -144,21 +143,43 @@ func (w *connWrapper) Close() error {
 	return w.conn.Close()
 }
 
+// parseEthstatsURL parses the netstats connection url.
+// URL argument should be of the form <nodename:secret@host:port>
+// If non-erroring, the returned slice contains 3 elements: [nodename, pass, host]
+func parseEthstatsURL(url string) (parts []string, err error) {
+	err = fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+
+	hostIndex := strings.LastIndex(url, "@")
+	if hostIndex == -1 || hostIndex == len(url)-1 {
+		return nil, err
+	}
+	preHost, host := url[:hostIndex], url[hostIndex+1:]
+
+	passIndex := strings.LastIndex(preHost, ":")
+	if passIndex == -1 {
+		return []string{preHost, "", host}, nil
+	}
+	nodename, pass := preHost[:passIndex], ""
+	if passIndex != len(preHost)-1 {
+		pass = preHost[passIndex+1:]
+	}
+
+	return []string{nodename, pass, host}, nil
+}
+
 // New returns a monitoring service ready for stats reporting.
 func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
-	// Parse the netstats connection url
-	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
-	parts := re.FindStringSubmatch(url)
-	if len(parts) != 5 {
-		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+	parts, err := parseEthstatsURL(url)
+	if err != nil {
+		return err
 	}
 	ethstats := &Service{
 		backend: backend,
 		engine:  engine,
 		server:  node.Server(),
-		node:    parts[1],
-		pass:    parts[3],
-		host:    parts[4],
+		node:    parts[0],
+		pass:    parts[1],
+		host:    parts[2],
 		pongCh:  make(chan struct{}),
 		histCh:  make(chan []uint64, 1),
 	}
@@ -332,7 +353,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 // it, if they themselves are requests it initiates a reply, and lastly it drops
 // unknown packets.
 func (s *Service) readLoop(conn *connWrapper) {
-	// If the read loop exists, close the connection
+	// If the read loop exits, close the connection
 	defer conn.Close()
 
 	for {
@@ -345,7 +366,7 @@ func (s *Service) readLoop(conn *connWrapper) {
 		// If the network packet is a system ping, respond to it directly
 		var ping string
 		if err := json.Unmarshal(blob, &ping); err == nil && strings.HasPrefix(ping, "primus::ping::") {
-			if err := conn.WriteJSON(strings.Replace(ping, "ping", "pong", -1)); err != nil {
+			if err := conn.WriteJSON(strings.ReplaceAll(ping, "ping", "pong")); err != nil {
 				log.Warn("Failed to respond to system ping message", "err", err)
 				return
 			}
@@ -756,13 +777,16 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		mining = fullBackend.Miner().Mining()
 		hashrate = int(fullBackend.Miner().Hashrate())
 
-		sync := fullBackend.Downloader().Progress()
+		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		price, _ := fullBackend.SuggestPrice(context.Background())
+		price, _ := fullBackend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
+		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
+			gasprice += int(basefee.Uint64())
+		}
 	} else {
-		sync := s.backend.Downloader().Progress()
+		sync := s.backend.SyncProgress()
 		syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 	}
 	// Assemble the node stats and send it to the server

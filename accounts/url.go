@@ -64,7 +64,7 @@ func (u URL) String() string {
 func (u URL) TerminalString() string {
 	url := u.String()
 	if len(url) > 32 {
-		return url[:31] + "…"
+		return url[:31] + ".."
 	}
 	return url
 }

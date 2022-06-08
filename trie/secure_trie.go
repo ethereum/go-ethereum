@@ -20,7 +20,9 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
@@ -51,11 +53,11 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
+func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
-	trie, err := New(root, db)
+	trie, err := New(owner, root, db)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +85,21 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {
 	return t.trie.TryGetNode(path)
+}
+
+// TryUpdateAccount account will abstract the write of an account to the
+// secure trie.
+func (t *SecureTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+	hk := t.hashKey(key)
+	data, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return err
+	}
+	if err := t.trie.TryUpdate(hk, data); err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -144,7 +161,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
-func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+func (t *SecureTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		if t.trie.db.preimages != nil { // Ugly direct check but avoids the below write lock
@@ -168,8 +185,10 @@ func (t *SecureTrie) Hash() common.Hash {
 
 // Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
-	cpy := *t
-	return &cpy
+	return &SecureTrie{
+		trie:        *t.trie.Copy(),
+		secKeyCache: t.secKeyCache,
+	}
 }
 
 // NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration

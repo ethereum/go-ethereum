@@ -33,13 +33,23 @@ type Peer struct {
 	logger log.Logger // Contextual logger with the peer id injected
 }
 
-// newPeer create a wrapper for a network connection and negotiated  protocol
+// NewPeer create a wrapper for a network connection and negotiated  protocol
 // version.
-func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
+func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	id := p.ID().String()
 	return &Peer{
 		id:      id,
 		Peer:    p,
+		rw:      rw,
+		version: version,
+		logger:  log.New("peer", id[:8]),
+	}
+}
+
+// NewFakePeer create a fake snap peer without a backing p2p peer, for testing purposes.
+func NewFakePeer(version uint, id string, rw p2p.MsgReadWriter) *Peer {
+	return &Peer{
+		id:      id,
 		rw:      rw,
 		version: version,
 		logger:  log.New("peer", id[:8]),
@@ -65,6 +75,8 @@ func (p *Peer) Log() log.Logger {
 // trie, starting with the origin.
 func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit common.Hash, bytes uint64) error {
 	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
+
+	requestTracker.Track(p.id, p.version, GetAccountRangeMsg, AccountRangeMsg, id)
 	return p2p.Send(p.rw, GetAccountRangeMsg, &GetAccountRangePacket{
 		ID:     id,
 		Root:   root,
@@ -83,6 +95,7 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 	} else {
 		p.logger.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
 	}
+	requestTracker.Track(p.id, p.version, GetStorageRangesMsg, StorageRangesMsg, id)
 	return p2p.Send(p.rw, GetStorageRangesMsg, &GetStorageRangesPacket{
 		ID:       id,
 		Root:     root,
@@ -96,6 +109,8 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 // RequestByteCodes fetches a batch of bytecodes by hash.
 func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
 	p.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+
+	requestTracker.Track(p.id, p.version, GetByteCodesMsg, ByteCodesMsg, id)
 	return p2p.Send(p.rw, GetByteCodesMsg, &GetByteCodesPacket{
 		ID:     id,
 		Hashes: hashes,
@@ -107,6 +122,8 @@ func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) e
 // a specificstate trie.
 func (p *Peer) RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error {
 	p.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
+
+	requestTracker.Track(p.id, p.version, GetTrieNodesMsg, TrieNodesMsg, id)
 	return p2p.Send(p.rw, GetTrieNodesMsg, &GetTrieNodesPacket{
 		ID:    id,
 		Root:  root,

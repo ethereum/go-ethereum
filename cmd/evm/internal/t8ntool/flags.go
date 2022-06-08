@@ -1,18 +1,18 @@
 // Copyright 2020 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package t8ntool
 
@@ -30,17 +30,25 @@ var (
 		Name:  "trace",
 		Usage: "Output full trace logs to files <txhash>.jsonl",
 	}
-	TraceDisableMemoryFlag = cli.BoolFlag{
+	TraceDisableMemoryFlag = cli.BoolTFlag{
 		Name:  "trace.nomemory",
-		Usage: "Disable full memory dump in traces",
+		Usage: "Disable full memory dump in traces (deprecated)",
+	}
+	TraceEnableMemoryFlag = cli.BoolFlag{
+		Name:  "trace.memory",
+		Usage: "Enable full memory dump in traces",
 	}
 	TraceDisableStackFlag = cli.BoolFlag{
 		Name:  "trace.nostack",
 		Usage: "Disable stack output in traces",
 	}
-	TraceDisableReturnDataFlag = cli.BoolFlag{
+	TraceDisableReturnDataFlag = cli.BoolTFlag{
 		Name:  "trace.noreturndata",
-		Usage: "Disable return data output in traces",
+		Usage: "Disable return data output in traces (deprecated)",
+	}
+	TraceEnableReturnDataFlag = cli.BoolFlag{
+		Name:  "trace.returndata",
+		Usage: "Enable return data output in traces",
 	}
 	OutputBasedir = cli.StringFlag{
 		Name:  "output.basedir",
@@ -68,6 +76,14 @@ var (
 			"\t<file> - into the file <file> ",
 		Value: "result.json",
 	}
+	OutputBlockFlag = cli.StringFlag{
+		Name: "output.block",
+		Usage: "Determines where to put the `block` after building.\n" +
+			"\t`stdout` - into the stdout output\n" +
+			"\t`stderr` - into the stderr output\n" +
+			"\t<file> - into the file <file> ",
+		Value: "block.json",
+	}
 	InputAllocFlag = cli.StringFlag{
 		Name:  "input.alloc",
 		Usage: "`stdin` or file name of where to find the prestate alloc to use.",
@@ -79,9 +95,42 @@ var (
 		Value: "env.json",
 	}
 	InputTxsFlag = cli.StringFlag{
-		Name:  "input.txs",
-		Usage: "`stdin` or file name of where to find the transactions to apply.",
+		Name: "input.txs",
+		Usage: "`stdin` or file name of where to find the transactions to apply. " +
+			"If the file extension is '.rlp', then the data is interpreted as an RLP list of signed transactions." +
+			"The '.rlp' format is identical to the output.body format.",
 		Value: "txs.json",
+	}
+	InputHeaderFlag = cli.StringFlag{
+		Name:  "input.header",
+		Usage: "`stdin` or file name of where to find the block header to use.",
+		Value: "header.json",
+	}
+	InputOmmersFlag = cli.StringFlag{
+		Name:  "input.ommers",
+		Usage: "`stdin` or file name of where to find the list of ommer header RLPs to use.",
+	}
+	InputTxsRlpFlag = cli.StringFlag{
+		Name:  "input.txs",
+		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
+		Value: "txs.rlp",
+	}
+	SealCliqueFlag = cli.StringFlag{
+		Name:  "seal.clique",
+		Usage: "Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.",
+	}
+	SealEthashFlag = cli.BoolFlag{
+		Name:  "seal.ethash",
+		Usage: "Seal block with ethash.",
+	}
+	SealEthashDirFlag = cli.StringFlag{
+		Name:  "seal.ethash.dir",
+		Usage: "Path to ethash DAG. If none exists, a new DAG will be generated.",
+	}
+	SealEthashModeFlag = cli.StringFlag{
+		Name:  "seal.ethash.mode",
+		Usage: "Defines the type and amount of PoW verification an ethash engine makes.",
+		Value: "normal",
 	}
 	RewardFlag = cli.Int64Flag{
 		Name:  "state.reward",
@@ -103,7 +152,7 @@ var (
 			"\n\tSyntax <forkname>(+ExtraEip)",
 			strings.Join(tests.AvailableForks(), "\n\t    "),
 			strings.Join(vm.ActivateableEips(), ", ")),
-		Value: "Istanbul",
+		Value: "ArrowGlacier",
 	}
 	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",

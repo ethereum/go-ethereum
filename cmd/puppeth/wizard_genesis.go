@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net/http"
@@ -240,8 +239,8 @@ func (w *wizard) manageGenesis() {
 		w.conf.Genesis.Config.BerlinBlock = w.readDefaultBigInt(w.conf.Genesis.Config.BerlinBlock)
 
 		fmt.Println()
-		fmt.Printf("Which block should YOLOv3 come into effect? (default = %v)\n", w.conf.Genesis.Config.YoloV3Block)
-		w.conf.Genesis.Config.YoloV3Block = w.readDefaultBigInt(w.conf.Genesis.Config.YoloV3Block)
+		fmt.Printf("Which block should London come into effect? (default = %v)\n", w.conf.Genesis.Config.LondonBlock)
+		w.conf.Genesis.Config.LondonBlock = w.readDefaultBigInt(w.conf.Genesis.Config.LondonBlock)
 
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
@@ -263,7 +262,7 @@ func (w *wizard) manageGenesis() {
 
 		// Export the native genesis spec used by puppeth and Geth
 		gethJson := filepath.Join(folder, fmt.Sprintf("%s.json", w.network))
-		if err := ioutil.WriteFile(gethJson, out, 0644); err != nil {
+		if err := os.WriteFile(gethJson, out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
 			return
 		}
@@ -305,7 +304,7 @@ func saveGenesis(folder, network, client string, spec interface{}) {
 	path := filepath.Join(folder, fmt.Sprintf("%s-%s.json", network, client))
 
 	out, _ := json.MarshalIndent(spec, "", "  ")
-	if err := ioutil.WriteFile(path, out, 0644); err != nil {
+	if err := os.WriteFile(path, out, 0644); err != nil {
 		log.Error("Failed to save genesis file", "client", client, "err", err)
 		return
 	}

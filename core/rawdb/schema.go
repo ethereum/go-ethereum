@@ -39,14 +39,20 @@ var (
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 
+	// headFinalizedBlockKey tracks the latest known finalized block hash.
+	headFinalizedBlockKey = []byte("LastFinalized")
+
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
 	lastPivotKey = []byte("LastPivot")
 
 	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.
 	fastTrieProgressKey = []byte("TrieSync")
 
-	// snapshotRootKey tracks the hash of the last snapshot.
-	snapshotRootKey = []byte("SnapshotRoot")
+	// snapshotDisabledKey flags that the snapshot should not be maintained due to initial sync.
+	snapshotDisabledKey = []byte("SnapshotDisabled")
+
+	// SnapshotRootKey tracks the hash of the last snapshot.
+	SnapshotRootKey = []byte("SnapshotRoot")
 
 	// snapshotJournalKey tracks the in-memory diff layers across restarts.
 	snapshotJournalKey = []byte("SnapshotJournal")
@@ -60,6 +66,9 @@ var (
 	// snapshotSyncStatusKey tracks the snapshot sync status across restarts.
 	snapshotSyncStatusKey = []byte("SnapshotSyncStatus")
 
+	// skeletonSyncStatusKey tracks the skeleton sync status across restarts.
+	skeletonSyncStatusKey = []byte("SkeletonSyncStatus")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
@@ -71,6 +80,9 @@ var (
 
 	// uncleanShutdownKey tracks the list of local crashes
 	uncleanShutdownKey = []byte("unclean-shutdown") // config prefix for the db
+
+	// transitionStatusKey tracks the eth2 transition status.
+	transitionStatusKey = []byte("eth2-transition")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
@@ -86,9 +98,11 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
-	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
-	configPrefix   = []byte("ethereum-config-") // config prefix for the db
+	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
+	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
+	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
@@ -114,9 +128,9 @@ const (
 	freezerDifficultyTable = "diffs"
 )
 
-// freezerNoSnappy configures whether compression is disabled for the ancient-tables.
+// FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
-var freezerNoSnappy = map[string]bool{
+var FreezerNoSnappy = map[string]bool{
 	freezerHeaderTable:     false,
 	freezerHashTable:       true,
 	freezerBodiesTable:     false,
@@ -204,9 +218,14 @@ func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 	return key
 }
 
-// preimageKey = preimagePrefix + hash
+// skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)
+func skeletonHeaderKey(number uint64) []byte {
+	return append(skeletonHeaderPrefix, encodeBlockNumber(number)...)
+}
+
+// preimageKey = PreimagePrefix + hash
 func preimageKey(hash common.Hash) []byte {
-	return append(preimagePrefix, hash.Bytes()...)
+	return append(PreimagePrefix, hash.Bytes()...)
 }
 
 // codeKey = CodePrefix + hash
@@ -226,4 +245,9 @@ func IsCodeKey(key []byte) (bool, []byte) {
 // configKey = configPrefix + hash
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
+}
+
+// genesisKey = genesisPrefix + hash
+func genesisKey(hash common.Hash) []byte {
+	return append(genesisPrefix, hash.Bytes()...)
 }

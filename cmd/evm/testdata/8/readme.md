@@ -56,8 +56,8 @@ dir=./testdata/8 \
 If we try to execute it on older rules: 
 ```
 dir=./testdata/8 && ./evm t8n --state.fork=Istanbul --input.alloc=$dir/alloc.json --input.txs=$dir/txs.json --input.env=$dir/env.json 
-INFO [01-21|23:21:51.265] rejected tx                              index=0 hash="d2818d…6ab3da" error="tx type not supported"
-INFO [01-21|23:21:51.265] rejected tx                              index=1 hash="26ea00…81c01b" from=0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B error="nonce too high: address 0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B, tx: 1 state: 0"
-INFO [01-21|23:21:51.265] rejected tx                              index=2 hash="698d01…369cee" error="tx type not supported"
+INFO [01-21|23:21:51.265] rejected tx                              index=0 hash=d2818d..6ab3da error="tx type not supported"
+INFO [01-21|23:21:51.265] rejected tx                              index=1 hash=26ea00..81c01b from=0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B error="nonce too high: address 0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B, tx: 1 state: 0"
+INFO [01-21|23:21:51.265] rejected tx                              index=2 hash=698d01..369cee error="tx type not supported"
 ```
 Number `1` and `3` are not applicable, and therefore number `2` has wrong nonce. 

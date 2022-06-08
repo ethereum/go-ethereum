@@ -353,7 +353,7 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 	}
 }
 
-// AddTrustedPeer adds the given node to a reserved whitelist which allows the
+// AddTrustedPeer adds the given node to a reserved trusted list which allows the
 // node to always connect, even if the slot are full.
 func (srv *Server) AddTrustedPeer(node *enode.Node) {
 	select {
@@ -370,7 +370,7 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	}
 }
 
-// SubscribePeers subscribes the given channel to peer events
+// SubscribeEvents subscribes the given channel to peer events
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }
@@ -903,7 +903,7 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	}
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
-		return fmt.Errorf("not whitelisted in NetRestrict")
+		return fmt.Errorf("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()
@@ -943,9 +943,8 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// If dialing, figure out the remote public key.
-	var dialPubkey *ecdsa.PublicKey
 	if dialDest != nil {
-		dialPubkey = new(ecdsa.PublicKey)
+		dialPubkey := new(ecdsa.PublicKey)
 		if err := dialDest.Load((*enode.Secp256k1)(dialPubkey)); err != nil {
 			err = errors.New("dial destination doesn't have a secp256k1 public key")
 			srv.log.Trace("Setting up connection failed", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)

@@ -20,6 +20,7 @@ package clique
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"math/rand"
@@ -179,7 +180,7 @@ type Clique struct {
 
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
-	lock   sync.RWMutex   // Protects the signer fields
+	lock   sync.RWMutex   // Protects the signer and proposals fields
 
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
@@ -293,6 +294,10 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 			return errInvalidDifficulty
 		}
 	}
+	// Verify that the gas limit is <= 2^63-1
+	if header.GasLimit > params.MaxGasLimit {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
+	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -324,6 +329,22 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if parent.Time+c.config.Period > header.Time {
 		return errInvalidTimestamp
 	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	}
+	if !chain.Config().IsLondon(header.Number) {
+		// Verify BaseFee not present before EIP-1559 fork.
+		if header.BaseFee != nil {
+			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
+		}
+		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
+			return err
+		}
+	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-1559 attributes.
+		return err
+	}
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
 	if err != nil {
@@ -341,7 +362,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		}
 	}
 	// All basic checks passed, verify the seal and return
-	return c.verifySeal(chain, header, parents)
+	return c.verifySeal(snap, header, parents)
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -438,18 +459,12 @@ func (c *Clique) VerifyUncles(chain consensus.ChainReader, block *types.Block) e
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
 // from.
-func (c *Clique) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (c *Clique) verifySeal(snap *Snapshot, header *types.Header, parents []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
 		return errUnknownBlock
 	}
-	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
-
 	// Resolve the authorization key and check against signers
 	signer, err := ecrecover(header, c.signatures)
 	if err != nil {
@@ -492,9 +507,8 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if err != nil {
 		return err
 	}
+	c.lock.RLock()
 	if number%c.config.Epoch != 0 {
-		c.lock.RLock()
-
 		// Gather all the proposals that make sense voting on
 		addresses := make([]common.Address, 0, len(c.proposals))
 		for address, authorize := range c.proposals {
@@ -511,10 +525,14 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 				copy(header.Nonce[:], nonceDropVote)
 			}
 		}
-		c.lock.RUnlock()
 	}
+
+	// Copy signer protected by mutex to avoid race condition
+	signer := c.signer
+	c.lock.RUnlock()
+
 	// Set the correct difficulty
-	header.Difficulty = calcDifficulty(snap, c.signer)
+	header.Difficulty = calcDifficulty(snap, signer)
 
 	// Ensure the extra data has all its components
 	if len(header.Extra) < extraVanity {
@@ -584,8 +602,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
 	if c.config.Period == 0 && len(block.Transactions()) == 0 {
-		log.Info("Sealing paused, waiting for transactions")
-		return nil
+		return errors.New("sealing paused while waiting for transactions")
 	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
@@ -605,8 +622,7 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 		if recent == signer {
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
-				log.Info("Signed recently, must wait for others")
-				return nil
+				return errors.New("signed recently, must wait for others")
 			}
 		}
 	}
@@ -653,7 +669,10 @@ func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, 
 	if err != nil {
 		return nil
 	}
-	return calcDifficulty(snap, c.signer)
+	c.lock.RLock()
+	signer := c.signer
+	c.lock.RUnlock()
+	return calcDifficulty(snap, signer)
 }
 
 func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
@@ -688,7 +707,7 @@ func (c *Clique) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 	encodeSigHeader(hasher, header)
-	hasher.Sum(hash[:0])
+	hasher.(crypto.KeccakState).Read(hash[:])
 	return hash
 }
 
@@ -706,7 +725,7 @@ func CliqueRLP(header *types.Header) []byte {
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
-	err := rlp.Encode(w, []interface{}{
+	enc := []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -722,8 +741,11 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
 		header.MixDigest,
 		header.Nonce,
-	})
-	if err != nil {
+	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}
 }

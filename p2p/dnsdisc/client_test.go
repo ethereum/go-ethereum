@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -113,6 +113,21 @@ func TestIterator(t *testing.T) {
 	}
 
 	checkIterator(t, it, nodes)
+}
+
+func TestIteratorCloseWithoutNext(t *testing.T) {
+	tree1, url1 := makeTestTree("t1", nil, nil)
+	c := NewClient(Config{Resolver: newMapResolver(tree1.ToTXT("t1"))})
+	it, err := c.NewIterator(url1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	it.Close()
+	ok := it.Next()
+	if ok {
+		t.Fatal("Next returned true after Close")
+	}
 }
 
 // This test checks if closing randomIterator races.

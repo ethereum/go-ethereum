@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -162,7 +163,11 @@ func TestUPNP_DDWRT(t *testing.T) {
 	// Attempt to discover the fake device.
 	discovered := discoverUPnP()
 	if discovered == nil {
-		t.Fatalf("not discovered")
+		if os.Getenv("CI") != "" {
+			t.Fatalf("not discovered")
+		} else {
+			t.Skipf("UPnP not discovered (known issue, see https://github.com/ethereum/go-ethereum/issues/21476)")
+		}
 	}
 	upnp, _ := discovered.(*upnp)
 	if upnp.service != "IGDv1-IP1" {
@@ -218,7 +223,7 @@ func (dev *fakeIGD) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (dev *fakeIGD) replaceListenAddr(resp string) string {
-	return strings.Replace(resp, "{{listenAddr}}", dev.listener.Addr().String(), -1)
+	return strings.ReplaceAll(resp, "{{listenAddr}}", dev.listener.Addr().String())
 }
 
 func (dev *fakeIGD) listen() (err error) {

@@ -78,16 +78,10 @@ func (arguments Arguments) isTuple() bool {
 // Unpack performs the operation hexdata -> Go format.
 func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	if len(data) == 0 {
-		if len(arguments) != 0 {
+		if len(arguments.NonIndexed()) != 0 {
 			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
-		// Nothing to unmarshal, return default variables
-		nonIndexedArgs := arguments.NonIndexed()
-		defaultVars := make([]interface{}, len(nonIndexedArgs))
-		for index, arg := range nonIndexedArgs {
-			defaultVars[index] = reflect.New(arg.Type.GetType())
-		}
-		return defaultVars, nil
+		return make([]interface{}, 0), nil
 	}
 	return arguments.UnpackValues(data)
 }
@@ -99,7 +93,7 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 		return fmt.Errorf("abi: cannot unpack into a nil map")
 	}
 	if len(data) == 0 {
-		if len(arguments) != 0 {
+		if len(arguments.NonIndexed()) != 0 {
 			return fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
 		}
 		return nil // Nothing to unmarshal, return
@@ -121,8 +115,8 @@ func (arguments Arguments) Copy(v interface{}, values []interface{}) error {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
 	}
 	if len(values) == 0 {
-		if len(arguments) != 0 {
-			return fmt.Errorf("abi: attempting to copy no values while %d arguments are expected", len(arguments))
+		if len(arguments.NonIndexed()) != 0 {
+			return fmt.Errorf("abi: attempting to copy no values while arguments are expected")
 		}
 		return nil // Nothing to copy, return
 	}
@@ -137,7 +131,7 @@ func (arguments Arguments) copyAtomic(v interface{}, marshalledValues interface{
 	dst := reflect.ValueOf(v).Elem()
 	src := reflect.ValueOf(marshalledValues)
 
-	if dst.Kind() == reflect.Struct && src.Kind() != reflect.Struct {
+	if dst.Kind() == reflect.Struct {
 		return set(dst.Field(0), src)
 	}
 	return set(dst, src)

@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -32,8 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	ethdownloader "github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -422,7 +422,7 @@ func NewAdapter(adapterType string, services adapters.LifecycleConstructors) (ad
 		//	case "socket":
 		//		adapter = adapters.NewSocketAdapter(services)
 	case "exec":
-		baseDir, err0 := ioutil.TempDir("", "les-test")
+		baseDir, err0 := os.MkdirTemp("", "les-test")
 		if err0 != nil {
 			return nil, teardown, err0
 		}
@@ -494,14 +494,14 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 
 func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
-	config.SyncMode = downloader.LightSync
+	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
 	config.Ethash.PowMode = ethash.ModeFake
 	return New(stack, &config)
 }
 
 func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	config := ethconfig.Defaults
-	config.SyncMode = downloader.FullSync
+	config.SyncMode = (ethdownloader.SyncMode)(downloader.FullSync)
 	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
 	ethereum, err := eth.New(stack, &config)

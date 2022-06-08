@@ -143,7 +143,7 @@ func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err err
 // choice to be made, returning that choice.
 func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
 	input, err := p.Prompt(prompt + " [y/n] ")
-	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
+	if len(input) > 0 && strings.EqualFold(input[:1], "y") {
 		return true, nil
 	}
 	return false, err
