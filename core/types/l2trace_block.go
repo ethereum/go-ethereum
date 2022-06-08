@@ -9,14 +9,14 @@ import (
 )
 
 type BlockTrace struct {
-	Number       *hexutil.Big         `json:"number"`
-	Hash         common.Hash          `json:"hash"`
-	GasLimit     uint64               `json:"gasLimit"`
-	Difficulty   *hexutil.Big         `json:"difficulty"`
-	BaseFee      *hexutil.Big         `json:"baseFee"`
-	Coinbase     *AccountProofWrapper `json:"coinbase"`
-	Time         uint64               `json:"time"`
-	Transactions []*TransactionTrace  `json:"transactions"`
+	Number       *hexutil.Big        `json:"number"`
+	Hash         common.Hash         `json:"hash"`
+	GasLimit     uint64              `json:"gasLimit"`
+	Difficulty   *hexutil.Big        `json:"difficulty"`
+	BaseFee      *hexutil.Big        `json:"baseFee"`
+	Coinbase     *AccountWrapper     `json:"coinbase"`
+	Time         uint64              `json:"time"`
+	Transactions []*TransactionTrace `json:"transactions"`
 }
 
 type TransactionTrace struct {
@@ -36,7 +36,7 @@ type TransactionTrace struct {
 }
 
 // NewTraceBlock supports necessary fields for roller.
-func NewTraceBlock(config *params.ChainConfig, block *Block, coinbase *AccountProofWrapper) *BlockTrace {
+func NewTraceBlock(config *params.ChainConfig, block *Block, coinbase *AccountWrapper) *BlockTrace {
 	txs := make([]*TransactionTrace, block.Transactions().Len())
 	for i, tx := range block.Transactions() {
 		txs[i] = newTraceTransaction(tx, block.NumberU64(), config)
