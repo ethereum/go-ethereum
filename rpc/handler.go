@@ -346,7 +346,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 			successfulRequestGauge.Inc(1)
 		}
 		rpcServingTimer.UpdateSince(start)
-		newRPCServingTimer(msg.Method, answer.Error == nil).UpdateSince(start)
+		updateServeTimeHistogram(msg.Method, answer.Error == nil, time.Since(start))
 	}
 	return answer
 }
