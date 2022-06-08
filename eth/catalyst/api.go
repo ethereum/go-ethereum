@@ -47,13 +47,6 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 			Public:        true,
 			Authenticated: true,
 		},
-		{
-			Namespace:     "engine",
-			Version:       "1.0",
-			Service:       NewConsensusAPI(backend),
-			Public:        true,
-			Authenticated: false,
-		},
 	})
 	return nil
 }
