@@ -41,29 +41,29 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// PublicEthereumAPI provides an API to access Ethereum full node-related
+// EthereumAPI provides an API to access Ethereum full node-related
 // information.
-type PublicEthereumAPI struct {
+type EthereumAPI struct {
 	e *Ethereum
 }
 
-// NewPublicEthereumAPI creates a new Ethereum protocol API for full nodes.
-func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
-	return &PublicEthereumAPI{e}
+// NewEthereumAPI creates a new Ethereum protocol API for full nodes.
+func NewEthereumAPI(e *Ethereum) *EthereumAPI {
+	return &EthereumAPI{e}
 }
 
 // Etherbase is the address that mining rewards will be send to.
-func (api *PublicEthereumAPI) Etherbase() (common.Address, error) {
+func (api *EthereumAPI) Etherbase() (common.Address, error) {
 	return api.e.Etherbase()
 }
 
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase).
-func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
+func (api *EthereumAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
 }
 
 // Hashrate returns the POW hashrate.
-func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
+func (api *EthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
 

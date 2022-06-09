@@ -309,7 +309,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewEthereumAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "eth",
