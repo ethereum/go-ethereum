@@ -67,19 +67,19 @@ func (api *EthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
 
-// PublicMinerAPI provides an API to control the miner.
+// MinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
-type PublicMinerAPI struct {
+type MinerAPI struct {
 	e *Ethereum
 }
 
-// NewPublicMinerAPI create a new PublicMinerAPI instance.
-func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
-	return &PublicMinerAPI{e}
+// NewMinerAPI create a new PublicMinerAPI instance.
+func NewMinerAPI(e *Ethereum) *MinerAPI {
+	return &MinerAPI{e}
 }
 
 // Mining returns an indication if this node is currently mining.
-func (api *PublicMinerAPI) Mining() bool {
+func (api *MinerAPI) Mining() bool {
 	return api.e.IsMining()
 }
 
