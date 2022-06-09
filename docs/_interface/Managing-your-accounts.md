@@ -172,7 +172,7 @@ Geth will start and prompt the user to input the account password in the termina
 geth <other commands> --unlock 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/password.txt
 ```
 
-{% include note.html content=" By default, account **unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is not recommended if there is any chance of the node connecting to Ethereum Mainnet. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
+{% include note.html content=" By default, account **unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
 
 
 ## Accounts in the Javascript console
