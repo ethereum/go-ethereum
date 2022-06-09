@@ -1447,23 +1447,23 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 }
 
-// PublicTransactionPoolAPI exposes methods for the RPC interface
-type PublicTransactionPoolAPI struct {
+// TransactionAPI exposes methods for the RPC interface
+type TransactionAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
 	signer    types.Signer
 }
 
-// NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
+// NewTransactionAPI creates a new RPC service with methods specific for the transaction pool.
+func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 	// The signer used by the API should always be the 'latest' known one because we expect
 	// signers to be backwards-compatible with old transactions.
 	signer := types.LatestSigner(b.ChainConfig())
-	return &PublicTransactionPoolAPI{b, nonceLock, signer}
+	return &TransactionAPI{b, nonceLock, signer}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
-func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
+func (s *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
 		n := hexutil.Uint(len(block.Transactions()))
 		return &n
@@ -1472,7 +1472,7 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(ctx context.
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
-func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
+func (s *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
 		n := hexutil.Uint(len(block.Transactions()))
 		return &n
@@ -1481,7 +1481,7 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Co
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
+func (s *TransactionAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
 		return newRPCTransactionFromBlockIndex(block, uint64(index), s.b.ChainConfig())
 	}
@@ -1489,7 +1489,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx conte
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
+func (s *TransactionAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
 		return newRPCTransactionFromBlockIndex(block, uint64(index), s.b.ChainConfig())
 	}
@@ -1497,7 +1497,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context
 }
 
 // GetRawTransactionByBlockNumberAndIndex returns the bytes of the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) hexutil.Bytes {
+func (s *TransactionAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) hexutil.Bytes {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
 		return newRPCRawTransactionFromBlockIndex(block, uint64(index))
 	}
@@ -1505,7 +1505,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx co
 }
 
 // GetRawTransactionByBlockHashAndIndex returns the bytes of the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) hexutil.Bytes {
+func (s *TransactionAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) hexutil.Bytes {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
 		return newRPCRawTransactionFromBlockIndex(block, uint64(index))
 	}
@@ -1513,7 +1513,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx cont
 }
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
-func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
+func (s *TransactionAPI) GetTransactionCount(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Uint64, error) {
 	// Ask transaction pool for the nonce which includes pending transactions
 	if blockNr, ok := blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
 		nonce, err := s.b.GetPoolNonce(ctx, address)
@@ -1532,7 +1532,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 }
 
 // GetTransactionByHash returns the transaction for the given hash
-func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
+func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
 	// Try to return an already finalized transaction
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
@@ -1555,7 +1555,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
 	tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
@@ -1572,7 +1572,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null
@@ -1635,7 +1635,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
-func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+func (s *TransactionAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
 
@@ -1679,7 +1679,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
-func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
+func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.from()}
 
@@ -1712,7 +1712,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 // FillTransaction fills the defaults (nonce, gas, gasPrice or 1559 fields)
 // on a given unsigned transaction, and returns it to the caller for further
 // processing (signing + broadcast).
-func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
@@ -1728,7 +1728,7 @@ func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args Tra
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
-func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
+func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err
@@ -1745,7 +1745,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 // The account associated with addr must be unlocked.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
-func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
+func (s *TransactionAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
 
@@ -1770,7 +1770,7 @@ type SignTransactionResult struct {
 // SignTransaction will sign the given transaction with the from account.
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
-func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
 		return nil, fmt.Errorf("gas not specified")
 	}
@@ -1801,7 +1801,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 
 // PendingTransactions returns the transactions that are in the transaction pool
 // and have a from address that is one of the accounts this node manages.
-func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, error) {
+func (s *TransactionAPI) PendingTransactions() ([]*RPCTransaction, error) {
 	pending, err := s.b.GetPoolTransactions()
 	if err != nil {
 		return nil, err
@@ -1825,7 +1825,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
 // the given transaction from the pool and reinsert it with the new gas price and limit.
-func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
+func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
 	}
