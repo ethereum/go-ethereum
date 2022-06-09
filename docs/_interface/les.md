@@ -3,7 +3,7 @@ title: Light client
 sort_key: B
 ---
 
-Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. Ina  full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources. 
+Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. In a  full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources. 
 
 Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/en/run-a-node/).
 
@@ -14,12 +14,12 @@ Running Geth in light mode has the following advantages for users:
 - Syncing takes minutes rather than hours/days
 - Light mode uses significantly less storage
 - Light mode is lighter on CPU and other resources
-- Light mode is suitable for resource-contrained devices
+- Light mode is suitable for resource-constrained devices
 - Light mode can catch up much quicker after having been offline for a while
 
 However, the cost of this performance increase is that a light Geth node depends heavily on full-node peers that choose, for altruistic reasons, to run light servers. There is no monetary incentive for full nodes to run light servers and it is an opt-in, rather than opt-out function of a Geth full node. For those reasons light servers are rather rare and can quickly become overwhelmed by data requests from light clients. The result of this is that **Geth nodes run in light mode often struggle to find peers**.
 
-Light nodes also have different security guarantees than full nodes. Because they don't keep local copies of the Ethereum state, light nodes can't validate the blocks in the same way as the full nodes. Instead they fetch block headers by requestign them from full nodes and check their proof-of-work (PoW), assuming the heaviest chain is valid. This means that it is sensible to wait until a few additional blocks have been confirmed before trusting the validity of a recently-mined transaction.
+Light nodes also have different security guarantees than full nodes. Because they don't keep local copies of the Ethereum state, light nodes can't validate the blocks in the same way as the full nodes. Instead they fetch block headers by requesting them from full nodes and check their proof-of-work (PoW), assuming the heaviest chain is valid. This means that it is sensible to wait until a few additional blocks have been confirmed before trusting the validity of a recently-mined transaction.
 
 A light client can therefore be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. Doing so introduces some trust assumptions relative to running a full node - namely that the light server providing the light client with data is providing accurate and honest information. 
 
