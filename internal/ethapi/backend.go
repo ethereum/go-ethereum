@@ -122,7 +122,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPublicDebugAPI(apiBackend),
+			Service:   NewDebugAPI(apiBackend),
 			Public:    true,
 		}, {
 			Namespace: "debug",

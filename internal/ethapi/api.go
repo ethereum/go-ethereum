@@ -1875,20 +1875,20 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
-// PublicDebugAPI is the collection of Ethereum APIs exposed over the public
+// DebugAPI is the collection of Ethereum APIs exposed over the public
 // debugging endpoint.
-type PublicDebugAPI struct {
+type DebugAPI struct {
 	b Backend
 }
 
-// NewPublicDebugAPI creates a new API definition for the public debug methods
+// NewDebugAPI creates a new API definition for the public debug methods
 // of the Ethereum service.
-func NewPublicDebugAPI(b Backend) *PublicDebugAPI {
-	return &PublicDebugAPI{b: b}
+func NewDebugAPI(b Backend) *DebugAPI {
+	return &DebugAPI{b: b}
 }
 
 // GetHeaderRlp retrieves the RLP encoded for of a single header.
-func (api *PublicDebugAPI) GetHeaderRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
+func (api *DebugAPI) GetHeaderRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
 	header, _ := api.b.HeaderByNumber(ctx, rpc.BlockNumber(number))
 	if header == nil {
 		return nil, fmt.Errorf("header #%d not found", number)
@@ -1897,7 +1897,7 @@ func (api *PublicDebugAPI) GetHeaderRlp(ctx context.Context, number uint64) (hex
 }
 
 // GetBlockRlp retrieves the RLP encoded for of a single block.
-func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
+func (api *DebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if block == nil {
 		return nil, fmt.Errorf("block #%d not found", number)
@@ -1906,7 +1906,7 @@ func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexu
 }
 
 // GetRawReceipts retrieves the binary-encoded raw receipts of a single block.
-func (api *PublicDebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
 	var hash common.Hash
 	if h, ok := blockNrOrHash.Hash(); ok {
 		hash = h
@@ -1933,7 +1933,7 @@ func (api *PublicDebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc
 }
 
 // PrintBlock retrieves a block and returns its pretty printed form.
-func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (string, error) {
+func (api *DebugAPI) PrintBlock(ctx context.Context, number uint64) (string, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
@@ -1942,7 +1942,7 @@ func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (strin
 }
 
 // SeedHash retrieves the seed hash of a block.
-func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string, error) {
+func (api *DebugAPI) SeedHash(ctx context.Context, number uint64) (string, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
