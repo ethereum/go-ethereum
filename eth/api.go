@@ -246,20 +246,20 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-// PublicDebugAPI is the collection of Ethereum full node APIs exposed
+// DebugAPI is the collection of Ethereum full node APIs exposed
 // over the public debugging endpoint.
-type PublicDebugAPI struct {
+type DebugAPI struct {
 	eth *Ethereum
 }
 
-// NewPublicDebugAPI creates a new API definition for the full node-
+// NewDebugAPI creates a new API definition for the full node-
 // related public debug methods of the Ethereum service.
-func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
-	return &PublicDebugAPI{eth: eth}
+func NewDebugAPI(eth *Ethereum) *DebugAPI {
+	return &DebugAPI{eth: eth}
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
-func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
+func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	opts := &state.DumpConfig{
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
@@ -350,7 +350,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 const AccountRangeMaxResults = 256
 
 // AccountRange enumerates all accounts in the given block and start point in paging request
-func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
+func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
 	var err error
 
