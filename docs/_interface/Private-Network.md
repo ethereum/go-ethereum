@@ -5,16 +5,15 @@ sort_key: D
 
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
 
+## Prerequisites
 
-## Background
+To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](../../_site/docs/install-and-build/installing-geth.html)). It is also helpful to understand Geth fundamentals (see [Getting Started](../../docs/_getting-started/index.md)).
 
-A private network is composed of multiple Ethereum nodes that connect to each other but not to external peers. A fully controlled, private Ethereum network is useful as a backend for network integration testing for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. The nodes on a private network do not necessarily have to be run from the same machine but they can be. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`), a different `eth` and `http` port and a unique `ipc` endpoint. The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. 
 
-The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
+## Private Networks
 
 A private network is composed of multiple Ethereum nodes that can only connect to each other. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`). The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
 
-To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](../../_site/docs/install-and-build/installing-geth.html)). It is also helpful to understand Geth fundamentals (see [Getting Started](../../docs/_getting-started/index.md)).
 
 ### Choosing A Network ID
 
@@ -27,8 +26,7 @@ geth --networkid 12345
 
 ### Choosing A Consensus Algorithm
 
-Ethereum Mainnet uses a proof-of-work (PoW) algorithm called "Ethash" to secure the blockchain, Geth also supports the the 'clique' proof-of-authority (PoA) consensus algorithm as an alternative for private
-networks. Clique is strongly recommended for private testnets because it is far less resource-intensive than PoW. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
+While the main network uses proof-of-work (PoW) to secure the blockchain, Geth also supports the the 'Clique' proof-of-authority (PoA) consensus algorithm as an alternative for private networks. Clique is strongly recommended for private testnets because PoA is far less resource-intensive than PoW. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
 
 #### Ethash
 
@@ -36,33 +34,27 @@ Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensu
 
 #### Clique
 
-Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing
-the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty
-adjustment.
+Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
 [clique-eip]: https://eips.ethereum.org/EIPS/eip-225
 
 
 ### Creating The Genesis Block
 
-Every blockchain starts with a genesis block. When Geth is run with default settings for the first time, it commits the Mainnet genesis to the database. For a private
-network, it is generally preferable to use a different genesis block. The genesis block is configured using a _genesis.json_ file whose path must be provided to Geth on start-up. When creating a genesis block, a few initial parameters for the private blockchain must be defined:
+Every blockchain starts with a genesis block. When Geth is run with default settings for the first time, it commits the Mainnet genesis to the database. For a private network, it is generally preferable to use a different genesis block. The genesis block is configured using a _genesis.json_ file whose path must be provided to Geth on start-up. When creating a genesis block, a few initial parameters for the private blockchain must be defined:
 
 - Ethereum platform features enabled at launch (`config`). Enabling and disabling features once the blockchain is running requires scheduling a [hard fork](https://ethereum.org/en/glossary/#hard-fork).
   
-- Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a
-  [good choice][gaslimit-chart]. The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
+- Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a [good choice][gaslimit-chart]. The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
 
-- Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through
-  mining as the chain progresses.
-
+- Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through mining as the chain progresses.
 
 
 #### Clique Example
 
 Below is an example of a `genesis.json` file for a PoA network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for Clique to work.
 
-First create the signer account keys using the [geth account](./managing-your-accounts) command (run this command multiple times to create more than one signer key).
+The signer account keys can be generated using the [geth account](./managing-your-accounts) command (this command can be run multiple times to create more than one signer key).
 
 ```shell
 geth account new --datadir data
@@ -75,7 +67,7 @@ The `period` configuration option sets the target block time of the chain.
 ```json
 {
   "config": {
-    "chainId": 012345,
+    "chainId": 12345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -100,13 +92,12 @@ The `period` configuration option sets the target block time of the chain.
 
 #### Ethash Example
 
-Since Ethash is the default consensus algorithm, no additional parameters need to be configured in order to use it. The initial mining difficulty is influenced using the
-`difficulty` parameter, but note that the difficulty adjustment algorithm will quickly adapt to the amount of mining resources deployed on the chain.
+Since Ethash is the default consensus algorithm, no additional parameters need to be configured in order to use it. The initial mining difficulty is influenced using the `difficulty` parameter, but note that the difficulty adjustment algorithm will quickly adapt to the amount of mining resources deployed on the chain.
 
 ```json
 {
   "config": {
-    "chainId": 012345,
+    "chainId": 12345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -127,7 +118,7 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
 
 ### Initializing the Geth Database
 
-To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument. It makes sense to store `genesis.json` int he top-level directory or the data directory. In the following example the data directory is `data` and `genesis.json` is in the top level project directory.
+To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument. It makes sense to store `genesis.json` in the top-level directory or the data directory. In the following example the data directory is `data` and `genesis.json` is in the top level project directory.
 
 ```shell
 geth init --datadir data genesis.json
@@ -142,7 +133,7 @@ geth --datadir data --networkid 12345
 
 ### Scheduling Hard Forks
 
-As Ethereum protocol development progresses, new features become available. To enable these features on an existing private network, a hard fork must be scheduled. To do this, a future block number must be chosen which determines precisely when the hard fork will activate. Continuing the `genesis.json` example above and assuming the current block number is 35421, a hard fork might be scheduled for block 40000. This hard fork might upgrade the network to conform to the 'Instabul' specs. First, all the Geth instances ont he private network must be recent enough to support the specific hard fork. If so, `genesis.json` can be updated so that the `instabulBlock` key gets the value 40000. The Geth instances are then shut down and `geth init` is run to update their configuration. When the nodes are restarted they will pick up where they left off and run normally until block 40000, at which point they will automatically upgrade.
+As Ethereum protocol development progresses, new features become available. To enable these features on an existing private network, a hard fork must be scheduled. To do this, a future block number must be chosen which determines precisely when the hard fork will activate. Continuing the `genesis.json` example above and assuming the current block number is 35421, a hard fork might be scheduled for block 40000. This hard fork might upgrade the network to conform to the 'Instabul' specs. First, all the Geth instances on the private network must be recent enough to support the specific hard fork. If so, `genesis.json` can be updated so that the `instabulBlock` key gets the value 40000. The Geth instances are then shut down and `geth init` is run to update their configuration. When the nodes are restarted they will pick up where they left off and run normally until block 40000, at which point they will automatically upgrade.
 
 The modification to `genesis.json` is as follows:
 
@@ -225,8 +216,7 @@ Mining can be further configured by changing the default gas limit blocks conver
 
 ### Running A Miner (Ethash)
 
-For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for
-mining, it can be run with all the usual flags plus the following to configure mining:
+For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for mining, it can be run with all the usual flags plus the following to configure mining:
 
 ```shell
 geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0x0000000000000000000000000000000000000000
@@ -264,7 +254,7 @@ Path of the secret key file: node1/keystore/UTC--2022-05-13T14-25-49.229126160Z-
 - You can share your public address with anyone. Others need it to interact with you.
 - You must NEVER share the secret key with anyone! The key controls access to your funds!
 - You must BACKUP your key file! Without the key, it's impossible to access account funds!
-- You muist remember your password! Without the password, it's impossible to decrypt the key!
+- You must remember your password! Without the password, it's impossible to decrypt the key!
 ```
 
 The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in eachnode's data directory.
@@ -315,10 +305,10 @@ INFO [05-13|15:41:47.520] Allocated cache and file handles         database=/hom
 INFO [05-13|15:41:47.542] Writing custom genesis block 
 INFO [05-13|15:41:47.542] Persisted trie from memory database      nodes=3 size=397.00B time="41.246µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-13|15:41:47.543] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
-INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/lightchaindata cache=16.00MiB handles=16
+INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/chaindata cache=16.00MiB handles=16
 INFO [05-13|15:41:47.556] Writing custom genesis block 
 INFO [05-13|15:41:47.557] Persisted trie from memory database      nodes=3 size=397.00B time="81.801µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
+INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
 ```
 
 The next step is to configure a bootnode. This can be any node, but for this tutorial the developer tool `bootnode` will be used to quickly and easily configure a dedicated bootnode. First the bootnode requires a key, which can be created with the following command, which will save a key to `boot.key`:
@@ -469,7 +459,6 @@ eth.getBalance("0xc94d95a5106270775351eecfe43f97e8e75e59e8")
 ```
 
 The same steps can then be repeated to attach a console to Node 2.
-
 
 
 ## Summary
