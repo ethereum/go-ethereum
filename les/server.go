@@ -172,7 +172,7 @@ func (s *LesServer) APIs() []rpc.API {
 		{
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s),
+			Service:   NewDebugAPI(s),
 			Public:    false,
 		},
 	}

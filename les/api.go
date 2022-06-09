@@ -324,20 +324,20 @@ func (api *LightServerAPI) Benchmark(setups []map[string]interface{}, passCount,
 	return result, nil
 }
 
-// PrivateDebugAPI provides an API to debug LES light server functionality.
-type PrivateDebugAPI struct {
+// DebugAPI provides an API to debug LES light server functionality.
+type DebugAPI struct {
 	server *LesServer
 }
 
-// NewPrivateDebugAPI creates a new LES light server debug API.
-func NewPrivateDebugAPI(server *LesServer) *PrivateDebugAPI {
-	return &PrivateDebugAPI{
+// NewDebugAPI creates a new LES light server debug API.
+func NewDebugAPI(server *LesServer) *DebugAPI {
+	return &DebugAPI{
 		server: server,
 	}
 }
 
 // FreezeClient forces a temporary client freeze which normally happens when the server is overloaded
-func (api *PrivateDebugAPI) FreezeClient(node string) error {
+func (api *DebugAPI) FreezeClient(node string) error {
 	var (
 		id  enode.ID
 		err error
