@@ -75,13 +75,13 @@ type tmplStruct struct {
 // tmplSource is language to template mapping containing all the supported
 // programming languages the package can generate to.
 var tmplSource = map[Lang]string{
-	LangGo:   tmplSourceGo,
-	LangJava: tmplSourceJava,
+	LangGo:   TemplateSourceGo,
+	LangJava: TemplateSourceJava,
 }
 
-// tmplSourceGo is the Go source template that the generated Go contract binding
+// TemplateSourceGo is the Go source template that the generated Go contract binding
 // is based on.
-const tmplSourceGo = `
+const TemplateSourceGo = `
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
@@ -570,9 +570,9 @@ var (
 {{end}}
 `
 
-// tmplSourceJava is the Java source template that the generated Java contract binding
+// TemplateSourceJava is the Java source template that the generated Java contract binding
 // is based on.
-const tmplSourceJava = `
+const TemplateSourceJava = `
 // This file is an automatically generated Java binding. Do not modify as any
 // change will likely be lost upon the next re-generation!
 

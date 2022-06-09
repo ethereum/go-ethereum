@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -39,6 +40,7 @@ var bindTests = []struct {
 	libs     map[string]string
 	aliases  map[string]string
 	types    []string
+	opts     []BindOption
 }{
 	// Test that the binding is available in combined and separate forms too
 	{
@@ -62,6 +64,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that all the official sample contracts bind correctly
 	{
@@ -75,6 +78,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -95,6 +99,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DAO`,
@@ -107,6 +112,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -148,6 +154,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that named and anonymous outputs are handled correctly
 	{
@@ -184,6 +191,7 @@ var bindTests = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -264,6 +272,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that contract interactions (deploy, transact and call) generate working code
 	{
@@ -326,6 +335,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that plain values can be properly returned and deserialized
 	{
@@ -372,6 +382,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that tuples can be properly returned and deserialized
 	{
@@ -414,6 +425,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -476,6 +488,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that anonymous default methods can be correctly invoked
 	{
@@ -523,6 +536,7 @@ var bindTests = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -591,6 +605,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Tests that non-existent contracts are reported as such (though only simulator test)
 	{
@@ -631,6 +646,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`NonExistentStruct`,
@@ -666,6 +682,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -726,6 +743,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test that constant functions can be called from an (optional) specified address
 	{
@@ -776,6 +794,7 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -856,6 +875,7 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -1082,6 +1102,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`DeeplyNestedArray`,
@@ -1163,6 +1184,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`CallbackParam`,
@@ -1202,6 +1224,7 @@ var bindTests = []struct {
 				"test(function)": "d7a5aba2",
 			},
 		},
+		nil,
 		nil,
 		nil,
 		nil,
@@ -1349,6 +1372,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		`UseLibrary`,
@@ -1419,6 +1443,7 @@ var bindTests = []struct {
 		},
 		nil,
 		[]string{"UseLibrary", "Math"},
+		nil,
 	}, {
 		"Overload",
 		`
@@ -1513,6 +1538,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	{
 		"IdentifierCollision",
@@ -1555,6 +1581,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		map[string]string{"_myVar": "pubVar"}, // alias MyVar to PubVar
+		nil,
 		nil,
 	},
 	{
@@ -1638,6 +1665,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		[]string{"ContractOne", "ContractTwo", "ExternalLib"},
+		nil,
 	},
 	// Test the existence of the free retrieval calls
 	{
@@ -1689,6 +1717,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -1783,6 +1812,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test resolving single struct argument
 	{
@@ -1854,6 +1884,7 @@ var bindTests = []struct {
 		nil,
 		nil,
 		nil,
+		nil,
 	},
 	// Test errors introduced in v0.8.4
 	{
@@ -1905,6 +1936,7 @@ var bindTests = []struct {
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
 	   `,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -2002,6 +2034,35 @@ var bindTests = []struct {
 			}
 		`,
 	},
+	{
+		name: `CustomTemplateAndFuncs`,
+		contract: `
+		pragma solidity >=0.8.0 <0.9.0;
+
+		contract Null {}
+		`,
+		bytecode: []string{`0x6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea264697066735822122004b4c0b5bf90253f65d22a9e596944c418f3d8fe4d24b3d226de0ac01d531dc764736f6c634300080e0033`},
+		abi:      []string{`[]`},
+		opts: []BindOption{
+			WithTemplateFuncs(template.FuncMap{
+				// Using a function name that will definitely not be in the default
+				// map, even in the future (I hope!).
+				"uniquefunctionnameforuppercasequote": func(s string) string {
+					return fmt.Sprintf("%q", strings.ToUpper(s))
+				},
+			}),
+			WithTemplate(`
+			package {{.Package}}
+
+			const UpperCaseFoo = {{uniquefunctionnameforuppercasequote "foo"}}
+			`),
+		},
+		tester: `
+		if got, want := UpperCaseFoo, "FOO"; got != want {
+			t.Errorf("Using custom template with arbitrary const value; got UpperCaseFoo = %q; want %q", got, want)
+		}
+		`,
+	},
 }
 
 // Tests that packages generated by the binder can be successfully compiled and
@@ -2029,7 +2090,7 @@ func TestGolangBindings(t *testing.T) {
 				types = []string{tt.name}
 			}
 			// Generate the binding and create a Go source file in the workspace
-			bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs, tt.aliases)
+			bind, err := Bind(types, tt.abi, tt.bytecode, tt.fsigs, "bindtest", LangGo, tt.libs, tt.aliases, tt.opts...)
 			if err != nil {
 				t.Fatalf("test %d: failed to generate binding: %v", i, err)
 			}

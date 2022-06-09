@@ -78,6 +78,10 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
 	}
+	templateFlag = cli.StringFlag{
+		Name:  "custom-template",
+		Usage: "Path to a text file containing a raw Go text/template to override the default generated code",
+	}
 )
 
 func init() {
@@ -92,6 +96,7 @@ func init() {
 		outFlag,
 		langFlag,
 		aliasFlag,
+		templateFlag,
 	}
 	app.Action = utils.MigrateFlags(abigen)
 	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
@@ -218,8 +223,18 @@ func abigen(c *cli.Context) error {
 			aliases[match[1]] = match[2]
 		}
 	}
+
+	var opts []bind.BindOption
+	if tmpl := c.GlobalString(templateFlag.Name); tmpl != "" {
+		raw, err := os.ReadFile(tmpl)
+		if err != nil {
+			utils.Fatalf("Failed to read custom-template from %q: %v", tmpl, err)
+		}
+		opts = append(opts, bind.WithTemplate(string(raw)))
+	}
+
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs, aliases)
+	code, err := bind.Bind(types, abis, bins, sigs, c.GlobalString(pkgFlag.Name), lang, libs, aliases, opts...)
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)
 	}
