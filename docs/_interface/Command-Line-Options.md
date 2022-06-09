@@ -57,7 +57,7 @@ ETHEREUM OPTIONS:
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
   --eth.requiredblocks value          Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
   --mainnet                           Ethereum mainnet
-  --ropsten                           Ropsten network: pre-configured proof-of-work test network
+  --ropsten                           Ropsten network: pre-configured proof-of-stake test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --sepolia                           Sepolia network: pre-configured proof-of-work test network
