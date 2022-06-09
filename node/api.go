@@ -40,7 +40,7 @@ func (n *Node) apis() []rpc.API {
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   &publicAdminAPI{n},
+			Service:   &adminAPI{n},
 			Public:    true,
 		}, {
 			Namespace: "debug",
@@ -296,15 +296,15 @@ func (api *privateAdminAPI) StopWS() (bool, error) {
 	return true, nil
 }
 
-// publicAdminAPI is the collection of administrative API methods exposed over
+// adminAPI is the collection of administrative API methods exposed over
 // both secure and unsecure RPC channels.
-type publicAdminAPI struct {
+type adminAPI struct {
 	node *Node // Node interfaced by this API
 }
 
 // Peers retrieves all the information we know about each individual peer at the
 // protocol granularity.
-func (api *publicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
+func (api *adminAPI) Peers() ([]*p2p.PeerInfo, error) {
 	server := api.node.Server()
 	if server == nil {
 		return nil, ErrNodeStopped
@@ -314,7 +314,7 @@ func (api *publicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
 
 // NodeInfo retrieves all the information we know about the host node at the
 // protocol granularity.
-func (api *publicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
+func (api *adminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 	server := api.node.Server()
 	if server == nil {
 		return nil, ErrNodeStopped
@@ -323,7 +323,7 @@ func (api *publicAdminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 }
 
 // Datadir retrieves the current data directory the node is using.
-func (api *publicAdminAPI) Datadir() string {
+func (api *adminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
