@@ -353,14 +353,14 @@ func (api *PrivateDebugAPI) FreezeClient(node string) error {
 	}
 }
 
-// PrivateLightAPI provides an API to access the LES light server or light client.
-type PrivateLightAPI struct {
+// LightAPI provides an API to access the LES light server or light client.
+type LightAPI struct {
 	backend *lesCommons
 }
 
-// NewPrivateLightAPI creates a new LES service API.
-func NewPrivateLightAPI(backend *lesCommons) *PrivateLightAPI {
-	return &PrivateLightAPI{backend: backend}
+// NewLightAPI creates a new LES service API.
+func NewLightAPI(backend *lesCommons) *LightAPI {
+	return &LightAPI{backend: backend}
 }
 
 // LatestCheckpoint returns the latest local checkpoint package.
@@ -370,7 +370,7 @@ func NewPrivateLightAPI(backend *lesCommons) *PrivateLightAPI {
 //   result[1], 32 bytes hex encoded latest section head hash
 //   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
 //   result[3], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
+func (api *LightAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
 	cp := api.backend.latestLocalCheckpoint()
 	if cp.Empty() {
@@ -387,7 +387,7 @@ func (api *PrivateLightAPI) LatestCheckpoint() ([4]string, error) {
 //   result[0], 32 bytes hex encoded latest section head hash
 //   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
 //   result[2], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
+func (api *LightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
 	cp := api.backend.localCheckpoint(index)
 	if cp.Empty() {
@@ -398,7 +398,7 @@ func (api *PrivateLightAPI) GetCheckpoint(index uint64) ([3]string, error) {
 }
 
 // GetCheckpointContractAddress returns the contract contract address in hex format.
-func (api *PrivateLightAPI) GetCheckpointContractAddress() (string, error) {
+func (api *LightAPI) GetCheckpointContractAddress() (string, error) {
 	if api.backend.oracle == nil {
 		return "", errNotActivated
 	}
