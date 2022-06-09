@@ -289,20 +289,8 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	return stateDb.RawDump(opts), nil
 }
 
-// PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
-// the private debugging endpoint.
-type PrivateDebugAPI struct {
-	eth *Ethereum
-}
-
-// NewPrivateDebugAPI creates a new API definition for the full node-related
-// private debug methods of the Ethereum service.
-func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
-	return &PrivateDebugAPI{eth: eth}
-}
-
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
-func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+func (api *DebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	if preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); preimage != nil {
 		return preimage, nil
 	}
@@ -318,7 +306,7 @@ type BadBlockArgs struct {
 
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block hashes.
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
+func (api *DebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
 		blocks  = rawdb.ReadAllBadBlocks(api.eth.chainDb)
@@ -417,7 +405,7 @@ type storageEntry struct {
 }
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
-func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+func (api *DebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	// Retrieve the block
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
@@ -462,7 +450,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 // code hash, or storage hash.
 //
 // With one parameter, returns the list of accounts modified in the specified block.
-func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
+func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
 
 	startBlock = api.eth.blockchain.GetBlockByNumber(startNum)
@@ -490,7 +478,7 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum 
 // code hash, or storage hash.
 //
 // With one parameter, returns the list of accounts modified in the specified block.
-func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
+func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
 	var startBlock, endBlock *types.Block
 	startBlock = api.eth.blockchain.GetBlockByHash(startHash)
 	if startBlock == nil {
@@ -512,7 +500,7 @@ func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, end
 	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
-func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
+func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
@@ -545,7 +533,7 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 // of the next block.
 // The (from, to) parameters are the sequence of blocks to search, which can go
 // either forwards or backwards
-func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
+func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error) {
 	db := api.eth.ChainDb()
 	var pivot uint64
 	if p := rawdb.ReadLastPivotNumber(db); p != nil {
