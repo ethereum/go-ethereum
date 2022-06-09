@@ -183,12 +183,15 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	// Set sender address or use zero address if none specified.
 	addr := args.from()
 
+	// Gas set for system calls
+	systemCallGas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+
 	// Set default gas & gas price if none were set
 	gas := globalGasCap
 	if gas == 0 {
 		gas = uint64(math.MaxUint64 / 2)
 	}
-	if args.Gas != nil {
+	if args.Gas != nil && *args.Gas != systemCallGas {
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
