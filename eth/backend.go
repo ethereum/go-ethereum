@@ -312,7 +312,7 @@ func (s *Ethereum) APIs() []rpc.API {
 			Service:   NewEthereumAPI(s),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "miner",
 			Version:   "1.0",
 			Service:   NewMinerAPI(s),
 			Public:    true,
@@ -321,11 +321,6 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
 			Public:    true,
-		}, {
-			Namespace: "miner",
-			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
-			Public:    false,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
