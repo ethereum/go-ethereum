@@ -1,9 +1,9 @@
 ---
 title: Private Networks
-sort_key: B
+sort_key: D
 ---
 
-This guide explains how to set up a private network of multiple Geth nodes that are not able to connect to external peers. The setup process and configuration options required to establish a private network are explained on this page. An end-to-end tutorial for setting up a simple private network is available in the [final section below](#end-to-end-example).
+This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
 
 
 ## Background
@@ -12,7 +12,7 @@ A private network is composed of multiple Ethereum nodes that connect to each ot
 
 The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
 
-## Prerequisites
+A private network is composed of multiple Ethereum nodes that can only connect to each other. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`). The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
 
 To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](../../_site/docs/install-and-build/installing-geth.html)). It is also helpful to understand Geth fundamentals (see [Getting Started](../../docs/_getting-started/index.md)).
 
@@ -21,9 +21,7 @@ To follow the tutorial on this page it is necessary to have a working Geth insta
 Ethereum Mainnet has Network ID = 1. There are also many other networks that Geth can connect to by providing alternative Chain IDs, some are testnets and others are alternative networks built from forks of the Geth source code. Providing a network ID that is not already being used by an existing network or testnet means the nodes using that network ID can only connect to each other, creating a private network. A list of current network IDs is available at [Chainlist.org](https://chainlist.org/). The network ID is controlled using the `networkid` flag, e.g.
 
 ```shell
-
-geth --networkid 012345
-
+geth --networkid 12345
 ```
 
 
@@ -67,9 +65,7 @@ Below is an example of a `genesis.json` file for a PoA network. The `config` sec
 First create the signer account keys using the [geth account](./managing-your-accounts) command (run this command multiple times to create more than one signer key).
 
 ```shell
-
 geth account new --datadir data
-
 ```
 
 The Ethereum address printed by this command should be recorded. To encode the signer addresses in `extradata`, concatenate 32 zero bytes, all signer addresses and 65 further zero bytes. The result of this concatenation is then used as the value accompanying the `extradata` key in `genesis.json`. In the example below, `extradata` contains a single initial signer address, `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82`.
@@ -134,18 +130,14 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
 To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument. It makes sense to store `genesis.json` int he top-level directory or the data directory. In the following example the data directory is `data` and `genesis.json` is in the top level project directory.
 
 ```shell
-
 geth init --datadir data genesis.json
-
 ```
 
 When Geth is started using `--datadir data` the genesis block defined in `genesis.json` will be used. For example:
 
 
 ```shell
-
 geth --datadir data --networkid 12345
-
 ```
 
 ### Scheduling Hard Forks
@@ -168,9 +160,7 @@ The modification to `genesis.json` is as follows:
 The upgrade command is:
 
 ```shell
-
 geth init --datadir data genesis.json
-
 ```
 
 
@@ -183,17 +173,13 @@ To configure a bootstrap node, the IP address of the machine the bootstrap node 
 The bootstrap node IP is set using the `--nat` flag (the command below contains an example address - replace it with the correct one).
 
 ```shell
-
 geth --datadir data --networkid 15 --nat extip:172.16.254.4
-
 ```
 
 The 'node record' of the bootnode can be extracted using the JS console:
 
 ```shell
-
 geth attach data/geth.ipc --exec admin.nodeInfo.enr
-
 ```
 
 This command should print a base64 string such as the following example. Other nodes will use the information contained in the bootstrap node record to connect to the peer-to-peer network.
@@ -224,9 +210,7 @@ geth --datadir data2 --networkid 12345 --port 30305 --bootnodes <bootstrap-node-
 With the member node running, it is possible to check that it is connected to the bootstrap node or any other node in the network by attaching a console and running `admin.peers`. It may take up to a few seconds for the nodes to get connected.
 
 ```shell
-
 geth attach data2/geth.ipc --exec admin.peers
-
 ```
 
 ### Running A Signer (Clique)
@@ -234,9 +218,7 @@ geth attach data2/geth.ipc --exec admin.peers
 To set up Geth for signing blocks in Clique, a signer account must be available. The account must already be available as a keyfile in the keystore. To use it for signing blocks, it must be unlocked. The following command, for address `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82` will prompt for the account password, then start signing blocks:
 
 ```shell
-
 geth <other-flags> --unlock 0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82 --mine
-
 ```
 
 Mining can be further configured by changing the default gas limit blocks converge to (with `--miner.gastarget`) and the price transactions are accepted at (with `--miner.gasprice`).
@@ -264,9 +246,7 @@ This section will run through the commands for setting up a simple private netwo
 Each node will have an associated account that will receive some ether at launch. The following command creates an account for Node 1:
 
 ```shell
-
 geth --datadir node1 account new
-
 ```
 
 This command returns a request for a password. Once a password has been provided the following information is returned to the terminal:
@@ -285,7 +265,6 @@ Path of the secret key file: node1/keystore/UTC--2022-05-13T14-25-49.229126160Z-
 - You must NEVER share the secret key with anyone! The key controls access to your funds!
 - You must BACKUP your key file! Without the key, it's impossible to access account funds!
 - You muist remember your password! Without the password, it's impossible to decrypt the key!
-
 ```
 
 The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in eachnode's data directory.
@@ -296,7 +275,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
 ```json
 {
   "config": {
-    "chainId": 0012345,
+    "chainId": 12345,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,
@@ -323,15 +302,12 @@ In each data directory save a copy of the following `genesis.json` to the top le
 The nodes can now be set up using `geth init` as follows:
 
 ```shell
-
 geth init --datadir node1 genesis.json
-
 ```
 
 This should be repeated for both nodes. The following will be returned to the terminal:
 
 ```terminal
-
 INFO [05-13|15:41:47.520] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [05-13|15:41:47.520] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
 INFO [05-13|15:41:47.520] Set global gas cap                       cap=50,000,000
@@ -343,42 +319,33 @@ INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/hom
 INFO [05-13|15:41:47.556] Writing custom genesis block 
 INFO [05-13|15:41:47.557] Persisted trie from memory database      nodes=3 size=397.00B time="81.801µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=lightchaindata hash=c9a158..d415a0
-
 ```
 
 The next step is to configure a bootnode. This can be any node, but for this tutorial the developer tool `bootnode` will be used to quickly and easily configure a dedicated bootnode. First the bootnode requires a key, which can be created with the following command, which will save a key to `boot.key`:
 
 ```shell
-
 bootnode -genkey boot.key 
-
 ```
 
 This key can then be used to generate a bootnode as follows:
 
 ```
-
 bootnode -nodekey boot.key -addr :30305
-
 ```
 
 The choice of port passed to `-addr` is arbitrary, but public Ethereum networks use 30303, so this is best avoided. The `bootnode` command returns the following logs to the terminal, confirming that it is running:
 
 ```terminal
-
 enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305
 Note: you're using cmd/bootnode, a developer tool.
 We recommend using a regular node as bootstrap node for production deployments.
 INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
-
 ```
 
 The two nodes can now be started. Open separate terminals for each node, leaving the bootnode running in the original terminal. In each terminal, run the following command (replacing `node1` with `node2` where appropriate, and giving each node a different port ID. The account address and password file for node 1 must also be provided:
 
 ```shell
-
 ./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt
-
 ```
 
 This will start the node using the bootnode as an entry point. Repeat the same command with the information appropriate to node 2. In each terminal, the following logs indicate success:
@@ -409,15 +376,11 @@ INFO [05-13|16:17:43.309] Mapped network port                      proto=tcp ext
 INFO [05-13|16:17:43.822] Mapped network port                      proto=udp extport=30306 intport=30306 interface="UPNP IGDv1-IP1"
 [05-13|16:17:50.150] Looking for peers                        peercount=0 tried=0 static=0
 INFO [05-13|16:18:00.164] Looking for peers                        peercount=0 tried=0 static=0
-
-
-
 ```
 
 In the first terminal that is currently running the logs resembling the following will be displayed, showing the discovery process in action:
 
 ```terminal
-
 INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453,403,645 id=a2d37f4a7d515b3a ip=nil udp=0 tcp=0
 TRACE[05-13|16:15:49.228]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:49.229]  PONG/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
@@ -436,38 +399,30 @@ TRACE[05-13|16:15:51.232]  NEIGHBORS/v4                          id=f1364e6d060c
 TRACE[05-13|16:15:52.591]  FINDNODE/v4                           id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:52.591]  NEIGHBORS/v4                          id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
 TRACE[05-13|16:15:57.767]  PING/v4                               id=f1364e6d060c4625 addr=127.0.0.1:30306 err=nil
-
 ```
 
 It is now possible to attach a Javascript console to either node to query the network properties:
 
 
 ```shell
-
 geth attach node1/geth.ipc
-
 ```
 
 Once the Javascript console is running, check that the node is connected to one other peer (node 2):
 
 ```shell
-
 net.peerCount
-
 ```
 
 The details of this peer can also be queried and used to check that the peer really is Node 2:
 
 ```
-
 admin.peers
-
 ```
 
 This should return the following:
 
 ```terminal
-
 [{
     caps: ["eth/66", "snap/1"],
     enode: "enode://6a4576fb12004aa13949dbf25de978102483a6521e6d5d87c5b7ccb1944bbf8995dc730303ae891732410b1dd2e684277e9292fc0a17372a789bb4e87bdf366b@127.0.0.1:30307",
@@ -491,15 +446,12 @@ This should return the following:
       }
     }
 }]
-
 ```
 
 The account associated with Node 1 was supposed to be funded with some ether at the chain genesis. This can be checked easily using `eth.getBalance()`:
 
 ```shell
-
 eth.getBalance(eth.accounts[0])
-
 ```
 
 This account can then be unlocked and some ether sent to Node 2, using the following commands:
@@ -523,7 +475,6 @@ The same steps can then be repeated to attach a console to Node 2.
 ## Summary
 
 This page explored the various options for configuring a local private network. A step by step guide showed how to set up and launch a private network, unlock the associated accounts, attach a console to check the network status and make some basic interactions.
-
 
 
 
