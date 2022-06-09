@@ -27,7 +27,7 @@ Example:
 ### Considerations
 
 1. notifications are sent for current events and not for past events. If your use case
-   requires you not to miss any notifications than subscriptions are probably not the best
+   requires you not to miss any notifications then subscriptions are probably not the best
    option.
 2. subscriptions require a full duplex connection. Geth offers such connections in the
    form of WebSocket and IPC (enabled by default).

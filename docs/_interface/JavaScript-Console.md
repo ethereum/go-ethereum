@@ -1,83 +1,147 @@
 ---
 title: JavaScript Console
-sort_key: B
+sort_key: D
 ---
 
-The Geth JavaScript console exposes the full [web3 JavaScript Dapp
-API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and further administrative
-APIs.
+Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed. 
 
-(note: the web3 version bundled within geth is very old, and not up to date with official docs)
+```
+curl --data '{"jsonrpc":"2.0","method":"eth_getBalance", "params": ["0x9b1d35635cc34752ca54713bb99d38614f63c955", "latest"], "id":2}' -H "Content-Type: application/json" localhost:8545
+```
 
-## Interactive Use: The Console
+This returns a result which is also a JSON object, with values expressed as hexadecimal strings, for example:
 
-The geth JavaScript console is started with the `console` or `attach` geth sub-commands.
-The `console` subcommands starts the geth node and then opens the console. The `attach`
-subcommand attaches to the console to an already-running geth instance.
+```terminal
+{"id":2,"jsonrpc":"2.0","result":"0x1639e49bba16280000"}
+```
 
-    geth console
-    geth attach
+While this approach is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). This is a collection of Javascript libraries for interacting with an Ethereum node at a higher level than sending raw JSON objects to the node. The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
-Attach mode accepts an endpoint in case the geth node is running with a non default
-ipc endpoint or you would like to connect over the rpc interface.
+{% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.jc documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/rpc/server)" %}
 
-    geth attach /some/custom/path.ipc
-    geth attach http://191.168.1.1:8545
-    geth attach ws://191.168.1.1:8546
 
-Note that by default the geth node doesn't start the HTTP and WebSocket servers and not
-all functionality is provided over these interfaces for security reasons. These defaults
-can be overridden with the `--http.api` and `--ws.api` arguments when the geth node is
-started, or with [admin.startRPC](../rpc/ns-admin#admin_startrpc) and
-[admin.startWS](../rpc/ns-admin#admin_startws).
+## Starting the console
 
-If you need log information, start with:
+There are two ways to start an interactive session using Geth console. The first is to provide the `console` command when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
 
-    geth console --verbosity 5 2>> /tmp/eth.log
+```shell
+# to mute logs
+geth <other flags> console 2> /dev/null
 
-Otherwise mute your logs, so that it does not pollute your console:
+# to save logs to file
+geth <other flags> console --verbosity 3 2> geth-logs.log
+```
 
-    geth console 2> /dev/null
+Alternatively, a Javascript console can be attached to an existing Geth instance (i.e. one that is running in another terminal or remotely). In this case, `geth attach` can be used to open a Javascript console connected to the Geth node. It is also necessary to define the method used to connect the console to the node. Geth supports websockets, HTTP or local IPC. To use HTTP or Websockets, these must be enabled at the node by providing the following flags at startup:
 
-Geth has support to load custom JavaScript files into the console through the `--preload`
-option. This can be used to load often used functions, or to setup web3 contract objects.
+```shell
+# enable websockets
+geth <other flags> --ws
 
-    geth console --preload "/my/scripts/folder/utils.js,/my/scripts/folder/contracts.js"
+# enable http
+
+geth <other flags> --http
+```
+
+The commands above use default HTTP/WS endpoints and only enables the default JSON-RPC libraries. To update the Websockets or HTTP endpoints used, or to add support for additional libraries, the `.addr` `.port` and `.api` flags can be used as follows:
+
+```shell
+# define a custom http adress, custom http port and enable libraries
+geth <other commands> --http --http.addr 192.60.52.21 --http.port 8552 --http.api eth,web3,admin
+
+# define a custom Websockets address and enable libraries
+geth <other commands> --ws --ws.addr 192.60.52.21 --ws.port 8552 --ws.api eth,web3,admin
+```
+
+It is important to note that by default **some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled**. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is not recommended if there is any chance of the node connecting to Ethereum Mainnet. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**"
+
+The Javascript console can also be connected to a Geth node using IPC. When Geth is started, a `geth.ipc` file is automatically generated and saved to the data directory. This file, or a custom path to a specific ipc file can be passed to `geth attach` as follows:
+
+```shell
+geth attach datadir/geth.ipc
+```
+
+Once started, the console looks like this:
+
+```terminal
+Welcome to the Geth Javascript console!
+
+instance: Geth/v1.10.18-unstable-8d85a701-20220503/linux-amd64/go1.18.1
+coinbase: 0x281aabb85c68e1638bb092750a0d9bb06ba103ee
+at block: 12305815 (Thu May 26 2022 16:16:00 GMT+0100 (BST))
+  datadir: /home/go-ethereum/data
+  modules: admin:1.0 debug:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0
+
+To exit, press ctrl-d or type exit
+>
+```
+
+
+## Interactive use
+
+Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/rpc/server). For example, to create an account:
+
+```js
+personal.newAccount()
+```
+
+To check the balance of the first account already existing in the keystore:
+
+```js
+eth.getBalance(personal.listAccounts[0])
+```
+
+
+To make a transaction (without global account unlocking):
+
+```js
+personal.sendTransaction({to: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.5, "ether")})
+```
+
+It is also possible to load pre-written Javascript files into the console by passing the `--preload` flag
+when starting the console. This is useful for setting up complex contract objects or loading frequently-used
+functions.
+
+
+```shell
+geth console --preload "/my/scripts/folder/utils.js"
+```
+
+Once the interactive session is over, the console can be closed down by typing `exit` or `CTRL-D`.
 
 ## Non-interactive Use: Script Mode
 
-It's also possible to execute files to the JavaScript interpreter. The `console` and
-`attach` subcommand accept the `--exec` argument which is a javascript statement.
+It is also possible to execute JavaScript code non-interactively by passing the `--exec` and a JSON-RPC-API endpoint 
+to `geth attach` or `geth console`. The result is displayed directly in the terminal rather than in an interactive Javascript console.
 
-    geth attach --exec "eth.blockNumber"
+For example, to display the accounts in the keystore:
 
-This prints the current block number of a running geth instance.
+```shell
+geth attach --exec eth.accounts
+```
 
-Or execute a local script with more complex statements on a remote node over http:
 
-    geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
-    geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("checkbalances.js")'
+```shell
+geth attach --exec eth.blockNumber
+```
 
-Use the `--jspath <path/to/my/js/root>` to set a library directory for your js scripts.
-Parameters to `loadScript()` with no absolute path will be understood relative to this
-directory.
+The same syntax can be used to execute a local script file with more complex statements on a remote node over http, for example:
 
-You can exit the console by typing `exit` or simply with `CTRL-C`.
+```shell
+geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
+
+geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("checkbalances.js")'
+```
+
+The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()`
+that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
+
+
+## Timers
+
+In addition to the full functionality of JS (as per ECMA5), the Ethereum Javascript Runtime Environment (JSRE) is augmented with various timers. It implements `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout` which some users will be familiar with from browser windows. It also provides implementation for `admin.sleep(seconds)` and a block based timer, `admin.sleepBlocks(n)` which sleeps till the number of new blocks added is equal to or greater than `n`.
+
 
 ## Caveats
 
-go-ethereum now uses the [GoJa JS VM](https://github.com/dop251/goja) which is compatible with ECMAScript 5.1. There are some limitations though:
-
-  * Promises and `async` won't work.
-
-`web3.js` uses the [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) library.
-This library is auto-loaded into the console.
-
-### Timers
-
-In addition to the full functionality of JS (as per ECMA5), the ethereum JSRE is augmented
-with various timers. It implements `setInterval`, `clearInterval`, `setTimeout`,
-`clearTimeout` you may be used to using in browser windows. It also provides
-implementation for `admin.sleep(seconds)` and a block based timer, `admin.sleepBlocks(n)`
-which sleeps till the number of new blocks added is equal to or greater than `n`, think
-"wait for n confirmations".
+Geth's console is built using the [GoJa JS Virtual Machine](https://github.com/dop251/goja) which is compatible with ECMAScript 5.1. This does not support promises or `async` functions. Web3js depends upon the `bignumber.js` library. This is auto-loaded into the console.

@@ -62,3 +62,16 @@ table thead tr th, table tbody tr td {
 .navbar-input-group-fixup {
     margin-top: 5px;
 }
+
+
+img{
+    width: 300px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem
+}
+
+img[alt="Remix"]{
+    width: 800px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}

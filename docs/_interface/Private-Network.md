@@ -36,6 +36,7 @@ Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensu
 
 Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
+
 [clique-eip]: https://eips.ethereum.org/EIPS/eip-225
 
 

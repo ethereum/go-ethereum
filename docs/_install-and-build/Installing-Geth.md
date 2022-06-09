@@ -89,7 +89,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 The easiest way to install Geth is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
 
-Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version followign the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
+Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version following the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
 ### FreeBSD via pkg
 
