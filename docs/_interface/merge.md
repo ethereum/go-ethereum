@@ -33,7 +33,7 @@ In advance of the Mainnet merge, several public testnets will transition from Po
 The first public testnet to merge will be Ropsten. As the Ropsten merge approaches, Geth
 users will need to prepare to ensure a smooth transition.
 
-{% include note.html content="The merge event did not go smoothly on Ropsten. Use `--override.terminaltotaldifficulty 100000000000000000000000` when launching Geth for Ropsten." %}
+{% include note.html content="The merge event did not go smoothly on Ropsten. Use `--override.terminaltotaldifficulty 50000000000000000` when launching Geth for Ropsten." %}
 
 ### Consensus client
 
@@ -65,7 +65,7 @@ case for Ropsten, Geth will:
 This is what it looks like by default:
 
 ```shell
-geth --ropsten --datadir ~/.ropsten --override.terminaltotaldifficulty 100000000000000000000000
+geth --ropsten --datadir ~/.ropsten --override.terminaltotaldifficulty 50000000000000000
 ```
 
 ```terminal
@@ -88,7 +88,7 @@ openssl rand -hex 32 | tr -d "\n" > "/tmp/jwtsecret"
 Now configure authentication using Geth flags:
 
 ```shell
-geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret --override.terminaltotaldifficulty 100000000000000000000000
+geth --ropsten --datadir ~/.ropsten --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret --override.terminaltotaldifficulty 50000000000000000
 ```
 
 [engineapi]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
