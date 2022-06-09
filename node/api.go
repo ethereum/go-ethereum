@@ -37,7 +37,6 @@ func (n *Node) apis() []rpc.API {
 			Namespace: "admin",
 			Version:   "1.0",
 			Service:   &adminAPI{n},
-			Public:    true,
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
@@ -46,7 +45,6 @@ func (n *Node) apis() []rpc.API {
 			Namespace: "web3",
 			Version:   "1.0",
 			Service:   &web3API{n},
-			Public:    true,
 		},
 	}
 }

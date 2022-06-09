@@ -296,32 +296,26 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},
-			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
-			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   filters.NewFilterAPI(s.ApiBackend, true, 5*time.Minute),
-			Public:    true,
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,
-			Public:    true,
 		}, {
 			Namespace: "les",
 			Version:   "1.0",
 			Service:   NewLightAPI(&s.lesCommons),
-			Public:    false,
 		}, {
 			Namespace: "vflux",
 			Version:   "1.0",
 			Service:   s.serverPool.API(),
-			Public:    false,
 		},
 	}...)
 }

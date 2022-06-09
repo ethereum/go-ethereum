@@ -310,22 +310,18 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   NewEthereumAPI(s),
-			Public:    true,
 		}, {
 			Namespace: "miner",
 			Version:   "1.0",
 			Service:   NewMinerAPI(s),
-			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
-			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   filters.NewFilterAPI(s.APIBackend, false, 5*time.Minute),
-			Public:    true,
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
@@ -334,12 +330,10 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewDebugAPI(s),
-			Public:    true,
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,
-			Public:    true,
 		},
 	}...)
 }
