@@ -1022,7 +1022,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
 		if !w.chainConfig.IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, gasTarget)
 		}
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
