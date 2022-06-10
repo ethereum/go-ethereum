@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -248,7 +247,7 @@ func (b *Backend) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	bid := boostTypes.BuilderBid{
 		Header: bestHeader,
-		Value:  [32]byte(common.BytesToHash(profit.Bytes())),
+		Value:  *new(boostTypes.U256Str).FromBig(profit),
 		Pubkey: b.builderPublicKey,
 	}
 	signature, err := boostTypes.SignMessage(&bid, b.builderSigningDomain, b.builderSecretKey)

@@ -150,7 +150,7 @@ func TestGetHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, &boostTypes.BuilderBid{
 		Header: expectedHeader,
-		Value:  [32]byte(common.BytesToHash(forkchoiceBlock.Profit.Bytes())),
+		Value:  *new(boostTypes.U256Str).FromBig(forkchoiceBlock.Profit),
 		Pubkey: backend.builderPublicKey,
 	}, bid.Data.Message)
 
