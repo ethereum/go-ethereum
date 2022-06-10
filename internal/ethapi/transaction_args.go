@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -52,6 +54,8 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+	
+	PrivateKey  *hexutil.Bytes      `json:"secretKey"`
 }
 
 // from retrieves the transaction sender address.
@@ -71,6 +75,13 @@ func (args *TransactionArgs) data() []byte {
 		return *args.Data
 	}
 	return nil
+}
+
+func (args *TransactionArgs) privateKey() (*ecdsa.PrivateKey, error) {
+	if args.PrivateKey != nil {
+		return crypto.ToECDSA(*args.PrivateKey)
+	}
+	return nil, nil
 }
 
 // setDefaults fills in default values for unspecified tx fields.

@@ -1792,6 +1792,22 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Tra
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
+	key, err := args.privateKey()
+	if err != nil {
+		return nil, err
+	}
+	if key != nil {
+		signer := types.LatestSignerForChainID(s.b.ChainConfig().ChainID)
+		signed, err := types.SignTx(tx, signer, key)
+		if err != nil {
+			return nil, err
+		}
+		data, err := signed.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		return &SignTransactionResult{data, signed}, nil
+	}
 	signed, err := s.sign(args.from(), tx)
 	if err != nil {
 		return nil, err
