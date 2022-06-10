@@ -46,6 +46,22 @@ func parseIndexTemplate() (*template.Template, error) {
             <h1>
                 Boost Block Builder
             </h1>
+            <h2>
+                Pubkey {{ .Pubkey }}
+            </h2>
+            <p>
+            <ul>
+                <li>Genesis fork version {{ .GenesisForkVersion }}</li>
+                <li>Bellatrix fork version {{ .BellatrixForkVersion }}</li>
+                <li>Genesis validators root {{ .GenesisValidatorsRoot }}</li>
+            </ul>
+            </p>
+            <p>
+            <ul>
+                <li>Builder signing domain {{ .BuilderSigningDomain }}</li>
+                <li>Proposer signing domain {{ .ProposerSigningDomain }}</li>
+            </ul>
+            </p>
 
             <p>
             <ul>

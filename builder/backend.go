@@ -41,6 +41,7 @@ type Backend struct {
 	builderSecretKey            *bls.SecretKey
 	builderPublicKey            boostTypes.PublicKey
 	serializedBuilderPoolPubkey hexutil.Bytes
+	fd                          ForkData
 	builderSigningDomain        boostTypes.Domain
 	proposerSigningDomain       boostTypes.Domain
 	enableBeaconChecks          bool
@@ -56,7 +57,13 @@ type Backend struct {
 	indexTemplate *template.Template
 }
 
-func NewBackend(sk *bls.SecretKey, bc IBeaconClient, builderSigningDomain boostTypes.Domain, proposerSigningDomain boostTypes.Domain, enableBeaconChecks bool) *Backend {
+type ForkData struct {
+	GenesisForkVersion    string
+	BellatrixForkVersion  string
+	GenesisValidatorsRoot string
+}
+
+func NewBackend(sk *bls.SecretKey, bc IBeaconClient, fd ForkData, builderSigningDomain boostTypes.Domain, proposerSigningDomain boostTypes.Domain, enableBeaconChecks bool) *Backend {
 	pkBytes := bls.PublicKeyFromSecretKey(sk).Compress()
 	pk := boostTypes.PublicKey{}
 	pk.FromSlice(pkBytes)
@@ -77,6 +84,7 @@ func NewBackend(sk *bls.SecretKey, bc IBeaconClient, builderSigningDomain boostT
 		builderPublicKey:            pk,
 		serializedBuilderPoolPubkey: pkBytes,
 
+		fd:                    fd,
 		builderSigningDomain:  builderSigningDomain,
 		proposerSigningDomain: proposerSigningDomain,
 		enableBeaconChecks:    enableBeaconChecks,
@@ -107,10 +115,16 @@ func (b *Backend) handleIndex(w http.ResponseWriter, req *http.Request) {
 	}
 
 	statusData := struct {
-		NoValidators int
-		Header       string
-		Blocks       string
-	}{noValidators, string(headerData), string(payloadData)}
+		Pubkey                string
+		NoValidators          int
+		GenesisForkVersion    string
+		BellatrixForkVersion  string
+		GenesisValidatorsRoot string
+		BuilderSigningDomain  string
+		ProposerSigningDomain string
+		Header                string
+		Blocks                string
+	}{hexutil.Encode(b.serializedBuilderPoolPubkey), noValidators, b.fd.GenesisForkVersion, b.fd.BellatrixForkVersion, b.fd.GenesisValidatorsRoot, hexutil.Encode(b.builderSigningDomain[:]), hexutil.Encode(b.proposerSigningDomain[:]), string(headerData), string(payloadData)}
 
 	if err := b.indexTemplate.Execute(w, statusData); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

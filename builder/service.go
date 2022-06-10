@@ -98,7 +98,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *BuilderConfig) error
 	var beaconClient IBeaconClient
 	beaconClient = NewBeaconClient(cfg.BeaconEndpoint)
 
-	builderBackend := NewBackend(sk, beaconClient, builderSigningDomain, proposerSigningDomain, cfg.EnableValidatorChecks)
+	builderBackend := NewBackend(sk, beaconClient, ForkData{cfg.GenesisForkVersion, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot}, builderSigningDomain, proposerSigningDomain, cfg.EnableValidatorChecks)
 	builderService := NewService(cfg.ListenAddr, builderBackend)
 	builderService.Start()
 

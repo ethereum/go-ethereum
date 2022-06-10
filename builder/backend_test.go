@@ -26,7 +26,7 @@ func newTestBackend(t *testing.T) (*Backend, *ValidatorPrivateData) {
 	bDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, boostTypes.Hash{})
 	genesisValidatorsRoot := boostTypes.Hash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"))
 	cDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeBeaconProposer, [4]byte{0x02, 0x0, 0x0, 0x0}, genesisValidatorsRoot)
-	backend := NewBackend(sk, &testBeaconClient{validator}, bDomain, cDomain, true)
+	backend := NewBackend(sk, &testBeaconClient{validator}, ForkData{}, bDomain, cDomain, true)
 	// service := NewService("127.0.0.1:31545", backend)
 
 	return backend, validator
@@ -230,4 +230,9 @@ func TestGetPayload(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), getPayloadResponse)
 	require.NoError(t, err)
 	require.Equal(t, bid.Data.Message.Header.BlockHash, getPayloadResponse.Data.BlockHash)
+}
+
+func TestXxx(t *testing.T) {
+	sk, _ := bls.GenerateRandomSecretKey()
+	fmt.Println(hexutil.Encode(sk.Serialize()))
 }
