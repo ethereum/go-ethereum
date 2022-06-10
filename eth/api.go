@@ -41,8 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// EthereumAPI provides an API to access Ethereum full node-related
-// information.
+// EthereumAPI provides an API to access Ethereum full node-related information.
 type EthereumAPI struct {
 	e *Ethereum
 }
@@ -73,12 +72,11 @@ func (api *EthereumAPI) Mining() bool {
 }
 
 // MinerAPI provides an API to control the miner.
-// It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type MinerAPI struct {
 	e *Ethereum
 }
 
-// NewMinerAPI create a new PublicMinerAPI instance.
+// NewMinerAPI create a new MinerAPI instance.
 func NewMinerAPI(e *Ethereum) *MinerAPI {
 	return &MinerAPI{e}
 }
@@ -136,14 +134,13 @@ func (api *MinerAPI) SetRecommitInterval(interval int) {
 	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
-// AdminAPI is the collection of Ethereum full node-related APIs
-// exposed over the private admin endpoint.
+// AdminAPI is the collection of Ethereum full node related APIs for node
+// administration.
 type AdminAPI struct {
 	eth *Ethereum
 }
 
-// NewAdminAPI creates a new API definition for the full node private
-// admin methods of the Ethereum service.
+// NewAdminAPI creates a new instance of AdminAPI.
 func NewAdminAPI(eth *Ethereum) *AdminAPI {
 	return &AdminAPI{eth: eth}
 }
@@ -246,14 +243,13 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-// DebugAPI is the collection of Ethereum full node APIs exposed
-// over the public debugging endpoint.
+// DebugAPI is the collection of Ethereum full node APIs for debugging the
+// protocol.
 type DebugAPI struct {
 	eth *Ethereum
 }
 
-// NewDebugAPI creates a new API definition for the full node-
-// related public debug methods of the Ethereum service.
+// NewDebugAPI creates a new DebugAPI instance.
 func NewDebugAPI(eth *Ethereum) *DebugAPI {
 	return &DebugAPI{eth: eth}
 }

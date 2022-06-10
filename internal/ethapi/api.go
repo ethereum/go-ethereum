@@ -49,7 +49,6 @@ import (
 )
 
 // EthereumAPI provides an API to access Ethereum related information.
-// It offers only methods that operate on public data that is freely available to anyone.
 type EthereumAPI struct {
 	b Backend
 }
@@ -258,12 +257,12 @@ type EthereumAccountAPI struct {
 	am *accounts.Manager
 }
 
-// NewEthereumAccountAPI creates a new PublicAccountAPI.
+// NewEthereumAccountAPI creates a new EthereumAccountAPI.
 func NewEthereumAccountAPI(am *accounts.Manager) *EthereumAccountAPI {
 	return &EthereumAccountAPI{am: am}
 }
 
-// Accounts returns the collection of accounts this node manages
+// Accounts returns the collection of accounts this node manages.
 func (s *EthereumAccountAPI) Accounts() []common.Address {
 	return s.am.Accounts()
 }
@@ -277,7 +276,7 @@ type PersonalAccountAPI struct {
 	b         Backend
 }
 
-// NewPersonalAccountAPI create a new PrivateAccountAPI.
+// NewPersonalAccountAPI create a new PersonalAccountAPI.
 func NewPersonalAccountAPI(b Backend, nonceLock *AddrLocker) *PersonalAccountAPI {
 	return &PersonalAccountAPI{
 		am:        b.AccountManager(),
@@ -599,8 +598,7 @@ func (s *PersonalAccountAPI) Unpair(ctx context.Context, url string, pin string)
 	}
 }
 
-// BlockChainAPI provides an API to access the Ethereum blockchain.
-// It offers only methods that operate on public data that is freely available to anyone.
+// BlockChainAPI provides an API to access Ethereum blockchain data.
 type BlockChainAPI struct {
 	b Backend
 }
@@ -610,7 +608,7 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 	return &BlockChainAPI{b}
 }
 
-// ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
+// ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
 func (api *BlockChainAPI) ChainId() (*hexutil.Big, error) {
 	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
 	if config := api.b.ChainConfig(); config.IsEIP155(api.b.CurrentBlock().Number()) {
@@ -1216,7 +1214,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 }
 
 // rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainAPI`.
+// a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
 	fields := RPCMarshalHeader(header)
 	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(ctx, header.Hash()))
@@ -1224,7 +1222,7 @@ func (s *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Head
 }
 
 // rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
-// a `PublicBlockchainAPI`.
+// a `BlockchainAPI`.
 func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
 	fields, err := RPCMarshalBlock(b, inclTx, fullTx, s.b.ChainConfig())
 	if err != nil {
@@ -1447,14 +1445,14 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 }
 
-// TransactionAPI exposes methods for the RPC interface
+// TransactionAPI exposes methods for reading and creating transaction data.
 type TransactionAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
 	signer    types.Signer
 }
 
-// NewTransactionAPI creates a new RPC service with methods specific for the transaction pool.
+// NewTransactionAPI creates a new RPC service with methods for interacting with transactions.
 func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 	// The signer used by the API should always be the 'latest' known one because we expect
 	// signers to be backwards-compatible with old transactions.
@@ -1875,14 +1873,13 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 	return common.Hash{}, fmt.Errorf("transaction %#x not found", matchTx.Hash())
 }
 
-// DebugAPI is the collection of Ethereum APIs exposed over the public
-// debugging endpoint.
+// DebugAPI is the collection of Ethereum APIs exposed over the debugging
+// namespace.
 type DebugAPI struct {
 	b Backend
 }
 
-// NewDebugAPI creates a new API definition for the public debug methods
-// of the Ethereum service.
+// NewDebugAPI creates a new instance of DebugAPI.
 func NewDebugAPI(b Backend) *DebugAPI {
 	return &DebugAPI{b: b}
 }
