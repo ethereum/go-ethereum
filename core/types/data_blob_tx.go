@@ -360,8 +360,10 @@ func (tx *BlobTxMessage) copy() *BlobTxMessage {
 		To:                  AddressOptionalSSZ{Address: (*AddressSSZ)(copyAddressPtr((*common.Address)(tx.To.Address)))},
 		Value:               tx.Value,
 		Data:                common.CopyBytes(tx.Data),
+		AccessList:          make([]AccessTuple, len(tx.AccessList)),
 		BlobVersionedHashes: make([]common.Hash, len(tx.BlobVersionedHashes)),
 	}
+	copy(cpy.AccessList, tx.AccessList)
 	copy(cpy.BlobVersionedHashes, tx.BlobVersionedHashes)
 
 	return cpy
