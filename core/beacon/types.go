@@ -124,7 +124,7 @@ type ForkchoiceStateV1 struct {
 func encodeTransactions(txs []*types.Transaction) [][]byte {
 	var enc = make([][]byte, len(txs))
 	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
+		enc[i], _ = tx.MarshalMinimal()
 	}
 	return enc
 }
