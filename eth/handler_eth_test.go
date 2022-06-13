@@ -278,7 +278,8 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
-	if err := src.SendTransactions([]*types.Transaction{tx}); err != nil {
+	ntx := types.NewNetworkTransaction(tx)
+	if err := src.SendTransactions([]*types.NetworkTransaction{ntx}); err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
 	select {

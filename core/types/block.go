@@ -232,25 +232,25 @@ func (tx *minimalTx) EncodeRLP(w io.Writer) error {
 // a view over a regular transactions slice, to RLP decode/encode the transactions all the minimal way
 type extBlockTxs []*Transaction
 
-func (txs *extBlockTxs) DecodeRLP(s *rlp.Stream) error {
+func (txs extBlockTxs) DecodeRLP(s *rlp.Stream) error {
 	// we need generics to do this nicely...
 	var out []*minimalTx
-	for i, tx := range *txs {
+	for i, tx := range txs {
 		out[i] = (*minimalTx)(tx)
 	}
 	if err := s.Decode(&out); err != nil {
 		return fmt.Errorf("failed to decode list of minimal txs: %v", err)
 	}
-	*txs = make([]*Transaction, len(out))
+	txs = make([]*Transaction, len(out))
 	for i, tx := range out {
-		(*txs)[i] = (*Transaction)(tx)
+		txs[i] = (*Transaction)(tx)
 	}
 	return nil
 }
 
-func (txs *extBlockTxs) EncodeRLP(w io.Writer) error {
-	out := make([]*minimalTx, len(*txs))
-	for i, tx := range *txs {
+func (txs extBlockTxs) EncodeRLP(w io.Writer) error {
+	out := make([]*minimalTx, len(txs))
+	for i, tx := range txs {
 		out[i] = (*minimalTx)(tx)
 	}
 	return rlp.Encode(w, &out)
