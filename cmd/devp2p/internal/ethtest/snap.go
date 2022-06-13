@@ -104,6 +104,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		// Max bytes: 0. Expect to deliver one account.
 		{0, root, zero, ffHash, 1, firstKey, firstKey},
 	} {
+		tc := tc
 		if err := s.snapGetAccountRange(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\nfailed: %v", i, tc.root, tc.origin, tc.limit, tc.nBytes, err)
 		}
@@ -194,6 +195,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 			expSlots: 2,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetStorageRanges(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
 				i, tc.root, tc.origin, tc.limit, tc.nBytes, len(tc.accounts), err)
@@ -291,6 +293,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 			expHashes: 4,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetByteCodes(t, &tc); err != nil {
 			t.Errorf("test %d \n bytes: %d\n #hashes: %d\nfailed: %v", i, tc.nBytes, len(tc.hashes), err)
 		}
@@ -436,6 +439,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 			},
 		},
 	} {
+		tc := tc
 		if err := s.snapGetTrieNodes(t, &tc); err != nil {
 			t.Errorf("test %d \n #hashes %x\n root: %#x\n bytes: %d\nfailed: %v", i, len(tc.expHashes), tc.root, tc.nBytes, err)
 		}

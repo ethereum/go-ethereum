@@ -442,6 +442,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 		for _, conn := range snap.Conns {
+			conn := conn
 			event := NewEvent(&conn)
 			if err := writeEvent(event); err != nil {
 				writeErr(err)

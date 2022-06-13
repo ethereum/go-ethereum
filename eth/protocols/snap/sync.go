@@ -2781,7 +2781,7 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 	if len(paths) == 1 {
 		var account types.StateAccount
 		if err := rlp.DecodeBytes(value, &account); err != nil {
-			return nil
+			return nil // Returning the error here would drop the remote peer
 		}
 		blob := snapshot.SlimAccountRLP(account.Nonce, account.Balance, account.Root, account.CodeHash)
 		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
