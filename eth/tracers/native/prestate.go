@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -131,7 +132,7 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
+func (t *prestateTracer) CaptureTxStart(gasLimit uint64, acl types.AccessList) {
 	t.gasLimit = gasLimit
 }
 

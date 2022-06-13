@@ -882,9 +882,13 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Default tracer is the struct logger
 	tracer = logger.NewStructLogger(config.Config)
 	if config.Tracer != nil {
-		tracer, err = New(*config.Tracer, txctx)
-		if err != nil {
-			return nil, err
+		if *config.Tracer == "aclDiffTracer" {
+			tracer = logger.NewACLDiffTracer()
+		} else {
+			tracer, err = New(*config.Tracer, txctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	// Define a meaningful timeout of a single transaction trace

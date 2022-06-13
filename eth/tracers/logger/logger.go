@@ -263,7 +263,7 @@ func (l *StructLogger) Stop(err error) {
 	atomic.StoreUint32(&l.interrupt, 1)
 }
 
-func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
+func (l *StructLogger) CaptureTxStart(gasLimit uint64, acl types.AccessList) {
 	l.gasLimit = gasLimit
 }
 
@@ -396,7 +396,7 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
-func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
+func (*mdLogger) CaptureTxStart(gasLimit uint64, acl types.AccessList) {}
 
 func (*mdLogger) CaptureTxEnd(restGas uint64) {}
 

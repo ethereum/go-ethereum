@@ -289,7 +289,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	if st.evm.Config.Debug {
-		st.evm.Config.Tracer.CaptureTxStart(st.initialGas)
+		st.evm.Config.Tracer.CaptureTxStart(st.initialGas, st.msg.AccessList())
 		defer func() {
 			st.evm.Config.Tracer.CaptureTxEnd(st.gas)
 		}()

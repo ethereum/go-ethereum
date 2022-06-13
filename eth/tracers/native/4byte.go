@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -131,7 +132,7 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
 
-func (*fourByteTracer) CaptureTxStart(gasLimit uint64) {}
+func (*fourByteTracer) CaptureTxStart(gasLimit uint64, acl types.AccessList) {}
 
 func (*fourByteTracer) CaptureTxEnd(restGas uint64) {}
 

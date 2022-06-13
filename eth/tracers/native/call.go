@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
@@ -142,7 +143,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (*callTracer) CaptureTxStart(gasLimit uint64) {}
+func (*callTracer) CaptureTxStart(gasLimit uint64, acl types.AccessList) {}
 
 func (*callTracer) CaptureTxEnd(restGas uint64) {}
 
