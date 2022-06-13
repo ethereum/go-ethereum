@@ -315,7 +315,7 @@ func TestInternalType(t *testing.T) {
 		TupleType: reflect.TypeOf(struct {
 			A int64 `json:"a"`
 		}{}),
-		stringKind:    "(int64)",
+		stringKind:    "ab[](int64)",
 		TupleRawName:  "ab[]",
 		TupleElems:    []*Type{{T: IntTy, Size: 64, stringKind: "int64"}},
 		TupleRawNames: []string{"a"},

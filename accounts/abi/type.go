@@ -211,6 +211,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			// Foo.Bar type definition is not allowed in golang,
 			// convert the format to FooBar
 			typ.TupleRawName = strings.ReplaceAll(internalType[len(structPrefix):], ".", "")
+			typ.stringKind = typ.TupleRawName + expression
 		}
 
 	case "function":
