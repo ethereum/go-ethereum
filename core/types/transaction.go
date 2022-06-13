@@ -137,7 +137,6 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	// TODO(EIP-4844): Ensure that we use encodeTyped when gossiping transactions
 	if err := tx.encodeTypedMinimal(buf); err != nil {
 		return err
 	}
@@ -817,3 +816,63 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	cpy := *a
 	return &cpy
 }
+
+// NetworkTransaction is a Transaction wrapper that encodes its maximal representation
+type NetworkTransaction struct {
+	Tx *Transaction
+}
+
+func NewNetworkTransaction(tx *Transaction) *NetworkTransaction {
+	return &NetworkTransaction{Tx: tx}
+}
+
+// EncodeRLP implements rlp.Encoder
+func (tx *NetworkTransaction) EncodeRLP(w io.Writer) error {
+	if tx.Tx.Type() == LegacyTxType {
+		return rlp.Encode(w, tx.Tx)
+	}
+	// It's an EIP-2718 typed TX envelope.
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	if err := tx.Tx.encodeTyped(buf); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
+}
+
+// DecodeRLP implements rlp.Decoder
+func (tx *NetworkTransaction) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var inner LegacyTx
+		err := s.Decode(&inner)
+		if err == nil {
+			tx.Tx.setDecoded(&inner, int(rlp.ListSize(size)))
+		}
+		return err
+	default:
+		// It's an EIP-2718 typed TX envelope.
+		var b []byte
+		if b, err = s.Bytes(); err != nil {
+			return err
+		}
+		inner, wrapData, err := tx.Tx.decodeTyped(b)
+		if err == nil {
+			tx.Tx.setDecoded(inner, len(b))
+			tx.Tx.wrapData = wrapData
+		}
+		return err
+	}
+}
+
+// Hash returns the transaction hash.
+func (tx *NetworkTransaction) Hash() common.Hash {
+	return tx.Tx.Hash()
+}
+
+type NetworkTransactions []*NetworkTransaction
