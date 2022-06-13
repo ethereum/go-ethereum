@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -112,11 +113,11 @@ const deployedCode = `60806040526004361061003b576000357c010000000000000000000000
 // expected return value contains "hello world"
 var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-func simTestBackend(testAddr common.Address) *SimulatedBackend {
+func simTestBackend(testAddr common.Address, opts ...Option) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
-		}, 10000000,
+		}, 10000000, opts...,
 	)
 }
 
@@ -1054,6 +1055,140 @@ func TestPendingAndCallContract(t *testing.T) {
 
 	if !bytes.Equal(res, expectedReturn) || !strings.Contains(string(res), "hello world") {
 		t.Errorf("response from calling contract was expected to be 'hello world' instead received %v", string(res))
+	}
+}
+
+func TestVMConfigCloning(t *testing.T) {
+	// vm.Config was previously only honoured by SendTransaction() and ignored
+	// by CallContract(), PendingCallContract(), and EstimateGas().
+	tests := []struct {
+		name                                                      string
+		opts                                                      []Option
+		wantCallClone, wantPendingCallClone, wantEstimageGasClone bool
+	}{
+		{
+			name:                 "default behaviour",
+			wantCallClone:        false,
+			wantPendingCallClone: false,
+			wantEstimageGasClone: false,
+		},
+		{
+			name:          "only clone on ContractCall()",
+			opts:          []Option{CloneVMConfigOnCall()},
+			wantCallClone: true,
+		},
+		{
+			name:                 "only clone on PendingContractCall()",
+			opts:                 []Option{CloneVMConfigOnPendingCall()},
+			wantPendingCallClone: true,
+		},
+		{
+			name:                 "only clone on EstimateGas()",
+			opts:                 []Option{CloneVMConfigOnEstimateGas()},
+			wantEstimageGasClone: true,
+		},
+		{
+			name: "always clone, based on individual options",
+			opts: []Option{
+				CloneVMConfigOnCall(),
+				CloneVMConfigOnPendingCall(),
+				CloneVMConfigOnEstimateGas(),
+			},
+			wantCallClone:        true,
+			wantPendingCallClone: true,
+			wantEstimageGasClone: true,
+		},
+		{
+			name:                 "always clone, based on AlwaysCloneVMConfig() singular option",
+			opts:                 []Option{AlwaysCloneVMConfig()},
+			wantCallClone:        true,
+			wantPendingCallClone: true,
+			wantEstimageGasClone: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+			sim := simTestBackend(testAddr, tt.opts...)
+			defer sim.Close()
+			bgCtx := context.Background()
+
+			// To test behaviour of vm.Config cloning options, we inspect the
+			// number of entries in a struct trace. If cloned then there will be
+			// an entry, if not then no logs will be captured.
+			tracer := logger.NewStructLogger(&logger.Config{
+				Limit: 1,
+			})
+			cfg := sim.Blockchain().GetVMConfig()
+			cfg.Debug = true
+			cfg.Tracer = tracer
+
+			parsed, err := abi.JSON(strings.NewReader(abiJSON))
+			if err != nil {
+				t.Errorf("could not get code at test addr: %v", err)
+			}
+			contractAuth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
+			addr, _, _, err := bind.DeployContract(contractAuth, parsed, common.FromHex(abiBin), sim)
+			if err != nil {
+				t.Errorf("could not deploy contract: %v", err)
+			}
+
+			input, err := parsed.Pack("receive", []byte("X"))
+			if err != nil {
+				t.Errorf("could not pack receive function on contract: %v", err)
+			}
+
+			callMsg := ethereum.CallMsg{
+				From: testAddr,
+				To:   &addr,
+				Data: input,
+			}
+
+			for _, funcTest := range []struct {
+				name               string
+				fn                 func(context.Context) error
+				wantVMConfigCloned bool
+			}{
+				{
+					name: "PendingCallContract()",
+					fn: func(ctx context.Context) error {
+						_, err := sim.PendingCallContract(ctx, callMsg)
+						return err
+					},
+					wantVMConfigCloned: tt.wantPendingCallClone,
+				},
+				{
+					name: "CallContract()",
+					fn: func(ctx context.Context) error {
+						_, err := sim.CallContract(ctx, callMsg, nil)
+						return err
+					},
+					wantVMConfigCloned: tt.wantCallClone,
+				},
+				{
+					name: "EstimateGas()",
+					fn: func(ctx context.Context) error {
+						_, err := sim.EstimateGas(ctx, callMsg)
+						return err
+					},
+					wantVMConfigCloned: tt.wantEstimageGasClone,
+				},
+			} {
+				t.Run(funcTest.name, func(t *testing.T) {
+					tracer.Reset()
+
+					if err := funcTest.fn(bgCtx); err != nil {
+						t.Fatalf("%s got err %v; want nil err", funcTest.name, err)
+					}
+					if gotVMConfigCloned := len(tracer.StructLogs()) > 0; gotVMConfigCloned != funcTest.wantVMConfigCloned {
+						t.Errorf("%s got vm.Config cloned = %t; want %t", funcTest.name, gotVMConfigCloned, funcTest.wantVMConfigCloned)
+					}
+
+					sim.Commit()
+				})
+			}
+		})
 	}
 }
 

@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package backends provides implementations of bind.ContractBackend. Currently
+// only a SimulatedBackend for contract testing against a simulated blockchain
+// is provided.
 package backends
 
 import (
@@ -72,12 +75,26 @@ type SimulatedBackend struct {
 	filterSystem *filters.FilterSystem // for filtering database logs
 
 	config *params.ChainConfig
+
+	// cloneVMConfigOn flags when calls to SimulatedBackend.callContract() must
+	// clone the existing vm.Config instead of using a fresh one. Historically
+	// the Config was always overridden, so this remains the default behaviour.
+	cloneVMConfigOn struct {
+		call, pendingCall, estimateGas bool
+	}
+}
+
+// An Option configures a SimulatedBackend upon construction.
+type Option interface {
+	// isOption is not exported to block outside packages from implementing this
+	// interface. See options.go for implementations.
+	isOption()
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, opts ...Option) *SimulatedBackend {
 	genesis := core.Genesis{
 		Config:   params.AllEthashProtocolChanges,
 		GasLimit: gasLimit,
@@ -96,14 +113,30 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	backend.events = filters.NewEventSystem(backend.filterSystem, false)
 
 	backend.rollback(blockchain.CurrentBlock())
+
+	for _, o := range opts {
+		switch o.(type) {
+		case cloneOnCall:
+			backend.cloneVMConfigOn.call = true
+		case cloneOnPendingCall:
+			backend.cloneVMConfigOn.pendingCall = true
+		case cloneOnEstimateGas:
+			backend.cloneVMConfigOn.estimateGas = true
+		case alwaysCloneVMConfig:
+			backend.cloneVMConfigOn.call = true
+			backend.cloneVMConfigOn.pendingCall = true
+			backend.cloneVMConfigOn.estimateGas = true
+		}
+	}
+
 	return backend
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, opts ...Option) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, opts...)
 }
 
 // Close terminates the underlying blockchain's update loop.
@@ -438,7 +471,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
+	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB, b.cloneVMConfigOn.call)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +488,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.cloneVMConfigOn.pendingCall)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +582,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		call.Gas = gas
 
 		snapshot := b.pendingState.Snapshot()
-		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.cloneVMConfigOn.estimateGas)
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil {
@@ -599,7 +632,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB, cloneVMConfig bool) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -646,9 +679,14 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	txContext := core.NewEVMTxContext(msg)
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
+	var vmConfig vm.Config
+	if c := b.blockchain.GetVMConfig(); c != nil && cloneVMConfig {
+		vmConfig = *c
+	}
+	vmConfig.NoBaseFee = true
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
+	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vmConfig)
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
