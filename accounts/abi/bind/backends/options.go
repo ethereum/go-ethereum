@@ -23,7 +23,7 @@ type cloneOnCall struct {
 // CloneVMConfigOnCall instructs the SimulatedBackend to clone its Blockchain's
 // vm.Config when CallContract() is invoked. Historically, the Config was always
 // overrideen and this remains the default for backwards compatibility. The
-// Config's NoBaseFee field is always overriden to true.
+// Config's NoBaseFee field is always overridden to true.
 func CloneVMConfigOnCall() Option {
 	return cloneOnCall{}
 }
@@ -35,7 +35,7 @@ type cloneOnPendingCall struct {
 // CloneVMConfigOnPendingCall instructs the SimulatedBackend to clone its
 // Blockchain's vm.Config when PendingCallContract() is invoked. Historically,
 // the Config was always overrideen and this remains the default for backwards
-// compatibility. The Config's NoBaseFee field is always overriden to true.
+// compatibility. The Config's NoBaseFee field is always overridden to true.
 func CloneVMConfigOnPendingCall() Option {
 	return cloneOnPendingCall{}
 }
@@ -47,7 +47,7 @@ type cloneOnEstimateGas struct {
 // CloneVMConfigOnEstimateGas instructs the SimulatedBackend to clone its
 // Blockchain's vm.Config when EstimateGas() is invoked. Historically, the
 // Config was always overrideen and this remains the default for backwards
-// compatibility. The Config's NoBaseFee field is always overriden to true.
+// compatibility. The Config's NoBaseFee field is always overridden to true.
 func CloneVMConfigOnEstimateGas() Option {
 	return cloneOnEstimateGas{}
 }
