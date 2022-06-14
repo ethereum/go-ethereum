@@ -220,6 +220,24 @@ type batch struct {
 	size   int
 }
 
+type deferredBatchOp struct {
+	batch ethdb.Batch
+	key []byte
+	value []byte
+}
+
+func (b *deferredBatchOp) Key() []byte {
+	return b.key
+}
+
+func (b *deferredBatchOp) Value() []byte {
+	return b.value
+}
+
+func (b *deferredBatchOp) Finish() error {
+	return b.batch.Put(b.key, b.value)
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), common.CopyBytes(value), false})
@@ -227,8 +245,12 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-func (b *batch) PutDeferred(_, _ int) ethdb.DeferredOp {
-	panic("not implemented")
+func (b *batch) PutDeferred(keySize, valueSize int) ethdb.DeferredOp {
+	return &deferredBatchOp{
+		b,
+		make([]byte, keySize, keySize),
+		make([]byte, valueSize, valueSize),
+	}
 }
 
 // Delete inserts the a key removal into the batch for later committing.

@@ -397,7 +397,7 @@ func WriteHeaderBatch(batch ethdb.Batch, header *types.Header) {
 
 	key := headerKey(number, hash)
 	allocDeferred := func(size int) []byte {
-		deferredOp := batch.PutDeferred(len(key), size)
+		deferredOp = batch.PutDeferred(len(key), size)
 		return deferredOp.Value()
 	}
 
@@ -409,8 +409,6 @@ func WriteHeaderBatch(batch ethdb.Batch, header *types.Header) {
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
-
-	log.Crit("this should basically panic")
 
 	if err = deferredOp.Finish(); err != nil {
 		log.Crit("deferredOp.Finish failed", "err", err)
@@ -541,6 +539,25 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 		log.Crit("Failed to RLP encode body", "err", err)
 	}
 	WriteBodyRLP(db, hash, number, data)
+}
+
+func WriteBodyBatch(batch ethdb.Batch, hash common.Hash, number uint64, body *types.Body) {
+	var deferredOp ethdb.DeferredOp
+	key := blockBodyKey(number, hash)
+
+	allocDeferred := func(size int) []byte {
+		deferredOp = batch.PutDeferred(len(key), size)
+		return deferredOp.Value()
+	}
+	err := rlp.EncodeToBytesIntoBatch(body, allocDeferred)
+	if err != nil {
+		log.Crit("Failed to RLP encode body", "err", err)
+	}
+	copy(deferredOp.Key(), key)
+
+	if err = deferredOp.Finish(); err != nil {
+		log.Crit("DeferredOp.Finish failed", "err", err)
+	}
 }
 
 // DeleteBody removes all block body data associated with a hash.
@@ -687,6 +704,29 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
+	}
+}
+
+func WriteReceiptsBatch(batch ethdb.Batch, hash common.Hash, number uint64, receipts types.Receipts) {
+	var deferredOp ethdb.DeferredOp
+	// Convert the receipts into their storage form and serialize them
+	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+	for i, receipt := range receipts {
+		storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+	}
+
+	key := blockReceiptsKey(number, hash)
+	allocDeferred := func(size int) []byte {
+		deferredOp = batch.PutDeferred(len(key), size)
+		return deferredOp.Value()
+	}
+	err := rlp.EncodeToBytesIntoBatch(storageReceipts, allocDeferred)
+	if err != nil {
+		log.Crit("Failed to RLP encode header", "err", err)
+	}
+
+	if err = deferredOp.Finish(); err != nil {
+		log.Crit("deferredOp.Finish failed", "err", err)
 	}
 }
 
