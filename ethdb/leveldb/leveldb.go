@@ -476,6 +476,10 @@ type batch struct {
 	size int
 }
 
+func (b *batch) PutDeferred(_, _ int) ethdb.DeferredOp {
+	panic("not implemented")
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Put(key, value)

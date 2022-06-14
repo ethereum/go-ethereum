@@ -80,6 +80,18 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 	return buf.makeBytes(), nil
 }
 
+func EncodeToBytesIntoBatch(val interface{}, batchAllocator func(size int)[]byte) error {
+    buf := getEncBuffer()
+    defer encBufferPool.Put(buf)
+
+    if err := buf.encode(val); err != nil {
+        return err
+    }
+    batchSpace := batchAllocator(buf.size())
+    buf.copyTo(batchSpace)
+    return nil
+}
+
 // EncodeToReader returns a reader from which the RLP encoding of val
 // can be read. The returned size is the total size of the encoded
 // data.

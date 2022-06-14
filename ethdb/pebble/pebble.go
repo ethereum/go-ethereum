@@ -457,6 +457,23 @@ type batch struct {
 	size int
 }
 
+type DeferredBatchOp struct {
+	do pebble.DeferredBatchOp
+}
+
+func (d *DeferredBatchOp) Value() []byte {
+	return d.do.Value
+}
+
+func (d *DeferredBatchOp) Key() []byte {
+	return d.do.Key
+}
+
+func (b *batch) PutDeferred(keySize, valSize int) ethdb.DeferredOp {
+	do := b.PutDeferred(keySize, valSize)
+	return do
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Set(key, value, nil)

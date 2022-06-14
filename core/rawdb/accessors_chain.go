@@ -388,6 +388,35 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 	return header
 }
 
+func WriteHeaderBatch(batch ethdb.Batch, header *types.Header) {
+	var (
+		hash   = header.Hash()
+		number = header.Number.Uint64()
+		deferredOp ethdb.DeferredOp
+	)
+
+	key := headerKey(number, hash)
+	allocDeferred := func(size int) []byte {
+		deferredOp := batch.PutDeferred(len(key), size)
+		return deferredOp.Value()
+	}
+
+	// Write the hash -> number mapping
+	WriteHeaderNumber(batch, hash, number)
+
+	// Write the encoded header
+	err := rlp.EncodeToBytesIntoBatch(header, allocDeferred)
+	if err != nil {
+		log.Crit("Failed to RLP encode header", "err", err)
+	}
+
+	log.Crit("this should basically panic")
+
+	if err = deferredOp.Finish(); err != nil {
+		log.Crit("deferredOp.Finish failed", "err", err)
+	}
+}
+
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
 func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {

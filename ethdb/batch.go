@@ -20,6 +20,12 @@ package ethdb
 // write.
 const IdealBatchSize = 100 * 1024
 
+type DeferredOp interface {
+	Key() []byte
+	Value() []byte
+	Finish() error
+}
+
 // Batch is a write-only database that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type Batch interface {
@@ -36,6 +42,8 @@ type Batch interface {
 
 	// Replay replays the batch contents.
 	Replay(w KeyValueWriter) error
+
+	PutDeferred(keySize, valSize int) DeferredOp
 }
 
 // Batcher wraps the NewBatch method of a backing data store.

@@ -227,6 +227,10 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
+func (b *batch) PutDeferred(_, _ int) ethdb.DeferredOp {
+	panic("not implemented")
+}
+
 // Delete inserts the a key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{common.CopyBytes(key), nil, true})
