@@ -78,11 +78,10 @@ func (t *ACLDiffTracer) GetResult() (json.RawMessage, error) {
 		return nil, fmt.Errorf("Transaction not of type 1")
 	}
 	touched := t.tracer.list
-	diff, err := aclDiff(t.txACL, touched)
-	if err != nil {
-		return nil, err
-	}
-	res, err := json.Marshal(diff)
+	txACL := newAccessListFrom(t.txACL, nil)
+	excess := txACL.diff(touched).accessList()
+	unannounced := touched.diff(txACL).accessList()
+	res, err := json.Marshal(map[string]interface{}{"excess": excess, "unannounced": unannounced})
 	if err != nil {
 		return nil, err
 	}
@@ -94,28 +93,4 @@ func (t *ACLDiffTracer) GetResult() (json.RawMessage, error) {
 func (t *ACLDiffTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
-}
-
-// aclDiff returns a - b. b must be a subset of a.
-func aclDiff(a types.AccessList, b accessList) (types.AccessList, error) {
-	if len(b) > len(a) {
-		return nil, fmt.Errorf("Touched access list must be smaller than announced access list: %d vs %d", len(b), len(a))
-	}
-	res := newAccessList()
-	for _, al := range a {
-		bAcc, ok := b[al.Address]
-		// Whole account is missing
-		if !ok {
-			res.addAddress(al.Address)
-			for _, slot := range al.StorageKeys {
-				res.addSlot(al.Address, slot)
-			}
-		}
-		for _, slot := range al.StorageKeys {
-			if _, ok := bAcc[slot]; !ok {
-				res.addSlot(al.Address, slot)
-			}
-		}
-	}
-	return res.accessList(), nil
 }

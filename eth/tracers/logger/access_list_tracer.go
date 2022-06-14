@@ -38,6 +38,24 @@ func newAccessList() accessList {
 	return make(map[common.Address]accessListSlots)
 }
 
+// newAccessListFrom creates a new accessList from an instance of the core AccessList type.
+func newAccessListFrom(acl types.AccessList, excl map[common.Address]struct{}) accessList {
+	if excl == nil {
+		excl = make(map[common.Address]struct{})
+	}
+	res := newAccessList()
+	for _, al := range acl {
+		if _, ok := excl[al.Address]; ok {
+			continue
+		}
+		res.addAddress(al.Address)
+		for _, slot := range al.StorageKeys {
+			res.addSlot(al.Address, slot)
+		}
+	}
+	return res
+}
+
 // addAddress adds an address to the accesslist.
 func (al accessList) addAddress(address common.Address) {
 	// Set address if not previously present
@@ -101,6 +119,26 @@ func (al accessList) accessList() types.AccessList {
 	return acl
 }
 
+// diff returns `a - b`.
+func (a accessList) diff(b accessList) accessList {
+	res := newAccessList()
+	for addr, slots := range a {
+		bSlots, ok := b[addr]
+		// Whole account is missing
+		if !ok {
+			res.addAddress(addr)
+			// Add every slot
+			bSlots = make(accessListSlots)
+		}
+		for slot, _ := range slots {
+			if _, ok := bSlots[slot]; !ok {
+				res.addSlot(addr, slot)
+			}
+		}
+	}
+	return res
+}
+
 // AccessListTracer is a tracer that accumulates touched accounts and storage
 // slots into an internal set.
 type AccessListTracer struct {
@@ -118,15 +156,7 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	for _, addr := range precompiles {
 		excl[addr] = struct{}{}
 	}
-	list := newAccessList()
-	for _, al := range acl {
-		if _, ok := excl[al.Address]; !ok {
-			list.addAddress(al.Address)
-		}
-		for _, slot := range al.StorageKeys {
-			list.addSlot(al.Address, slot)
-		}
-	}
+	list := newAccessListFrom(acl, excl)
 	return &AccessListTracer{
 		excl: excl,
 		list: list,
