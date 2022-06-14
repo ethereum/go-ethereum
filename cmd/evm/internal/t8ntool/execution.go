@@ -241,7 +241,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			minerReward.Add(minerReward, perOmmer)
 			// Add (8-delta)/8
 			reward := big.NewInt(8)
-			reward.Sub(reward, big.NewInt(0).SetUint64(ommer.Delta))
+			reward.Sub(reward, new(big.Int).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
 			statedb.AddBalance(ommer.Address, reward)
