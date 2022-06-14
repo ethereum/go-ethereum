@@ -449,7 +449,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 }
 
 func dummyTxWithV(value uint64) *core.SignTxRequest {
-	v := big.NewInt(0).SetUint64(value)
+	v := new(big.Int).SetUint64(value)
 	h := hexutil.Big(*v)
 	return dummyTx(h)
 }
@@ -469,7 +469,7 @@ func TestLimitWindow(t *testing.T) {
 		return
 	}
 	// 0.3 ether: 429D069189E0000 wei
-	v := big.NewInt(0).SetBytes(common.Hex2Bytes("0429D069189E0000"))
+	v := new(big.Int).SetBytes(common.Hex2Bytes("0429D069189E0000"))
 	h := hexutil.Big(*v)
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
