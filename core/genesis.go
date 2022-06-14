@@ -326,6 +326,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
+	if overrideDeveloperMode != nil {
+		// Ignore Chain ID compatibility errors when we're in dev fork mode.
+		storedcfg.ChainID = newcfg.ChainID
+	}
 	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
 	if height == nil {
 		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
