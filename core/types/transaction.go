@@ -755,7 +755,7 @@ type Message struct {
 	isFake     bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, dataHashes []common.Hash, isFake bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -767,6 +767,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasTipCap:  gasTipCap,
 		data:       data,
 		accessList: accessList,
+		dataHashes: dataHashes,
 		isFake:     isFake,
 	}
 }

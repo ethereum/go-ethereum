@@ -243,7 +243,12 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+	// The values don't matter. Only its cardinality is used for correct gas estimation
+	var fakeDataHashes []common.Hash
+	if args.Blobs != nil {
+		fakeDataHashes = make([]common.Hash, len(args.Blobs))
+	}
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, fakeDataHashes, true)
 	return msg, nil
 }
 
