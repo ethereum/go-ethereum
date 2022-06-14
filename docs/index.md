@@ -15,6 +15,8 @@ For the Go API reference and developer documentation head over to
 
 ### Other Ethereum Documentation
 
+For generic Ethereum-related information, check the [introduction](https://ethereum.org/en/developers/docs/intro-to-ethereum/) at ethereum.org.
+
 * [Ethereum Whitepaper](https://github.com/ethereum/wiki/wiki/White-Paper)
 * [Ethereum Yellow Paper](https://ethereum.github.io/yellowpaper/paper.pdf)
 * [Ethereum Improvement Proposals (EIPs)](https://eips.ethereum.org)
