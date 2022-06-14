@@ -5,7 +5,7 @@ root: ..
 
 ## Welcome to the Geth user manual!
 
-Geth (go-ethereum) is an Ethereum client implemented in [Go](https://go.dev/). This website 
+Geth (go-ethereum) is an Ethereum client implemented in Go. This website 
 contains the Geth documentation, including:
 
 * [Getting Started Guide](./getting-started)
