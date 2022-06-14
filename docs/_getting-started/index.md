@@ -416,7 +416,7 @@ A successful call will return a response like the one below:
 {"jsonrpc":"2.0","id":1,"result":"0xc7d54951f87f7c0"}
 ```
 
-The balance is in the `return` field in the returned JSON object. However, it is denominated in Wei and presented as a hexadecimal string. There are many options for converting this value to a decimal in units of ether, for example by opening a Python console and running:
+The balance is in the `result` field in the returned JSON object. However, it is denominated in Wei and presented as a hexadecimal string. There are many options for converting this value to a decimal in units of ether, for example by opening a Python console and running:
 
 ```python
 
