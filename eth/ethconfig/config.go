@@ -206,7 +206,7 @@ type Config struct {
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
 	// Arrow Glacier block override (TODO: remove after the fork)
-	OverrideArrowGlacier *big.Int `toml:",omitempty"`
+	OverrideGrayGlacier *big.Int `toml:",omitempty"`
 
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
