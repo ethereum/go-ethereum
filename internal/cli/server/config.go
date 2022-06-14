@@ -52,6 +52,9 @@ type Config struct {
 	// DataDir is the directory to store the state in
 	DataDir string `hcl:"data-dir,optional"`
 
+	// KeyStoreDir is the directory to store keystores
+	KeyStoreDir string `hcl:"keystore-dir,optional"`
+
 	// SyncMode selects the sync protocol
 	SyncMode string `hcl:"sync-mode,optional"`
 
@@ -894,6 +897,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 	cfg := &node.Config{
 		Name:                  clientIdentifier,
 		DataDir:               c.DataDir,
+		KeyStoreDir:           c.KeyStoreDir,
 		UseLightweightKDF:     c.Accounts.UseLightweightKDF,
 		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,
 		Version:               params.VersionWithCommit(gitCommit, gitDate),

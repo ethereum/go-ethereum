@@ -12,6 +12,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```datadir```: Path of the data directory to store information
 
+- ```keystore```: Path of the directory to store keystores
+
 - ```config```: File for the config file
 
 - ```syncmode```: Blockchain sync mode ("fast", "full", or "snap")
