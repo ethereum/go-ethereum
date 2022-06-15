@@ -86,7 +86,7 @@ type handlerConfig struct {
 	Network    uint64                      // Network identifier to adfvertise
 	Sync       downloader.SyncMode         // Whether to snap or full sync
 	BloomCache uint64                      // Megabytes to alloc for snap sync bloom
-	EventMux   *event.TypeMux              // Legacy event mux, deprecate for `feed`
+	EventMux   *event.TypeMux              //nolint:staticcheck // Legacy event mux, deprecate for `feed`
 	Checkpoint *params.TrustedCheckpoint   // Hard coded checkpoint for sync challenges
 	EthAPI     *ethapi.PublicBlockChainAPI // EthAPI to interact
 

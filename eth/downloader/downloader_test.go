@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -62,23 +63,28 @@ func newTester() *downloadTester {
 	if err != nil {
 		panic(err)
 	}
+
 	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
 	if err != nil {
 		panic(err)
 	}
+
 	core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
 
 	chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		panic(err)
 	}
+
 	tester := &downloadTester{
 		freezer: freezer,
 		chain:   chain,
 		peers:   make(map[string]*downloadTesterPeer),
 	}
 
+	//nolint: staticcheck
 	tester.downloader = New(0, db, new(event.TypeMux), tester.chain, nil, tester.dropPeer, nil, whitelist.NewService(10))
+
 	return tester
 }
 
@@ -1349,6 +1355,7 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 					}
 				}
 			}
+
 			if failed {
 				res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
 				exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
@@ -1383,9 +1390,11 @@ func testCheckpointEnforcement(t *testing.T, protocol uint, mode SyncMode) {
 	if mode == SnapSync || mode == LightSync {
 		expect = errUnsyncedPeer
 	}
+
 	if err := tester.sync("peer", nil, mode); !errors.Is(err, expect) {
 		t.Fatalf("block sync error mismatch: have %v, want %v", err, expect)
 	}
+
 	if mode == SnapSync || mode == LightSync {
 		assertOwnChain(t, tester, 1)
 	} else {
@@ -1409,14 +1418,15 @@ func newWhitelistFake(validate func(count int) (bool, error)) *whitelistFake {
 
 // IsValidChain is the mock function which the downloader will use to validate the chain
 // to be received from a peer.
-func (w *whitelistFake) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
+func (w *whitelistFake) IsValidChain(_ *types.Header, _ func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
 	defer func() {
 		w.count++
 	}()
+
 	return w.validate(w.count)
 }
 
-func (w *whitelistFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}
+func (w *whitelistFake) ProcessCheckpoint(_ uint64, _ common.Hash) {}
 
 func (w *whitelistFake) GetCheckpointWhitelist() map[uint64]common.Hash {
 	return nil
@@ -1427,6 +1437,8 @@ func (w *whitelistFake) PurgeCheckpointWhitelist() {}
 // TestFakedSyncProgress66WhitelistMismatch tests if in case of whitelisted
 // checkpoint mismatch with opposite peer, the sync should fail.
 func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
+	t.Parallel()
+
 	protocol := uint(eth.ETH66)
 	mode := FullSync
 
@@ -1450,6 +1462,8 @@ func TestFakedSyncProgress66WhitelistMismatch(t *testing.T) {
 // TestFakedSyncProgress66WhitelistMatch tests if in case of whitelisted
 // checkpoint match with opposite peer, the sync should succeed.
 func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
+	t.Parallel()
+
 	protocol := uint(eth.ETH66)
 	mode := FullSync
 
@@ -1474,6 +1488,8 @@ func TestFakedSyncProgress66WhitelistMatch(t *testing.T) {
 // checkpointed blocks with opposite peer, the sync should fail initially but
 // with the retry mechanism, it should succeed eventually.
 func TestFakedSyncProgress66NoRemoteCheckpoint(t *testing.T) {
+	t.Parallel()
+
 	protocol := uint(eth.ETH66)
 	mode := FullSync
 
@@ -1483,8 +1499,10 @@ func TestFakedSyncProgress66NoRemoteCheckpoint(t *testing.T) {
 		if count == 0 {
 			return false, whitelist.ErrNoRemoteCheckoint
 		}
+
 		return true, nil
 	}
+
 	tester.downloader.ChainValidator = newWhitelistFake(validate)
 
 	defer tester.terminate()

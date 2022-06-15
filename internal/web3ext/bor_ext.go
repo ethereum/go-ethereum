@@ -18,6 +18,18 @@ web3._extend({
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
+			name: 'getSnapshotProposer',
+			call: 'bor_getSnapshotProposer',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotProposerSequence',
+			call: 'bor_getSnapshotProposerSequence',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
 			call: 'bor_getSnapshotAtHash',
 			params: 1

@@ -7,7 +7,7 @@ release:
 
 builds:
   - id: darwin-amd64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - darwin
@@ -22,7 +22,7 @@ builds:
       -s -w
 
   - id: darwin-arm64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - darwin
@@ -37,7 +37,7 @@ builds:
       -s -w
 
   - id: linux-amd64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - linux
@@ -53,7 +53,7 @@ builds:
       -s -w -extldflags "-static"
 
   - id: linux-arm64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - linux

@@ -2,12 +2,24 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
 type AccountNewCommand struct {
 	*Meta
+}
+
+// MarkDown implements cli.MarkDown interface
+func (a *AccountNewCommand) MarkDown() string {
+	items := []string{
+		"# Account new",
+		"The `account new` command creates a new local account file on the Bor data directory. Bor should not be running to execute this command.",
+		a.Flags().MarkDown(),
+	}
+
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface

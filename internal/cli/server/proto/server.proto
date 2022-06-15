@@ -4,11 +4,9 @@ package proto;
 
 import "google/protobuf/empty.proto";
 
-option go_package = "/command/server/proto";
+option go_package = "/internal/cli/server/proto";
 
 service Bor {
-    rpc Pprof(PprofRequest) returns (stream PprofResponse);
-
     rpc PeersAdd(PeersAddRequest) returns (PeersAddResponse);
 
     rpc PeersRemove(PeersRemoveRequest) returns (PeersRemoveResponse);
@@ -20,8 +18,20 @@ service Bor {
     rpc ChainSetHead(ChainSetHeadRequest) returns (ChainSetHeadResponse);
 
     rpc Status(google.protobuf.Empty) returns (StatusResponse);
-    
+
     rpc ChainWatch(ChainWatchRequest) returns (stream ChainWatchResponse);
+
+    rpc DebugPprof(DebugPprofRequest) returns (stream DebugFileResponse);
+
+    rpc DebugBlock(DebugBlockRequest) returns (stream DebugFileResponse);
+}
+
+message TraceRequest {
+    int64 number = 1;
+}
+
+message TraceResponse {
+
 }
 
 message ChainWatchRequest {
@@ -113,7 +123,7 @@ message Header {
     uint64 number = 2;
 }
 
-message PprofRequest {
+message DebugPprofRequest {
     Type type = 1;
 
     string profile = 2;
@@ -127,7 +137,11 @@ message PprofRequest {
     }
 }
 
-message PprofResponse {
+message DebugBlockRequest {
+    int64 number = 1;
+}
+
+message DebugFileResponse {
     oneof event {
         Open open = 1;
         Input input = 2;
@@ -136,7 +150,6 @@ message PprofResponse {
 
     message Open {
         map<string, string> headers = 1;
-        int64 size = 2;
     }
 
     message Input {

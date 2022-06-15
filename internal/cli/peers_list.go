@@ -14,6 +14,17 @@ type PeersListCommand struct {
 	*Meta2
 }
 
+// MarkDown implements cli.MarkDown interface
+func (p *PeersListCommand) MarkDown() string {
+	items := []string{
+		"# Peers add",
+		"The ```peers list``` command lists the connected peers.",
+		p.Flags().MarkDown(),
+	}
+
+	return strings.Join(items, "\n\n")
+}
+
 // Help implements the cli.Command interface
 func (p *PeersListCommand) Help() string {
 	return `Usage: bor peers list
@@ -50,12 +61,14 @@ func (c *PeersListCommand) Run(args []string) int {
 
 	req := &proto.PeersListRequest{}
 	resp, err := borClt.PeersList(context.Background(), req)
+
 	if err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
 
 	c.UI.Output(formatPeers(resp.Peers))
+
 	return 0
 }
 
@@ -66,6 +79,7 @@ func formatPeers(peers []*proto.Peer) string {
 
 	rows := make([]string, len(peers)+1)
 	rows[0] = "ID|Enode|Name|Caps|Static|Trusted"
+
 	for i, d := range peers {
 		enode := strings.TrimPrefix(d.Enode, "enode://")
 
@@ -77,5 +91,6 @@ func formatPeers(peers []*proto.Peer) string {
 			d.Static,
 			d.Trusted)
 	}
+
 	return formatList(rows)
 }

@@ -5,9 +5,10 @@ import (
 	"math/big"
 	"testing"
 
+	"gotest.tools/assert"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"gotest.tools/assert"
 )
 
 // NewMockService creates a new mock whitelist service

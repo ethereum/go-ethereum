@@ -7,7 +7,9 @@ package mocks
 import (
 	reflect "reflect"
 
-	bor "github.com/ethereum/go-ethereum/consensus/bor"
+	clerk "github.com/ethereum/go-ethereum/consensus/bor/clerk"
+	checkpoint "github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
+	span "github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -46,26 +48,11 @@ func (mr *MockIHeimdallClientMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockIHeimdallClient)(nil).Close))
 }
 
-// Fetch mocks base method.
-func (m *MockIHeimdallClient) Fetch(arg0, arg1 string) (*bor.ResponseWithHeight, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Fetch", arg0, arg1)
-	ret0, _ := ret[0].(*bor.ResponseWithHeight)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Fetch indicates an expected call of Fetch.
-func (mr *MockIHeimdallClientMockRecorder) Fetch(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockIHeimdallClient)(nil).Fetch), arg0, arg1)
-}
-
 // FetchLatestCheckpoint mocks base method.
-func (m *MockIHeimdallClient) FetchLatestCheckpoint() (*bor.Checkpoint, error) {
+func (m *MockIHeimdallClient) FetchLatestCheckpoint() (*checkpoint.Checkpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FetchLatestCheckpoint")
-	ret0, _ := ret[0].(*bor.Checkpoint)
+	ret0, _ := ret[0].(*checkpoint.Checkpoint)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -76,32 +63,32 @@ func (mr *MockIHeimdallClientMockRecorder) FetchLatestCheckpoint() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchLatestCheckpoint", reflect.TypeOf((*MockIHeimdallClient)(nil).FetchLatestCheckpoint))
 }
 
-// FetchStateSyncEvents mocks base method.
-func (m *MockIHeimdallClient) FetchStateSyncEvents(arg0 uint64, arg1 int64) ([]*bor.EventRecordWithTime, error) {
+// Span mocks base method.
+func (m *MockIHeimdallClient) Span(arg0 uint64) (*span.HeimdallSpan, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchStateSyncEvents", arg0, arg1)
-	ret0, _ := ret[0].([]*bor.EventRecordWithTime)
+	ret := m.ctrl.Call(m, "Span", arg0)
+	ret0, _ := ret[0].(*span.HeimdallSpan)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FetchStateSyncEvents indicates an expected call of FetchStateSyncEvents.
-func (mr *MockIHeimdallClientMockRecorder) FetchStateSyncEvents(arg0, arg1 interface{}) *gomock.Call {
+// Span indicates an expected call of Span.
+func (mr *MockIHeimdallClientMockRecorder) Span(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchStateSyncEvents", reflect.TypeOf((*MockIHeimdallClient)(nil).FetchStateSyncEvents), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Span", reflect.TypeOf((*MockIHeimdallClient)(nil).Span), arg0)
 }
 
-// FetchWithRetry mocks base method.
-func (m *MockIHeimdallClient) FetchWithRetry(arg0, arg1 string) (*bor.ResponseWithHeight, error) {
+// StateSyncEvents mocks base method.
+func (m *MockIHeimdallClient) StateSyncEvents(arg0 uint64, arg1 int64) ([]*clerk.EventRecordWithTime, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchWithRetry", arg0, arg1)
-	ret0, _ := ret[0].(*bor.ResponseWithHeight)
+	ret := m.ctrl.Call(m, "StateSyncEvents", arg0, arg1)
+	ret0, _ := ret[0].([]*clerk.EventRecordWithTime)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FetchWithRetry indicates an expected call of FetchWithRetry.
-func (mr *MockIHeimdallClientMockRecorder) FetchWithRetry(arg0, arg1 interface{}) *gomock.Call {
+// StateSyncEvents indicates an expected call of StateSyncEvents.
+func (mr *MockIHeimdallClientMockRecorder) StateSyncEvents(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchWithRetry", reflect.TypeOf((*MockIHeimdallClient)(nil).FetchWithRetry), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateSyncEvents", reflect.TypeOf((*MockIHeimdallClient)(nil).StateSyncEvents), arg0, arg1)
 }
