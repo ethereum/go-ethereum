@@ -409,6 +409,7 @@ func WriteHeaderBatch(batch ethdb.Batch, header *types.Header) {
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
+	copy(deferredOp.Key(), key)
 
 	if err = deferredOp.Finish(); err != nil {
 		log.Crit("deferredOp.Finish failed", "err", err)
@@ -724,6 +725,7 @@ func WriteReceiptsBatch(batch ethdb.Batch, hash common.Hash, number uint64, rece
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
 	}
+	copy(deferredOp.Key(), key)
 
 	if err = deferredOp.Finish(); err != nil {
 		log.Crit("deferredOp.Finish failed", "err", err)
