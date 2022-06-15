@@ -390,27 +390,31 @@ func (w *worker) close() {
 
 // recalcRecommit recalculates the resubmitting interval upon feedback.
 func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
-	var (
-		prevF = float64(prev.Nanoseconds())
-		next  float64
-	)
+	// var (
+	// 	prevF = float64(prev.Nanoseconds())
+	// 	next  float64
+	// )
+	//
+	// if inc {
+	// 	next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
+	// 	max := float64(maxRecommitInterval.Nanoseconds())
+	//
+	// 	if next > max {
+	// 		next = max
+	// 	}
+	// } else {
+	// 	next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
+	// 	min := float64(minRecommit.Nanoseconds())
+	//
+	// 	if next < min {
+	// 		next = min
+	// 	}
+	// }
+	//
+	// log.Info("Recalc Commit", "Prev", prev, "Next", next)
 
-	if inc {
-		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
-
-		max := float64(maxRecommitInterval.Nanoseconds())
-		if next > max {
-			next = max
-		}
-	} else {
-		next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
-		min := float64(minRecommit.Nanoseconds())
-		if next < min {
-			next = min
-		}
-	}
-
-	return time.Duration(int64(next))
+	//returning the Same prev value to keep the recommit interval constant
+	return prev
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.

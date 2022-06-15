@@ -337,17 +337,24 @@ func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 //
 
 func (b *LesApiBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (b *LesApiBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (b *LesApiBackend) GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	return nil, common.Hash{}, 0, 0, errors.New("Not implemented")
+	return nil, common.Hash{}, 0, 0, errors.New("not implemented")
 }
 
 func (b *LesApiBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	return nil, common.Hash{}, 0, 0, errors.New("Not implemented")
+	return nil, common.Hash{}, 0, 0, errors.New("not implemented")
+}
+
+func (b *LesApiBackend) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return nil
+}
+
+func (b *LesApiBackend) PurgeCheckpointWhitelist() {
 }

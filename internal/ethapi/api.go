@@ -2156,6 +2156,17 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
 }
 
+// GetCheckpointWhitelist retrieves the current checkpoint whitelist
+// entries (of the form block number -> block hash)
+func (api *PrivateDebugAPI) GetCheckpointWhitelist() map[uint64]common.Hash {
+	return api.b.GetCheckpointWhitelist()
+}
+
+// PurgeCheckpointWhitelist purges the current checkpoint whitelist entries
+func (api *PrivateDebugAPI) PurgeCheckpointWhitelist() {
+	api.b.PurgeCheckpointWhitelist()
+}
+
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	net            *p2p.Server

@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	clerk "github.com/ethereum/go-ethereum/consensus/bor/clerk"
+	checkpoint "github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 	span "github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -45,6 +46,21 @@ func (m *MockIHeimdallClient) Close() {
 func (mr *MockIHeimdallClientMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockIHeimdallClient)(nil).Close))
+}
+
+// FetchLatestCheckpoint mocks base method.
+func (m *MockIHeimdallClient) FetchLatestCheckpoint() (*checkpoint.Checkpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchLatestCheckpoint")
+	ret0, _ := ret[0].(*checkpoint.Checkpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchLatestCheckpoint indicates an expected call of FetchLatestCheckpoint.
+func (mr *MockIHeimdallClientMockRecorder) FetchLatestCheckpoint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchLatestCheckpoint", reflect.TypeOf((*MockIHeimdallClient)(nil).FetchLatestCheckpoint))
 }
 
 // Span mocks base method.

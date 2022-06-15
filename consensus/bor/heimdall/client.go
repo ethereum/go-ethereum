@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -53,6 +54,7 @@ func NewHeimdallClient(urlString string) *HeimdallClient {
 const (
 	fetchStateSyncEventsFormat = "from-id=%d&to-time=%d&limit=%d"
 	fetchStateSyncEventsPath   = "clerk/event-record/list"
+	fetchLatestCheckpoint      = "/checkpoints/latest"
 
 	fetchSpanFormat = "bor/span/%d"
 )
@@ -101,6 +103,21 @@ func (h *HeimdallClient) Span(spanID uint64) (*span.HeimdallSpan, error) {
 	}
 
 	response, err := FetchWithRetry[SpanResponse](h.client, url, h.closeCh)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response.Result, nil
+}
+
+// FetchLatestCheckpoint fetches the latest bor submitted checkpoint from heimdall
+func (h *HeimdallClient) FetchLatestCheckpoint() (*checkpoint.Checkpoint, error) {
+	url, err := latestCheckpointURL(h.urlString)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := FetchWithRetry[checkpoint.CheckpointResponse](h.client, url, h.closeCh)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +186,10 @@ func stateSyncURL(urlString string, fromID uint64, to int64) (*url.URL, error) {
 	queryParams := fmt.Sprintf(fetchStateSyncEventsFormat, fromID, to, stateFetchLimit)
 
 	return makeURL(urlString, fetchStateSyncEventsPath, queryParams)
+}
+
+func latestCheckpointURL(urlString string) (*url.URL, error) {
+	return makeURL(urlString, fetchLatestCheckpoint, "")
 }
 
 func makeURL(urlString, rawPath, rawQuery string) (*url.URL, error) {
