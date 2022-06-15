@@ -14,7 +14,7 @@ USAGE:
    geth [options] [command] [command options] [arguments...]
 
 VERSION:
-   1.10.18-stable-de23cf91
+   1.10.19-stable-23bee162
 
 COMMANDS:
    account                            Manage accounts
@@ -57,7 +57,7 @@ ETHEREUM OPTIONS:
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
   --eth.requiredblocks value          Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
   --mainnet                           Ethereum mainnet
-  --ropsten                           Ropsten network: pre-configured proof-of-work test network
+  --ropsten                           Ropsten network: pre-configured proof-of-stake test network
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --sepolia                           Sepolia network: pre-configured proof-of-work test network
@@ -76,7 +76,7 @@ LIGHT CLIENT OPTIONS:
   --ulc.onlyannounce                  Ultra light server sends announcements only
   --light.nopruning                   Disable ancient light chain data pruning
   --light.nosyncserve                 Enables serving light clients before syncing
-
+  
 DEVELOPER CHAIN OPTIONS:
   --dev                               Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
   --dev.period value                  Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
@@ -104,7 +104,7 @@ TRANSACTION POOL OPTIONS:
   --txpool.accountqueue value         Maximum number of non-executable transaction slots permitted per account (default: 64)
   --txpool.globalqueue value          Maximum number of non-executable transaction slots for all accounts (default: 1024)
   --txpool.lifetime value             Maximum amount of time non-executable transaction are queued (default: 3h0m0s)
-  
+
 PERFORMANCE TUNING OPTIONS:
   --cache value                       Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode) (default: 1024)
   --cache.database value              Percentage of cache memory allowance to use for database io (default: 50)
@@ -166,7 +166,7 @@ NETWORKING OPTIONS:
   --netrestrict value                 Restricts network communication to the given IP networks (CIDR masks)
   --nodekey value                     P2P node key file
   --nodekeyhex value                  P2P node key as hex (for testing)
-
+  
 MINER OPTIONS:
   --mine                              Enable mining
   --miner.threads value               Number of CPU threads to use for mining (default: 0)
@@ -227,8 +227,9 @@ ALIASED (deprecated) OPTIONS:
 MISC OPTIONS:
   --snapshot                                Enables snapshot-database mode (default = enable)
   --bloomfilter.size value                  Megabytes of memory allocated to bloom-filter for pruning (default: 2048)
+  --ignore-legacy-receipts                  Geth will start up even if there are legacy receipts in freezer
   --help, -h                                show help
-  --override.arrowglacier value             Manually specify Arrow Glacier fork-block, overriding the bundled setting (default: 0)
+  --override.grayglacier value              Manually specify Gray Glacier fork-block, overriding the bundled setting (default: 0)
   --override.terminaltotaldifficulty value  Manually specify TerminalTotalDifficulty, overriding the bundled setting (default: <nil>)
 
 
