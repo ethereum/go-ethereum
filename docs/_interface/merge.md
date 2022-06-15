@@ -18,16 +18,12 @@ to the moment when Ethereum's existing blockchain and the Beacon Chain join toge
 At the moment of the merge, execution clients will switch off their proof-of-work and block gossiping functions 
 and hand responsibility for all consensus and fork choice logic over to consensus clients. This is a profound
 change to how Ethereum operates and it will require node operators to run a consensus client in addition to
-Geth. However, once this is set up, users will be able to interact with Ethereum using most of the familiar
-Geth features. This page introduces The Merge from a Geth perspective.
+Geth.
 
 ## How will Geth change?
 
 Geth is an execution client. Historically, an execution client alone has been enough to run a full Ethereum node.
-However, Ethereum will soon swap its consensus mechanism from proof-of-work (PoW) to proof-of-stake (PoS) in a 
-transition known as [The Merge](/docs/interface/merge](https://ethereum.org/en/upgrades/merge/)). 
-
-When that happens, Geth will not be able to track the Ethereum chain on its own. Instead, it will need to 
+However, when The Merge happens, Geth will not be able to track the Ethereum chain on its own. Instead, it will need to 
 be coupled to another piece of software called a "consensus client". In this configuration, 
 the execution client will be responsible for transaction handling, transaction gossip, state management and
 the Ethereum Virtual Machine (EVM). However, Geth will no longer be responsible for block building, block
@@ -75,7 +71,7 @@ the consensus layer, but all of Geth’s other functionality remains intact. Thi
 and data queries can still be handled by Geth using the same methods as before. This includes interacting with Geth using
 the JSON_RPC_API directly using tools such as [curl](https//curl.se), third party libraries such as 
 [Web3.js][web3js-link] or [Web3.py][web3py-link] in development frameworks (e.g. [Truffle][truffle-link], [Hardhat][hardhat-link], 
-[Brownie][brownie-link], [Foundry][foundry-ink] or using Web3.js in Geth's built-in Javascript console. 
+[Brownie][brownie-link], [Foundry][foundry-link] or using Web3.js in Geth's built-in Javascript console. 
 Much more information about the Javascript consle is available on the [Javascript Console page](/docs/interface/javascript-console).
 
 ## Summary

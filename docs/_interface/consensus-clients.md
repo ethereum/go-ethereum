@@ -8,35 +8,30 @@ However, Ethereum will soon swap its consensus mechanism from [proof-of-work][po
 [proof-of-stake][pos-link] (PoS) in a transition known as [The Merge](/docs/interface/merge). 
 
 When that happens, Geth will not be able to track the Ethereum chain on its own. Instead, it will need to 
-be coupled to another piece of software called a ["consensus client"][con-client-link]. In this configuration, 
-the execution client will be responsible for transaction handling, transaction gossip, state management and supporting
-the Ethereum Virtual Machine (EVM). However, Geth will no longer be responsible for block building, block gossip
- or handling consensus logic. These will be in the remit of the consensus client.
+be coupled to another piece of software called a ["consensus client"][con-client-link]. For Geth users that 
+intend to continue to run full nodes after The Merge, it is sensible to start running a consensus client now, 
+so that The Merge can happen smoothly. There are five consensus clients available, all of which connect to Geth in the same way. 
 
-For Geth users that intend to continue to run full nodes after The Merge, it is sensible to start running
-a consensus client now, so that The Merge can happen smoothly. There are five consensus clients available, all
-of which connect to Geth in the same way. This page will outline how Geth can be set up with a consensus client
-in advance of The Merge (or to interact with an alread-merged testnet).
+This page will outline how Geth can be set up with a consensus client in advance of The Merge (or to interact with an alread-merged testnet).
 
 
 ## Configuring Geth
 
 Geth can be downloaded and installed according to the instructions on the 
-[Installing Geth](/docs/install_and_build/installing-geth) page. In order to connect to a consensu client,
-Geth must expose a port for the inter-client RPC connection. By default this is `localhost:8545`. Enable 
-this using the `--http` command. A custom port can be configured using `--http.port`. 
+[Installing Geth](/docs/install-and-build/installing-geth) page. In order to connect to a consensus client,
+Geth must expose a port for the inter-client RPC connection. 
 
-The RPC connection must also be authenticated using a `jwtsecret` file. This is created and saved 
+The RPC connection must be authenticated using a `jwtsecret` file. This is created and saved 
 to `<datadir>/geth/jwtsecret` by default but can also be created and saved to a custom location or it can be
 self-generated and provided to Geth by passing the file path to `--authrpc.jwtsecret`. The `jwtsecret` file 
 is required by both Geth and the consensus client.
 
 The authorization must then be applied to a specific address/port. This is achievd by passing an address to
-`--authrpc.addr` and a port number to `--authrpc.port`. It is also safe to provide a wildcard to `--authrpc.vhosts`
-so that incoming requests from virtual hsost are accepted by Geth because it only applies to the port authenticated
-using `jwtsecret`.
+`--authrpc.addr` and a port number to `--authrpc.port`. It is also safe to provide either `localhost` or a wildcard
+`*` to `--authrpc.vhosts` so that incoming requests from virtual hosts are accepted by Geth because it only 
+applies to the port authenticated using `jwtsecret`. 
 
-The Merge itself will be triggered using a terminal total difficulty (TTD). The speciufic value for the TTD has not yet
+The Merge itself will be triggered using a terminal total difficulty (TTD). The specific value for the TTD has not yet
 been decided. When it is decided,Geth needs to know what it is in order to merge successfully. This requires restarting
 Geth with the `--override.terminaltotaldiffilculty` command, passing the correct value as an argument.
 
@@ -45,6 +40,7 @@ A complete command to start Geth so that it can connect to a consensus client lo
 ```shell
 geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret
 ```
+
 
 ## Consensus clients
 
@@ -60,11 +56,10 @@ There are currently five consensus clients that can be run alongside Geth. These
  
 [Prysm](https://docs.prylabs.network/docs/getting-started/): written in Go
 
-There is currently a [client diversity][client-div-link]
-issue where a large dominance of Prysm clients poses a risk to the health of the network. In response to the 
-initial drive to even out the client diversity many Prysm nodes switched to Lighthouse to the extent that it 
-also has a problematic market share. It is therefore recommended to use a minority client such as Teku, Nimbus 
-or Lodestar (although uses should be aware that Lodestar is currently awaiting a third-party audit). 
+There is currently a [client diversity][client-div-link] issue where a large dominance of Prysm clients poses a risk 
+to the health of the network. In response to the initial drive to even out the client diversity many Prysm nodes switched 
+to Lighthouse to the extent that it now also has a problematic market share. It is therefore recommended to use a minority 
+client such as Teku, Nimbus or Lodestar (although users should be aware that Lodestar is currently awaiting a third-party audit). 
 
 It is also worth noting that client diversity is also an [issue on the execution layer](https://clientdiversity.org/), 
 with Geth being run on about 85% of all Ethereum nodes. It is assumed that readers on this page have at 
@@ -73,6 +68,7 @@ client for them.
 
 There are several ways to download and install the consensus clients including prebuilt binaries, docker containers
 or building from source. Instructions for each client are provided in the documentation linked in the client list above.
+Users can choose the method that is right for them.
 
 Regardles of the installation method, the consensus client must be started with the right port configuration to 
 establish an RPC connection to the local Geth instance. In the example above, `localhost:8551` was authorized 
@@ -85,7 +81,14 @@ be consistent with the `--authrpc.jwtsecret` path provided to Geth.
 
 The consensus clients all expose a [Beacon API][beacon-api-link] that can be used to check the status
 of the Beacon client or download blocks and consensus data by sending requests using tools such as [Curl](https://curl.se).
+More information on this can be found in the documentation for each consensus client.
 
+## Validators
+
+After The Merge, miners are n longer responsible for securing the Ethereum blockchain. Instead, this becomes the responsibility
+of validators that have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients
+have their own validator software that is described in detail on their respective documentation. The easiest way to handle 
+staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link].
 
 ## Using Geth
 
@@ -143,3 +146,4 @@ result of The Merge.
 [engine-api-link]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
 [client-div-link]:https://ethereum.org/en/developers/docs/nodes-and-clients/client-diversity
 [execution-clients-link]: https://ethereum.org/en/developers/docs/nodes-and-clients/client-diversity/#execution-clients
+[launchpad-link][https://launchpad.ethereum.org/]
