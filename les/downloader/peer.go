@@ -413,7 +413,7 @@ func (ps *peerSet) HeaderIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockHeadersMsg, time.Second)
 	}
-	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
 // BodyIdlePeers retrieves a flat list of all the currently body-idle peers within
@@ -425,7 +425,7 @@ func (ps *peerSet) BodyIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.BlockBodiesMsg, time.Second)
 	}
-	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
 // ReceiptIdlePeers retrieves a flat list of all the currently receipt-idle peers
@@ -437,7 +437,7 @@ func (ps *peerSet) ReceiptIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.ReceiptsMsg, time.Second)
 	}
-	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
 // NodeDataIdlePeers retrieves a flat list of all the currently node-data-idle
@@ -449,7 +449,7 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 	throughput := func(p *peerConnection) int {
 		return p.rates.Capacity(eth.NodeDataMsg, time.Second)
 	}
-	return ps.idlePeers(eth.ETH66, eth.ETH66, idle, throughput)
+	return ps.idlePeers(eth.ETH66, eth.ETH67, idle, throughput)
 }
 
 // idlePeers retrieves a flat list of all currently idle peers satisfying the
