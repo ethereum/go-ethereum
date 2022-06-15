@@ -356,6 +356,7 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
 		if len(jwtSecret) == 32 {
+			log.Info("Read JWT secret", "path", fileName)
 			return jwtSecret, nil
 		}
 		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
