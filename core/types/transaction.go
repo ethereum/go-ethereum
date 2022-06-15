@@ -156,9 +156,12 @@ func (tx *Transaction) encodeTypedMinimal(w io.Writer) error {
 	if _, err := w.Write([]byte{tx.Type()}); err != nil {
 		return err
 	}
-	// TODO(inphi): clean
 	if tx.Type() == BlobTxType {
-		return EncodeSSZ(w, tx.inner.(*SignedBlobTx))
+		blobTx, ok := tx.inner.(*SignedBlobTx)
+		if !ok {
+			return ErrInvalidTxType
+		}
+		return EncodeSSZ(w, blobTx)
 	} else {
 		return rlp.Encode(w, tx.inner)
 	}
