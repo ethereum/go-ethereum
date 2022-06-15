@@ -20,6 +20,7 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -356,7 +357,7 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
 		if len(jwtSecret) == 32 {
-			log.Info("Read JWT secret", "path", fileName)
+			log.Info("Read JWT secret", "path", fileName, "crc32", fmt.Sprintf("%#x", crc32.ChecksumIEEE(jwtSecret)))
 			return jwtSecret, nil
 		}
 		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
