@@ -24,7 +24,7 @@ Geth.
 
 Geth is an execution client. Historically, an execution client alone has been enough to run a full Ethereum node.
 However, when The Merge happens, Geth will not be able to track the Ethereum chain on its own. Instead, it will need to 
-be coupled to another piece of software called a "consensus client". In this configuration, 
+be coupled to another piece of software called a ["consensus client"][con-client-link]. In this configuration, 
 the execution client will be responsible for transaction handling, transaction gossip, state management and
 the Ethereum Virtual Machine (EVM). However, Geth will no longer be responsible for block building, block
 gossiping or handling consensus logic. These will be in the remit of the consensus client.
@@ -54,7 +54,7 @@ include in the new block. This inter-client communication is handled by a local 
 ## Transition
 
 The transition from PoW to PoS will happen when a pre-announced total difficulty is reached by the chain. 
-This is unlike usual forks which occur at a certain scheduled block number. The total difficulty threshold 
+This is different to other forks which usually occur at a certain scheduled block number. The total difficulty threshold 
 that will trigger the Merge is also known as the [*Terminal
 Total Difficulty* (TTD)](https://ethereum.org/en/glossary/#terminal-total-difficulty). In
 case of an emergency delay, the TTD can be overriden in Geth using the `--override.terminaltotaldifficulty` command-line
@@ -72,7 +72,7 @@ and data queries can still be handled by Geth using the same methods as before. 
 the JSON_RPC_API directly using tools such as [curl](https//curl.se), third party libraries such as 
 [Web3.js][web3js-link] or [Web3.py][web3py-link] in development frameworks (e.g. [Truffle][truffle-link], [Hardhat][hardhat-link], 
 [Brownie][brownie-link], [Foundry][foundry-link] or using Web3.js in Geth's built-in Javascript console. 
-Much more information about the Javascript consle is available on the [Javascript Console page](/docs/interface/javascript-console).
+Much more information about the Javascript console is available on the [Javascript Console page](/docs/interface/javascript-console).
 
 ## Summary
 
@@ -82,7 +82,7 @@ run both execution and consensus clients that each have responsibility for speci
 and communicate with each other over a local RPC connection. Although there is some necessary configuration in advance
 of The Merge, the experience for Geth users should change minimally as a result of The Merge.
 
-[engineapi]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
+[engine-api-link]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
 [cl-list]: https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients
 [web3py-link]: https://web3py.readthedocs.io/en/stable/web3.main.html
 [web3js-link]: https://web3js.readthedocs.io/en/v1.2.9/
@@ -90,3 +90,4 @@ of The Merge, the experience for Geth users should change minimally as a result 
 [truffle-link]: https://trufflesuite.com/
 [hardhat-link]: https://hardhat.org/
 [foundry-link]: https://github.com/foundry-rs/foundry)
+[con-client-link]:https://ethereum.org/en/glossary/#consensus-client

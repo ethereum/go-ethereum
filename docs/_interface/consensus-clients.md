@@ -108,7 +108,7 @@ geth attach datadir/geth.ipc
 
 Ethereum Mainnet has not yet undergone The Merge, but some public testnets have. This means that running Geth alone is no longer
 enough to interact with merged testnets. This includes two testnets that were purpose built to test The Merge (Kiln, Kintsugi) and 
-the long-standing public PoW chain, Ropsten. If Geth is connected to these merged networks it will simply stall when it syncs as far
+the long-standing public PoW chain, Ropsten. If Geth is connected to these merged networks alone it will simply stall when it syncs as far
 as the merge block, awaiting information from a consensus client. Therefore, any activity on these testnets requires Geth to be 
 connected to a consensus client. There are many instructional articles that exlain how to connect to these testnets using Geth in
 combination with various consensus clients, for example:
