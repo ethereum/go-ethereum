@@ -78,4 +78,4 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
 
-replace github.com/cockroachdb/pebble => github.com/jwasinger/pebble v0.0.0-20220406011846-3b68e86b2526
+replace github.com/cockroachdb/pebble => github.com/jwasinger/pebble v0.0.0-20220615165723-34267d1e3f18
