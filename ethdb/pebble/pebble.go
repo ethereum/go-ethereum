@@ -475,6 +475,7 @@ func (d *DeferredBatchOp) Finish() error {
 
 func (b *batch) PutDeferred(keySize, valSize int) ethdb.DeferredOp {
 	do := DeferredBatchOp{b.b.SetDeferred(keySize, valSize)}
+	b.size += valSize // TODO shouldn't key-size be included
 	return &do
 }
 
