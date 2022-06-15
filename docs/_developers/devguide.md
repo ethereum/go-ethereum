@@ -36,7 +36,7 @@ These early PRs should indicate 'in progress' status.
 
 ## Building and Testing
 
-We assume that you have Go installed. Please use Go version 1.13 or later. We use the gc
+We assume that you have Go installed. Please use Go version 1.13 or later. We use the go
 toolchain for development, which you can get from the [Go downloads page][go-install].
 
 go-ethereum is a Go module, and uses the [Go modules system][go-modules] to manage
