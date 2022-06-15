@@ -116,6 +116,12 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 		return nil, err
 	}
 	tracer := txtrace.NewOeTracer(nil)
+	tracer.SetFrom(msg.From())
+	tracer.SetTo(msg.To())
+	tracer.SetValue(*msg.Value())
+	tracer.SetTxIndex(uint(0))
+	tracer.SetBlockNumber(header.Number)
+	tracer.SetBlockHash(header.Hash())
 	evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
 	if err != nil {
 		return nil, err
@@ -193,6 +199,12 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreExecTx) (*Pre
 		return nil, err
 	}
 	tracer := txtrace.NewOeTracer(nil)
+	tracer.SetFrom(msg.From())
+	tracer.SetTo(msg.To())
+	tracer.SetValue(*msg.Value())
+	tracer.SetTxIndex(uint(0))
+	tracer.SetBlockNumber(header.Number)
+	tracer.SetBlockHash(header.Hash())
 	evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
 	if err != nil {
 		return nil, err
