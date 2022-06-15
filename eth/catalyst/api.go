@@ -42,7 +42,6 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
-			Version:       "1.0",
 			Service:       NewConsensusAPI(backend),
 			Authenticated: true,
 		},

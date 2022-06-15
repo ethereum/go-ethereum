@@ -648,7 +648,7 @@ func signer(c *cli.Context) error {
 		{
 			Namespace: "account",
 			Service:   api,
-			Version:   "1.0"},
+		},
 	}
 	if c.GlobalBool(utils.HTTPEnabledFlag.Name) {
 		vhosts := utils.SplitAndTrim(c.GlobalString(utils.HTTPVirtualHostsFlag.Name))
