@@ -141,6 +141,9 @@ func (db *Database) GetReader(blockRoot common.Hash) Reader {
 // in the given set in order to update state from the specified parent to
 // the specified root.
 func (db *Database) Commit(root common.Hash, parentRoot common.Hash, nodes *NodeSet) error {
+	if db.preimage != nil {
+		db.preimage.commit(false)
+	}
 	return db.backend.Commit(root, parentRoot, nodes)
 }
 
@@ -181,6 +184,9 @@ func (db *Database) Recoverable(root common.Hash) bool {
 // database as read-only to prevent all following mutation to disk.
 // It's only supported by snap database and it's noop for hash database.
 func (db *Database) Close(root common.Hash) error {
+	if db.preimage != nil {
+		db.preimage.commit(true)
+	}
 	if snapDB, ok := db.backend.(*snapDatabase); ok {
 		return snapDB.Close(root)
 	}

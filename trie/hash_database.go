@@ -94,7 +94,7 @@ func (db *hashDatabase) Commit(root common.Hash, parentRoot common.Hash, result 
 		hasher.Reset()
 		hasher.Write(val)
 		hasher.Read(hash)
-		batch.Put(hash, val)
+		rawdb.WriteLegacyTrieNode(batch, hash, val)
 		if db.cleans != nil {
 			db.cleans.Set(hash, val)
 		}

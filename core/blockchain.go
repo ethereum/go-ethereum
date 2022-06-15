@@ -576,7 +576,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
 						if newHeadBlock.NumberU64() == 0 {
 							if err := bc.triedb.Reset(newHeadBlock.Root()); err != nil {
-								log.Crit("Failed to clean state", "err", err) // Shouldn't happen
+								log.Crit("Failed to reset state", "err", err) // Shouldn't happen
 							}
 						} else if !bc.HasState(newHeadBlock.Root()) {
 							// Rewind to a block with recoverable state. If the state is

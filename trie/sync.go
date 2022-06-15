@@ -210,7 +210,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 		return
 	}
 	// If database says duplicate, the blob is present for sure.
-	// Note we only check the existence with new code scheme, fast
+	// Note we only check the existence with new code scheme, snap
 	// sync is expected to run with a fresh new node. Even there
 	// exists the code with legacy format, fetch and store with
 	// new scheme anyway.
@@ -467,8 +467,6 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if s.membatch.hasNode(childKey) {
 				continue
 			}
-			// If database says duplicate, then at least the trie node is present
-			// and we hold the assumption that it's NOT legacy contract code.
 			blob, hash := rawdb.ReadTrieNode(s.database, storage)
 			if len(blob) != 0 && hash == chash {
 				continue

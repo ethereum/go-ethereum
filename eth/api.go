@@ -535,7 +535,7 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(startBlock.Root(), common.Hash{}, endBlock.Root(), db.NodeDB())
+	newTrie, err := trie.NewSecure(endBlock.Root(), common.Hash{}, endBlock.Root(), db.NodeDB())
 	if err != nil {
 		return nil, err
 	}

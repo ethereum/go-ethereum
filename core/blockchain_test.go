@@ -1681,9 +1681,14 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	if _, err := chain.InsertChain(competitor[len(competitor)-2:]); err != nil {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
+	for i, block := range competitor[len(competitor)-TriesInMemory-1:] {
+		if !chain.HasState(block.Root()) {
+			t.Fatalf("competitor %d: competing chain state missing", i)
+		}
+	}
 	for i, block := range competitor[:len(competitor)-TriesInMemory-1] {
 		if chain.HasState(block.Root()) {
-			t.Fatalf("competitor %d: competing chain state missing", i)
+			t.Fatalf("competitor %d: competing chain state should be pruned", i)
 		}
 	}
 }

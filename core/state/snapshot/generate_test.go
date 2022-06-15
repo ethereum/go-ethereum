@@ -18,7 +18,6 @@ package snapshot
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"os"
 	"testing"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -196,8 +196,6 @@ func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string
 	return root.Bytes()
 }
 
-// Commit commits the changes cached in the account trie and all storage tries
-// into the underlying triedb and returns the latest state root.
 func (t *testHelper) Commit() (common.Hash, *trie.NodeSet) {
 	root, nodes, _ := t.accTrie.Commit(nil)
 	for _, res := range t.uncommitted {

@@ -470,7 +470,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		reverseDiffs      = counter(0)
 	)
 	if ancient, err := db.AncientDatadir(); err == nil && ancient != "" {
-		freezer, err := NewFreezer(path.Join(ancient, "rdiffs"), "", true, reverseDiffTableSize, reverseDiffFreezerNoSnappy)
+		freezer, err := NewReverseDiffFreezer(path.Join(ancient, "rdiffs"), "", true)
 		if err == nil {
 			count, _ := db.Ancients()
 			reverseDiffs = counter(count)

@@ -82,10 +82,12 @@ func (cache *diskcache) commit(nodes map[string]*cachedNode) *diskcache {
 
 	var size int64
 	for storage, node := range nodes {
-		if orig, exist := cache.nodes[storage]; exist {
-			size += int64(node.size) - int64(orig.size)
-		} else {
+		if orig, exist := cache.nodes[storage]; !exist {
 			size += int64(node.memorySize(len(storage)))
+		} else {
+			size += int64(node.size) - int64(orig.size)
+			triedbGCNodesMeter.Mark(1)
+			triedbGCSizeMeter.Mark(int64(orig.size))
 		}
 		cache.nodes[storage] = node
 	}

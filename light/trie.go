@@ -172,7 +172,11 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 			if len(t.id.AccKey) > 0 {
 				owner = common.BytesToHash(t.id.AccKey)
 			}
-			t.trie, err = trie.New(t.id.StateRoot, owner, t.id.Root, trie.NewDatabase(t.db.backend.Database(), &trie.Config{Legacy: true}))
+			// Open the light trie in legacy hash-based scheme. The reason
+			// is the response of TrieRequest only contains node blob with
+			// no path information at all.
+			triedb := trie.NewDatabase(t.db.backend.Database(), &trie.Config{Legacy: true})
+			t.trie, err = trie.New(t.id.StateRoot, owner, t.id.Root, triedb)
 		}
 		if err == nil {
 			err = fn()

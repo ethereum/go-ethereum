@@ -42,7 +42,7 @@ type DatabaseSnapshot struct {
 
 // GetSnapshot initializes the database snapshot with the given target state
 // identifier. The returned snapshot should be released otherwise resource
-// leak can happen. It's only supported by hash-based database.
+// leak can happen. It's only supported by path-based database.
 func (db *Database) GetSnapshot(root common.Hash) (*DatabaseSnapshot, error) {
 	snapDB, ok := db.backend.(*snapDatabase)
 	if !ok {

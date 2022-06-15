@@ -18,13 +18,13 @@ package rawdb
 
 import (
 	"encoding/binary"
-	"golang.org/x/crypto/sha3"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/crypto/sha3"
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.
@@ -99,19 +99,13 @@ func DeleteCode(db ethdb.KeyValueWriter, hash common.Hash) {
 }
 
 // hasher used to derive the hash of trie node.
-type hasher struct {
-	sha crypto.KeccakState
-}
+type hasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
 	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
 }
 
-func newHasher() *hasher {
-	h := hasherPool.Get().(*hasher)
-	return h
-}
-
+func newHasher() *hasher           { return hasherPool.Get().(*hasher) }
 func returnHasherToPool(h *hasher) { hasherPool.Put(h) }
 
 func (h *hasher) hashData(data []byte) (n common.Hash) {
@@ -164,16 +158,9 @@ func ReadLegacyTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 }
 
 // WriteLegacyTrieNode writes the provided legacy trie node to database.
-func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
-	if err := db.Put(hash.Bytes(), node); err != nil {
+func WriteLegacyTrieNode(db ethdb.KeyValueWriter, hash []byte, node []byte) {
+	if err := db.Put(hash, node); err != nil {
 		log.Crit("Failed to store legacy trie node", "err", err)
-	}
-}
-
-// DeleteLegacyTrieNode deletes the specified legacy trie node from the database.
-func DeleteLegacyTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
-	if err := db.Delete(hash.Bytes()); err != nil {
-		log.Crit("Failed to delete legacy trie node", "err", err)
 	}
 }
 
@@ -290,8 +277,7 @@ func ReadReverseDiffHead(db ethdb.KeyValueReader) uint64 {
 	if len(data) != 8 {
 		return 0
 	}
-	number := binary.BigEndian.Uint64(data)
-	return number
+	return binary.BigEndian.Uint64(data)
 }
 
 // WriteReverseDiffHead stores the number of the latest reverse diff id

@@ -38,6 +38,9 @@ var (
 	triedbCommitNodesMeter = metrics.NewRegisteredMeter("trie/triedb/commit/nodes", nil)
 	triedbCommitSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/commit/size", nil)
 
+	triedbGCNodesMeter = metrics.NewRegisteredMeter("trie/triedb/gc/nodes", nil)
+	triedbGCSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/gc/size", nil)
+
 	triedbDiffLayerSizeMeter  = metrics.NewRegisteredMeter("trie/triedb/diff/size", nil)
 	triedbDiffLayerNodesMeter = metrics.NewRegisteredMeter("trie/triedb/diff/nodes", nil)
 

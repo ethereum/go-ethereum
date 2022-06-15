@@ -42,9 +42,16 @@ type diskLayerSnapshot struct {
 	lock   sync.RWMutex     // Lock used to protect stale flag
 }
 
-// getSnapshot creates the disk layer snapshot by the given root.
-// If the root is matched with the
-func (dl *diskLayer) getSnapshot(nocache bool) (snap *diskLayerSnapshot, err error) {
+// GetSnapshot creates a disk layer snapshot and rewinds the snapshot
+// to the specified state. In order to store the temporary mutations,
+// the unique database namespace will be allocated for the snapshot,
+// and it's expected to be released after the usage.
+func (dl *diskLayer) GetSnapshot(root common.Hash, freezer *rawdb.Freezer) (snap *diskLayerSnapshot, err error) {
+	// Ensure the requested state is recoverable in the first place.
+	id := rawdb.ReadReverseDiffLookup(dl.diskdb, convertEmpty(root))
+	if id == nil {
+		return nil, errStateUnrecoverable
+	}
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -52,6 +59,7 @@ func (dl *diskLayer) getSnapshot(nocache bool) (snap *diskLayerSnapshot, err err
 		return nil, errSnapshotStale
 	}
 	// Allocate an unique database namespace for the snapshot.
+	// todo ensure the namespace is unique.
 	prefix := make([]byte, 8)
 	if _, err := rand.Read(prefix[:]); err != nil {
 		return nil, err
@@ -61,15 +69,29 @@ func (dl *diskLayer) getSnapshot(nocache bool) (snap *diskLayerSnapshot, err err
 	if err != nil {
 		return nil, err
 	}
+	// Release all held resources and cleanup the junks caused by state revert
+	// in case the snapshot is not constructed successfully.
 	defer func() {
 		if err == nil {
 			return
 		}
-		// Release all held resources and cleanup the junks
 		db.Release()
 		rawdb.DeleteTrieNodeSnapshots(dl.diskdb, prefix)
 	}()
-	if !nocache {
+	// If the requested state is even blow the disk state, then
+	// the discard the diskcache totally and construct the base
+	// layer with the in-disk state.
+	if *id <= rawdb.ReadReverseDiffHead(dl.diskdb) {
+		_, diskRoot := rawdb.ReadTrieNode(dl.diskdb, EncodeStorageKey(common.Hash{}, nil))
+		snap = &diskLayerSnapshot{
+			prefix: prefix,
+			root:   diskRoot,
+			diffid: rawdb.ReadReverseDiffHead(dl.diskdb),
+			diskdb: dl.diskdb,
+			snap:   db,
+			clean:  fastcache.New(16 * 1024 * 1024), // tiny cache
+		}
+	} else {
 		// The requested state is located in the embedded disk
 		// cache, flushes all cached nodes into the ephemeral
 		// disk area and apply the reverse diffs later. Note
@@ -93,37 +115,6 @@ func (dl *diskLayer) getSnapshot(nocache bool) (snap *diskLayerSnapshot, err err
 			snap:   db,
 			clean:  fastcache.New(16 * 1024 * 1024), // tiny cache
 		}
-	} else {
-		// Construct the base layer from the in-disk state. The following
-		// state reverts can be applied on this directly.
-		_, diskRoot := rawdb.ReadTrieNode(dl.diskdb, EncodeStorageKey(common.Hash{}, nil))
-		snap = &diskLayerSnapshot{
-			prefix: prefix,
-			root:   diskRoot,
-			diffid: rawdb.ReadReverseDiffHead(dl.diskdb),
-			diskdb: dl.diskdb,
-			snap:   db,
-			clean:  fastcache.New(16 * 1024 * 1024), // tiny cache
-		}
-	}
-	return snap, nil
-}
-
-// GetSnapshot creates a disk layer snapshot and rewinds the snapshot
-// to the specified state. In order to store the temporary mutations,
-// the unique database namespace will be allocated for the snapshot,
-// and it's expected to be released after the usage.
-func (dl *diskLayer) GetSnapshot(root common.Hash, freezer *rawdb.Freezer) (*diskLayerSnapshot, error) {
-	id := rawdb.ReadReverseDiffLookup(dl.diskdb, convertEmpty(root))
-	if id == nil {
-		return nil, errStateUnrecoverable
-	}
-	// If the requested state is even blow the disk state, then
-	// the cached dirty nodes are not needed by the snapshot.
-	nocache := *id <= rawdb.ReadReverseDiffHead(dl.diskdb)
-	snap, err := dl.getSnapshot(nocache)
-	if err != nil {
-		return nil, err
 	}
 	// Apply the reverse diffs with the given order.
 	for snap.diffid >= *id {

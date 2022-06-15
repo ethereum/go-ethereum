@@ -592,14 +592,13 @@ func makeLargeTestTrie() (*Database, *SecureTrie, *loggingDb) {
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorLargeTrie(t *testing.T) {
-	t.Skip("FIX ME")
 	// Create some arbitrary test trie to iterate
 	_, trie, logDb := makeLargeTestTrie()
 	// Do a seek operation
 	trie.NodeIterator(common.FromHex("0x77667766776677766778855885885885"))
 	// master: 24 get operations
-	// this pr: 2 get operations
-	if have, want := logDb.getCount, uint64(13853); have != want {
+	// this pr: 4 get operations
+	if have, want := logDb.getCount, uint64(4); have != want {
 		t.Fatalf("Too many lookups during seek, have %d want %d", have, want)
 	}
 }

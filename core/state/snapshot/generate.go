@@ -370,6 +370,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, state common.Hash, own
 		root, nodes, err := snapTrie.Commit(nil)
 		if err == nil {
 			db.Commit(root, common.Hash{}, nodes)
+			db.Cap(root, 0)
 		}
 	}
 	// Construct the trie for state iteration, reuse the trie

@@ -70,11 +70,11 @@ func (db *preimageStore) preimage(hash common.Hash) []byte {
 }
 
 // commit flushes the cached preimages into the disk.
-func (db *preimageStore) commit() error {
+func (db *preimageStore) commit(force bool) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if db.preimagesSize <= 4*1024*1024 {
+	if db.preimagesSize <= 4*1024*1024 || force {
 		return nil
 	}
 	batch := db.disk.NewBatch()

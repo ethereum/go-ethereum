@@ -274,6 +274,9 @@ func (db *snapDatabase) Reset(root common.Hash) error {
 		// is nuked out, it can ensure all the children are dangling
 		// and shouldn't be accessible anymore.
 		rawdb.DeleteTrieNode(db.diskdb, EncodeStorageKey(common.Hash{}, nil))
+
+		// TODO(rjl493456442) should we delete all dangling nodes in
+		// path-based scheme? It might take some time though.
 	}
 	// Drop the stale state journal in persistent database.
 	rawdb.DeleteTrieJournal(db.diskdb)
@@ -282,10 +285,8 @@ func (db *snapDatabase) Reset(root common.Hash) error {
 	db.tree.forEach(func(_ common.Hash, layer snapshot) bool {
 		switch layer := layer.(type) {
 		case *diskLayer:
-			// Layer should be inactive now, mark it as stale
 			layer.MarkStale()
 		case *diffLayer:
-			// If the layer is a simple diff, simply mark as stale
 			layer.MarkStale()
 		default:
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
@@ -300,7 +301,7 @@ func (db *snapDatabase) Reset(root common.Hash) error {
 		truncateDiffs(db.freezer, db.diskdb, diffid)
 	}
 	db.tree = newLayerTree(newDiskLayer(root, diffid, db.cleans, newDiskcache(nil, 0), db.diskdb))
-	log.Info("Rebuild triedb", "root", root, "diffid", diffid)
+	log.Info("Rebuild trie database", "root", root, "id", diffid)
 	return nil
 }
 
@@ -372,6 +373,7 @@ func (db *snapDatabase) Recover(target common.Hash) error {
 		}
 		current -= 1
 	}
+	log.Info("Recovered state", "root", target)
 	return nil
 }
 

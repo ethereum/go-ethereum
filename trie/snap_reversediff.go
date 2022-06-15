@@ -172,13 +172,18 @@ func storeReverseDiff(freezer *rawdb.Freezer, dl *diffLayer, limit uint64) error
 func truncateFromHead(freezer *rawdb.Freezer, disk ethdb.Database, nhead uint64) (int, error) {
 	ohead, _ := freezer.Ancients()
 	batch := disk.NewBatch()
-	for id := nhead + 1; id <= ohead; id++ {
+	for id := ohead; id > nhead; id-- {
 		hash := rawdb.ReadReverseDiffHash(disk, id)
 		if hash != (common.Hash{}) {
 			rawdb.DeleteReverseDiffLookup(batch, hash)
 		}
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return 0, err
+			}
+			batch.Reset()
+		}
 	}
-	// TODO(rjl493456442) split the batch if it's too large
 	if err := batch.Write(); err != nil {
 		return 0, err
 	}
@@ -199,8 +204,13 @@ func truncateFromTail(freezer *rawdb.Freezer, disk ethdb.Database, ntail uint64)
 		if hash != (common.Hash{}) {
 			rawdb.DeleteReverseDiffLookup(batch, hash)
 		}
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return 0, err
+			}
+			batch.Reset()
+		}
 	}
-	// TODO(rjl493456442) split the batch if it's too large
 	if err := batch.Write(); err != nil {
 		return 0, err
 	}
