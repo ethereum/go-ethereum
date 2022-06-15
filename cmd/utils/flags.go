@@ -257,9 +257,9 @@ var (
 		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
 		Value: 2048,
 	}
-	OverrideArrowGlacierFlag = cli.Uint64Flag{
-		Name:  "override.arrowglacier",
-		Usage: "Manually specify Arrow Glacier fork-block, overriding the bundled setting",
+	OverrideGrayGlacierFlag = cli.Uint64Flag{
+		Name:  "override.grayglacier",
+		Usage: "Manually specify Gray Glacier fork-block, overriding the bundled setting",
 	}
 	OverrideTerminalTotalDifficulty = BigFlag{
 		Name:  "override.terminaltotaldifficulty",
