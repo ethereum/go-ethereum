@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
@@ -302,7 +304,97 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	if err != nil {
 		return nil, err
 	}
+	log.Info("using LevelDB as the backing database")
 	return NewDatabase(db), nil
+}
+
+// NewPebbleDBDatabase creates a persistent key-value database without a freezer
+// moving immutable chain segments into cold storage.
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("using Pebble as the backing database")
+	return NewDatabase(db), nil
+}
+
+type dbType int
+
+const (
+	Nonexistent dbType = iota
+	Pebble
+	LevelDb
+)
+
+func hasPreexistingDb(path string) dbType {
+	_, err := os.Stat(path + "/CURRENT")
+	if os.IsNotExist(err) || err != nil {
+		return Nonexistent
+	}
+	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
+		if err != nil {
+			panic(err) // only possible if the pattern is malformed
+		}
+		return Pebble
+	}
+	return LevelDb
+}
+
+func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+	var (
+		db  ethdb.Database
+		err error
+	)
+
+	preexistingDb := hasPreexistingDb(file)
+
+	if backingdb == "pebble" {
+		if preexistingDb == LevelDb {
+			return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
+		} else {
+			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else if backingdb == "leveldb" {
+		if preexistingDb == Pebble {
+			return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
+		} else {
+			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if preexistingDb == Pebble {
+			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return db, nil
+}
+
+func NewPebbleOrLevelDBDatabaseWithFreezer(backingdb string, file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	kvdb, err := NewPebbleOrLevelDBDatabase(backingdb, file, cache, handles, namespace, readonly)
+	if err != nil {
+		return nil, err
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
+	if err != nil {
+		kvdb.Close()
+		return nil, err
+	}
+	return frdb, nil
 }
 
 // NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
@@ -311,6 +403,21 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 // opened.
 func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
+	if err != nil {
+		return nil, err
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
+	if err != nil {
+		kvdb.Close()
+		return nil, err
+	}
+	return frdb, nil
+}
+
+// NewPebbleDBDatabaseWithFreezer creates a persistent key-value database with a
+// freezer moving immutable chain segments into cold storage.
+func NewPebbleDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	kvdb, err := pebble.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}

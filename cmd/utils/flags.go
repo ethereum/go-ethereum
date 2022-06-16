@@ -99,6 +99,11 @@ var (
 		Usage:    "URL for remote database",
 		Category: flags.LoggingCategory,
 	}
+	BackingDBFlag = &cli.StringFlag{
+		Name:  "backingdb",
+		Usage: "Backing database implementation to use",
+		Value: ethconfig.Defaults.BackingDB,
+	}
 	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",
 		Usage:    "Root directory for ancient data (default = inside chaindata)",
@@ -1012,6 +1017,7 @@ var (
 		AncientFlag,
 		RemoteDBFlag,
 		HttpHeaderFlag,
+		BackingDBFlag,
 	}
 )
 
@@ -1496,6 +1502,14 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.IsSet(InsecureUnlockAllowedFlag.Name) {
 		cfg.InsecureUnlockAllowed = ctx.Bool(InsecureUnlockAllowedFlag.Name)
+	}
+	if ctx.IsSet(BackingDBFlag.Name) {
+		backingDB := ctx.String(BackingDBFlag.Name)
+		if backingDB != "leveldb" && backingDB != "pebble" {
+			Fatalf("invalid choice for backing db: %s", backingDB)
+		}
+		log.Info(fmt.Sprintf("using %s as backing db", backingDB))
+		cfg.BackingDB = backingDB
 	}
 }
 
