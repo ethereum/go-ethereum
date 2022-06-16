@@ -126,7 +126,7 @@ true
 
 Validate the given passphrase and submit transaction.
 
-The transaction is the same argument as for `eth_sendTransaction` and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
+The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
 
 | Client   | Method invocation                                                |
 | :--------| -----------------------------------------------------------------|

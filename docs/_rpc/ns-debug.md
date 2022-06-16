@@ -573,16 +573,7 @@ References:
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The block can be specified either by hash or by number. It takes the same input object as a `eth_call`.
-It returns the same output as `debug_traceTransaction`. A tracer can be specified as a third argument, similar to `debug_traceTransaction`.
-
-`Object` - The transaction call object
-- `from`: `DATA`, 20 Bytes - (optional) The address the transaction is sent from.
-- `to`: `DATA`, 20 Bytes - The address the transaction is directed to.
-- `gas`: `QUANTITY` - (optional) Integer of the gas provided for the transaction execution. eth_call consumes zero gas, but this parameter may be needed by some executions.
-- `gasPrice`: `QUANTITY` - (optional) Integer of the gasPrice used for each paid gas
-- `value`: `QUANTITY` - (optional) Integer of the value sent with this transaction
-- `data`: `DATA` - (optional) Hash of the method signature and encoded parameters. For details see Ethereum Contract ABI in the Solidity documentation
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. A tracer can be specified as a third argument, similar to `debug_traceTransaction`. It returns the same output as `debug_traceTransaction`.
 
 | Client  | Method invocation                 |
 |:-------:|-----------------------------------|

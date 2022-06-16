@@ -1,5 +1,5 @@
 ---
-title: Data structures
+title: Objects
 sort_key: C
 ---
 
