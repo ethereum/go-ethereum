@@ -118,8 +118,8 @@ var (
 		Name:  "remotedb",
 		Usage: "URL for remote database",
 	}
-	BackingDBFlag = cli.StringFlag {
-		Name: "backingdb",
+	BackingDBFlag = cli.StringFlag{
+		Name:  "backingdb",
 		Usage: "Backing database implementation to use",
 		Value: ethconfig.Defaults.BackingDB,
 	}
