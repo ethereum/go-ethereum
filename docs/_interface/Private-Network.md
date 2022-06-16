@@ -220,7 +220,7 @@ Mining can be further configured by changing the default gas limit blocks conver
 For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for mining, it can be run with all the usual flags plus the following to configure mining:
 
 ```shell
-geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0x0000000000000000000000000000000000000000
+geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0xf41c74c9ae680c1aa78f42e5647a62f353b7bdde
 ```
 
 This will start mining bocks and transactions on a single CPU thread, crediting all block rewards to the account specified by `--miner.etherbase`.
