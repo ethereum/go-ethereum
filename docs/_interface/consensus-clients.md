@@ -32,7 +32,7 @@ The authorization must then be applied to a specific address/port. This is achie
 applies to the port authenticated using `jwtsecret`. 
 
 The Merge itself will be triggered using a terminal total difficulty (TTD). The specific value for the TTD has not yet
-been decided. When it is decided,Geth needs to know what it is in order to merge successfully. This requires restarting
+been decided. When it is decided, Geth needs to know what it is in order to merge successfully. This requires restarting
 Geth with the `--override.terminaltotaldiffilculty` command, passing the correct value as an argument.
 
 A complete command to start Geth so that it can connect to a consensus client looks as follows:
@@ -85,16 +85,16 @@ More information on this can be found in the documentation for each consensus cl
 
 ## Validators
 
-After The Merge, miners are n longer responsible for securing the Ethereum blockchain. Instead, this becomes the responsibility
+After The Merge, miners are no longer responsible for securing the Ethereum blockchain. Instead, this becomes the responsibility
 of validators that have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients
-have their own validator software that is described in detail on their respective documentation. The easiest way to handle 
+have their own validator software that is described in detail in their respective documentation. The easiest way to handle 
 staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link].
 
 ## Using Geth
 
 After the merge, Geth will follow the head of the chain via its connection to the consensus client. However, Geth is still 
 the portal for users to send transactions to Ethereum. Overall, Geth will not change very much from a user-perspective. 
-The Geth Javascript console is still available for this purpose, and the majority of the [JSON-RPC-API](/docs/rpc/server) will 
+The Geth Javascript console is still available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will 
 remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the 
 [Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started using the following command
 in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
