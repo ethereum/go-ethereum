@@ -32,8 +32,8 @@ The authorization must then be applied to a specific address/port. This is achie
 applies to the port authenticated using `jwtsecret`. 
 
 The Merge itself will be triggered using a terminal total difficulty (TTD). The specific value for the TTD has not yet
-been decided. When it is decided, Geth needs to know what it is in order to merge successfully. This requires restarting
-Geth with the `--override.terminaltotaldiffilculty` command, passing the correct value as an argument.
+been decided. When it is decided, Geth needs to know what it is in order to merge successfully. This will most likely be 
+included in a new release, so Geth will have to be stopped, updated and restarted in advance of The Merge.
 
 A complete command to start Geth so that it can connect to a consensus client looks as follows:
 
@@ -45,21 +45,19 @@ geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --a
 ## Consensus clients
 
 There are currently five consensus clients that can be run alongside Geth. These are:
-
-[Teku](https://pegasys.tech/teku): written in Java
- 
-[Nimbus](https://nimbus.team/): written in Nim
  
 [Lighthouse](https://lighthouse-book.sigmaprime.io/): written in Rust
  
-[Lodestar](https://lodestar.chainsafe.io/): written in Typescript
+[Nimbus](https://nimbus.team/): written in Nim
  
 [Prysm](https://docs.prylabs.network/docs/getting-started/): written in Go
-
+ 
+[Teku](https://pegasys.tech/teku): written in Java
+ 
 There is currently a [client diversity][client-div-link] issue where a large dominance of Prysm clients poses a risk 
 to the health of the network. In response to the initial drive to even out the client diversity many Prysm nodes switched 
 to Lighthouse to the extent that it now also has a problematic market share. It is therefore recommended to use a minority 
-client such as Teku, Nimbus or Lodestar (although users should be aware that Lodestar is currently awaiting a third-party audit). 
+client such as Teku or Nimbus. 
 
 It is also worth noting that client diversity is also an [issue on the execution layer](https://clientdiversity.org/), 
 with Geth being run on about 85% of all Ethereum nodes. It is assumed that readers on this page have at 
@@ -113,18 +111,14 @@ as the merge block, awaiting information from a consensus client. Therefore, any
 connected to a consensus client. There are many instructional articles that exlain how to connect to these testnets using Geth in
 combination with various consensus clients, for example:
 
-[Connecting to Kiln using Geku](https://github.com/chrishobcroft/TestingTheMerge/blob/main/geku.md)
+[Connecting to Kiln using Teku](https://github.com/chrishobcroft/TestingTheMerge/blob/main/geku.md)
  
-[Connecting to Kiln using GethHouse](https://github.com/remyroy/ethstaker/blob/main/merge-devnet.md)
+[Connecting to Kiln using Lighthouse](https://github.com/remyroy/ethstaker/blob/main/merge-devnet.md)
  
-[Connecting to Kiln using Geth-Prysm](https://hackmd.io/@prysmaticlabs/B1Q2SluWq)
- 
-[Connecting to Ropsten using GethStar](https://mirror.xyz/jmcook.eth/1GcUHyHst4VxXsbr4Ee3DJbrFQjAmQLkqt-fIBEeX_M)
- 
-[Connecting to Ropsten using GethHouse](https://github.com/remyroy/ethstaker/blob/main/merge-ropsten.md)
+[Connecting to Kiln using Prysm](https://hackmd.io/@prysmaticlabs/B1Q2SluWq)
+  
+[Connecting to Ropsten using Lighthouse](https://github.com/remyroy/ethstaker/blob/main/merge-ropsten.md)
 
-*(note that the client combinations are often named using portmanteaus of the individual client names, e.g. Geth + lighthouse = Geth-House, 
-Geth + Teku = Geku, etc).*
 
 The Merge testing will soon progress to merging the Sepolia and Goerli testnets. Once this has happened Geth will require a connection
 to a consensus client to work on those networks too.
