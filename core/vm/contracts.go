@@ -1068,10 +1068,6 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	return g.EncodePoint(r), nil
 }
 
-var PrecompiledContractsDanksharding = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x14}): &pointEvaluation{},
-}
-
 // pointEvaluation implements the EIP-4844 point evaluation precompile
 // to check if a value is part of a blob at a specific point with a KZG proof.
 type pointEvaluation struct{}
