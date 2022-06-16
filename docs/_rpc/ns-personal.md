@@ -164,6 +164,15 @@ See ecRecover to verify the signature.
 "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b"
 ```
 
+### personal_signTransaction
+
+SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/rpc/objects#transaction-call-object) and the second argument is the password, similar to `personal_sendTransaction`.
+
+| Client   | Method invocation                                                |
+| :--------| -----------------------------------------------------------------|
+| Console  | `personal.signTransaction(tx, passphrase)`                       |
+| RPC      | `{"method": "personal_signTransaction", "params": [tx, string]}` |
+
 ### personal_ecRecover
 
 `ecRecover` returns the address associated with the private key that was used to calculate the signature in `personal_sign`. 
