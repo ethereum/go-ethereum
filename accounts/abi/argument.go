@@ -86,6 +86,15 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	return arguments.UnpackValues(data)
 }
 
+// UnpackIntoInterface performs the operation hexdata in v
+func (arguments Arguments) UnpackIntoInterface(v interface{}, data []byte) error {
+	unpacked, err := arguments.Unpack(data)
+	if err != nil {
+		return err
+	}
+	return arguments.Copy(v, unpacked)
+}
+
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	// Make sure map is not nil
@@ -131,7 +140,7 @@ func (arguments Arguments) copyAtomic(v interface{}, marshalledValues interface{
 	dst := reflect.ValueOf(v).Elem()
 	src := reflect.ValueOf(marshalledValues)
 
-	if dst.Kind() == reflect.Struct {
+	if dst.Kind() == reflect.Struct && src.Kind() != reflect.Struct {
 		return set(dst.Field(0), src)
 	}
 	return set(dst, src)
