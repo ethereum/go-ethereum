@@ -59,8 +59,8 @@ that will trigger the Merge is also known as the [*Terminal
 Total Difficulty* (TTD)](https://ethereum.org/en/glossary/#terminal-total-difficulty). In
 case of an emergency delay, the TTD can be overriden in Geth using the `--override.terminaltotaldifficulty` command-line
 flag. Once the merge block exists, Geth will no longer be able to follow the head of the chain without a consensus
-client. If Geth is not connected to a consensus client it will simply stall at the merge block awaiting instructions
-information from a consensus client. Assuming a consensus client is connected in advance, the two clients will automatically
+client. If Geth is not connected to a consensus client it will simply stall at the merge block. 
+Assuming a consensus client is connected in advance, the two clients will automatically
 handle the merge together with no disruption to the user.
 
 ## Using Geth after The Merge
