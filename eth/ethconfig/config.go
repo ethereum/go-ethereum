@@ -243,7 +243,11 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		genesisContractsClient := contract.NewGenesisContractsClient(chainConfig, chainConfig.Bor.ValidatorContract, chainConfig.Bor.StateReceiverContract, blockchainAPI)
 		spanner := span.NewChainSpanner(blockchainAPI, contract.ValidatorSet(), chainConfig, common.HexToAddress(chainConfig.Bor.ValidatorContract))
 
-		return bor.New(chainConfig, db, blockchainAPI, spanner, heimdall.NewHeimdallClient(ethConfig.HeimdallURL), genesisContractsClient)
+		if ethConfig.WithoutHeimdall {
+			return bor.New(chainConfig, db, blockchainAPI, spanner, nil, genesisContractsClient)
+		} else {
+			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdall.NewHeimdallClient(ethConfig.HeimdallURL), genesisContractsClient)
+		}
 	} else {
 		switch config.PowMode {
 		case ethash.ModeFake:
