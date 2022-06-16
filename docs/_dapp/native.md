@@ -61,7 +61,8 @@ The Geth library is distributed as a collection of standard Go packages straight
 repository. The packages can be used directly via the official Go toolkit, without needing any 
 third party tools. External dependencies are vendored locally into `vendor`, ensuring both 
 self-containment and code stability. When Geth is used in downstream projects these best
-practices should also be followed there too to avoid any accidental API breakages.
+practices (packing dependencies into a local `vendor`) should be followed there too to 
+avoid any accidental API breakages.
 
 The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with all packages residing
 underneath. Although there are [lots of them][go-ethereum-dir] most developers will only care about 
@@ -78,7 +79,7 @@ and [Go Account Management](/docs/dapp/native-accounts) pages.
 
 ## Summary
 
-There are Go APIs avaiable for dapp developers that abstract away the complexity of interacting with Ethereum
+There are a wide variety of Go APIs available for dapp developers that abstract away the complexity of interacting with Ethereum
 using a set of composable, reusable functions provided by Geth.
 
 [go-guide]: https://github.com/golang/go/wiki#getting-started-with-go
