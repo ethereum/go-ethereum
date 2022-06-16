@@ -3,64 +3,88 @@ title: Go API
 sort_key: C
 ---
 
-The Ethereum blockchain along with its two extension protocols Whisper and Swarm was
-originally conceptualized to become the supporting pillar of web3, providing the
-consensus, messaging and storage backbone for a new generation of distributed (actually,
-decentralized) applications called DApps.
+Ethereum was originally conceptualized to be the base layer for [Web3][web3-link], providing 
+the backbone for a new generation of decentralized, permissionless and censorship resistant 
+applications called [dapps][dapp-link]. The first step towards this vision was the development 
+of clients providing an RPC interface into the peer-to-peer protocols. This allowed users to 
+transact between accounts and interact with smart contracts using command line tools. 
+Geth was one of the original clients to provide this type of gateway to the Ethereum network.
 
-The first incarnation towards this dream of web3 was a command line client providing an
-RPC interface into the peer-to-peer protocols. The client was soon enough extended with a
-web-browser-like graphical user interface, permitting developers to write DApps based on
-the tried and proven HTML/CSS/JS technologies.
+Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients.
+However, as dapps became more complex their requirements exceeded what a simple browser environment
+could support. To support the next generation of dapps, built using time-tested HTML/CSS/JS 
+technologies, programmatic access to client functions was required
 
-As many DApps have more complex requirements than what a browser environment can handle,
-it became apparent that providing programmatic access to the web3 pillars would open the
-door towards a new class of applications. As such, the second incarnation of the web3
-dream is to open up all our technologies for other projects as reusable components.
+Programmatic access to client functions is best delivered in the form of an open API. 
+This not only levels-up the complexity of dapps that can be built on top of 
+Ethereum but also opens up client technologies as re-usable, composable units that can be 
+applied in creative ways by a global community of developers.
 
-Starting with the 1.5 release family of `go-ethereum`, we transitioned away from providing
-only a full blown Ethereum client and started shipping official Go packages that could be
-embedded into third party desktop and server applications.
+To support this vision, Geth ships official Go packages that can be embedded into third party 
+desktop and server applications. There is also a [mobile API](/docs/dapp/mobile) that can be 
+used to embed Geth into mobile applications.
 
-*Note, this guide will assume you are familiar with Go development. It will make no
-attempts to cover general topics about Go project layouts, import paths or any other
-standard methodologies. If you are new to Go, consider reading its [getting started guides][go-guide] first.*
+This page provides a high-level overview of the Go API.
 
-## Quick overview
+*Note, this guide will assume some familiarity with Go development. It does not cover general topics 
+about Go project layouts, import paths or any other standard methodologies. If you are new to Go, 
+consider reading [Getting Started with Go][go-guide] first.*
 
-Our reusable Go libraries focus on four main usage areas:
+## Overview
+
+Geth's reusable Go libraries focus on three main usage areas:
 
 - Simplified client side account management
 - Remote node interfacing via different transports
 - Contract interactions through auto-generated bindings
-- In-process Ethereum, Whisper and Swarm peer-to-peer node
 
-You can watch a quick overview about these in Peter's (@karalabe) talk titled "Import
-Geth: Ethereum from Go and beyond", presented at the Ethereum Devcon2 developer conference
-in September, 2016 (Shanghai). Slides are [available here][peter-slides].
+The libraries are updated synchronously with the Geth Github repository. 
+The Go libraries can be viewed in full at [Go Packages][go-pkg-link]
 
-[![Peter's Devcon2 talk](https://img.youtube.com/vi/R0Ia1U9Gxjg/0.jpg)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
+The benefits of using the Go libraries include easy client-side [account management](/docs/dapp/native-accounts)
+that allows users to keep their private keys safely encrypted locally and make their own
+security decisions. The Go libraries allow dapp developers to spend more of their time
+building their dapps rather than implementing complex protocols such as encoding and
+decoding function calls to smart contracts - this can all be abstracted away using
+Geth's Go libraries.
+
+Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in 
+a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource
+([available here][peter-slides]) and the talk itself can be viewed by clicking
+the image below (it is also archived on [IPFS][ipfs-link]).
+
+[![Peter's Devcon2 talk](/static/images/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
 ## Go packages
 
-The `go-ethereum` library is distributed as a collection of standard Go packages straight
-from our GitHub repository. The packages can be used directly via the official Go toolkit,
-without needing any third party tools. External dependencies are vendored locally into
-`vendor`, ensuring both self-containment as well as code stability. If you reuse
-`go-ethereum` in your own project, please follow these best practices and vendor it
-yourself too to avoid any accidental API breakages!
+The Geth library is distributed as a collection of standard Go packages straight from Geth's GitHub
+repository. The packages can be used directly via the official Go toolkit, without needing any 
+third party tools. External dependencies are vendored locally into `vendor`, ensuring both 
+self-containment and code stability. When Geth is used in downstream projects these best
+practices should also be followed there too to avoid any accidental API breakages.
 
-The canonical import path for `go-ethereum` is `github.com/ethereum/go-ethereum`, with all
-packages residing underneath. Although there are [quite a number][go-ethereum-dir] of
-them, you'll only need to care about a limited subset, each of which will be properly
-introduced in their relevant section.
+The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with all packages residing
+underneath. Although there are [lots of them][go-ethereum-dir] most developers will only care about 
+a limited subset.
 
-You can download all our packages via:
+All the Geth packages can be downloaded using:
 
 ```
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
+More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/dapp/native-bindings)
+and [Go Account Management](/docs/dapp/native-accounts) pages.
+
+## Summary
+
+There are Go APIs avaiable for dapp developers that abstract away the complexity of interacting with Ethereum
+using a set of composable, reusable functions provided by Geth.
+
 [go-guide]: https://github.com/golang/go/wiki#getting-started-with-go
 [peter-slides]: https://ethereum.karalabe.com/talks/2016-devcon.html
 [go-ethereum-dir]: https://pkg.go.dev/github.com/ethereum/go-ethereum/#section-directories
+[go-pkg-link]: https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories
+[ipfs-link]: https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR
+[dapp-link]: https://ethereum.org/en/glossary/#dapp
+[web3-link]: https://ethereum.org/en/web3/
