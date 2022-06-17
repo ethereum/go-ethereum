@@ -1,6 +1,6 @@
 ---
 title: Communication APIs
-sort_key: C
+sort_key: E
 ---
 
 ### External API
