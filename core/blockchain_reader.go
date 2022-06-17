@@ -330,6 +330,7 @@ func (bc *BlockChain) Validator() Validator {
 	return bc.validator
 }
 
+// SetValidator sets the current validator.
 func (bc *BlockChain) SetValidator(v Validator) {
 	bc.validator = v
 }
