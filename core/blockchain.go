@@ -1652,9 +1652,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		// Validate the state using the default validator
 		substart = time.Now()
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-			bc.reportBlock(block, receipts, err)
-			atomic.StoreUint32(&followupInterrupt, 1)
-			return it.index, err
+			fmt.Println("#### ignoring invalid block")
+			// bc.reportBlock(block, receipts, err)
+			// atomic.StoreUint32(&followupInterrupt, 1)
+			// return it.index, err
 		}
 		proctime := time.Since(start)
 
