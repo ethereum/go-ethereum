@@ -126,15 +126,12 @@ true
 
 Validate the given passphrase and submit transaction.
 
-The transaction is the same argument as for `eth_sendTransaction` and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
+The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
 
 | Client   | Method invocation                                                |
 | :--------| -----------------------------------------------------------------|
 | Console  | `personal.sendTransaction(tx, passphrase)`                       |
 | RPC      | `{"method": "personal_sendTransaction", "params": [tx, string]}` |
-
-*Note, prior to Geth 1.5, please use `personal_signAndSendTransaction` as that was the
-original introductory name and only later renamed to the current final version.*
 
 #### Examples
 
@@ -166,6 +163,15 @@ See ecRecover to verify the signature.
 > personal.sign("0xdeadbeaf", "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83", "")
 "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b"
 ```
+
+### personal_signTransaction
+
+SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/rpc/objects#transaction-call-object) and the second argument is the password, similar to `personal_sendTransaction`.
+
+| Client   | Method invocation                                                |
+| :--------| -----------------------------------------------------------------|
+| Console  | `personal.signTransaction(tx, passphrase)`                       |
+| RPC      | `{"method": "personal_signTransaction", "params": [tx, string]}` |
 
 ### personal_ecRecover
 
