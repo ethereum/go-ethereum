@@ -52,7 +52,7 @@ type AccessListTx struct {
 	Value      *big.Int        // wei amount
 	Data       []byte          // contract invocation input data
 	AccessList AccessList      // EIP-2930 access list
-	V, R, S    *big.Int        // signature values
+	V, R, S    *big.Int        `rlp:"optional"` // signature values
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.

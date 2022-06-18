@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -530,4 +531,42 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 		}
 	}
 	return nil
+}
+
+func decodeRLP(txData string) (*Transaction, error) {
+	txDataBytes, err := hex.DecodeString(txData)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := new(Transaction)
+	err = tx.UnmarshalBinary(txDataBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
+}
+
+func TestUnsignedTxDecode(t *testing.T) {
+	// rlp encoded transactions sending 0.001 ETH to vitalik
+	// each RLP payload is missing the signature data fields
+
+	txDatas := []string{
+		// dynamic fee tx
+		"02ee03808459682f008459682f0a82520894d8da6bf26964af9d7eed9e03e53415d37aa9604587038d7ea4c6800080c0",
+
+		// access list tx
+		"01f86501800a8301e24194d8da6bf26964af9d7eed9e03e53415d37aa9604587038d7ea4c6800086616263646566f838f7940000000000000000000000000000000000000001e1a00000000000000000000000000000000000000000000000000000000000000000",
+
+		// legacy tx
+		"e780020194d8da6bf26964af9d7eed9e03e53415d37aa9604587038d7ea4c6800086616263646566",
+	}
+
+	for _, data := range txDatas {
+		_, err := decodeRLP(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

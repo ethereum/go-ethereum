@@ -34,9 +34,9 @@ type DynamicFeeTx struct {
 	AccessList AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	V *big.Int `json:"v" gencodec:"required" rlp:"optional"`
+	R *big.Int `json:"r" gencodec:"required" rlp:"optional"`
+	S *big.Int `json:"s" gencodec:"required" rlp:"optional"`
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.

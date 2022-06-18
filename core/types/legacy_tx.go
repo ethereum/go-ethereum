@@ -30,7 +30,7 @@ type LegacyTx struct {
 	To       *common.Address `rlp:"nil"` // nil means contract creation
 	Value    *big.Int        // wei amount
 	Data     []byte          // contract invocation input data
-	V, R, S  *big.Int        // signature values
+	V, R, S  *big.Int        `rlp:"optional"` // signature values
 }
 
 // NewTransaction creates an unsigned legacy transaction.
