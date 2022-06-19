@@ -225,6 +225,17 @@ Ethereum nodes with exposed APIs! Further, all browser tabs can access locally
 running web servers, so malicious web pages could try to subvert locally available
 APIs!**
 
+### Puppeth network manager
+Geth 1.6 shipped a new tool called puppeth, which was aimed at solvving the particular issue of deploying your own private Ethereum Network.
+
+Puppeth is a CLI wizard that aids in creating a new Ethereum network down to the genesis, bootnodes, signers, ethstats, faucet, dashboard and more, without the hassle that it would normally take to configure all these services one by one. It makes usage of ssh to dial into remote servers, and builds its network components out of docker containers using docker-compose. The user is guided through the process via a command line wizard that does the heavy lifting and topology configuration automatically behind the scenes.
+
+Puppeth aids deploying your own private network without creating a fuss by deploying everything into containers, hence not littering your system with weird packages.
+
+Puppeth can also be installed independently if you have Go installed, with the following command:
+``` go get github.com/ethereum/go-ethereum/cmd/puppeth ```
+
+
 ### Operating a private network
 
 Maintaining your own private network is more involved as a lot of configurations taken for
