@@ -134,7 +134,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	log.Info("[Initial] initial v2 related parameters")
 
 	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
-		log.Error("[Initial] Already initialized", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash)
+		log.Info("[Initial] Already initialized", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash)
 		return nil
 	}
 
@@ -248,7 +248,7 @@ func (x *XDPoS_v2) Prepare(chain consensus.ChainReader, header *types.Header) er
 	x.lock.RUnlock()
 
 	if header.ParentHash != highestQC.ProposedBlockInfo.Hash {
-		log.Warn("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "parentHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash, "QCNumber", highestQC.ProposedBlockInfo.Number)
+		log.Warn("[Prepare] parent hash and QC hash does not match", "blockNum", header.Number, "QCNumber", highestQC.ProposedBlockInfo.Number, "blockHash", header.ParentHash, "QCHash", highestQC.ProposedBlockInfo.Hash)
 		return consensus.ErrNotReadyToPropose
 	}
 
@@ -618,9 +618,6 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg 
 
 /*
 	Entry point for handling timeout message to process below:
-	1. checkRoundNumber()
-	2. Collect timeout
-	3. Once timeout pool reached threshold, it will trigger the call to the function "onTimeoutPoolThresholdReached"
 */
 func (x *XDPoS_v2) TimeoutHandler(blockChainReader consensus.ChainReader, timeout *types.Timeout) error {
 	x.lock.Lock()
@@ -635,13 +632,6 @@ func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader
 	x.lock.Lock()
 	defer x.lock.Unlock()
 
-	/*
-		1. Verify QC
-		2. Generate blockInfo
-		3. processQC(): process the QC inside the proposed block
-		4. verifyVotingRule(): the proposed block's info is extracted into BlockInfo and verified for voting
-		5. sendVote()
-	*/
 	// Get QC and Round from Extra
 	quorumCert, round, _, err := x.getExtraFields(blockHeader)
 	if err != nil {
@@ -671,8 +661,6 @@ func (x *XDPoS_v2) ProposedBlockHandler(chain consensus.ChainReader, blockHeader
 	}
 	if verified {
 		return x.sendVote(chain, blockInfo)
-	} else {
-		log.Info("Failed to pass the voting rule verification", "ProposeBlockHash", blockInfo.Hash)
 	}
 
 	return nil
@@ -792,8 +780,8 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
 	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
 	if gapNumber != quorumCert.GapNumber {
-		log.Error("[verifyQC] gap number mismatch", "BlockInfoHash", quorumCert.ProposedBlockInfo.Hash, "Gap", quorumCert.GapNumber, "GapShouldBe", gapNumber)
-		return fmt.Errorf("gap number mismatch %v", quorumCert)
+		log.Error("[verifyQC] QC gap number mismatch", "epochSwitchNumber", epochSwitchNumber, "BlockNum", quorumCert.ProposedBlockInfo.Number, "BlockInfoHash", quorumCert.ProposedBlockInfo.Hash, "Gap", quorumCert.GapNumber, "GapShouldBe", gapNumber)
+		return fmt.Errorf("gap number mismatch QC Gap %d, shouldBe %d", quorumCert.GapNumber, gapNumber)
 	}
 
 	return x.VerifyBlockInfo(blockChainReader, quorumCert.ProposedBlockInfo, parentHeader)
@@ -801,16 +789,17 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 
 // Update local QC variables including highestQC & lockQuorumCert, as well as commit the blocks that satisfy the algorithm requirements
 func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuorumCert *types.QuorumCert) error {
-	log.Trace("[ProcessQC][Before]", "HighQC", x.highestQuorumCert)
+	log.Trace("[processQC][Before]", "HighQC", x.highestQuorumCert)
 	// 1. Update HighestQC
 	if incomingQuorumCert.ProposedBlockInfo.Round > x.highestQuorumCert.ProposedBlockInfo.Round {
+		log.Debug("[processQC] update x.highestQuorumCert", "blockNum", incomingQuorumCert.ProposedBlockInfo.Number, "round", incomingQuorumCert.ProposedBlockInfo.Round, "hash", incomingQuorumCert.ProposedBlockInfo.Hash)
 		x.highestQuorumCert = incomingQuorumCert
 	}
 	// 2. Get QC from header and update lockQuorumCert(lockQuorumCert is the parent of highestQC)
 	proposedBlockHeader := blockChainReader.GetHeaderByHash(incomingQuorumCert.ProposedBlockInfo.Hash)
 	if proposedBlockHeader == nil {
 		log.Error("[processQC] Block not found using the QC", "quorumCert.ProposedBlockInfo.Hash", incomingQuorumCert.ProposedBlockInfo.Hash, "incomingQuorumCert.ProposedBlockInfo.Number", incomingQuorumCert.ProposedBlockInfo.Number)
-		return fmt.Errorf("Block not found, number: %v, hash: %v", incomingQuorumCert.ProposedBlockInfo.Number, incomingQuorumCert.ProposedBlockInfo.Hash)
+		return fmt.Errorf("block not found, number: %v, hash: %v", incomingQuorumCert.ProposedBlockInfo.Number, incomingQuorumCert.ProposedBlockInfo.Hash)
 	}
 	if proposedBlockHeader.Number.Cmp(x.config.V2.SwitchBlock) > 0 {
 		// Extra field contain parent information
@@ -834,7 +823,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuo
 	if incomingQuorumCert.ProposedBlockInfo.Round >= x.currentRound {
 		x.setNewRound(blockChainReader, incomingQuorumCert.ProposedBlockInfo.Round+1)
 	}
-	log.Trace("[ProcessQC][After]", "HighQC", x.highestQuorumCert)
+	log.Trace("[processQC][After]", "HighQC", x.highestQuorumCert)
 	return nil
 }
 

@@ -135,6 +135,6 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())
 		return true, epochNum, nil
 	}
-	log.Info("[IsEpochSwitch]", "is", parentRound < epochStartRound, "parentRound", parentRound, "round", round, "number", header.Number.Uint64(), "epochNum", epochNum, "hash", header.Hash())
+	log.Debug("[IsEpochSwitch]", "is", parentRound < epochStartRound, "parentRound", parentRound, "round", round, "number", header.Number.Uint64(), "epochNum", epochNum, "hash", header.Hash())
 	return parentRound < epochStartRound, epochNum, nil
 }

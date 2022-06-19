@@ -15,7 +15,7 @@ import (
 )
 
 func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeout *types.Timeout) error {
-	// 1. checkRoundNumber
+	// checkRoundNumber
 	if timeout.Round != x.currentRound {
 		return &utils.ErrIncomingMessageRoundNotEqualCurrentRound{
 			Type:          "timeout",

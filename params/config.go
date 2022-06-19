@@ -52,9 +52,9 @@ var (
 		SwitchBlock:          big.NewInt(7218000),
 		CertThreshold:        6,
 		TimeoutSyncThreshold: 5,
-		TimeoutPeriod:        50,
+		TimeoutPeriod:        10,
 		WaitPeriod:           2,
-		MinePeriod:           10,
+		MinePeriod:           2,
 	}
 
 	// XDPoSChain mainnet config

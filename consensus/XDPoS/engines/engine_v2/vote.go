@@ -55,7 +55,7 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *types.
 
 func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote) error {
 
-	// 1. checkRoundNumber
+	// checkRoundNumber
 	if (voteMsg.ProposedBlockInfo.Round != x.currentRound) && (voteMsg.ProposedBlockInfo.Round != x.currentRound+1) {
 		return &utils.ErrIncomingMessageRoundTooFarFromCurrentRound{
 			Type:          "vote",
@@ -73,7 +73,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 		// Check if the block already exist, otherwise we try luck with the next vote
 		proposedBlockHeader := chain.GetHeaderByHash(voteMsg.ProposedBlockInfo.Hash)
 		if proposedBlockHeader == nil {
-			log.Warn("[voteHandler] The proposed block from vote message does not exist yet, wait for the next vote to try again", "Hash", voteMsg.ProposedBlockInfo.Hash, "Round", voteMsg.ProposedBlockInfo.Round)
+			log.Warn("[voteHandler] The proposed block from vote message does not exist yet, wait for the next vote to try again", "blockNum", voteMsg.ProposedBlockInfo.Number, "Hash", voteMsg.ProposedBlockInfo.Hash, "Round", voteMsg.ProposedBlockInfo.Round)
 			return nil
 		}
 
@@ -152,6 +152,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, blockInfo *types.BlockInfo, quorumCert *types.QuorumCert) (bool, error) {
 	// Make sure this node has not voted for this round.
 	if x.currentRound <= x.highestVotedRound {
+		log.Warn("Failed to pass the voting rule verification, currentRound is not large then highestVoteRound", "x.currentRound", x.currentRound, "x.highestVotedRound", x.highestVotedRound)
 		return false, nil
 	}
 	/*
@@ -161,6 +162,7 @@ func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, bloc
 		header's QC's ProposedBlockInfo.Round > lockQuorumCert's ProposedBlockInfo.Round
 	*/
 	if blockInfo.Round != x.currentRound {
+		log.Warn("Failed to pass the voting rule verification, blockRound is not equal currentRound", "x.currentRound", x.currentRound, "blockInfo.Round", blockInfo.Round)
 		return false, nil
 	}
 	// XDPoS v1.0 switch to v2.0, the proposed block can always pass voting rule
@@ -174,13 +176,16 @@ func (x *XDPoS_v2) verifyVotingRule(blockChainReader consensus.ChainReader, bloc
 
 	isExtended, err := x.isExtendingFromAncestor(blockChainReader, blockInfo, x.lockQuorumCert.ProposedBlockInfo)
 	if err != nil {
+		log.Error("Failed to pass the voting rule verification, error on isExtendingFromAncestor", "err", err, "blockInfo", blockInfo, "x.lockQuorumCert.ProposedBlockInfo", x.lockQuorumCert.ProposedBlockInfo)
 		return false, err
 	}
-	if isExtended {
-		return true, nil
+
+	if !isExtended {
+		log.Warn("Failed to pass the voting rule verification, block is not extended from ancestor", "blockInfo", blockInfo, "x.lockQuorumCert.ProposedBlockInfo", x.lockQuorumCert.ProposedBlockInfo)
+		return false, nil
 	}
 
-	return false, nil
+	return true, nil
 }
 
 func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReader, currentBlock *types.BlockInfo, ancestorBlock *types.BlockInfo) (bool, error) {

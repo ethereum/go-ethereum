@@ -42,20 +42,20 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, pare
 
 	curIndex := utils.Position(masterNodes, signer)
 	if curIndex == -1 {
-		log.Warn("[yourturn] Not authorised signer", "MN", masterNodes, "Hash", parent.Hash(), "signer", signer)
+		log.Warn("[yourturn] I am not in masternodes list", "Hash", parent.Hash(), "signer", signer)
 		return false, nil
 	}
 
 	for i, s := range masterNodes {
-		log.Warn("[yourturn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
+		log.Debug("[yourturn] Masternode:", "index", i, "address", s.String(), "parentBlockNum", parent.Number)
 	}
 
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
 	if masterNodes[leaderIndex] != signer {
-		log.Warn("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
+		log.Info("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
 		return false, nil
 	}
 
-	log.Debug("[yourturn] Yes, it's my turn based on parent block", "ParentHash", parent.Hash().Hex(), "ParentBlockNumber", parent.Number.Uint64())
+	log.Info("[yourturn] Yes, it's my turn based on parent block", "ParentHash", parent.Hash().Hex(), "ParentBlockNumber", parent.Number.Uint64())
 	return true, nil
 }
