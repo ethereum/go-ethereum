@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -141,10 +142,34 @@ func (s *RPCService) Modules() map[string]string {
 	defer s.server.services.mu.Unlock()
 
 	modules := make(map[string]string)
-	for name := range s.server.services.services {
+	for name, service := range s.server.services.services {
 		modules[name] = "1.0"
+		for mname := range service.callbacks {
+			fmt.Printf("%s:%s, ", name, mname)
+		}
+		fmt.Printf("\n")
 	}
 	return modules
+}
+
+// Methods returns the list of methods for each RPC service.
+func (s *RPCService) Methods() map[string][]string {
+	s.server.services.mu.Lock()
+	defer s.server.services.mu.Unlock()
+
+	methods := make(map[string][]string)
+	for name, service := range s.server.services.services {
+		// Skip methods exposed by the web3.js library as they're not
+		// part of Geth API.
+		if name == "web3" {
+			continue
+		}
+		methods[name] = make([]string, 0, len(service.callbacks))
+		for mname := range service.callbacks {
+			methods[name] = append(methods[name], mname)
+		}
+	}
+	return methods
 }
 
 // PeerInfo contains information about the remote end of the network connection.
