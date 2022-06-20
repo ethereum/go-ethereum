@@ -557,12 +557,6 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 	return crypto.PubkeyToAddress(*rpk), nil
 }
 
-// SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
-// and will be removed in the future. It primary goal is to give clients time to update.
-func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args TransactionArgs, passwd string) (common.Hash, error) {
-	return s.SendTransaction(ctx, args, passwd)
-}
-
 // InitializeWallet initializes a new wallet at the provided URL, by generating and returning a new private key.
 func (s *PrivateAccountAPI) InitializeWallet(ctx context.Context, url string) (string, error) {
 	wallet, err := s.am.Wallet(url)
