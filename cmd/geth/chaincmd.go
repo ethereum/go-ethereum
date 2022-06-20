@@ -311,8 +311,9 @@ func exportChain(ctx *cli.Context) error {
 
 	var err error
 	fp := ctx.Args().First()
+	exportReceipts := ctx.Bool(utils.ExportReceiptsFlag.Name)
 	if len(ctx.Args()) < 3 {
-		err = utils.ExportChain(chain, fp, ctx.GlobalBool(utils.ExportReceiptsFlag.Name))
+		err = utils.ExportChain(chain, fp, exportReceipts)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
@@ -326,7 +327,7 @@ func exportChain(ctx *cli.Context) error {
 		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
 			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
 		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last), ctx.GlobalBool(utils.ExportReceiptsFlag.Name))
+		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last), exportReceipts)
 	}
 
 	if err != nil {
