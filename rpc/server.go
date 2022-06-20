@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -142,12 +141,8 @@ func (s *RPCService) Modules() map[string]string {
 	defer s.server.services.mu.Unlock()
 
 	modules := make(map[string]string)
-	for name, service := range s.server.services.services {
+	for name := range s.server.services.services {
 		modules[name] = "1.0"
-		for mname := range service.callbacks {
-			fmt.Printf("%s:%s, ", name, mname)
-		}
-		fmt.Printf("\n")
 	}
 	return modules
 }
