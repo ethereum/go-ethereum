@@ -3,18 +3,15 @@ title: Clique-signing with Clef
 sort_key: C
 ---
 
-The 'classic' way to sign PoA blocks is to use the "unlock"-feature of `geth`. This is a highly dangerous thing to do, because "unlock" is totally un-discriminatory.
+The 'classic' way to sign PoA blocks is to use the "unlock"-feature of `geth`. This is a highly dangerous thing to do, because "unlock" is totally un-discriminatory. Meaning: if an account is unlocked and an attacker obtains access to the RPC api, the attacker can have anything signed by that account, without supplying a password.
 
-
-Meaning: if an account is unlocked and an attacker obtains access to the RPC api, the attacker can have anything signed by that account, without supplying a password.
-
-The idea with `clef` was to remove the `unlock` capability, yet still provide sufficient usability to make it possible to automate some things yet maintain a high level of security. This post will show how to integrate `clef` as a sealer of clique-blocks.
+The idea with `clef` was to remove the `unlock` capability, yet still provide sufficient usability to make it possible to automate some things while maintaining a high level of security. This post will show how to integrate `clef` as a sealer of clique-blocks.
 
 ## Part 0: Prepping a Clique network
 
 Feel free to skip this section if you already have a Clique-network.
 
-First of all, we'll set up a rudimentary testnet to have something to sign on. First creating a new keystore (password `testtesttest`)
+First of all, we'll set up a rudimentary testnet to have something to sign on. We create a new keystore (password `testtesttest`)
 ```
 $ geth account new --datadir ./ddir
 INFO [06-16|11:10:39.600] Maximum peer count                       ETH=50 LES=0 total=50
