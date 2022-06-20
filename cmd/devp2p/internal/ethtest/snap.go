@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2022 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package ethtest
 
@@ -104,6 +104,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		// Max bytes: 0. Expect to deliver one account.
 		{0, root, zero, ffHash, 1, firstKey, firstKey},
 	} {
+		tc := tc
 		if err := s.snapGetAccountRange(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\nfailed: %v", i, tc.root, tc.origin, tc.limit, tc.nBytes, err)
 		}
@@ -194,6 +195,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 			expSlots: 2,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetStorageRanges(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
 				i, tc.root, tc.origin, tc.limit, tc.nBytes, len(tc.accounts), err)
@@ -291,6 +293,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 			expHashes: 4,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetByteCodes(t, &tc); err != nil {
 			t.Errorf("test %d \n bytes: %d\n #hashes: %d\nfailed: %v", i, tc.nBytes, len(tc.hashes), err)
 		}
@@ -372,8 +375,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{}, // zero-length pathset should 'abort' and kick us off
-				snap.TrieNodePathSet{[]byte{0}},
+				{}, // zero-length pathset should 'abort' and kick us off
+				{[]byte{0}},
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{},
@@ -382,8 +385,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
 			nBytes: 5000,
 			//0x6b3724a41b8c38b46d4d02fba2bb2074c47a507eb16a9a4b978f91d32e406faf
@@ -392,7 +395,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{ // nonsensically long path
 			root: s.chain.RootAt(999),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+				{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8,
 					0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8}},
 			},
 			nBytes:    5000,
@@ -401,8 +404,8 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 		{
 			root: s.chain.RootAt(0),
 			paths: []snap.TrieNodePathSet{
-				snap.TrieNodePathSet{[]byte{0}},
-				snap.TrieNodePathSet{[]byte{1}, []byte{0}},
+				{[]byte{0}},
+				{[]byte{1}, []byte{0}},
 			},
 			nBytes:    5000,
 			expHashes: []common.Hash{},
@@ -436,6 +439,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 			},
 		},
 	} {
+		tc := tc
 		if err := s.snapGetTrieNodes(t, &tc); err != nil {
 			t.Errorf("test %d \n #hashes %x\n root: %#x\n bytes: %d\nfailed: %v", i, len(tc.expHashes), tc.root, tc.nBytes, err)
 		}

@@ -17,18 +17,12 @@
 package main
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestMessageSignVerify(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "ethkey-test")
-	if err != nil {
-		t.Fatal("Can't create temporary directory:", err)
-	}
-	defer os.RemoveAll(tmpdir)
+	tmpdir := t.TempDir()
 
 	keyfile := filepath.Join(tmpdir, "the-keyfile")
 	message := "test message"

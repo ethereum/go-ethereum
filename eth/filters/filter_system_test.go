@@ -44,7 +44,6 @@ var (
 )
 
 type testBackend struct {
-	mux             *event.TypeMux
 	db              ethdb.Database
 	sections        uint64
 	txFeed          event.Feed
@@ -104,6 +103,10 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 		logs[i] = receipt.Logs
 	}
 	return logs, nil
+}
+
+func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return nil, nil
 }
 
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
@@ -301,12 +304,15 @@ func TestLogFilterCreation(t *testing.T) {
 	)
 
 	for i, test := range testCases {
-		_, err := api.NewFilter(test.crit)
-		if test.success && err != nil {
+		id, err := api.NewFilter(test.crit)
+		if err != nil && test.success {
 			t.Errorf("expected filter creation for case %d to success, got %v", i, err)
 		}
-		if !test.success && err == nil {
-			t.Errorf("expected testcase %d to fail with an error", i)
+		if err == nil {
+			api.UninstallFilter(id)
+			if !test.success {
+				t.Errorf("expected testcase %d to fail with an error", i)
+			}
 		}
 	}
 }
@@ -589,7 +595,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	// (some) events are posted.
 	for i := range testCases {
 		testCases[i].c = make(chan []*types.Log)
-		testCases[i].err = make(chan error)
+		testCases[i].err = make(chan error, 1)
 
 		var err error
 		testCases[i].sub, err = api.events.SubscribeLogs(testCases[i].crit, testCases[i].c)

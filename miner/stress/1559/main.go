@@ -19,7 +19,6 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -222,7 +221,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 
 func makeMiner(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",

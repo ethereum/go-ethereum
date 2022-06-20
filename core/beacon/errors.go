@@ -12,11 +12,47 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package beacon
 
-import "github.com/ethereum/go-ethereum/rpc"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
+)
+
+// EngineAPIError is a standardized error message between consensus and execution
+// clients, also containing any custom error message Geth might include.
+type EngineAPIError struct {
+	code int
+	msg  string
+	err  error
+}
+
+func (e *EngineAPIError) ErrorCode() int { return e.code }
+func (e *EngineAPIError) Error() string  { return e.msg }
+func (e *EngineAPIError) ErrorData() interface{} {
+	if e.err == nil {
+		return nil
+	}
+	return struct {
+		Error string `json:"err"`
+	}{e.err.Error()}
+}
+
+// With returns a copy of the error with a new embedded custom data field.
+func (e *EngineAPIError) With(err error) *EngineAPIError {
+	return &EngineAPIError{
+		code: e.code,
+		msg:  e.msg,
+		err:  err,
+	}
+}
+
+var (
+	_ rpc.Error     = new(EngineAPIError)
+	_ rpc.DataError = new(EngineAPIError)
+)
 
 var (
 	// VALID is returned by the engine API in the following calls:
@@ -38,13 +74,14 @@ var (
 	//   - newPayloadV1: if the payload was accepted, but not processed (side chain)
 	ACCEPTED = "ACCEPTED"
 
-	INVALIDBLOCKHASH     = "INVALID_BLOCK_HASH"
-	INVALIDTERMINALBLOCK = "INVALID_TERMINAL_BLOCK"
+	INVALIDBLOCKHASH = "INVALID_BLOCK_HASH"
 
-	GenericServerError = rpc.CustomError{Code: -32000, ValidationError: "Server error"}
-	UnknownPayload     = rpc.CustomError{Code: -32001, ValidationError: "Unknown payload"}
-	InvalidTB          = rpc.CustomError{Code: -32002, ValidationError: "Invalid terminal block"}
+	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
+	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
+	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
+	InvalidPayloadAttributes = &EngineAPIError{code: -38003, msg: "Invalid payload attributes"}
 
-	STATUS_INVALID = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
-	STATUS_SYNCING = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
+	STATUS_INVALID         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: INVALID}, PayloadID: nil}
+	STATUS_SYNCING         = ForkChoiceResponse{PayloadStatus: PayloadStatusV1{Status: SYNCING}, PayloadID: nil}
+	INVALID_TERMINAL_BLOCK = PayloadStatusV1{Status: INVALID, LatestValidHash: &common.Hash{}}
 )

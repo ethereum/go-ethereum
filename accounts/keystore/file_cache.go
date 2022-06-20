@@ -17,7 +17,6 @@
 package keystore
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +40,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 	t0 := time.Now()
 
 	// List all the failes from the keystore folder
-	files, err := ioutil.ReadDir(keyDir)
+	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -65,7 +64,11 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 		// Gather the set of all and fresly modified files
 		all.Add(path)
 
-		modified := fi.ModTime()
+		info, err := fi.Info()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		modified := info.ModTime()
 		if modified.After(fc.lastMod) {
 			mods.Add(path)
 		}
@@ -89,13 +92,13 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 }
 
 // nonKeyFile ignores editor backups, hidden files and folders/symlinks.
-func nonKeyFile(fi os.FileInfo) bool {
+func nonKeyFile(fi os.DirEntry) bool {
 	// Skip editor backups and UNIX-style hidden files.
 	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || fi.Mode()&os.ModeType != 0 {
+	if fi.IsDir() || !fi.Type().IsRegular() {
 		return true
 	}
 	return false
