@@ -226,7 +226,7 @@ running web servers, so malicious web pages could try to subvert locally availab
 APIs!**
 
 ### Puppeth network manager
-Geth 1.6 shipped a new tool called puppeth, which was aimed at solvving the particular issue of deploying your own private Ethereum Network.
+Geth 1.6 shipped a new tool called puppeth, which was aimed at solving the particular issue of deploying your own private Ethereum Network.
 
 Puppeth is a CLI wizard that aids in creating a new Ethereum network down to the genesis, bootnodes, signers, ethstats, faucet, dashboard and more, without the hassle that it would normally take to configure all these services one by one. It makes usage of ssh to dial into remote servers, and builds its network components out of docker containers using docker-compose. The user is guided through the process via a command line wizard that does the heavy lifting and topology configuration automatically behind the scenes.
 
