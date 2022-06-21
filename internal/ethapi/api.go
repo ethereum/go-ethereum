@@ -814,6 +814,18 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 	return nil
 }
 
+// getHeaderWithAuthor: changes the miner (0x0, coinbase) with the original miner address
+func (s *PublicBlockChainAPI) getHeaderWithAuthor(head *types.Header) error {
+	// get author using From: Backend -> Engine -> Author
+	author, err := s.b.Engine().Author(head)
+	if err != nil {
+		return err
+	}
+	// change the coinbase (0x0) with the miner address
+	head.Coinbase = author
+	return nil
+}
+
 // GetBlockByNumber returns the requested canonical block.
 // * When blockNr is -1 the chain head is returned.
 // * When blockNr is -2 the pending chain head is returned.
