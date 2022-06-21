@@ -1722,12 +1722,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.GlobalBool(RopstenFlag.Name):
 		log.Warn("")
-		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("-------------------------------------------------------------------------------------------------------------")
 		log.Warn("Please note, Ropsten has been deprecated. It will still work for the time being,")
 		log.Warn("but will be shut down in the coming months. Eventually the network")
 		log.Warn("will be permanently halted around Q4 2022. For the most future proof testnets, choose Sepolia or Goerli as")
 		log.Warn("your replacement environment (--sepolia or --goerli instead of --ropsten).")
-		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("-------------------------------------------------------------------------------------------------------------")
 		log.Warn("")
 
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
