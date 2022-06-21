@@ -180,6 +180,12 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
+func (ec *Client) RPCMethods(ctx context.Context) (map[string][]string, error) {
+	var result map[string][]string
+	err := ec.c.CallContext(ctx, &result, "rpc_methods")
+	return result, err
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
