@@ -10,17 +10,13 @@ of clients providing an RPC interface into the peer-to-peer protocols. This allo
 transact between accounts and interact with smart contracts using command line tools. 
 Geth was one of the original clients to provide this type of gateway to the Ethereum network.
 
-Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients.
-However, as dapps became more complex their requirements exceeded what a simple browser environment
-could support. To support the next generation of dapps, built using time-tested HTML/CSS/JS 
-technologies, programmatic access to client functions was required
+Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients, and
+client functions were built into websites built using the time-tested HTML/CSS/JS stack. 
+However, to support the most diverse, complex dapps, developers require programmatic access to client
+functions through an API. This opens up client technologies as re-usable, composable units that 
+can be applied in creative ways by a global community of developers.
 
-Programmatic access to client functions is best delivered in the form of an open API. 
-This not only levels-up the complexity of dapps that can be built on top of 
-Ethereum but also opens up client technologies as re-usable, composable units that can be 
-applied in creative ways by a global community of developers.
-
-To support this vision, Geth ships official Go packages that can be embedded into third party 
+To support this, Geth ships official Go packages that can be embedded into third party 
 desktop and server applications. There is also a [mobile API](/docs/dapp/mobile) that can be 
 used to embed Geth into mobile applications.
 
@@ -40,13 +36,6 @@ Geth's reusable Go libraries focus on three main usage areas:
 
 The libraries are updated synchronously with the Geth Github repository. 
 The Go libraries can be viewed in full at [Go Packages][go-pkg-link]
-
-The benefits of using the Go libraries include easy client-side [account management](/docs/dapp/native-accounts)
-that allows users to keep their private keys safely encrypted locally and make their own
-security decisions. The Go libraries allow dapp developers to spend more of their time
-building their dapps rather than implementing complex protocols such as encoding and
-decoding function calls to smart contracts - this can all be abstracted away using
-Geth's Go libraries.
 
 Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in 
 a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource
