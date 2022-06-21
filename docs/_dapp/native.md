@@ -57,12 +57,9 @@ the image below (it is also archived on [IPFS][ipfs-link]).
 
 ## Go packages
 
-The Geth library is distributed as a collection of standard Go packages straight from Geth's GitHub
+The `go-ethereum` library is distributed as a collection of standard Go packages straight from Geth's GitHub
 repository. The packages can be used directly via the official Go toolkit, without needing any 
-third party tools. External dependencies are vendored locally into `vendor`, ensuring both 
-self-containment and code stability. When Geth is used in downstream projects these best
-practices (packing dependencies into a local `vendor`) should be followed there too to 
-avoid any accidental API breakages.
+third party tools.
 
 The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with all packages residing
 underneath. Although there are [lots of them][go-ethereum-dir] most developers will only care about 
