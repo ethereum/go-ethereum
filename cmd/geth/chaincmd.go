@@ -63,7 +63,7 @@ It expects the genesis file as argument.`,
 		ArgsUsage: "",
 		Flags:     utils.NetworkFlags,
 		Description: `
-The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
+The dumpgenesis command prints a genesis block as JSON. What it outputs is determined in order of preference: testnet preset if it is set, preexisting datadir, mainnet.`,
 	}
 	importCommand = &cli.Command{
 		Action:    importChain,
@@ -203,13 +203,41 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func dumpGenesis(ctx *cli.Context) error {
-	// TODO(rjl493456442) support loading from the custom datadir
-	genesis := utils.MakeGenesis(ctx)
-	if genesis == nil {
-		genesis = core.DefaultGenesisBlock()
+	// if there is a testnet preset enabled, dump that
+	if utils.IsTestnetPreset(ctx) {
+		genesis := utils.MakeGenesis(ctx)
+		if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
+			utils.Fatalf("could not encode genesis: %s", err)
+		}
+		return nil
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(genesis); err != nil {
-		utils.Fatalf("could not encode genesis")
+	// dump whatever already exists in the datadir
+	stack, _ := makeConfigNode(ctx)
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		db, err := stack.OpenDatabase(name, 0, 0, "", true)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			continue
+		}
+		genesis, err := core.ReadGenesis(db)
+		if err != nil {
+			utils.Fatalf("failed to read genesis: %s", err)
+		}
+		db.Close()
+
+		if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
+			utils.Fatalf("could not encode stored genesis: %s", err)
+		}
+		return nil
+	}
+	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
+		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
+	}
+	// no datadir exists or is specified, dump mainnet
+	if err := json.NewEncoder(os.Stdout).Encode(core.DefaultGenesisBlock()); err != nil {
+		utils.Fatalf("could not encode genesis: %s", err)
 	}
 	return nil
 }
