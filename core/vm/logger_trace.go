@@ -32,7 +32,7 @@ func traceToAddressCode(l *StructLogger, scope *ScopeContext, extraData *types.E
 		return nil
 	}
 	code := l.env.StateDB.GetCode(*l.env.To)
-	extraData.CodeList = append(extraData.CodeList, code)
+	extraData.CodeList = append(extraData.CodeList, hexutil.Encode(code))
 	return nil
 }
 
@@ -45,7 +45,7 @@ func traceLastNAddressCode(n int) traceFunc {
 		}
 		address := common.Address(stack.data[stack.len()-1-n].Bytes20())
 		code := l.env.StateDB.GetCode(address)
-		extraData.CodeList = append(extraData.CodeList, code)
+		extraData.CodeList = append(extraData.CodeList, hexutil.Encode(code))
 		return nil
 	}
 }
