@@ -76,7 +76,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	// Connections without origin header should work.
 	client, err = DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
-		t.Fatal("error for empty origin")
+		t.Fatalf("error for empty origin: %v", err)
 	}
 	client.Close()
 }

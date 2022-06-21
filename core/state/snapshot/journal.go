@@ -108,44 +108,15 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// So if there is no journal, or the journal is invalid(e.g. the journal
 	// is not matched with disk layer; or the it's the legacy-format journal,
 	// etc.), we just discard all diffs and try to recover them later.
-	journal := rawdb.ReadSnapshotJournal(db)
-	if len(journal) == 0 {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
-		return base, generator, nil
-	}
-	r := rlp.NewStream(bytes.NewReader(journal), 0)
-
-	// Firstly, resolve the first element as the journal version
-	version, err := r.Uint()
+	var current snapshot = base
+	err := iterateJournal(db, func(parent common.Hash, root common.Hash, destructSet map[common.Hash]struct{}, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
+		current = newDiffLayer(current, root, destructSet, accountData, storageData)
+		return nil
+	})
 	if err != nil {
-		log.Warn("Failed to resolve the journal version", "error", err)
 		return base, generator, nil
 	}
-	if version != journalVersion {
-		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
-		return base, generator, nil
-	}
-	// Secondly, resolve the disk layer root, ensure it's continuous
-	// with disk layer. Note now we can ensure it's the snapshot journal
-	// correct version, so we expect everything can be resolved properly.
-	var root common.Hash
-	if err := r.Decode(&root); err != nil {
-		return nil, journalGenerator{}, errors.New("missing disk layer root")
-	}
-	// The diff journal is not matched with disk, discard them.
-	// It can happen that Geth crashes without persisting the latest
-	// diff journal.
-	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "unmatched")
-		return base, generator, nil
-	}
-	// Load all the snapshot diffs from the journal
-	snapshot, err := loadDiffLayer(base, r)
-	if err != nil {
-		return nil, journalGenerator{}, err
-	}
-	log.Debug("Loaded snapshot journal", "diskroot", base.root, "diffhead", snapshot.Root())
-	return snapshot, generator, nil
+	return current, generator, nil
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
@@ -216,57 +187,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, 
 		})
 	}
 	return snapshot, false, nil
-}
-
-// loadDiffLayer reads the next sections of a snapshot journal, reconstructing a new
-// diff and verifying that it can be linked to the requested parent.
-func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
-	// Read the next diff journal entry
-	var root common.Hash
-	if err := r.Decode(&root); err != nil {
-		// The first read may fail with EOF, marking the end of the journal
-		if err == io.EOF {
-			return parent, nil
-		}
-		return nil, fmt.Errorf("load diff root: %v", err)
-	}
-	var destructs []journalDestruct
-	if err := r.Decode(&destructs); err != nil {
-		return nil, fmt.Errorf("load diff destructs: %v", err)
-	}
-	destructSet := make(map[common.Hash]struct{})
-	for _, entry := range destructs {
-		destructSet[entry.Hash] = struct{}{}
-	}
-	var accounts []journalAccount
-	if err := r.Decode(&accounts); err != nil {
-		return nil, fmt.Errorf("load diff accounts: %v", err)
-	}
-	accountData := make(map[common.Hash][]byte)
-	for _, entry := range accounts {
-		if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-			accountData[entry.Hash] = entry.Blob
-		} else {
-			accountData[entry.Hash] = nil
-		}
-	}
-	var storage []journalStorage
-	if err := r.Decode(&storage); err != nil {
-		return nil, fmt.Errorf("load diff storage: %v", err)
-	}
-	storageData := make(map[common.Hash]map[common.Hash][]byte)
-	for _, entry := range storage {
-		slots := make(map[common.Hash][]byte)
-		for i, key := range entry.Keys {
-			if len(entry.Vals[i]) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
-				slots[key] = entry.Vals[i]
-			} else {
-				slots[key] = nil
-			}
-		}
-		storageData[entry.Hash] = slots
-	}
-	return loadDiffLayer(newDiffLayer(parent, root, destructSet, accountData, storageData), r)
 }
 
 // Journal terminates any in-progress snapshot generation, also implicitly pushing
@@ -344,4 +264,97 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	}
 	log.Debug("Journalled diff layer", "root", dl.root, "parent", dl.parent.Root())
 	return base, nil
+}
+
+// journalCallback is a function which is invoked by iterateJournal, every
+// time a difflayer is loaded from disk.
+type journalCallback = func(parent common.Hash, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error
+
+// iterateJournal iterates through the journalled difflayers, loading them from
+// the database, and invoking the callback for each loaded layer.
+// The order is incremental; starting with the bottom-most difflayer, going towards
+// the most recent layer.
+// This method returns error either if there was some error reading from disk,
+// OR if the callback returns an error when invoked.
+func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
+	journal := rawdb.ReadSnapshotJournal(db)
+	if len(journal) == 0 {
+		log.Warn("Loaded snapshot journal", "diffs", "missing")
+		return nil
+	}
+	r := rlp.NewStream(bytes.NewReader(journal), 0)
+	// Firstly, resolve the first element as the journal version
+	version, err := r.Uint64()
+	if err != nil {
+		log.Warn("Failed to resolve the journal version", "error", err)
+		return errors.New("failed to resolve journal version")
+	}
+	if version != journalVersion {
+		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
+		return errors.New("wrong journal version")
+	}
+	// Secondly, resolve the disk layer root, ensure it's continuous
+	// with disk layer. Note now we can ensure it's the snapshot journal
+	// correct version, so we expect everything can be resolved properly.
+	var parent common.Hash
+	if err := r.Decode(&parent); err != nil {
+		return errors.New("missing disk layer root")
+	}
+	if baseRoot := rawdb.ReadSnapshotRoot(db); baseRoot != parent {
+		log.Warn("Loaded snapshot journal", "diskroot", baseRoot, "diffs", "unmatched")
+		return fmt.Errorf("mismatched disk and diff layers")
+	}
+	for {
+		var (
+			root        common.Hash
+			destructs   []journalDestruct
+			accounts    []journalAccount
+			storage     []journalStorage
+			destructSet = make(map[common.Hash]struct{})
+			accountData = make(map[common.Hash][]byte)
+			storageData = make(map[common.Hash]map[common.Hash][]byte)
+		)
+		// Read the next diff journal entry
+		if err := r.Decode(&root); err != nil {
+			// The first read may fail with EOF, marking the end of the journal
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("load diff root: %v", err)
+		}
+		if err := r.Decode(&destructs); err != nil {
+			return fmt.Errorf("load diff destructs: %v", err)
+		}
+		if err := r.Decode(&accounts); err != nil {
+			return fmt.Errorf("load diff accounts: %v", err)
+		}
+		if err := r.Decode(&storage); err != nil {
+			return fmt.Errorf("load diff storage: %v", err)
+		}
+		for _, entry := range destructs {
+			destructSet[entry.Hash] = struct{}{}
+		}
+		for _, entry := range accounts {
+			if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+				accountData[entry.Hash] = entry.Blob
+			} else {
+				accountData[entry.Hash] = nil
+			}
+		}
+		for _, entry := range storage {
+			slots := make(map[common.Hash][]byte)
+			for i, key := range entry.Keys {
+				if len(entry.Vals[i]) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
+					slots[key] = entry.Vals[i]
+				} else {
+					slots[key] = nil
+				}
+			}
+			storageData[entry.Hash] = slots
+		}
+		if err := callback(parent, root, destructSet, accountData, storageData); err != nil {
+			return err
+		}
+		parent = root
+	}
 }

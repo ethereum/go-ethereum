@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-//go:generate gencodec -type AccessTuple -out gen_access_tuple.go
+//go:generate go run github.com/fjl/gencodec -type AccessTuple -out gen_access_tuple.go
 
 // AccessList is an EIP-2930 access list.
 type AccessList []AccessTuple

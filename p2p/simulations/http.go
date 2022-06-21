@@ -21,9 +21,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -111,7 +112,7 @@ func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		response, _ := ioutil.ReadAll(res.Body)
+		response, _ := io.ReadAll(res.Body)
 		res.Body.Close()
 		return nil, fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
@@ -251,7 +252,7 @@ func (c *Client) Send(method, path string, in, out interface{}) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
-		response, _ := ioutil.ReadAll(res.Body)
+		response, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("unexpected HTTP status: %s: %s", res.Status, response)
 	}
 	if out != nil {
@@ -336,7 +337,7 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	mockerType := req.FormValue("mocker-type")
 	mockerFn := LookupMocker(mockerType)
 	if mockerFn == nil {
-		http.Error(w, fmt.Sprintf("unknown mocker type %q", mockerType), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("unknown mocker type %q", html.EscapeString(mockerType)), http.StatusBadRequest)
 		return
 	}
 	nodeCount, err := strconv.Atoi(req.FormValue("node-count"))
@@ -441,6 +442,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 		for _, conn := range snap.Conns {
+			conn := conn
 			event := NewEvent(&conn)
 			if err := writeEvent(event); err != nil {
 				writeErr(err)
@@ -559,7 +561,7 @@ func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
 	config := &adapters.NodeConfig{}
 
 	err := json.NewDecoder(req.Body).Decode(config)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

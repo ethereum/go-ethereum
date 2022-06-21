@@ -77,16 +77,16 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database   ethdb.Database            // Database for direct sync insertions
-	Chain      *core.BlockChain          // Blockchain to serve data from
-	TxPool     txPool                    // Transaction pool to propagate from
-	Merger     *consensus.Merger         // The manager for eth1/2 transition
-	Network    uint64                    // Network identifier to adfvertise
-	Sync       downloader.SyncMode       // Whether to snap or full sync
-	BloomCache uint64                    // Megabytes to alloc for snap sync bloom
-	EventMux   *event.TypeMux            // Legacy event mux, deprecate for `feed`
-	Checkpoint *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
-	Whitelist  map[uint64]common.Hash    // Hard coded whitelist for sync challenged
+	Database       ethdb.Database            // Database for direct sync insertions
+	Chain          *core.BlockChain          // Blockchain to serve data from
+	TxPool         txPool                    // Transaction pool to propagate from
+	Merger         *consensus.Merger         // The manager for eth1/2 transition
+	Network        uint64                    // Network identifier to adfvertise
+	Sync           downloader.SyncMode       // Whether to snap or full sync
+	BloomCache     uint64                    // Megabytes to alloc for snap sync bloom
+	EventMux       *event.TypeMux            // Legacy event mux, deprecate for `feed`
+	Checkpoint     *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
+	RequiredBlocks map[uint64]common.Hash    // Hard coded map of required block hashes for sync challenges
 }
 
 type handler struct {
@@ -115,7 +115,7 @@ type handler struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
-	whitelist map[uint64]common.Hash
+	requiredBlocks map[uint64]common.Hash
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
@@ -132,16 +132,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
 	}
 	h := &handler{
-		networkID:  config.Network,
-		forkFilter: forkid.NewFilter(config.Chain),
-		eventMux:   config.EventMux,
-		database:   config.Database,
-		txpool:     config.TxPool,
-		chain:      config.Chain,
-		peers:      newPeerSet(),
-		merger:     config.Merger,
-		whitelist:  config.Whitelist,
-		quitSync:   make(chan struct{}),
+		networkID:      config.Network,
+		forkFilter:     forkid.NewFilter(config.Chain),
+		eventMux:       config.EventMux,
+		database:       config.Database,
+		txpool:         config.TxPool,
+		chain:          config.Chain,
+		peers:          newPeerSet(),
+		merger:         config.Merger,
+		requiredBlocks: config.RequiredBlocks,
+		quitSync:       make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the snap
@@ -171,10 +171,30 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		h.checkpointNumber = (config.Checkpoint.SectionIndex+1)*params.CHTFrequency - 1
 		h.checkpointHash = config.Checkpoint.SectionHead
 	}
+	// If sync succeeds, pass a callback to potentially disable snap sync mode
+	// and enable transaction propagation.
+	success := func() {
+		// If we were running snap sync and it finished, disable doing another
+		// round on next sync cycle
+		if atomic.LoadUint32(&h.snapSync) == 1 {
+			log.Info("Snap sync complete, auto disabling")
+			atomic.StoreUint32(&h.snapSync, 0)
+		}
+		// If we've successfully finished a sync cycle and passed any required
+		// checkpoint, enable accepting transactions from the network
+		head := h.chain.CurrentBlock()
+		if head.NumberU64() >= h.checkpointNumber {
+			// Checkpoint passed, sanity check the timestamp to have a fallback mechanism
+			// for non-checkpointed (number = 0) private networks.
+			if head.Time() >= uint64(time.Now().AddDate(0, -1, 0).Unix()) {
+				atomic.StoreUint32(&h.acceptTxs, 1)
+			}
+		}
+	}
 	// Construct the downloader (long sync) and its backing state bloom if snap
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer)
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -403,8 +423,8 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			}
 		}()
 	}
-	// If we have any explicit whitelist block hashes, request them
-	for number, hash := range h.whitelist {
+	// If we have any explicit peer required block hashes, request them
+	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
 		if _, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh); err != nil {
 			return err
@@ -417,25 +437,25 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			case res := <-resCh:
 				headers := ([]*types.Header)(*res.Res.(*eth.BlockHeadersPacket))
 				if len(headers) == 0 {
-					// Whitelisted blocks are allowed to be missing if the remote
+					// Required blocks are allowed to be missing if the remote
 					// node is not yet synced
 					res.Done <- nil
 					return
 				}
 				// Validate the header and either drop the peer or continue
 				if len(headers) > 1 {
-					res.Done <- errors.New("too many headers in whitelist response")
+					res.Done <- errors.New("too many headers in required block response")
 					return
 				}
 				if headers[0].Number.Uint64() != number || headers[0].Hash() != hash {
-					peer.Log().Info("Whitelist mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
-					res.Done <- errors.New("whitelist block mismatch")
+					peer.Log().Info("Required block mismatch, dropping peer", "number", number, "hash", headers[0].Hash(), "want", hash)
+					res.Done <- errors.New("required block mismatch")
 					return
 				}
-				peer.Log().Debug("Whitelist block verified", "number", number, "hash", hash)
+				peer.Log().Debug("Peer required block verified", "number", number, "hash", hash)
 				res.Done <- nil
 			case <-timeout.C:
-				peer.Log().Warn("Whitelist challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
+				peer.Log().Warn("Required block challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
 				h.removePeer(peer.ID())
 			}
 		}(number, hash)
@@ -453,7 +473,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.peerWG.Done()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		peer.Log().Error("Snapshot extension registration failed", "err", err)
+		peer.Log().Warn("Snapshot extension registration failed", "err", err)
 		return err
 	}
 	return handler(peer)

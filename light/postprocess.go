@@ -187,12 +187,12 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	c.trie, err = trie.New(root, c.triedb)
+	c.trie, err = trie.New(common.Hash{}, root, c.triedb)
 
 	if err != nil && c.odr != nil {
 		err = c.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			c.trie, err = trie.New(root, c.triedb)
+			c.trie, err = trie.New(common.Hash{}, root, c.triedb)
 		}
 	}
 	c.section = section
@@ -253,9 +253,8 @@ func (c *ChtIndexerBackend) Commit() error {
 	return nil
 }
 
-// PruneSections implements core.ChainIndexerBackend which deletes all
-// chain data(except hash<->number mappings) older than the specified
-// threshold.
+// Prune implements core.ChainIndexerBackend which deletes all chain data
+// (except hash<->number mappings) older than the specified threshold.
 func (c *ChtIndexerBackend) Prune(threshold uint64) error {
 	// Short circuit if the light pruning is disabled.
 	if c.disablePruning {
@@ -404,11 +403,11 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	b.trie, err = trie.New(root, b.triedb)
+	b.trie, err = trie.New(common.Hash{}, root, b.triedb)
 	if err != nil && b.odr != nil {
 		err = b.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			b.trie, err = trie.New(root, b.triedb)
+			b.trie, err = trie.New(common.Hash{}, root, b.triedb)
 		}
 	}
 	b.section = section

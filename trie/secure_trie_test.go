@@ -28,7 +28,7 @@ import (
 )
 
 func newEmptySecure() *SecureTrie {
-	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+	trie, _ := NewSecure(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
 }
 
@@ -36,7 +36,7 @@ func newEmptySecure() *SecureTrie {
 func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewSecure(common.Hash{}, triedb)
+	trie, _ := NewSecure(common.Hash{}, common.Hash{}, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -112,8 +112,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 	threads := runtime.NumCPU()
 	tries := make([]*SecureTrie, threads)
 	for i := 0; i < threads; i++ {
-		cpy := *trie
-		tries[i] = &cpy
+		tries[i] = trie.Copy()
 	}
 	// Start a batch of goroutines interactng with the trie
 	pend := new(sync.WaitGroup)

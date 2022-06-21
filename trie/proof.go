@@ -23,9 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes
@@ -79,7 +77,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 		if hash, ok := hn.(hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
-			enc, _ := rlp.EncodeToBytes(n)
+			enc := nodeToBytes(n)
 			if !ok {
 				hash = hasher.hashData(enc)
 			}
@@ -369,11 +367,12 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 					// branch. The parent must be a fullnode.
 					fn := parent.(*fullNode)
 					fn.Children[key[pos-1]] = nil
-				} else {
-					// The key of fork shortnode is greater than the
-					// path(it doesn't belong to the range), keep
-					// it with the cached hash available.
 				}
+				//else {
+				// The key of fork shortnode is greater than the
+				// path(it doesn't belong to the range), keep
+				// it with the cached hash available.
+				//}
 			} else {
 				if bytes.Compare(cld.Key, key[pos:]) > 0 {
 					// The key of fork shortnode is greater than the
@@ -381,11 +380,12 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 					// branch. The parent must be a fullnode.
 					fn := parent.(*fullNode)
 					fn.Children[key[pos-1]] = nil
-				} else {
-					// The key of fork shortnode is less than the
-					// path(it doesn't belong to the range), keep
-					// it with the cached hash available.
 				}
+				//else {
+				// The key of fork shortnode is less than the
+				// path(it doesn't belong to the range), keep
+				// it with the cached hash available.
+				//}
 			}
 			return nil
 		}
@@ -553,7 +553,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, db: NewDatabase(memorydb.New())}
+	tr := newWithRootNode(root)
 	if empty {
 		tr.root = nil
 	}

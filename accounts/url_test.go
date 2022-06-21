@@ -32,9 +32,10 @@ func TestURLParsing(t *testing.T) {
 		t.Errorf("expected: %v, got: %v", "ethereum.org", url.Path)
 	}
 
-	_, err = parseURL("ethereum.org")
-	if err == nil {
-		t.Error("expected err, got: nil")
+	for _, u := range []string{"ethereum.org", ""} {
+		if _, err = parseURL(u); err == nil {
+			t.Errorf("input %v, expected err, got: nil", u)
+		}
 	}
 }
 

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build none
 // +build none
 
 /*
@@ -39,7 +40,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -68,7 +68,9 @@ var (
 		"common/bitutil/bitutil",
 		"common/prque/",
 		"consensus/ethash/xor.go",
+		"crypto/blake2b/",
 		"crypto/bn256/",
+		"crypto/bls12381/",
 		"crypto/ecies/",
 		"graphql/graphiql.go",
 		"internal/jsre/deps",
@@ -241,7 +243,7 @@ func gitAuthors(files []string) []string {
 }
 
 func readAuthors() []string {
-	content, err := ioutil.ReadFile("AUTHORS")
+	content, err := os.ReadFile("AUTHORS")
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatalln("error reading AUTHORS:", err)
 	}
@@ -305,7 +307,7 @@ func writeAuthors(files []string) {
 		content.WriteString("\n")
 	}
 	fmt.Println("writing AUTHORS")
-	if err := ioutil.WriteFile("AUTHORS", content.Bytes(), 0644); err != nil {
+	if err := os.WriteFile("AUTHORS", content.Bytes(), 0644); err != nil {
 		log.Fatalln(err)
 	}
 }
@@ -381,7 +383,7 @@ func writeLicense(info *info) {
 	if err != nil {
 		log.Fatalf("error stat'ing %s: %v\n", info.file, err)
 	}
-	content, err := ioutil.ReadFile(info.file)
+	content, err := os.ReadFile(info.file)
 	if err != nil {
 		log.Fatalf("error reading %s: %v\n", info.file, err)
 	}
@@ -400,7 +402,7 @@ func writeLicense(info *info) {
 		return
 	}
 	fmt.Println("writing", info.ShortLicense(), info.file)
-	if err := ioutil.WriteFile(info.file, buf.Bytes(), fi.Mode()); err != nil {
+	if err := os.WriteFile(info.file, buf.Bytes(), fi.Mode()); err != nil {
 		log.Fatalf("error writing %s: %v", info.file, err)
 	}
 }

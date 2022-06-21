@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -239,14 +239,15 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 	}
 	fmt.Println("Testing your password against all of them...")
 	var match *accounts.Account
-	for _, a := range err.Matches {
-		if err := ks.Unlock(a, auth); err == nil {
-			match = &a
+	for i, a := range err.Matches {
+		if e := ks.Unlock(a, auth); e == nil {
+			match = &err.Matches[i]
 			break
 		}
 	}
 	if match == nil {
 		utils.Fatalf("None of the listed files could be unlocked.")
+		return accounts.Account{}
 	}
 	fmt.Printf("Your password unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
@@ -320,7 +321,7 @@ func importWallet(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	keyJSON, err := ioutil.ReadFile(keyfile)
+	keyJSON, err := os.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}

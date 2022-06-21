@@ -20,7 +20,6 @@ package main
 import (
 	"crypto/ecdsa"
 	"errors"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -173,7 +172,7 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 	}
 	switch n.typ {
 	case eth2NormalNode, eth2MiningNode:
-		newResp, err := n.api.ExecutePayloadV1(eb)
+		newResp, err := n.api.NewPayloadV1(eb)
 		if err != nil {
 			return err
 		} else if newResp.Status != "VALID" {
@@ -317,7 +316,7 @@ func (mgr *nodeManager) run() {
 		nodes := mgr.getNodes(eth2MiningNode)
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
-		for _, node := range append(nodes) {
+		for _, node := range nodes {
 			fcState := beacon.ForkchoiceStateV1{
 				HeadBlockHash:      oldest.Hash(),
 				SafeBlockHash:      common.Hash{},
@@ -461,7 +460,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 
 func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",
@@ -512,7 +511,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *eth.Ethereum, *ethcatalys
 
 func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",

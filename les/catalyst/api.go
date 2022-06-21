@@ -34,10 +34,11 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "engine",
-			Version:   "1.0",
-			Service:   NewConsensusAPI(backend),
-			Public:    true,
+			Namespace:     "engine",
+			Version:       "1.0",
+			Service:       NewConsensusAPI(backend),
+			Public:        true,
+			Authenticated: true,
 		},
 	})
 	return nil
@@ -68,39 +69,40 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 //      we return an error since block creation is not supported in les mode
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
-		return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+		log.Warn("Forkchoice requested update to zero hash")
+		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
 	if err := api.checkTerminalTotalDifficulty(heads.HeadBlockHash); err != nil {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.HeadBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return beacon.STATUS_SYNCING, nil
 		}
-		return beacon.INVALID, err
+		return beacon.STATUS_INVALID, err
 	}
 	// If the finalized block is set, check if it is in our blockchain
 	if heads.FinalizedBlockHash != (common.Hash{}) {
 		if header := api.les.BlockChain().GetHeaderByHash(heads.FinalizedBlockHash); header == nil {
 			// TODO (MariusVanDerWijden) trigger sync
-			return beacon.SYNCING, nil
+			return beacon.STATUS_SYNCING, nil
 		}
 	}
 	// SetHead
-	if err := api.setHead(heads.HeadBlockHash); err != nil {
-		return beacon.INVALID, err
+	if err := api.setCanonical(heads.HeadBlockHash); err != nil {
+		return beacon.STATUS_INVALID, err
 	}
 	if payloadAttributes != nil {
-		return beacon.INVALID, errors.New("not supported")
+		return beacon.STATUS_INVALID, errors.New("not supported")
 	}
-	return beacon.ForkChoiceResponse{Status: beacon.SUCCESS.Status, PayloadID: nil}, nil
+	return api.validForkChoiceResponse(), nil
 }
 
 // GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
-	return nil, &beacon.GenericServerError
+	return nil, beacon.GenericServerError.With(errors.New("not supported in light client mode"))
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.ExecutePayloadResponse, error) {
+func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
@@ -113,7 +115,7 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 			}
 		*/
 		// TODO (MariusVanDerWijden) we should return nil here not empty hash
-		return beacon.ExecutePayloadResponse{Status: beacon.SYNCING.Status, LatestValidHash: common.Hash{}}, nil
+		return beacon.PayloadStatusV1{Status: beacon.SYNCING, LatestValidHash: nil}, nil
 	}
 	parent := api.les.BlockChain().GetHeaderByHash(params.ParentHash)
 	if parent == nil {
@@ -130,12 +132,21 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if merger := api.les.Merger(); !merger.TDDReached() {
 		merger.ReachTTD()
 	}
-	return beacon.ExecutePayloadResponse{Status: beacon.VALID.Status, LatestValidHash: block.Hash()}, nil
+	hash := block.Hash()
+	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
+}
+
+func (api *ConsensusAPI) validForkChoiceResponse() beacon.ForkChoiceResponse {
+	currentHash := api.les.BlockChain().CurrentHeader().Hash()
+	return beacon.ForkChoiceResponse{
+		PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &currentHash},
+	}
 }
 
 // invalid returns a response "INVALID" with the latest valid hash set to the current head.
-func (api *ConsensusAPI) invalid() beacon.ExecutePayloadResponse {
-	return beacon.ExecutePayloadResponse{Status: beacon.INVALID.Status, LatestValidHash: api.les.BlockChain().CurrentHeader().Hash()}
+func (api *ConsensusAPI) invalid() beacon.PayloadStatusV1 {
+	currentHash := api.les.BlockChain().CurrentHeader().Hash()
+	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash}
 }
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
@@ -146,17 +157,17 @@ func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// make sure the parent has enough terminal total difficulty
 	header := api.les.BlockChain().GetHeaderByHash(head)
 	if header == nil {
-		return &beacon.GenericServerError
+		return errors.New("unknown header")
 	}
 	td := api.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 	if td != nil && td.Cmp(api.les.BlockChain().Config().TerminalTotalDifficulty) < 0 {
-		return &beacon.InvalidTB
+		return errors.New("invalid ttd")
 	}
 	return nil
 }
 
-// setHead is called to perform a force choice.
-func (api *ConsensusAPI) setHead(newHead common.Hash) error {
+// setCanonical is called to perform a force choice.
+func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 	log.Info("Setting head", "head", newHead)
 
 	headHeader := api.les.BlockChain().CurrentHeader()
@@ -165,9 +176,9 @@ func (api *ConsensusAPI) setHead(newHead common.Hash) error {
 	}
 	newHeadHeader := api.les.BlockChain().GetHeaderByHash(newHead)
 	if newHeadHeader == nil {
-		return &beacon.GenericServerError
+		return errors.New("unknown header")
 	}
-	if err := api.les.BlockChain().SetChainHead(newHeadHeader); err != nil {
+	if err := api.les.BlockChain().SetCanonical(newHeadHeader); err != nil {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.

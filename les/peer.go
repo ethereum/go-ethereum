@@ -213,7 +213,7 @@ func (p *peerCommons) sendReceiveHandshake(sendList keyValueList) (keyValueList,
 	)
 	// Send out own handshake in a new thread
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, sendList)
+		errc <- p2p.Send(p.rw, StatusMsg, &sendList)
 	}()
 	go func() {
 		// In the mean time retrieve the remote status message
@@ -421,7 +421,7 @@ func sendRequest(w p2p.MsgWriter, msgcode, reqID uint64, data interface{}) error
 		ReqID uint64
 		Data  interface{}
 	}
-	return p2p.Send(w, msgcode, req{reqID, data})
+	return p2p.Send(w, msgcode, &req{reqID, data})
 }
 
 func (p *serverPeer) sendRequest(msgcode, reqID uint64, data interface{}, amount int) error {
@@ -871,7 +871,7 @@ func (r *reply) send(bv uint64) error {
 		ReqID, BV uint64
 		Data      rlp.RawValue
 	}
-	return p2p.Send(r.w, r.msgcode, resp{r.reqID, bv, r.data})
+	return p2p.Send(r.w, r.msgcode, &resp{r.reqID, bv, r.data})
 }
 
 // size returns the RLP encoded size of the message data
@@ -992,40 +992,6 @@ func (p *clientPeer) sendLastAnnounce() {
 			p.Log().Debug("Sent announcement", "number", p.lastAnnounce.Number, "hash", p.lastAnnounce.Hash)
 		}
 		p.headInfo = blockInfo{Hash: p.lastAnnounce.Hash, Number: p.lastAnnounce.Number, Td: p.lastAnnounce.Td}
-	}
-}
-
-// freezeClient temporarily puts the client in a frozen state which means all
-// unprocessed and subsequent requests are dropped. Unfreezing happens automatically
-// after a short time if the client's buffer value is at least in the slightly positive
-// region. The client is also notified about being frozen/unfrozen with a Stop/Resume
-// message.
-func (p *clientPeer) freezeClient() {
-	if p.version < lpv3 {
-		// if Stop/Resume is not supported then just drop the peer after setting
-		// its frozen status permanently
-		atomic.StoreUint32(&p.frozen, 1)
-		p.Peer.Disconnect(p2p.DiscUselessPeer)
-		return
-	}
-	if atomic.SwapUint32(&p.frozen, 1) == 0 {
-		go func() {
-			p.sendStop()
-			time.Sleep(freezeTimeBase + time.Duration(rand.Int63n(int64(freezeTimeRandom))))
-			for {
-				bufValue, bufLimit := p.fcClient.BufferStatus()
-				if bufLimit == 0 {
-					return
-				}
-				if bufValue <= bufLimit/8 {
-					time.Sleep(freezeCheckPeriod)
-				} else {
-					atomic.StoreUint32(&p.frozen, 0)
-					p.sendResume(bufValue)
-					break
-				}
-			}
-		}()
 	}
 }
 
@@ -1157,19 +1123,6 @@ func (ps *serverPeerSet) subscribe(sub serverPeerSubscriber) {
 	}
 }
 
-// unSubscribe removes the specified service from the subscriber pool.
-func (ps *serverPeerSet) unSubscribe(sub serverPeerSubscriber) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	for i, s := range ps.subscribers {
-		if s == sub {
-			ps.subscribers = append(ps.subscribers[:i], ps.subscribers[i+1:]...)
-			return
-		}
-	}
-}
-
 // register adds a new server peer into the set, or returns an error if the
 // peer is already known.
 func (ps *serverPeerSet) register(peer *serverPeer) error {
@@ -1234,25 +1187,6 @@ func (ps *serverPeerSet) len() int {
 	defer ps.lock.RUnlock()
 
 	return len(ps.peers)
-}
-
-// bestPeer retrieves the known peer with the currently highest total difficulty.
-// If the peerset is "client peer set", then nothing meaningful will return. The
-// reason is client peer never send back their latest status to server.
-func (ps *serverPeerSet) bestPeer() *serverPeer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	var (
-		bestPeer *serverPeer
-		bestTd   *big.Int
-	)
-	for _, p := range ps.peers {
-		if td := p.Td(); bestTd == nil || td.Cmp(bestTd) > 0 {
-			bestPeer, bestTd = p, td
-		}
-	}
-	return bestPeer
 }
 
 // allServerPeers returns all server peers in a list.
@@ -1346,14 +1280,6 @@ func (ps *clientPeerSet) peer(id enode.ID) *clientPeer {
 	defer ps.lock.RUnlock()
 
 	return ps.peers[id]
-}
-
-// len returns if the current number of peers in the set.
-func (ps *clientPeerSet) len() int {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return len(ps.peers)
 }
 
 // setSignerKey sets the signer key for signed announcements. Should be called before

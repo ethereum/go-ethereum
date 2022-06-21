@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -304,7 +304,6 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 	// Create a channel to control when tx requests can fail
 	proceed := make(chan struct{})
-
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
@@ -1262,6 +1261,16 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 
 	fetcher.Start()
 	defer fetcher.Stop()
+
+	defer func() { // drain the wait chan on exit
+		for {
+			select {
+			case <-wait:
+			default:
+				return
+			}
+		}
+	}()
 
 	// Crunch through all the test steps and execute them
 	for i, step := range tt.steps {

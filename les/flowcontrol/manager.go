@@ -58,10 +58,9 @@ var (
 // corrigated buffer value and usually allows a higher remaining buffer value
 // to be returned with each reply.
 type ClientManager struct {
-	clock     mclock.Clock
-	lock      sync.Mutex
-	enabledCh chan struct{}
-	stop      chan chan struct{}
+	clock mclock.Clock
+	lock  sync.Mutex
+	stop  chan chan struct{}
 
 	curve                                      PieceWiseLinear
 	sumRecharge, totalRecharge, totalConnected uint64

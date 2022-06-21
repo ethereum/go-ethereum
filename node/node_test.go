@@ -20,10 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -88,11 +86,7 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 // Tests that if the data dir is already in use, an appropriate error is returned.
 func TestNodeUsedDataDir(t *testing.T) {
 	// Create a temporary folder to use as the data directory
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Create a new node based on the data directory
 	original, err := New(&Config{DataDir: dir})
@@ -577,13 +571,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		}
 	}
 	for _, path := range test.wantWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err != nil {
 			t.Errorf("Error: %s: WebSocket connection failed: %v", path, err)
 		}
 	}
 	for _, path := range test.wantNoWS {
-		err := wsRequest(t, wsBase+path, "")
+		err := wsRequest(t, wsBase+path)
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}

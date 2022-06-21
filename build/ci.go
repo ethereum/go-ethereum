@@ -46,7 +46,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -59,6 +58,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
@@ -130,13 +130,15 @@ var (
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
-	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy
+	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite
 	debDistroGoBoots = map[string]string{
-		"trusty":  "golang-1.11",
-		"xenial":  "golang-go",
-		"bionic":  "golang-go",
-		"focal":   "golang-go",
-		"hirsute": "golang-go",
+		"trusty":  "golang-1.11", // EOL: 04/2024
+		"xenial":  "golang-go",   // EOL: 04/2026
+		"bionic":  "golang-go",   // EOL: 04/2028
+		"focal":   "golang-go",   // EOL: 04/2030
+		"impish":  "golang-go",   // EOL: 07/2022
+		"jammy":   "golang-go",   // EOL: 04/2032
+		//"kinetic": "golang-go",   //  EOL: 07/2023
 	}
 
 	debGoBootPaths = map[string]string{
@@ -147,7 +149,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.17.5"
+	dlgoVersion = "1.18.1"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -162,7 +164,7 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if _, err := os.Stat(filepath.Join("build", "ci.go")); os.IsNotExist(err) {
+	if !common.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
@@ -331,16 +333,21 @@ func doLint(cmdline []string) {
 
 // downloadLinter downloads and unpacks golangci-lint.
 func downloadLinter(cachedir string) string {
-	const version = "1.42.0"
+	const version = "1.45.2"
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	arch := runtime.GOARCH
+	ext := ".tar.gz"
+
+	if runtime.GOOS == "windows" {
+		ext = ".zip"
+	}
 	if arch == "arm" {
 		arch += "v" + os.Getenv("GOARM")
 	}
 	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, arch)
-	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s.tar.gz", version, base)
-	archivePath := filepath.Join(cachedir, base+".tar.gz")
+	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s%s", version, base, ext)
+	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
 		log.Fatal(err)
 	}
@@ -727,8 +734,8 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if _, err := os.Stat(idfile); os.IsNotExist(err) {
-			ioutil.WriteFile(idfile, sshkey, 0600)
+		if !common.FileExist(idfile) {
+			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
 	// Upload
@@ -751,7 +758,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = ioutil.TempDir("", "geth-build-")
+		wdflag, err = os.MkdirTemp("", "geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -949,10 +956,10 @@ func doWindowsInstaller(cmdline []string) {
 	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 	if err := cp.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll"); err != nil {
-		log.Fatal("Failed to copy SimpleFC.dll: %v", err)
+		log.Fatalf("Failed to copy SimpleFC.dll: %v", err)
 	}
 	if err := cp.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING"); err != nil {
-		log.Fatal("Failed to copy copyright note: %v", err)
+		log.Fatalf("Failed to copy copyright note: %v", err)
 	}
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
@@ -1127,11 +1134,7 @@ func doXCodeFramework(cmdline []string) {
 	tc := new(build.GoToolchain)
 
 	// Build gomobile.
-	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest"))
-
-	// Ensure all dependencies are available. This is required to make
-	// gomobile bind work because it expects go.sum to contain all checksums.
-	build.MustRun(tc.Go("mod", "download"))
+	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
 
 	// Build the iOS XCode framework
 	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
@@ -1237,21 +1240,21 @@ func doPurge(cmdline []string) {
 
 	// Iterate over the blobs, collect and sort all unstable builds
 	for i := 0; i < len(blobs); i++ {
-		if !strings.Contains(blobs[i].Name, "unstable") {
+		if !strings.Contains(*blobs[i].Name, "unstable") {
 			blobs = append(blobs[:i], blobs[i+1:]...)
 			i--
 		}
 	}
 	for i := 0; i < len(blobs); i++ {
 		for j := i + 1; j < len(blobs); j++ {
-			if blobs[i].Properties.LastModified.After(blobs[j].Properties.LastModified) {
+			if blobs[i].Properties.LastModified.After(*blobs[j].Properties.LastModified) {
 				blobs[i], blobs[j] = blobs[j], blobs[i]
 			}
 		}
 	}
 	// Filter out all archives more recent that the given threshold
 	for i, blob := range blobs {
-		if time.Since(blob.Properties.LastModified) < time.Duration(*limit)*24*time.Hour {
+		if time.Since(*blob.Properties.LastModified) < time.Duration(*limit)*24*time.Hour {
 			blobs = blobs[:i]
 			break
 		}

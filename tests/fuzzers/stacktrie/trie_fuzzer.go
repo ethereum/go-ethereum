@@ -25,7 +25,6 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
@@ -66,6 +65,8 @@ func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement 
 func (s *spongeDb) Get(key []byte) ([]byte, error)           { return nil, errors.New("no such elem") }
 func (s *spongeDb) Delete(key []byte) error                  { panic("implement me") }
 func (s *spongeDb) NewBatch() ethdb.Batch                    { return &spongeBatch{s} }
+func (s *spongeDb) NewBatchWithSize(size int) ethdb.Batch    { return &spongeBatch{s} }
+func (s *spongeDb) NewSnapshot() (ethdb.Snapshot, error)     { panic("implement me") }
 func (s *spongeDb) Stat(property string) (string, error)     { panic("implement me") }
 func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
 func (s *spongeDb) Close() error                             { return nil }
@@ -142,7 +143,7 @@ func (f *fuzzer) fuzz() int {
 	var (
 		spongeA     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		dbA         = trie.NewDatabase(spongeA)
-		trieA, _    = trie.New(common.Hash{}, dbA)
+		trieA       = trie.NewEmpty(dbA)
 		spongeB     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		trieB       = trie.NewStackTrie(spongeB)
 		vals        kvs

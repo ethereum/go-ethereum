@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
+	"path"
 	"sync"
 	"testing"
 
@@ -49,8 +49,7 @@ func TestFreezerModify(t *testing.T) {
 	}
 
 	tables := map[string]bool{"raw": true, "rlp": false}
-	f, dir := newFreezerForTesting(t, tables)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, tables)
 	defer f.Close()
 
 	// Commit test data.
@@ -96,7 +95,6 @@ func TestFreezerModifyRollback(t *testing.T) {
 	t.Parallel()
 
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
 
 	theError := errors.New("oops")
 	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -115,7 +113,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]bool{"test": true}
-	f2, err := newFreezer(dir, "", false, 2049, tables)
+	f2, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
@@ -127,8 +125,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var (
@@ -186,17 +183,16 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	wg.Wait()
 }
 
-// This test runs ModifyAncients and TruncateAncients concurrently with each other.
+// This test runs ModifyAncients and TruncateHead concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
-	defer os.RemoveAll(dir)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef)
 	defer f.Close()
 
 	var item = make([]byte, 256)
 
 	for i := 0; i < 1000; i++ {
 		// First reset and write 100 items.
-		if err := f.TruncateAncients(0); err != nil {
+		if err := f.TruncateHead(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
 		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -231,7 +227,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			truncateErr = f.TruncateAncients(10)
+			truncateErr = f.TruncateHead(10)
 			wg.Done()
 		}()
 		go func() {
@@ -255,14 +251,10 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 func TestFreezerReadonlyValidate(t *testing.T) {
 	tables := map[string]bool{"a": true, "b": true}
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -285,22 +277,19 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 
 	// Re-openening as readonly should fail when validating
 	// table lengths.
-	f, err = newFreezer(dir, "", true, 2049, tables)
+	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
 }
 
-func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, string) {
+func newFreezerForTesting(t *testing.T, tables map[string]bool) (*Freezer, string) {
 	t.Helper()
 
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
-	f, err := newFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -308,7 +297,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]bool) (*freezer, strin
 }
 
 // checkAncientCount verifies that the freezer contains n items.
-func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
+func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 	t.Helper()
 
 	if frozen, _ := f.Ancients(); frozen != n {
@@ -335,5 +324,86 @@ func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != errOutOfBounds {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
+	}
+}
+
+func TestRenameWindows(t *testing.T) {
+	var (
+		fname   = "file.bin"
+		fname2  = "file2.bin"
+		data    = []byte{1, 2, 3, 4}
+		data2   = []byte{2, 3, 4, 5}
+		data3   = []byte{3, 5, 6, 7}
+		dataLen = 4
+	)
+
+	// Create 2 temp dirs
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	// Create file in dir1 and fill with data
+	f, err := os.Create(path.Join(dir1, fname))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f2, err := os.Create(path.Join(dir1, fname2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f3, err := os.Create(path.Join(dir2, fname2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f2.Write(data2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f3.Write(data3); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f3.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(f.Name(), path.Join(dir2, fname)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(f2.Name(), path.Join(dir2, fname2)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Check file contents
+	f, err = os.Open(path.Join(dir2, fname))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	buf := make([]byte, dataLen)
+	if _, err := f.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(buf, data) {
+		t.Errorf("unexpected file contents. Got %v\n", buf)
+	}
+
+	f, err = os.Open(path.Join(dir2, fname2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+	if _, err := f.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(buf, data2) {
+		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
 }

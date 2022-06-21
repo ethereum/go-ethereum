@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -81,7 +80,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		debugger = logger.NewStructLogger(config)
 	}
 	// Load the test content from the input file
-	src, err := ioutil.ReadFile(ctx.Args().First())
+	src, err := os.ReadFile(ctx.Args().First())
 	if err != nil {
 		return err
 	}

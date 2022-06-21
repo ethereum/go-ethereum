@@ -655,8 +655,7 @@ func TestHeaderByNumber(t *testing.T) {
 	}
 	if latestBlockHeader == nil {
 		t.Errorf("received a nil block header")
-	}
-	if latestBlockHeader.Number.Uint64() != uint64(0) {
+	} else if latestBlockHeader.Number.Uint64() != uint64(0) {
 		t.Errorf("expected block header number 0, instead got %v", latestBlockHeader.Number.Uint64())
 	}
 

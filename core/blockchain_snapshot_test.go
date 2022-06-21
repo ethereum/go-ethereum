@@ -22,7 +22,6 @@ package core
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"strings"
@@ -59,11 +58,7 @@ type snapshotTestBasic struct {
 
 func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Block) {
 	// Create a temporary persistent database
-	datadir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("Failed to create temporary datadir: %v", err)
-	}
-	os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	db, err := rawdb.NewLevelDBDatabaseWithFreezer(datadir, 0, 0, datadir, "", false)
 	if err != nil {
@@ -155,6 +150,7 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	}
 }
 
+//nolint:unused
 func (basic *snapshotTestBasic) dump() string {
 	buffer := new(strings.Builder)
 
@@ -346,54 +342,6 @@ func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 	snaptest.verify(t, newchain, blocks)
 }
 
-// restartCrashSnapshotTest is the test type used to test this scenario:
-// - have a complete snapshot
-// - restart chain
-// - insert more blocks with enabling the snapshot
-// - commit the snapshot
-// - crash
-// - restart again
-type restartCrashSnapshotTest struct {
-	snapshotTestBasic
-	newBlocks int
-}
-
-func (snaptest *restartCrashSnapshotTest) test(t *testing.T) {
-	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
-	chain, blocks := snaptest.prepare(t)
-
-	// Firstly, stop the chain properly, with all snapshot journal
-	// and state committed.
-	chain.Stop()
-
-	newchain, err := NewBlockChain(snaptest.db, nil, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to recreate chain: %v", err)
-	}
-	newBlocks, _ := GenerateChain(params.TestChainConfig, blocks[len(blocks)-1], snaptest.engine, snaptest.gendb, snaptest.newBlocks, func(i int, b *BlockGen) {})
-	newchain.InsertChain(newBlocks)
-
-	// Commit the entire snapshot into the disk if requested. Note only
-	// (a) snapshot root and (b) snapshot generator will be committed,
-	// the diff journal is not.
-	newchain.Snapshots().Cap(newBlocks[len(newBlocks)-1].Root(), 0)
-
-	// Simulate the blockchain crash
-	// Don't call chain.Stop here, so that no snapshot
-	// journal and latest state will be committed
-
-	// Restart the chain after the crash
-	newchain, err = NewBlockChain(snaptest.db, nil, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to recreate chain: %v", err)
-	}
-	defer newchain.Stop()
-
-	snaptest.verify(t, newchain, blocks)
-}
-
 // wipeCrashSnapshotTest is the test type used to test this scenario:
 // - have a complete snapshot
 // - restart, insert more blocks without enabling the snapshot
@@ -436,7 +384,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 		SnapshotLimit:  256,
 		SnapshotWait:   false, // Don't wait rebuild
 	}
-	newchain, err = NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
+	_, err = NewBlockChain(snaptest.db, config, params.AllEthashProtocolChanges, snaptest.engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

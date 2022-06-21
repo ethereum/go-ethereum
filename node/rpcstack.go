@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"sort"
@@ -40,13 +39,15 @@ type httpConfig struct {
 	CorsAllowedOrigins []string
 	Vhosts             []string
 	prefix             string // path prefix on which to mount http handler
+	jwtSecret          []byte // optional JWT secret
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
-	Origins []string
-	Modules []string
-	prefix  string // path prefix on which to mount ws handler
+	Origins   []string
+	Modules   []string
+	prefix    string // path prefix on which to mount ws handler
+	jwtSecret []byte // optional JWT secret
 }
 
 type rpcHandler struct {
@@ -157,7 +158,7 @@ func (h *httpServer) start() error {
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
-		"endpoint", listener.Addr(),
+		"endpoint", listener.Addr(), "auth", (h.httpConfig.jwtSecret != nil),
 		"prefix", h.httpConfig.prefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
@@ -285,7 +286,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 	}
 	h.httpConfig = config
 	h.httpHandler.Store(&rpcHandler{
-		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts),
+		Handler: NewHTTPHandlerStack(srv, config.CorsAllowedOrigins, config.Vhosts, config.jwtSecret),
 		server:  srv,
 	})
 	return nil
@@ -309,7 +310,6 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	if h.wsAllowed() {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
-
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
 	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
@@ -317,7 +317,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 	h.wsConfig = config
 	h.wsHandler.Store(&rpcHandler{
-		Handler: srv.WebsocketHandler(config.Origins),
+		Handler: NewWSHandlerStack(srv.WebsocketHandler(config.Origins), config.jwtSecret),
 		server:  srv,
 	})
 	return nil
@@ -357,16 +357,27 @@ func (h *httpServer) wsAllowed() bool {
 
 // isWebsocket checks the header of an http request for a websocket upgrade request.
 func isWebsocket(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
 
 // NewHTTPHandlerStack returns wrapped http-related handlers
-func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string) http.Handler {
+func NewHTTPHandlerStack(srv http.Handler, cors []string, vhosts []string, jwtSecret []byte) http.Handler {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
+	if len(jwtSecret) != 0 {
+		handler = newJWTHandler(jwtSecret, handler)
+	}
 	return newGzipHandler(handler)
+}
+
+// NewWSHandlerStack returns a wrapped ws-related handler.
+func NewWSHandlerStack(srv http.Handler, jwtSecret []byte) http.Handler {
+	if len(jwtSecret) != 0 {
+		return newJWTHandler(jwtSecret, srv)
+	}
+	return srv
 }
 
 func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
@@ -432,7 +443,7 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 var gzPool = sync.Pool{
 	New: func() interface{} {
-		w := gzip.NewWriter(ioutil.Discard)
+		w := gzip.NewWriter(io.Discard)
 		return w
 	},
 }

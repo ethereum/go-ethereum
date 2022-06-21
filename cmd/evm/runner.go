@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"os"
 	goruntime "runtime"
@@ -165,13 +165,13 @@ func runCmd(ctx *cli.Context) error {
 			// If - is specified, it means that code comes from stdin
 			if codeFileFlag == "-" {
 				//Try reading from stdin
-				if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
+				if hexcode, err = io.ReadAll(os.Stdin); err != nil {
 					fmt.Printf("Could not load code from stdin: %v\n", err)
 					os.Exit(1)
 				}
 			} else {
 				// Codefile with hex assembly
-				if hexcode, err = ioutil.ReadFile(codeFileFlag); err != nil {
+				if hexcode, err = os.ReadFile(codeFileFlag); err != nil {
 					fmt.Printf("Could not load code from file: %v\n", err)
 					os.Exit(1)
 				}
@@ -187,7 +187,7 @@ func runCmd(ctx *cli.Context) error {
 		code = common.FromHex(string(hexcode))
 	} else if fn := ctx.Args().First(); len(fn) > 0 {
 		// EASM-file to compile
-		src, err := ioutil.ReadFile(fn)
+		src, err := os.ReadFile(fn)
 		if err != nil {
 			return err
 		}
@@ -239,14 +239,19 @@ func runCmd(ctx *cli.Context) error {
 	var hexInput []byte
 	if inputFileFlag := ctx.GlobalString(InputFileFlag.Name); inputFileFlag != "" {
 		var err error
-		if hexInput, err = ioutil.ReadFile(inputFileFlag); err != nil {
+		if hexInput, err = os.ReadFile(inputFileFlag); err != nil {
 			fmt.Printf("could not load input from file: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
 		hexInput = []byte(ctx.GlobalString(InputFlag.Name))
 	}
-	input := common.FromHex(string(bytes.TrimSpace(hexInput)))
+	hexInput = bytes.TrimSpace(hexInput)
+	if len(hexInput)%2 != 0 {
+		fmt.Println("input length must be even")
+		os.Exit(1)
+	}
+	input := common.FromHex(string(hexInput))
 
 	var execFunc func() ([]byte, uint64, error)
 	if ctx.GlobalBool(CreateFlag.Name) {

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var ErrCommitDisabled = errors.New("no database for committing")
@@ -39,9 +38,10 @@ var stPool = sync.Pool{
 	},
 }
 
-func stackTrieFromPool(db ethdb.KeyValueWriter) *StackTrie {
+func stackTrieFromPool(db ethdb.KeyValueWriter, owner common.Hash) *StackTrie {
 	st := stPool.Get().(*StackTrie)
 	st.db = db
+	st.owner = owner
 	return st
 }
 
@@ -54,6 +54,7 @@ func returnToPool(st *StackTrie) {
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
 type StackTrie struct {
+	owner    common.Hash          // the owner of the trie
 	nodeType uint8                // node type (as in branch, ext, leaf)
 	val      []byte               // value contained by this node if it's a leaf
 	key      []byte               // key chunk covered by this (leaf|ext) node
@@ -64,6 +65,16 @@ type StackTrie struct {
 // NewStackTrie allocates and initializes an empty trie.
 func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
 	return &StackTrie{
+		nodeType: emptyNode,
+		db:       db,
+	}
+}
+
+// NewStackTrieWithOwner allocates and initializes an empty trie, but with
+// the additional owner field.
+func NewStackTrieWithOwner(db ethdb.KeyValueWriter, owner common.Hash) *StackTrie {
+	return &StackTrie{
+		owner:    owner,
 		nodeType: emptyNode,
 		db:       db,
 	}
@@ -89,10 +100,12 @@ func (st *StackTrie) MarshalBinary() (data []byte, err error) {
 		w = bufio.NewWriter(&b)
 	)
 	if err := gob.NewEncoder(w).Encode(struct {
-		Nodetype uint8
+		Owner    common.Hash
+		NodeType uint8
 		Val      []byte
 		Key      []byte
 	}{
+		st.owner,
 		st.nodeType,
 		st.val,
 		st.key,
@@ -123,12 +136,14 @@ func (st *StackTrie) UnmarshalBinary(data []byte) error {
 
 func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 	var dec struct {
-		Nodetype uint8
+		Owner    common.Hash
+		NodeType uint8
 		Val      []byte
 		Key      []byte
 	}
 	gob.NewDecoder(r).Decode(&dec)
-	st.nodeType = dec.Nodetype
+	st.owner = dec.Owner
+	st.nodeType = dec.NodeType
 	st.val = dec.Val
 	st.key = dec.Key
 
@@ -155,16 +170,16 @@ func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
 	}
 }
 
-func newLeaf(key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
-	st := stackTrieFromPool(db)
+func newLeaf(owner common.Hash, key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
+	st := stackTrieFromPool(db, owner)
 	st.nodeType = leafNode
 	st.key = append(st.key, key...)
 	st.val = val
 	return st
 }
 
-func newExt(key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
-	st := stackTrieFromPool(db)
+func newExt(owner common.Hash, key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
+	st := stackTrieFromPool(db, owner)
 	st.nodeType = extNode
 	st.key = append(st.key, key...)
 	st.children[0] = child
@@ -197,6 +212,7 @@ func (st *StackTrie) Update(key, value []byte) {
 }
 
 func (st *StackTrie) Reset() {
+	st.owner = common.Hash{}
 	st.db = nil
 	st.key = st.key[:0]
 	st.val = nil
@@ -224,6 +240,7 @@ func (st *StackTrie) insert(key, value []byte) {
 	switch st.nodeType {
 	case branchNode: /* Branch */
 		idx := int(key[0])
+
 		// Unresolve elder siblings
 		for i := idx - 1; i >= 0; i-- {
 			if st.children[i] != nil {
@@ -233,12 +250,14 @@ func (st *StackTrie) insert(key, value []byte) {
 				break
 			}
 		}
+
 		// Add new child
 		if st.children[idx] == nil {
-			st.children[idx] = newLeaf(key[1:], value, st.db)
+			st.children[idx] = newLeaf(st.owner, key[1:], value, st.db)
 		} else {
 			st.children[idx].insert(key[1:], value)
 		}
+
 	case extNode: /* Ext */
 		// Compare both key chunks and see where they differ
 		diffidx := st.getDiffIndex(key)
@@ -260,7 +279,7 @@ func (st *StackTrie) insert(key, value []byte) {
 		// node directly.
 		var n *StackTrie
 		if diffidx < len(st.key)-1 {
-			n = newExt(st.key[diffidx+1:], st.children[0], st.db)
+			n = newExt(st.owner, st.key[diffidx+1:], st.children[0], st.db)
 		} else {
 			// Break on the last byte, no need to insert
 			// an extension node: reuse the current node
@@ -280,12 +299,12 @@ func (st *StackTrie) insert(key, value []byte) {
 			// the common prefix is at least one byte
 			// long, insert a new intermediate branch
 			// node.
-			st.children[0] = stackTrieFromPool(st.db)
+			st.children[0] = stackTrieFromPool(st.db, st.owner)
 			st.children[0].nodeType = branchNode
 			p = st.children[0]
 		}
 		// Create a leaf for the inserted part
-		o := newLeaf(key[diffidx+1:], value, st.db)
+		o := newLeaf(st.owner, key[diffidx+1:], value, st.db)
 
 		// Insert both child leaves where they belong:
 		origIdx := st.key[diffidx]
@@ -321,39 +340,41 @@ func (st *StackTrie) insert(key, value []byte) {
 			// Convert current node into an ext,
 			// and insert a child branch node.
 			st.nodeType = extNode
-			st.children[0] = NewStackTrie(st.db)
+			st.children[0] = NewStackTrieWithOwner(st.db, st.owner)
 			st.children[0].nodeType = branchNode
 			p = st.children[0]
 		}
 
-		// Create the two child leaves: the one containing the
-		// original value and the one containing the new value
-		// The child leave will be hashed directly in order to
-		// free up some memory.
+		// Create the two child leaves: one containing the original
+		// value and another containing the new value. The child leaf
+		// is hashed directly in order to free up some memory.
 		origIdx := st.key[diffidx]
-		p.children[origIdx] = newLeaf(st.key[diffidx+1:], st.val, st.db)
+		p.children[origIdx] = newLeaf(st.owner, st.key[diffidx+1:], st.val, st.db)
 		p.children[origIdx].hash()
 
 		newIdx := key[diffidx]
-		p.children[newIdx] = newLeaf(key[diffidx+1:], value, st.db)
+		p.children[newIdx] = newLeaf(st.owner, key[diffidx+1:], value, st.db)
 
 		// Finally, cut off the key part that has been passed
 		// over to the children.
 		st.key = st.key[:diffidx]
 		st.val = nil
+
 	case emptyNode: /* Empty */
 		st.nodeType = leafNode
 		st.key = key
 		st.val = value
+
 	case hashedNode:
 		panic("trying to insert into hash")
+
 	default:
 		panic("invalid type")
 	}
 }
 
-// hash() hashes the node 'st' and converts it into 'hashedNode', if possible.
-// Possible outcomes:
+// hash converts st into a 'hashedNode', if possible. Possible outcomes:
+//
 // 1. The rlp-encoded value was >= 32 bytes:
 //  - Then the 32-byte `hash` will be accessible in `st.val`.
 //  - And the 'st.type' will be 'hashedNode'
@@ -361,119 +382,116 @@ func (st *StackTrie) insert(key, value []byte) {
 //  - Then the <32 byte rlp-encoded value will be accessible in 'st.val'.
 //  - And the 'st.type' will be 'hashedNode' AGAIN
 //
-// This method will also:
-// set 'st.type' to hashedNode
-// clear 'st.key'
+// This method also sets 'st.type' to hashedNode, and clears 'st.key'.
 func (st *StackTrie) hash() {
-	/* Shortcut if node is already hashed */
-	if st.nodeType == hashedNode {
-		return
-	}
-	// The 'hasher' is taken from a pool, but we don't actually
-	// claim an instance until all children are done with their hashing,
-	// and we actually need one
-	var h *hasher
+	h := newHasher(false)
+	defer returnHasherToPool(h)
+
+	st.hashRec(h)
+}
+
+func (st *StackTrie) hashRec(hasher *hasher) {
+	// The switch below sets this to the RLP-encoding of this node.
+	var encodedNode []byte
 
 	switch st.nodeType {
-	case branchNode:
-		var nodes [17]node
-		for i, child := range st.children {
-			if child == nil {
-				nodes[i] = nilValueNode
-				continue
-			}
-			child.hash()
-			if len(child.val) < 32 {
-				nodes[i] = rawNode(child.val)
-			} else {
-				nodes[i] = hashNode(child.val)
-			}
-			st.children[i] = nil // Reclaim mem from subtree
-			returnToPool(child)
-		}
-		nodes[16] = nilValueNode
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		if err := rlp.Encode(&h.tmp, nodes); err != nil {
-			panic(err)
-		}
-	case extNode:
-		st.children[0].hash()
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		var valuenode node
-		if len(st.children[0].val) < 32 {
-			valuenode = rawNode(st.children[0].val)
-		} else {
-			valuenode = hashNode(st.children[0].val)
-		}
-		n := struct {
-			Key []byte
-			Val node
-		}{
-			Key: hexToCompact(st.key),
-			Val: valuenode,
-		}
-		if err := rlp.Encode(&h.tmp, n); err != nil {
-			panic(err)
-		}
-		returnToPool(st.children[0])
-		st.children[0] = nil // Reclaim mem from subtree
-	case leafNode:
-		h = newHasher(false)
-		defer returnHasherToPool(h)
-		h.tmp.Reset()
-		st.key = append(st.key, byte(16))
-		sz := hexToCompactInPlace(st.key)
-		n := [][]byte{st.key[:sz], st.val}
-		if err := rlp.Encode(&h.tmp, n); err != nil {
-			panic(err)
-		}
+	case hashedNode:
+		return
+
 	case emptyNode:
 		st.val = emptyRoot.Bytes()
 		st.key = st.key[:0]
 		st.nodeType = hashedNode
 		return
+
+	case branchNode:
+		var nodes rawFullNode
+		for i, child := range st.children {
+			if child == nil {
+				nodes[i] = nilValueNode
+				continue
+			}
+
+			child.hashRec(hasher)
+			if len(child.val) < 32 {
+				nodes[i] = rawNode(child.val)
+			} else {
+				nodes[i] = hashNode(child.val)
+			}
+
+			// Release child back to pool.
+			st.children[i] = nil
+			returnToPool(child)
+		}
+
+		nodes.encode(hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
+
+	case extNode:
+		st.children[0].hashRec(hasher)
+
+		sz := hexToCompactInPlace(st.key)
+		n := rawShortNode{Key: st.key[:sz]}
+		if len(st.children[0].val) < 32 {
+			n.Val = rawNode(st.children[0].val)
+		} else {
+			n.Val = hashNode(st.children[0].val)
+		}
+
+		n.encode(hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
+
+		// Release child back to pool.
+		returnToPool(st.children[0])
+		st.children[0] = nil
+
+	case leafNode:
+		st.key = append(st.key, byte(16))
+		sz := hexToCompactInPlace(st.key)
+		n := rawShortNode{Key: st.key[:sz], Val: valueNode(st.val)}
+
+		n.encode(hasher.encbuf)
+		encodedNode = hasher.encodedBytes()
+
 	default:
-		panic("Invalid node type")
+		panic("invalid node type")
 	}
-	st.key = st.key[:0]
+
 	st.nodeType = hashedNode
-	if len(h.tmp) < 32 {
-		st.val = common.CopyBytes(h.tmp)
+	st.key = st.key[:0]
+	if len(encodedNode) < 32 {
+		st.val = common.CopyBytes(encodedNode)
 		return
 	}
+
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values
-	st.val = make([]byte, 32)
-	h.sha.Reset()
-	h.sha.Write(h.tmp)
-	h.sha.Read(st.val)
+	st.val = hasher.hashData(encodedNode)
 	if st.db != nil {
 		// TODO! Is it safe to Put the slice here?
 		// Do all db implementations copy the value provided?
-		st.db.Put(st.val, h.tmp)
+		st.db.Put(st.val, encodedNode)
 	}
 }
 
-// Hash returns the hash of the current node
+// Hash returns the hash of the current node.
 func (st *StackTrie) Hash() (h common.Hash) {
-	st.hash()
-	if len(st.val) != 32 {
-		// If the node's RLP isn't 32 bytes long, the node will not
-		// be hashed, and instead contain the  rlp-encoding of the
-		// node. For the top level node, we need to force the hashing.
-		ret := make([]byte, 32)
-		h := newHasher(false)
-		defer returnHasherToPool(h)
-		h.sha.Reset()
-		h.sha.Write(st.val)
-		h.sha.Read(ret)
-		return common.BytesToHash(ret)
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
+
+	st.hashRec(hasher)
+	if len(st.val) == 32 {
+		copy(h[:], st.val)
+		return h
 	}
-	return common.BytesToHash(st.val)
+
+	// If the node's RLP isn't 32 bytes long, the node will not
+	// be hashed, and instead contain the  rlp-encoding of the
+	// node. For the top level node, we need to force the hashing.
+	hasher.sha.Reset()
+	hasher.sha.Write(st.val)
+	hasher.sha.Read(h[:])
+	return h
 }
 
 // Commit will firstly hash the entrie trie if it's still not hashed
@@ -483,23 +501,26 @@ func (st *StackTrie) Hash() (h common.Hash) {
 //
 // The associated database is expected, otherwise the whole commit
 // functionality should be disabled.
-func (st *StackTrie) Commit() (common.Hash, error) {
+func (st *StackTrie) Commit() (h common.Hash, err error) {
 	if st.db == nil {
 		return common.Hash{}, ErrCommitDisabled
 	}
-	st.hash()
-	if len(st.val) != 32 {
-		// If the node's RLP isn't 32 bytes long, the node will not
-		// be hashed (and committed), and instead contain the  rlp-encoding of the
-		// node. For the top level node, we need to force the hashing+commit.
-		ret := make([]byte, 32)
-		h := newHasher(false)
-		defer returnHasherToPool(h)
-		h.sha.Reset()
-		h.sha.Write(st.val)
-		h.sha.Read(ret)
-		st.db.Put(ret, st.val)
-		return common.BytesToHash(ret), nil
+
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
+
+	st.hashRec(hasher)
+	if len(st.val) == 32 {
+		copy(h[:], st.val)
+		return h, nil
 	}
-	return common.BytesToHash(st.val), nil
+
+	// If the node's RLP isn't 32 bytes long, the node will not
+	// be hashed (and committed), and instead contain the  rlp-encoding of the
+	// node. For the top level node, we need to force the hashing+commit.
+	hasher.sha.Reset()
+	hasher.sha.Write(st.val)
+	hasher.sha.Read(h[:])
+	st.db.Put(h[:], st.val)
+	return h, nil
 }

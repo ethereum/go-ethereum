@@ -16,7 +16,7 @@ var _ = (*payloadAttributesMarshaling)(nil)
 func (p PayloadAttributesV1) MarshalJSON() ([]byte, error) {
 	type PayloadAttributesV1 struct {
 		Timestamp             hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		Random                common.Hash    `json:"random"        gencodec:"required"`
+		Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
 		SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
 	var enc PayloadAttributesV1
@@ -30,7 +30,7 @@ func (p PayloadAttributesV1) MarshalJSON() ([]byte, error) {
 func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 	type PayloadAttributesV1 struct {
 		Timestamp             *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		Random                *common.Hash    `json:"random"        gencodec:"required"`
+		Random                *common.Hash    `json:"prevRandao"        gencodec:"required"`
 		SuggestedFeeRecipient *common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	}
 	var dec PayloadAttributesV1
@@ -42,7 +42,7 @@ func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 	}
 	p.Timestamp = uint64(*dec.Timestamp)
 	if dec.Random == nil {
-		return errors.New("missing required field 'random' for PayloadAttributesV1")
+		return errors.New("missing required field 'prevRandao' for PayloadAttributesV1")
 	}
 	p.Random = *dec.Random
 	if dec.SuggestedFeeRecipient == nil {

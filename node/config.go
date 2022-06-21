@@ -19,7 +19,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -36,6 +35,7 @@ import (
 
 const (
 	datadirPrivateKey      = "nodekey"            // Path within the datadir to the node's private key
+	datadirJWTKey          = "jwtsecret"          // Path within the datadir to the node's jwt secret
 	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
 	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
@@ -138,6 +138,16 @@ type Config struct {
 	// HTTPPathPrefix specifies a path prefix on which http-rpc is to be served.
 	HTTPPathPrefix string `toml:",omitempty"`
 
+	// AuthAddr is the listening address on which authenticated APIs are provided.
+	AuthAddr string `toml:",omitempty"`
+
+	// AuthPort is the port number on which authenticated APIs are provided.
+	AuthPort int `toml:",omitempty"`
+
+	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
+	// for the authenticated api. This is by default {'localhost'}.
+	AuthVirtualHosts []string `toml:",omitempty"`
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string
@@ -190,6 +200,9 @@ type Config struct {
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
+
+	// JWTSecret is the hex-encoded jwt secret.
+	JWTSecret string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -248,7 +261,7 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort, AuthPort: DefaultAuthPort}
 	return config.HTTPEndpoint()
 }
 
@@ -456,7 +469,7 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 	isEphemeral := false
 	if keydir == "" {
 		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		keydir, err = os.MkdirTemp("", "go-ethereum-keystore")
 		isEphemeral = true
 	}
 

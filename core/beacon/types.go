@@ -31,7 +31,7 @@ import (
 // PayloadAttributesV1 structure described at https://github.com/ethereum/execution-apis/pull/74
 type PayloadAttributesV1 struct {
 	Timestamp             uint64         `json:"timestamp"     gencodec:"required"`
-	Random                common.Hash    `json:"random"        gencodec:"required"`
+	Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
 	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 }
 
@@ -47,9 +47,9 @@ type ExecutableDataV1 struct {
 	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
 	FeeRecipient  common.Address `json:"feeRecipient"  gencodec:"required"`
 	StateRoot     common.Hash    `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot  common.Hash    `json:"receiptsRoot"   gencodec:"required"`
+	ReceiptsRoot  common.Hash    `json:"receiptsRoot"  gencodec:"required"`
 	LogsBloom     []byte         `json:"logsBloom"     gencodec:"required"`
-	Random        common.Hash    `json:"random"        gencodec:"required"`
+	Random        common.Hash    `json:"prevRandao"    gencodec:"required"`
 	Number        uint64         `json:"blockNumber"   gencodec:"required"`
 	GasLimit      uint64         `json:"gasLimit"      gencodec:"required"`
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
@@ -72,26 +72,16 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
-type NewBlockResponse struct {
-	Valid bool `json:"valid"`
+type PayloadStatusV1 struct {
+	Status          string       `json:"status"`
+	LatestValidHash *common.Hash `json:"latestValidHash"`
+	ValidationError *string      `json:"validationError"`
 }
 
-type GenericResponse struct {
-	Success bool `json:"success"`
-}
-
-type GenericStringResponse struct {
-	Status string `json:"status"`
-}
-
-type ExecutePayloadResponse struct {
-	Status          string      `json:"status"`
-	LatestValidHash common.Hash `json:"latestValidHash"`
-}
-
-type ConsensusValidatedParams struct {
-	BlockHash common.Hash `json:"blockHash"`
-	Status    string      `json:"status"`
+type TransitionConfigurationV1 struct {
+	TerminalTotalDifficulty *hexutil.Big   `json:"terminalTotalDifficulty"`
+	TerminalBlockHash       common.Hash    `json:"terminalBlockHash"`
+	TerminalBlockNumber     hexutil.Uint64 `json:"terminalBlockNumber"`
 }
 
 // PayloadID is an identifier of the payload build process
@@ -114,8 +104,8 @@ func (b *PayloadID) UnmarshalText(input []byte) error {
 }
 
 type ForkChoiceResponse struct {
-	Status    string     `json:"status"`
-	PayloadID *PayloadID `json:"payloadId"`
+	PayloadStatus PayloadStatusV1 `json:"payloadStatus"`
+	PayloadID     *PayloadID      `json:"payloadId"`
 }
 
 type ForkchoiceStateV1 struct {
@@ -157,6 +147,13 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	}
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	}
+	if len(params.LogsBloom) != 256 {
+		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
+	}
+	// Check that baseFeePerGas is not negative or too big
+	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
+		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
 	header := &types.Header{
 		ParentHash:  params.ParentHash,

@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,8 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/crypto/sha3"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow
@@ -44,9 +42,6 @@ type leaf struct {
 // By 'some level' of parallelism, it's still the case that all leaves will be
 // processed sequentially - onleaf will never be called in parallel or out of order.
 type committer struct {
-	tmp sliceBuffer
-	sha crypto.KeccakState
-
 	onleaf LeafCallback
 	leafCh chan *leaf
 }
@@ -54,10 +49,7 @@ type committer struct {
 // committers live in a global sync.Pool
 var committerPool = sync.Pool{
 	New: func() interface{} {
-		return &committer{
-			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
-			sha: sha3.NewLegacyKeccak256().(crypto.KeccakState),
-		}
+		return &committer{}
 	},
 }
 
@@ -91,7 +83,7 @@ func (c *committer) commit(n node, db *Database) (node, int, error) {
 	if hash != nil && !dirty {
 		return hash, 0, nil
 	}
-	// Commit children, then parent, and remove remove the dirty flag.
+	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
 	case *shortNode:
 		// Commit child
@@ -201,9 +193,7 @@ func (c *committer) store(n node, db *Database) node {
 	} else if db != nil {
 		// No leaf-callback used, but there's still a database. Do serial
 		// insertion
-		db.lock.Lock()
 		db.insert(common.BytesToHash(hash), size, n)
-		db.lock.Unlock()
 	}
 	return hash
 }
@@ -217,9 +207,7 @@ func (c *committer) commitLoop(db *Database) {
 			n    = item.node
 		)
 		// We are pooling the trie nodes into an intermediate memory cache
-		db.lock.Lock()
 		db.insert(hash, size, n)
-		db.lock.Unlock()
 
 		if c.onleaf != nil {
 			switch n := n.(type) {
@@ -236,14 +224,6 @@ func (c *committer) commitLoop(db *Database) {
 			}
 		}
 	}
-}
-
-func (c *committer) makeHashNode(data []byte) hashNode {
-	n := make(hashNode, c.sha.Size())
-	c.sha.Reset()
-	c.sha.Write(data)
-	c.sha.Read(n)
-	return n
 }
 
 // estimateSize estimates the size of an rlp-encoded node, without actually

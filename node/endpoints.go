@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -60,8 +60,10 @@ func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available [
 		}
 	}
 	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok && name != rpc.MetadataApi {
-			bad = append(bad, name)
+		if _, ok := availableSet[name]; !ok {
+			if name != rpc.MetadataApi && name != rpc.EngineApi {
+				bad = append(bad, name)
+			}
 		}
 	}
 	return bad, available
