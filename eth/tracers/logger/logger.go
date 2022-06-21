@@ -174,7 +174,8 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
-	for i := l.depth - (depth - 1); l.depth > depth-1; l.depth, i = l.depth-1, i-1 {
+	for ; l.depth > depth-1; l.depth = l.depth - 1 {
+		i := l.depth - (depth - 1)
 		if l.current.error == nil {
 			switch stack.Data()[len(stack.Data())-i].Bytes32()[31] {
 			case 0x00:
