@@ -140,16 +140,26 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return beacon.ForkChoiceResponse{PayloadStatus: beacon.INVALID_TERMINAL_BLOCK, PayloadID: nil}, nil
 		}
 	}
-
+	valid := func(id *beacon.PayloadID) beacon.ForkChoiceResponse {
+		return beacon.ForkChoiceResponse{
+			PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &update.HeadBlockHash},
+			PayloadID:     id,
+		}
+	}
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return beacon.ForkChoiceResponse{PayloadStatus: beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &latestValid}}, err
 		}
+	} else if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
+		// If the specified head matches with our local head, do nothing and keep
+		// generating the payload. It's a special corner case that a few slots are
+		// missing and we are requested to generate the payload in slot.
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
 		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
+		return valid(nil), nil
 	}
 	api.eth.SetSynced()
 
@@ -181,12 +191,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
 			log.Warn("Safe block not in canonical chain")
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
-		}
-	}
-	valid := func(id *beacon.PayloadID) beacon.ForkChoiceResponse {
-		return beacon.ForkChoiceResponse{
-			PayloadStatus: beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &update.HeadBlockHash},
-			PayloadID:     id,
 		}
 	}
 	// If payload generation was requested, create a new block to be potentially
