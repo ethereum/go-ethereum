@@ -148,7 +148,7 @@ func (s *RPCService) Modules() map[string]string {
 }
 
 // Methods returns the list of methods for each RPC service.
-func (s *RPCService) Methods() map[string][]string {
+func (s *RPCService) Methods(includeSubscriptions bool) map[string][]string {
 	s.server.services.mu.Lock()
 	defer s.server.services.mu.Unlock()
 
@@ -162,6 +162,11 @@ func (s *RPCService) Methods() map[string][]string {
 		methods[name] = make([]string, 0, len(service.callbacks))
 		for mname := range service.callbacks {
 			methods[name] = append(methods[name], mname)
+		}
+		if includeSubscriptions {
+			for mname := range service.subscriptions {
+				methods[name] = append(methods[name], mname)
+			}
 		}
 	}
 	return methods

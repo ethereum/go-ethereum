@@ -749,7 +749,8 @@ web3._extend({
 		}),
 		new web3._extend.Property({
 			name: 'methods',
-			getter: 'rpc_methods'
+			getter: 'rpc_methods',
+			params: 1,
 		}),
 	]
 });

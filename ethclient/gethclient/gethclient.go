@@ -180,9 +180,9 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- co
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
-func (ec *Client) RPCMethods(ctx context.Context) (map[string][]string, error) {
+func (ec *Client) RPCMethods(ctx context.Context, includeSubscriptions bool) (map[string][]string, error) {
 	var result map[string][]string
-	err := ec.c.CallContext(ctx, &result, "rpc_methods")
+	err := ec.c.CallContext(ctx, &result, "rpc_methods", includeSubscriptions)
 	return result, err
 }
 
