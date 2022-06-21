@@ -33,7 +33,7 @@ In advance of the Mainnet merge, several public testnets will transition from Po
 The first public testnet to merge will be Ropsten. As the Ropsten merge approaches, Geth
 users will need to prepare to ensure a smooth transition.
 
-{% include note.html content="The merge event did not go smoothly on Ropsten. Use `--override.terminaltotaldifficulty 50000000000000000` when launching Geth for Ropsten." %}
+{% include note.html content="The merge event did not go smoothly on Ropsten. However, if you are running Geth v1.10.19 or later, no action is required. If you are running Geth v1.10.18 or earlier, you should use `--override.terminaltotaldifficulty 50000000000000000` when launching Geth for Ropsten." %}
 
 ### Consensus client
 
