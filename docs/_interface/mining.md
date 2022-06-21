@@ -43,16 +43,10 @@ and installation instructions are available from the [Ethminer Github](https://g
 
 ### Using Ethminer with Geth
 
-An account to receive block rewards must first be created or imported into Geth. To create a new account:
 
-```shell
-geth account new
-```
+An account to receive block rewards must first be defined. The address of the account is all that is required to start mining - the mining rewards will be credited to that address. This can be an existing address or one that is newly created by Geth. More detailed instructions on creating and importing accounts are available on the [Account Management](/docs/interface/managing-your-accounts) page.
 
-It is extremely important that the password is backed up safely and securely. The funds cannot be retrieved if the password is lost or forgotten. More detailed instructions on creating an importing accounts are available on the [Account Management](/docs/interface/managing-your-accounts) page.
-
-
-With an account in the Geth keystore, Geth can be started. The account address can be provided to `--mining.etherbase`. This instructs Geth todirect any block rewards to this address. Once started, Geth will sync the blockchain. If Geth has not connected to this network before, or if the data directory has been deleted, this can take several days. Also, enable HTTP traffic with the `--http` command.
+The account address can be provided to `--mining.etherbase` when Geth is started. This instructs Geth to direct any block rewards to this address. Once started, Geth will sync the blockchain. If Geth has not connected to this network before, or if the data directory has been deleted, this can take several days. Also, enable HTTP traffic with the `--http` command.
 
 ```shell
 geth --http --miner.etherbase 0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10
@@ -74,11 +68,21 @@ If the sync is progressing correctly the output will look similar to the followi
 
 ```terminal
 {
-    currentBlock: 10707814,
-    highestBlock: 13252182,
-    knownStates: 0,
-    pulledStates: 0,
-    startingBlock: 3809258
+  currentBlock: 13891665,
+  healedBytecodeBytes: 0,
+  healedBytecodes: 0,
+  healedTrienodeBytes: 0,
+  healedTrienodes: 0,
+  healingBytecode: 0,
+  healingTrienodes: 0,
+  highestBlock: 14640000,
+  startingBlock: 13891665,
+  syncedAccountBytes: 0,
+  syncedAccounts: 0,
+  syncedBytecodeBytes: 0,
+  syncedBytecodes: 0,
+  syncedStorage: 0,
+  syncedStorageBytes: 0
 }
 ```
 
