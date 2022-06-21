@@ -18,11 +18,9 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -61,7 +59,7 @@ This command allows to open a console on a running geth node.`,
 	javascriptCommand = cli.Command{
 		Action:    utils.MigrateFlags(ephemeralConsole),
 		Name:      "js",
-		Usage:     "Execute the specified JavaScript files",
+		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",
 		Flags:     utils.GroupFlags(nodeFlags, consoleFlags),
 		Category:  "CONSOLE COMMANDS",
@@ -121,31 +119,9 @@ func localConsole(ctx *cli.Context) error {
 func remoteConsole(ctx *cli.Context) error {
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
-		path := node.DefaultDataDir()
-		if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
-			path = ctx.GlobalString(utils.DataDirFlag.Name)
-		}
-		if path != "" {
-			if ctx.GlobalBool(utils.RopstenFlag.Name) {
-				// Maintain compatibility with older Geth configurations storing the
-				// Ropsten database in `testnet` instead of `ropsten`.
-				legacyPath := filepath.Join(path, "testnet")
-				if common.FileExist(legacyPath) {
-					path = legacyPath
-				} else {
-					path = filepath.Join(path, "ropsten")
-				}
-			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
-				path = filepath.Join(path, "rinkeby")
-			} else if ctx.GlobalBool(utils.GoerliFlag.Name) {
-				path = filepath.Join(path, "goerli")
-			} else if ctx.GlobalBool(utils.SepoliaFlag.Name) {
-				path = filepath.Join(path, "sepolia")
-			} else if ctx.GlobalBool(utils.KilnFlag.Name) {
-				path = filepath.Join(path, "kiln")
-			}
-		}
-		endpoint = fmt.Sprintf("%s/geth.ipc", path)
+		cfg := defaultNodeConfig()
+		utils.SetDataDir(ctx, &cfg)
+		endpoint = cfg.IPCEndpoint()
 	}
 	client, err := dialRPC(endpoint)
 	if err != nil {
@@ -174,6 +150,19 @@ func remoteConsole(ctx *cli.Context) error {
 	return nil
 }
 
+// ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
+// console to it, executes each of the files specified as arguments and tears
+// everything down.
+func ephemeralConsole(ctx *cli.Context) error {
+	var b strings.Builder
+	for _, file := range ctx.Args() {
+		b.Write([]byte(fmt.Sprintf("loadScript('%s');", file)))
+	}
+	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:
+geth --exec "%s" console`, b.String())
+	return nil
+}
+
 // dialRPC returns a RPC client which connects to the given endpoint.
 // The check for empty endpoint implements the defaulting logic
 // for "geth attach" with no argument.
@@ -186,49 +175,4 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 		endpoint = endpoint[4:]
 	}
 	return rpc.Dial(endpoint)
-}
-
-// ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
-// console to it, executes each of the files specified as arguments and tears
-// everything down.
-func ephemeralConsole(ctx *cli.Context) error {
-	// Create and start the node based on the CLI flags
-	stack, backend := makeFullNode(ctx)
-	startNode(ctx, stack, backend, false)
-	defer stack.Close()
-
-	// Attach to the newly started node and start the JavaScript console
-	client, err := stack.Attach()
-	if err != nil {
-		return fmt.Errorf("Failed to attach to the inproc geth: %v", err)
-	}
-	config := console.Config{
-		DataDir: utils.MakeDataDir(ctx),
-		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),
-		Client:  client,
-		Preload: utils.MakeConsolePreloads(ctx),
-	}
-
-	console, err := console.New(config)
-	if err != nil {
-		return fmt.Errorf("Failed to start the JavaScript console: %v", err)
-	}
-	defer console.Stop(false)
-
-	// Interrupt the JS interpreter when node is stopped.
-	go func() {
-		stack.Wait()
-		console.Stop(false)
-	}()
-
-	// Evaluate each of the specified JavaScript files.
-	for _, file := range ctx.Args() {
-		if err = console.Execute(file); err != nil {
-			return fmt.Errorf("Failed to execute %s: %v", file, err)
-		}
-	}
-
-	// The main script is now done, but keep running timers/callbacks.
-	console.Stop(true)
-	return nil
 }
