@@ -166,7 +166,7 @@ var (
 	}
 	KilnFlag = cli.BoolFlag{
 		Name:  "kiln",
-		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
+		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network (deprecated)",
 	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -1721,6 +1721,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.GlobalBool(RopstenFlag.Name):
+		log.Warn("")
+		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("Please note, Ropsten has been deprecated. It will still work for the time being,")
+		log.Warn("but will be shut down in the coming months. Eventually the network")
+		log.Warn("will be permanently halted around Q4 2022. For the most future proof testnets, choose Sepolia or Goerli as")
+		log.Warn("your replacement environment (--sepolia or --goerli instead of --ropsten).")
+		log.Warn("--------------------------------------------------------------------------------")
+		log.Warn("")
+
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
@@ -1755,6 +1764,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.GlobalBool(KilnFlag.Name):
+		log.Warn("")
+		log.Warn("-------------------------------------------------------------------------------------------")
+		log.Warn("The Kiln testnet, launched in 2022 to provide a post-merge testing environment,")
+		log.Warn("will be shut down shortly after the Ethereum mainnet's transition to proof-of-stake,")
+		log.Warn("which is expected in the second half of 2022. Developers should not use Kiln as a")
+		log.Warn("long-lasting testing environment. It is expected to be the first testnet to be shut down")
+		log.Warn("after The Merge happens on the Ethereum mainnet.")
+		log.Warn("-------------------------------------------------------------------------------------------")
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337802
 		}
