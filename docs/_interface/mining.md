@@ -22,7 +22,7 @@ Ethereum nodes is available on
 ## Mining and the Merge
 
 [The Merge](https://ethereum.org/en/upgrades/merge) is an upcoming upgrade to Ethereum that
-will swap the existing PoW for a [proof-of-stake (PoS)](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos) consensus mechanism. This marks the end of mining on Ethereum. Instead, nodes can [stake ether](https://ethereum.org/en/staking/solo/#get-started-on-the-staking-launchpad) directly and earn ether rewards by running [validators](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/#validators). The merge is expected to happen in the second half of 2022. Until then, Ethereum will coninue to be secured by PoW miners. It is no longer recommended to purchase new hardware to participate in Ethereum mining because the chances of returning a profit before The Merge are low.
+will swap the existing PoW for a [proof-of-stake (PoS)](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos) consensus mechanism. This marks the end of mining on Ethereum. Instead, nodes can [stake ether](https://ethereum.org/en/staking/solo/#get-started-on-the-staking-launchpad) directly and earn ether rewards by running [validators](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/#validators). The merge is expected to happen in the second half of 2022. Until then, Ethereum will continue to be secured by PoW miners. It is no longer recommended to purchase new hardware to participate in Ethereum mining because the chances of returning a profit before The Merge are low.
 
 
 ## CPU vs GPU
@@ -38,7 +38,7 @@ Regardless of the mining method, the blockchain must be fully synced before mini
 
 ### Installing Ethminer
 
-The Ethminer software can be installed from a downloaded binary or built from source. Either way, the relevant downloads 
+The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads 
 and installation instructions are available from the [Ethminer Github](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
 
 ### Using Ethminer with Geth
@@ -106,9 +106,9 @@ Benchmarking on platform: { "platform": "NVIDIA CUDA", "device": "GeForce GTX 75
 Benchmarking on platform: { "platform": "Apple", "device": "Intel(R) Xeon(R) CPU E5-1620 v2 @ 3.70GHz", "version": "OpenCL 1.2 " }
 ```
 
-Note that the Geth command `miner.hashrate` onyl works for CPU mining - it always reports zero for GPU mining. To check the GPU mining hashrate, check the logs `ethminer` displays to its terminal. More voerbose logs can be configured using `-v` and a value between 0-9.
+Note that the Geth command `miner.hashrate` only works for CPU mining - it always reports zero for GPU mining. To check the GPU mining hashrate, check the logs `ethminer` displays to its terminal. More verbose logs can be configured using `-v` and a value between 0-9.
 
-The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions/84002/memory-hard-vs-memory-bound-functions) and requires a large dataset to be loaded into memory. Each GPU requires 1-2 GB of RAM. The error message `Error GPU mining. GPU memory fragmentation?` indicates that there is insufficient memory available.
+The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions/84002/memory-hard-vs-memory-bound-functions) and requires a large dataset to be loaded into memory. Each GPU requires 4-5 GB of RAM. The error message `Error GPU mining. GPU memory fragmentation?` indicates that there is insufficient memory available.
 
 
 ## CPU Mining with Geth
