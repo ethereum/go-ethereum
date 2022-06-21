@@ -1,32 +1,5 @@
 
-# Config to run Retesteth using docker
-
-- git submodule add --depth 1 https://github.com/ethereum/tests.git tests/testdata  
-- download docker image from http://retesteth.ethdevops.io/  
-- load the docker image with `sudo docker load -i dretest*.tar` 
-- Download the `dretesteth.sh` script with
-```
-  wget https://raw.githubusercontent.com/ethereum/retesteth/master/dretesteth.sh
-  chmod +x dretesteth.sh
-```
-- Run a test with the following command. It will create the retesteth configuration directories in `~/tests/config`, and run a sanity check  
-```
-sudo ./dretesteth.sh -t GeneralStateTests/stExample -- \
-  --testpath ~/tests --datadir /tests/config
-```
-- The output should be similar to
-```
-Running 1 test case...
-Running tests using path: /tests
-Active client configurations: 't8ntool '
-Running tests for config 'Ethereum GO on StateTool'
-Test Case "stExample":
-100%
-*** No errors detected
-*** Total Tests Run: 1
-```
-
-# Testing against bor
+# Retesteth - testing against bor client
 
 - Change configs by replacing geth with bor inside the docker container  
 ```
