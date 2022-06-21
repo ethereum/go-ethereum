@@ -49,6 +49,11 @@ var (
 		Usage: "Target gas floor for mined blocks (deprecated)",
 		Value: ethconfig.Defaults.Miner.GasFloor,
 	}
+	// (Deprecated March 2022, shown in aliased flags section)
+	LegacyWhitelistFlag = cli.StringFlag{
+		Name:  "whitelist",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
