@@ -17,4 +17,12 @@ jobs:
         uses: codecov/codecov-action@v1
         with:
           file: ./cover.out
-
+      - name: Reproducible build test
+        run: |
+            make geth
+            shasum -a256 ./build/bin/geth > bor1.sha256
+            make geth
+            shasum -a256 ./build/bin/geth > bor2.sha256
+            if ! cmp -s bor1.sha256 bor2.sha256; then
+              echo >&2 "Reproducible build broken"; cat bor1.sha256; cat bor2.sha256; exit 1
+            fi
