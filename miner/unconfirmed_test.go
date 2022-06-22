@@ -44,6 +44,7 @@ func TestUnconfirmedInsertBounds(t *testing.T) {
 		for i := 0; i < int(depth); i++ {
 			pool.Insert(depth, [32]byte{byte(depth), byte(i)})
 		}
+
 		// Validate that no blocks below the depth allowance are left in
 		pool.blocks.Do(func(block interface{}) {
 			if block := block.(*unconfirmedBlock); block.index+uint64(limit) <= depth {
@@ -64,23 +65,29 @@ func TestUnconfirmedShifts(t *testing.T) {
 	for depth := start; depth < start+uint64(limit); depth++ {
 		pool.Insert(depth, [32]byte{byte(depth)})
 	}
+
 	// Try to shift below the limit and ensure no blocks are dropped
 	pool.Shift(start + uint64(limit) - 1)
 	if n := pool.blocks.Len(); n != int(limit) {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, limit)
 	}
+
 	// Try to shift half the blocks out and verify remainder
 	pool.Shift(start + uint64(limit) - 1 + uint64(limit/2))
 	if n := pool.blocks.Len(); n != int(limit)/2 {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, limit/2)
 	}
+
 	// Try to shift all the remaining blocks out and verify emptyness
 	pool.Shift(start + 2*uint64(limit))
+
 	if n := pool.blocks.Len(); n != 0 {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, 0)
 	}
+
 	// Try to shift out from the empty set and make sure it doesn't break
 	pool.Shift(start + 3*uint64(limit))
+
 	if n := pool.blocks.Len(); n != 0 {
 		t.Errorf("unconfirmed count mismatch: have %d, want %d", n, 0)
 	}

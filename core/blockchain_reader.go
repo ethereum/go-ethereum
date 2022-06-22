@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -397,9 +398,24 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
 
+// Snaps retrieves the snapshot tree.
+func (bc *BlockChain) Snaps() *snapshot.Tree {
+	return bc.snaps
+}
+
+// DB retrieves the blockchain database.
+func (bc *BlockChain) DB() ethdb.Database {
+	return bc.db
+}
+
 //
 // Bor related changes
 //
+
+type BorStateSyncer interface {
+	SetStateSync(stateData []*types.StateSyncData)
+	SubscribeStateSyncEvent(ch chan<- StateSyncEvent) event.Subscription
+}
 
 // SetStateSync set sync data in state_data
 func (bc *BlockChain) SetStateSync(stateData []*types.StateSyncData) {

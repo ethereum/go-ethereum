@@ -1,4 +1,3 @@
-
 # Chain sethead
 
 The ```chain sethead <number>``` command sets the current chain to a certain block.
@@ -9,4 +8,6 @@ The ```chain sethead <number>``` command sets the current chain to a certain blo
 
 ## Options
 
-- ```yes```: Force set head.
+- ```address```: Address of the grpc endpoint
+
+- ```yes```: Force set head

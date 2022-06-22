@@ -1,11 +1,8 @@
 package cli
 
-// Based on https://github.com/hashicorp/nomad/blob/main/command/operator_debug.go
-
 import (
 	"archive/tar"
 	"compress/gzip"
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,194 +13,187 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/cli/flagset"
+	"github.com/mitchellh/cli"
+
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
-	"github.com/golang/protobuf/jsonpb"
-	gproto "github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/empty"
+
+	"github.com/golang/protobuf/jsonpb"       // nolint:staticcheck
+	gproto "github.com/golang/protobuf/proto" // nolint:staticcheck
 	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/runtime/protoiface"
 )
 
+// DebugCommand is the command to group the peers commands
 type DebugCommand struct {
-	*Meta2
+	UI cli.Ui
+}
 
-	seconds uint64
-	output  string
+// MarkDown implements cli.MarkDown interface
+func (d *DebugCommand) MarkDown() string {
+	examples := []string{
+		"## Examples",
+		"By default it creates a tar.gz file with the output:",
+		CodeBlock([]string{
+			"$ bor debug",
+			"Starting debugger...\n",
+			"Created debug archive: bor-debug-2021-10-26-073819Z.tar.gz",
+		}),
+		"Send the output to a specific directory:",
+		CodeBlock([]string{
+			"$ bor debug --output data",
+			"Starting debugger...\n",
+			"Created debug directory: data/bor-debug-2021-10-26-075437Z",
+		}),
+	}
+
+	items := []string{
+		"# Debug",
+		"The ```bor debug``` command takes a debug dump of the running client.",
+		"- [```bor debug pprof```](./debug_pprof.md): Dumps bor pprof traces.",
+		"- [```bor debug block <number>```](./debug_block.md): Dumps bor block traces.",
+	}
+	items = append(items, examples...)
+
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface
-func (d *DebugCommand) Help() string {
-	return `Usage: bor debug
+func (c *DebugCommand) Help() string {
+	return `Usage: bor debug <subcommand>
 
-  Build an archive containing Bor pprof traces
+  This command takes a debug dump of the running client. 
+	
+	Get the pprof traces:
 
-  ` + d.Flags().Help()
-}
+		$ bor debug pprof <enode>
 
-func (d *DebugCommand) Flags() *flagset.Flagset {
-	flags := d.NewFlagSet("debug")
+	Get the block traces:
 
-	flags.Uint64Flag(&flagset.Uint64Flag{
-		Name:    "seconds",
-		Usage:   "seconds to trace",
-		Value:   &d.seconds,
-		Default: 2,
-	})
-	flags.StringFlag(&flagset.StringFlag{
-		Name:  "output",
-		Value: &d.output,
-		Usage: "Output directory",
-	})
-
-	return flags
+		$ bor debug block <number>`
 }
 
 // Synopsis implements the cli.Command interface
-func (d *DebugCommand) Synopsis() string {
-	return "Build an archive containing Bor pprof traces"
+func (c *DebugCommand) Synopsis() string {
+	return "Get traces of the running client"
 }
 
 // Run implements the cli.Command interface
-func (d *DebugCommand) Run(args []string) int {
-	flags := d.Flags()
-	if err := flags.Parse(args); err != nil {
-		d.UI.Error(err.Error())
-		return 1
-	}
+func (c *DebugCommand) Run(args []string) int {
+	return cli.RunResultHelp
+}
 
-	clt, err := d.BorConn()
-	if err != nil {
-		d.UI.Error(err.Error())
-		return 1
-	}
+type debugEnv struct {
+	output string
+	prefix string
 
-	stamped := "bor-debug-" + time.Now().UTC().Format("2006-01-02-150405Z")
+	name string
+	dst  string
+}
+
+func (d *debugEnv) init() error {
+	d.name = d.prefix + time.Now().UTC().Format("2006-01-02-150405Z")
+
+	var err error
 
 	// Create the output directory
 	var tmp string
 	if d.output != "" {
 		// User specified output directory
-		tmp = filepath.Join(d.output, stamped)
+		tmp = filepath.Join(d.output, d.name)
 		_, err := os.Stat(tmp)
+
 		if !os.IsNotExist(err) {
-			d.UI.Error("Output directory already exists")
-			return 1
+			return fmt.Errorf("output directory already exists")
 		}
 	} else {
 		// Generate temp directory
-		tmp, err = ioutil.TempDir(os.TempDir(), stamped)
+		tmp, err = ioutil.TempDir(os.TempDir(), d.name)
 		if err != nil {
-			d.UI.Error(fmt.Sprintf("Error creating tmp directory: %s", err.Error()))
-			return 1
+			return fmt.Errorf("error creating tmp directory: %s", err.Error())
 		}
-		defer os.RemoveAll(tmp)
 	}
-
-	d.UI.Output("Starting debugger...")
-	d.UI.Output("")
 
 	// ensure destine folder exists
 	if err := os.MkdirAll(tmp, os.ModePerm); err != nil {
-		d.UI.Error(fmt.Sprintf("failed to create parent directory: %v", err))
-		return 1
+		return fmt.Errorf("failed to create parent directory: %v", err)
 	}
 
-	pprofProfile := func(ctx context.Context, profile string, filename string) error {
-		req := &proto.PprofRequest{
-			Seconds: int64(d.seconds),
-		}
-		switch profile {
-		case "cpu":
-			req.Type = proto.PprofRequest_CPU
-		case "trace":
-			req.Type = proto.PprofRequest_TRACE
-		default:
-			req.Type = proto.PprofRequest_LOOKUP
-			req.Profile = profile
-		}
-		stream, err := clt.Pprof(ctx, req)
-		if err != nil {
-			return err
-		}
-		// wait for open request
-		msg, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		if _, ok := msg.Event.(*proto.PprofResponse_Open_); !ok {
-			return fmt.Errorf("expected open message")
-		}
+	d.dst = tmp
 
-		// create the stream
-		conn := &grpc_net_conn.Conn{
-			Stream:   stream,
-			Response: &proto.PprofResponse_Input{},
-			Decode: grpc_net_conn.SimpleDecoder(func(msg gproto.Message) *[]byte {
-				return &msg.(*proto.PprofResponse_Input).Data
-			}),
-		}
+	return nil
+}
 
-		file, err := os.OpenFile(filepath.Join(tmp, filename+".prof"), os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
+func (d *debugEnv) tarName() string {
+	return d.name + ".tar.gz"
+}
 
-		if _, err := io.Copy(file, conn); err != nil {
-			return err
-		}
+func (d *debugEnv) finish() error {
+	// Exit before archive if output directory was specified
+	if d.output != "" {
 		return nil
 	}
 
-	ctx, cancelFn := context.WithCancel(context.Background())
-	trapSignal(cancelFn)
-
-	profiles := map[string]string{
-		"heap":  "heap",
-		"cpu":   "cpu",
-		"trace": "trace",
-	}
-	for profile, filename := range profiles {
-		if err := pprofProfile(ctx, profile, filename); err != nil {
-			d.UI.Error(fmt.Sprintf("Error creating profile '%s': %v", profile, err))
-			return 1
-		}
-	}
-
-	// append the status
-	{
-		statusResp, err := clt.Status(ctx, &empty.Empty{})
-		if err != nil {
-			d.UI.Output(fmt.Sprintf("Failed to get status: %v", err))
-			return 1
-		}
-		m := jsonpb.Marshaler{}
-		data, err := m.MarshalToString(statusResp)
-		if err != nil {
-			d.UI.Output(err.Error())
-			return 1
-		}
-		if err := ioutil.WriteFile(filepath.Join(tmp, "status.json"), []byte(data), 0644); err != nil {
-			d.UI.Output(fmt.Sprintf("Failed to write status: %v", err))
-			return 1
-		}
-	}
-
-	// Exit before archive if output directory was specified
-	if d.output != "" {
-		d.UI.Output(fmt.Sprintf("Created debug directory: %s", tmp))
-		return 0
-	}
-
 	// Create archive tarball
-	archiveFile := stamped + ".tar.gz"
-	if err = tarCZF(archiveFile, tmp, stamped); err != nil {
-		d.UI.Error(fmt.Sprintf("Error creating archive: %s", err.Error()))
-		return 1
+	archiveFile := d.tarName()
+	if err := tarCZF(archiveFile, d.dst, d.name); err != nil {
+		return fmt.Errorf("error creating archive: %s", err.Error())
 	}
 
-	d.UI.Output(fmt.Sprintf("Created debug archive: %s", archiveFile))
-	return 0
+	return nil
+}
+
+type debugStream interface {
+	Recv() (*proto.DebugFileResponse, error)
+	grpc.ClientStream
+}
+
+func (d *debugEnv) writeFromStream(name string, stream debugStream) error {
+	// wait for open request
+	msg, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+
+	if _, ok := msg.Event.(*proto.DebugFileResponse_Open_); !ok {
+		return fmt.Errorf("expected open message")
+	}
+
+	// create the stream
+	conn := &grpc_net_conn.Conn{
+		Stream:   stream,
+		Response: &proto.DebugFileResponse_Input{},
+		Decode: grpc_net_conn.SimpleDecoder(func(msg gproto.Message) *[]byte {
+			return &msg.(*proto.DebugFileResponse_Input).Data
+		}),
+	}
+
+	file, err := os.OpenFile(filepath.Join(d.dst, name), os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, conn); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *debugEnv) writeJSON(name string, msg protoiface.MessageV1) error {
+	m := jsonpb.Marshaler{}
+	data, err := m.MarshalToString(msg)
+
+	if err != nil {
+		return err
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(d.dst, name), []byte(data), 0600); err != nil {
+		return fmt.Errorf("failed to write status: %v", err)
+	}
+
+	return nil
 }
 
 func trapSignal(cancel func()) {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
@@ -12,6 +13,17 @@ type PeersAddCommand struct {
 	*Meta2
 
 	trusted bool
+}
+
+// MarkDown implements cli.MarkDown interface
+func (p *PeersAddCommand) MarkDown() string {
+	items := []string{
+		"# Peers add",
+		"The ```peers add <enode>``` command joins the local client to another remote peer.",
+		p.Flags().MarkDown(),
+	}
+
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface
@@ -68,5 +80,6 @@ func (c *PeersAddCommand) Run(args []string) int {
 		c.UI.Error(err.Error())
 		return 1
 	}
+
 	return 0
 }

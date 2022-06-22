@@ -24,9 +24,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/bor/api"
+	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -38,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
 
 const (
@@ -49,43 +55,9 @@ const (
 	testGas = 144109
 )
 
-var (
-	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
-	ethashChainConfig *params.ChainConfig
-	cliqueChainConfig *params.ChainConfig
-
-	// Test accounts
-	testBankKey, _  = crypto.GenerateKey()
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000000000000000)
-
-	testUserKey, _  = crypto.GenerateKey()
-	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
-
-	// Test transactions
-	pendingTxs []*types.Transaction
-	newTxs     []*types.Transaction
-
-	testConfig = &Config{
-		Recommit: time.Second,
-		GasCeil:  params.GenesisGasLimit,
-	}
-)
-
 func init() {
-	testTxPoolConfig = core.DefaultTxPoolConfig
-	testTxPoolConfig.Journal = ""
-	ethashChainConfig = new(params.ChainConfig)
-	*ethashChainConfig = *params.TestChainConfig
-	cliqueChainConfig = new(params.ChainConfig)
-	*cliqueChainConfig = *params.TestChainConfig
-	cliqueChainConfig.Clique = &params.CliqueConfig{
-		Period: 10,
-		Epoch:  30000,
-	}
-
 	signer := types.LatestSigner(params.TestChainConfig)
+
 	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
 		ChainID:  params.TestChainConfig.ChainID,
 		Nonce:    0,
@@ -94,6 +66,7 @@ func init() {
 		Gas:      params.TxGas,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
+
 	pendingTxs = append(pendingTxs, tx1)
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
@@ -103,6 +76,7 @@ func init() {
 		Gas:      params.TxGas,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 	})
+
 	newTxs = append(newTxs, tx2)
 
 	rand.Seed(time.Now().UnixNano())
@@ -125,6 +99,12 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 
 	switch e := engine.(type) {
+	case *bor.Bor:
+		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
+		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
+		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		})
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
@@ -135,6 +115,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
+
 	genesis := gspec.MustCommit(db)
 
 	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{}, nil, nil)
@@ -149,10 +130,12 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			t.Fatalf("failed to insert origin chain: %v", err)
 		}
 	}
+
 	parent := genesis
 	if n > 0 {
 		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
 	}
+
 	blocks, _ := core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
 		gen.SetCoinbase(testUserAddress)
 	})
@@ -174,28 +157,36 @@ func (b *testWorkerBackend) StateAtBlock(block *types.Block, reexec uint64, base
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
+
 	cur := b.chain.CurrentBlock()
+
 	if cur.NumberU64() == 0 {
 		parent = b.chain.Genesis()
 	} else {
 		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
 	}
+
 	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
 		var addr = make([]byte, common.AddressLength)
+
 		rand.Read(addr)
 		gen.SetCoinbase(common.BytesToAddress(addr))
 	})
+
 	return blocks[0]
 }
 
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
+
 	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+
 	if creation {
 		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
 		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, gasPrice, nil), types.HomesteadSigner{}, testBankKey)
 	}
+
 	return tx
 }
 
@@ -204,39 +195,85 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
+
 	return w, backend
 }
 
 func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
+	t.Parallel()
+
+	testGenerateBlockAndImport(t, false, false)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
-	testGenerateBlockAndImport(t, true)
+	t.Parallel()
+
+	testGenerateBlockAndImport(t, true, false)
 }
 
-func testGenerateBlockAndImport(t *testing.T, isClique bool) {
+func TestGenerateBlockAndImportBor(t *testing.T) {
+	t.Parallel()
+
+	testGenerateBlockAndImport(t, false, true)
+}
+
+//nolint:thelper
+func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	var (
 		engine      consensus.Engine
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
-		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
-		engine = clique.New(chainConfig.Clique, db)
+
+	if isBor {
+		chainConfig = params.BorUnittestChainConfig
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		ethAPIMock := api.NewMockCaller(ctrl)
+		ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+		spanner := bor.NewMockSpanner(ctrl)
+		spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+			{
+				ID:               0,
+				Address:          testBankAddress,
+				VotingPower:      100,
+				ProposerPriority: 0,
+			},
+		}, nil).AnyTimes()
+
+		heimdallClientMock := mocks.NewMockIHeimdallClient(ctrl)
+		heimdallClientMock.EXPECT().Close().Times(1)
+
+		contractMock := bor.NewMockGenesisContract(ctrl)
+
+		db, _, _ = NewDBForFakes(t)
+
+		engine = NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 	} else {
-		chainConfig = params.AllEthashProtocolChanges
-		engine = ethash.NewFaker()
+		if isClique {
+			chainConfig = params.AllCliqueProtocolChanges
+			chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+			engine = clique.New(chainConfig.Clique, db)
+		} else {
+			chainConfig = params.AllEthashProtocolChanges
+			engine = ethash.NewFaker()
+		}
 	}
 
+	defer engine.Close()
+
 	chainConfig.LondonBlock = big.NewInt(0)
+
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 
 	// This test chain imports the mined blocks.
 	db2 := rawdb.NewMemoryDatabase()
 	b.genesis.MustCommit(db2)
+
 	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil, nil)
 	defer chain.Stop()
 
@@ -287,20 +324,25 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		taskIndex int
 		taskCh    = make(chan struct{}, 2)
 	)
+
 	checkEqual := func(t *testing.T, task *task, index int) {
 		// The first empty work without any txs included
 		receiptLen, balance := 0, big.NewInt(0)
+
 		if index == 1 {
 			// The second full work with 1 tx included
 			receiptLen, balance = 1, big.NewInt(1000)
 		}
+
 		if len(task.receipts) != receiptLen {
 			t.Fatalf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 		}
+
 		if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
 			t.Fatalf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
 		}
 	}
+
 	w.newTaskHook = func(task *task) {
 		if task.block.NumberU64() == 1 {
 			checkEqual(t, task, taskIndex)
@@ -308,11 +350,14 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 			taskCh <- struct{}{}
 		}
 	}
+
 	w.skipSealHook = func(task *task) bool { return true }
 	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	w.start() // Start mining!
+
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
@@ -344,16 +389,20 @@ func TestStreamUncleBlock(t *testing.T) {
 					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
 				}
 			}
+
 			taskCh <- struct{}{}
 			taskIndex += 1
 		}
 	}
+
 	w.skipSealHook = func(task *task) bool {
 		return true
 	}
+
 	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	w.start()
 
 	for i := 0; i < 2; i += 1 {
@@ -396,20 +445,25 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			// one has 1 pending tx, the third one has 2 txs
 			if taskIndex == 2 {
 				receiptLen, balance := 2, big.NewInt(2000)
+
 				if len(task.receipts) != receiptLen {
 					t.Errorf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 				}
+
 				if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
 					t.Errorf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
 				}
 			}
+
 			taskCh <- struct{}{}
 			taskIndex += 1
 		}
 	}
+
 	w.skipSealHook = func(task *task) bool {
 		return true
 	}
+
 	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -423,6 +477,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			t.Error("new task timeout")
 		}
 	}
+
 	b.txPool.AddLocals(newTxs)
 	time.Sleep(time.Second)
 
@@ -464,6 +519,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		index    = 0
 		start    uint32
 	)
+
 	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
 		// Short circuit if interval checking hasn't started.
 		if atomic.LoadUint32(&start) == 0 {
@@ -494,16 +550,19 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 		if recommitInterval != wantRecommitInterval {
 			t.Errorf("resubmit interval mismatch: have %v, want %v", recommitInterval, wantRecommitInterval)
 		}
+
 		result = append(result, float64(recommitInterval.Nanoseconds()))
 		index += 1
 		progress <- struct{}{}
 	}
+
 	w.start()
 
 	time.Sleep(time.Second) // Ensure two tasks have been summitted due to start opt
 	atomic.StoreUint32(&start, 1)
 
 	w.setRecommitInterval(3 * time.Second)
+
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
@@ -511,6 +570,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 
 	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
+
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
@@ -518,6 +578,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 
 	w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
@@ -525,6 +586,7 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 
 	w.setRecommitInterval(500 * time.Millisecond)
+
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
@@ -559,9 +621,11 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	w.skipSealHook = func(task *task) bool {
 		return true
 	}
+
 	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
+
 	timestamp := uint64(time.Now().Unix())
 	assertBlock := func(block *types.Block, number uint64, coinbase common.Address, random common.Hash) {
 		if block.Time() != timestamp {
@@ -569,14 +633,17 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			// is even smaller than parent block's. It's OK.
 			t.Logf("Invalid timestamp, want %d, get %d", timestamp, block.Time())
 		}
+
 		if len(block.Uncles()) != 0 {
 			t.Error("Unexpected uncle block")
 		}
+
 		_, isClique := engine.(*clique.Clique)
 		if !isClique {
 			if len(block.Extra()) != 0 {
 				t.Error("Unexpected extra field")
 			}
+
 			if block.Coinbase() != coinbase {
 				t.Errorf("Unexpected coinbase got %x want %x", block.Coinbase(), coinbase)
 			}
@@ -585,18 +652,22 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 				t.Error("Unexpected coinbase")
 			}
 		}
+
 		if !isClique {
 			if block.MixDigest() != random {
 				t.Error("Unexpected mix digest")
 			}
 		}
+
 		if block.Nonce() != 0 {
 			t.Error("Unexpected block nonce")
 		}
+
 		if block.NumberU64() != number {
 			t.Errorf("Mismatched block number, want %d got %d", number, block.NumberU64())
 		}
 	}
+
 	var cases = []struct {
 		parent       common.Hash
 		coinbase     common.Address
@@ -644,6 +715,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	// This API should work even when the automatic sealing is not enabled
 	for _, c := range cases {
 		block, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random)
+
 		if c.expectErr {
 			if err == nil {
 				t.Error("Expect error but get nil")
@@ -652,12 +724,14 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
+
 			assertBlock(block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
 
 	// This API should work even when the automatic sealing is enabled
 	w.start()
+
 	for _, c := range cases {
 		block, err := w.getSealingBlock(c.parent, timestamp, c.coinbase, c.random)
 		if c.expectErr {
@@ -668,6 +742,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
+
 			assertBlock(block, c.expectNumber, c.coinbase, c.random)
 		}
 	}
