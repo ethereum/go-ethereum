@@ -496,7 +496,7 @@ func TestEstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("b9b046f9"),
-		}, 0, errors.New("invalid opcode: opcode 0xfe not defined"), nil},
+		}, 0, errors.New("invalid opcode: INVALID"), nil},
 
 		{"Valid", ethereum.CallMsg{
 			From:     addr,
