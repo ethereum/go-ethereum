@@ -250,6 +250,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		performConfigOverride(genesis.Config, overrideGrayGlacier, overrideTerminalTotalDifficulty)
 		return genesis.Config, block.Hash(), nil
 	}
 	// We have the genesis block in database(perhaps in ancient database)
@@ -279,12 +280,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	if overrideGrayGlacier != nil {
-		newcfg.GrayGlacierBlock = overrideGrayGlacier
-	}
-	if overrideTerminalTotalDifficulty != nil {
-		newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
-	}
+	performConfigOverride(newcfg, overrideGrayGlacier, overrideTerminalTotalDifficulty)
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
 		return newcfg, common.Hash{}, err
 	}
@@ -301,12 +297,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	// apply the overrides.
 	if genesis == nil && stored != params.MainnetGenesisHash {
 		newcfg = storedcfg
-		if overrideGrayGlacier != nil {
-			newcfg.GrayGlacierBlock = overrideGrayGlacier
-		}
-		if overrideTerminalTotalDifficulty != nil {
-			newcfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
-		}
+		performConfigOverride(newcfg, overrideGrayGlacier, overrideTerminalTotalDifficulty)
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
@@ -320,6 +311,15 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	rawdb.WriteChainConfig(db, stored, newcfg)
 	return newcfg, stored, nil
+}
+
+func performConfigOverride(cfg *params.ChainConfig, overrideGrayGlacier *big.Int, overrideTerminalTotalDifficulty *big.Int) {
+	if overrideGrayGlacier != nil {
+		cfg.GrayGlacierBlock = overrideGrayGlacier
+	}
+	if overrideTerminalTotalDifficulty != nil {
+		cfg.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
+	}
 }
 
 func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
