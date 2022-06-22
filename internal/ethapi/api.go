@@ -814,16 +814,15 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 	return nil
 }
 
-// getHeaderWithAuthor: changes the miner (0x0, coinbase) with the original miner address
-func (s *PublicBlockChainAPI) getHeaderWithAuthor(head *types.Header) error {
+// getAuthor: returns the author of the Block
+func (s *PublicBlockChainAPI) getAuthor(head *types.Header) (*common.Address, error) {
 	// get author using From: Backend -> Engine -> Author
 	author, err := s.b.Engine().Author(head)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// change the coinbase (0x0) with the miner address
-	head.Coinbase = author
-	return nil
+	return &author, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -834,15 +833,21 @@ func (s *PublicBlockChainAPI) getHeaderWithAuthor(head *types.Header) error {
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		if err = s.getHeaderWithAuthor(block.Header()); err != nil {
-			return nil, err
-		}
+
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		if err == nil && number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
+		}
+
+		if err == nil && number != rpc.PendingBlockNumber {
+			author, err := s.getAuthor(block.Header())
+			if err != nil {
+				return nil, err
+			}
+			response["miner"] = author
 		}
 
 		// append marshalled bor transaction
@@ -860,12 +865,16 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByHash(ctx, hash)
 	if block != nil {
-		if err = s.getHeaderWithAuthor(block.Header()); err != nil {
-			return nil, err
-		}
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
 		// append marshalled bor transaction
 		if err == nil && response != nil {
+
+			author, err := s.getAuthor(block.Header())
+			if err != nil {
+				return nil, err
+			}
+			response["miner"] = author
+
 			return s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
 		}
 		return response, err
