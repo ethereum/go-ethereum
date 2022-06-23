@@ -75,7 +75,7 @@ type StructLogRes struct {
 	Gas           uint64            `json:"gas"`
 	GasCost       uint64            `json:"gasCost"`
 	Depth         int               `json:"depth"`
-	Error         error             `json:"error,omitempty"`
+	Error         string            `json:"error,omitempty"`
 	Stack         []string          `json:"stack,omitempty"`
 	Memory        []string          `json:"memory,omitempty"`
 	Storage       map[string]string `json:"storage,omitempty"`
@@ -88,7 +88,9 @@ type StructLogRes struct {
 func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, refundCounter uint64, err error) *StructLogRes {
 	logRes := loggerResPool.Get().(*StructLogRes)
 	logRes.Pc, logRes.Op, logRes.Gas, logRes.GasCost, logRes.Depth, logRes.RefundCounter = pc, op, gas, gasCost, depth, refundCounter
-	logRes.Error = err
+	if err != nil {
+		logRes.Error = err.Error()
+	}
 	runtime.SetFinalizer(logRes, func(logRes *StructLogRes) {
 		logRes.Stack = logRes.Stack[:0]
 		logRes.Memory = logRes.Memory[:0]
