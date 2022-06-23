@@ -38,7 +38,7 @@ func respond(w http.ResponseWriter, body []byte, code int) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
-	_, _ = w.Write(body)
+	w.Write(body)
 }
 
 func errorJSON(msg string) []byte {
