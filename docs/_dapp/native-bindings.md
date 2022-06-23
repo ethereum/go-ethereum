@@ -13,7 +13,7 @@ the direction of the Mist browser, through which users can interact with the blo
 
 Although this was a solid plan for mainstream adoption and does cover quite a lot of use
 cases that people come up with (mostly where people manually interact with the blockchain),
-it eludes the server side (backend, fully automated, devops) use cases where JavaScript is
+it excludes the server side (backend, fully automated, devops) use cases where JavaScript is
 usually not the language of choice given its dynamic nature.
 
 This page introduces the concept of server side native Dapps: Go language bindings to any
@@ -336,7 +336,7 @@ In the past, abigen allowed you to compile and bind a Solidity source file direc
 This feature has been discontinued from [v1.10.18](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.18)
 onwards due to maintenance synchronization challenges with the compiler in ```go-ethereum```. 
 Now, to bind a Solidity source file into a go package you will have to compile it first using 
-any of your prefered compilers (e.g. [solc](https://docs.soliditylang.org/en/v0.8.14/installing-solidity.html) 
+any of your prefered approaches (e.g. [solc](https://docs.soliditylang.org/en/v0.8.14/installing-solidity.html) 
 or [Remix](https://remix.ethereum.org/)) and bind it later. Binding the official Token contract [`token.sol`](https://gist.github.com/karalabe/08f4b780e01c8452d989) would then entail to running:
 ```
 $ solc --abi --bin token.sol -o tokenDirectory
@@ -350,6 +350,10 @@ $ solc token.sol --combined-json abi,bin -o .
 $ abigen --combined-json combined.json --pkg main --type token --out token.go
 ```
 
+Even you can combine these two steps together as a pipeline
+```
+solc token.sol --combined-json abi,bin | abigen --pkg contract --out contract.go  --combined-json -
+```
 
 ### Project integration (i.e. `go generate`)
 
