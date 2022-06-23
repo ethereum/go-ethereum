@@ -70,6 +70,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 			break
 		}
 		return common.FromHex(obj.String()), nil
+
 	case "Array":
 		var b []byte
 		if err := vm.ExportTo(buf, &b); err != nil {
@@ -81,11 +82,8 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		if !obj.Get("constructor").SameAs(bufType) {
 			break
 		}
-		var b goja.ArrayBuffer
-		if err := vm.ExportTo(obj.Get("buffer"), &b); err != nil {
-			return nil, err
-		}
-		return b.Bytes(), nil
+		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+		return b, nil
 	}
 	return nil, fmt.Errorf("invalid buffer type")
 }
