@@ -55,7 +55,7 @@ type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byt
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.
-	res, err := vm.New(bufType, vm.ToValue(val))
+	res, err := vm.New(bufType, vm.ToValue(vm.NewArrayBuffer(val)))
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +81,11 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		if !obj.Get("constructor").SameAs(bufType) {
 			break
 		}
-		var b []byte
-		if err := vm.ExportTo(buf, &b); err != nil {
+		var b goja.ArrayBuffer
+		if err := vm.ExportTo(obj.Get("buffer"), &b); err != nil {
 			return nil, err
 		}
-		return b, nil
+		return b.Bytes(), nil
 	}
 	return nil, fmt.Errorf("invalid buffer type")
 }
