@@ -324,7 +324,7 @@ func (db *Database) meter(refresh time.Duration) {
 		delayN = int64(stats.WriteDelayCount)
 		duration = stats.WriteDelayDuration
 		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(int64(delayN - delaystats[0]))
+			db.writeDelayNMeter.Mark(delayN - delaystats[0])
 		}
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
