@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"os"
@@ -27,6 +28,8 @@ import (
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
+	"text/tabwriter"
+	"text/template"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -83,6 +86,18 @@ GLOBAL OPTIONS:
    {{end}}{{end}}
 `
 	cli.CommandHelpTemplate = flags.CommandHelpTemplate
+	cli.HelpPrinter = printHelp
+}
+
+func printHelp(out io.Writer, templ string, data interface{}) {
+	funcMap := template.FuncMap{"join": strings.Join}
+	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
+	w := tabwriter.NewWriter(out, 42, 8, 2, ' ', 0)
+	err := t.Execute(w, data)
+	if err != nil {
+		panic(err)
+	}
+	w.Flush()
 }
 
 // These are all the command line flags we support.
