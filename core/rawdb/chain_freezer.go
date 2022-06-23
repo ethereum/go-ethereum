@@ -37,6 +37,10 @@ const (
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
 	freezerBatchLimit = 30000
+
+	// cleanerRecheckInterval is the frequency to check the freezer database to
+	// find the bloks that might be pruned
+	cleanerRecheckInterval = 1 * time.Minute
 )
 
 // chainFreezer is a wrapper of freezer with additional chain freezing feature.
@@ -48,6 +52,10 @@ type chainFreezer struct {
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
+	// ancientRecentLimit Number of recent blocks to keep in ancient db
+	// if not 0, blocks older than `HEAD - ancientRecentLimit` will be purged from ancient db
+	ancientRecentLimit uint64
+
 	*Freezer
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -55,16 +63,17 @@ type chainFreezer struct {
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
-func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*chainFreezer, error) {
+func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool, ancientRecentLimit uint64) (*chainFreezer, error) {
 	freezer, err := NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
 	if err != nil {
 		return nil, err
 	}
 	return &chainFreezer{
-		Freezer:   freezer,
-		threshold: params.FullImmutabilityThreshold,
-		quit:      make(chan struct{}),
-		trigger:   make(chan chan struct{}),
+		Freezer:            freezer,
+		ancientRecentLimit: ancientRecentLimit,
+		threshold:          params.FullImmutabilityThreshold,
+		quit:               make(chan struct{}),
+		trigger:            make(chan chan struct{}),
 	}, nil
 }
 
@@ -247,6 +256,57 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if frozen-first < freezerBatchLimit {
 			backoff = true
 		}
+	}
+}
+
+// clean is a background thread that periodically checks the blockchain for any
+// import progress and cleans ancient data from the freezer.
+//
+// it calculates the highest block(named `cleanTo`) that can be cleaned, then starts
+// cleaning from the genesis+1 block in batches, until reaches the `cleanTo` block.
+func (f *chainFreezer) clean(db ethdb.KeyValueStore) {
+	nfdb := &nofreezedb{KeyValueStore: db}
+
+	for {
+		select {
+		case <-time.NewTimer(cleanerRecheckInterval).C:
+		case <-f.quit:
+			log.Info("Freezer cleaner shutting down")
+			return
+		}
+
+		// we won't start the prunning until chain has initialised itself
+		hash := ReadHeadBlockHash(nfdb)
+		log.Info("Read head block hash", hash.Hex())
+		if hash == (common.Hash{}) {
+			log.Info("current full block hash unavailable, schedule next round") // new chain, empty database
+			continue
+		}
+
+		// Calculates the cleanTo block
+		number := ReadHeaderNumber(nfdb, hash)
+		if number == nil {
+			log.Info("Current full block number unavailable, schedule next round", "hash", hash)
+			continue
+		}
+
+		start := time.Now()
+		tail, _ := f.Tail()
+		frozen, _ := f.Ancients()
+		if frozen < f.ancientRecentLimit || frozen < tail {
+			log.Error("ancient clean error target block", "frozen", frozen, "tail", tail, "ancientRecentLimit", f.ancientRecentLimit)
+			continue
+		}
+
+		cleanTo := frozen - f.ancientRecentLimit
+		// truncate
+		f.TruncateTail(cleanTo)
+
+		// Log something friendly for the user
+		context := []interface{}{
+			"blocks", cleanTo - tail, "frozen", frozen, "ancientRecentLimit", f.ancientRecentLimit, "elapsed", common.PrettyDuration(time.Since(start)), "cleaned to", cleanTo,
+		}
+		log.Info("cleaned chain segment", context...)
 	}
 }
 

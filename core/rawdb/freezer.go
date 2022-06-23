@@ -52,7 +52,7 @@ var (
 )
 
 // freezerTableSize defines the maximum size of freezer data files.
-const freezerTableSize = 2 * 1000 * 1000 * 1000
+const freezerTableSize = 2 * 1000 * 1000
 
 // Freezer is a memory mapped append-only database to store immutable ordered
 // data into flat files:

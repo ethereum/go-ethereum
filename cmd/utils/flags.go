@@ -122,6 +122,11 @@ var (
 		Name:  "datadir.ancient",
 		Usage: "Data directory for ancient chain segments (default = inside chaindata)",
 	}
+	AncientRecentLimitFlag = cli.Uint64Flag{
+		Name:  "ancient.recentlimit",
+		Usage: "Keep only the specified amount of recent ancient blocks and won't do ancient related checks on startup (default = 0, means keep all)",
+		Value: 0,
+	}
 	MinFreeDiskSpaceFlag = DirectoryFlag{
 		Name:  "datadir.minfreedisk",
 		Usage: "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
@@ -849,6 +854,7 @@ var (
 	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
+		AncientRecentLimitFlag,
 		RemoteDBFlag,
 	}
 )
@@ -1637,7 +1643,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.GlobalString(AncientFlag.Name)
 	}
-
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -1656,6 +1661,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
 	}
+	if ctx.GlobalIsSet(AncientRecentLimitFlag.Name) {
+		cfg.AncientRecentLimit = ctx.GlobalUint64(AncientRecentLimitFlag.Name)
+		if cfg.TxLookupLimit == 0 || cfg.TxLookupLimit > cfg.AncientRecentLimit+params.FullImmutabilityThreshold {
+			cfg.TxLookupLimit = cfg.AncientRecentLimit + params.FullImmutabilityThreshold
+			log.Warn("Reducing TxLookupLimit to meet ancient db purging, as it's insane to lookup txs in purged blocks")
+		}
+	}
+
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}
@@ -1979,7 +1992,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	case ctx.GlobalString(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, ctx.GlobalUint64(AncientRecentLimitFlag.Name))
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
