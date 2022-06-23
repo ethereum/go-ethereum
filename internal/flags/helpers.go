@@ -17,9 +17,6 @@
 package flags
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -144,13 +141,6 @@ func FlagCategory(flag cli.Flag, flagGroups []FlagGroup) string {
 func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
-	app.Name = filepath.Base(os.Args[0])
-	app.Authors = []*cli.Author{
-		&cli.Author{
-			Name:  "",
-			Email: "",
-		},
-	}
 	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
 	return app
