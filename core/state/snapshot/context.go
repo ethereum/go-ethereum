@@ -46,9 +46,9 @@ type generatorStats struct {
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
 }
 
-// Log creates an contextual log with the given message and the context pulled
+// Log creates an contextual log with the given log level and message and the context pulled
 // from the internally maintained statistics.
-func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
+func (gs *generatorStats) Log(logLvl log.Lvl, msg string, root common.Hash, marker []byte) {
 	var ctx []interface{}
 	if root != (common.Hash{}) {
 		ctx = append(ctx, []interface{}{"root", root}...)
@@ -82,7 +82,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 			}...)
 		}
 	}
-	log.Info(msg, ctx...)
+	log.Output(msg, logLvl, 0, ctx...)
 }
 
 // generatorContext carries a few global values to be shared by all generation functions.

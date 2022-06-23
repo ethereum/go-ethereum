@@ -250,7 +250,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, owner common.Hash, root c
 	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(owner, root, dl.triedb)
 	if err != nil {
-		ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
+		ctx.stats.Log(log.LvlWarn, "Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 		return nil, errMissingTrie
 	}
 	// Firstly find out the key of last iterated element.
@@ -376,7 +376,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, owner common.Hash, roo
 	if tr == nil {
 		tr, err = trie.New(owner, root, dl.triedb)
 		if err != nil {
-			ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
+			ctx.stats.Log(log.LvlWarn, "Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 			return false, nil, errMissingTrie
 		}
 	}
@@ -492,7 +492,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		dl.lock.Unlock()
 
 		if abort != nil {
-			ctx.stats.Log("Aborting state snapshot generation", dl.root, current)
+			ctx.stats.Log(log.LvlDebug, "Aborting state snapshot generation", dl.root, current)
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
 		// Don't hold the iterators too long, release them to let compactor works
@@ -500,7 +500,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		ctx.reopenIterator(snapStorage)
 	}
 	if time.Since(ctx.logged) > 8*time.Second {
-		ctx.stats.Log("Generating state snapshot", dl.root, current)
+		ctx.stats.Log(log.LvlInfo, "Generating state snapshot", dl.root, current)
 		ctx.logged = time.Now()
 	}
 	return nil
@@ -666,7 +666,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	if len(dl.genMarker) > 0 { // []byte{} is the start, use nil for that
 		accMarker = dl.genMarker[:common.HashLength]
 	}
-	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
+	stats.Log(log.LvlDebug, "Resuming state snapshot generation", dl.root, dl.genMarker)
 
 	// Initialize the global generator context. The snapshot iterators are
 	// opened at the interrupted position because the assumption is held
