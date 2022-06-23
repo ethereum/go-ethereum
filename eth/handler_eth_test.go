@@ -58,7 +58,6 @@ func (h *testEthHandler) RunPeer(*eth.Peer, eth.Handler) error { panic("not used
 func (h *testEthHandler) PeerInfo(enode.ID) interface{}        { panic("not used in tests") }
 
 func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
-	println("broadcasting")
 	switch packet := packet.(type) {
 	case *eth.NewBlockPacket:
 		h.blockBroadcasts.Send(packet.Block)
