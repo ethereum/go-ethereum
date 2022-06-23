@@ -155,7 +155,7 @@ func remoteConsole(ctx *cli.Context) error {
 // everything down.
 func ephemeralConsole(ctx *cli.Context) error {
 	var b strings.Builder
-	for _, file := range ctx.Args() {
+	for _, file := range ctx.Args().Slice() {
 		b.Write([]byte(fmt.Sprintf("loadScript('%s');", file)))
 	}
 	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:

@@ -558,12 +558,12 @@ func checkAccount(ctx *cli.Context) error {
 		hash common.Hash
 		addr common.Address
 	)
-	switch len(ctx.Args()[0]) {
+	switch arg := ctx.Args().First(); len(arg) {
 	case 40, 42:
-		addr = common.HexToAddress(ctx.Args()[0])
+		addr = common.HexToAddress(arg)
 		hash = crypto.Keccak256Hash(addr.Bytes())
 	case 64, 66:
-		hash = common.HexToHash(ctx.Args()[0])
+		hash = common.HexToHash(arg)
 	default:
 		return errors.New("malformed address or hash")
 	}
