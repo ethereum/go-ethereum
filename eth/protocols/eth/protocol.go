@@ -114,7 +114,16 @@ func (p *NewBlockHashesPacket) Unpack() ([]common.Hash, []uint64) {
 }
 
 // TransactionsPacket is the network packet for broadcasting new transactions.
-type TransactionsPacket []*types.Transaction
+type TransactionsPacket []*types.NetworkTransaction
+
+// Unwrap returns the wrapped Transactions
+func (p *TransactionsPacket) Unwrap() []*types.Transaction {
+	txs := make([]*types.Transaction, len(*p))
+	for i := range *p {
+		txs[i] = (*p)[i].Tx
+	}
+	return txs
+}
 
 // GetBlockHeadersPacket represents a block header query.
 type GetBlockHeadersPacket struct {
@@ -309,12 +318,21 @@ type GetPooledTransactionsPacket66 struct {
 }
 
 // PooledTransactionsPacket is the network packet for transaction distribution.
-type PooledTransactionsPacket []*types.Transaction
+type PooledTransactionsPacket []*types.NetworkTransaction
 
 // PooledTransactionsPacket66 is the network packet for transaction distribution over eth/66.
 type PooledTransactionsPacket66 struct {
 	RequestId uint64
 	PooledTransactionsPacket
+}
+
+// Unwrap returns the wrapped transactions
+func (p *PooledTransactionsPacket) Unwrap() []*types.Transaction {
+	txs := make([]*types.Transaction, len(*p))
+	for i := range *p {
+		txs[i] = (*p)[i].Tx
+	}
+	return txs
 }
 
 // PooledTransactionsRLPPacket is the network packet for transaction distribution, used

@@ -856,6 +856,7 @@ func (tx *NetworkTransaction) DecodeRLP(s *rlp.Stream) error {
 		var inner LegacyTx
 		err := s.Decode(&inner)
 		if err == nil {
+			tx.Tx = new(Transaction)
 			tx.Tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}
 		return err
@@ -867,7 +868,8 @@ func (tx *NetworkTransaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		inner, wrapData, err := tx.Tx.decodeTyped(b)
 		if err == nil {
-			tx.Tx.setDecoded(inner, len(b))
+			tx.Tx = new(Transaction)
+			tx.Tx.setDecoded(inner, 0)
 			tx.Tx.wrapData = wrapData
 		}
 		return err

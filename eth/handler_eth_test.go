@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
@@ -56,6 +58,7 @@ func (h *testEthHandler) RunPeer(*eth.Peer, eth.Handler) error { panic("not used
 func (h *testEthHandler) PeerInfo(enode.ID) interface{}        { panic("not used in tests") }
 
 func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
+	println("broadcasting")
 	switch packet := packet.(type) {
 	case *eth.NewBlockPacket:
 		h.blockBroadcasts.Send(packet.Block)
@@ -66,11 +69,11 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.TransactionsPacket:
-		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
+		h.txBroadcasts.Send(packet.Unwrap())
 		return nil
 
 	case *eth.PooledTransactionsPacket:
-		h.txBroadcasts.Send(([]*types.Transaction)(*packet))
+		h.txBroadcasts.Send(packet.Unwrap())
 		return nil
 
 	default:
@@ -428,13 +431,31 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
-	txs := make([]*types.Transaction, 1024)
+	txs := make([]*types.Transaction, 1023)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		txs[nonce] = tx
 	}
+	txdata := &types.SignedBlobTx{
+		Message: types.BlobTxMessage{
+			ChainID:             view.Uint256View(*uint256.NewInt(1)),
+			Nonce:               view.Uint64View(len(txs)),
+			Gas:                 view.Uint64View(123457),
+			BlobVersionedHashes: types.VersionedHashesView{common.HexToHash("0x01624652859a6e98ffc1608e2af0147ca4e86e1ce27672d8d3f3c9d4ffd6ef7e")},
+		},
+	}
+	wrapData := &types.BlobTxWrapData{
+		BlobKzgs: types.BlobKzgs{types.KZGCommitment{0: 0xc0}},
+		Blobs:    types.Blobs{types.Blob{}},
+	}
+	blobTx, err := types.SignNewTx(testKey, types.NewDankSigner(common.Big1), txdata, types.WithTxWrapData(wrapData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	txs = append(txs, blobTx)
+
 	source.txpool.AddRemotes(txs)
 
 	// Iterate through all the sinks and ensure they all got the transactions
