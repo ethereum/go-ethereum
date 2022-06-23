@@ -352,7 +352,7 @@ $ abigen --combined-json combined.json --pkg main --type token --out token.go
 
 Even you can combine these two steps together as a pipeline
 ```
-solc token.sol --combined-json abi,bin | abigen --pkg contract --out contract.go  --combined-json -
+solc token.sol --combined-json abi,bin | abigen --pkg main --type token --out token.go --combined-json -
 ```
 
 ### Project integration (i.e. `go generate`)
