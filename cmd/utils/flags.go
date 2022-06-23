@@ -1663,12 +1663,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.GlobalIsSet(AncientRecentLimitFlag.Name) {
 		cfg.AncientRecentLimit = ctx.GlobalUint64(AncientRecentLimitFlag.Name)
-		if cfg.TxLookupLimit == 0 || cfg.TxLookupLimit > cfg.AncientRecentLimit+params.FullImmutabilityThreshold {
-			cfg.TxLookupLimit = cfg.AncientRecentLimit + params.FullImmutabilityThreshold
-			log.Warn("Reducing TxLookupLimit to meet ancient db purging, as it's insane to lookup txs in purged blocks")
-		}
 	}
-
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}

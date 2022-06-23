@@ -259,57 +259,6 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 	}
 }
 
-// clean is a background thread that periodically checks the blockchain for any
-// import progress and cleans ancient data from the freezer.
-//
-// it calculates the highest block(named `cleanTo`) that can be cleaned, then starts
-// cleaning from the genesis+1 block in batches, until reaches the `cleanTo` block.
-func (f *chainFreezer) clean(db ethdb.KeyValueStore) {
-	nfdb := &nofreezedb{KeyValueStore: db}
-
-	for {
-		select {
-		case <-time.NewTimer(cleanerRecheckInterval).C:
-		case <-f.quit:
-			log.Info("Freezer cleaner shutting down")
-			return
-		}
-
-		// we won't start the prunning until chain has initialised itself
-		hash := ReadHeadBlockHash(nfdb)
-		log.Info("Read head block hash", hash.Hex())
-		if hash == (common.Hash{}) {
-			log.Info("current full block hash unavailable, schedule next round") // new chain, empty database
-			continue
-		}
-
-		// Calculates the cleanTo block
-		number := ReadHeaderNumber(nfdb, hash)
-		if number == nil {
-			log.Info("Current full block number unavailable, schedule next round", "hash", hash)
-			continue
-		}
-
-		start := time.Now()
-		tail, _ := f.Tail()
-		frozen, _ := f.Ancients()
-		if frozen < f.ancientRecentLimit || frozen < tail {
-			log.Error("ancient clean error target block", "frozen", frozen, "tail", tail, "ancientRecentLimit", f.ancientRecentLimit)
-			continue
-		}
-
-		cleanTo := frozen - f.ancientRecentLimit
-		// truncate
-		f.TruncateTail(cleanTo)
-
-		// Log something friendly for the user
-		context := []interface{}{
-			"blocks", cleanTo - tail, "frozen", frozen, "ancientRecentLimit", f.ancientRecentLimit, "elapsed", common.PrettyDuration(time.Since(start)), "cleaned to", cleanTo,
-		}
-		log.Info("cleaned chain segment", context...)
-	}
-}
-
 func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 
