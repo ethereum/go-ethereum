@@ -327,11 +327,10 @@ func (s *PersonalAccountAPI) OpenWallet(url string, passphrase *string) error {
 	if err != nil {
 		return err
 	}
-	pass := ""
-	if passphrase != nil {
-		pass = *passphrase
+	if passphrase == nil {
+		return wallet.Open("")
 	}
-	return wallet.Open(pass)
+	return wallet.Open(*passphrase)
 }
 
 // DeriveAccount requests a HD wallet to derive a new account, optionally pinning
@@ -812,8 +811,7 @@ func (s *BlockChainAPI) GetCode(ctx context.Context, address common.Address, blo
 	if state == nil || err != nil {
 		return nil, err
 	}
-	code := state.GetCode(address)
-	return code, state.Error()
+	return state.GetCode(address), state.Error()
 }
 
 // GetStorageAt returns the storage from the state at the given address, key and
