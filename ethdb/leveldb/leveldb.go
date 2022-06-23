@@ -287,7 +287,7 @@ func (db *Database) meter(refresh time.Duration) {
 	// Iterate ad infinitum and collect the stats
 	for i := 1; errc == nil && merr == nil; i++ {
 		// Retrieve the database stats
-		var stats *leveldb.DBStats
+		var stats = &leveldb.DBStats{}
 		err := db.db.Stats(stats)
 		if err != nil {
 			db.log.Error("Failed to read database stats", "err", err)
