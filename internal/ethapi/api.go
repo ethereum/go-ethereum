@@ -609,6 +609,9 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 }
 
 // ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
+//
+// Note, this method does not conform to EIP-695 becuase the configured chain id is always
+// returned regardless of the current head block.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
 	return (*hexutil.Big)(api.b.ChainConfig().ChainID)
 }
