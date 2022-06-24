@@ -2314,6 +2314,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 				rawdb.WriteTxIndexTail(bc.db, 0)
 			} else {
 				// Prune all stale tx indices and record the tx index tail
+				log.Info("Scheduled transactions unindexing", "from block", 0, "to", head-bc.txLookupLimit+1)
 				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit)
 			}
 			return
@@ -2338,7 +2339,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			rawdb.IndexTransactions(bc.db, head-bc.txLookupLimit+1, *tail, bc.quit)
 		} else {
 			// Unindex a part of stale indices and forward index tail to HEAD-limit
-			log.Info("unindex transactions", "tail", *tail, "to", head-bc.txLookupLimit+1)
+			log.Info("Scheduled transactions unindexing", "from block", *tail, "to", head-bc.txLookupLimit+1)
 			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit)
 		}
 	}
@@ -2352,9 +2353,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 		defer func() { done <- struct{}{} }()
 		// Wait till the tx index routine finishes, in case that it cannot find the ancient
 		// blocks for iterating transactions for unindex because we have pruned the blocks
-		select {
-		case <-wait:
-		}
+		<-wait
 
 		start := time.Now()
 
@@ -2381,9 +2380,9 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 
 		// Log something friendly for the user
 		context := []interface{}{
-			"blocks", pruneTo - first, "frozen", last, "ancientRecentLimit", ancientLimit, "elapsed", common.PrettyDuration(time.Since(start)), "pruned to", pruneTo,
+			"blocks", pruneTo - first, "from block", first, "to", pruneTo, "current last block in ancient", last, "elapsed", common.PrettyDuration(time.Since(start)),
 		}
-		log.Info("cleaned chain segment", context...)
+		log.Info("Cleaned ancient chain segment", context...)
 	}
 
 	// Any reindexing done, start listening to chain events and moving the index window
@@ -2401,7 +2400,6 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	for {
 		select {
 		case head := <-headCh:
-			log.Info("chainHeadEvent", "received", head)
 			if doneTx == nil && donePr == nil {
 				doneTx = make(chan struct{})
 				donePr = make(chan struct{})
