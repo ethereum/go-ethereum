@@ -30,7 +30,7 @@ the Ethereum Virtual Machine (EVM). However, Geth will no longer be responsible 
 gossiping or handling consensus logic. These will be in the remit of the consensus client.
 
 For Geth users that intend to continue to run full nodes after The Merge, it is sensible to start running
-a consensus client now, so that The Merge can happen smoothly. There are five consensus clients available, all
+a consensus client in advance, so that The Merge can happen smoothly. There are five consensus clients available, all
 of which connect to Geth in the same way. Instructions for this are available on the 
 [Consensus Clients page](/docs/interface/consensus-clients).
 

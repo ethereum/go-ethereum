@@ -28,28 +28,7 @@ allow executing the call against a modified chain state.
 
 ##### 1. `Object` - Transaction call object
 
-The *transaction call object* is mandatory and contains all the necessary parameters to
-execute a read-only EVM contract method.
-
-| Field      | Type       | Bytes | Optional | Description |
-|:-----------|:-----------|:------|:---------|:------------|
-| `from`     | `Address`  | 20    | Yes      | Address the transaction is simulated to have been sent from. Defaults to first account in the local keystore or the `0x00..0` address if no local accounts are available. |
-| `to`       | `Address`  | 20    | No       | Address the transaction is sent to. |
-| `gas`      | `Quantity` | <8    | Yes      | Maximum gas allowance for the code execution to avoid infinite loops. Defaults to `2^63` or whatever value the node operator specified via `--rpc.gascap`. |
-| `gasPrice` | `Quantity` | <32   | Yes      | Number of `wei` to simulate paying for each unit of gas during execution. Defaults to `1 gwei`. |
-| `value`    | `Quantity` | <32   | Yes      | Amount of `wei` to simulate sending along with the transaction. Defaults to `0`. |
-| `data`     | `Binary`   | any   | Yes      | Binary data to send to the target contract. Generally the 4 byte hash of the method signature followed by the ABI encoded parameters. For details please see the [Ethereum Contract ABI](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI). |
-
-Example:
-
-```json
-{
-  "from": "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3",
-  "to":   "0xebe8efa441b9302a0d7eaecc277c09d20d684540",
-  "gas":  "0x1bd7c",
-  "data": "0xd459fc46000000000000000000000000000000000000000000000000000000000046c650dbb5e8cb2bac4d2ed0b1e6475d37361157738801c494ca482f96527eb48f9eec488c2eba92d31baeccfb6968fad5c21a3df93181b43b4cf253b4d572b64172ef000000000000000000000000000000000000000000000000000000000000008c00000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001a00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000000000000002b85c0c828d7a98633b4e1b65eac0c017502da909420aeade9a280675013df36bdc71cffdf420cef3d24ba4b3f9b980bfbb26bd5e2dcf7795b3519a3fd22ffbb2000000000000000000000000000000000000000000000000000000000000000238fb6606dc2b5e42d00c653372c153da8560de77bd9afaba94b4ab6e4aa11d565d858c761320dbf23a94018d843772349bd9d92301b0ca9ca983a22d86a70628",
-}
-```
+The *transaction call object* is mandatory. Please see [here](/docs/rpc/objects#transaction-call-object) for details.
 
 ##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 
@@ -189,7 +168,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`.
 The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles.
-This method uses the same `transaction` call object and `blockNumberOrTag` object as `eth_call`.
+This method uses the same `transaction` call [object](/docs/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`.
 An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
 #### Parameters

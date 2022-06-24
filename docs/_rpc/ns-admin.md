@@ -141,10 +141,10 @@ protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 }]
 ```
 
-### admin_startRPC
+### admin_startHTTP
 
-The `startRPC` administrative method starts an HTTP based [JSON RPC](https://www.jsonrpc.org/specification)
-API webserver to handle client requests. All the parameters are optional:
+The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/rpc/server)
+webserver to handle client requests. All the parameters are optional:
 
 * `host`: network interface to open the listener socket on (defaults to `"localhost"`)
 * `port`: network port to open the listener socket on (defaults to `8545`)
@@ -155,14 +155,14 @@ The method returns a boolean flag specifying whether the HTTP RPC listener was o
 
 | Client  | Method invocation                                                                             |
 |:--------|-----------------------------------------------------------------------------------------------|
-| Go      | `admin.StartRPC(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
-| Console | `admin.startRPC(host, port, cors, apis)`                                                      |
-| RPC     | `{"method": "admin_startRPC", "params": [host, port, cors, apis]}`                            |
+| Go      | `admin.StartHTTP(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
+| Console | `admin.startHTTP(host, port, cors, apis)`                                                      |
+| RPC     | `{"method": "admin_startHTTP", "params": [host, port, cors, apis]}`                            |
 
 #### Example
 
 ```javascript
-> admin.startRPC("127.0.0.1", 8545)
+> admin.startHTTP("127.0.0.1", 8545)
 true
 ```
 
@@ -191,20 +191,20 @@ The method returns a boolean flag specifying whether the WebSocket RPC listener 
 true
 ```
 
-### admin_stopRPC
+### admin_stopHTTP
 
-The `stopRPC` administrative method closes the currently open HTTP RPC endpoint. As the node can only have a single HTTP endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
+The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint. As the node can only have a single HTTP endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
 | Client  | Method invocation               |
 |:--------|---------------------------------|
-| Go      | `admin.StopRPC() (bool, error`) |
-| Console | `admin.stopRPC()`               |
-| RPC     | `{"method": "admin_stopRPC"`    |
+| Go      | `admin.StopHTTP() (bool, error`) |
+| Console | `admin.stopHTTP()`               |
+| RPC     | `{"method": "admin_stopHTTP"`    |
 
 #### Example
 
 ```javascript
-> admin.stopRPC()
+> admin.stopHTTP()
 true
 ```
 
