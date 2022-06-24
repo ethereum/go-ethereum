@@ -19,8 +19,6 @@ package catalyst
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -64,7 +62,8 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 		log.Warn("Catalyst started without valid total difficulty")
 	}
 	return &ConsensusAPI{
-		les: les,
+		les:           les,
+		remoteHeaders: *newHeaderQueue(),
 	}
 }
 
@@ -77,7 +76,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 // 		we check if we have the finalizedBlockHash in our db, if not we start a sync
 // We try to set our blockchain to the headBlock
 // If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+// 		we return an error since LES does not support payload creation.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkChoiceLock.Lock()
 	defer api.forkChoiceLock.Unlock()
@@ -209,6 +208,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 }
 
 // GetPayloadV1 returns a cached payload by id.
+// LES does not allow for payload creation so this calls always fails.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	return nil, beacon.GenericServerError.With(errors.New("not supported in light client mode"))
@@ -278,19 +278,6 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	}
 	hash := block.Hash()
 	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
-}
-
-// computePayloadId computes a pseudo-random payloadid, based on the parameters.
-func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttributesV1) beacon.PayloadID {
-	// Hash
-	hasher := sha256.New()
-	hasher.Write(headBlockHash[:])
-	binary.Write(hasher, binary.BigEndian, params.Timestamp)
-	hasher.Write(params.Random[:])
-	hasher.Write(params.SuggestedFeeRecipient[:])
-	var out beacon.PayloadID
-	copy(out[:], hasher.Sum(nil)[:8])
-	return out
 }
 
 // invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head
