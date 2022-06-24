@@ -1,3 +1,19 @@
+// Copyright 2020 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -63,41 +79,6 @@ func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
 	g.nodeInfo = &p2p.NodeInfo{}
 	g.callRPC(&g.nodeInfo, "admin_nodeInfo")
 	return g.nodeInfo
-}
-
-func (g *gethrpc) waitSynced() {
-	// Check if it's synced now
-	var result interface{}
-	g.callRPC(&result, "eth_syncing")
-	syncing, ok := result.(bool)
-	if ok && !syncing {
-		g.geth.Logf("%v already synced", g.name)
-		return
-	}
-
-	// Actually wait, subscribe to the event
-	ch := make(chan interface{})
-	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
-	if err != nil {
-		g.geth.Fatalf("%v syncing: %v", g.name, err)
-	}
-	defer sub.Unsubscribe()
-	timeout := time.After(4 * time.Second)
-	select {
-	case ev := <-ch:
-		g.geth.Log("'syncing' event", ev)
-		syncing, ok := ev.(bool)
-		if ok && !syncing {
-			break
-		}
-		g.geth.Log("Other 'syncing' event", ev)
-	case err := <-sub.Err():
-		g.geth.Fatalf("%v notification: %v", g.name, err)
-		break
-	case <-timeout:
-		g.geth.Fatalf("%v timeout syncing", g.name)
-		break
-	}
 }
 
 // ipcEndpoint resolves an IPC endpoint based on a configured value, taking into

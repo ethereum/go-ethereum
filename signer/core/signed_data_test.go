@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -353,7 +353,7 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 }
 
 func TestJsonFiles(t *testing.T) {
-	testfiles, err := ioutil.ReadDir("testdata/")
+	testfiles, err := os.ReadDir("testdata/")
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestJsonFiles(t *testing.T) {
 			continue
 		}
 		expectedFailure := strings.HasPrefix(fInfo.Name(), "expfail")
-		data, err := ioutil.ReadFile(path.Join("testdata", fInfo.Name()))
+		data, err := os.ReadFile(path.Join("testdata", fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue
@@ -388,13 +388,13 @@ func TestJsonFiles(t *testing.T) {
 // crashes or hangs.
 func TestFuzzerFiles(t *testing.T) {
 	corpusdir := path.Join("testdata", "fuzzing")
-	testfiles, err := ioutil.ReadDir(corpusdir)
+	testfiles, err := os.ReadDir(corpusdir)
 	if err != nil {
 		t.Fatalf("failed reading files: %v", err)
 	}
 	verbose := false
 	for i, fInfo := range testfiles {
-		data, err := ioutil.ReadFile(path.Join(corpusdir, fInfo.Name()))
+		data, err := os.ReadFile(path.Join(corpusdir, fInfo.Name()))
 		if err != nil {
 			t.Errorf("Failed to read file %v: %v", fInfo.Name(), err)
 			continue

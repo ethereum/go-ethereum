@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -55,10 +55,11 @@ func newHookedBackfiller() backfiller {
 // based on the skeleton chain as it might be invalid. The backfiller should
 // gracefully handle multiple consecutive suspends without a resume, even
 // on initial sartup.
-func (hf *hookedBackfiller) suspend() {
+func (hf *hookedBackfiller) suspend() *types.Header {
 	if hf.suspendHook != nil {
 		hf.suspendHook()
 	}
+	return nil // we don't really care about header cleanups for now
 }
 
 // resume requests the backfiller to start running fill or snap sync based on
@@ -426,7 +427,6 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 49, Tail: 49},
 			},
-			err: errReorgDenied,
 		},
 		// Initialize a sync and try to extend it with a sibling block.
 		{
@@ -489,7 +489,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 
 		<-wait
 		if err := skeleton.Sync(tt.extend, false); err != tt.err {
-			t.Errorf("extension failure mismatch: have %v, want %v", err, tt.err)
+			t.Errorf("test %d: extension failure mismatch: have %v, want %v", i, err, tt.err)
 		}
 		skeleton.Terminate()
 

@@ -20,8 +20,8 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,7 +52,7 @@ func TestServerRegisterName(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
-	files, err := ioutil.ReadDir("testdata")
+	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal("where'd my testdata go?")
 	}
@@ -70,7 +70,7 @@ func TestServer(t *testing.T) {
 
 func runTestScript(t *testing.T, file string) {
 	server := newTestServer()
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}

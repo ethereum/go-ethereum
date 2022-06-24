@@ -204,7 +204,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 
 // WriteHeaders writes a chain of headers into the local chain, given that the
 // parents are already known. The chain head header won't be updated in this
-// function, the additional setChainHead is expected in order to finish the entire
+// function, the additional SetCanonical is expected in order to finish the entire
 // procedure.
 func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	if len(headers) == 0 {

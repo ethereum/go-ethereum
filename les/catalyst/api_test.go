@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -194,7 +194,7 @@ func TestEth2DeepReorg(t *testing.T) {
 			if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
 				t.Fatalf("Chain head shouldn't be updated")
 			}
-			if err := api.setHead(block.Hash()); err != nil {
+			if err := api.setCanonical(block.Hash()); err != nil {
 				t.Fatalf("Failed to set head: %v", err)
 			}
 			if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {

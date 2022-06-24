@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/rand"
 	"math/big"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -31,7 +30,7 @@ import (
 )
 
 const (
-	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
+	ipcAPIs  = "admin:1.0 debug:1.0 engine:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
@@ -43,7 +42,8 @@ func runMinimalGeth(t *testing.T, args ...string) *testgeth {
 	// --networkid=1337 to avoid cache bump
 	// --syncmode=full to avoid allocating fast sync bloom
 	allArgs := []string{"--ropsten", "--networkid", "1337", "--syncmode=full", "--port", "0",
-		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--cache", "64"}
+		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--cache", "64",
+		"--datadir.minfreedisk", "0"}
 	return runGeth(t, append(allArgs, args...)...)
 }
 
@@ -92,9 +92,7 @@ func TestAttachWelcome(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\geth` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
-		ws := tmpdir(t)
-		defer os.RemoveAll(ws)
-		ipc = filepath.Join(ws, "geth.ipc")
+		ipc = filepath.Join(t.TempDir(), "geth.ipc")
 	}
 	// And HTTP + WS attachment
 	p := trulyRandInt(1024, 65533) // Yeah, sometimes this will fail, sorry :P
@@ -118,6 +116,7 @@ func TestAttachWelcome(t *testing.T) {
 		waitForEndpoint(t, endpoint, 3*time.Second)
 		testAttachWelcome(t, geth, endpoint, httpAPIs)
 	})
+	geth.ExpectExit()
 }
 
 func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {

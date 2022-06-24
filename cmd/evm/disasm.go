@@ -19,7 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/asm"
@@ -38,7 +38,7 @@ func disasmCmd(ctx *cli.Context) error {
 	switch {
 	case len(ctx.Args().First()) > 0:
 		fn := ctx.Args().First()
-		input, err := ioutil.ReadFile(fn)
+		input, err := os.ReadFile(fn)
 		if err != nil {
 			return err
 		}

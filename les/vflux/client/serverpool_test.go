@@ -55,7 +55,6 @@ type ServerPoolTest struct {
 	clock                *mclock.Simulated
 	quit                 chan chan struct{}
 	preNeg, preNegFail   bool
-	vt                   *ValueTracker
 	sp                   *ServerPool
 	spi                  enode.Iterator
 	input                enode.Iterator

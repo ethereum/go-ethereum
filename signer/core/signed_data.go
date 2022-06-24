@@ -147,13 +147,11 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useEthereumV, err
 		}
-		// The incoming clique header is already truncated, sent to us with a extradata already shortened
-		if len(header.Extra) < 65 {
-			// Need to add it back, to get a suitable length for hashing
-			newExtra := make([]byte, len(header.Extra)+65)
-			copy(newExtra, header.Extra)
-			header.Extra = newExtra
-		}
+		// Add space in the extradata to put the signature
+		newExtra := make([]byte, len(header.Extra)+65)
+		copy(newExtra, header.Extra)
+		header.Extra = newExtra
+
 		// Get back the rlp data, encoded by us
 		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
 		if err != nil {
@@ -171,7 +169,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
-		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
+		// hash = keccak256("\x19Ethereum Signed Message:\n${message length}${message}")
 		// We expect it to be a string
 		if stringData, ok := data.(string); !ok {
 			return nil, useEthereumV, fmt.Errorf("input for text/plain must be an hex-encoded string")
@@ -196,7 +194,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 	return req, useEthereumV, nil
 }
 
-// SignTextWithValidator signs the given message which can be further recovered
+// SignTextValidator signs the given message which can be further recovered
 // with the given validator.
 // hash = keccak256("\x19\x00"${address}${data}).
 func SignTextValidator(validatorData apitypes.ValidatorData) (hexutil.Bytes, string) {
@@ -273,11 +271,11 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	//
 	// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 	// the address of:
-	// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
+	// hash = keccak256("\x19Ethereum Signed Message:\n${message length}${message}")
 	// addr = ecrecover(hash, signature)
 	//
 	// Note, the signature must conform to the secp256k1 curve R, S and V values, where
-	// the V value must be be 27 or 28 for legacy reasons.
+	// the V value must be 27 or 28 for legacy reasons.
 	//
 	// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 	if len(sig) != 65 {

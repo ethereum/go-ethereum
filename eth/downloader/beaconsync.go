@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ type beaconBackfiller struct {
 	syncMode   SyncMode      // Sync mode to use for backfilling the skeleton chains
 	success    func()        // Callback to run on successful sync cycle completion
 	filling    bool          // Flag whether the downloader is backfilling or not
+	filled     *types.Header // Last header filled by the last terminated sync loop
 	started    chan struct{} // Notification channel whether the downloader inited
 	lock       sync.Mutex    // Mutex protecting the sync lock
 }
@@ -48,16 +49,18 @@ func newBeaconBackfiller(dl *Downloader, success func()) backfiller {
 	}
 }
 
-// suspend cancels any background downloader threads.
-func (b *beaconBackfiller) suspend() {
+// suspend cancels any background downloader threads and returns the last header
+// that has been successfully backfilled.
+func (b *beaconBackfiller) suspend() *types.Header {
 	// If no filling is running, don't waste cycles
 	b.lock.Lock()
 	filling := b.filling
+	filled := b.filled
 	started := b.started
 	b.lock.Unlock()
 
 	if !filling {
-		return
+		return filled // Return the filled header on the previous sync completion
 	}
 	// A previous filling should be running, though it may happen that it hasn't
 	// yet started (being done on a new goroutine). Many concurrent beacon head
@@ -69,6 +72,10 @@ func (b *beaconBackfiller) suspend() {
 	// Now that we're sure the downloader successfully started up, we can cancel
 	// it safely without running the risk of data races.
 	b.downloader.Cancel()
+
+	// Sync cycle was just terminated, retrieve and return the last filled header.
+	// Can't use `filled` as that contains a stale value from before cancellation.
+	return b.downloader.blockchain.CurrentFastBlock().Header()
 }
 
 // resume starts the downloader threads for backfilling state and chain data.
@@ -81,6 +88,7 @@ func (b *beaconBackfiller) resume() {
 		return
 	}
 	b.filling = true
+	b.filled = nil
 	b.started = make(chan struct{})
 	mode := b.syncMode
 	b.lock.Unlock()
@@ -92,6 +100,7 @@ func (b *beaconBackfiller) resume() {
 		defer func() {
 			b.lock.Lock()
 			b.filling = false
+			b.filled = b.downloader.blockchain.CurrentFastBlock().Header()
 			b.lock.Unlock()
 		}()
 		// If the downloader fails, report an error as in beacon chain mode there
@@ -254,9 +263,22 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // fetchBeaconHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchBeaconHeaders(from uint64) error {
-	head, _, err := d.skeleton.Bounds()
+	head, tail, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
+	}
+	// A part of headers are not in the skeleton space, try to resolve
+	// them from the local chain. Note the range should be very short
+	// and it should only happen when there are less than 64 post-merge
+	// blocks in the network.
+	var localHeaders []*types.Header
+	if from < tail.Number.Uint64() {
+		count := tail.Number.Uint64() - from
+		if count > uint64(fsMinFullBlocks) {
+			return fmt.Errorf("invalid origin (%d) of beacon sync (%d)", from, tail.Number)
+		}
+		localHeaders = d.readHeaderRange(tail, int(count))
+		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
 	for {
 		// Retrieve a batch of headers and feed it to the header processor
@@ -265,7 +287,21 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 			hashes  = make([]common.Hash, 0, maxHeadersProcess)
 		)
 		for i := 0; i < maxHeadersProcess && from <= head.Number.Uint64(); i++ {
-			headers = append(headers, d.skeleton.Header(from))
+			header := d.skeleton.Header(from)
+
+			// The header is not found in skeleton space, try to find it in local chain.
+			if header == nil && from < tail.Number.Uint64() {
+				dist := tail.Number.Uint64() - from
+				if len(localHeaders) >= int(dist) {
+					header = localHeaders[dist-1]
+				}
+			}
+			// The header is still missing, the beacon sync is corrupted and bail out
+			// the error here.
+			if header == nil {
+				return fmt.Errorf("missing beacon header %d", from)
+			}
+			headers = append(headers, header)
 			hashes = append(hashes, headers[i].Hash())
 			from++
 		}

@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -44,7 +43,7 @@ func TestCopyFrom(t *testing.T) {
 		{"foo", "bar", 8, true},
 	}
 	for _, c := range cases {
-		ioutil.WriteFile(c.src, content, 0644)
+		os.WriteFile(c.src, content, 0600)
 
 		if err := copyFrom(c.src, c.dest, c.offset, func(f *os.File) error {
 			if !c.writePrefix {
@@ -57,7 +56,7 @@ func TestCopyFrom(t *testing.T) {
 			t.Fatalf("Failed to copy %v", err)
 		}
 
-		blob, err := ioutil.ReadFile(c.dest)
+		blob, err := os.ReadFile(c.dest)
 		if err != nil {
 			os.Remove(c.src)
 			os.Remove(c.dest)

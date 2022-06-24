@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -61,7 +61,6 @@ type ClientPool struct {
 
 	setup  *serverSetup
 	clock  mclock.Clock
-	closed bool
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 

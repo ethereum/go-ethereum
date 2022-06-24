@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -64,6 +65,8 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 	case int32:
 		*b = Long(input)
 	case int64:
+		*b = Long(input)
+	case float64:
 		*b = Long(input)
 	default:
 		err = fmt.Errorf("unexpected type %T for Long", input)
@@ -514,6 +517,22 @@ func (t *Transaction) V(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*v), nil
 }
 
+func (t *Transaction) Raw(ctx context.Context) (hexutil.Bytes, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return hexutil.Bytes{}, err
+	}
+	return tx.MarshalBinary()
+}
+
+func (t *Transaction) RawReceipt(ctx context.Context) (hexutil.Bytes, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return hexutil.Bytes{}, err
+	}
+	return receipt.MarshalBinary()
+}
+
 type BlockType int
 
 // Block represents an Ethereum block.
@@ -786,6 +805,22 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", b.hash)
 	}
 	return hexutil.Big(*td), nil
+}
+
+func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
+	header, err := b.resolveHeader(ctx)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	return rlp.EncodeToBytes(header)
+}
+
+func (b *Block) Raw(ctx context.Context) (hexutil.Bytes, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	return rlp.EncodeToBytes(block)
 }
 
 // BlockNumberArgs encapsulates arguments to accessors that specify a block number.

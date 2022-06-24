@@ -1,3 +1,19 @@
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package abi
 
 import (
@@ -16,6 +32,8 @@ func TestParseSelector(t *testing.T) {
 				result = append(result, ArgumentMarshaling{name, typeName, typeName, nil, false})
 			} else if components, ok := typeOrComponents.([]ArgumentMarshaling); ok {
 				result = append(result, ArgumentMarshaling{name, "tuple", "tuple", components, false})
+			} else if components, ok := typeOrComponents.([][]ArgumentMarshaling); ok {
+				result = append(result, ArgumentMarshaling{name, "tuple[]", "tuple[]", components[0], false})
 			} else {
 				log.Fatalf("unexpected type %T", typeOrComponents)
 			}
@@ -34,6 +52,13 @@ func TestParseSelector(t *testing.T) {
 		{"singleNest(bytes32,uint8,(uint256,uint256),address)", "singleNest", mkType("bytes32", "uint8", mkType("uint256", "uint256"), "address")},
 		{"multiNest(address,(uint256[],uint256),((address,bytes32),uint256))", "multiNest",
 			mkType("address", mkType("uint256[]", "uint256"), mkType(mkType("address", "bytes32"), "uint256"))},
+		{"arrayNest((uint256,uint256)[],bytes32)", "arrayNest", mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, "bytes32")},
+		{"multiArrayNest((uint256,uint256)[],(uint256,uint256)[])", "multiArrayNest",
+			mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, [][]ArgumentMarshaling{mkType("uint256", "uint256")})},
+		{"singleArrayNestAndArray((uint256,uint256)[],bytes32[])", "singleArrayNestAndArray",
+			mkType([][]ArgumentMarshaling{mkType("uint256", "uint256")}, "bytes32[]")},
+		{"singleArrayNestWithArrayAndArray((uint256[],address[2],uint8[4][][5])[],bytes32[])", "singleArrayNestWithArrayAndArray",
+			mkType([][]ArgumentMarshaling{mkType("uint256[]", "address[2]", "uint8[4][][5]")}, "bytes32[]")},
 	}
 	for i, tt := range tests {
 		selector, err := ParseSelector(tt.input)
