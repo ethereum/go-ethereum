@@ -35,7 +35,7 @@ Geth's reusable Go libraries focus on three main usage areas:
 - Contract interactions through auto-generated bindings
 
 The libraries are updated synchronously with the Geth Github repository. 
-The Go libraries can be viewed in full at [Go Packages][go-pkg-link]
+The Go libraries can be viewed in full at [Go Packages][go-pkg-link].
 
 Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in 
 a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource
@@ -46,7 +46,7 @@ the image below (it is also archived on [IPFS][ipfs-link]).
 
 ## Go packages
 
-The `go-ethereum` library is distributed as a collection of standard Go packages straight from Geth's 
+The `go-ethereum` library is distributed as a collection of standard Go packages straight from go-ethereum's
 GitHub repository. The packages can be used directly via the official Go toolkit, without needing any 
 third party tools.
 
@@ -90,54 +90,46 @@ _ = cl
 ### Interacting with the client
 
 The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function
-`blockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `sendTransaction` wraps a call to 
-`eth_sendTransaction`. The syntax for calling these functions in a Go application is as follows:
+`BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to
+`eth_sendTransaction`. The full list of client methods can be found [here][ethclient-pkg].
 
-```go
-cl.a_function(arg1, arg2...)
-```
-
-Frequently, the functions take an instance of the `Context` type as their leading argument. This defines some low-level
-rules about requests sent from the application such as deadlines, cancellation signals etc. More information on this can
+Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can
 be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be 
 created using `Context.Background()`. 
 
-### Simple functions
+### Querying client for data
 
-Some of the client functions simpy request data from the client and do not require any arguments other than the
-`context.Context` instance that defines the request, for example `chainID()` and `PeerCount()`. Others
-take additional arguments such as an Ethereum address or block number, for example `BalanceAt()`.
-
-To request the network ID, the `ChainID()` function can be used. It wraps a call to the `eth_chainID` endpoint. 
-The `ChainID()` function takes an instance of `context.Context` as its only argument. The network ID can therefore
-be obtained as a `uint64` and assigned to `networkid` as follows:
+A simple starting point is to fetch the chain ID from the client. This e.g. is needed when signing a transaction as is to be seen in the next section.
 
 ```go
-networkid, err := cl.NetworkID(context.Background())
+chainid, err := cl.ChainID(context.Background())
 if err != nil {
     return err
 }
 ```
 
-The `PeerCount` function also takes an instance of `context.Context` as its only argument. The number of peers the node
-is connected to is returned as a `uint64` and assigned to `peers` in the following example:
+Unlike `ChainID`, many functions require arguments other than context. The Go API takes in and returns high-level types which are used in Geth internals as well to simplify programming and remove the need for knowing how data needs to be formatted exactly as per the JSON-RPC API spec. For example to find out the nonce for an account at a given block the address needs to be provided as a `common.Address` type and the block number as a `*big.Int`:
 
 ```go
-peers, err := cl.PeerCount(context.Background())
+addr := common.HexToAddress("0xb02A2EdA1b317FBd16760128836B0Ac59B560e9D")
+nonce, err := cl.NonceAt(context.Background(), addr, big.NewInt(14000000))
+```
+
+### Querying past events
+
+Contracts emit events during execution which can be queried from the client. The parameters for the event one is interested in have to be filled out in the `ethereum.FilterQuery` object. This includes which event topics are of interested, from which contracts and during which range of blocks. The example below queries `Transfer` events of all ERC-20 tokens for the last 10 blocks:
+
+```go
+blockNum, err := cl.BlockNumber(context.Background())
 if err != nil {
     return err
 }
-```
-
-Obtaining an account balance at a specific block is achieved using `BalanceAt()`. This function takes an instance of
-`context.Context` as its leading argument but also requires an Ethereum address provided with type `common.Address` and
-a block number which can either be an integer or nil (in which case the latest block is used):
-
-```go
-
-addr = common.HexToAddress("0xb02A2EdA1b317FBd16760128836B0Ac59B560e9D")
-
-balance, err := cl.BalanceAt(context.Background(), addr, 0)
+q := ethereum.FilterQuery{
+    FromBlock: new(big.Int).Sub(blockNum, big.NewInt(10)),
+    ToBlock: blockNum,
+    Topics: [][]common.Hash{common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")},
+}
+logs, err := cl.FilterLogs(context.Background(), q)
 if err != nil {
     return err
 }
@@ -147,8 +139,8 @@ if err != nil {
 
 Sending a transaction is achieved using the `SendTransaction()` function. `SendTransaction` takes an instance of
 `context.Context` as its leading argument and a signed transaction as its second argument. The signed transaction
-must be generated in advance of calling `sendTransaction()`. Building the signed transaction is a multi-stage 
-process that requires first generating a key pair, retrieving some chain data and defining sender and recipient 
+must be generated in advance. Building the signed transaction is a multi-stage
+process that requires first generating a key pair if none exists already, retrieving some chain data and defining sender and recipient
 addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction
 can then be passed to `SendTransaction`. 
 
@@ -210,7 +202,7 @@ func sendTransaction(cl *ethclient.Client) error {
 			Data:      nil,
 		})
 	// Sign the transaction using our keys
-	signedTx, _ := types.SignTx(tx, types.NewEIP155Signer(chainid), sk)
+	signedTx, _ := types.SignTx(tx, types.NewLondonSigner(chainid), sk)
 	// Send the transaction to our node
 	return cl.SendTransaction(context.Background(), signedTx)
 }
@@ -219,7 +211,7 @@ func sendTransaction(cl *ethclient.Client) error {
 ### gethclient
 
 An instance of `gethclient` can be used in exactly the same way as `ethclient`. However, `gethclient` 
-also includes Geth-specific API endpoints. These additional endpoints are:
+includes Geth-specific API methods. These additional methods are:
 
 ```shell
 CallContract()
@@ -247,6 +239,7 @@ using a set of composable, reusable functions provided by Geth.
 [go-guide]: https://github.com/golang/go/wiki#getting-started-with-go
 [peter-slides]: https://ethereum.karalabe.com/talks/2016-devcon.html
 [go-ethereum-dir]: https://pkg.go.dev/github.com/ethereum/go-ethereum/#section-directories
+[ethclient-pkg]:https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client
 [go-pkg-link]: https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories
 [ipfs-link]: https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR
 [dapp-link]: https://ethereum.org/en/glossary/#dapp
