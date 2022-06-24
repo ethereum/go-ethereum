@@ -847,6 +847,7 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 			if err != nil {
 				return nil, err
 			}
+
 			response["miner"] = author
 		}
 
@@ -873,6 +874,7 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Ha
 			if err != nil {
 				return nil, err
 			}
+
 			response["miner"] = author
 
 			return s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
