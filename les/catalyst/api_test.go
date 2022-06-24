@@ -81,8 +81,11 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err == nil {
-		t.Errorf("fork choice updated before total terminal difficulty should fail")
+	status, err := api.ForkchoiceUpdatedV1(fcState, nil)
+	if err != nil {
+		t.Error("fork choice should not error")
+	} else if status.PayloadStatus.Status != beacon.INVALID {
+		t.Errorf("expected INVALID on set head before ttd, got %v", status.PayloadStatus.Status)
 	}
 }
 
@@ -122,7 +125,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		BaseFee:     block.BaseFee(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(beacon.ExecutableDataV1{
+	_, err := api.NewPayloadV1(beacon.ExecutableDataV1{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),
