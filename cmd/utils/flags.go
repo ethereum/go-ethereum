@@ -1595,6 +1595,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		ctx.GlobalSet(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
+	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalIsSet(AncientRecentLimitFlag.Name) != 0 {
+		ctx.GlobalSet(AncientRecentLimitFlag.Name, "0")
+		log.Warn("Disable ancient prunning for archive node")
+	}
 	if ctx.GlobalIsSet(LightServeFlag.Name) && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
 		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
 	}
