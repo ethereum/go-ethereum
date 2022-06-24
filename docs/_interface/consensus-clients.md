@@ -14,6 +14,8 @@ so that The Merge can happen smoothly. There are five consensus clients availabl
 
 This page will outline how Geth can be set up with a consensus client in advance of The Merge (or to interact with an alread-merged testnet).
 
+{% include note.html content=" It is recommended to practise connecting a consensus client to Geth on a testnet such as Kiln or Ropsten but to
+wait until merge-ready releases are available before doing it on Ethereum Mainnet." %}
 
 ## Configuring Geth
 
@@ -54,22 +56,12 @@ There are currently five consensus clients that can be run alongside Geth. These
  
 [Teku](https://pegasys.tech/teku): written in Java
  
-There is currently a [client diversity][client-div-link] issue where a large dominance of Prysm clients poses a risk 
-to the health of the network. In response to the initial drive to even out the client diversity many Prysm nodes switched 
-to Lighthouse to the extent that it now also has a problematic market share. It is therefore recommended to use a minority 
-client such as Teku or Nimbus. 
+It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. 
 
-It is also worth noting that client diversity is also an [issue on the execution layer](https://clientdiversity.org/), 
-with Geth being run on about 85% of all Ethereum nodes. It is assumed that readers on this page have at 
-least considered running a [minority execution client][execution-clients-link] and concluded that Geth is the right 
-client for them.
+Instructions for installing each client are provided in the documentation linked in the list above.
 
-There are several ways to download and install the consensus clients including prebuilt binaries, docker containers
-or building from source. Instructions for each client are provided in the documentation linked in the client list above.
-Users can choose the method that is right for them.
-
-Regardles of the installation method, the consensus client must be started with the right port configuration to 
-establish an RPC connection to the local Geth instance. In the example above, `localhost:8551` was authorized 
+The consensus client must be started with the right port configuration to establish an RPC connection 
+to the local Geth instance. In the example above, `localhost:8551` was authorized 
 for this purpose. The consensus clients all have a command similar to `--http-webprovider` that 
 takes the exposed Geth port as an argument.
 
@@ -86,7 +78,9 @@ More information on this can be found in the documentation for each consensus cl
 After The Merge, miners are no longer responsible for securing the Ethereum blockchain. Instead, this becomes the responsibility
 of validators that have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients
 have their own validator software that is described in detail in their respective documentation. The easiest way to handle 
-staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link].
+staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link]. The launchpad is also
+available for [Prater][prater-launchpad-link], [Ropsten][ropsten-launchpad-link] and [Kiln][kiln-launchpad-link] testnets. It is
+also highly recommended to review the [Merge readiness checklist][checklist-link].
 
 ## Using Geth
 
@@ -128,7 +122,7 @@ to a consensus client to work on those networks too.
 
 As The Merge approaches it is important for Geth users to prepare by installing and running a consensus client. Otherwise, Geth will stop
 following the head of the chain immediately after The Merge. There are five consensus clients to choose from. This page provided an overview
-of how to choose a consensus client and configure Geth to connect to it. This pre-emptive action protects against disruption to users as a 
+of how to choose a consensus client and configure Geth to connect to it. This pre-emptive action will protect against disruption to users as a 
 result of The Merge.
 
 
@@ -140,4 +134,9 @@ result of The Merge.
 [engine-api-link]: https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md
 [client-div-link]:https://ethereum.org/en/developers/docs/nodes-and-clients/client-diversity
 [execution-clients-link]: https://ethereum.org/en/developers/docs/nodes-and-clients/client-diversity/#execution-clients
-[launchpad-link][https://launchpad.ethereum.org/]
+[launchpad-link]:https://launchpad.ethereum.org/
+[prater-launchpad-link]:https://prater.launchpad.ethereum.org/
+[kiln-launchpad-link]:https://kiln.launchpad.ethereum.org/
+[ropsten-launchpad-link]:https://ropsten.launchpad.ethereum.org/
+[e-org-link]: https://ethereum.org/en/developers/docs/nodes-and-clients/run-a-node/
+[checklist-link]:https://launchpad.ethereum.org/en/merge-readiness
