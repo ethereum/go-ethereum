@@ -1595,7 +1595,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		ctx.GlobalSet(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
-	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalIsSet(AncientRecentLimitFlag.Name) != 0 {
+	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(AncientRecentLimitFlag.Name) != 0 {
 		ctx.GlobalSet(AncientRecentLimitFlag.Name, "0")
 		log.Warn("Disable ancient prunning for archive node")
 	}
