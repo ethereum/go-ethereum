@@ -2348,7 +2348,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	//
 	// it calculates the highest block(named `cleanTo`) that can be cleaned, then starts
 	// cleaning from the genesis+1 block in batches, until reaches the `cleanTo` block.
-	pruneAncient := func(tail *uint64, head uint64, wait, done chan struct{}) {
+	pruneAncient := func(txIndexTail *uint64, head uint64, wait, done chan struct{}) {
 		defer func() { done <- struct{}{} }()
 		// Wait till the tx index routine finishes, in case that it cannot find the ancient
 		// blocks for iterating transactions for unindex because we have pruned the blocks
@@ -2364,14 +2364,14 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 
 		if last < ancientLimit || last < first {
 			// It should not reach here
-			log.Error("prune ancient error", "frozen", frozen, "tail", tail, "ancientRecentLimit", ancientLimit)
+			log.Error("prune ancient error", "last frozen", last, "first frozen", first, "ancientRecentLimit", ancientLimit)
 			return
 		}
 
 		pruneTo := last - ancientLimit
 
 		// Double ensure we don't prune the blocks having dangling transaction indices
-		if tail != nil && pruneTo > *tail {
+		if txIndexTail != nil && pruneTo > *txIndexTail {
 			log.Warn("Attempt to prune the ancient blocks that still have tx indices, postpone to next round")
 			return
 		}
@@ -2381,7 +2381,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 
 		// Log something friendly for the user
 		context := []interface{}{
-			"blocks", pruneTo - first, "frozen", frozen, "ancientRecentLimit", ancientLimit, "elapsed", common.PrettyDuration(time.Since(start)), "pruned to", pruneTo,
+			"blocks", pruneTo - first, "frozen", last, "ancientRecentLimit", ancientLimit, "elapsed", common.PrettyDuration(time.Since(start)), "pruned to", pruneTo,
 		}
 		log.Info("cleaned chain segment", context...)
 	}
