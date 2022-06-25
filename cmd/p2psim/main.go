@@ -46,6 +46,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -100,9 +101,14 @@ var (
 	}
 )
 
+var (
+	// Git information set by linker when building with ci.go.
+	gitCommit string
+	gitDate   string
+)
+
 func main() {
-	app := cli.NewApp()
-	app.Usage = "devp2p simulation command-line client"
+	app := flags.NewApp(gitCommit, gitDate, "devp2p simulation command-line client")
 	app.Flags = []cli.Flag{
 		apiFlag,
 	}
