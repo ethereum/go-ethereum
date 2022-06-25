@@ -33,7 +33,6 @@ var (
 		Name:      "wallet",
 		Usage:     "Manage Ethereum presale wallets",
 		ArgsUsage: "",
-		Category:  "ACCOUNT COMMANDS",
 		Description: `
     geth wallet import /path/to/my/presale.wallet
 
@@ -47,7 +46,6 @@ passwordfile as argument containing the wallet password in plaintext.`,
 				Usage:     "Import Ethereum presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
-				Category:  "ACCOUNT COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
@@ -65,9 +63,8 @@ passwordfile as argument containing the wallet password in plaintext.`,
 	}
 
 	accountCommand = &cli.Command{
-		Name:     "account",
-		Usage:    "Manage accounts",
-		Category: "ACCOUNT COMMANDS",
+		Name:  "account",
+		Usage: "Manage accounts",
 		Description: `
 
 Manage accounts, list all existing accounts, import a private key into a new

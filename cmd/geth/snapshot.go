@@ -49,7 +49,6 @@ var (
 	snapshotCommand = &cli.Command{
 		Name:        "snapshot",
 		Usage:       "A set of commands based on the snapshot",
-		Category:    "MISCELLANEOUS COMMANDS",
 		Description: "",
 		Subcommands: []*cli.Command{
 			{
@@ -57,7 +56,6 @@ var (
 				Usage:     "Prune stale ethereum state data based on the snapshot",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: utils.GroupFlags([]cli.Flag{
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
@@ -82,7 +80,6 @@ the trie clean cache with default directory will be deleted.
 				Usage:     "Recalculate state hash based on the snapshot for verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(verifyState),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot verify-state <state-root>
@@ -96,7 +93,6 @@ In other words, this command does the snapshot to trie conversion.
 				Usage:     "Check that there is no 'dangling' snap storage",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(checkDanglingStorage),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot check-dangling-storage <state-root> traverses the snap storage 
@@ -108,7 +104,6 @@ data, and verifies that all snapshot storage data has a corresponding account.
 				Usage:     "Check all snapshot layers for the a specific account",
 				ArgsUsage: "<address | hash>",
 				Action:    utils.MigrateFlags(checkAccount),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
@@ -120,7 +115,6 @@ information about the specified address.
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseState),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -136,7 +130,6 @@ It's also usable without snapshot enabled.
 				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseRawState),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -153,7 +146,6 @@ It's also usable without snapshot enabled.
 				Usage:     "Dump a specific block from storage (same as 'geth dump' but using snapshots)",
 				ArgsUsage: "[? <blockHash> | <blockNum>]",
 				Action:    utils.MigrateFlags(dumpState),
-				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: utils.GroupFlags([]cli.Flag{
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,

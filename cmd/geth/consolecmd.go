@@ -31,11 +31,10 @@ var (
 	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag}
 
 	consoleCommand = &cli.Command{
-		Action:   utils.MigrateFlags(localConsole),
-		Name:     "console",
-		Usage:    "Start an interactive JavaScript environment",
-		Flags:    utils.GroupFlags(nodeFlags, rpcFlags, consoleFlags),
-		Category: "CONSOLE COMMANDS",
+		Action: utils.MigrateFlags(localConsole),
+		Name:   "console",
+		Usage:  "Start an interactive JavaScript environment",
+		Flags:  utils.GroupFlags(nodeFlags, rpcFlags, consoleFlags),
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -48,7 +47,6 @@ See https://geth.ethereum.org/docs/interface/javascript-console.`,
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
 		Flags:     utils.GroupFlags([]cli.Flag{utils.DataDirFlag}, consoleFlags),
-		Category:  "CONSOLE COMMANDS",
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -62,7 +60,6 @@ This command allows to open a console on a running geth node.`,
 		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",
 		Flags:     utils.GroupFlags(nodeFlags, consoleFlags),
-		Category:  "CONSOLE COMMANDS",
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://geth.ethereum.org/docs/interface/javascript-console`,

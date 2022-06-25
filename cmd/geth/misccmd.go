@@ -47,7 +47,6 @@ var (
 		Name:      "makecache",
 		Usage:     "Generate ethash verification cache (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The makecache command generates an ethash cache in <outputDir>.
 
@@ -60,7 +59,6 @@ Regular users do not need to execute it.
 		Name:      "makedag",
 		Usage:     "Generate ethash mining DAG (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The makedag command generates an ethash DAG in <outputDir>.
 
@@ -73,7 +71,6 @@ Regular users do not need to execute it.
 		Name:      "version",
 		Usage:     "Print version numbers",
 		ArgsUsage: " ",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The output of this command is supposed to be machine-readable.
 `,
@@ -87,7 +84,6 @@ The output of this command is supposed to be machine-readable.
 		Name:      "version-check",
 		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
 		ArgsUsage: "<versionstring (optional)>",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The version-check command fetches vulnerability-information from https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
 and displays information about any security vulnerabilities that affect the currently executing version.
@@ -98,7 +94,6 @@ and displays information about any security vulnerabilities that affect the curr
 		Name:      "license",
 		Usage:     "Display license information",
 		ArgsUsage: " ",
-		Category:  "MISCELLANEOUS COMMANDS",
 	}
 )
 

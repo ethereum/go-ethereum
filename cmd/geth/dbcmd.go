@@ -50,7 +50,6 @@ var (
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: "",
 		Flags:     utils.DatabasePathFlags,
-		Category:  "DATABASE COMMANDS",
 		Description: `
 Remove blockchain and state databases`,
 	}
@@ -58,7 +57,6 @@ Remove blockchain and state databases`,
 		Name:      "db",
 		Usage:     "Low level database operations",
 		ArgsUsage: "",
-		Category:  "DATABASE COMMANDS",
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
 			dbStatCmd,

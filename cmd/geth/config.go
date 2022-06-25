@@ -50,7 +50,6 @@ var (
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
 		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
-		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
