@@ -19,6 +19,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -94,5 +95,9 @@ var (
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
-	app.RunAndExitOnError()
+
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

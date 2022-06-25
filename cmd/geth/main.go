@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -261,7 +262,10 @@ func init() {
 }
 
 func main() {
-	app.RunAndExitOnError()
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 // prepare manipulates memory cache allowance and setups metric system.

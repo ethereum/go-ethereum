@@ -51,7 +51,7 @@ func main() {
 		return nil
 	}
 	app.Action = runWizard
-	app.RunAndExitOnError()
+	app.Run(os.Args)
 }
 
 // runWizard start the wizard and relinquish control to it.
