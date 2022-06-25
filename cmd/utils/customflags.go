@@ -59,7 +59,6 @@ type DirectoryFlag struct {
 
 	Category    string
 	DefaultText string
-	FilePath    string
 	Usage       string
 
 	Required   bool
@@ -148,7 +147,6 @@ type TextMarshalerFlag struct {
 
 	Category    string
 	DefaultText string
-	FilePath    string
 	Usage       string
 
 	Required   bool
@@ -230,7 +228,6 @@ type BigFlag struct {
 
 	Category    string
 	DefaultText string
-	FilePath    string
 	Usage       string
 
 	Required   bool
