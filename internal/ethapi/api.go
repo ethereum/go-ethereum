@@ -817,6 +817,7 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 // getAuthor: returns the author of the Block
 func (s *PublicBlockChainAPI) getAuthor(head *types.Header) (*common.Address, error) {
 	// get author using Author() function from: /consensus/clique/clique.go
+	// In Production: get author using Author() function from: /consensus/bor/bor.go
 	author, err := s.b.Engine().Author(head)
 	if err != nil {
 		return nil, err
