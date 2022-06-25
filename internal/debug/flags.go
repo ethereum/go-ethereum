@@ -24,6 +24,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
@@ -37,58 +38,70 @@ var Memsize memsizeui.Handler
 
 var (
 	verbosityFlag = &cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 3,
+		Name:     "verbosity",
+		Usage:    "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value:    3,
+		Category: flags.LoggingCategory,
 	}
 	vmoduleFlag = &cli.StringFlag{
-		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
-		Value: "",
+		Name:     "vmodule",
+		Usage:    "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value:    "",
+		Category: flags.LoggingCategory,
 	}
 	logjsonFlag = &cli.BoolFlag{
-		Name:  "log.json",
-		Usage: "Format logs with JSON",
+		Name:     "log.json",
+		Usage:    "Format logs with JSON",
+		Category: flags.LoggingCategory,
 	}
 	backtraceAtFlag = &cli.StringFlag{
-		Name:  "log.backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: "",
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Value:    "",
+		Category: flags.LoggingCategory,
 	}
 	debugFlag = &cli.BoolFlag{
-		Name:  "log.debug",
-		Usage: "Prepends log messages with call-site location (file and line number)",
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (file and line number)",
+		Category: flags.LoggingCategory,
 	}
 	pprofFlag = &cli.BoolFlag{
-		Name:  "pprof",
-		Usage: "Enable the pprof HTTP server",
+		Name:     "pprof",
+		Usage:    "Enable the pprof HTTP server",
+		Category: flags.LoggingCategory,
 	}
 	pprofPortFlag = &cli.IntFlag{
-		Name:  "pprof.port",
-		Usage: "pprof HTTP server listening port",
-		Value: 6060,
+		Name:     "pprof.port",
+		Usage:    "pprof HTTP server listening port",
+		Value:    6060,
+		Category: flags.LoggingCategory,
 	}
 	pprofAddrFlag = &cli.StringFlag{
-		Name:  "pprof.addr",
-		Usage: "pprof HTTP server listening interface",
-		Value: "127.0.0.1",
+		Name:     "pprof.addr",
+		Usage:    "pprof HTTP server listening interface",
+		Value:    "127.0.0.1",
+		Category: flags.LoggingCategory,
 	}
 	memprofilerateFlag = &cli.IntFlag{
-		Name:  "pprof.memprofilerate",
-		Usage: "Turn on memory profiling with the given rate",
-		Value: runtime.MemProfileRate,
+		Name:     "pprof.memprofilerate",
+		Usage:    "Turn on memory profiling with the given rate",
+		Value:    runtime.MemProfileRate,
+		Category: flags.LoggingCategory,
 	}
 	blockprofilerateFlag = &cli.IntFlag{
-		Name:  "pprof.blockprofilerate",
-		Usage: "Turn on block profiling with the given rate",
+		Name:     "pprof.blockprofilerate",
+		Usage:    "Turn on block profiling with the given rate",
+		Category: flags.LoggingCategory,
 	}
 	cpuprofileFlag = &cli.StringFlag{
-		Name:  "pprof.cpuprofile",
-		Usage: "Write CPU profile to the given file",
+		Name:     "pprof.cpuprofile",
+		Usage:    "Write CPU profile to the given file",
+		Category: flags.LoggingCategory,
 	}
 	traceFlag = &cli.StringFlag{
-		Name:  "trace",
-		Usage: "Write execution trace to the given file",
+		Name:     "trace",
+		Usage:    "Write execution trace to the given file",
+		Category: flags.LoggingCategory,
 	}
 )
 

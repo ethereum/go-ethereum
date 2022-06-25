@@ -32,9 +32,9 @@ var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	gitDate   = ""
-)
 
-var app *cli.App
+	app *cli.App
+)
 
 func init() {
 	app = flags.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
@@ -48,7 +48,6 @@ func init() {
 		oracleFlag,
 		nodeURLFlag,
 	}
-	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.

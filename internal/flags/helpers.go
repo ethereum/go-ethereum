@@ -17,124 +17,15 @@
 package flags
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
 
-var (
-	CommandHelpTemplate = `{{.cmd.Name}}{{if .cmd.Subcommands}} command{{end}}{{if .cmd.Flags}} [command options]{{end}} {{.cmd.ArgsUsage}}
-{{if .cmd.Description}}{{.cmd.Description}}
-{{end}}{{if .cmd.Subcommands}}
-SUBCOMMANDS:
-  {{range .cmd.Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-  {{end}}{{end}}{{if .categorizedFlags}}
-{{range $idx, $categorized := .categorizedFlags}}{{$categorized.Name}} OPTIONS:
-{{range $categorized.Flags}}{{"\t"}}{{.}}
-{{end}}
-{{end}}{{end}}`
-
-	OriginCommandHelpTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} {{.ArgsUsage}}
-{{if .Description}}{{.Description}}
-{{end}}{{if .Subcommands}}
-SUBCOMMANDS:
-  {{range .Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-  {{end}}{{end}}{{if .Flags}}
-OPTIONS:
-{{range $.Flags}}   {{.}}
-{{end}}
-{{end}}`
-
-	// AppHelpTemplate is the test template for the default, global app help topic.
-	AppHelpTemplate = `NAME:
-   {{.App.Name}} - {{.App.Usage}}
-
-   Copyright 2013-2022 The go-ethereum Authors
-
-USAGE:
-   {{.App.HelpName}} [options]{{if .App.Commands}} [command] [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
-   {{if .App.Version}}
-VERSION:
-   {{.App.Version}}
-   {{end}}{{if len .App.Authors}}
-AUTHOR(S):
-   {{range .App.Authors}}{{ . }}{{end}}
-   {{end}}{{if .App.Commands}}
-COMMANDS:
-   {{range .App.Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-   {{end}}{{end}}{{if .FlagGroups}}
-{{range .FlagGroups}}{{.Name}} OPTIONS:
-  {{range .Flags}}{{.}}
-  {{end}}
-{{end}}{{end}}{{if .App.Copyright }}
-COPYRIGHT:
-   {{.App.Copyright}}
-   {{end}}
-`
-	// ClefAppHelpTemplate is the template for the default, global app help topic.
-	ClefAppHelpTemplate = `NAME:
-   {{.App.Name}} - {{.App.Usage}}
-
-   Copyright 2013-2022 The go-ethereum Authors
-
-USAGE:
-   {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
-   {{if .App.Version}}
-COMMANDS:
-   {{range .App.Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-   {{end}}{{end}}{{if .FlagGroups}}
-{{range .FlagGroups}}{{.Name}} OPTIONS:
-  {{range .Flags}}{{.}}
-  {{end}}
-{{end}}{{end}}{{if .App.Copyright }}
-COPYRIGHT:
-   {{.App.Copyright}}
-   {{end}}
-`
-)
-
-// HelpData is a one shot struct to pass to the usage template
-type HelpData struct {
-	App        interface{}
-	FlagGroups []FlagGroup
-}
-
-// FlagGroup is a collection of flags belonging to a single topic.
-type FlagGroup struct {
-	Name  string
-	Flags []cli.Flag
-}
-
-// ByCategory sorts an array of FlagGroup by Name in the order
-// defined in AppHelpFlagGroups.
-type ByCategory []FlagGroup
-
-func (a ByCategory) Len() int      { return len(a) }
-func (a ByCategory) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByCategory) Less(i, j int) bool {
-	iCat, jCat := a[i].Name, a[j].Name
-	iIdx, jIdx := len(a), len(a) // ensure non categorized flags come last
-
-	for i, group := range a {
-		if iCat == group.Name {
-			iIdx = i
-		}
-		if jCat == group.Name {
-			jIdx = i
-		}
-	}
-
-	return iIdx < jIdx
-}
-
-func FlagCategory(flag cli.Flag, flagGroups []FlagGroup) string {
-	for _, category := range flagGroups {
-		for _, flg := range category.Flags {
-			if flg.String() == flag.String() {
-				return category.Name
-			}
-		}
-	}
-	return "MISC"
+func init() {
+	cli.FlagStringer = FlagString
 }
 
 // NewApp creates an app with sane defaults.
@@ -143,5 +34,88 @@ func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app.EnableBashCompletion = true
 	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
+	app.Copyright = "Copyright 2013-2022 The go-ethereum Authors"
 	return app
+}
+
+// FlagString prints a single flag in help.
+func FlagString(f cli.Flag) string {
+	df, ok := f.(cli.DocGenerationFlag)
+	if !ok {
+		return ""
+	}
+
+	needsPlaceholder := df.TakesValue()
+	placeholder := ""
+	if needsPlaceholder {
+		placeholder = "value"
+	}
+
+	namesText := pad(cli.FlagNamePrefixer(df.Names(), placeholder), 30)
+
+	defaultValueString := ""
+	if s := df.GetDefaultText(); s != "" {
+		defaultValueString = " (default: " + s + ")"
+	}
+
+	usage := strings.TrimSpace(df.GetUsage())
+	envHint := strings.TrimSpace(cli.FlagEnvHinter(df.GetEnvVars(), ""))
+	if len(envHint) > 0 {
+		usage += " " + envHint
+	}
+
+	usage = wordWrap(usage, 80)
+	usage = indent(usage, 10)
+
+	return fmt.Sprintf("\n    %s%s\n%s", namesText, defaultValueString, usage)
+}
+
+func pad(s string, length int) string {
+	if len(s) < length {
+		s += strings.Repeat(" ", length-len(s))
+	}
+	return s
+}
+
+func indent(s string, nspace int) string {
+	ind := strings.Repeat(" ", nspace)
+	return ind + strings.ReplaceAll(s, "\n", "\n"+ind)
+}
+
+func wordWrap(s string, width int) string {
+	var (
+		output     strings.Builder
+		lineLength = 0
+	)
+
+	for {
+		sp := strings.IndexByte(s, ' ')
+		var word string
+		if sp == -1 {
+			word = s
+		} else {
+			word = s[:sp]
+		}
+		wlen := len(word)
+		over := lineLength+wlen >= width
+		if over {
+			output.WriteByte('\n')
+			lineLength = 0
+		} else {
+			if lineLength != 0 {
+				output.WriteByte(' ')
+				lineLength++
+			}
+		}
+
+		output.WriteString(word)
+		lineLength += wlen
+
+		if sp == -1 {
+			break
+		}
+		s = s[wlen+1:]
+	}
+
+	return output.String()
 }

@@ -39,7 +39,9 @@ var (
 	gitDate   = ""
 
 	app *cli.App
+)
 
+var (
 	// Flags needed by abigen
 	abiFlag = &cli.StringFlag{
 		Name:  "abi",
@@ -82,6 +84,7 @@ var (
 
 func init() {
 	app = flags.NewApp(gitCommit, gitDate, "ethereum checkpoint helper tool")
+	app.Name = "abigen"
 	app.Flags = []cli.Flag{
 		abiFlag,
 		binFlag,
@@ -94,11 +97,11 @@ func init() {
 		aliasFlag,
 	}
 	app.Action = utils.MigrateFlags(abigen)
-	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }
 
 func abigen(c *cli.Context) error {
 	utils.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
+
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}

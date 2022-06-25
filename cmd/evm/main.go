@@ -28,12 +28,14 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
-var gitDate = ""
+var (
+	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+	gitDate   = ""
+
+	app = flags.NewApp(gitCommit, gitDate, "the evm command line interface")
+)
 
 var (
-	app = flags.NewApp(gitCommit, gitDate, "the evm command line interface")
-
 	DebugFlag = &cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
@@ -63,12 +65,12 @@ var (
 		Usage: "gas limit for the evm",
 		Value: 10000000000,
 	}
-	PriceFlag = utils.BigFlag{
+	PriceFlag = &utils.BigFlag{
 		Name:  "price",
 		Usage: "price set for the evm",
 		Value: new(big.Int),
 	}
-	ValueFlag = utils.BigFlag{
+	ValueFlag = &utils.BigFlag{
 		Name:  "value",
 		Usage: "value set for the evm",
 		Value: new(big.Int),
@@ -158,6 +160,7 @@ var stateTransitionCommand = &cli.Command{
 		t8ntool.VerbosityFlag,
 	},
 }
+
 var transactionCommand = &cli.Command{
 	Name:    "transaction",
 	Aliases: []string{"t9n"},
@@ -225,7 +228,6 @@ func init() {
 		transactionCommand,
 		blockBuilderCommand,
 	}
-	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }
 
 func main() {

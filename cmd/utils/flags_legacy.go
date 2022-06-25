@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
 
@@ -40,14 +41,16 @@ var DeprecatedFlags = []cli.Flag{
 var (
 	// (Deprecated May 2020, shown in aliased flags section)
 	NoUSBFlag = &cli.BoolFlag{
-		Name:  "nousb",
-		Usage: "Disables monitoring for and managing USB hardware wallets (deprecated)",
+		Name:     "nousb",
+		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
+		Category: flags.DeprecatedCategory,
 	}
 	// (Deprecated July 2021, shown in aliased flags section)
 	LegacyMinerGasTargetFlag = &cli.Uint64Flag{
-		Name:  "miner.gastarget",
-		Usage: "Target gas floor for mined blocks (deprecated)",
-		Value: ethconfig.Defaults.Miner.GasFloor,
+		Name:     "miner.gastarget",
+		Usage:    "Target gas floor for mined blocks (deprecated)",
+		Value:    ethconfig.Defaults.Miner.GasFloor,
+		Category: flags.DeprecatedCategory,
 	}
 )
 

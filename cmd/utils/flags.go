@@ -20,7 +20,6 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"os"
@@ -28,8 +27,6 @@ import (
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
-	"text/tabwriter"
-	"text/template"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -72,34 +69,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func init() {
-	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
-
-VERSION:
-   {{.Version}}
-
-COMMANDS:
-   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-   {{end}}{{if .Flags}}
-GLOBAL OPTIONS:
-   {{range .Flags}}{{.}}
-   {{end}}{{end}}
-`
-	cli.CommandHelpTemplate = flags.CommandHelpTemplate
-	cli.HelpPrinter = printHelp
-}
-
-func printHelp(out io.Writer, templ string, data interface{}) {
-	funcMap := template.FuncMap{"join": strings.Join}
-	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
-	w := tabwriter.NewWriter(out, 42, 8, 2, ' ', 0)
-	err := t.Execute(w, data)
-	if err != nil {
-		panic(err)
-	}
-	w.Flush()
-}
-
 // These are all the command line flags we support.
 // If you add to this list, please remember to include the
 // flag in the appropriate command definition.
@@ -109,91 +78,116 @@ func printHelp(out io.Writer, templ string, data interface{}) {
 
 var (
 	// General settings
-	DataDirFlag = DirectoryFlag{
-		Name:  "datadir",
-		Usage: "Data directory for the databases and keystore",
-		Value: DirectoryString(node.DefaultDataDir()),
+	DataDirFlag = &DirectoryFlag{
+		Name:     "datadir",
+		Usage:    "Data directory for the databases and keystore",
+		Value:    DirectoryString(node.DefaultDataDir()),
+		Category: flags.EthCategory,
 	}
 	RemoteDBFlag = &cli.StringFlag{
-		Name:  "remotedb",
-		Usage: "URL for remote database",
+		Name:     "remotedb",
+		Usage:    "URL for remote database",
+		Category: flags.LoggingCategory,
 	}
-	AncientFlag = DirectoryFlag{
-		Name:  "datadir.ancient",
-		Usage: "Data directory for ancient chain segments (default = inside chaindata)",
+	AncientFlag = &DirectoryFlag{
+		Name:     "datadir.ancient",
+		Usage:    "Data directory for ancient chain segments (default = inside chaindata)",
+		Category: flags.EthCategory,
 	}
-	MinFreeDiskSpaceFlag = DirectoryFlag{
-		Name:  "datadir.minfreedisk",
-		Usage: "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
+	MinFreeDiskSpaceFlag = &DirectoryFlag{
+		Name:     "datadir.minfreedisk",
+		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
+		Category: flags.EthCategory,
 	}
-	KeyStoreDirFlag = DirectoryFlag{
-		Name:  "keystore",
-		Usage: "Directory for the keystore (default = inside the datadir)",
+	KeyStoreDirFlag = &DirectoryFlag{
+		Name:     "keystore",
+		Usage:    "Directory for the keystore (default = inside the datadir)",
+		Category: flags.AccountCategory,
 	}
 	USBFlag = &cli.BoolFlag{
-		Name:  "usb",
-		Usage: "Enable monitoring and management of USB hardware wallets",
+		Name:     "usb",
+		Usage:    "Enable monitoring and management of USB hardware wallets",
+		Category: flags.AccountCategory,
 	}
 	SmartCardDaemonPathFlag = &cli.StringFlag{
-		Name:  "pcscdpath",
-		Usage: "Path to the smartcard daemon (pcscd) socket file",
-		Value: pcsclite.PCSCDSockName,
+		Name:     "pcscdpath",
+		Usage:    "Path to the smartcard daemon (pcscd) socket file",
+		Value:    pcsclite.PCSCDSockName,
+		Category: flags.AccountCategory,
 	}
 	NetworkIdFlag = &cli.Uint64Flag{
-		Name:  "networkid",
-		Usage: "Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead)",
-		Value: ethconfig.Defaults.NetworkId,
+		Name:     "networkid",
+		Usage:    "Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead)",
+		Value:    ethconfig.Defaults.NetworkId,
+		Category: flags.EthCategory,
 	}
 	MainnetFlag = &cli.BoolFlag{
-		Name:  "mainnet",
-		Usage: "Ethereum mainnet",
+		Name:     "mainnet",
+		Usage:    "Ethereum mainnet",
+		Category: flags.EthCategory,
 	}
 	RopstenFlag = &cli.BoolFlag{
-		Name:  "ropsten",
-		Usage: "Ropsten network: pre-configured proof-of-stake test network",
+		Name:     "ropsten",
+		Usage:    "Ropsten network: pre-configured proof-of-stake test network",
+		Category: flags.EthCategory,
 	}
 	RinkebyFlag = &cli.BoolFlag{
-		Name:  "rinkeby",
-		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
+		Name:     "rinkeby",
+		Usage:    "Rinkeby network: pre-configured proof-of-authority test network",
+		Category: flags.EthCategory,
 	}
 	GoerliFlag = &cli.BoolFlag{
-		Name:  "goerli",
-		Usage: "Görli network: pre-configured proof-of-authority test network",
+		Name:     "goerli",
+		Usage:    "Görli network: pre-configured proof-of-authority test network",
+		Category: flags.EthCategory,
 	}
 	SepoliaFlag = &cli.BoolFlag{
-		Name:  "sepolia",
-		Usage: "Sepolia network: pre-configured proof-of-work test network",
+		Name:     "sepolia",
+		Usage:    "Sepolia network: pre-configured proof-of-work test network",
+		Category: flags.EthCategory,
 	}
 	KilnFlag = &cli.BoolFlag{
-		Name:  "kiln",
-		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
+		Name:     "kiln",
+		Usage:    "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
+		Category: flags.EthCategory,
 	}
+
+	// Dev mode
 	DeveloperFlag = &cli.BoolFlag{
-		Name:  "dev",
-		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+		Name:     "dev",
+		Usage:    "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+		Category: flags.DevCategory,
 	}
 	DeveloperPeriodFlag = &cli.IntFlag{
-		Name:  "dev.period",
-		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
+		Name:     "dev.period",
+		Usage:    "Block period to use in developer mode (0 = mine only if transaction pending)",
+		Category: flags.DevCategory,
 	}
 	DeveloperGasLimitFlag = &cli.Uint64Flag{
-		Name:  "dev.gaslimit",
-		Usage: "Initial block gas limit",
-		Value: 11500000,
+		Name:     "dev.gaslimit",
+		Usage:    "Initial block gas limit",
+		Value:    11500000,
+		Category: flags.DevCategory,
 	}
+
 	IdentityFlag = &cli.StringFlag{
-		Name:  "identity",
-		Usage: "Custom node name",
+		Name:     "identity",
+		Usage:    "Custom node name",
+		Category: flags.NetworkingCategory,
 	}
 	DocRootFlag = DirectoryFlag{
-		Name:  "docroot",
-		Usage: "Document Root for HTTPClient file scheme",
-		Value: DirectoryString(HomeDir()),
+		Name:     "docroot",
+		Usage:    "Document Root for HTTPClient file scheme",
+		Value:    DirectoryString(HomeDir()),
+		Category: flags.APICategory,
 	}
 	ExitWhenSyncedFlag = &cli.BoolFlag{
-		Name:  "exitwhensynced",
-		Usage: "Exits after block synchronisation completes",
+		Name:     "exitwhensynced",
+		Usage:    "Exits after block synchronisation completes",
+		Category: flags.EthCategory,
 	}
+
+	// Dump command options.
 	IterativeOutputFlag = &cli.BoolFlag{
 		Name:  "iterative",
 		Usage: "Print streaming JSON iteratively, delimited by newlines",
@@ -221,544 +215,671 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
+
 	defaultSyncMode = ethconfig.Defaults.SyncMode
-	SyncModeFlag    = TextMarshalerFlag{
-		Name:  "syncmode",
-		Usage: `Blockchain sync mode ("snap", "full" or "light")`,
-		Value: &defaultSyncMode,
+	SyncModeFlag    = &TextMarshalerFlag{
+		Name:     "syncmode",
+		Usage:    `Blockchain sync mode ("snap", "full" or "light")`,
+		Value:    &defaultSyncMode,
+		Category: flags.EthCategory,
 	}
 	GCModeFlag = &cli.StringFlag{
-		Name:  "gcmode",
-		Usage: `Blockchain garbage collection mode ("full", "archive")`,
-		Value: "full",
+		Name:     "gcmode",
+		Usage:    `Blockchain garbage collection mode ("full", "archive")`,
+		Value:    "full",
+		Category: flags.EthCategory,
 	}
 	SnapshotFlag = &cli.BoolFlag{
-		Name:  "snapshot",
-		Usage: `Enables snapshot-database mode (default = enable)`,
-		Value: true,
+		Name:     "snapshot",
+		Usage:    `Enables snapshot-database mode (default = enable)`,
+		Value:    true,
+		Category: flags.EthCategory,
 	}
 	TxLookupLimitFlag = &cli.Uint64Flag{
-		Name:  "txlookuplimit",
-		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
-		Value: ethconfig.Defaults.TxLookupLimit,
+		Name:     "txlookuplimit",
+		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
+		Value:    ethconfig.Defaults.TxLookupLimit,
+		Category: flags.EthCategory,
 	}
 	LightKDFFlag = &cli.BoolFlag{
-		Name:  "lightkdf",
-		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+		Name:     "lightkdf",
+		Usage:    "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+		Category: flags.AccountCategory,
 	}
 	EthRequiredBlocksFlag = &cli.StringFlag{
-		Name:  "eth.requiredblocks",
-		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
+		Name:     "eth.requiredblocks",
+		Usage:    "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
+		Category: flags.EthCategory,
 	}
 	LegacyWhitelistFlag = &cli.StringFlag{
-		Name:  "whitelist",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
+		Name:     "whitelist",
+		Usage:    "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --eth.requiredblocks)",
+		Category: flags.DeprecatedCategory,
 	}
 	BloomFilterSizeFlag = &cli.Uint64Flag{
-		Name:  "bloomfilter.size",
-		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
-		Value: 2048,
+		Name:     "bloomfilter.size",
+		Usage:    "Megabytes of memory allocated to bloom-filter for pruning",
+		Value:    2048,
+		Category: flags.EthCategory,
 	}
 	OverrideGrayGlacierFlag = &cli.Uint64Flag{
-		Name:  "override.grayglacier",
-		Usage: "Manually specify Gray Glacier fork-block, overriding the bundled setting",
+		Name:     "override.grayglacier",
+		Usage:    "Manually specify Gray Glacier fork-block, overriding the bundled setting",
+		Category: flags.EthCategory,
 	}
-	OverrideTerminalTotalDifficulty = BigFlag{
-		Name:  "override.terminaltotaldifficulty",
-		Usage: "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
+	OverrideTerminalTotalDifficulty = &BigFlag{
+		Name:     "override.terminaltotaldifficulty",
+		Usage:    "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
+		Category: flags.EthCategory,
 	}
+
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
-		Name:  "light.serve",
-		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
-		Value: ethconfig.Defaults.LightServ,
+		Name:     "light.serve",
+		Usage:    "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
+		Value:    ethconfig.Defaults.LightServ,
+		Category: flags.LightCategory,
 	}
 	LightIngressFlag = &cli.IntFlag{
-		Name:  "light.ingress",
-		Usage: "Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
-		Value: ethconfig.Defaults.LightIngress,
+		Name:     "light.ingress",
+		Usage:    "Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
+		Value:    ethconfig.Defaults.LightIngress,
+		Category: flags.LightCategory,
 	}
 	LightEgressFlag = &cli.IntFlag{
-		Name:  "light.egress",
-		Usage: "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
-		Value: ethconfig.Defaults.LightEgress,
+		Name:     "light.egress",
+		Usage:    "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
+		Value:    ethconfig.Defaults.LightEgress,
+		Category: flags.LightCategory,
 	}
 	LightMaxPeersFlag = &cli.IntFlag{
-		Name:  "light.maxpeers",
-		Usage: "Maximum number of light clients to serve, or light servers to attach to",
-		Value: ethconfig.Defaults.LightPeers,
+		Name:     "light.maxpeers",
+		Usage:    "Maximum number of light clients to serve, or light servers to attach to",
+		Value:    ethconfig.Defaults.LightPeers,
+		Category: flags.LightCategory,
 	}
 	UltraLightServersFlag = &cli.StringFlag{
-		Name:  "ulc.servers",
-		Usage: "List of trusted ultra-light servers",
-		Value: strings.Join(ethconfig.Defaults.UltraLightServers, ","),
+		Name:     "ulc.servers",
+		Usage:    "List of trusted ultra-light servers",
+		Value:    strings.Join(ethconfig.Defaults.UltraLightServers, ","),
+		Category: flags.LightCategory,
 	}
 	UltraLightFractionFlag = &cli.IntFlag{
-		Name:  "ulc.fraction",
-		Usage: "Minimum % of trusted ultra-light servers required to announce a new head",
-		Value: ethconfig.Defaults.UltraLightFraction,
+		Name:     "ulc.fraction",
+		Usage:    "Minimum % of trusted ultra-light servers required to announce a new head",
+		Value:    ethconfig.Defaults.UltraLightFraction,
+		Category: flags.LightCategory,
 	}
 	UltraLightOnlyAnnounceFlag = &cli.BoolFlag{
-		Name:  "ulc.onlyannounce",
-		Usage: "Ultra light server sends announcements only",
+		Name:     "ulc.onlyannounce",
+		Usage:    "Ultra light server sends announcements only",
+		Category: flags.LightCategory,
 	}
 	LightNoPruneFlag = &cli.BoolFlag{
-		Name:  "light.nopruning",
-		Usage: "Disable ancient light chain data pruning",
+		Name:     "light.nopruning",
+		Usage:    "Disable ancient light chain data pruning",
+		Category: flags.LightCategory,
 	}
 	LightNoSyncServeFlag = &cli.BoolFlag{
-		Name:  "light.nosyncserve",
-		Usage: "Enables serving light clients before syncing",
+		Name:     "light.nosyncserve",
+		Usage:    "Enables serving light clients before syncing",
+		Category: flags.LightCategory,
 	}
+
 	// Ethash settings
-	EthashCacheDirFlag = DirectoryFlag{
-		Name:  "ethash.cachedir",
-		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
+	EthashCacheDirFlag = &DirectoryFlag{
+		Name:     "ethash.cachedir",
+		Usage:    "Directory to store the ethash verification caches (default = inside the datadir)",
+		Category: flags.EthashCategory,
 	}
 	EthashCachesInMemoryFlag = &cli.IntFlag{
-		Name:  "ethash.cachesinmem",
-		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
-		Value: ethconfig.Defaults.Ethash.CachesInMem,
+		Name:     "ethash.cachesinmem",
+		Usage:    "Number of recent ethash caches to keep in memory (16MB each)",
+		Value:    ethconfig.Defaults.Ethash.CachesInMem,
+		Category: flags.EthashCategory,
 	}
 	EthashCachesOnDiskFlag = &cli.IntFlag{
-		Name:  "ethash.cachesondisk",
-		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
-		Value: ethconfig.Defaults.Ethash.CachesOnDisk,
+		Name:     "ethash.cachesondisk",
+		Usage:    "Number of recent ethash caches to keep on disk (16MB each)",
+		Value:    ethconfig.Defaults.Ethash.CachesOnDisk,
+		Category: flags.EthashCategory,
 	}
 	EthashCachesLockMmapFlag = &cli.BoolFlag{
-		Name:  "ethash.cacheslockmmap",
-		Usage: "Lock memory maps of recent ethash caches",
+		Name:     "ethash.cacheslockmmap",
+		Usage:    "Lock memory maps of recent ethash caches",
+		Category: flags.EthashCategory,
 	}
-	EthashDatasetDirFlag = DirectoryFlag{
-		Name:  "ethash.dagdir",
-		Usage: "Directory to store the ethash mining DAGs",
-		Value: DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
+	EthashDatasetDirFlag = &DirectoryFlag{
+		Name:     "ethash.dagdir",
+		Usage:    "Directory to store the ethash mining DAGs",
+		Value:    DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
+		Category: flags.EthashCategory,
 	}
 	EthashDatasetsInMemoryFlag = &cli.IntFlag{
-		Name:  "ethash.dagsinmem",
-		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value: ethconfig.Defaults.Ethash.DatasetsInMem,
+		Name:     "ethash.dagsinmem",
+		Usage:    "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value:    ethconfig.Defaults.Ethash.DatasetsInMem,
+		Category: flags.EthashCategory,
 	}
 	EthashDatasetsOnDiskFlag = &cli.IntFlag{
-		Name:  "ethash.dagsondisk",
-		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value: ethconfig.Defaults.Ethash.DatasetsOnDisk,
+		Name:     "ethash.dagsondisk",
+		Usage:    "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
+		Value:    ethconfig.Defaults.Ethash.DatasetsOnDisk,
+		Category: flags.EthashCategory,
 	}
 	EthashDatasetsLockMmapFlag = &cli.BoolFlag{
-		Name:  "ethash.dagslockmmap",
-		Usage: "Lock memory maps for recent ethash mining DAGs",
+		Name:     "ethash.dagslockmmap",
+		Usage:    "Lock memory maps for recent ethash mining DAGs",
+		Category: flags.EthashCategory,
 	}
+
 	// Transaction pool settings
 	TxPoolLocalsFlag = &cli.StringFlag{
-		Name:  "txpool.locals",
-		Usage: "Comma separated accounts to treat as locals (no flush, priority inclusion)",
+		Name:     "txpool.locals",
+		Usage:    "Comma separated accounts to treat as locals (no flush, priority inclusion)",
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolNoLocalsFlag = &cli.BoolFlag{
-		Name:  "txpool.nolocals",
-		Usage: "Disables price exemptions for locally submitted transactions",
+		Name:     "txpool.nolocals",
+		Usage:    "Disables price exemptions for locally submitted transactions",
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolJournalFlag = &cli.StringFlag{
-		Name:  "txpool.journal",
-		Usage: "Disk journal for local transaction to survive node restarts",
-		Value: core.DefaultTxPoolConfig.Journal,
+		Name:     "txpool.journal",
+		Usage:    "Disk journal for local transaction to survive node restarts",
+		Value:    core.DefaultTxPoolConfig.Journal,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolRejournalFlag = &cli.DurationFlag{
-		Name:  "txpool.rejournal",
-		Usage: "Time interval to regenerate the local transaction journal",
-		Value: core.DefaultTxPoolConfig.Rejournal,
+		Name:     "txpool.rejournal",
+		Usage:    "Time interval to regenerate the local transaction journal",
+		Value:    core.DefaultTxPoolConfig.Rejournal,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolPriceLimitFlag = &cli.Uint64Flag{
-		Name:  "txpool.pricelimit",
-		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
-		Value: ethconfig.Defaults.TxPool.PriceLimit,
+		Name:     "txpool.pricelimit",
+		Usage:    "Minimum gas price limit to enforce for acceptance into the pool",
+		Value:    ethconfig.Defaults.TxPool.PriceLimit,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolPriceBumpFlag = &cli.Uint64Flag{
-		Name:  "txpool.pricebump",
-		Usage: "Price bump percentage to replace an already existing transaction",
-		Value: ethconfig.Defaults.TxPool.PriceBump,
+		Name:     "txpool.pricebump",
+		Usage:    "Price bump percentage to replace an already existing transaction",
+		Value:    ethconfig.Defaults.TxPool.PriceBump,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolAccountSlotsFlag = &cli.Uint64Flag{
-		Name:  "txpool.accountslots",
-		Usage: "Minimum number of executable transaction slots guaranteed per account",
-		Value: ethconfig.Defaults.TxPool.AccountSlots,
+		Name:     "txpool.accountslots",
+		Usage:    "Minimum number of executable transaction slots guaranteed per account",
+		Value:    ethconfig.Defaults.TxPool.AccountSlots,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolGlobalSlotsFlag = &cli.Uint64Flag{
-		Name:  "txpool.globalslots",
-		Usage: "Maximum number of executable transaction slots for all accounts",
-		Value: ethconfig.Defaults.TxPool.GlobalSlots,
+		Name:     "txpool.globalslots",
+		Usage:    "Maximum number of executable transaction slots for all accounts",
+		Value:    ethconfig.Defaults.TxPool.GlobalSlots,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolAccountQueueFlag = &cli.Uint64Flag{
-		Name:  "txpool.accountqueue",
-		Usage: "Maximum number of non-executable transaction slots permitted per account",
-		Value: ethconfig.Defaults.TxPool.AccountQueue,
+		Name:     "txpool.accountqueue",
+		Usage:    "Maximum number of non-executable transaction slots permitted per account",
+		Value:    ethconfig.Defaults.TxPool.AccountQueue,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolGlobalQueueFlag = &cli.Uint64Flag{
-		Name:  "txpool.globalqueue",
-		Usage: "Maximum number of non-executable transaction slots for all accounts",
-		Value: ethconfig.Defaults.TxPool.GlobalQueue,
+		Name:     "txpool.globalqueue",
+		Usage:    "Maximum number of non-executable transaction slots for all accounts",
+		Value:    ethconfig.Defaults.TxPool.GlobalQueue,
+		Category: flags.TxPoolCategory,
 	}
 	TxPoolLifetimeFlag = &cli.DurationFlag{
-		Name:  "txpool.lifetime",
-		Usage: "Maximum amount of time non-executable transaction are queued",
-		Value: ethconfig.Defaults.TxPool.Lifetime,
+		Name:     "txpool.lifetime",
+		Usage:    "Maximum amount of time non-executable transaction are queued",
+		Value:    ethconfig.Defaults.TxPool.Lifetime,
+		Category: flags.TxPoolCategory,
 	}
+
 	// Performance tuning settings
 	CacheFlag = &cli.IntFlag{
-		Name:  "cache",
-		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
-		Value: 1024,
+		Name:     "cache",
+		Usage:    "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
+		Value:    1024,
+		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
-		Name:  "cache.database",
-		Usage: "Percentage of cache memory allowance to use for database io",
-		Value: 50,
+		Name:     "cache.database",
+		Usage:    "Percentage of cache memory allowance to use for database io",
+		Value:    50,
+		Category: flags.PerfCategory,
 	}
 	CacheTrieFlag = &cli.IntFlag{
-		Name:  "cache.trie",
-		Usage: "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
-		Value: 15,
+		Name:     "cache.trie",
+		Usage:    "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
+		Value:    15,
+		Category: flags.PerfCategory,
 	}
 	CacheTrieJournalFlag = &cli.StringFlag{
-		Name:  "cache.trie.journal",
-		Usage: "Disk journal directory for trie cache to survive node restarts",
-		Value: ethconfig.Defaults.TrieCleanCacheJournal,
+		Name:     "cache.trie.journal",
+		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Value:    ethconfig.Defaults.TrieCleanCacheJournal,
+		Category: flags.PerfCategory,
 	}
 	CacheTrieRejournalFlag = &cli.DurationFlag{
-		Name:  "cache.trie.rejournal",
-		Usage: "Time interval to regenerate the trie cache journal",
-		Value: ethconfig.Defaults.TrieCleanCacheRejournal,
+		Name:     "cache.trie.rejournal",
+		Usage:    "Time interval to regenerate the trie cache journal",
+		Value:    ethconfig.Defaults.TrieCleanCacheRejournal,
+		Category: flags.PerfCategory,
 	}
 	CacheGCFlag = &cli.IntFlag{
-		Name:  "cache.gc",
-		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
-		Value: 25,
+		Name:     "cache.gc",
+		Usage:    "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
+		Value:    25,
+		Category: flags.PerfCategory,
 	}
 	CacheSnapshotFlag = &cli.IntFlag{
-		Name:  "cache.snapshot",
-		Usage: "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
-		Value: 10,
+		Name:     "cache.snapshot",
+		Usage:    "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
+		Value:    10,
+		Category: flags.PerfCategory,
 	}
 	CacheNoPrefetchFlag = &cli.BoolFlag{
-		Name:  "cache.noprefetch",
-		Usage: "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
+		Name:     "cache.noprefetch",
+		Usage:    "Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)",
+		Category: flags.PerfCategory,
 	}
 	CachePreimagesFlag = &cli.BoolFlag{
-		Name:  "cache.preimages",
-		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
+		Name:     "cache.preimages",
+		Usage:    "Enable recording the SHA3/keccak preimages of trie keys",
+		Category: flags.PerfCategory,
 	}
 	FDLimitFlag = &cli.IntFlag{
-		Name:  "fdlimit",
-		Usage: "Raise the open file descriptor resource limit (default = system fd limit)",
+		Name:     "fdlimit",
+		Usage:    "Raise the open file descriptor resource limit (default = system fd limit)",
+		Category: flags.PerfCategory,
 	}
+
 	// Miner settings
 	MiningEnabledFlag = &cli.BoolFlag{
-		Name:  "mine",
-		Usage: "Enable mining",
+		Name:     "mine",
+		Usage:    "Enable mining",
+		Category: flags.MinerCategory,
 	}
 	MinerThreadsFlag = &cli.IntFlag{
-		Name:  "miner.threads",
-		Usage: "Number of CPU threads to use for mining",
-		Value: 0,
+		Name:     "miner.threads",
+		Usage:    "Number of CPU threads to use for mining",
+		Value:    0,
+		Category: flags.MinerCategory,
 	}
 	MinerNotifyFlag = &cli.StringFlag{
-		Name:  "miner.notify",
-		Usage: "Comma separated HTTP URL list to notify of new work packages",
+		Name:     "miner.notify",
+		Usage:    "Comma separated HTTP URL list to notify of new work packages",
+		Category: flags.MinerCategory,
 	}
 	MinerNotifyFullFlag = &cli.BoolFlag{
-		Name:  "miner.notify.full",
-		Usage: "Notify with pending block headers instead of work packages",
+		Name:     "miner.notify.full",
+		Usage:    "Notify with pending block headers instead of work packages",
+		Category: flags.MinerCategory,
 	}
 	MinerGasLimitFlag = &cli.Uint64Flag{
-		Name:  "miner.gaslimit",
-		Usage: "Target gas ceiling for mined blocks",
-		Value: ethconfig.Defaults.Miner.GasCeil,
+		Name:     "miner.gaslimit",
+		Usage:    "Target gas ceiling for mined blocks",
+		Value:    ethconfig.Defaults.Miner.GasCeil,
+		Category: flags.MinerCategory,
 	}
-	MinerGasPriceFlag = BigFlag{
-		Name:  "miner.gasprice",
-		Usage: "Minimum gas price for mining a transaction",
-		Value: ethconfig.Defaults.Miner.GasPrice,
+	MinerGasPriceFlag = &BigFlag{
+		Name:     "miner.gasprice",
+		Usage:    "Minimum gas price for mining a transaction",
+		Value:    ethconfig.Defaults.Miner.GasPrice,
+		Category: flags.MinerCategory,
 	}
 	MinerEtherbaseFlag = &cli.StringFlag{
-		Name:  "miner.etherbase",
-		Usage: "Public address for block mining rewards (default = first account)",
-		Value: "0",
+		Name:     "miner.etherbase",
+		Usage:    "Public address for block mining rewards (default = first account)",
+		Value:    "0",
+		Category: flags.MinerCategory,
 	}
 	MinerExtraDataFlag = &cli.StringFlag{
-		Name:  "miner.extradata",
-		Usage: "Block extra data set by the miner (default = client version)",
+		Name:     "miner.extradata",
+		Usage:    "Block extra data set by the miner (default = client version)",
+		Category: flags.MinerCategory,
 	}
 	MinerRecommitIntervalFlag = &cli.DurationFlag{
-		Name:  "miner.recommit",
-		Usage: "Time interval to recreate the block being mined",
-		Value: ethconfig.Defaults.Miner.Recommit,
+		Name:     "miner.recommit",
+		Usage:    "Time interval to recreate the block being mined",
+		Value:    ethconfig.Defaults.Miner.Recommit,
+		Category: flags.MinerCategory,
 	}
 	MinerNoVerifyFlag = &cli.BoolFlag{
-		Name:  "miner.noverify",
-		Usage: "Disable remote sealing verification",
+		Name:     "miner.noverify",
+		Usage:    "Disable remote sealing verification",
+		Category: flags.MinerCategory,
 	}
+
 	// Account settings
 	UnlockedAccountFlag = &cli.StringFlag{
-		Name:  "unlock",
-		Usage: "Comma separated list of accounts to unlock",
-		Value: "",
+		Name:     "unlock",
+		Usage:    "Comma separated list of accounts to unlock",
+		Value:    "",
+		Category: flags.AccountCategory,
 	}
 	PasswordFileFlag = &cli.PathFlag{
 		Name:      "password",
 		Usage:     "Password file to use for non-interactive password input",
 		TakesFile: true,
+		Category:  flags.AccountCategory,
 	}
 	ExternalSignerFlag = &cli.StringFlag{
-		Name:  "signer",
-		Usage: "External signer (url or path to ipc file)",
-		Value: "",
-	}
-	VMEnableDebugFlag = &cli.BoolFlag{
-		Name:  "vmdebug",
-		Usage: "Record information useful for VM and contract debugging",
+		Name:     "signer",
+		Usage:    "External signer (url or path to ipc file)",
+		Value:    "",
+		Category: flags.AccountCategory,
 	}
 	InsecureUnlockAllowedFlag = &cli.BoolFlag{
-		Name:  "allow-insecure-unlock",
-		Usage: "Allow insecure account unlocking when account-related RPCs are exposed by http",
+		Name:     "allow-insecure-unlock",
+		Usage:    "Allow insecure account unlocking when account-related RPCs are exposed by http",
+		Category: flags.AccountCategory,
 	}
+
+	// EVM settings
+	VMEnableDebugFlag = &cli.BoolFlag{
+		Name:     "vmdebug",
+		Usage:    "Record information useful for VM and contract debugging",
+		Category: flags.VMCategory,
+	}
+
+	// API options.
 	RPCGlobalGasCapFlag = &cli.Uint64Flag{
-		Name:  "rpc.gascap",
-		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
-		Value: ethconfig.Defaults.RPCGasCap,
+		Name:     "rpc.gascap",
+		Usage:    "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value:    ethconfig.Defaults.RPCGasCap,
+		Category: flags.APICategory,
 	}
 	RPCGlobalEVMTimeoutFlag = &cli.DurationFlag{
-		Name:  "rpc.evmtimeout",
-		Usage: "Sets a timeout used for eth_call (0=infinite)",
-		Value: ethconfig.Defaults.RPCEVMTimeout,
+		Name:     "rpc.evmtimeout",
+		Usage:    "Sets a timeout used for eth_call (0=infinite)",
+		Value:    ethconfig.Defaults.RPCEVMTimeout,
+		Category: flags.APICategory,
 	}
 	RPCGlobalTxFeeCapFlag = &cli.Float64Flag{
-		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
-		Value: ethconfig.Defaults.RPCTxFeeCap,
+		Name:     "rpc.txfeecap",
+		Usage:    "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
+		Value:    ethconfig.Defaults.RPCTxFeeCap,
+		Category: flags.APICategory,
 	}
 	// Authenticated RPC HTTP settings
 	AuthListenFlag = &cli.StringFlag{
-		Name:  "authrpc.addr",
-		Usage: "Listening address for authenticated APIs",
-		Value: node.DefaultConfig.AuthAddr,
+		Name:     "authrpc.addr",
+		Usage:    "Listening address for authenticated APIs",
+		Value:    node.DefaultConfig.AuthAddr,
+		Category: flags.APICategory,
 	}
 	AuthPortFlag = &cli.IntFlag{
-		Name:  "authrpc.port",
-		Usage: "Listening port for authenticated APIs",
-		Value: node.DefaultConfig.AuthPort,
+		Name:     "authrpc.port",
+		Usage:    "Listening port for authenticated APIs",
+		Value:    node.DefaultConfig.AuthPort,
+		Category: flags.APICategory,
 	}
 	AuthVirtualHostsFlag = &cli.StringFlag{
-		Name:  "authrpc.vhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value: strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
+		Name:     "authrpc.vhosts",
+		Usage:    "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value:    strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
+		Category: flags.APICategory,
 	}
 	JWTSecretFlag = &cli.StringFlag{
-		Name:  "authrpc.jwtsecret",
-		Usage: "Path to a JWT secret to use for authenticated RPC endpoints",
+		Name:     "authrpc.jwtsecret",
+		Usage:    "Path to a JWT secret to use for authenticated RPC endpoints",
+		Category: flags.APICategory,
 	}
+
 	// Logging and debug settings
 	EthStatsURLFlag = &cli.StringFlag{
-		Name:  "ethstats",
-		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
+		Name:     "ethstats",
+		Usage:    "Reporting URL of a ethstats service (nodename:secret@host:port)",
+		Category: flags.MetricsCategory,
 	}
 	FakePoWFlag = &cli.BoolFlag{
-		Name:  "fakepow",
-		Usage: "Disables proof-of-work verification",
+		Name:     "fakepow",
+		Usage:    "Disables proof-of-work verification",
+		Category: flags.LoggingCategory,
 	}
 	NoCompactionFlag = &cli.BoolFlag{
-		Name:  "nocompaction",
-		Usage: "Disables db compaction after import",
+		Name:     "nocompaction",
+		Usage:    "Disables db compaction after import",
+		Category: flags.LoggingCategory,
 	}
+
 	IgnoreLegacyReceiptsFlag = &cli.BoolFlag{
-		Name:  "ignore-legacy-receipts",
-		Usage: "Geth will start up even if there are legacy receipts in freezer",
+		Name:     "ignore-legacy-receipts",
+		Usage:    "Geth will start up even if there are legacy receipts in freezer",
+		Category: flags.MiscCategory,
 	}
+
 	// RPC settings
 	IPCDisabledFlag = &cli.BoolFlag{
-		Name:  "ipcdisable",
-		Usage: "Disable the IPC-RPC server",
+		Name:     "ipcdisable",
+		Usage:    "Disable the IPC-RPC server",
+		Category: flags.APICategory,
 	}
-	IPCPathFlag = DirectoryFlag{
-		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
+	IPCPathFlag = &DirectoryFlag{
+		Name:     "ipcpath",
+		Usage:    "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
+		Category: flags.APICategory,
 	}
 	HTTPEnabledFlag = &cli.BoolFlag{
-		Name:  "http",
-		Usage: "Enable the HTTP-RPC server",
+		Name:     "http",
+		Usage:    "Enable the HTTP-RPC server",
+		Category: flags.APICategory,
 	}
 	HTTPListenAddrFlag = &cli.StringFlag{
-		Name:  "http.addr",
-		Usage: "HTTP-RPC server listening interface",
-		Value: node.DefaultHTTPHost,
+		Name:     "http.addr",
+		Usage:    "HTTP-RPC server listening interface",
+		Value:    node.DefaultHTTPHost,
+		Category: flags.APICategory,
 	}
 	HTTPPortFlag = &cli.IntFlag{
-		Name:  "http.port",
-		Usage: "HTTP-RPC server listening port",
-		Value: node.DefaultHTTPPort,
+		Name:     "http.port",
+		Usage:    "HTTP-RPC server listening port",
+		Value:    node.DefaultHTTPPort,
+		Category: flags.APICategory,
 	}
 	HTTPCORSDomainFlag = &cli.StringFlag{
-		Name:  "http.corsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value: "",
+		Name:     "http.corsdomain",
+		Usage:    "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	HTTPVirtualHostsFlag = &cli.StringFlag{
-		Name:  "http.vhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+		Name:     "http.vhosts",
+		Usage:    "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value:    strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+		Category: flags.APICategory,
 	}
 	HTTPApiFlag = &cli.StringFlag{
-		Name:  "http.api",
-		Usage: "API's offered over the HTTP-RPC interface",
-		Value: "",
+		Name:     "http.api",
+		Usage:    "API's offered over the HTTP-RPC interface",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	HTTPPathPrefixFlag = &cli.StringFlag{
-		Name:  "http.rpcprefix",
-		Usage: "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
-		Value: "",
+		Name:     "http.rpcprefix",
+		Usage:    "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	GraphQLEnabledFlag = &cli.BoolFlag{
-		Name:  "graphql",
-		Usage: "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
+		Name:     "graphql",
+		Usage:    "Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.",
+		Category: flags.APICategory,
 	}
 	GraphQLCORSDomainFlag = &cli.StringFlag{
-		Name:  "graphql.corsdomain",
-		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value: "",
+		Name:     "graphql.corsdomain",
+		Usage:    "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	GraphQLVirtualHostsFlag = &cli.StringFlag{
-		Name:  "graphql.vhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value: strings.Join(node.DefaultConfig.GraphQLVirtualHosts, ","),
+		Name:     "graphql.vhosts",
+		Usage:    "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value:    strings.Join(node.DefaultConfig.GraphQLVirtualHosts, ","),
+		Category: flags.APICategory,
 	}
 	WSEnabledFlag = &cli.BoolFlag{
-		Name:  "ws",
-		Usage: "Enable the WS-RPC server",
+		Name:     "ws",
+		Usage:    "Enable the WS-RPC server",
+		Category: flags.APICategory,
 	}
 	WSListenAddrFlag = &cli.StringFlag{
-		Name:  "ws.addr",
-		Usage: "WS-RPC server listening interface",
-		Value: node.DefaultWSHost,
+		Name:     "ws.addr",
+		Usage:    "WS-RPC server listening interface",
+		Value:    node.DefaultWSHost,
+		Category: flags.APICategory,
 	}
 	WSPortFlag = &cli.IntFlag{
-		Name:  "ws.port",
-		Usage: "WS-RPC server listening port",
-		Value: node.DefaultWSPort,
+		Name:     "ws.port",
+		Usage:    "WS-RPC server listening port",
+		Value:    node.DefaultWSPort,
+		Category: flags.APICategory,
 	}
 	WSApiFlag = &cli.StringFlag{
-		Name:  "ws.api",
-		Usage: "API's offered over the WS-RPC interface",
-		Value: "",
+		Name:     "ws.api",
+		Usage:    "API's offered over the WS-RPC interface",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	WSAllowedOriginsFlag = &cli.StringFlag{
-		Name:  "ws.origins",
-		Usage: "Origins from which to accept websockets requests",
-		Value: "",
+		Name:     "ws.origins",
+		Usage:    "Origins from which to accept websockets requests",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	WSPathPrefixFlag = &cli.StringFlag{
-		Name:  "ws.rpcprefix",
-		Usage: "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
-		Value: "",
+		Name:     "ws.rpcprefix",
+		Usage:    "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Value:    "",
+		Category: flags.APICategory,
 	}
 	ExecFlag = &cli.StringFlag{
-		Name:  "exec",
-		Usage: "Execute JavaScript statement",
+		Name:     "exec",
+		Usage:    "Execute JavaScript statement",
+		Category: flags.APICategory,
 	}
 	PreloadJSFlag = &cli.StringFlag{
-		Name:  "preload",
-		Usage: "Comma separated list of JavaScript files to preload into the console",
+		Name:     "preload",
+		Usage:    "Comma separated list of JavaScript files to preload into the console",
+		Category: flags.APICategory,
 	}
 	AllowUnprotectedTxs = &cli.BoolFlag{
-		Name:  "rpc.allow-unprotected-txs",
-		Usage: "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
+		Name:     "rpc.allow-unprotected-txs",
+		Usage:    "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
+		Category: flags.APICategory,
 	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{
-		Name:  "maxpeers",
-		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: node.DefaultConfig.P2P.MaxPeers,
+		Name:     "maxpeers",
+		Usage:    "Maximum number of network peers (network disabled if set to 0)",
+		Value:    node.DefaultConfig.P2P.MaxPeers,
+		Category: flags.NetworkingCategory,
 	}
 	MaxPendingPeersFlag = &cli.IntFlag{
-		Name:  "maxpendpeers",
-		Usage: "Maximum number of pending connection attempts (defaults used if set to 0)",
-		Value: node.DefaultConfig.P2P.MaxPendingPeers,
+		Name:     "maxpendpeers",
+		Usage:    "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Value:    node.DefaultConfig.P2P.MaxPendingPeers,
+		Category: flags.NetworkingCategory,
 	}
 	ListenPortFlag = &cli.IntFlag{
-		Name:  "port",
-		Usage: "Network listening port",
-		Value: 30303,
+		Name:     "port",
+		Usage:    "Network listening port",
+		Value:    30303,
+		Category: flags.NetworkingCategory,
 	}
 	BootnodesFlag = &cli.StringFlag{
-		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
-		Value: "",
+		Name:     "bootnodes",
+		Usage:    "Comma separated enode URLs for P2P discovery bootstrap",
+		Value:    "",
+		Category: flags.NetworkingCategory,
 	}
 	NodeKeyFileFlag = &cli.StringFlag{
-		Name:  "nodekey",
-		Usage: "P2P node key file",
+		Name:     "nodekey",
+		Usage:    "P2P node key file",
+		Category: flags.NetworkingCategory,
 	}
 	NodeKeyHexFlag = &cli.StringFlag{
-		Name:  "nodekeyhex",
-		Usage: "P2P node key as hex (for testing)",
+		Name:     "nodekeyhex",
+		Usage:    "P2P node key as hex (for testing)",
+		Category: flags.NetworkingCategory,
 	}
 	NATFlag = &cli.StringFlag{
-		Name:  "nat",
-		Usage: "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
-		Value: "any",
+		Name:     "nat",
+		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
+		Value:    "any",
+		Category: flags.NetworkingCategory,
 	}
 	NoDiscoverFlag = &cli.BoolFlag{
-		Name:  "nodiscover",
-		Usage: "Disables the peer discovery mechanism (manual peer addition)",
+		Name:     "nodiscover",
+		Usage:    "Disables the peer discovery mechanism (manual peer addition)",
+		Category: flags.NetworkingCategory,
 	}
 	DiscoveryV5Flag = &cli.BoolFlag{
-		Name:  "v5disc",
-		Usage: "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+		Name:     "v5disc",
+		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+		Category: flags.NetworkingCategory,
 	}
 	NetrestrictFlag = &cli.StringFlag{
-		Name:  "netrestrict",
-		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
+		Name:     "netrestrict",
+		Usage:    "Restricts network communication to the given IP networks (CIDR masks)",
+		Category: flags.NetworkingCategory,
 	}
 	DNSDiscoveryFlag = &cli.StringFlag{
-		Name:  "discovery.dns",
-		Usage: "Sets DNS discovery entry points (use \"\" to disable DNS)",
+		Name:     "discovery.dns",
+		Usage:    "Sets DNS discovery entry points (use \"\" to disable DNS)",
+		Category: flags.NetworkingCategory,
 	}
 
-	// ATM the url is left to the user and deployment to
-	JSpathFlag = DirectoryFlag{
-		Name:  "jspath",
-		Usage: "JavaScript root path for `loadScript`",
-		Value: DirectoryString("."),
+	// Console
+	JSpathFlag = &DirectoryFlag{
+		Name:     "jspath",
+		Usage:    "JavaScript root path for `loadScript`",
+		Value:    DirectoryString("."),
+		Category: flags.APICategory,
 	}
 
 	// Gas price oracle settings
 	GpoBlocksFlag = &cli.IntFlag{
-		Name:  "gpo.blocks",
-		Usage: "Number of recent blocks to check for gas prices",
-		Value: ethconfig.Defaults.GPO.Blocks,
+		Name:     "gpo.blocks",
+		Usage:    "Number of recent blocks to check for gas prices",
+		Value:    ethconfig.Defaults.GPO.Blocks,
+		Category: flags.GasPriceCategory,
 	}
 	GpoPercentileFlag = &cli.IntFlag{
-		Name:  "gpo.percentile",
-		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: ethconfig.Defaults.GPO.Percentile,
+		Name:     "gpo.percentile",
+		Usage:    "Suggested gas price is the given percentile of a set of recent transaction gas prices",
+		Value:    ethconfig.Defaults.GPO.Percentile,
+		Category: flags.GasPriceCategory,
 	}
 	GpoMaxGasPriceFlag = &cli.Int64Flag{
-		Name:  "gpo.maxprice",
-		Usage: "Maximum transaction priority fee (or gasprice before London fork) to be recommended by gpo",
-		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
+		Name:     "gpo.maxprice",
+		Usage:    "Maximum transaction priority fee (or gasprice before London fork) to be recommended by gpo",
+		Value:    ethconfig.Defaults.GPO.MaxPrice.Int64(),
+		Category: flags.GasPriceCategory,
 	}
 	GpoIgnoreGasPriceFlag = &cli.Int64Flag{
-		Name:  "gpo.ignoreprice",
-		Usage: "Gas price below which gpo will ignore transactions",
-		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
+		Name:     "gpo.ignoreprice",
+		Usage:    "Gas price below which gpo will ignore transactions",
+		Value:    ethconfig.Defaults.GPO.IgnorePrice.Int64(),
+		Category: flags.GasPriceCategory,
 	}
 
 	// Metrics flags
 	MetricsEnabledFlag = &cli.BoolFlag{
-		Name:  "metrics",
-		Usage: "Enable metrics collection and reporting",
+		Name:     "metrics",
+		Usage:    "Enable metrics collection and reporting",
+		Category: flags.MetricsCategory,
 	}
 	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
-		Name:  "metrics.expensive",
-		Usage: "Enable expensive metrics collection and reporting",
+		Name:     "metrics.expensive",
+		Usage:    "Enable expensive metrics collection and reporting",
+		Category: flags.MetricsCategory,
 	}
 
 	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
@@ -766,70 +887,82 @@ var (
 	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
-		Name:  "metrics.addr",
-		Usage: "Enable stand-alone metrics HTTP server listening interface",
-		Value: metrics.DefaultConfig.HTTP,
+		Name:     "metrics.addr",
+		Usage:    "Enable stand-alone metrics HTTP server listening interface",
+		Value:    metrics.DefaultConfig.HTTP,
+		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
-		Name:  "metrics.port",
-		Usage: "Metrics HTTP server listening port",
-		Value: metrics.DefaultConfig.Port,
+		Name:     "metrics.port",
+		Usage:    "Metrics HTTP server listening port",
+		Value:    metrics.DefaultConfig.Port,
+		Category: flags.MetricsCategory,
 	}
 	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
-		Name:  "metrics.influxdb",
-		Usage: "Enable metrics export/push to an external InfluxDB database",
+		Name:     "metrics.influxdb",
+		Usage:    "Enable metrics export/push to an external InfluxDB database",
+		Category: flags.MetricsCategory,
 	}
 	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.endpoint",
-		Usage: "InfluxDB API endpoint to report metrics to",
-		Value: metrics.DefaultConfig.InfluxDBEndpoint,
+		Name:     "metrics.influxdb.endpoint",
+		Usage:    "InfluxDB API endpoint to report metrics to",
+		Value:    metrics.DefaultConfig.InfluxDBEndpoint,
+		Category: flags.MetricsCategory,
 	}
 	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.database",
-		Usage: "InfluxDB database name to push reported metrics to",
-		Value: metrics.DefaultConfig.InfluxDBDatabase,
+		Name:     "metrics.influxdb.database",
+		Usage:    "InfluxDB database name to push reported metrics to",
+		Value:    metrics.DefaultConfig.InfluxDBDatabase,
+		Category: flags.MetricsCategory,
 	}
 	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.username",
-		Usage: "Username to authorize access to the database",
-		Value: metrics.DefaultConfig.InfluxDBUsername,
+		Name:     "metrics.influxdb.username",
+		Usage:    "Username to authorize access to the database",
+		Value:    metrics.DefaultConfig.InfluxDBUsername,
+		Category: flags.MetricsCategory,
 	}
 	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.password",
-		Usage: "Password to authorize access to the database",
-		Value: metrics.DefaultConfig.InfluxDBPassword,
+		Name:     "metrics.influxdb.password",
+		Usage:    "Password to authorize access to the database",
+		Value:    metrics.DefaultConfig.InfluxDBPassword,
+		Category: flags.MetricsCategory,
 	}
 	// Tags are part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// For example `host` tag could be used so that we can group all nodes and average a measurement
 	// across all of them, but also so that we can select a specific node and inspect its measurements.
 	// https://docs.influxdata.com/influxdb/v1.4/concepts/key_concepts/#tag-key
 	MetricsInfluxDBTagsFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.tags",
-		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Value: metrics.DefaultConfig.InfluxDBTags,
+		Name:     "metrics.influxdb.tags",
+		Usage:    "Comma-separated InfluxDB tags (key/values) attached to all measurements",
+		Value:    metrics.DefaultConfig.InfluxDBTags,
+		Category: flags.MetricsCategory,
 	}
 
 	MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
-		Name:  "metrics.influxdbv2",
-		Usage: "Enable metrics export/push to an external InfluxDB v2 database",
+		Name:     "metrics.influxdbv2",
+		Usage:    "Enable metrics export/push to an external InfluxDB v2 database",
+		Category: flags.MetricsCategory,
 	}
 
 	MetricsInfluxDBTokenFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.token",
-		Usage: "Token to authorize access to the database (v2 only)",
-		Value: metrics.DefaultConfig.InfluxDBToken,
+		Name:     "metrics.influxdb.token",
+		Usage:    "Token to authorize access to the database (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBToken,
+		Category: flags.MetricsCategory,
 	}
 
 	MetricsInfluxDBBucketFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.bucket",
-		Usage: "InfluxDB bucket name to push reported metrics to (v2 only)",
-		Value: metrics.DefaultConfig.InfluxDBBucket,
+		Name:     "metrics.influxdb.bucket",
+		Usage:    "InfluxDB bucket name to push reported metrics to (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBBucket,
+		Category: flags.MetricsCategory,
 	}
 
 	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
-		Name:  "metrics.influxdb.organization",
-		Usage: "InfluxDB organization name (v2 only)",
-		Value: metrics.DefaultConfig.InfluxDBOrganization,
+		Name:     "metrics.influxdb.organization",
+		Usage:    "InfluxDB organization name (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBOrganization,
+		Category: flags.MetricsCategory,
 	}
 )
 
