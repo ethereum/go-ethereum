@@ -82,7 +82,7 @@ The output of this command is supposed to be machine-readable.
 			VersionCheckVersionFlag,
 		},
 		Name:      "version-check",
-		Usage:     "Checks (online) whether the current version suffers from any known security vulnerabilities",
+		Usage:     "Checks (online) for known Geth security vulnerabilities",
 		ArgsUsage: "<versionstring (optional)>",
 		Description: `
 The version-check command fetches vulnerability-information from https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
