@@ -203,10 +203,7 @@ func main() {
 			},
 		},
 	}
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	app.RunAndExitOnError()
 }
 
 func showNetwork(ctx *cli.Context) error {

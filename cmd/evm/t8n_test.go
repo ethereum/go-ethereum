@@ -31,17 +31,13 @@ import (
 
 func TestMain(m *testing.M) {
 	// Run the app if we've been exec'd as "ethkey-test" in runEthkey.
-	reexec.Register("evm-test", func() {
-		if err := app.Run(os.Args); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	})
-	// check if we have been reexec'd
+	reexec.Register("evm-test", app.RunAndExitOnError)
+
+	// check if we have been reexec'd.
 	if reexec.Init() {
 		return
 	}
+
 	os.Exit(m.Run())
 }
 

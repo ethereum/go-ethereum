@@ -17,9 +17,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -58,8 +55,5 @@ var (
 )
 
 func main() {
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	app.RunAndExitOnError()
 }

@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -38,13 +37,7 @@ type testgeth struct {
 
 func init() {
 	// Run the app if we've been exec'd as "geth-test" in runGeth.
-	reexec.Register("geth-test", func() {
-		if err := app.Run(os.Args); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	})
+	reexec.Register("geth-test", app.RunAndExitOnError)
 }
 
 func TestMain(m *testing.M) {
