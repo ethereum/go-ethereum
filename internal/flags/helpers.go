@@ -82,7 +82,6 @@ func doMigrateFlags(ctx *cli.Context) {
 	for _, name := range ctx.FlagNames() {
 		for _, parent := range ctx.Lineage()[1:] {
 			if parent.IsSet(name) {
-				fmt.Println("set in parent:", name)
 				ctx.Set(name, parent.String(name))
 				break
 			}
