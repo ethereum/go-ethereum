@@ -135,7 +135,7 @@ var (
 		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
 	initCommand = &cli.Command{
-		Action:    utils.MigrateFlags(initializeSecrets),
+		Action:    initializeSecrets,
 		Name:      "init",
 		Usage:     "Initialize the signer, generate secret storage",
 		ArgsUsage: "",
@@ -148,7 +148,7 @@ The init command generates a master seed which Clef can use to store credentials
 the rule-engine to work.`,
 	}
 	attestCommand = &cli.Command{
-		Action:    utils.MigrateFlags(attestFile),
+		Action:    attestFile,
 		Name:      "attest",
 		Usage:     "Attest that a js-file is to be used",
 		ArgsUsage: "<sha256sum>",
@@ -165,7 +165,7 @@ Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
 	setCredentialCommand = &cli.Command{
-		Action:    utils.MigrateFlags(setCredential),
+		Action:    setCredential,
 		Name:      "setpw",
 		Usage:     "Store a credential for a keystore file",
 		ArgsUsage: "<address>",
@@ -178,7 +178,7 @@ Clef that the file is 'safe' to execute.`,
 The setpw command stores a password for a given address (keyfile).
 `}
 	delCredentialCommand = &cli.Command{
-		Action:    utils.MigrateFlags(removeCredential),
+		Action:    removeCredential,
 		Name:      "delpw",
 		Usage:     "Remove a credential for a keystore file",
 		ArgsUsage: "<address>",
@@ -191,7 +191,7 @@ The setpw command stores a password for a given address (keyfile).
 The delpw command removes a password for a given address (keyfile).
 `}
 	newAccountCommand = &cli.Command{
-		Action:    utils.MigrateFlags(newAccount),
+		Action:    newAccount,
 		Name:      "newaccount",
 		Usage:     "Create a new account",
 		ArgsUsage: "",

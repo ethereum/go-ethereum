@@ -49,7 +49,7 @@ var commandDeploy = &cli.Command{
 		signersFlag,
 		thresholdFlag,
 	},
-	Action: utils.MigrateFlags(deploy),
+	Action: deploy,
 }
 
 var commandSign = &cli.Command{
@@ -63,7 +63,7 @@ var commandSign = &cli.Command{
 		hashFlag,
 		oracleFlag,
 	},
-	Action: utils.MigrateFlags(sign),
+	Action: sign,
 }
 
 var commandPublish = &cli.Command{
@@ -76,7 +76,7 @@ var commandPublish = &cli.Command{
 		indexFlag,
 		signaturesFlag,
 	},
-	Action: utils.MigrateFlags(publish),
+	Action: publish,
 }
 
 // deploy deploys the checkpoint registrar contract.

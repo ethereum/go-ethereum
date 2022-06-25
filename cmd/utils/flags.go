@@ -2209,30 +2209,3 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 	}
 	return preloads
 }
-
-// MigrateFlags sets the global flag from a local flag when it's set.
-// This is a temporary function used for migrating old command/flags to the
-// new format.
-//
-// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
-//
-// is equivalent after calling this method with:
-//
-// geth --keystore /tmp/mykeystore --lightkdf account new
-//
-// This allows the use of the existing configuration functionality.
-// When all flags are migrated this function can be removed and the existing
-// configuration functionality must be changed that is uses local flags
-func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error {
-	return func(ctx *cli.Context) error {
-		for _, name := range ctx.FlagNames() {
-			for _, parent := range ctx.Lineage()[1:] {
-				if parent.IsSet(name) {
-					ctx.Set(name, parent.String(name))
-					break
-				}
-			}
-		}
-		return action(ctx)
-	}
-}

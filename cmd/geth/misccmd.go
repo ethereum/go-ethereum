@@ -43,7 +43,7 @@ var (
 			runtime.GOOS, runtime.GOARCH, runtime.Version()),
 	}
 	makecacheCommand = &cli.Command{
-		Action:    utils.MigrateFlags(makecache),
+		Action:    makecache,
 		Name:      "makecache",
 		Usage:     "Generate ethash verification cache (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
@@ -55,7 +55,7 @@ Regular users do not need to execute it.
 `,
 	}
 	makedagCommand = &cli.Command{
-		Action:    utils.MigrateFlags(makedag),
+		Action:    makedag,
 		Name:      "makedag",
 		Usage:     "Generate ethash mining DAG (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
@@ -67,7 +67,7 @@ Regular users do not need to execute it.
 `,
 	}
 	versionCommand = &cli.Command{
-		Action:    utils.MigrateFlags(version),
+		Action:    version,
 		Name:      "version",
 		Usage:     "Print version numbers",
 		ArgsUsage: " ",
@@ -76,7 +76,7 @@ The output of this command is supposed to be machine-readable.
 `,
 	}
 	versionCheckCommand = &cli.Command{
-		Action: utils.MigrateFlags(versionCheck),
+		Action: versionCheck,
 		Flags: []cli.Flag{
 			VersionCheckUrlFlag,
 			VersionCheckVersionFlag,
@@ -90,7 +90,7 @@ and displays information about any security vulnerabilities that affect the curr
 `,
 	}
 	licenseCommand = &cli.Command{
-		Action:    utils.MigrateFlags(license),
+		Action:    license,
 		Name:      "license",
 		Usage:     "Display license information",
 		ArgsUsage: " ",

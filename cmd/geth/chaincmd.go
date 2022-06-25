@@ -43,7 +43,7 @@ import (
 
 var (
 	initCommand = &cli.Command{
-		Action:    utils.MigrateFlags(initGenesis),
+		Action:    initGenesis,
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
@@ -56,7 +56,7 @@ participating.
 It expects the genesis file as argument.`,
 	}
 	dumpGenesisCommand = &cli.Command{
-		Action:    utils.MigrateFlags(dumpGenesis),
+		Action:    dumpGenesis,
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
@@ -65,7 +65,7 @@ It expects the genesis file as argument.`,
 The dumpgenesis command dumps the genesis block configuration in JSON format to stdout.`,
 	}
 	importCommand = &cli.Command{
-		Action:    utils.MigrateFlags(importChain),
+		Action:    importChain,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
@@ -100,7 +100,7 @@ If only one file is used, import error will result in failure. If several files 
 processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
 	exportCommand = &cli.Command{
-		Action:    utils.MigrateFlags(exportChain),
+		Action:    exportChain,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
@@ -116,7 +116,7 @@ if already existing. If the file ends with .gz, the output will
 be gzipped.`,
 	}
 	importPreimagesCommand = &cli.Command{
-		Action:    utils.MigrateFlags(importPreimages),
+		Action:    importPreimages,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
@@ -130,7 +130,7 @@ It's deprecated, please use "geth db import" instead.
 `,
 	}
 	exportPreimagesCommand = &cli.Command{
-		Action:    utils.MigrateFlags(exportPreimages),
+		Action:    exportPreimages,
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
@@ -144,7 +144,7 @@ It's deprecated, please use "geth db export" instead.
 `,
 	}
 	dumpCommand = &cli.Command{
-		Action:    utils.MigrateFlags(dump),
+		Action:    dump,
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[? <blockHash> | <blockNum>]",

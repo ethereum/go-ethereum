@@ -96,7 +96,7 @@ func init() {
 		langFlag,
 		aliasFlag,
 	}
-	app.Action = utils.MigrateFlags(abigen)
+	app.Action = abigen
 }
 
 func abigen(c *cli.Context) error {

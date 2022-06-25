@@ -241,13 +241,16 @@ func init() {
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	app.Flags = utils.GroupFlags(nodeFlags,
+	app.Flags = utils.GroupFlags(
+		nodeFlags,
 		rpcFlags,
 		consoleFlags,
 		debug.Flags,
-		metricsFlags)
+		metricsFlags,
+	)
 
 	app.Before = func(ctx *cli.Context) error {
+		flags.MigrateGlobalFlags(ctx)
 		return debug.Setup(ctx)
 	}
 	app.After = func(ctx *cli.Context) error {

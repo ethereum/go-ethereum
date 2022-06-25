@@ -31,7 +31,7 @@ var (
 	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag}
 
 	consoleCommand = &cli.Command{
-		Action: utils.MigrateFlags(localConsole),
+		Action: localConsole,
 		Name:   "console",
 		Usage:  "Start an interactive JavaScript environment",
 		Flags:  utils.GroupFlags(nodeFlags, rpcFlags, consoleFlags),
@@ -42,7 +42,7 @@ See https://geth.ethereum.org/docs/interface/javascript-console.`,
 	}
 
 	attachCommand = &cli.Command{
-		Action:    utils.MigrateFlags(remoteConsole),
+		Action:    remoteConsole,
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
@@ -55,7 +55,7 @@ This command allows to open a console on a running geth node.`,
 	}
 
 	javascriptCommand = &cli.Command{
-		Action:    utils.MigrateFlags(ephemeralConsole),
+		Action:    ephemeralConsole,
 		Name:      "js",
 		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",

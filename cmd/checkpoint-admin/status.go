@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
 )
@@ -30,7 +29,7 @@ var commandStatus = &cli.Command{
 	Flags: []cli.Flag{
 		nodeURLFlag,
 	},
-	Action: utils.MigrateFlags(status),
+	Action: status,
 }
 
 // status fetches the admin list of specified registrar contract.
