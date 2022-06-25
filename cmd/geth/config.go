@@ -161,7 +161,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideGrayGlacier = new(big.Int).SetUint64(ctx.Uint64(utils.OverrideGrayGlacierFlag.Name))
 	}
 	if ctx.IsSet(utils.OverrideTerminalTotalDifficulty.Name) {
-		cfg.Eth.OverrideTerminalTotalDifficulty = utils.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
+		cfg.Eth.OverrideTerminalTotalDifficulty = flags.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 	// Warn users to migrate if they have a legacy freezer format.

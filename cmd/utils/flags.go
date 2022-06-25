@@ -78,10 +78,10 @@ import (
 
 var (
 	// General settings
-	DataDirFlag = &DirectoryFlag{
+	DataDirFlag = &flags.DirectoryFlag{
 		Name:     "datadir",
 		Usage:    "Data directory for the databases and keystore",
-		Value:    DirectoryString(node.DefaultDataDir()),
+		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
 	RemoteDBFlag = &cli.StringFlag{
@@ -89,17 +89,17 @@ var (
 		Usage:    "URL for remote database",
 		Category: flags.LoggingCategory,
 	}
-	AncientFlag = &DirectoryFlag{
+	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",
 		Usage:    "Data directory for ancient chain segments (default = inside chaindata)",
 		Category: flags.EthCategory,
 	}
-	MinFreeDiskSpaceFlag = &DirectoryFlag{
+	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
 		Name:     "datadir.minfreedisk",
 		Usage:    "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
 		Category: flags.EthCategory,
 	}
-	KeyStoreDirFlag = &DirectoryFlag{
+	KeyStoreDirFlag = &flags.DirectoryFlag{
 		Name:     "keystore",
 		Usage:    "Directory for the keystore (default = inside the datadir)",
 		Category: flags.AccountCategory,
@@ -175,10 +175,10 @@ var (
 		Usage:    "Custom node name",
 		Category: flags.NetworkingCategory,
 	}
-	DocRootFlag = DirectoryFlag{
+	DocRootFlag = &flags.DirectoryFlag{
 		Name:     "docroot",
 		Usage:    "Document Root for HTTPClient file scheme",
-		Value:    DirectoryString(HomeDir()),
+		Value:    flags.DirectoryString(flags.HomeDir()),
 		Category: flags.APICategory,
 	}
 	ExitWhenSyncedFlag = &cli.BoolFlag{
@@ -217,7 +217,7 @@ var (
 	}
 
 	defaultSyncMode = ethconfig.Defaults.SyncMode
-	SyncModeFlag    = &TextMarshalerFlag{
+	SyncModeFlag    = &flags.TextMarshalerFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap", "full" or "light")`,
 		Value:    &defaultSyncMode,
@@ -267,7 +267,7 @@ var (
 		Usage:    "Manually specify Gray Glacier fork-block, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	OverrideTerminalTotalDifficulty = &BigFlag{
+	OverrideTerminalTotalDifficulty = &flags.BigFlag{
 		Name:     "override.terminaltotaldifficulty",
 		Usage:    "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
 		Category: flags.EthCategory,
@@ -327,7 +327,7 @@ var (
 	}
 
 	// Ethash settings
-	EthashCacheDirFlag = &DirectoryFlag{
+	EthashCacheDirFlag = &flags.DirectoryFlag{
 		Name:     "ethash.cachedir",
 		Usage:    "Directory to store the ethash verification caches (default = inside the datadir)",
 		Category: flags.EthashCategory,
@@ -349,10 +349,10 @@ var (
 		Usage:    "Lock memory maps of recent ethash caches",
 		Category: flags.EthashCategory,
 	}
-	EthashDatasetDirFlag = &DirectoryFlag{
+	EthashDatasetDirFlag = &flags.DirectoryFlag{
 		Name:     "ethash.dagdir",
 		Usage:    "Directory to store the ethash mining DAGs",
-		Value:    DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
+		Value:    flags.DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
 		Category: flags.EthashCategory,
 	}
 	EthashDatasetsInMemoryFlag = &cli.IntFlag{
@@ -526,7 +526,7 @@ var (
 		Value:    ethconfig.Defaults.Miner.GasCeil,
 		Category: flags.MinerCategory,
 	}
-	MinerGasPriceFlag = &BigFlag{
+	MinerGasPriceFlag = &flags.BigFlag{
 		Name:     "miner.gasprice",
 		Usage:    "Minimum gas price for mining a transaction",
 		Value:    ethconfig.Defaults.Miner.GasPrice,
@@ -660,7 +660,7 @@ var (
 		Usage:    "Disable the IPC-RPC server",
 		Category: flags.APICategory,
 	}
-	IPCPathFlag = &DirectoryFlag{
+	IPCPathFlag = &flags.DirectoryFlag{
 		Name:     "ipcpath",
 		Usage:    "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 		Category: flags.APICategory,
@@ -837,10 +837,10 @@ var (
 	}
 
 	// Console
-	JSpathFlag = &DirectoryFlag{
+	JSpathFlag = &flags.DirectoryFlag{
 		Name:     "jspath",
 		Usage:    "JavaScript root path for `loadScript`",
-		Value:    DirectoryString("."),
+		Value:    flags.DirectoryString("."),
 		Category: flags.APICategory,
 	}
 
@@ -1632,7 +1632,7 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
 	}
 	if ctx.IsSet(MinerGasPriceFlag.Name) {
-		cfg.GasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
+		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
 	if ctx.IsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.Recommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
@@ -1760,7 +1760,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	godebug.SetGCPercent(int(gogc))
 
 	if ctx.IsSet(SyncModeFlag.Name) {
-		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)

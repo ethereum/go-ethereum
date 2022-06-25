@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
@@ -205,8 +206,8 @@ func runCmd(ctx *cli.Context) error {
 		Origin:      sender,
 		State:       statedb,
 		GasLimit:    initialGas,
-		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
-		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
+		GasPrice:    flags.GlobalBig(ctx, PriceFlag.Name),
+		Value:       flags.GlobalBig(ctx, ValueFlag.Name),
 		Difficulty:  genesisConfig.Difficulty,
 		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
 		Coinbase:    genesisConfig.Coinbase,

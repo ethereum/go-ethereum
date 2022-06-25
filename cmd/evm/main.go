@@ -23,7 +23,6 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -65,12 +64,12 @@ var (
 		Usage: "gas limit for the evm",
 		Value: 10000000000,
 	}
-	PriceFlag = &utils.BigFlag{
+	PriceFlag = &flags.BigFlag{
 		Name:  "price",
 		Usage: "price set for the evm",
 		Value: new(big.Int),
 	}
-	ValueFlag = &utils.BigFlag{
+	ValueFlag = &flags.BigFlag{
 		Name:  "value",
 		Usage: "value set for the evm",
 		Value: new(big.Int),
