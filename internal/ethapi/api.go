@@ -612,7 +612,8 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 //
 // Note, this method does not conform to EIP-695 because the configured chain ID is always
 // returned, regardless of the current head block. We used to return an error when the chain
-// wasn't synced up to the head block here, but it caused issues in CL clients.
+// wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
+// in CL clients.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
 	return (*hexutil.Big)(api.b.ChainConfig().ChainID)
 }
