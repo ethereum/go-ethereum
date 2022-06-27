@@ -284,7 +284,7 @@ To build Geth from source code on FreeBSD, the Geth Github repository can be clo
 
 ```shell
 git clone https://github.com/ethereum/go-ethereum
-
+```
 
 Then, the Go compiler can be used to build Geth:
 

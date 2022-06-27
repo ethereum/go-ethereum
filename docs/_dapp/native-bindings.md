@@ -524,27 +524,14 @@ session.Store(big.NewInt(69))
 
 ## Bind Solidity directly
 
-This page has explained the general process of compiling Solidity code and separately generating 
-ABIs and bytecode for each contract. Repeating these steps for many contracts or after every small
-change to a contract in-development quickly becomes tiresome. Therefore, `abigen` can supports binding
-directly from Solidity code, effectively combining the compilation and binding stages into a single 
-command.
+In the past, abigen allowed compilation and binding of a Solidity source file directly to a Go package in a single step.
+This feature has been discontinued from [v1.10.18](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.18)
+onwards due to maintenance synchronization challenges with the compiler in Geth.
 
-Binding the `Storage.sol` contract entails the following single command, passing the `Storage.sol`
-Solidity code:
-
+The compilation and binding steps can be joined together into a pipeline, for example:
 ```
-$ abigen --sol Storage.sol --pkg main --out Storage.go
+solc Storage.sol --combined-json abi,bin | abigen --pkg main --type storage --out Storage.go --combined-json -
 ```
-
-*Note: Building from Solidity (`--sol`) is mutually exclusive with individually setting
-the bind components (`--abi`, `--bin` and `--type`), as all of them are extracted from
-the Solidity code and the build results are produced directly.*
-
-Building a contract directly from Solidity has the nice side effect that all contracts
-contained within a Solidity source file are built and bound, so if your file contains many
-contract sources, each and every one of them will be available from Go code.
-
 
 ### Project integration (`go generate`)
 
@@ -620,7 +607,6 @@ integrate the currently pending transactions. To mine the next block, simply `Co
 
 To make interacting with Ethereum contracts easier for Go developers, Geth provides tools that generate
 contract bindings automatically. This makes contract functions available in Go native applications.
-Go bindings can be generated in a single step from Solidity code.
 
 
 [go-link]:https://github.com/golang/go/wiki#getting-started-with-go
