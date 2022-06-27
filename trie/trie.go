@@ -138,16 +138,6 @@ func newTrie(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 	return trie, nil
 }
 
-// newWithRootNode initializes the trie with the given root node.
-// It's only used by range prover.
-func newWithRootNode(root node) *Trie {
-	return &Trie{
-		root: root,
-		//tracer: newTracer(),
-		db: NewDatabase(rawdb.NewMemoryDatabase()),
-	}
-}
-
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key.
 func (t *Trie) NodeIterator(start []byte) NodeIterator {

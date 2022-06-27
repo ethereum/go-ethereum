@@ -117,8 +117,6 @@ func (t *tracer) deleteList() [][]byte {
 	return ret
 }
 
-<<<<<<< HEAD
-=======
 /*
 // getPrev returns the cached original value of the specified node.
 func (t *tracer) getPrev(key []byte) []byte {
@@ -130,7 +128,6 @@ func (t *tracer) getPrev(key []byte) []byte {
 }
 */
 
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 // reset clears the content tracked by tracer.
 func (t *tracer) reset() {
 	// Tracer isn't used right now, remove this check later.
@@ -139,10 +136,7 @@ func (t *tracer) reset() {
 	}
 	t.insert = make(map[string]struct{})
 	t.delete = make(map[string]struct{})
-<<<<<<< HEAD
-=======
 	t.origin = make(map[string][]byte)
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 }
 
 // copy returns a deep copied tracer instance.
@@ -154,10 +148,7 @@ func (t *tracer) copy() *tracer {
 	var (
 		insert = make(map[string]struct{})
 		delete = make(map[string]struct{})
-<<<<<<< HEAD
-=======
 		origin = make(map[string][]byte)
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	)
 	for key := range t.insert {
 		insert[key] = struct{}{}
@@ -165,11 +156,6 @@ func (t *tracer) copy() *tracer {
 	for key := range t.delete {
 		delete[key] = struct{}{}
 	}
-<<<<<<< HEAD
-	return &tracer{
-		insert: insert,
-		delete: delete,
-=======
 	for key, val := range t.origin {
 		origin[key] = val
 	}
@@ -177,6 +163,5 @@ func (t *tracer) copy() *tracer {
 		insert: insert,
 		delete: delete,
 		origin: origin,
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	}
 }
