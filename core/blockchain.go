@@ -236,6 +236,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if cacheConfig.TraceCacheLimit != 0 {
 		blockResultCache, _ = lru.New(cacheConfig.TraceCacheLimit)
 	}
+	// override snapshot setting
+	if chainConfig.Zktrie && cacheConfig.SnapshotLimit > 0 {
+		log.Warn("snapshot has been disabled by zktrie")
+		cacheConfig.SnapshotLimit = 0
+	}
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -246,6 +251,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
 			Preimages: cacheConfig.Preimages,
+			Zktrie:    chainConfig.Zktrie,
 		}),
 		quit:             make(chan struct{}),
 		chainmu:          syncx.NewClosableMutex(),

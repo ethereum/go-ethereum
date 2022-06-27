@@ -229,6 +229,12 @@ func IsHexAddress(s string) bool {
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
 
+func (a Address) Bytes32() []byte {
+	ret := make([]byte, 32)
+	copy(ret, a.Bytes())
+	return ret
+}
+
 // Hash converts an address to a hash by left-padding it with zeros.
 func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 

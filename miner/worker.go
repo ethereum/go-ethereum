@@ -704,6 +704,17 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	}
 	state.StartPrefetcher("miner")
 
+	// fetch coinbase's proof
+	proof, err := state.GetProof(header.Coinbase)
+	if err != nil {
+		log.Error("Proof for coinbase not available", "coinbase", header.Coinbase.String(), "error", err)
+		// but we still mark the proofs map with nil array
+	}
+	wrappedProof := make([]hexutil.Bytes, len(proof))
+	for i, bt := range proof {
+		wrappedProof[i] = bt
+	}
+
 	env := &environment{
 		signer:        types.MakeSigner(w.chainConfig, header.Number),
 		state:         state,
@@ -711,7 +722,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		family:        mapset.NewSet(),
 		uncles:        mapset.NewSet(),
 		header:        header,
-		proofs:        make(map[string][]hexutil.Bytes),
+		proofs:        map[string][]hexutil.Bytes{header.Coinbase.String(): wrappedProof},
 		storageProofs: make(map[string]map[string][]hexutil.Bytes),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
@@ -847,12 +858,12 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		if _, existed := w.current.proofs[addrStr]; !existed {
 			proof, err := w.current.state.GetProof(addr)
 			if err != nil {
-				log.Error("Proof not available", "address", addrStr)
+				log.Error("Proof not available", "address", addrStr, "error", err)
 				// but we still mark the proofs map with nil array
 			}
 			wrappedProof := make([]hexutil.Bytes, len(proof))
-			for _, bt := range proof {
-				wrappedProof = append(wrappedProof, bt)
+			for i, bt := range proof {
+				wrappedProof[i] = bt
 			}
 			w.current.proofs[addrStr] = wrappedProof
 		}
@@ -872,12 +883,12 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 			if _, existed := m[keyStr]; !existed {
 				proof, err := w.current.state.GetStorageTrieProof(addr, key)
 				if err != nil {
-					log.Error("Storage proof not available", "address", addrStr, "key", keyStr)
+					log.Error("Storage proof not available", "error", err, "address", addrStr, "key", keyStr)
 					// but we still mark the proofs map with nil array
 				}
 				wrappedProof := make([]hexutil.Bytes, len(proof))
-				for _, bt := range proof {
-					wrappedProof = append(wrappedProof, hexutil.Bytes(bt))
+				for i, bt := range proof {
+					wrappedProof[i] = bt
 				}
 				m[keyStr] = wrappedProof
 			}

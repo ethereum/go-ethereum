@@ -314,7 +314,8 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 		panic("unexpected evm depth in capture enter")
 	}
 	l.statesAffected[to] = struct{}{}
-	theLog := l.logs[lastLogPos]
+	theLog := &l.logs[lastLogPos]
+	theLog.getOrInitExtraData()
 	// handling additional updating for CALL/STATICCALL/CALLCODE/CREATE/CREATE2 only
 	// append extraData part for the log, capture the account status (the nonce / balance has been updated in capture enter)
 	wrappedStatus, _ := getWrappedAccountForAddr(l, to)

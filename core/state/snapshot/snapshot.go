@@ -185,6 +185,9 @@ type Tree struct {
 //   a background thread.
 func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root common.Hash, async bool, rebuild bool, recovery bool) (*Tree, error) {
 	// Create a new, empty snapshot tree
+	if triedb.Zktrie {
+		panic("zktrie does not support snapshot yet")
+	}
 	snap := &Tree{
 		diskdb: diskdb,
 		triedb: triedb,

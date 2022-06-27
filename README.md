@@ -13,6 +13,15 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 
 ZK-Rollup adapts the Go Ethereum to run as Layer 2 Sequencer. The codebase is based on v1.10.13.
 
+### ZKTrie Storage
+
+Another implement for storage trie, base on patricia merkle tree, has been induced. It is feasible to zk proving in the storage part. It is specified as a flag
+in gensis, set `config.zktrie` to true for enabling it. Using `genesis_zktrie.json` as an example to create a L2 chain with zktrie sotrage:
+
+> geth init \<repo root\>/genesis_zktrie.json
+
+Notice current the snapshot would be disabled by the zktrie implement.
+
 ## Building the source
 
 For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/install-and-build/installing-geth).
