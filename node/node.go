@@ -712,6 +712,28 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	return db, err
 }
 
+// OpenDatabaseWithTrace same as OpenDatabaseWithFreezer but open txTrace dedicated database instead.
+func (n *Node) OpenDatabaseWithTrace(cache, handles int, tracer, namespace string, readonly bool) (ethdb.Database, error) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	if n.state == closedState {
+		return nil, ErrNodeStopped
+	}
+
+	var db ethdb.Database
+	var err error
+	if tracer == "" {
+		tracer = "tracedb"
+	}
+	tracer = n.ResolvePath(tracer)
+	db, err = rawdb.NewLevelDBDatabase(tracer, cache, handles, namespace, readonly)
+	if err == nil {
+		db = n.wrapDatabase(db)
+	}
+	log.Info("Opened tx-trace database", "database", tracer)
+	return db, err
+}
+
 // OpenDatabaseWithFreezer opens an existing database with the given name (or
 // creates one if no previous can be found) from within the node's data directory,
 // also attaching a chain freezer to it that moves ancient chain data from the

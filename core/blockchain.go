@@ -43,7 +43,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/txtrace"
 	lru "github.com/hashicorp/golang-lru"
+
+	txtracelib "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
 )
 
 var (
@@ -171,8 +174,11 @@ var defaultCacheConfig = &CacheConfig{
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
-	chainConfig *params.ChainConfig // Chain & network configuration
-	cacheConfig *CacheConfig        // Cache configuration for pruning
+	chainConfig   *params.ChainConfig // Chain & network configuration
+	cacheConfig   *CacheConfig        // Cache configuration for pruning
+	txTraceConfig *txtrace.Config
+	// txtraceStore
+	txTraceStore txtracelib.Store
 
 	db     ethdb.Database // Low level persistent database to store final content in
 	snaps  *snapshot.Tree // Snapshot tree for fast trie leaf access
@@ -223,6 +229,19 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	forker     *ForkChoice
 	vmConfig   vm.Config
+}
+
+// NewBlockChainV2 returns a fully initialised blockchain using information
+// available in the database. It initialises the default Ethereum Validator and
+// Processor. The different between NewBlockChainV2 and NewBlockchain are additional txtrace.Config and txtracelib.Store parameter will passed.
+func NewBlockChainV2(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, txTraceConfig *txtrace.Config, txStore txtracelib.Store, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, chainConfig, engine, vmConfig, shouldPreserve, txLookupLimit)
+	if err != nil {
+		return nil, err
+	}
+	bc.txTraceConfig = txTraceConfig
+	bc.txTraceStore = txStore
+	return bc, nil
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -439,6 +458,10 @@ func (bc *BlockChain) empty() bool {
 		}
 	}
 	return true
+}
+
+func (bc *BlockChain) tracingTx() bool {
+	return bc.txTraceConfig != nil && bc.txTraceConfig.Enabled
 }
 
 // loadLastState loads the last known chain state from the database. This method
@@ -2471,3 +2494,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	_, err := bc.hc.InsertHeaderChain(chain, start, bc.forker)
 	return 0, err
 }
+
+// TxTraceStore retrieves the blockchain's tx-trace store.
+func (bc *BlockChain) TxTraceStore() txtracelib.Store { return bc.txTraceStore }

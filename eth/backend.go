@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/txtrace"
 	"math/big"
 	"runtime"
 	"strings"
@@ -149,6 +150,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
+	// Init tx-trace underlying database and storage layer
+	var traceDb ethdb.Database
+	if config.TxTrace.Enabled {
+		traceDb, err = stack.OpenDatabaseWithTrace(config.DatabaseCache, config.DatabaseHandles, config.TxTrace.StoreDir, "eth/db/tracedb", false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	txStore := txtrace.NewTraceStore(traceDb)
+
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
@@ -205,7 +216,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			AncientRecentLimit:  config.AncientRecentLimit,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChainV2(chainDb, cacheConfig, chainConfig, &config.TxTrace, txStore, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
 	}

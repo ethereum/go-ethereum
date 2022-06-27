@@ -201,6 +201,11 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 	}
+
+	txTraceFlags = []cli.Flag{
+		utils.TxTraceEnabledFlag,
+		utils.TxTraceStoreFlag,
+	}
 )
 
 func init() {
@@ -246,7 +251,8 @@ func init() {
 		rpcFlags,
 		consoleFlags,
 		debug.Flags,
-		metricsFlags)
+		metricsFlags,
+		txTraceFlags)
 
 	app.Before = func(ctx *cli.Context) error {
 		return debug.Setup(ctx)

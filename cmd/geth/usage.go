@@ -216,6 +216,10 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Flags: metricsFlags,
 	},
 	{
+		Name:  "TRANSACTION TRACING",
+		Flags: txTraceFlags,
+	},
+	{
 		Name: "ALIASED (deprecated)",
 		Flags: []cli.Flag{
 			utils.NoUSBFlag,
