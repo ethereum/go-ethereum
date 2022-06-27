@@ -43,7 +43,6 @@ pipeline {
             steps {                           
                 // Use a scripted pipeline.
                 script {
-                    node {
                         def app
                         //  stage('Initialize') {
                         //     def dockerHome = tool 'myDocker'
@@ -53,7 +52,7 @@ pipeline {
                         stage('Build image') {
                             app = docker.build("${env.DOCKER_CREDENTIALS_USR}/l2geth-img")
                         }            
-                    }                 
+                                     
                 }
             }
         }
