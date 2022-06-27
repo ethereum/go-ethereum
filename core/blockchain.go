@@ -2368,10 +2368,15 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 		}
 
 		pruneTo := last - ancientLimit
+		storedSections := rawdb.ReadStoredBloomSections(bc.db)
+		if storedSections*params.BloomBitsBlocks-1 < pruneTo {
+			log.Warn("Attempt to prune the ancient blocks that bloom filter haven't finished yet, postpone to next round", "storedSections", storedSections, "pruneTo", pruneTo)
+			return
+		}
 
 		// Double ensure we don't prune the blocks having dangling transaction indices
 		if txIndexTail != nil && pruneTo > *txIndexTail {
-			log.Warn("Attempt to prune the ancient blocks that still have tx indices, postpone to next round")
+			log.Warn("Attempt to prune the ancient blocks that still have tx indices, postpone to next round", "txIndexTail", *txIndexTail, "pruneTo", pruneTo)
 			return
 		}
 

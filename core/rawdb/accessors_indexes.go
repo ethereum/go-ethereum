@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -139,6 +140,19 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	}
 	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
+}
+
+// ReadStoredBloomSections reads the number of valid sections from the index database
+func ReadStoredBloomSections(db ethdb.Database) uint64 {
+	var storedSections uint64
+
+	table := NewTable(db, string(BloomBitsIndexPrefix))
+	data, _ := table.Get([]byte("count"))
+	if len(data) == 8 {
+		storedSections = binary.BigEndian.Uint64(data)
+	}
+
+	return storedSections
 }
 
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
