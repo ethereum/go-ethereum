@@ -156,15 +156,15 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.GlobalIsSet(utils.OverrideArrowGlacierFlag.Name) {
-		cfg.Eth.OverrideArrowGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideArrowGlacierFlag.Name))
+	if ctx.GlobalIsSet(utils.OverrideGrayGlacierFlag.Name) {
+		cfg.Eth.OverrideGrayGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideGrayGlacierFlag.Name))
 	}
 	if ctx.GlobalIsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = utils.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 	// Warn users to migrate if they have a legacy freezer format.
-	if eth != nil {
+	if eth != nil && !ctx.GlobalIsSet(utils.IgnoreLegacyReceiptsFlag.Name) {
 		firstIdx := uint64(0)
 		// Hack to speed up check for mainnet because we know
 		// the first non-empty block.
@@ -176,7 +176,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		if err != nil {
 			log.Error("Failed to check db for legacy receipts", "err", err)
 		} else if isLegacy {
-			log.Warn("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+			stack.Close()
+			utils.Fatalf("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
 		}
 	}
 

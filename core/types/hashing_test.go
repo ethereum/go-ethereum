@@ -39,8 +39,7 @@ func TestDeriveSha(t *testing.T) {
 		t.Fatal(err)
 	}
 	for len(txs) < 1000 {
-		tr, _ := trie.New(common.Hash{}, trie.NewDatabase(rawdb.NewMemoryDatabase()))
-		exp := types.DeriveSha(txs, tr)
+		exp := types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
 		got := types.DeriveSha(txs, trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("%d txs: got %x exp %x", len(txs), got, exp)
@@ -87,8 +86,12 @@ func BenchmarkDeriveSha200(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
+<<<<<<< HEAD
 			tr, _ := trie.New(common.Hash{}, trie.NewDatabase(rawdb.NewMemoryDatabase()))
 			exp = types.DeriveSha(txs, tr)
+=======
+			exp = types.DeriveSha(txs, trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 		}
 	})
 
@@ -109,8 +112,12 @@ func TestFuzzDeriveSha(t *testing.T) {
 	rndSeed := mrand.Int()
 	for i := 0; i < 10; i++ {
 		seed := rndSeed + i
+<<<<<<< HEAD
 		tr, _ := trie.New(common.Hash{}, trie.NewDatabase(rawdb.NewMemoryDatabase()))
 		exp := types.DeriveSha(newDummy(i), tr)
+=======
+		exp := types.DeriveSha(newDummy(i), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 		got := types.DeriveSha(newDummy(i), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			printList(newDummy(seed))
@@ -138,8 +145,12 @@ func TestDerivableList(t *testing.T) {
 		},
 	}
 	for i, tc := range tcs[1:] {
+<<<<<<< HEAD
 		tr, _ := trie.New(common.Hash{}, trie.NewDatabase(rawdb.NewMemoryDatabase()))
 		exp := types.DeriveSha(flatList(tc), tr)
+=======
+		exp := types.DeriveSha(flatList(tc), trie.NewEmpty(trie.NewDatabase(rawdb.NewMemoryDatabase())))
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 		got := types.DeriveSha(flatList(tc), trie.NewStackTrie(nil))
 		if !bytes.Equal(got[:], exp[:]) {
 			t.Fatalf("case %d: got %x exp %x", i, got, exp)

@@ -383,7 +383,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents with crap
-	if err := os.WriteFile(file, []byte("foo"), 0644); err != nil {
+	if err := os.WriteFile(file, []byte("foo"), 0600); err != nil {
 		t.Fatal(err)
 		return
 	}

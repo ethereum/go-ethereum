@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // nolint: gosec
 	"os"
 	"runtime"
 

@@ -31,7 +31,7 @@ import (
 // the correct fork ID.
 func TestCreation(t *testing.T) {
 	mergeConfig := *params.MainnetChainConfig
-	mergeConfig.MergeForkBlock = big.NewInt(15000000)
+	mergeConfig.MergeNetsplitBlock = big.NewInt(18000000)
 	type testcase struct {
 		head uint64
 		want ID
@@ -68,8 +68,10 @@ func TestCreation(t *testing.T) {
 				{12964999, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}}, // Last Berlin block
 				{12965000, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // First London block
 				{13772999, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // Last London block
-				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 0}},        // First Arrow Glacier block
-				{20000000, ID{Hash: checksumToBytes(0x20c327fc), Next: 0}},        // Future Arrow Glacier block
+				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // First Arrow Glacier block
+				{15049999, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // Last Arrow Glacier block
+				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // First Gray Glacier block
+				{20000000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // Future Gray Glacier block
 			},
 		},
 		// Ropsten test cases
@@ -163,9 +165,11 @@ func TestCreation(t *testing.T) {
 				{12964999, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}}, // Last Berlin block
 				{12965000, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // First London block
 				{13772999, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // Last London block
-				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 15000000}}, // First Arrow Glacier block
-				{15000000, ID{Hash: checksumToBytes(0xe3abe201), Next: 0}},        // First Merge Start block
-				{20000000, ID{Hash: checksumToBytes(0xe3abe201), Next: 0}},        // Future Merge Start block
+				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // First Arrow Glacier block
+				{15049999, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // Last Arrow Glacier block
+				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 18000000}}, // First Gray Glacier block
+				{18000000, ID{Hash: checksumToBytes(0x4fb8a872), Next: 0}},        // First Merge Start block
+				{20000000, ID{Hash: checksumToBytes(0x4fb8a872), Next: 0}},        // Future Merge Start block
 			},
 		},
 	}
@@ -242,11 +246,11 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet Petersburg, remote is Rinkeby Petersburg.
 		{7987396, ID{Hash: checksumToBytes(0xafec6b27), Next: 0}, ErrLocalIncompatibleOrStale},
 
-		// Local is mainnet Arrow Glacier, far in the future. Remote announces Gopherium (non existing fork)
+		// Local is mainnet Gray Glacier, far in the future. Remote announces Gopherium (non existing fork)
 		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{88888888, ID{Hash: checksumToBytes(0x20c327fc), Next: 88888888}, ErrLocalIncompatibleOrStale},
+		{88888888, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 88888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
 		// fork) at block 7279999, before Petersburg. Local is incompatible.

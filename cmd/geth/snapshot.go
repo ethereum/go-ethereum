@@ -104,8 +104,20 @@ data, and verifies that all snapshot storage data has a corresponding account.
 `,
 			},
 			{
+				Name:      "inspect-account",
+				Usage:     "Check all snapshot layers for the a specific account",
+				ArgsUsage: "<address | hash>",
+				Action:    utils.MigrateFlags(checkAccount),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags:     utils.GroupFlags(utils.NetworkFlags, utils.DatabasePathFlags),
+				Description: `
+geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
+information about the specified address. 
+`,
+			},
+			{
 				Name:      "traverse-state",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -121,7 +133,7 @@ It's also usable without snapshot enabled.
 			},
 			{
 				Name:      "traverse-rawstate",
-				Usage:     "Traverse the state with given root hash for verification",
+				Usage:     "Traverse the state with given root hash and perform detailed verification",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(traverseRawState),
 				Category:  "MISCELLANEOUS COMMANDS",
@@ -266,7 +278,7 @@ func traverseState(ctx *cli.Context) error {
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
+	t, err := trie.NewSecure(common.Hash{}, root, triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
@@ -287,7 +299,7 @@ func traverseState(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != emptyRoot {
-			storageTrie, err := trie.NewSecure(acc.Root, triedb)
+			storageTrie, err := trie.NewSecure(common.BytesToHash(accIter.Key), acc.Root, triedb)
 			if err != nil {
 				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
@@ -355,7 +367,7 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewSecure(root, triedb)
+	t, err := trie.NewSecure(common.Hash{}, root, triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
@@ -367,6 +379,8 @@ func traverseRawState(ctx *cli.Context) error {
 		codes      int
 		lastReport time.Time
 		start      = time.Now()
+		hasher     = crypto.NewKeccakState()
+		got        = make([]byte, 32)
 	)
 	accIter := t.NodeIterator(nil)
 	for accIter.Next(true) {
@@ -376,9 +390,17 @@ func traverseRawState(ctx *cli.Context) error {
 		// Check the present for non-empty hash node(embedded node doesn't
 		// have their own hash).
 		if node != (common.Hash{}) {
-			if !rawdb.HasTrieNode(chaindb, node) {
+			blob := rawdb.ReadTrieNode(chaindb, node)
+			if len(blob) == 0 {
 				log.Error("Missing trie node(account)", "hash", node)
 				return errors.New("missing account")
+			}
+			hasher.Reset()
+			hasher.Write(blob)
+			hasher.Read(got)
+			if !bytes.Equal(got, node.Bytes()) {
+				log.Error("Invalid trie node(account)", "hash", node.Hex(), "value", blob)
+				return errors.New("invalid account node")
 			}
 		}
 		// If it's a leaf node, yes we are touching an account,
@@ -391,7 +413,7 @@ func traverseRawState(ctx *cli.Context) error {
 				return errors.New("invalid account")
 			}
 			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewSecure(acc.Root, triedb)
+				storageTrie, err := trie.NewSecure(common.BytesToHash(accIter.LeafKey()), acc.Root, triedb)
 				if err != nil {
 					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 					return errors.New("missing storage trie")
@@ -404,9 +426,17 @@ func traverseRawState(ctx *cli.Context) error {
 					// Check the present for non-empty hash node(embedded node doesn't
 					// have their own hash).
 					if node != (common.Hash{}) {
-						if !rawdb.HasTrieNode(chaindb, node) {
+						blob := rawdb.ReadTrieNode(chaindb, node)
+						if len(blob) == 0 {
 							log.Error("Missing trie node(storage)", "hash", node)
 							return errors.New("missing storage")
+						}
+						hasher.Reset()
+						hasher.Write(blob)
+						hasher.Read(got)
+						if !bytes.Equal(got, node.Bytes()) {
+							log.Error("Invalid trie node(storage)", "hash", node.Hex(), "value", blob)
+							return errors.New("invalid storage node")
 						}
 					}
 					// Bump the counter if it's leaf node.
@@ -515,5 +545,37 @@ func dumpState(ctx *cli.Context) error {
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// checkAccount iterates the snap data layers, and looks up the given account
+// across all layers.
+func checkAccount(ctx *cli.Context) error {
+	if ctx.NArg() != 1 {
+		return errors.New("need <address|hash> arg")
+	}
+	var (
+		hash common.Hash
+		addr common.Address
+	)
+	switch len(ctx.Args()[0]) {
+	case 40, 42:
+		addr = common.HexToAddress(ctx.Args()[0])
+		hash = crypto.Keccak256Hash(addr.Bytes())
+	case 64, 66:
+		hash = common.HexToHash(ctx.Args()[0])
+	default:
+		return errors.New("malformed address or hash")
+	}
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+	start := time.Now()
+	log.Info("Checking difflayer journal", "address", addr, "hash", hash)
+	if err := snapshot.CheckJournalAccount(chaindb, hash); err != nil {
+		return err
+	}
+	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
 	return nil
 }

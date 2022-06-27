@@ -596,7 +596,7 @@ func (c *Codec) decodeMessage(fromAddr string, head *Header, headerData, msgData
 	// Try decrypting the message.
 	key := c.sc.readKey(auth.SrcID, fromAddr)
 	msg, err := c.decryptMessage(msgData, head.Nonce[:], headerData, key)
-	if err == errMessageDecrypt {
+	if errors.Is(err, errMessageDecrypt) {
 		// It didn't work. Start the handshake since this is an ordinary message packet.
 		return &Unknown{Nonce: head.Nonce}, nil
 	}

@@ -148,6 +148,13 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
+	if len(params.LogsBloom) != 256 {
+		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
+	}
+	// Check that baseFeePerGas is not negative or too big
+	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
+		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
+	}
 	header := &types.Header{
 		ParentHash:  params.ParentHash,
 		UncleHash:   types.EmptyUncleHash,

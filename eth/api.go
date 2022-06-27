@@ -52,17 +52,17 @@ func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
 	return &PublicEthereumAPI{e}
 }
 
-// Etherbase is the address that mining rewards will be send to
+// Etherbase is the address that mining rewards will be send to.
 func (api *PublicEthereumAPI) Etherbase() (common.Address, error) {
 	return api.e.Etherbase()
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
+// Coinbase is the address that mining rewards will be send to (alias for Etherbase).
 func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 	return api.Etherbase()
 }
 
-// Hashrate returns the POW hashrate
+// Hashrate returns the POW hashrate.
 func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
@@ -136,7 +136,7 @@ func (api *PrivateMinerAPI) SetGasLimit(gasLimit hexutil.Uint64) bool {
 	return true
 }
 
-// SetEtherbase sets the etherbase of the miner
+// SetEtherbase sets the etherbase of the miner.
 func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
 	api.e.SetEtherbase(etherbase)
 	return true
@@ -160,7 +160,7 @@ func NewPrivateAdminAPI(eth *Ethereum) *PrivateAdminAPI {
 }
 
 // ExportChain exports the current blockchain into a local file,
-// or a range of blocks if first and last are non-nil
+// or a range of blocks if first and last are non-nil.
 func (api *PrivateAdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool, error) {
 	if first == nil && last != nil {
 		return false, errors.New("last cannot be specified without first")
@@ -328,7 +328,7 @@ type BadBlockArgs struct {
 }
 
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-// and returns them as a JSON list of block-hashes
+// and returns them as a JSON list of block hashes.
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	var (
 		err     error
@@ -361,7 +361,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 const AccountRangeMaxResults = 256
 
 // AccountRange enumerates all accounts in the given block and start point in paging request
-func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start []byte, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
+func (api *PublicDebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hexutil.Bytes, maxResults int, nocode, nostorage, incompletes bool) (state.IteratorDump, error) {
 	var stateDb *state.StateDB
 	var err error
 
@@ -529,11 +529,11 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
+	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), triedb)
+	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}

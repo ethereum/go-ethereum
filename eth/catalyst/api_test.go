@@ -205,7 +205,6 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 func TestInvalidPayloadTimestamp(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 	var (
 		api    = NewConsensusAPI(ethservice)
@@ -250,7 +249,6 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 func TestEth2NewBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	var (
@@ -427,7 +425,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 	var (
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -480,7 +477,6 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Bl
 func TestExchangeTransitionConfig(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 	var (
 		api = NewConsensusAPI(ethservice)
@@ -543,7 +539,6 @@ CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
 func TestNewPayloadOnInvalidChain(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	var (
@@ -618,7 +613,6 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.Pay
 func TestEmptyBlocks(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	commonAncestor := ethservice.BlockChain().CurrentBlock()
@@ -653,7 +647,8 @@ func TestEmptyBlocks(t *testing.T) {
 	if status.Status != beacon.INVALID {
 		t.Errorf("invalid status: expected INVALID got: %v", status.Status)
 	}
-	expected := commonAncestor.Hash()
+	// Expect 0x0 on INVALID block on top of PoW block
+	expected := common.Hash{}
 	if !bytes.Equal(status.LatestValidHash[:], expected[:]) {
 		t.Fatalf("invalid LVH: got %v want %v", status.LatestValidHash, expected)
 	}
@@ -734,8 +729,6 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	nodeA, ethserviceA := startEthService(t, genesis, preMergeBlocks)
 	nodeB, ethserviceB := startEthService(t, genesis, preMergeBlocks)
-	ethserviceA.Merger().ReachTTD()
-	ethserviceB.Merger().ReachTTD()
 	defer nodeA.Close()
 	defer nodeB.Close()
 	for nodeB.Server().NodeInfo().Ports.Listener == 0 {
@@ -792,5 +785,77 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 			t.Errorf("invalid status: expected INVALID got: %v", resp.PayloadStatus.Status)
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func TestInvalidBloom(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	commonAncestor := ethservice.BlockChain().CurrentBlock()
+	api := NewConsensusAPI(ethservice)
+
+	// Setup 10 blocks on the canonical chain
+	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
+
+	// (1) check LatestValidHash by sending a normal payload (P1'')
+	payload := getNewPayload(t, api, commonAncestor)
+	payload.LogsBloom = append(payload.LogsBloom, byte(1))
+	status, err := api.NewPayloadV1(*payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Status != beacon.INVALIDBLOCKHASH {
+		t.Errorf("invalid status: expected VALID got: %v", status.Status)
+	}
+}
+
+func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(100)
+	fmt.Println(genesis.Config.TerminalTotalDifficulty)
+	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
+
+	fmt.Println(genesis.Config.TerminalTotalDifficulty)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	defer n.Close()
+
+	var (
+		api    = NewConsensusAPI(ethservice)
+		parent = preMergeBlocks[len(preMergeBlocks)-1]
+	)
+
+	// Test parent already post TTD in FCU
+	fcState := beacon.ForkchoiceStateV1{
+		HeadBlockHash:      parent.Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	resp, err := api.ForkchoiceUpdatedV1(fcState, nil)
+	if err != nil {
+		t.Fatalf("error sending forkchoice, err=%v", err)
+	}
+	if resp.PayloadStatus != beacon.INVALID_TERMINAL_BLOCK {
+		t.Fatalf("error sending invalid forkchoice, invalid status: %v", resp.PayloadStatus.Status)
+	}
+
+	// Test parent already post TTD in NewPayload
+	params := beacon.PayloadAttributesV1{
+		Timestamp:             parent.Time() + 1,
+		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
+		SuggestedFeeRecipient: parent.Coinbase(),
+	}
+	empty, err := api.eth.Miner().GetSealingBlockSync(parent.Hash(), params.Timestamp, params.SuggestedFeeRecipient, params.Random, true)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	data := *beacon.BlockToExecutableData(empty)
+	resp2, err := api.NewPayloadV1(data)
+	if err != nil {
+		t.Fatalf("error sending NewPayload, err=%v", err)
+	}
+	if resp2 != beacon.INVALID_TERMINAL_BLOCK {
+		t.Fatalf("error sending invalid forkchoice, invalid status: %v", resp.PayloadStatus.Status)
 	}
 }

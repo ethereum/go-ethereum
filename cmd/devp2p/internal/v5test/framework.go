@@ -60,11 +60,9 @@ type conn struct {
 	remoteAddr *net.UDPAddr
 	listeners  []net.PacketConn
 
-	log           logger
-	codec         *v5wire.Codec
-	lastRequest   v5wire.Packet
-	lastChallenge *v5wire.Whoareyou
-	idCounter     uint32
+	log       logger
+	codec     *v5wire.Codec
+	idCounter uint32
 }
 
 type logger interface {

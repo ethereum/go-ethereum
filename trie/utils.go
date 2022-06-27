@@ -29,24 +29,41 @@ package trie
 // This tool can track all of them no matter the node is embedded in its
 // parent or not, but valueNode is never tracked.
 //
+// Besides, it's also used for recording the original value of the nodes
+// when they are resolved from the disk. The pre-value of the nodes will
+// be used to construct reverse-diffs in the future.
+//
 // Note tracer is not thread-safe, callers should be responsible for handling
 // the concurrency issues by themselves.
 type tracer struct {
 	insert map[string]struct{}
 	delete map[string]struct{}
+	origin map[string][]byte
 }
 
-// newTracer initializes trie node diff tracer.
+// newTracer initializes the tracer for capturing trie changes.
 func newTracer() *tracer {
 	return &tracer{
 		insert: make(map[string]struct{}),
 		delete: make(map[string]struct{}),
+		origin: make(map[string][]byte),
 	}
 }
 
-// onInsert tracks the newly inserted trie node. If it's already
-// in the deletion set(resurrected node), then just wipe it from
-// the deletion set as it's untouched.
+/*
+// onRead tracks the newly loaded trie node and caches the rlp-encoded blob internally.
+// Don't change the value outside of function since it's not deep-copied.
+func (t *tracer) onRead(key []byte, val []byte) {
+	// Tracer isn't used right now, remove this check later.
+	if t == nil {
+		return
+	}
+	t.origin[string(key)] = val
+}
+*/
+
+// onInsert tracks the newly inserted trie node. If it's already in the deletion set
+// (resurrected node), then just wipe it from the deletion set as the "untouched".
 func (t *tracer) onInsert(key []byte) {
 	// Tracer isn't used right now, remove this check later.
 	if t == nil {
@@ -100,6 +117,20 @@ func (t *tracer) deleteList() [][]byte {
 	return ret
 }
 
+<<<<<<< HEAD
+=======
+/*
+// getPrev returns the cached original value of the specified node.
+func (t *tracer) getPrev(key []byte) []byte {
+	// Don't panic on uninitialized tracer, it's possible in testing.
+	if t == nil {
+		return nil
+	}
+	return t.origin[string(key)]
+}
+*/
+
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 // reset clears the content tracked by tracer.
 func (t *tracer) reset() {
 	// Tracer isn't used right now, remove this check later.
@@ -108,6 +139,10 @@ func (t *tracer) reset() {
 	}
 	t.insert = make(map[string]struct{})
 	t.delete = make(map[string]struct{})
+<<<<<<< HEAD
+=======
+	t.origin = make(map[string][]byte)
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 }
 
 // copy returns a deep copied tracer instance.
@@ -119,6 +154,10 @@ func (t *tracer) copy() *tracer {
 	var (
 		insert = make(map[string]struct{})
 		delete = make(map[string]struct{})
+<<<<<<< HEAD
+=======
+		origin = make(map[string][]byte)
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	)
 	for key := range t.insert {
 		insert[key] = struct{}{}
@@ -126,8 +165,18 @@ func (t *tracer) copy() *tracer {
 	for key := range t.delete {
 		delete[key] = struct{}{}
 	}
+<<<<<<< HEAD
 	return &tracer{
 		insert: insert,
 		delete: delete,
+=======
+	for key, val := range t.origin {
+		origin[key] = val
+	}
+	return &tracer{
+		insert: insert,
+		delete: delete,
+		origin: origin,
+>>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	}
 }

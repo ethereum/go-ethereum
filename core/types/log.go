@@ -98,8 +98,8 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
-// LogForStorage is a wrapper around a Log that flattens and parses the entire content of
-// a log including non-consensus fields.
+// LogForStorage is a wrapper around a Log that handles
+// backward compatibility with prior storage formats.
 type LogForStorage Log
 
 // EncodeRLP implements rlp.Encoder.

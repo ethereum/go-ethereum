@@ -307,7 +307,7 @@ func checkStateContent(ctx *cli.Context) error {
 		start  []byte
 	)
 	if ctx.NArg() > 1 {
-		return fmt.Errorf("Max 1 argument: %v", ctx.Command.ArgsUsage)
+		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
 	}
 	if ctx.NArg() > 0 {
 		if d, err := hexutil.Decode(ctx.Args().First()); err != nil {
@@ -332,8 +332,8 @@ func checkStateContent(ctx *cli.Context) error {
 	)
 	for it.Next() {
 		count++
-		v := it.Value()
 		k := it.Key()
+		v := it.Value()
 		hasher.Reset()
 		hasher.Write(v)
 		hasher.Read(got)
@@ -519,7 +519,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 			return err
 		}
 	}
-	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	theTrie, err := trie.New(common.Hash{}, stRoot, trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
