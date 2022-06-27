@@ -1,10 +1,6 @@
 module github.com/ethereum/go-ethereum
 
-<<<<<<< HEAD
-go 1.16
-=======
 go 1.17
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0
@@ -19,10 +15,6 @@ require (
 	github.com/consensys/gnark-crypto v0.4.1-0.20210426202927-39ac3d4b3f1f
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
-<<<<<<< HEAD
-	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-=======
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	github.com/docker/docker v1.6.2
 	github.com/dop251/goja v0.0.0-20220405120441-9037c2b61cbf
 	github.com/edsrzf/mmap-go v1.0.0
@@ -67,17 +59,12 @@ require (
 	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654
-<<<<<<< HEAD
-=======
 	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.org/x/tools v0.1.8-0.20211029000441-d6a9af8af023
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
 	gopkg.in/urfave/cli.v1 v1.20.0
-<<<<<<< HEAD
-=======
 )
 
 require (
@@ -113,5 +100,4 @@ require (
 	google.golang.org/protobuf v1.23.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
->>>>>>> 23bee16208718975f9b9e012949b8d4ee1223108
 )
