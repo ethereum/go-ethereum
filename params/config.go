@@ -156,7 +156,7 @@ var (
 		MuirGlacierBlock:        big.NewInt(0),
 		BerlinBlock:             big.NewInt(0),
 		LondonBlock:             big.NewInt(0),
-		TerminalTotalDifficulty: big.NewInt(17000000000000000),
+		TerminalTotalDifficulty: big.NewInt(17_000_000_000_000_000),
 		Ethash:                  new(EthashConfig),
 	}
 
