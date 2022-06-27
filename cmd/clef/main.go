@@ -647,7 +647,6 @@ func signer(c *cli.Context) error {
 	rpcAPI := []rpc.API{
 		{
 			Namespace: "account",
-			Public:    true,
 			Service:   api,
 			Version:   "1.0"},
 	}
@@ -656,7 +655,7 @@ func signer(c *cli.Context) error {
 		cors := utils.SplitAndTrim(c.GlobalString(utils.HTTPCORSDomainFlag.Name))
 
 		srv := rpc.NewServer()
-		err := node.RegisterApis(rpcAPI, []string{"account"}, srv, false)
+		err := node.RegisterApis(rpcAPI, []string{"account"}, srv)
 		if err != nil {
 			utils.Fatalf("Could not register API: %w", err)
 		}
