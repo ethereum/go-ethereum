@@ -124,17 +124,6 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
-	// Verify that the last preHeader (and only the last one) satisfies the
-	// terminal total difficulty.
-	if err := beacon.verifyTerminalPoWBlock(chain, preHeaders); err != nil {
-		go func() {
-			select {
-			case results <- err:
-			case <-abort:
-			}
-		}()
-		return abort, results
-	}
 	go func() {
 		var (
 			old, new, out      = 0, len(preHeaders), 0
@@ -143,6 +132,14 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
+		// verify that the headers are valid wrt. the terminal block.
+		index, err := beacon.verifyTerminalPoWBlock(chain, preHeaders)
+		if err != nil {
+			// Mark all subsequent headers with the error.
+			for i := index; i < len(preHeaders); i++ {
+				errors[i], done[i] = err, true
+			}
+		}
 		for {
 			for ; done[out]; out++ {
 				results <- errors[out]
@@ -174,7 +171,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 // - the parent of the header element to be stored in the chain correctly
 // - the preHeaders to have a set difficulty
 // - the last element to be the terminal block
-func (beacon *Beacon) verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) error {
+func (beacon *Beacon) verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
 	var (
 		first = preHeaders[0]
 		last  = preHeaders[len(preHeaders)-1]
@@ -182,22 +179,23 @@ func (beacon *Beacon) verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, 
 
 	td := chain.GetTd(first.ParentHash, first.Number.Uint64()-1)
 	if td == nil {
-		return consensus.ErrUnknownAncestor
+		return 0, consensus.ErrUnknownAncestor
 	}
 	if len(preHeaders) != 1 {
-		for _, head := range preHeaders[:len(preHeaders)-2] {
+		for i, head := range preHeaders[:len(preHeaders)-2] {
 			td.Add(td, head.Difficulty)
+			// Check if the parent was already the terminal block
+			if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
+				return i, consensus.ErrInvalidTerminalBlock
+			}
 		}
 	}
-	// Check if the parent was already the terminal block
-	if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
-		return consensus.ErrInvalidTerminalBlock
-	}
+
 	// Check that the last block is the terminal block
 	if td.Add(td, last.Difficulty).Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
-		return consensus.ErrInvalidTerminalBlock
+		return len(preHeaders) - 1, consensus.ErrInvalidTerminalBlock
 	}
-	return nil
+	return 0, nil
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
