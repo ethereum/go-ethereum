@@ -368,6 +368,12 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   NewPreExecAPI(s),
 			Public:    true,
+		}, {
+
+			Namespace: "trace",
+			Version:   "1.0",
+			Service:   NewPublicTxTraceAPI(s),
+			Public:    true,
 		},
 	}...)
 }
