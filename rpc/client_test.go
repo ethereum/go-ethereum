@@ -618,6 +618,7 @@ func TestClientReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't dial", err)
 	}
+	defer client.Close()
 
 	// Perform a call. This should work because the server is up.
 	var resp echoResult

@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -175,7 +175,7 @@ func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 	if wallet.URL().Scheme != keystore.KeyStoreScheme {
 		return nil, fmt.Errorf("account is not a keystore-account")
 	}
-	return ioutil.ReadFile(wallet.URL().Path)
+	return os.ReadFile(wallet.URL().Path)
 }
 
 // Import tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be

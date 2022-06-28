@@ -30,7 +30,6 @@ import (
 type fuzzer struct {
 	input     io.Reader
 	exhausted bool
-	debugging bool
 }
 
 func (f *fuzzer) read(size int) []byte {
@@ -130,8 +129,8 @@ func (f *fuzzer) fuzz() int {
 		bigFn  calculator
 		u256Fn calculator
 	}{
-		{ethash.FrontierDifficultyCalulator, ethash.CalcDifficultyFrontierU256},
-		{ethash.HomesteadDifficultyCalulator, ethash.CalcDifficultyHomesteadU256},
+		{ethash.FrontierDifficultyCalculator, ethash.CalcDifficultyFrontierU256},
+		{ethash.HomesteadDifficultyCalculator, ethash.CalcDifficultyHomesteadU256},
 		{ethash.DynamicDifficultyCalculator(bombDelay), ethash.MakeDifficultyCalculatorU256(bombDelay)},
 	} {
 		want := pair.bigFn(time, header)

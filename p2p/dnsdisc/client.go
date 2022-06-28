@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package dnsdisc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -204,7 +205,7 @@ func (c *Client) doResolveEntry(ctx context.Context, domain, hash string) (entry
 	}
 	for _, txt := range txts {
 		e, err := parseEntry(txt, c.cfg.ValidSchemes)
-		if err == errUnknownEntry {
+		if errors.Is(err, errUnknownEntry) {
 			continue
 		}
 		if !bytes.HasPrefix(crypto.Keccak256([]byte(txt)), wantHash) {
@@ -281,7 +282,7 @@ func (it *randomIterator) nextNode() *enode.Node {
 		}
 		n, err := ct.syncRandom(it.ctx)
 		if err != nil {
-			if err == it.ctx.Err() {
+			if errors.Is(err, it.ctx.Err()) {
 				return nil // context canceled.
 			}
 			it.c.cfg.Logger.Debug("Error in DNS random node sync", "tree", ct.loc.domain, "err", err)

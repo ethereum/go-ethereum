@@ -19,9 +19,10 @@ package rlp
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
 )
 
 // typeinfo is an entry in the type cache.
@@ -32,35 +33,16 @@ type typeinfo struct {
 	writerErr  error // error from makeWriter
 }
 
-// tags represents struct tags.
-type tags struct {
-	// rlp:"nil" controls whether empty input results in a nil pointer.
-	// nilKind is the kind of empty value allowed for the field.
-	nilKind Kind
-	nilOK   bool
-
-	// rlp:"optional" allows for a field to be missing in the input list.
-	// If this is set, all subsequent fields must also be optional.
-	optional bool
-
-	// rlp:"tail" controls whether this field swallows additional list elements. It can
-	// only be set for the last field, which must be of slice type.
-	tail bool
-
-	// rlp:"-" ignores fields.
-	ignored bool
-}
-
 // typekey is the key of a type in typeCache. It includes the struct tags because
 // they might generate a different decoder.
 type typekey struct {
 	reflect.Type
-	tags
+	rlpstruct.Tags
 }
 
 type decoder func(*Stream, reflect.Value) error
 
-type writer func(reflect.Value, *encbuf) error
+type writer func(reflect.Value, *encBuffer) error
 
 var theTC = newTypeCache()
 
@@ -95,10 +77,10 @@ func (c *typeCache) info(typ reflect.Type) *typeinfo {
 	}
 
 	// Not in the cache, need to generate info for this type.
-	return c.generate(typ, tags{})
+	return c.generate(typ, rlpstruct.Tags{})
 }
 
-func (c *typeCache) generate(typ reflect.Type, tags tags) *typeinfo {
+func (c *typeCache) generate(typ reflect.Type, tags rlpstruct.Tags) *typeinfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -122,7 +104,7 @@ func (c *typeCache) generate(typ reflect.Type, tags tags) *typeinfo {
 	return info
 }
 
-func (c *typeCache) infoWhileGenerating(typ reflect.Type, tags tags) *typeinfo {
+func (c *typeCache) infoWhileGenerating(typ reflect.Type, tags rlpstruct.Tags) *typeinfo {
 	key := typekey{typ, tags}
 	if info := c.next[key]; info != nil {
 		return info
@@ -144,35 +126,40 @@ type field struct {
 
 // structFields resolves the typeinfo of all public fields in a struct type.
 func structFields(typ reflect.Type) (fields []field, err error) {
-	var (
-		lastPublic  = lastPublicField(typ)
-		anyOptional = false
-	)
+	// Convert fields to rlpstruct.Field.
+	var allStructFields []rlpstruct.Field
 	for i := 0; i < typ.NumField(); i++ {
-		if f := typ.Field(i); f.PkgPath == "" { // exported
-			tags, err := parseStructTag(typ, i, lastPublic)
-			if err != nil {
-				return nil, err
-			}
+		rf := typ.Field(i)
+		allStructFields = append(allStructFields, rlpstruct.Field{
+			Name:     rf.Name,
+			Index:    i,
+			Exported: rf.PkgPath == "",
+			Tag:      string(rf.Tag),
+			Type:     *rtypeToStructType(rf.Type, nil),
+		})
+	}
 
-			// Skip rlp:"-" fields.
-			if tags.ignored {
-				continue
-			}
-			// If any field has the "optional" tag, subsequent fields must also have it.
-			if tags.optional || tags.tail {
-				anyOptional = true
-			} else if anyOptional {
-				return nil, fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
-			}
-			info := theTC.infoWhileGenerating(f.Type, tags)
-			fields = append(fields, field{i, info, tags.optional})
+	// Filter/validate fields.
+	structFields, structTags, err := rlpstruct.ProcessFields(allStructFields)
+	if err != nil {
+		if tagErr, ok := err.(rlpstruct.TagError); ok {
+			tagErr.StructType = typ.String()
+			return nil, tagErr
 		}
+		return nil, err
+	}
+
+	// Resolve typeinfo.
+	for i, sf := range structFields {
+		typ := typ.Field(sf.Index).Type
+		tags := structTags[i]
+		info := theTC.infoWhileGenerating(typ, tags)
+		fields = append(fields, field{sf.Index, info, tags.Optional})
 	}
 	return fields, nil
 }
 
-// anyOptionalFields returns the index of the first field with "optional" tag.
+// firstOptionalField returns the index of the first field with "optional" tag.
 func firstOptionalField(fields []field) int {
 	for i, f := range fields {
 		if f.optional {
@@ -192,82 +179,56 @@ func (e structFieldError) Error() string {
 	return fmt.Sprintf("%v (struct field %v.%s)", e.err, e.typ, e.typ.Field(e.field).Name)
 }
 
-type structTagError struct {
-	typ             reflect.Type
-	field, tag, err string
-}
-
-func (e structTagError) Error() string {
-	return fmt.Sprintf("rlp: invalid struct tag %q for %v.%s (%s)", e.tag, e.typ, e.field, e.err)
-}
-
-func parseStructTag(typ reflect.Type, fi, lastPublic int) (tags, error) {
-	f := typ.Field(fi)
-	var ts tags
-	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
-		switch t = strings.TrimSpace(t); t {
-		case "":
-		case "-":
-			ts.ignored = true
-		case "nil", "nilString", "nilList":
-			ts.nilOK = true
-			if f.Type.Kind() != reflect.Ptr {
-				return ts, structTagError{typ, f.Name, t, "field is not a pointer"}
-			}
-			switch t {
-			case "nil":
-				ts.nilKind = defaultNilKind(f.Type.Elem())
-			case "nilString":
-				ts.nilKind = String
-			case "nilList":
-				ts.nilKind = List
-			}
-		case "optional":
-			ts.optional = true
-			if ts.tail {
-				return ts, structTagError{typ, f.Name, t, `also has "tail" tag`}
-			}
-		case "tail":
-			ts.tail = true
-			if fi != lastPublic {
-				return ts, structTagError{typ, f.Name, t, "must be on last field"}
-			}
-			if ts.optional {
-				return ts, structTagError{typ, f.Name, t, `also has "optional" tag`}
-			}
-			if f.Type.Kind() != reflect.Slice {
-				return ts, structTagError{typ, f.Name, t, "field type is not slice"}
-			}
-		default:
-			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
-		}
-	}
-	return ts, nil
-}
-
-func lastPublicField(typ reflect.Type) int {
-	last := 0
-	for i := 0; i < typ.NumField(); i++ {
-		if typ.Field(i).PkgPath == "" {
-			last = i
-		}
-	}
-	return last
-}
-
-func (i *typeinfo) generate(typ reflect.Type, tags tags) {
+func (i *typeinfo) generate(typ reflect.Type, tags rlpstruct.Tags) {
 	i.decoder, i.decoderErr = makeDecoder(typ, tags)
 	i.writer, i.writerErr = makeWriter(typ, tags)
 }
 
-// defaultNilKind determines whether a nil pointer to typ encodes/decodes
-// as an empty string or empty list.
-func defaultNilKind(typ reflect.Type) Kind {
+// rtypeToStructType converts typ to rlpstruct.Type.
+func rtypeToStructType(typ reflect.Type, rec map[reflect.Type]*rlpstruct.Type) *rlpstruct.Type {
 	k := typ.Kind()
-	if isUint(k) || k == reflect.String || k == reflect.Bool || isByteArray(typ) {
-		return String
+	if k == reflect.Invalid {
+		panic("invalid kind")
 	}
-	return List
+
+	if prev := rec[typ]; prev != nil {
+		return prev // short-circuit for recursive types
+	}
+	if rec == nil {
+		rec = make(map[reflect.Type]*rlpstruct.Type)
+	}
+
+	t := &rlpstruct.Type{
+		Name:      typ.String(),
+		Kind:      k,
+		IsEncoder: typ.Implements(encoderInterface),
+		IsDecoder: typ.Implements(decoderInterface),
+	}
+	rec[typ] = t
+	if k == reflect.Array || k == reflect.Slice || k == reflect.Ptr {
+		t.Elem = rtypeToStructType(typ.Elem(), rec)
+	}
+	return t
+}
+
+// typeNilKind gives the RLP value kind for nil pointers to 'typ'.
+func typeNilKind(typ reflect.Type, tags rlpstruct.Tags) Kind {
+	styp := rtypeToStructType(typ, nil)
+
+	var nk rlpstruct.NilKind
+	if tags.NilOK {
+		nk = tags.NilKind
+	} else {
+		nk = styp.DefaultNilValue()
+	}
+	switch nk {
+	case rlpstruct.NilKindString:
+		return String
+	case rlpstruct.NilKindList:
+		return List
+	default:
+		panic("invalid nil kind value")
+	}
 }
 
 func isUint(k reflect.Kind) bool {
@@ -276,8 +237,4 @@ func isUint(k reflect.Kind) bool {
 
 func isByte(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
-}
-
-func isByteArray(typ reflect.Type) bool {
-	return (typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array) && isByte(typ.Elem())
 }

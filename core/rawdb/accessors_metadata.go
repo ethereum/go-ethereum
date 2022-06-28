@@ -81,6 +81,19 @@ func WriteChainConfig(db ethdb.KeyValueWriter, hash common.Hash, cfg *params.Cha
 	}
 }
 
+// ReadGenesisState retrieves the genesis state based on the given genesis hash.
+func ReadGenesisState(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, _ := db.Get(genesisKey(hash))
+	return data
+}
+
+// WriteGenesisState writes the genesis state into the disk.
+func WriteGenesisState(db ethdb.KeyValueWriter, hash common.Hash, data []byte) {
+	if err := db.Put(genesisKey(hash), data); err != nil {
+		log.Crit("Failed to store genesis state", "err", err)
+	}
+}
+
 // crashList is a list of unclean-shutdown-markers, for rlp-encoding to the
 // database
 type crashList struct {
@@ -136,6 +149,28 @@ func PopUncleanShutdownMarker(db ethdb.KeyValueStore) {
 	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
 	if err := db.Put(uncleanShutdownKey, data); err != nil {
 		log.Warn("Failed to clear unclean-shutdown marker", "err", err)
+	}
+}
+
+// UpdateUncleanShutdownMarker updates the last marker's timestamp to now.
+func UpdateUncleanShutdownMarker(db ethdb.KeyValueStore) {
+	var uncleanShutdowns crashList
+	// Read old data
+	if data, err := db.Get(uncleanShutdownKey); err != nil {
+		log.Warn("Error reading unclean shutdown markers", "error", err)
+	} else if err := rlp.DecodeBytes(data, &uncleanShutdowns); err != nil {
+		log.Warn("Error decoding unclean shutdown markers", "error", err)
+	}
+	// This shouldn't happen because we push a marker on Backend instantiation
+	count := len(uncleanShutdowns.Recent)
+	if count == 0 {
+		log.Warn("No unclean shutdown marker to update")
+		return
+	}
+	uncleanShutdowns.Recent[count-1] = uint64(time.Now().Unix())
+	data, _ := rlp.EncodeToBytes(uncleanShutdowns)
+	if err := db.Put(uncleanShutdownKey, data); err != nil {
+		log.Warn("Failed to write unclean-shutdown marker", "err", err)
 	}
 }
 

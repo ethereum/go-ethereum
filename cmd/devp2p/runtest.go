@@ -22,25 +22,25 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	testPatternFlag = cli.StringFlag{
+	testPatternFlag = &cli.StringFlag{
 		Name:  "run",
 		Usage: "Pattern of test suite(s) to run",
 	}
-	testTAPFlag = cli.BoolFlag{
+	testTAPFlag = &cli.BoolFlag{
 		Name:  "tap",
 		Usage: "Output TAP",
 	}
 	// These two are specific to the discovery tests.
-	testListen1Flag = cli.StringFlag{
+	testListen1Flag = &cli.StringFlag{
 		Name:  "listen1",
 		Usage: "IP address of the first tester",
 		Value: v4test.Listen1,
 	}
-	testListen2Flag = cli.StringFlag{
+	testListen2Flag = &cli.StringFlag{
 		Name:  "listen2",
 		Usage: "IP address of the second tester",
 		Value: v4test.Listen2,
@@ -53,7 +53,7 @@ func runTests(ctx *cli.Context, tests []utesting.Test) error {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
 	// Disable logging unless explicitly enabled.
-	if !ctx.GlobalIsSet("verbosity") && !ctx.GlobalIsSet("vmodule") {
+	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
 		log.Root().SetHandler(log.DiscardHandler())
 	}
 	// Run the tests.

@@ -71,9 +71,9 @@ type request struct {
 //   - Path 0x012345678901234567890123456789010123456789012345678901234567890199 -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x0099}
 type SyncPath [][]byte
 
-// newSyncPath converts an expanded trie path from nibble form into a compact
+// NewSyncPath converts an expanded trie path from nibble form into a compact
 // version that can be sent over the network.
-func newSyncPath(path []byte) SyncPath {
+func NewSyncPath(path []byte) SyncPath {
 	// If the hash is from the account trie, append a single item, if it
 	// is from the a storage trie, append a tuple. Note, the length 64 is
 	// clashing between account leaf and storage root. It's fine though
@@ -155,8 +155,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, cal
 	}
 	// If database says this is a duplicate, then at least the trie node is
 	// present, and we hold the assumption that it's NOT legacy contract code.
-	blob := rawdb.ReadTrieNode(s.database, root)
-	if len(blob) > 0 {
+	if rawdb.HasTrieNode(s.database, root) {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -193,7 +192,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 	// sync is expected to run with a fresh new node. Even there
 	// exists the code with legacy format, fetch and store with
 	// new scheme anyway.
-	if blob := rawdb.ReadCodeWithPrefix(s.database, hash); len(blob) > 0 {
+	if rawdb.HasCodeWithPrefix(s.database, hash) {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -224,7 +223,7 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		codeHashes []common.Hash
 	)
 	for !s.queue.Empty() && (max == 0 || len(nodeHashes)+len(codeHashes) < max) {
-		// Retrieve th enext item in line
+		// Retrieve the next item in line
 		item, prio := s.queue.Peek()
 
 		// If we have too many already-pending tasks for this depth, throttle
@@ -239,7 +238,7 @@ func (s *Sync) Missing(max int) (nodes []common.Hash, paths []SyncPath, codes []
 		hash := item.(common.Hash)
 		if req, ok := s.nodeReqs[hash]; ok {
 			nodeHashes = append(nodeHashes, hash)
-			nodePaths = append(nodePaths, newSyncPath(req.path))
+			nodePaths = append(nodePaths, NewSyncPath(req.path))
 		} else {
 			codeHashes = append(codeHashes, hash)
 		}
@@ -401,7 +400,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 			}
 			// If database says duplicate, then at least the trie node is present
 			// and we hold the assumption that it's NOT legacy contract code.
-			if blob := rawdb.ReadTrieNode(s.database, hash); len(blob) > 0 {
+			if rawdb.HasTrieNode(s.database, hash) {
 				continue
 			}
 			// Locally unknown node, schedule for retrieval

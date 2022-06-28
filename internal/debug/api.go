@@ -209,8 +209,8 @@ func (*HandlerT) Stacks(filter *string) string {
 		// E.g. (eth || snap) && !p2p -> (eth in Value || snap in Value) && p2p not in Value
 		expanded = regexp.MustCompile(`[:/\.A-Za-z0-9_-]+`).ReplaceAllString(expanded, "`$0` in Value")
 		expanded = regexp.MustCompile("!(`[:/\\.A-Za-z0-9_-]+`)").ReplaceAllString(expanded, "$1 not")
-		expanded = strings.Replace(expanded, "||", "or", -1)
-		expanded = strings.Replace(expanded, "&&", "and", -1)
+		expanded = strings.ReplaceAll(expanded, "||", "or")
+		expanded = strings.ReplaceAll(expanded, "&&", "and")
 		log.Info("Expanded filter expression", "filter", *filter, "expanded", expanded)
 
 		expr, err := bexpr.CreateEvaluator(expanded)

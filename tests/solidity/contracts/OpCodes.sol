@@ -206,7 +206,7 @@ contract OpCodes {
 
      assembly {
          let x := mload(0x40)   //Find empty storage location using "free memory pointer"
-         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(x,sig) //Place signature at beginning of empty storage
          mstore(add(x,0x04),a) // first address parameter. just after signature
          mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
          mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.
@@ -225,7 +225,7 @@ contract OpCodes {
      //callcode
      assembly {
          let x := mload(0x40)   //Find empty storage location using "free memory pointer"
-         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(x,sig) //Place signature at beginning of empty storage
          mstore(add(x,0x04),a) // first address parameter. just after signature
          mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
          mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.
@@ -244,7 +244,7 @@ contract OpCodes {
      //delegatecall
      assembly {
          let x := mload(0x40)   //Find empty storage location using "free memory pointer"
-         mstore(x,sig) //Place signature at begining of empty storage
+         mstore(x,sig) //Place signature at beginning of empty storage
          mstore(add(x,0x04),a) // first address parameter. just after signature
          mstore(add(x,0x24),a) // 2nd address parameter - first padded. add 32 bytes (not 20 bytes)
          mstore(0x40,add(x,0x64)) // this is missing in other examples. Set free pointer before function call. so it is used by called function.

@@ -49,6 +49,12 @@ func (bc *BlockChain) CurrentFastBlock() *types.Block {
 	return bc.currentFastBlock.Load().(*types.Block)
 }
 
+// CurrentFinalizedBlock retrieves the current finalized block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentFinalizedBlock() *types.Block {
+	return bc.currentFinalizedBlock.Load().(*types.Block)
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
@@ -71,6 +77,12 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // caching it (associated with its hash) if found.
 func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return bc.hc.GetHeaderByNumber(number)
+}
+
+// GetHeadersFrom returns a contiguous segment of headers, in rlp-form, going
+// backwards from the given number.
+func (bc *BlockChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
+	return bc.hc.GetHeadersFrom(number, count)
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database by

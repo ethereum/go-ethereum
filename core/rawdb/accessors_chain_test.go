@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -435,11 +434,7 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestAncientStorage(t *testing.T) {
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.RemoveAll(frdir)
+	frdir := t.TempDir()
 
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
@@ -577,15 +572,12 @@ func TestHashesInRange(t *testing.T) {
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		b.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.RemoveAll(frdir)
+	frdir := b.TempDir()
 	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
 	if err != nil {
 		b.Fatalf("failed to create database with ancient backend")
 	}
+	defer db.Close()
 
 	// Create the data to insert. The blocks must have consecutive numbers, so we create
 	// all of them ahead of time. However, there is no need to create receipts
@@ -860,7 +852,7 @@ func TestDeriveLogFields(t *testing.T) {
 
 func BenchmarkDecodeRLPLogs(b *testing.B) {
 	// Encoded receipts from block 0x14ee094309fbe8f70b65f45ebcc08fb33f126942d97464aad5eb91cfd1e2d269
-	buf, err := ioutil.ReadFile("testdata/stored_receipts.bin")
+	buf, err := os.ReadFile("testdata/stored_receipts.bin")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -882,4 +874,64 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestHeadersRLPStorage(t *testing.T) {
+	// Have N headers in the freezer
+	frdir := t.TempDir()
+
+	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend")
+	}
+	defer db.Close()
+	// Create blocks
+	var chain []*types.Block
+	var pHash common.Hash
+	for i := 0; i < 100; i++ {
+		block := types.NewBlockWithHeader(&types.Header{
+			Number:      big.NewInt(int64(i)),
+			Extra:       []byte("test block"),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
+			ParentHash:  pHash,
+		})
+		chain = append(chain, block)
+		pHash = block.Hash()
+	}
+	var receipts []types.Receipts = make([]types.Receipts, 100)
+	// Write first half to ancients
+	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
+	// Write second half to db
+	for i := 50; i < 100; i++ {
+		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
+		WriteBlock(db, chain[i])
+	}
+	checkSequence := func(from, amount int) {
+		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))
+		if have, want := len(headersRlp), amount; have != want {
+			t.Fatalf("have %d headers, want %d", have, want)
+		}
+		for i, headerRlp := range headersRlp {
+			var header types.Header
+			if err := rlp.DecodeBytes(headerRlp, &header); err != nil {
+				t.Fatal(err)
+			}
+			if have, want := header.Number.Uint64(), uint64(from-i); have != want {
+				t.Fatalf("wrong number, have %d want %d", have, want)
+			}
+		}
+	}
+	checkSequence(99, 20)  // Latest block and 19 parents
+	checkSequence(99, 50)  // Latest block -> all db blocks
+	checkSequence(99, 51)  // Latest block -> one from ancients
+	checkSequence(99, 52)  // Latest blocks -> two from ancients
+	checkSequence(50, 2)   // One from db, one from ancients
+	checkSequence(49, 1)   // One from ancients
+	checkSequence(49, 50)  // All ancient ones
+	checkSequence(99, 100) // All blocks
+	checkSequence(0, 1)    // Only genesis
+	checkSequence(1, 1)    // Only block 1
+	checkSequence(1, 2)    // Genesis + block 1
 }

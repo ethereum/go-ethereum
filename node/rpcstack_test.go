@@ -24,10 +24,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )
@@ -146,12 +148,12 @@ func TestWebsocketOrigins(t *testing.T) {
 		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
 		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
-			if err := wsRequest(t, url, origin); err != nil {
+			if err := wsRequest(t, url, "Origin", origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
 			}
 		}
 		for _, origin := range tc.expFail {
-			if err := wsRequest(t, url, origin); err == nil {
+			if err := wsRequest(t, url, "Origin", origin); err == nil {
 				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
 			}
 		}
@@ -243,13 +245,18 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 }
 
 // wsRequest attempts to open a WebSocket connection to the given URL.
-func wsRequest(t *testing.T, url, browserOrigin string) error {
+func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 	t.Helper()
-	t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
+	//t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
 
 	headers := make(http.Header)
-	if browserOrigin != "" {
-		headers.Set("Origin", browserOrigin)
+	// Apply extra headers.
+	if len(extraHeaders)%2 != 0 {
+		panic("odd extraHeaders length")
+	}
+	for i := 0; i < len(extraHeaders); i += 2 {
+		key, value := extraHeaders[i], extraHeaders[i+1]
+		headers.Set(key, value)
 	}
 	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if conn != nil {
@@ -276,7 +283,7 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 	}
 	for i := 0; i < len(extraHeaders); i += 2 {
 		key, value := extraHeaders[i], extraHeaders[i+1]
-		if strings.ToLower(key) == "host" {
+		if strings.EqualFold(key, "host") {
 			req.Host = value
 		} else {
 			req.Header.Set(key, value)
@@ -290,4 +297,125 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 		t.Fatal(err)
 	}
 	return resp
+}
+
+type testClaim map[string]interface{}
+
+func (testClaim) Valid() error {
+	return nil
+}
+
+func TestJWT(t *testing.T) {
+	var secret = []byte("secret")
+	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
+		if method == nil {
+			method = jwt.SigningMethodHS256
+		}
+		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
+		return ss
+	}
+	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
+		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
+	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
+	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
+
+	expOk := []func() string{
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 4}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+				"iat": time.Now().Unix(),
+				"exp": time.Now().Unix() + 2,
+			}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+				"iat": time.Now().Unix(),
+				"bar": "baz",
+			}))
+		},
+	}
+	for i, tokenFn := range expOk {
+		token := tokenFn()
+		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
+			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
+		}
+		token = tokenFn()
+		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
+			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
+		}
+	}
+
+	expFail := []func() string{
+		// future
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 6}))
+		},
+		// stale
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 6}))
+		},
+		// wrong algo
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, jwt.SigningMethodHS512, testClaim{"iat": time.Now().Unix() + 4}))
+		},
+		// expired
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix(), "exp": time.Now().Unix()}))
+		},
+		// missing mandatory iat
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{}))
+		},
+		//  wrong secret
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken([]byte("wrong"), nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken([]byte{}, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(nil, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		// Various malformed syntax
+		func() string {
+			return fmt.Sprintf("%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+	}
+	for i, tokenFn := range expFail {
+		token := tokenFn()
+		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
+			t.Errorf("tc %d-ws, token '%v': expected not to allow,  got ok", i, token)
+		}
+		token = tokenFn()
+		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 403 {
+			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
+		}
+	}
+	srv.stop()
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -247,7 +247,8 @@ func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan
 	}
 }
 
-// IndexTransactions creates txlookup indices of the specified block range.
+// IndexTransactions creates txlookup indices of the specified block range. The from
+// is included while to is excluded.
 //
 // This function iterates canonical chain in reverse order, it has one main advantage:
 // We can write tx index tail flag periodically even without the whole indexing
@@ -339,6 +340,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
+// The from is included while to is excluded.
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.

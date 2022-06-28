@@ -40,6 +40,9 @@ func Fuzz(input []byte) int {
 	if len(input) == 0 {
 		return 0
 	}
+	if len(input) > 500*1024 {
+		return 0
+	}
 
 	var i int
 	{

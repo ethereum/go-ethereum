@@ -17,7 +17,6 @@
 package jsre
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -40,23 +39,19 @@ func (no *testNativeObjectBinding) TestMethod(call goja.FunctionCall) goja.Value
 	return no.vm.ToValue(&msg{m})
 }
 
-func newWithTestJS(t *testing.T, testjs string) (*JSRE, string) {
-	dir, err := ioutil.TempDir("", "jsre-test")
-	if err != nil {
-		t.Fatal("cannot create temporary directory:", err)
-	}
+func newWithTestJS(t *testing.T, testjs string) *JSRE {
+	dir := t.TempDir()
 	if testjs != "" {
-		if err := ioutil.WriteFile(path.Join(dir, "test.js"), []byte(testjs), os.ModePerm); err != nil {
+		if err := os.WriteFile(path.Join(dir, "test.js"), []byte(testjs), os.ModePerm); err != nil {
 			t.Fatal("cannot create test.js:", err)
 		}
 	}
 	jsre := New(dir, os.Stdout)
-	return jsre, dir
+	return jsre
 }
 
 func TestExec(t *testing.T) {
-	jsre, dir := newWithTestJS(t, `msg = "testMsg"`)
-	defer os.RemoveAll(dir)
+	jsre := newWithTestJS(t, `msg = "testMsg"`)
 
 	err := jsre.Exec("test.js")
 	if err != nil {
@@ -78,25 +73,24 @@ func TestExec(t *testing.T) {
 }
 
 func TestNatto(t *testing.T) {
-	jsre, dir := newWithTestJS(t, `setTimeout(function(){msg = "testMsg"}, 1);`)
-	defer os.RemoveAll(dir)
+	jsre := newWithTestJS(t, `setTimeout(function(){msg = "testMsg"}, 1);`)
 
 	err := jsre.Exec("test.js")
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	val, err := jsre.Run("msg")
 	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+		t.Fatalf("expected no error, got %v", err)
 	}
 	if val.ExportType().Kind() != reflect.String {
-		t.Errorf("expected string value, got %v", val)
+		t.Fatalf("expected string value, got %v", val)
 	}
 	exp := "testMsg"
 	got := val.ToString().String()
 	if exp != got {
-		t.Errorf("expected '%v', got '%v'", exp, got)
+		t.Fatalf("expected '%v', got '%v'", exp, got)
 	}
 	jsre.Stop(false)
 }
@@ -114,8 +108,7 @@ func TestBind(t *testing.T) {
 }
 
 func TestLoadScript(t *testing.T) {
-	jsre, dir := newWithTestJS(t, `msg = "testMsg"`)
-	defer os.RemoveAll(dir)
+	jsre := newWithTestJS(t, `msg = "testMsg"`)
 
 	_, err := jsre.Run(`loadScript("test.js")`)
 	if err != nil {
