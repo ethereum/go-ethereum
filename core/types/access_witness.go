@@ -228,29 +228,56 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 	return naw
 }
 
-// TODO TouchAndCharge + SetLeafValue* does redundant calls to GetTreeKey*
-
 func (aw *AccessWitness) TouchAndChargeProofOfAbsence(addr []byte) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyVersion(addr[:]))
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyBalance(addr[:]))
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeSize(addr[:]))
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeKeccak(addr[:]))
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyNonce(addr[:]))
+	var (
+		balancekey, cskey, ckkey, noncekey [32]byte
+		gas                                uint64
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(addr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnReadAndComputeGas(balancekey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(cskey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(ckkey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(noncekey[:])
 	return gas
 }
 
 func (aw *AccessWitness) TouchAndChargeMessageCall(addr []byte) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyVersion(addr[:]))
-	gas += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeSize(addr[:]))
+	var (
+		gas   uint64
+		cskey [32]byte
+	)
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(addr[:])
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnReadAndComputeGas(cskey[:])
 	return gas
 }
 
 func (aw *AccessWitness) SetLeafValuesMessageCall(addr, codeSize []byte) {
-	var data [32]byte
-	aw.SetLeafValue(utils.GetTreeKeyVersion(addr[:]), data[:])
-	aw.SetLeafValue(utils.GetTreeKeyCodeSize(addr[:]), codeSize[:])
+	var (
+		cskey [32]byte
+		data  [32]byte
+	)
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(addr[:])
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	aw.SetLeafValue(versionkey, data[:])
+	aw.SetLeafValue(cskey[:], codeSize[:])
 }
 
 func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []byte) uint64 {
@@ -263,13 +290,26 @@ func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []by
 // TouchAndChargeContractCreateInit charges access costs to initiate
 // a contract creation
 func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSendsValue bool) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyVersion(addr[:]))
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyNonce(addr[:]))
+	var (
+		balancekey, ckkey, noncekey [32]byte
+		gas                         uint64
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(addr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	gas += aw.TouchAddressOnWriteAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnWriteAndComputeGas(noncekey[:])
 	if createSendsValue {
-		gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(addr[:]))
+		gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 	}
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyCodeKeccak(addr[:]))
+	gas += aw.TouchAddressOnWriteAndComputeGas(ckkey[:])
 	return gas
 }
 
@@ -277,75 +317,167 @@ func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSen
 // the completion of a contract creation to populate the created account in
 // the tree
 func (aw *AccessWitness) TouchAndChargeContractCreateCompleted(addr []byte, withValue bool) uint64 {
-	var gas uint64
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyVersion(addr[:]))
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyNonce(addr[:]))
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(addr[:]))
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyCodeSize(addr[:]))
-	gas += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyCodeKeccak(addr[:]))
+	var (
+		balancekey, cskey, ckkey, noncekey [32]byte
+		gas                                uint64
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(addr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	gas += aw.TouchAddressOnWriteAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
+	gas += aw.TouchAddressOnWriteAndComputeGas(cskey[:])
+	gas += aw.TouchAddressOnWriteAndComputeGas(ckkey[:])
+	gas += aw.TouchAddressOnWriteAndComputeGas(noncekey[:])
 	return gas
 }
 
 func (aw *AccessWitness) SetLeafValuesContractCreateCompleted(addr, codeSize, codeKeccak []byte) {
-	aw.SetLeafValue(utils.GetTreeKeyCodeSize(addr[:]), codeSize)
-	aw.SetLeafValue(utils.GetTreeKeyCodeKeccak(addr[:]), codeKeccak)
+	var ckkey [32]byte
+	cskey := utils.GetTreeKeyCodeSize(addr[:])
+	copy(ckkey[:], cskey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	aw.SetLeafValue(cskey, codeSize)
+	aw.SetLeafValue(ckkey[:], codeKeccak)
 }
 
 func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte, sendsValue bool) uint64 {
-	var gasUsed uint64
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyVersion(originAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeKeccak(originAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeSize(originAddr[:]))
-	gasUsed += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyNonce(originAddr[:]))
-	gasUsed += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(originAddr[:]))
+	var (
+		balancekey, cskey, ckkey, noncekey [32]byte
+		gas                                uint64
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(originAddr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnReadAndComputeGas(cskey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(ckkey[:])
+	gas += aw.TouchAddressOnWriteAndComputeGas(noncekey[:])
+	gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 
 	if sendsValue {
-		gasUsed += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(originAddr[:]))
+		gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 	}
-	return gasUsed
+	return gas
 }
 
 func (aw *AccessWitness) TouchTxExistingAndComputeGas(targetAddr []byte, sendsValue bool) uint64 {
-	var gasUsed uint64
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyVersion(targetAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyBalance(targetAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyNonce(targetAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeSize(targetAddr[:]))
-	gasUsed += aw.TouchAddressOnReadAndComputeGas(utils.GetTreeKeyCodeKeccak(targetAddr[:]))
+	var (
+		balancekey, cskey, ckkey, noncekey [32]byte
+		gas                                uint64
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
+	gas += aw.TouchAddressOnReadAndComputeGas(cskey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(ckkey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(noncekey[:])
+	gas += aw.TouchAddressOnReadAndComputeGas(balancekey[:])
 
 	if sendsValue {
-		gasUsed += aw.TouchAddressOnWriteAndComputeGas(utils.GetTreeKeyBalance(targetAddr[:]))
+		gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 	}
-	return gasUsed
+	return gas
 }
 
 func (aw *AccessWitness) SetTxOriginTouchedLeaves(originAddr, originBalance, originNonce []byte, codeSize int) {
-	var version [32]byte
-	aw.SetLeafValue(utils.GetTreeKeyVersion(originAddr[:]), version[:])
-	aw.SetLeafValue(utils.GetTreeKeyBalance(originAddr[:]), originBalance)
-	aw.SetLeafValue(utils.GetTreeKeyNonce(originAddr[:]), originNonce)
+	var (
+		balancekey, cskey, noncekey [32]byte
+		version                     [32]byte
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(originAddr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+
+	aw.SetLeafValue(versionkey, version[:])
+	aw.SetLeafValue(balancekey[:], originBalance)
+	aw.SetLeafValue(noncekey[:], originNonce)
 	var cs [32]byte
 	binary.LittleEndian.PutUint64(cs[:8], uint64(codeSize))
-	aw.SetLeafValue(utils.GetTreeKeyCodeSize(originAddr[:]), cs[:])
+	aw.SetLeafValue(cskey[:], cs[:])
 }
 
 func (aw *AccessWitness) SetTxExistingTouchedLeaves(targetAddr, targetBalance, targetNonce, targetCodeSize, targetCodeHash []byte) {
-	var version [32]byte
-	aw.SetLeafValue(utils.GetTreeKeyVersion(targetAddr[:]), version[:])
-	aw.SetLeafValue(utils.GetTreeKeyBalance(targetAddr[:]), targetBalance)
-	aw.SetLeafValue(utils.GetTreeKeyNonce(targetAddr[:]), targetNonce)
-	aw.SetLeafValue(utils.GetTreeKeyCodeSize(targetAddr[:]), targetCodeSize)
-	aw.SetLeafValue(utils.GetTreeKeyCodeKeccak(targetAddr[:]), targetCodeHash)
+	var (
+		balancekey, cskey, ckkey, noncekey [32]byte
+		version                            [32]byte
+	)
+
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	aw.SetLeafValue(versionkey, version[:])
+	aw.SetLeafValue(balancekey[:], targetBalance)
+	aw.SetLeafValue(noncekey[:], targetNonce)
+	aw.SetLeafValue(cskey[:], targetCodeSize)
+	aw.SetLeafValue(ckkey[:], targetCodeHash)
 }
 
 func (aw *AccessWitness) SetGetObjectTouchedLeaves(targetAddr, version, targetBalance, targetNonce, targetCodeHash []byte) {
-	aw.SetLeafValue(utils.GetTreeKeyVersion(targetAddr[:]), version[:])
-	aw.SetLeafValue(utils.GetTreeKeyBalance(targetAddr[:]), targetBalance)
-	aw.SetLeafValue(utils.GetTreeKeyNonce(targetAddr[:]), targetNonce)
-	aw.SetLeafValue(utils.GetTreeKeyCodeKeccak(targetAddr[:]), targetCodeHash)
+	var balancekey, ckkey, noncekey [32]byte
+	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	aw.SetLeafValue(versionkey, version[:])
+	aw.SetLeafValue(balancekey[:], targetBalance)
+	aw.SetLeafValue(noncekey[:], targetNonce)
+	aw.SetLeafValue(ckkey[:], targetCodeHash)
 }
 
 func (aw *AccessWitness) SetObjectCodeTouchedLeaves(addr, cs, ch []byte) {
-	aw.SetLeafValue(utils.GetTreeKeyCodeSize(addr[:]), cs)
-	aw.SetLeafValue(utils.GetTreeKeyCodeKeccak(addr[:]), ch)
+	var ckkey [32]byte
+	cskey := utils.GetTreeKeyCodeSize(addr[:])
+	copy(ckkey[:], cskey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	aw.SetLeafValue(cskey, cs)
+	aw.SetLeafValue(ckkey[:], ch)
 }
