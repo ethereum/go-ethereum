@@ -119,7 +119,7 @@ var (
 		utils.CachePreimagesFlag,
 		utils.FDLimitFlag,
 		utils.ListenPortFlag,
-		utils.DiscPortFlag,
+		utils.DiscoveryPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.MiningEnabledFlag,

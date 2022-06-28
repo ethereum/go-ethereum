@@ -799,12 +799,6 @@ var (
 		Value:    "",
 		Category: flags.NetworkingCategory,
 	}
-	DiscPortFlag = &cli.IntFlag{
-		Name:     "discport",
-		Usage:    "Use a custom UDP port for P2P discovery",
-		Value:    30303,
-		Category: flags.NetworkingCategory,
-	}
 	NodeKeyFileFlag = &cli.StringFlag{
 		Name:     "nodekey",
 		Usage:    "P2P node key file",
@@ -839,6 +833,12 @@ var (
 	DNSDiscoveryFlag = &cli.StringFlag{
 		Name:     "discovery.dns",
 		Usage:    "Sets DNS discovery entry points (use \"\" to disable DNS)",
+		Category: flags.NetworkingCategory,
+	}
+	DiscoveryPortFlag = &cli.IntFlag{
+		Name:     "discovery.port",
+		Usage:    "Use a custom UDP port for P2P discovery",
+		Value:    30303,
 		Category: flags.NetworkingCategory,
 	}
 
@@ -1128,8 +1128,8 @@ func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
 		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
 	}
-	if ctx.IsSet(DiscPortFlag.Name) {
-		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscPortFlag.Name))
+	if ctx.IsSet(DiscoveryPortFlag.Name) {
+		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscoveryPortFlag.Name))
 	}
 }
 
