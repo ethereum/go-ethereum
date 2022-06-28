@@ -819,8 +819,10 @@ func (s *PublicBlockChainAPI) getAuthor(head *types.Header) (*common.Address, er
 	// get author using Author() function from: /consensus/clique/clique.go
 	// In Production: get author using Author() function from: /consensus/bor/bor.go
 	author, err := s.b.Engine().Author(head)
+	// make sure we don't send error to the user, return 0x0 instead
 	if err != nil {
-		return nil, err
+		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
+		return &add, nil
 	}
 	// change the coinbase (0x0) with the miner address
 	return &author, nil
