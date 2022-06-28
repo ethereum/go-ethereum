@@ -127,6 +127,7 @@ const (
 
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
+// FIXME Change this config's name so it suits for both cache and prune config
 type CacheConfig struct {
 	TriesInMemory       int           // Keeps the latest n blocks when pruning.
 	TrieCleanLimit      int           // Memory allowance (MB) to use for caching trie nodes in memory
@@ -138,6 +139,8 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
+
+	AncientRecentLimit uint64
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -926,6 +929,8 @@ const (
 
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
+// (The function name is confusing here, though it calls "insert receipt", it inserts block body for sure,
+//  but it doesn't process the transaction in the block, which is different from the InsertChain() function)
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
 	// We don't require the chainMu here since we want to maximize the
 	// concurrency of header insertion and receipt insertion.
@@ -2265,16 +2270,36 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	defer bc.wg.Done()
 
+	ancientLimit := bc.cacheConfig.AncientRecentLimit
+	frozen, _ := bc.db.Ancients()
+	log.Info("maintainTxIndex", "ancientLimit", ancientLimit, "ancients", ancients, "frozen", frozen)
 	// Before starting the actual maintenance, we need to handle a special case,
 	// where user might init Geth with an external ancient database. If so, we
 	// need to reindex all necessary transactions before starting to process any
 	// pruning requests.
 	if ancients > 0 {
 		var from = uint64(0)
-		if bc.txLookupLimit != 0 && ancients > bc.txLookupLimit {
-			from = ancients - bc.txLookupLimit
+		// let `from` be a "more" recent block
+		if ancientLimit > 0 {
+			if ancientLimit < ancients {
+				from = ancients - ancientLimit
+			}
+			if bc.txLookupLimit != 0 && bc.txLookupLimit < ancientLimit {
+				from = ancients - bc.txLookupLimit
+			}
+		} else {
+			if bc.txLookupLimit != 0 && ancients > bc.txLookupLimit {
+				from = ancients - bc.txLookupLimit
+			}
 		}
+
+		log.Info("maintainTxIndex", "ancientLimit", ancientLimit, "ancients", ancients, "from", from)
 		rawdb.IndexTransactions(bc.db, from, ancients, bc.quit)
+	}
+
+	if ancientLimit > 0 && (bc.txLookupLimit == 0 || bc.txLookupLimit > ancientLimit) {
+		log.Warn("reduece txLookupLimit to meet ancient purging purpose, as it's insane to lookup txs in purged blocks")
+		bc.txLookupLimit = ancientLimit
 	}
 
 	// indexBlocks reindexes or unindexes transactions depending on user configuration
@@ -2289,6 +2314,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 				rawdb.WriteTxIndexTail(bc.db, 0)
 			} else {
 				// Prune all stale tx indices and record the tx index tail
+				log.Info("Scheduled transactions unindexing", "from block", 0, "to", head-bc.txLookupLimit+1)
 				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit)
 			}
 			return
@@ -2313,13 +2339,61 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			rawdb.IndexTransactions(bc.db, head-bc.txLookupLimit+1, *tail, bc.quit)
 		} else {
 			// Unindex a part of stale indices and forward index tail to HEAD-limit
+			log.Info("Scheduled transactions unindexing", "from block", *tail, "to", head-bc.txLookupLimit+1)
 			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit)
 		}
 	}
 
+	// pruneAncient is a background thread that periodically checks the blockchain for any
+	// import progress and cleans ancient data from the freezer.
+	//
+	// it calculates the highest block(named `cleanTo`) that can be cleaned, then starts
+	// cleaning from the genesis+1 block in batches, until reaches the `cleanTo` block.
+	pruneAncient := func(txIndexTail *uint64, head uint64, wait, done chan struct{}) {
+		defer func() { done <- struct{}{} }()
+		// Wait till the tx index routine finishes, in case that it cannot find the ancient
+		// blocks for iterating transactions for unindex because we have pruned the blocks
+		<-wait
+
+		start := time.Now()
+
+		first, _ := bc.db.Tail()
+		last, _ := bc.db.Ancients()
+		ancientLimit := bc.cacheConfig.AncientRecentLimit
+
+		if last < ancientLimit || last < first {
+			// It should not reach here
+			log.Error("prune ancient error", "last frozen", last, "first frozen", first, "ancientRecentLimit", ancientLimit)
+			return
+		}
+
+		pruneTo := last - ancientLimit
+		storedSections := rawdb.ReadStoredBloomSections(bc.db)
+		if storedSections*params.BloomBitsBlocks-1 < pruneTo {
+			log.Warn("Attempt to prune the ancient blocks that bloom filter haven't finished yet, postpone to next round", "storedSections", storedSections, "pruneTo", pruneTo)
+			return
+		}
+
+		// Double ensure we don't prune the blocks having dangling transaction indices
+		if txIndexTail != nil && pruneTo > *txIndexTail {
+			log.Warn("Attempt to prune the ancient blocks that still have tx indices, postpone to next round", "txIndexTail", *txIndexTail, "pruneTo", pruneTo)
+			return
+		}
+
+		// truncate
+		bc.db.TruncateTail(pruneTo)
+
+		// Log something friendly for the user
+		context := []interface{}{
+			"blocks", pruneTo - first, "from block", first, "to", pruneTo, "current last block in ancient", last, "elapsed", common.PrettyDuration(time.Since(start)),
+		}
+		log.Info("Cleaned ancient chain segment", context...)
+	}
+
 	// Any reindexing done, start listening to chain events and moving the index window
 	var (
-		done   chan struct{}                  // Non-nil if background unindexing or reindexing routine is active.
+		doneTx chan struct{}                  // For tx indexing routine, non-nil if the routine is active.
+		donePr chan struct{}                  // For prune ancient routine, non-nil if the routine is active.
 		headCh = make(chan ChainHeadEvent, 1) // Buffered to avoid locking up the event feed
 	)
 	sub := bc.SubscribeChainHeadEvent(headCh)
@@ -2331,16 +2405,19 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	for {
 		select {
 		case head := <-headCh:
-			if done == nil {
-				done = make(chan struct{})
-				go indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), done)
+			if doneTx == nil && donePr == nil {
+				doneTx = make(chan struct{})
+				donePr = make(chan struct{})
+				go indexBlocks(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), doneTx)
+				go pruneAncient(rawdb.ReadTxIndexTail(bc.db), head.Block.NumberU64(), doneTx, donePr)
 			}
-		case <-done:
-			done = nil
+		case <-donePr:
+			donePr = nil
+			doneTx = nil
 		case <-bc.quit:
-			if done != nil {
-				log.Info("Waiting background transaction indexer to exit")
-				<-done
+			if donePr != nil {
+				log.Info("Waiting background transaction indexer and ancient pruner to exit")
+				<-donePr
 			}
 			return
 		}
