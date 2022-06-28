@@ -2140,11 +2140,14 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	return chainDb
 }
 
-func IsTestnetPreset(ctx *cli.Context) bool {
+func IsNetworkPreset(ctx *cli.Context) bool {
 	for _, flag := range TestnetFlags {
-		if ctx.GlobalBool(flag.GetName()) {
+		if ctx.Bool(flag.String()) {
 			return true
 		}
+	}
+	if ctx.Bool(MainnetFlag.Name) {
+		return true
 	}
 	return false
 }
