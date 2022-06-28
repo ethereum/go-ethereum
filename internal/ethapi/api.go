@@ -954,6 +954,8 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		evm.Cancel()
 	}()
 
+	// Call Prepare to clear out the statedb access list
+	state.Prepare(common.Hash{}, 0)
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
