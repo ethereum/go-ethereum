@@ -167,8 +167,13 @@ func (ec *Client) GetNodeInfo(ctx context.Context) (*p2p.NodeInfo, error) {
 }
 
 // SubscribePendingTransactions subscribes to new pending transactions.
-func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (*rpc.ClientSubscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions", true)
+}
+
+// SubscribePendingTransactionHashes subscribes to new pending transaction hashes.
+func (ec *Client) SubscribePendingTransactionHashes(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions", false)
 }
 
 func toBlockNumArg(number *big.Int) string {

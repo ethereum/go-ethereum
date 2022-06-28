@@ -122,6 +122,9 @@ func TestGethClient(t *testing.T) {
 			"TestSetHead",
 			func(t *testing.T) { testSetHead(t, client) },
 		}, {
+			"TestSubscribePendingTxHashes",
+			func(t *testing.T) { testSubscribePendingTransactionHashes(t, client) },
+		}, {
 			"TestSubscribePendingTxs",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
@@ -269,12 +272,12 @@ func testSetHead(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
+func testSubscribePendingTransactionHashes(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
 	ch := make(chan common.Hash)
-	ec.SubscribePendingTransactions(context.Background(), ch)
+	ec.SubscribePendingTransactionHashes(context.Background(), ch)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
@@ -300,6 +303,40 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	hash := <-ch
 	if hash != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
+	}
+}
+
+func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	ethcl := ethclient.NewClient(client)
+	// Subscribe to Transactions
+	ch := make(chan *types.Transaction)
+	ec.SubscribePendingTransactions(context.Background(), ch)
+	// Send a transaction
+	chainID, err := ethcl.ChainID(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Create transaction
+	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	signer := types.LatestSignerForChainID(chainID)
+	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedTx, err := tx.WithSignature(signer, signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Send transaction
+	err = ethcl.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check that the transaction was send over the channel
+	tx = <-ch
+	if tx.Hash() != signedTx.Hash() {
+		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
 	}
 }
 
