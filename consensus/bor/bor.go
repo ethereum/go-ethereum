@@ -292,7 +292,15 @@ func (c *Bor) Author(header *types.Header) (common.Address, error) {
 		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
 		return add, nil
 	}
-	return ecrecover(header, c.signatures, c.config)
+
+	add, err := ecrecover(header, c.signatures, c.config)
+
+	if err != nil {
+		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
+		return add, nil
+	} else {
+		return add, nil
+	}
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.

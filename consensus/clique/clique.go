@@ -214,7 +214,15 @@ func (c *Clique) Author(header *types.Header) (common.Address, error) {
 		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
 		return add, nil
 	}
-	return ecrecover(header, c.signatures)
+
+	add, err := ecrecover(header, c.signatures)
+
+	if err != nil {
+		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
+		return add, nil
+	} else {
+		return add, nil
+	}
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
