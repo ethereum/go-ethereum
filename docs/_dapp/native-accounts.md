@@ -149,7 +149,7 @@ wildly different security guarantees, it is essential to be clear on how each wo
   security consequences if not done properly. Depending on the keystore's configured
   strength, constantly decrypting keys can result in non-negligible resource
   requirements.
-  
+
 * **Multiple authorizations**: A more complex way of signing transactions via the account
   manager is to unlock the account via its passphrase once, and allow the account manager
   to cache the decrypted private key, enabling all subsequent signing requests to
@@ -164,8 +164,8 @@ wildly different security guarantees, it is essential to be clear on how each wo
 
 Assuming an instance of an [`accounts.Manager`][accounts-manager] called `am` exists, a new 
 account can be created to sign transactions using [`NewAccount`][new-account]. Creating transactions
-is out of scope on this page so instead a random [`common.Hash`][common-hash]
-will be signed instead.
+is out of scope for this page so instead a random [`common.Hash`][common-hash] will be signed instead.
+For information on creating transactions in Go native applications see the [Go API page](/docs/dapp/native).
 
 ```go
 // Create a new account to sign transactions with
@@ -173,7 +173,7 @@ signer, _ := ks.NewAccount("Signer password")
 txHash := common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 ```
 
-With the boilerplate out of the way, we can now sign transaction using the authorization
+With the boilerplate out of the way, the transaction can be signed using the authorization
 mechanisms described above:
 
 ```go
