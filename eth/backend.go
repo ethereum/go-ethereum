@@ -20,7 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/txtrace"
 	"math/big"
 	"runtime"
 	"strings"
@@ -59,6 +58,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/txtrace"
 )
 
 // Config contains the configuration options of the ETH protocol.
