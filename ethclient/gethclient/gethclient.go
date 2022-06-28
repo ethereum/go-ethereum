@@ -173,7 +173,7 @@ func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- *t
 
 // SubscribePendingTransactionHashes subscribes to new pending transaction hashes.
 func (ec *Client) SubscribePendingTransactionHashes(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions", false)
+	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
 func toBlockNumArg(number *big.Int) string {
