@@ -63,29 +63,43 @@ func (trie *VerkleTrie) TryGet(key []byte) ([]byte, error) {
 }
 
 func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+	var (
+		err                                error
+		nonce, balance                     [32]byte
+		balancekey, cskey, ckkey, noncekey [32]byte
+	)
 
-	var err error
-	if err = t.TryUpdate(utils.GetTreeKeyVersion(key), []byte{0}); err != nil {
+	// Only evaluate the polynomial once
+	versionkey := utils.GetTreeKeyVersion(key[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	if err = t.TryUpdate(versionkey, []byte{0}); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
-	var nonce [32]byte
 	binary.LittleEndian.PutUint64(nonce[:], acc.Nonce)
-	if err = t.TryUpdate(utils.GetTreeKeyNonce(key), nonce[:]); err != nil {
+	if err = t.TryUpdate(noncekey[:], nonce[:]); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
-	var balance [32]byte
 	bbytes := acc.Balance.Bytes()
 	if len(bbytes) > 0 {
 		for i, b := range bbytes {
 			balance[len(bbytes)-i-1] = b
 		}
 	}
-	if err = t.TryUpdate(utils.GetTreeKeyBalance(key), balance[:]); err != nil {
+	if err = t.TryUpdate(balancekey[:], balance[:]); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
-	if err = t.TryUpdate(utils.GetTreeKeyCodeKeccak(key), acc.CodeHash); err != nil {
+	if err = t.TryUpdate(ckkey[:], acc.CodeHash); err != nil {
 		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
 	}
+	// TODO figure out if the code size needs to be updated, too
 
 	return nil
 }
