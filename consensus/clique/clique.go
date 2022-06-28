@@ -210,10 +210,6 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (c *Clique) Author(header *types.Header) (common.Address, error) {
-	if header.Number.Uint64() == 0 {
-		add := common.HexToAddress("0x0000000000000000000000000000000000000000")
-		return add, nil
-	}
 	return ecrecover(header, c.signatures)
 }
 
