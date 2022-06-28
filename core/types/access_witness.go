@@ -351,7 +351,7 @@ func (aw *AccessWitness) SetLeafValuesContractCreateCompleted(addr, codeSize, co
 	aw.SetLeafValue(ckkey[:], codeKeccak)
 }
 
-func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte, sendsValue bool) uint64 {
+func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
 	var (
 		balancekey, cskey, ckkey, noncekey [32]byte
 		gas                                uint64
@@ -374,9 +374,6 @@ func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte, sendsValu
 	gas += aw.TouchAddressOnWriteAndComputeGas(noncekey[:])
 	gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
 
-	if sendsValue {
-		gas += aw.TouchAddressOnWriteAndComputeGas(balancekey[:])
-	}
 	return gas
 }
 
