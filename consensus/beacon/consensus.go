@@ -112,16 +112,29 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			break
 		}
 	}
+
 	// All the headers have passed the transition point, use new rules.
 	if len(preHeaders) == 0 {
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
+
 	// The transition point exists in the middle, separate the headers
 	// into two batches and apply different verification rules for them.
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
+	// Verify that the last preHeader (and only the last one) satisfies the
+	// terminal total difficulty.
+	if err := beacon.verifyTerminalPoWBlock(chain, preHeaders); err != nil {
+		go func() {
+			select {
+			case results <- err:
+			case <-abort:
+			}
+		}()
+		return abort, results
+	}
 	go func() {
 		var (
 			old, new, out      = 0, len(preHeaders), 0
@@ -152,6 +165,39 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		}
 	}()
 	return abort, results
+}
+
+// verifyTerminalPoWBlock verifies that the preHeaders confirm to the specification
+// wrt. their total difficulty.
+// It expects:
+// - preHeaders to be at least 1 element
+// - the parent of the header element to be stored in the chain correctly
+// - the preHeaders to have a set difficulty
+// - the last element to be the terminal block
+func (beacon *Beacon) verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) error {
+	var (
+		first = preHeaders[0]
+		last  = preHeaders[len(preHeaders)-1]
+	)
+
+	td := chain.GetTd(first.ParentHash, first.Number.Uint64()-1)
+	if td == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	if len(preHeaders) != 1 {
+		for _, head := range preHeaders[:len(preHeaders)-2] {
+			td.Add(td, head.Difficulty)
+		}
+	}
+	// Check if the parent was already the terminal block
+	if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
+		return consensus.ErrInvalidTerminalBlock
+	}
+	// Check that the last block is the terminal block
+	if td.Add(td, last.Difficulty).Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
+		return consensus.ErrInvalidTerminalBlock
+	}
+	return nil
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
