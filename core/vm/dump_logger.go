@@ -128,6 +128,12 @@ func (l *ParityLogger) CaptureStart(env *EVM, from, to common.Address, create bo
 	}
 }
 
+func (l *ParityLogger) CaptureTxStart(gasLimit uint64) {
+}
+
+func (l *ParityLogger) CaptureTxEnd(restGas uint64) {
+}
+
 func (l *ParityLogger) CaptureFault(uint64, OpCode, uint64, uint64, *ScopeContext, int, error) {
 }
 
