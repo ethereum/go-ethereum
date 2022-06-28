@@ -1128,8 +1128,8 @@ func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.IsSet(ListenPortFlag.Name) {
 		cfg.ListenAddr = fmt.Sprintf(":%d", ctx.Int(ListenPortFlag.Name))
 	}
-	if ctx.GlobalIsSet(DiscPortFlag.Name) {
-		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.GlobalInt(DiscPortFlag.Name))
+	if ctx.IsSet(DiscPortFlag.Name) {
+		cfg.DiscAddr = fmt.Sprintf(":%d", ctx.Int(DiscPortFlag.Name))
 	}
 }
 
