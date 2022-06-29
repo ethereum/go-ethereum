@@ -132,14 +132,14 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
-		// verify that the headers are valid wrt. the terminal block.
-		index, err := verifyTerminalPoWBlock(chain, preHeaders)
-		if err != nil {
+		// Verify that pre-merge headers don't overflow the TTD
+		if index, err := verifyTerminalPoWBlock(chain, preHeaders); err != nil {
 			// Mark all subsequent pow headers with the error.
 			for i := index; i < len(preHeaders); i++ {
 				errors[i], done[i] = err, true
 			}
 		}
+		// Collect the results
 		for {
 			for ; done[out]; out++ {
 				results <- errors[out]
@@ -149,7 +149,9 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			}
 			select {
 			case err := <-oldResult:
-				errors[old], done[old] = err, true
+				if !done[old] { // skip TTD-verified failures
+					errors[old], done[old] = err, true
+				}
 				old++
 			case err := <-newResult:
 				errors[new], done[new] = err, true
@@ -176,8 +178,8 @@ func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*typ
 	if td == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
+	// Check that all blocks before the last one are below the TTD
 	for i, head := range preHeaders {
-		// Check if the parent was already the terminal block
 		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
 			return i, consensus.ErrInvalidTerminalBlock
 		}
