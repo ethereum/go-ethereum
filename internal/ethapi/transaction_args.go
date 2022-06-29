@@ -76,54 +76,63 @@ func (args *TransactionArgs) data() []byte {
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		// Because both the legacy fee parameter (gasPrice) and the EIP-1559 parameters
+		// are specified, it's not possible to resolve the callers intended fee payment.
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	// After london, default to 1559 unless gasPrice is set
+	// If London is active, try to set fee defaults using EIP-1559.
 	head := b.CurrentHeader()
-	// If user specifies both maxPriorityfee and maxFee, then we do not
-	// need to consult the chain for defaults. It's definitely a London tx.
-	if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
-		// In this clause, user left some fields unspecified.
-		if b.ChainConfig().IsLondon(head.Number) && args.GasPrice == nil {
+	if b.ChainConfig().IsLondon(head.Number) {
+		if args.GasPrice != nil {
+			// If the legacy gas price is set explicitly, do nothing.
+		} else if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
+			// If one of the EIP-1559 fee parameters is not set, calculate a reasonable default.
 			if args.MaxPriorityFeePerGas == nil {
 				tip, err := b.SuggestGasTipCap(ctx)
 				if err != nil {
 					return err
 				}
+				// If the estimate is lower than the provided maxFeePerGas, throw an error.
+				if args.MaxFeePerGas != nil && args.MaxFeePerGas.ToInt().Cmp(tip) < 0 {
+					return fmt.Errorf("provided maxFeePerGas (%v) < estimated maxPriorityFeePerGas (%v)", args.MaxFeePerGas, tip)
+				}
 				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
 			}
 			if args.MaxFeePerGas == nil {
+				// Set the fee cap to be 2 times larger than the previous block's base fee.
+				// The additional slack allows the tx to not become invalidated if the base
+				// fee is rising.
 				gasFeeCap := new(big.Int).Add(
-					(*big.Int)(args.MaxPriorityFeePerGas),
+					args.MaxPriorityFeePerGas.ToInt(),
 					new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 				)
 				args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
 			}
-			if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-				return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
-			}
-		} else {
-			if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-				return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
-			}
-			if args.GasPrice == nil {
-				price, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
-				if !b.ChainConfig().IsLondon(head.Number) {
-					// The legacy tx gas price suggestion should not add 2x base fee
-					// because all fees are consumed, so it would result in a spiral
-					// upwards.
-					price.Add(price, head.BaseFee)
-				}
-				args.GasPrice = (*hexutil.Big)(price)
-			}
 		}
-	} else {
-		// Both maxPriorityfee and maxFee set by caller. Sanity-check their internal relation
+		// Both EIP-1559 fee parameters are now set; sanity check them.
 		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+	} else {
+		// If London is not active, find a good default gasPrice.
+		//
+		// First, ensure no EIP-1559 fee parameters are set.
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+		}
+		// Next, if gasPrice is not set, find a good default.
+		if args.GasPrice == nil {
+			price, err := b.SuggestGasTipCap(ctx)
+			if err != nil {
+				return err
+			}
+			if !b.ChainConfig().IsLondon(head.Number) {
+				// The legacy tx gas price suggestion should not add 2x base fee
+				// because all fees are consumed, so it would result in a spiral
+				// upwards.
+				price.Add(price, head.BaseFee)
+			}
+			args.GasPrice = (*hexutil.Big)(price)
 		}
 	}
 	if args.Value == nil {
