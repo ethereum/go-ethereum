@@ -20,6 +20,7 @@ import (
 	//"bytes"
 	"bytes"
 	"crypto/ecdsa"
+
 	//"fmt"
 	"math/big"
 	//"os"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+
 	//"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
@@ -501,7 +503,7 @@ func TestProcessVerkleCodeDeployExec(t *testing.T) {
 		t.Fatalf("block imported with error: %v", err)
 	}
 
-	// Check that the location for the contract is availabe in the witness
+	// Check that the location for the contract is available in the witness
 	// and is reported as not present.
 	b1 := blockchain.GetBlockByNumber(1)
 	if b1 == nil {

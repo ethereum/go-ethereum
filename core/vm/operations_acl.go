@@ -53,8 +53,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 		value := common.Hash(y.Bytes32())
 
 		if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
-			addr := contract.Address()
-			index := trieUtils.GetTreeKeyStorageSlot(addr[:], x)
+			index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(contract.AddressPoint(), x)
 			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(index)
 		}
 

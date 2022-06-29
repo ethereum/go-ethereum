@@ -20,6 +20,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -49,6 +51,7 @@ type Contract struct {
 	CallerAddress common.Address
 	caller        ContractRef
 	self          ContractRef
+	addressPoint  *verkle.Point
 
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
@@ -173,6 +176,14 @@ func (c *Contract) UseGas(gas uint64) (ok bool) {
 // Address returns the contracts address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()
+}
+
+func (c *Contract) AddressPoint() *verkle.Point {
+	if c.addressPoint == nil {
+		c.addressPoint = utils.EvaluateAddressPoint(c.Address().Bytes())
+	}
+
+	return c.addressPoint
 }
 
 // Value returns the contract's value (sent to it from it's caller)

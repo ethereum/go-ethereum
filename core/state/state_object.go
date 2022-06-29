@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -71,6 +72,8 @@ type stateObject struct {
 	addrHash common.Hash // hash of ethereum address of the account
 	data     types.StateAccount
 	db       *StateDB
+
+	pointEval *verkle.Point
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -130,10 +133,16 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 	if data.Root == (common.Hash{}) {
 		data.Root = emptyRoot
 	}
+	var pointEval *verkle.Point
+	if db.GetTrie().IsVerkle() {
+		pointEval = trieUtils.EvaluateAddressPoint(address.Bytes())
+	}
+
 	return &stateObject{
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
+		pointEval:      pointEval,
 		data:           data,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
@@ -282,9 +291,8 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if err != nil {
 			return common.Hash{}
 		}
-		addr := s.Address()
 		loc := new(uint256.Int).SetBytes(key[:])
-		index := trieUtils.GetTreeKeyStorageSlot(addr[:], loc)
+		index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, loc)
 		if len(enc) > 0 {
 			s.db.Witness().SetLeafValue(index, value.Bytes())
 		} else {
@@ -391,7 +399,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 		var v []byte
 		if (value == common.Hash{}) {
 			if tr.IsVerkle() {
-				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				k := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, new(uint256.Int).SetBytes(key[:]))
 				s.setError(tr.TryDelete(k))
 				//s.db.db.TrieDB().DiskDB().Delete(append(s.address[:], key[:]...))
 			} else {
@@ -404,7 +412,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 			if !tr.IsVerkle() {
 				s.setError(tr.TryUpdate(key[:], v))
 			} else {
-				k := trieUtils.GetTreeKeyStorageSlot(s.address[:], new(uint256.Int).SetBytes(key[:]))
+				k := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, new(uint256.Int).SetBytes(key[:]))
 				// Update the trie, with v as a value
 				s.setError(tr.TryUpdate(k, value[:]))
 			}

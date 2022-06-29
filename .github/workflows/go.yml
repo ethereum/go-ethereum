@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, verkle-trie-proof-in-block-rebased ]
 
 jobs:
 
@@ -50,5 +50,8 @@ jobs:
       with:
         go-version: 1.18
 
+    - name: Download precomputed points
+      run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagon/precomp
+
     - name: Test
-      run: go test -v ./...
+      run: go test ./...

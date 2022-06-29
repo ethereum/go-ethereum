@@ -194,7 +194,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
 			// if the PC ends up in a new "page" of verkleized code, charge the
 			// associated witness costs.
-			contract.Gas -= touchEachChunksOnReadAndChargeGas(pc, 1, contract.Address().Bytes()[:], contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
+			contract.Gas -= touchEachChunksOnReadAndChargeGas(pc, 1, contract.AddressPoint(), contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
 		}
 
 		// If we are in witness mode, then raise an error

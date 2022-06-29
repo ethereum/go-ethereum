@@ -305,11 +305,9 @@ func deserializeVerkleProof(serialized []byte) (*verkle.Proof, []*verkle.Point, 
 			// another stem is found, build it
 			node.SetStem(proof.PoaStems[lastpoa])
 			lastpoa++
-			break
 		case 2:
 			// stem is present
 			node.SetStem(stem[:31])
-			break
 		default:
 			return nil, nil, nil, nil, nil, fmt.Errorf("verkle proof deserialization error: invalid extension status %d", status)
 		}
