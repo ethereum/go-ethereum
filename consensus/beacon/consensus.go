@@ -133,9 +133,9 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
 		// verify that the headers are valid wrt. the terminal block.
-		index, err := beacon.verifyTerminalPoWBlock(chain, preHeaders)
+		index, err := verifyTerminalPoWBlock(chain, preHeaders)
 		if err != nil {
-			// Mark all subsequent headers with the error.
+			// Mark all subsequent pow headers with the error.
 			for i := index; i < len(preHeaders); i++ {
 				errors[i], done[i] = err, true
 			}
@@ -171,28 +171,25 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 // - the parent of the header element to be stored in the chain correctly
 // - the preHeaders to have a set difficulty
 // - the last element to be the terminal block
-func (beacon *Beacon) verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
+func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
 	var (
 		first = preHeaders[0]
-		last  = preHeaders[len(preHeaders)-1]
 	)
 
 	td := chain.GetTd(first.ParentHash, first.Number.Uint64()-1)
 	if td == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
-	if len(preHeaders) != 1 {
-		for i, head := range preHeaders[:len(preHeaders)-2] {
-			td.Add(td, head.Difficulty)
-			// Check if the parent was already the terminal block
-			if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
-				return i, consensus.ErrInvalidTerminalBlock
-			}
-		}
-	}
 
+	for i, head := range preHeaders {
+		// Check if the parent was already the terminal block
+		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
+			return i, consensus.ErrInvalidTerminalBlock
+		}
+		td.Add(td, head.Difficulty)
+	}
 	// Check that the last block is the terminal block
-	if td.Add(td, last.Difficulty).Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
+	if td.Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
 		return len(preHeaders) - 1, consensus.ErrInvalidTerminalBlock
 	}
 	return 0, nil
