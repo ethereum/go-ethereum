@@ -2,6 +2,7 @@ package engine_v2_tests
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestSetCommittedQCsInOrder(t *testing.T) {
 	assert.Nil(t, err)
 	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(903), *blockchain.GetHeaderByNumber(902)), *decodedExtraField.QuorumCert)
 	assert.NotNil(t, err)
-	assert.Equal(t, "Headers shall be on the same chain and in the right order", err.Error())
+	assert.Equal(t, "headers shall be on the same chain and in the right order", err.Error())
 
 	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(903), *blockchain.GetHeaderByNumber(904)), *decodedExtraField.QuorumCert)
 	assert.Nil(t, err)
@@ -169,15 +170,18 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 		select {
 		case forensics := <-forensicsEventCh:
 			assert.NotNil(t, forensics.ForensicsProof)
-			assert.False(t, forensics.ForensicsProof.AcrossEpochs)
-			assert.Equal(t, types.Round(13), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(913), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 9, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
-			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
-			assert.Equal(t, types.Round(13), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(912), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 8, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
-			assert.Equal(t, 4, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			assert.Equal(t, "QC", forensics.ForensicsProof.ForensicsType)
+			content := &types.ForensicsContent{}
+			json.Unmarshal([]byte(forensics.ForensicsProof.Content), &content)
+			assert.False(t, content.AcrossEpoch)
+			assert.Equal(t, types.Round(13), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(913), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 9, len(content.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(content.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(13), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(912), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 8, len(content.LargerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
 			t.FailNow()
@@ -225,15 +229,19 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 		select {
 		case forensics := <-forensicsEventCh:
 			assert.NotNil(t, forensics.ForensicsProof)
-			assert.False(t, forensics.ForensicsProof.AcrossEpochs)
-			assert.Equal(t, types.Round(14), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(914), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 10, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
-			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
-			assert.Equal(t, types.Round(16), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(906), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
-			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			assert.Equal(t, "QC", forensics.ForensicsProof.ForensicsType)
+			content := &types.ForensicsContent{}
+			json.Unmarshal([]byte(forensics.ForensicsProof.Content), &content)
+
+			assert.False(t, content.AcrossEpoch)
+			assert.Equal(t, types.Round(14), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(914), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 10, len(content.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(content.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(16), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(906), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 2, len(content.LargerRoundInfo.HashPath))
+			assert.Equal(t, 2, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
 			t.FailNow()
@@ -282,15 +290,19 @@ func TestForensicsAcrossEpoch(t *testing.T) {
 		select {
 		case forensics := <-forensicsEventCh:
 			assert.NotNil(t, forensics.ForensicsProof)
-			assert.True(t, forensics.ForensicsProof.AcrossEpochs)
-			assert.Equal(t, types.Round(900), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(1800), forensics.ForensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 10, len(forensics.ForensicsProof.SmallerRoundInfo.HashPath))
-			assert.Equal(t, 4, len(forensics.ForensicsProof.SmallerRoundInfo.SignerAddresses))
-			assert.Equal(t, types.Round(902), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
-			assert.Equal(t, uint64(1792), forensics.ForensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
-			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.HashPath))
-			assert.Equal(t, 2, len(forensics.ForensicsProof.LargerRoundInfo.SignerAddresses))
+			assert.Equal(t, "QC", forensics.ForensicsProof.ForensicsType)
+			content := &types.ForensicsContent{}
+			json.Unmarshal([]byte(forensics.ForensicsProof.Content), &content)
+
+			assert.True(t, content.AcrossEpoch)
+			assert.Equal(t, types.Round(900), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(1800), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 10, len(content.SmallerRoundInfo.HashPath))
+			assert.Equal(t, 4, len(content.SmallerRoundInfo.SignerAddresses))
+			assert.Equal(t, types.Round(902), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
+			assert.Equal(t, uint64(1792), content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
+			assert.Equal(t, 2, len(content.LargerRoundInfo.HashPath))
+			assert.Equal(t, 2, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
 			t.FailNow()

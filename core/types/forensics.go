@@ -1,18 +1,22 @@
 package types
 
-import "github.com/XinFinOrg/XDPoSChain/common"
-
 type ForensicsInfo struct {
-	HashPath        []string // HashesTillSmallerRoundQc or HashesTillLargerRoundQc
-	QuorumCert      QuorumCert
-	SignerAddresses []string
+	HashPath        []string   `json:"hashPath"`
+	QuorumCert      QuorumCert `json:"quorumCert"`
+	SignerAddresses []string   `json:"signerAddresses"`
+}
+
+type ForensicsContent struct {
+	DivergingBlockNumber uint64         `json:"divergingBlockNumber"`
+	DivergingBlockHash   string         `json:"divergingBlockHash"`
+	AcrossEpoch          bool           `json:"acrossEpoch"`
+	SmallerRoundInfo     *ForensicsInfo `json:"smallerRoundInfo"`
+	LargerRoundInfo      *ForensicsInfo `json:"largerRoundInfo"`
 }
 
 type ForensicProof struct {
-	SmallerRoundInfo *ForensicsInfo
-	LargerRoundInfo  *ForensicsInfo
-	DivergingHash    common.Hash
-	AcrossEpochs     bool
+	ForensicsType string `json:"forensicsType"` // QC or VOTE
+	Content       string `json:"content"`       // Json string of the forensics data
 }
 
 type ForensicsEvent struct {

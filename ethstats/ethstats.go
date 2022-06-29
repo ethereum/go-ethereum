@@ -547,11 +547,7 @@ func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 
 // reportForensics forward the forensics repors it to the stats server.
 func (s *Service) reportForensics(conn *websocket.Conn, forensicsProof *types.ForensicProof) error {
-	log.Info(
-		"Sending Forensics report to ethstats",
-		"SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Hash", forensicsProof.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Hash,
-		"LargerRoundInfo.QuorumCert.ProposedBlockInfo.Hash", forensicsProof.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Hash,
-	)
+	log.Info("Sending Forensics report to ethstats", "ForensicsType", forensicsProof.ForensicsType)
 
 	stats := map[string]interface{}{
 		"id":             s.node,
