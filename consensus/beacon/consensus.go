@@ -172,15 +172,10 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 // - the preHeaders to have a set difficulty
 // - the last element to be the terminal block
 func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
-	var (
-		first = preHeaders[0]
-	)
-
-	td := chain.GetTd(first.ParentHash, first.Number.Uint64()-1)
+	td := chain.GetTd(preHeaders[0].ParentHash, preHeaders[0].Number.Uint64()-1)
 	if td == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
-
 	for i, head := range preHeaders {
 		// Check if the parent was already the terminal block
 		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
