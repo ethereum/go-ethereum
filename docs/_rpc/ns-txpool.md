@@ -115,6 +115,16 @@ transactions).
 }
 ```
 
+### txpool_contentFrom
+
+Retrieves the transactions contained within the txpool,
+returning pending as well as queued transactions of this address, grouped by nonce.
+
+| Client  | Method invocation                                      |
+|:-------:|--------------------------------------------------------|
+| Console | `txpool.contentFrom(address)`                          |
+| RPC     | `{"method": "txpool_contentFrom, "params": [string]"}` |
+
 ### txpool_inspect
 
 The `inspect` inspection property can be queried to list a textual summary of all the transactions
