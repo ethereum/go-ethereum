@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {
 	type test struct {
 		name     string
