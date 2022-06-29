@@ -54,14 +54,33 @@ Retrieves the state snapshot at a given block.
 | Console | `clique.getSnapshotAtHash(blockHash)`                    |
 | RPC     | `{"method": "clique_getSnapshotAtHash", "params": [blockHash]}` |
 
+### clique_getSigner
+
+Returns the signer for a specific clique block. Can be called with either a blocknumber, blockhash or an rlp encoded blob.
+The RLP encoded blob can either be a block or a header.
+
+| Client  | Method invocation                                    |
+|:--------|------------------------------------------------------|
+| Console | `clique.getSigner(blockNrOrHashOrRlp)`               |
+| RPC     | `{"method": "clique_getSigner", "params": [string]}` |
+
 ### clique_getSigners
 
-Retrieves the list of authorized signers at the specified block.
+Retrieves the list of authorized signers at the specified block number.
 
 | Client  | Method invocation                                          |
-|:--------|------------------------------------------------------------
+|:--------|------------------------------------------------------------|
 | Console | `clique.getSigners(blockNumber)`                           |
 | RPC     | `{"method": "clique_getSigners", "params": [blockNumber]}` |
+
+### clique_getSignersAtHash
+
+Retrieves the list of authorized signers at the specified block hash.
+
+| Client  | Method invocation                                           |
+|:--------|-------------------------------------------------------------|
+| Console | `clique.getSignersAtHash(blockHash)`                        |
+| RPC     | `{"method": "clique_getSignersAtHash", "params": [string]}` |
 
 ### clique_proposals
 
