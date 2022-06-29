@@ -31,6 +31,7 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	ETH66 = 66
+	ETH67 = 67
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -39,11 +40,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH66}
+var ProtocolVersions = []uint{ETH67, ETH66}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH66: 17}
+var protocolLengths = map[uint]uint64{ETH67: 17, ETH66: 17}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024

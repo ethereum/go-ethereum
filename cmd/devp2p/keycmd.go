@@ -22,25 +22,25 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	keyCommand = cli.Command{
+	keyCommand = &cli.Command{
 		Name:  "key",
 		Usage: "Operations on node keys",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			keyGenerateCommand,
 			keyToNodeCommand,
 		},
 	}
-	keyGenerateCommand = cli.Command{
+	keyGenerateCommand = &cli.Command{
 		Name:      "generate",
 		Usage:     "Generates node key files",
 		ArgsUsage: "keyfile",
 		Action:    genkey,
 	}
-	keyToNodeCommand = cli.Command{
+	keyToNodeCommand = &cli.Command{
 		Name:      "to-enode",
 		Usage:     "Creates an enode URL from a node key file",
 		ArgsUsage: "keyfile",
@@ -50,17 +50,17 @@ var (
 )
 
 var (
-	hostFlag = cli.StringFlag{
+	hostFlag = &cli.StringFlag{
 		Name:  "ip",
 		Usage: "IP address of the node",
 		Value: "127.0.0.1",
 	}
-	tcpPortFlag = cli.IntFlag{
+	tcpPortFlag = &cli.IntFlag{
 		Name:  "tcp",
 		Usage: "TCP port of the node",
 		Value: 30303,
 	}
-	udpPortFlag = cli.IntFlag{
+	udpPortFlag = &cli.IntFlag{
 		Name:  "udp",
 		Usage: "UDP port of the node",
 		Value: 30303,

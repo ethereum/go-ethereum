@@ -29,6 +29,7 @@ import (
 	gnark "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	blst "github.com/supranational/blst/bindings/go"
 )
@@ -64,16 +65,39 @@ func FuzzCrossPairing(data []byte) int {
 		panic("pairing mismatch gnark / geth ")
 	}
 
-	var b []byte
-	ctx := blst.PairingCtx(false, b)
 	// compute pairing using blst
-	blst.PairingRawAggregate(ctx, blG2, blG1)
-	blstResult := blst.PairingAsFp12(ctx)
-	if !(bytes.Equal(blstResult.ToBendian(), bls12381.NewGT().ToBytes(kResult))) {
-		panic("pairing mismatch blst / geth ")
+	blstResult := blst.Fp12MillerLoop(blG2, blG1)
+	blstResult.FinalExp()
+	res := massageBLST(blstResult.ToBendian())
+	if !(bytes.Equal(res, bls12381.NewGT().ToBytes(kResult))) {
+		panic("pairing mismatch blst / geth")
 	}
 
 	return 1
+}
+
+func massageBLST(in []byte) []byte {
+	out := make([]byte, len(in))
+	len := 12 * 48
+	// 1
+	copy(out[0:], in[len-1*48:len])
+	copy(out[1*48:], in[len-2*48:len-1*48])
+	// 2
+	copy(out[6*48:], in[len-3*48:len-2*48])
+	copy(out[7*48:], in[len-4*48:len-3*48])
+	// 3
+	copy(out[2*48:], in[len-5*48:len-4*48])
+	copy(out[3*48:], in[len-6*48:len-5*48])
+	// 4
+	copy(out[8*48:], in[len-7*48:len-6*48])
+	copy(out[9*48:], in[len-8*48:len-7*48])
+	// 5
+	copy(out[4*48:], in[len-9*48:len-8*48])
+	copy(out[5*48:], in[len-10*48:len-9*48])
+	// 6
+	copy(out[10*48:], in[len-11*48:len-10*48])
+	copy(out[11*48:], in[len-12*48:len-11*48])
+	return out
 }
 
 func FuzzCrossG1Add(data []byte) int {
@@ -227,10 +251,8 @@ func getG1Points(input io.Reader) (*bls12381.PointG1, *gnark.G1Affine, *blst.P1A
 	}
 
 	// marshal gnark point -> blst point
-	var p1 *blst.P1Affine
-	var scalar *blst.Scalar
-	scalar.Deserialize(s.Bytes())
-	p1.From(scalar)
+	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+	p1 := new(blst.P1Affine).From(scalar)
 	if !bytes.Equal(p1.Serialize(), cpBytes) {
 		panic("bytes(blst.G1) != bytes(geth.G1)")
 	}
@@ -262,10 +284,9 @@ func getG2Points(input io.Reader) (*bls12381.PointG2, *gnark.G2Affine, *blst.P2A
 	}
 
 	// marshal gnark point -> blst point
-	var p2 *blst.P2Affine
-	var scalar *blst.Scalar
-	scalar.Deserialize(s.Bytes())
-	p2.From(scalar)
+	// Left pad the scalar to 32 bytes
+	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+	p2 := new(blst.P2Affine).From(scalar)
 	if !bytes.Equal(p2.Serialize(), cpBytes) {
 		panic("bytes(blst.G2) != bytes(geth.G2)")
 	}

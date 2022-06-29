@@ -52,7 +52,7 @@ func TestKeyEncryptDecrypt(t *testing.T) {
 			t.Errorf("test %d: key address mismatch: have %x, want %x", i, key.Address, address)
 		}
 		// Recrypt with a new password and start over
-		password += "new data appended"
+		password += "new data appended" // nolint: gosec
 		if keyjson, err = EncryptKey(key, password, veryLightScryptN, veryLightScryptP); err != nil {
 			t.Errorf("test %d: failed to recrypt key %v", i, err)
 		}

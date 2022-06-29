@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/peterh/liner"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 // config contains all the configurations needed by puppeth that should be saved
@@ -228,7 +228,7 @@ func (w *wizard) readDefaultFloat(def float64) float64 {
 // line and returns it. The input will not be echoed.
 func (w *wizard) readPassword() string {
 	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	text, err := term.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}

@@ -28,14 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	discv4Command = cli.Command{
+	discv4Command = &cli.Command{
 		Name:  "discv4",
 		Usage: "Node Discovery v4 tools",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			discv4PingCommand,
 			discv4RequestRecordCommand,
 			discv4ResolveCommand,
@@ -44,39 +44,39 @@ var (
 			discv4TestCommand,
 		},
 	}
-	discv4PingCommand = cli.Command{
+	discv4PingCommand = &cli.Command{
 		Name:      "ping",
 		Usage:     "Sends ping to a node",
 		Action:    discv4Ping,
 		ArgsUsage: "<node>",
 	}
-	discv4RequestRecordCommand = cli.Command{
+	discv4RequestRecordCommand = &cli.Command{
 		Name:      "requestenr",
 		Usage:     "Requests a node record using EIP-868 enrRequest",
 		Action:    discv4RequestRecord,
 		ArgsUsage: "<node>",
 	}
-	discv4ResolveCommand = cli.Command{
+	discv4ResolveCommand = &cli.Command{
 		Name:      "resolve",
 		Usage:     "Finds a node in the DHT",
 		Action:    discv4Resolve,
 		ArgsUsage: "<node>",
 		Flags:     []cli.Flag{bootnodesFlag},
 	}
-	discv4ResolveJSONCommand = cli.Command{
+	discv4ResolveJSONCommand = &cli.Command{
 		Name:      "resolve-json",
 		Usage:     "Re-resolves nodes in a nodes.json file",
 		Action:    discv4ResolveJSON,
 		Flags:     []cli.Flag{bootnodesFlag},
 		ArgsUsage: "<nodes.json file>",
 	}
-	discv4CrawlCommand = cli.Command{
+	discv4CrawlCommand = &cli.Command{
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
 		Flags:  []cli.Flag{bootnodesFlag, crawlTimeoutFlag},
 	}
-	discv4TestCommand = cli.Command{
+	discv4TestCommand = &cli.Command{
 		Name:   "test",
 		Usage:  "Runs tests against a node",
 		Action: discv4Test,
@@ -91,31 +91,31 @@ var (
 )
 
 var (
-	bootnodesFlag = cli.StringFlag{
+	bootnodesFlag = &cli.StringFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated nodes used for bootstrapping",
 	}
-	nodekeyFlag = cli.StringFlag{
+	nodekeyFlag = &cli.StringFlag{
 		Name:  "nodekey",
 		Usage: "Hex-encoded node key",
 	}
-	nodedbFlag = cli.StringFlag{
+	nodedbFlag = &cli.StringFlag{
 		Name:  "nodedb",
 		Usage: "Nodes database location",
 	}
-	listenAddrFlag = cli.StringFlag{
+	listenAddrFlag = &cli.StringFlag{
 		Name:  "addr",
 		Usage: "Listening address",
 	}
-	crawlTimeoutFlag = cli.DurationFlag{
+	crawlTimeoutFlag = &cli.DurationFlag{
 		Name:  "timeout",
 		Usage: "Time limit for the crawl.",
 		Value: 30 * time.Minute,
 	}
-	remoteEnodeFlag = cli.StringFlag{
-		Name:   "remote",
-		Usage:  "Enode of the remote node under test",
-		EnvVar: "REMOTE_ENODE",
+	remoteEnodeFlag = &cli.StringFlag{
+		Name:    "remote",
+		Usage:   "Enode of the remote node under test",
+		EnvVars: []string{"REMOTE_ENODE"},
 	}
 )
 

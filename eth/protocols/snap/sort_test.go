@@ -67,10 +67,9 @@ func TestRequestSorting(t *testing.T) {
 		"0x01234567890123456789012345678901012345678901234567890123456789010",
 		"0x01234567890123456789012345678901012345678901234567890123456789011",
 	} {
-		sp, tnps, hash := f(x)
+		sp, _, hash := f(x)
 		hashes = append(hashes, hash)
 		paths = append(paths, sp)
-		pathsets = append(pathsets, tnps)
 	}
 	_, paths, pathsets = sortByAccountPath(hashes, paths)
 	{
