@@ -75,65 +75,8 @@ func (args *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
-		// Because both the legacy fee parameter (gasPrice) and the EIP-1559 parameters
-		// are specified, it's not possible to resolve the callers intended fee payment.
-		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
-	}
-	// If London is active, try to set fee defaults using EIP-1559.
-	head := b.CurrentHeader()
-	if b.ChainConfig().IsLondon(head.Number) {
-		if args.GasPrice != nil {
-			// If the legacy gas price is set explicitly, do nothing.
-		} else if args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil {
-			// If one of the EIP-1559 fee parameters is not set, calculate a reasonable default.
-			if args.MaxPriorityFeePerGas == nil {
-				tip, err := b.SuggestGasTipCap(ctx)
-				if err != nil {
-					return err
-				}
-				// If the estimate is lower than the provided maxFeePerGas, throw an error.
-				if args.MaxFeePerGas != nil && args.MaxFeePerGas.ToInt().Cmp(tip) < 0 {
-					return fmt.Errorf("provided maxFeePerGas (%v) < estimated maxPriorityFeePerGas (%v)", args.MaxFeePerGas, tip)
-				}
-				args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
-			}
-			if args.MaxFeePerGas == nil {
-				// Set the fee cap to be 2 times larger than the previous block's base fee.
-				// The additional slack allows the tx to not become invalidated if the base
-				// fee is rising.
-				gasFeeCap := new(big.Int).Add(
-					args.MaxPriorityFeePerGas.ToInt(),
-					new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-				)
-				args.MaxFeePerGas = (*hexutil.Big)(gasFeeCap)
-			}
-		}
-		// Both EIP-1559 fee parameters are now set; sanity check them.
-		if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
-			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
-		}
-	} else {
-		// If London is not active, find a good default gasPrice.
-		//
-		// First, ensure no EIP-1559 fee parameters are set.
-		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
-		}
-		// Next, if gasPrice is not set, find a good default.
-		if args.GasPrice == nil {
-			price, err := b.SuggestGasTipCap(ctx)
-			if err != nil {
-				return err
-			}
-			if !b.ChainConfig().IsLondon(head.Number) {
-				// The legacy tx gas price suggestion should not add 2x base fee
-				// because all fees are consumed, so it would result in a spiral
-				// upwards.
-				price.Add(price, head.BaseFee)
-			}
-			args.GasPrice = (*hexutil.Big)(price)
-		}
+	if err := args.setFeeDefaults(ctx, b); err != nil {
+		return err
 	}
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -177,6 +120,72 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.ChainID == nil {
 		id := (*hexutil.Big)(b.ChainConfig().ChainID)
 		args.ChainID = id
+	}
+	return nil
+}
+
+// setFeeDefaults fills in default fee values for unspecified tx fields.
+func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
+	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// If the tx has completely specifed a fee mechanism, no default is needed. This allows users
+	// who are not yet synced past London to get defaults for other tx values. See
+	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
+	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
+	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
+		// Sanity check the EIP-1559 fee parameters if present.
+		if args.GasPrice == nil && args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+			return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
+		}
+		return nil
+	}
+	// Now attempt to fill in default value depending on whether London is active or not.
+	head := b.CurrentHeader()
+	if b.ChainConfig().IsLondon(head.Number) {
+		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
+		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
+			return err
+		}
+	} else {
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		}
+		// London not active, set gas price.
+		price, err := b.SuggestGasTipCap(ctx)
+		if err != nil {
+			return err
+		}
+		args.GasPrice = (*hexutil.Big)(price)
+	}
+	return nil
+}
+
+// setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
+func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+	// Set maxPriorityFeePerGas if it is missing.
+	if args.MaxPriorityFeePerGas == nil {
+		tip, err := b.SuggestGasTipCap(ctx)
+		if err != nil {
+			return err
+		}
+		args.MaxPriorityFeePerGas = (*hexutil.Big)(tip)
+	}
+	// Set maxFeePerGas if it is missing.
+	if args.MaxFeePerGas == nil {
+		// Set the max fee to be 2 times larger than the previous block's base fee.
+		// The additional slack allows the tx to not become invalidated if the base
+		// fee is rising.
+		val := new(big.Int).Add(
+			args.MaxPriorityFeePerGas.ToInt(),
+			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+		)
+		args.MaxFeePerGas = (*hexutil.Big)(val)
+	}
+	// Both EIP-1559 fee parameters are now set; sanity check them.
+	if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
+		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 	}
 	return nil
 }
