@@ -87,7 +87,13 @@ profile data to disk.
 ### debug_dbAncient
 
 Retrieves an ancient binary blob from the freezer. The freezer is a collection of append-only immutable files.
-They include types such as block headers, block bodies, receipts, etc.
+The first argument `kind` specifies which table to look up data from. The list of all table kinds are as follows:
+
+- `headers`: block headers
+- `hashes`: canonical hash table (block number -> block hash)
+- `bodies`: block bodies
+- `receipts`: block receipts
+- `diffs`: total difficulty table (block number -> td)
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|
@@ -96,7 +102,7 @@ They include types such as block headers, block bodies, receipts, etc.
 
 ### debug_dbAncients
 
-Returns the ancient item numbers in the ancient store.
+Returns the number of ancient items in the ancient store.
 
 | Client  | Method invocation                |
 |:--------|----------------------------------|

@@ -66,7 +66,7 @@ currently uses to store all its databases.
 ### admin_exportChain
 
 Exports the current blockchain into a local file, the path to which is passed as first argument.
-It optionally takes a first last block number, in which case it exports only that range of blocks.
+It optionally takes a first and last block number, in which case it exports only that range of blocks.
 
 It returns a boolean indicating whether the operation succeeded.
 
@@ -77,7 +77,8 @@ It returns a boolean indicating whether the operation succeeded.
 
 ### admin_importChain
 
-Imports a blockchain from a local file.
+Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them
+into the canonical chain. The state from the parent block of this range is required.
 
 It returns a boolean indicating whether the operation succeeded.
 
@@ -128,6 +129,13 @@ overlay protocol, as well as specialized information added by each of the runnin
 ### admin_peerEvents
 
 PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer events from the node's p2p server.
+
+The type of events emitted by the server are as follows:
+
+- `add`: emitted when a peer is added
+- `drop`: emitted when a peer is dropped
+- `msgsend`: emitted when a message is successfully sent to a peer
+- `msgrecv`: emitted when a message is received from a peer
 
 ### admin_peers
 

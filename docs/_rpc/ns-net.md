@@ -28,7 +28,7 @@ Returns the number of connected peers.
 
 ### net_version
 
-Returns the current ethereum protocol version.
+Returns the devp2p network ID (e.g. 1 for mainnet, 5 for goerli).
 
 | Client  | Method invocation           |
 |:--------|-----------------------------|
