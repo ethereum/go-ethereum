@@ -164,7 +164,7 @@ func (q *LazyQueue) PopItem() interface{} {
 	return i
 }
 
-// Remove removes removes the item with the given index.
+// Remove removes the item with the given index.
 func (q *LazyQueue) Remove(index int) interface{} {
 	if index < 0 {
 		return nil
