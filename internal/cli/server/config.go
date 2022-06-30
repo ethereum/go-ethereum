@@ -431,7 +431,7 @@ func DefaultConfig() *Config {
 		Sealer: &SealerConfig{
 			Enabled:   false,
 			Etherbase: "",
-			GasCeil:   8000000,
+			GasCeil:   20000000,
 			GasPrice:  big.NewInt(30 * params.GWei),
 			ExtraData: "",
 		},
