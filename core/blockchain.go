@@ -941,7 +941,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	defer bc.wg.Done()
 
 	if bc.cacheConfig.AncientRecentLimit != 0 {
-		log.Info("throwing ancient turned on, set ancientLimit to 0 during snap sync")
 		ancientLimit = 0
 	}
 
@@ -2303,7 +2302,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 				rawdb.WriteTxIndexTail(bc.db, 0)
 			} else {
 				// Prune all stale tx indices and record the tx index tail
-				log.Info("Scheduled transactions unindexing", "from block", 0, "to", head-bc.txLookupLimit+1)
+				log.Info("Scheduled blocks & transactions unindexing", "from block", 0, "to", head-bc.txLookupLimit+1)
 				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit)
 			}
 			return
@@ -2328,7 +2327,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			rawdb.IndexTransactions(bc.db, head-bc.txLookupLimit+1, *tail, bc.quit)
 		} else {
 			// Unindex a part of stale indices and forward index tail to HEAD-limit
-			log.Info("Scheduled transactions unindexing", "from block", *tail, "to", head-bc.txLookupLimit+1)
+			log.Info("Scheduled blocks & transactions unindexing", "from block", *tail, "to", head-bc.txLookupLimit+1)
 			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit)
 		}
 	}
