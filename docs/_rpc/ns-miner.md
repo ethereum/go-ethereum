@@ -42,7 +42,7 @@ below this limit are excluded from the mining process.
 
 ### miner_setRecommitInterval
 
-Updates the interval for miner sealing work recommitting.
+Updates the interval for recomitting the miner sealing work
 
 | Client  | Method invocation                                             |
 |:--------|---------------------------------------------------------------|
