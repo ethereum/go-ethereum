@@ -28,21 +28,21 @@ import (
 )
 
 const (
-	// freezerRecheckInterval is the frequency to check the key-value database for
+	// throwerRecheckInterval is the frequency to check the key-value database for
 	// chain progression that might permit new blocks to be frozen into immutable
 	// storage.
-	nofreezerRecheckInterval = time.Minute
+	throwerRecheckInterval = time.Minute
 
-	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
+	// throwerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
-	nofreezerBatchLimit = 30000
+	throwerBatchLimit = 30000
 )
 
 // chainThrower is a wrapper of freezer with additional chain freezing feature.
 // The background thread will keep moving ancient chain segments from key-value
 // database to flat files for saving space on live database.
 type chainThrower struct {
-	nofreezedb
+	throwdb
 
 	// WARNING: The `threshold` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
@@ -52,6 +52,88 @@ type chainThrower struct {
 	quit    chan struct{}
 	wg      sync.WaitGroup
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
+}
+
+// throwdb is a database wrapper that disables freezer data retrievals.
+type throwdb struct {
+	ethdb.KeyValueStore
+}
+
+// HasAncient always returns false as `throwdb` has thrown everything written to it
+func (db *throwdb) HasAncient(kind string, number uint64) (bool, error) {
+	return false, nil
+}
+
+// Ancient returns an empty result as `throwdb` has thrown everything written to it
+func (db *throwdb) Ancient(kind string, number uint64) ([]byte, error) {
+	return []byte{}, nil
+}
+
+// AncientRange returns an empty result as `throwdb` has thrown everything written to it
+func (db *throwdb) AncientRange(kind string, start, max, maxByteSize uint64) ([][]byte, error) {
+	return [][]byte{}, nil
+}
+
+// Ancients returns 0 as we don't have a backing chain freezer.
+func (db *throwdb) Ancients() (uint64, error) {
+	return 0, nil
+}
+
+// Tail returns 0 as we don't have a backing chain freezer.
+func (db *throwdb) Tail() (uint64, error) {
+	return 0, errNotSupported
+}
+
+// AncientSize returns an error as we don't have a backing chain freezer.
+func (db *throwdb) AncientSize(kind string) (uint64, error) {
+	return 0, nil
+}
+
+// ModifyAncients is not supported.
+func (db *throwdb) ModifyAncients(func(ethdb.AncientWriteOp) error) (int64, error) {
+	return 0, nil
+}
+
+// TruncateHead returns an error as we don't have a backing chain freezer.
+func (db *throwdb) TruncateHead(items uint64) error {
+	return nil
+}
+
+// TruncateTail returns an error as we don't have a backing chain freezer.
+func (db *throwdb) TruncateTail(items uint64) error {
+	return nil
+}
+
+// Sync returns an error as we don't have a backing chain freezer.
+func (db *throwdb) Sync() error {
+	return nil
+}
+
+func (db *throwdb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
+	// Unlike other ancient-related methods, this method does not return
+	// errNotSupported when invoked.
+	// The reason for this is that the caller might want to do several things:
+	// 1. Check if something is in freezer,
+	// 2. If not, check leveldb.
+	//
+	// This will work, since the ancient-checks inside 'fn' will return errors,
+	// and the leveldb work will continue.
+	//
+	// If we instead were to return errNotSupported here, then the caller would
+	// have to explicitly check for that, having an extra clause to do the
+	// non-ancient operations.
+	return fn(db)
+}
+
+// MigrateTable processes the entries in a given table in sequence
+// converting them to a new format if they're of an old format.
+func (db *throwdb) MigrateTable(kind string, convert convertLegacyFn) error {
+	return errNotSupported
+}
+
+// AncientDatadir returns an error as we don't have a backing chain freezer.
+func (db *throwdb) AncientDatadir() (string, error) {
+	return "", errNotSupported
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
@@ -80,7 +162,7 @@ func (f *chainThrower) Close() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 func (f *chainThrower) throw(db ethdb.KeyValueStore) {
-	nfdb := &nofreezedb{KeyValueStore: db}
+	nfdb := &throwdb{KeyValueStore: db}
 
 	var (
 		backoff   bool
@@ -100,7 +182,7 @@ func (f *chainThrower) throw(db ethdb.KeyValueStore) {
 				triggered = nil
 			}
 			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
+			case <-time.NewTimer(throwerRecheckInterval).C:
 				backoff = false
 			case triggered = <-f.trigger:
 				backoff = false
@@ -138,6 +220,12 @@ func (f *chainThrower) throw(db ethdb.KeyValueStore) {
 			continue
 		}
 
+		storedSections := ReadStoredBloomSections(nfdb)
+		if storedSections*params.BloomBitsBlocks-1 < *last {
+			log.Warn("Attempt to prune the ancient blocks that bloom filter haven't finished yet, postpone to next round", "storedSections", storedSections, "pruneTo", *last)
+			return
+		}
+
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
@@ -154,6 +242,7 @@ func (f *chainThrower) throw(db ethdb.KeyValueStore) {
 		if limit-first > freezerBatchLimit {
 			limit = first + freezerBatchLimit
 		}
+		log.Info("schedule throwing blocks", "from", first, "to", limit)
 		ancients, err := f.throwRange(nfdb, first, limit)
 		if err != nil {
 			log.Error("Error in block freeze operation", "err", err)
@@ -245,34 +334,34 @@ func (f *chainThrower) throw(db ethdb.KeyValueStore) {
 	}
 }
 
-func (f *chainThrower) throwRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
+func (f *chainThrower) throwRange(nfdb *throwdb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 
 	for ; number <= limit; number++ {
 		// Retrieve all the components of the canonical block.
 		hash := ReadCanonicalHash(nfdb, number)
 		if hash == (common.Hash{}) {
-			log.Error("canonical hash missing, can't freeze block %d", number)
+			log.Error("canonical hash missing, can't freeze", "block %d", number)
 			continue
 		}
 		header := ReadHeaderRLP(nfdb, hash, number)
 		if len(header) == 0 {
-			log.Error("block header missing, can't freeze block %d", number)
+			log.Error("block header missing, can't freeze", "block %d", number)
 			continue
 		}
 		body := ReadBodyRLP(nfdb, hash, number)
 		if len(body) == 0 {
-			log.Error("block body missing, can't freeze block %d", number)
+			log.Error("block body missing, can't freeze", "block %d", number)
 			continue
 		}
 		receipts := ReadReceiptsRLP(nfdb, hash, number)
 		if len(receipts) == 0 {
-			log.Error("block receipts missing, can't freeze block %d", number)
+			log.Error("block receipts missing, can't freeze", "block %d", number)
 			continue
 		}
 		td := ReadTdRLP(nfdb, hash, number)
 		if len(td) == 0 {
-			log.Error("total difficulty missing, can't freeze block %d", number)
+			log.Error("total difficulty missing, can't freeze", "block %d", number)
 			continue
 		}
 
