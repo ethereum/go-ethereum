@@ -130,7 +130,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	// If the tx has completely specifed a fee mechanism, no default is needed. This allows users
+	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
 	// who are not yet synced past London to get defaults for other tx values. See
 	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
