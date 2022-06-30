@@ -1020,6 +1020,10 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	// If there is no data, it is considered a simple transfer which has a fixed cost.
+	if args.To != nil && len(args.data()) == 0 {
+		return hexutil.Uint64(params.TxGas), nil
+	}
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1
