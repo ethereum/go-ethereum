@@ -168,24 +168,6 @@ func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
-// ReadAncientThrowLastBlock retrieves the hash of the finalized block.
-func ReadAncientThrowLastBlockNumber(db ethdb.KeyValueReader) *uint64 {
-	data, _ := db.Get(ancientThrowLastBlock)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
-}
-
-// WriteAncientThrowLastBlock stores the hash of the finalized block.
-func WriteAncientThrowLastBlockNumber(db ethdb.KeyValueWriter, number uint64) {
-	enc := encodeBlockNumber(number)
-	if err := db.Put(ancientThrowLastBlock, enc); err != nil {
-		log.Crit("Failed to store last throwed ancient block's hash", "err", err)
-	}
-}
-
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.
 func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
