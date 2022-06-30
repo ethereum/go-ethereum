@@ -344,7 +344,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	// effectiveTip may be negative during RPC calls such as eth_call and eth_estimateGas.
+	// In these circumstances, we don't want to subtract balance from the coinbase,
+	// which would otherwise result in a potentially negative balance.
+	if effectiveTip.Sign() > 0 {
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
