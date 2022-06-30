@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -272,8 +273,13 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	// our live chain. As such, payload execution will not permit reorgs and thus
 	// will not trigger a sync cycle. That is fine though, if we get a fork choice
 	// update after legit payload executions.
+	//
+	// A similar cornercase is when the node is in snap sync mode, but the CL client
+	// tries to make it import a block. That should be denied as pushing something
+	// into the database directly will conflict with the assumptions of snap sync
+	// that it has an empty db that it can fill itself.
 	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
+	if parent == nil || api.eth.SyncMode() != downloader.FullSync {
 		// Stash the block away for a potential forced forckchoice update to it
 		// at a later time.
 		api.remoteBlocks.put(block.Hash(), block.Header())
