@@ -1950,7 +1950,7 @@ func (api *DebugAPI) SeedHash(ctx context.Context, number uint64) (string, error
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
+	return fmt.Sprintf("%#x", ethash.SeedHash(number)), nil
 }
 
 // ChaindbProperty returns leveldb properties of the key-value database.

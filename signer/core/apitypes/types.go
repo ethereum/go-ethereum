@@ -659,7 +659,7 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 		if b, err := parseInteger(encType, encValue); err != nil {
 			return "", err
 		} else {
-			return fmt.Sprintf("%d (0x%x)", b, b), nil
+			return fmt.Sprintf("%d (%#x)", b, b), nil
 		}
 	}
 	return "", fmt.Errorf("unhandled type %v", encType)
