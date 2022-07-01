@@ -194,7 +194,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 	// validate in this method. If, however, the genesis hash is not nil, compare
 	// it to the freezer content.
 	// TODO consider deprecate this check
-	if kvgenesis, _ := db.Get(headerHashKey(0)); len(kvgenesis) > 0 {
+	if kvgenesis, _ := db.Get(headerHashKey(0)); len(kvgenesis) > 0 && !ancientPrune {
 		if frozen, _ := frdb.Ancients(); frozen > 0 {
 			// If the freezer already contains something, ensure that the genesis blocks
 			// match, otherwise we might mix up freezers across chains and destroy both
