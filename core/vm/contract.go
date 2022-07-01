@@ -107,7 +107,7 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 func (c *Contract) IsCode(udest uint64) bool {
 	// Do we already have an analysis laying around?
 	if c.analysis != nil {
-		return c.analysis.IsCode(udest)
+		return c.analysis.codeSegment(udest)
 	}
 	// Do we have a contract hash already?
 	// If we do have a hash, that means it's a 'regular' contract. For regular
@@ -123,7 +123,7 @@ func (c *Contract) IsCode(udest uint64) bool {
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
-		return analysis.IsCode(udest)
+		return analysis.codeSegment(udest)
 	}
 	// We don't have the code hash, most likely a piece of initcode not already
 	// in state trie. In that case, we do an analysis, and save it locally, so
@@ -132,7 +132,7 @@ func (c *Contract) IsCode(udest uint64) bool {
 	if c.analysis == nil {
 		c.analysis = codeBitmap(c.Code)
 	}
-	return c.analysis.IsCode(udest)
+	return c.analysis.codeSegment(udest)
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current
