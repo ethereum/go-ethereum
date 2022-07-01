@@ -140,8 +140,7 @@ type CacheConfig struct {
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
-	AncientRecentLimit uint64
-
+	AncientPrune bool
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
@@ -406,7 +405,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Start tx indexer/unindexer.
 	if txLookupLimit != nil {
 		bc.txLookupLimit = *txLookupLimit
-		if bc.cacheConfig.AncientRecentLimit != 0 {
+		if bc.cacheConfig.AncientPrune {
 			bc.txLookupLimit = params.FullImmutabilityThreshold
 		}
 
@@ -940,7 +939,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	if bc.cacheConfig.AncientRecentLimit != 0 {
+	if bc.cacheConfig.AncientPrune {
 		ancientLimit = 0
 	}
 
