@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/txtrace"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -182,6 +183,9 @@ type Config struct {
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
+
+	// TxTrace
+	TxTrace txtrace.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config

@@ -67,6 +67,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/txtrace"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
@@ -834,6 +835,16 @@ var (
 		Usage: "InfluxDB organization name (v2 only)",
 		Value: metrics.DefaultConfig.InfluxDBOrganization,
 	}
+
+	// TxTraceEnabledFlag ...
+	TxTraceEnabledFlag = cli.BoolFlag{
+		Name:  "txtrace",
+		Usage: "Enable transaction trace while evm processing, default result is openEthereum style",
+	}
+	TxTraceStoreFlag = DirectoryFlag{
+		Name:  "txtrace.store",
+		Usage: "Data directory for store transaction trace result (default = inside datadir)",
+	}
 )
 
 var (
@@ -1421,6 +1432,15 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	}
 }
 
+func setTxTrace(ctx *cli.Context, cfg *txtrace.Config) {
+	if ctx.GlobalIsSet(TxTraceEnabledFlag.Name) {
+		cfg.Enabled = ctx.GlobalBool(TxTraceEnabledFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxTraceStoreFlag.Name) {
+		cfg.StoreDir = ctx.GlobalString(TxTraceStoreFlag.Name)
+	}
+}
+
 func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	if ctx.GlobalIsSet(TxPoolLocalsFlag.Name) {
 		locals := strings.Split(ctx.GlobalString(TxPoolLocalsFlag.Name), ",")
@@ -1613,6 +1633,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
+	setTxTrace(ctx, &cfg.TxTrace)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
