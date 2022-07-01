@@ -466,7 +466,7 @@ func (c *ChainConfig) String() string {
 		banner += fmt.Sprintf(" - Gray Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
 	if c.CancunBlock != nil {
-		fmt.Sprintf(" - Cancun:                                %-8v\n", c.CancunBlock)
+		banner += fmt.Sprintf(" - Cancun:                      %-8v\n", c.CancunBlock)
 	}
 	banner += "\n"
 
