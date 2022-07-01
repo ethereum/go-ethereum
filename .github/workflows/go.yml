@@ -51,7 +51,7 @@ jobs:
         go-version: 1.18
 
     - name: Download precomputed points
-      run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagon/precomp
+      run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagonv2/precomp -Otrie/utils/precomp
 
     - name: Test
       run: go test ./...

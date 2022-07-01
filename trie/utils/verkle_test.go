@@ -38,12 +38,14 @@ func TestGetTreeKey(t *testing.T) {
 }
 
 func TestConstantPoint(t *testing.T) {
+	var expectedPoly [1]verkle.Fr
+
 	cfg, _ := verkle.GetConfig()
-	verkle.FromLEBytes(&getTreePolyIndex0Fr[0], []byte{2, 64})
-	expected := cfg.CommitToPoly(getTreePolyIndex0Fr[:], 1)
+	verkle.FromLEBytes(&expectedPoly[0], []byte{2, 64})
+	expected := cfg.CommitToPoly(expectedPoly[:], 1)
 
 	if !verkle.Equal(expected, getTreePolyIndex0Point) {
-		t.Fatal("Marshalled constant value is incorrect")
+		t.Fatalf("Marshalled constant value is incorrect: %x != %x", expected.Bytes(), getTreePolyIndex0Point.Bytes())
 	}
 }
 

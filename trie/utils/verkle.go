@@ -19,7 +19,6 @@ package utils
 import (
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
 	"github.com/gballet/go-verkle"
-
 	"github.com/holiman/uint256"
 )
 
@@ -39,8 +38,7 @@ var (
 	VerkleNodeWidth     = uint256.NewInt(256)
 	codeStorageDelta    = uint256.NewInt(0).Sub(CodeOffset, HeaderStorageOffset)
 
-	getTreePolyIndex0Fr    [1]verkle.Fr
-	getTreePolyIndex0Point = new(verkle.Point)
+	getTreePolyIndex0Point *verkle.Point
 )
 
 func init() {
@@ -48,7 +46,11 @@ func init() {
 	//cfg, _ := verkle.GetConfig()
 	//verkle.FromLEBytes(&getTreePolyIndex0Fr[0], []byte{2, 64})
 	//= cfg.CommitToPoly(getTreePolyIndex0Fr[:], 1)
-	getTreePolyIndex0Point.Unmarshal([]byte{105, 89, 33, 220, 163, 177, 108, 92, 200, 80, 233, 76, 221, 99, 245, 115, 196, 103, 102, 158, 137, 206, 200, 137, 53, 208, 52, 116, 214, 189, 249, 212})
+	getTreePolyIndex0Point = new(verkle.Point)
+	err := getTreePolyIndex0Point.SetBytes([]byte{34, 25, 109, 242, 193, 5, 144, 224, 76, 52, 189, 92, 197, 126, 9, 145, 27, 152, 199, 130, 165, 3, 210, 27, 193, 131, 142, 28, 110, 26, 16, 191})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // GetTreeKey performs both the work of the spec's get_tree_key function, and that
