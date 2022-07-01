@@ -82,8 +82,7 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 
 // flush adds allocated genesis accounts into a fresh new statedb and
 // commit the state changes into the given database handler.
-func (ga *GenesisAlloc) flush(db ethdb.Database) (common.Hash, error) {
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+func (ga *GenesisAlloc) flush(db ethdb.Database, cfg *params.ChainConfig) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -151,7 +150,7 @@ func CommitGenesisState(db ethdb.Database, hash common.Hash) error {
 			return errors.New("not found")
 		}
 	}
-	_, err := alloc.flush(db)
+	_, err := alloc.flush(db, nil)
 	return err
 }
 
@@ -371,12 +370,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
 		db = rawdb.NewMemoryDatabase()
 	}
-	var trieCfg *trie.Config
-	if g.Config != nil {
-		trieCfg = &trie.Config{UseVerkle: g.Config.IsCancun(big.NewInt(int64(g.Number)))}
-	}
-	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
-	root, err := g.Alloc.flush(db)
+	root, err := g.Alloc.flush(db, g.Config)
 	if err != nil {
 		panic(err)
 	}

@@ -108,6 +108,7 @@ func (env *environment) copy() *environment {
 		state:     env.state.Copy(),
 		ancestors: env.ancestors.Clone(),
 		family:    env.family.Clone(),
+		original:  env.original.Copy(),
 		tcount:    env.tcount,
 		coinbase:  env.coinbase,
 		header:    types.CopyHeader(env.header),
@@ -1163,7 +1164,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 				kvs[string(key)] = v
 			}
 			vtr.Hash()
-			p, k, err := vtr.ProveAndSerialize(s.Witness().Keys(), s.Witness().KeyVals())
+			p, k, err := vtr.ProveAndSerialize(env.original.Witness().Keys(), env.original.Witness().KeyVals())
 			if err != nil {
 				return err
 			}

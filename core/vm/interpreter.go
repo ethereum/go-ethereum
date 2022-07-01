@@ -18,7 +18,6 @@ package vm
 
 import (
 	"hash"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
