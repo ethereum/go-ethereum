@@ -342,7 +342,7 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 // be called by the newpayload command when the block seems to be ok, but some
 // prerequisite prevents it from being processed (e.g. no parent, or nap sync).
 func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadStatusV1, error) {
-	// Stash the block away for a potential forced forckchoice update to it
+	// Stash the block away for a potential forced forkchoice update to it
 	// at a later time.
 	api.remoteBlocks.put(block.Hash(), block.Header())
 
