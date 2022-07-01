@@ -124,7 +124,7 @@ var (
 	}
 	AncientPruneFlag = cli.BoolFlag{
 		Name:  "ancient.prune",
-		Usage: "Totally discard the ancient blocks instead of writting them to the freezer db",
+		Usage: "Totally discard the ancient blocks instead of writing them to the freezer db",
 	}
 	MinFreeDiskSpaceFlag = DirectoryFlag{
 		Name:  "datadir.minfreedisk",
