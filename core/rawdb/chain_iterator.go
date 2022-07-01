@@ -273,7 +273,7 @@ func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, inte
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool, unindexBlock bool) {
 	// short circuit for invalid range
 	if from >= to {
 		return
@@ -308,7 +308,7 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 			DeleteTxLookupEntries(batch, delivery.hashes)
 			txs += len(delivery.hashes)
 			// Delete all about the block
-			if delivery.number != 0 { // never delete the genesis block
+			if unindexBlock && delivery.number != 0 { // never delete the genesis block
 				DeleteBlock(batch, delivery.blockHash, delivery.number)
 			}
 			blocks++
@@ -352,11 +352,11 @@ func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
-	unindexTransactions(db, from, to, interrupt, nil)
+func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, unindexBlock bool) {
+	unindexTransactions(db, from, to, interrupt, nil, unindexBlock)
 }
 
 // unindexTransactionsForTesting is the internal debug version with an additional hook.
 func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
-	unindexTransactions(db, from, to, interrupt, hook)
+	unindexTransactions(db, from, to, interrupt, hook, false)
 }

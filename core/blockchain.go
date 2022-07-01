@@ -2302,7 +2302,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 			} else {
 				// Prune all stale tx indices and record the tx index tail
 				log.Info("Scheduled blocks & transactions unindexing", "from block", 0, "to", head-bc.txLookupLimit+1)
-				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit)
+				rawdb.UnindexTransactions(bc.db, 0, head-bc.txLookupLimit+1, bc.quit, bc.cacheConfig.AncientPrune)
 			}
 			return
 		}
@@ -2327,7 +2327,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 		} else {
 			// Unindex a part of stale indices and forward index tail to HEAD-limit
 			log.Info("Scheduled blocks & transactions unindexing", "from block", *tail, "to", head-bc.txLookupLimit+1)
-			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit)
+			rawdb.UnindexTransactions(bc.db, *tail, head-bc.txLookupLimit+1, bc.quit, bc.cacheConfig.AncientPrune)
 		}
 	}
 
