@@ -386,7 +386,7 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 
 func TestGetTreeKeys(t *testing.T) {
 	addr := common.Hex2Bytes("71562b71999873DB5b286dF957af199Ec94617f7")
-	target := common.Hex2Bytes("e00f70099661b0afefd868e5f49863abdd83550021c3b71907a598e86b311900")
+	target := common.Hex2Bytes("274cde18dd9dbb04caf16ad5ee969c19fe6ca764d5688b5e1d419f4ac6cd1600")
 	key := utils.GetTreeKeyVersion(addr)
 	t.Logf("key=%x", key)
 	t.Logf("actualKey=%x", target)
