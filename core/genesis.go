@@ -83,6 +83,11 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 // flush adds allocated genesis accounts into a fresh new statedb and
 // commit the state changes into the given database handler.
 func (ga *GenesisAlloc) flush(db ethdb.Database, cfg *params.ChainConfig) (common.Hash, error) {
+	var trieCfg *trie.Config
+	if cfg != nil {
+		trieCfg = &trie.Config{UseVerkle: cfg.IsCancun(big.NewInt(int64(0)))}
+	}
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}

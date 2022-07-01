@@ -1152,8 +1152,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 
 		if tr := w.current.original.GetTrie(); tr.IsVerkle() {
 			vtr := tr.(*trie.VerkleTrie)
-			keys := s.Witness().Keys()
-			kvs := s.Witness().KeyVals()
+			keys := env.original.Witness().Keys()
+			kvs := env.original.Witness().KeyVals()
 			for _, key := range keys {
 				// XXX workaround - there is a problem in the witness creation
 				// so fix the witness creation as well.
