@@ -23,7 +23,6 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -515,11 +514,7 @@ func TestDiskMidAccountPartialMerge(t *testing.T) {
 // TestDiskSeek tests that seek-operations work on the disk layer
 func TestDiskSeek(t *testing.T) {
 	// Create some accounts in the disk layer
-	diskdb, err := leveldb.New(t.TempDir(), 256, 0, "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	db := rawdb.NewDatabase(diskdb)
+	db := rawdb.NewMemoryDatabase()
 	defer db.Close()
 
 	// Fill even keys [0,2,4...]

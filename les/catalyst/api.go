@@ -37,7 +37,6 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 			Namespace:     "engine",
 			Version:       "1.0",
 			Service:       NewConsensusAPI(backend),
-			Public:        true,
 			Authenticated: true,
 		},
 	})

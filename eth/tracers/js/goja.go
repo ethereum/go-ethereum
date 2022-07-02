@@ -55,11 +55,7 @@ type fromBufFn = func(vm *goja.Runtime, buf goja.Value, allowString bool) ([]byt
 
 func toBuf(vm *goja.Runtime, bufType goja.Value, val []byte) (goja.Value, error) {
 	// bufType is usually Uint8Array. This is equivalent to `new Uint8Array(val)` in JS.
-	res, err := vm.New(bufType, vm.ToValue(val))
-	if err != nil {
-		return nil, err
-	}
-	return vm.ToValue(res), nil
+	return vm.New(bufType, vm.ToValue(vm.NewArrayBuffer(val)))
 }
 
 func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString bool) ([]byte, error) {
@@ -70,6 +66,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 			break
 		}
 		return common.FromHex(obj.String()), nil
+
 	case "Array":
 		var b []byte
 		if err := vm.ExportTo(buf, &b); err != nil {
@@ -81,10 +78,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 		if !obj.Get("constructor").SameAs(bufType) {
 			break
 		}
-		var b []byte
-		if err := vm.ExportTo(buf, &b); err != nil {
-			return nil, err
-		}
+		b := obj.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
 		return b, nil
 	}
 	return nil, fmt.Errorf("invalid buffer type")
@@ -765,7 +759,7 @@ func (co *contractObj) GetValue() goja.Value {
 }
 
 func (co *contractObj) GetInput() goja.Value {
-	input := co.contract.Input
+	input := common.CopyBytes(co.contract.Input)
 	res, err := co.toBuf(co.vm, input)
 	if err != nil {
 		co.vm.Interrupt(err)
