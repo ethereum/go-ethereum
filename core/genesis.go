@@ -107,7 +107,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, cfg *params.ChainConfig) (commo
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return root, nil
+	return root, statedb.Cap(root)
 }
 
 // write writes the json marshaled genesis state into database
