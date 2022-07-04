@@ -185,7 +185,7 @@ func (f *fuzzer) fuzz() int {
 	sort.Sort(vals)
 	for _, kv := range vals {
 		if f.debugging {
-			fmt.Printf("{\"0x%x\" , \"0x%x\"} // stacktrie.Update\n", kv.k, kv.v)
+			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
 		trieB.Update(kv.k, kv.v)
 	}
