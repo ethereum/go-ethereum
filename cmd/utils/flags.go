@@ -970,6 +970,18 @@ var (
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Verkle conversion flags
+	VerkleConversionInsertRangeStartFlag = &cli.Uint64Flag{
+		Name:  "range.start",
+		Usage: "Starting byte of the key insertion range. Keys with a starting byte smaller than n will not be inserted in the tree.",
+		Value: 0,
+	}
+	VerkleConversionInsertRangeSizeFlag = &cli.Uint64Flag{
+		Name:  "range.size",
+		Usage: "Width of the insertion range. Keys with a starting byte greater or equal than start+n will not be inserted in the tree.",
+		Value: 256,
+	}
 )
 
 var (
