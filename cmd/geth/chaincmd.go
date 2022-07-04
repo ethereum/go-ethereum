@@ -171,7 +171,7 @@ func initGenesis(ctx *cli.Context) error {
 	}
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
-		utils.Fatalf("invalid path to genesis.json file")
+		utils.Fatalf("invalid path to genesis file")
 	}
 	file, err := os.Open(genesisPath)
 	if err != nil {
