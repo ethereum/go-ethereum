@@ -180,7 +180,7 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 		}
 		return nil
 	case eth2LightClient:
-		newResp, err := n.lapi.ExecutePayloadV1(eb)
+		newResp, err := n.lapi.NewPayloadV1(eb)
 		if err != nil {
 			return err
 		} else if newResp.Status != "VALID" {
