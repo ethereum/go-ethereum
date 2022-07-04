@@ -178,6 +178,7 @@ func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*typ
 	if td == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
+	td = new(big.Int).Set(td)
 	// Check that all blocks before the last one are below the TTD
 	for i, head := range preHeaders {
 		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
