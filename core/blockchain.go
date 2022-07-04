@@ -2375,9 +2375,9 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	return 0, err
 }
 
-// SetValidator sets the current validator.
+// SetBlockValidatorForTesting sets the current validator.
 // This method can be used to force an invalid blockchain to be verified for tests.
 // This method is unsafe and should only be used before block import starts.
-func (bc *BlockChain) SetValidator(v Validator) {
+func (bc *BlockChain) SetBlockValidatorForTesting(v Validator) {
 	bc.validator = v
 }
