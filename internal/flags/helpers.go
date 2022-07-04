@@ -38,6 +38,15 @@ func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	return app
 }
 
+// Merge merges the given flag slices.
+func Merge(groups ...[]cli.Flag) []cli.Flag {
+	var ret []cli.Flag
+	for _, group := range groups {
+		ret = append(ret, group...)
+	}
+	return ret
+}
+
 var migrationApplied = map[*cli.Command]struct{}{}
 
 // MigrateGlobalFlags makes all global flag values available in the
@@ -70,6 +79,10 @@ func MigrateGlobalFlags(ctx *cli.Context) {
 
 	// This iterates over all commands and wraps their action function.
 	iterate(ctx.App.Commands, func(cmd *cli.Command) {
+		if cmd.Action == nil {
+			return
+		}
+
 		action := cmd.Action
 		cmd.Action = func(ctx *cli.Context) error {
 			doMigrateFlags(ctx)

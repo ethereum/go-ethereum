@@ -114,6 +114,10 @@ func localConsole(ctx *cli.Context) error {
 // remoteConsole will connect to a remote geth instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
+	if ctx.Args().Len() > 1 {
+		utils.Fatalf("invalid command-line: too many arguments")
+	}
+
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		cfg := defaultNodeConfig()
