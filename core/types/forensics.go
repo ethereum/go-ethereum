@@ -7,6 +7,7 @@ type ForensicsInfo struct {
 }
 
 type ForensicsContent struct {
+	Id                   string         `json:"id"`
 	DivergingBlockNumber uint64         `json:"divergingBlockNumber"`
 	DivergingBlockHash   string         `json:"divergingBlockHash"`
 	AcrossEpoch          bool           `json:"acrossEpoch"`

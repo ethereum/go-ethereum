@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -165,6 +166,7 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 	}
 
 	content, err := json.Marshal(&types.ForensicsContent{
+		Id:                   generateForensicsId(ancestorHash.Hex(), &lowerRoundQC, &higherRoundQC),
 		DivergingBlockHash:   ancestorHash.Hex(),
 		AcrossEpoch:          accrossEpoches,
 		DivergingBlockNumber: ancestorBlock.Number.Uint64(),
@@ -360,4 +362,9 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 		return lowerBlockNumHash, ancestorToHigherBlockNumHashPath, ancestorToLowerBlockNumHashPath, nil
 	}
 	return lowerBlockNumHash, ancestorToLowerBlockNumHashPath, ancestorToHigherBlockNumHashPath, nil
+}
+
+func generateForensicsId(divergingHash string, qc1 *types.QuorumCert, qc2 *types.QuorumCert) string {
+	keysList := []string{divergingHash, qc1.ProposedBlockInfo.Hash.Hex(), qc2.ProposedBlockInfo.Hash.Hex()}
+	return strings.Join(keysList[:], ":")
 }

@@ -143,4 +143,3 @@ func TestFindQCsInSameRound(t *testing.T) {
 }
 
 // TODO: Add test for FindAncestorBlockHash
-// TODO: Add test for SendForensicProof
