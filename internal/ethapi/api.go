@@ -1102,21 +1102,39 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		return result.Failed(), result, nil
 	}
+
+	type result struct {
+		failed bool
+		err    error
+	}
+
+	resChan := make(chan result)
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		failed, _, err := executable(mid)
 
-		// If the error is not nil(consensus error), it means the provided message
-		// call or transaction will never be accepted no matter how much gas it is
-		// assigned. Return the error directly, don't struggle any more.
-		if err != nil {
-			return 0, err
-		}
-		if failed {
-			lo = mid
-		} else {
-			hi = mid
+		go func() {
+			failed, _, err := executable(mid)
+			resChan <- result{failed: failed, err: err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return 0, errors.New("gas estimation aborted")
+		case res := <-resChan:
+			failed, err := res.failed, res.err
+
+			// If the error is not nil(consensus error), it means the provided message
+			// call or transaction will never be accepted no matter how much gas it is
+			// assigned. Return the error directly, don't struggle any more.
+			if err != nil {
+				return 0, err
+			}
+			if failed {
+				lo = mid
+			} else {
+				hi = mid
+			}
 		}
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
