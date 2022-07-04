@@ -123,10 +123,9 @@ var (
 		Name:  "datadir.ancient",
 		Usage: "Data directory for ancient chain segments (default = inside chaindata)",
 	}
-	AncientRecentLimitFlag = cli.Uint64Flag{
-		Name:  "ancient.recentlimit",
-		Usage: "Keep only the specified amount of recent ancient blocks and won't do ancient related checks on startup (default = 0, means keep all)",
-		Value: 0,
+	AncientPruneFlag = cli.BoolFlag{
+		Name:  "ancient.prune",
+		Usage: "Totally discard the ancient blocks instead of writing them to the freezer db",
 	}
 	MinFreeDiskSpaceFlag = DirectoryFlag{
 		Name:  "datadir.minfreedisk",
@@ -865,7 +864,7 @@ var (
 	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
 		AncientFlag,
-		AncientRecentLimitFlag,
+		AncientPruneFlag,
 		RemoteDBFlag,
 	}
 )
@@ -1615,8 +1614,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		ctx.GlobalSet(TxLookupLimitFlag.Name, "0")
 		log.Warn("Disable transaction unindexing for archive node")
 	}
-	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(AncientRecentLimitFlag.Name) != 0 {
-		ctx.GlobalSet(AncientRecentLimitFlag.Name, "0")
+	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(AncientPruneFlag.Name) != 0 {
+		ctx.GlobalSet(AncientPruneFlag.Name, "false")
 		log.Warn("Disable ancient prunning for archive node")
 	}
 	if ctx.GlobalIsSet(LightServeFlag.Name) && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1686,8 +1685,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(TxLookupLimitFlag.Name) {
 		cfg.TxLookupLimit = ctx.GlobalUint64(TxLookupLimitFlag.Name)
 	}
-	if ctx.GlobalIsSet(AncientRecentLimitFlag.Name) {
-		cfg.AncientRecentLimit = ctx.GlobalUint64(AncientRecentLimitFlag.Name)
+	if ctx.GlobalIsSet(AncientPruneFlag.Name) {
+		cfg.AncientPrune = ctx.GlobalBool(AncientPruneFlag.Name)
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
@@ -2012,7 +2011,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	case ctx.GlobalString(SyncModeFlag.Name) == "light":
 		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
-		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, ctx.GlobalUint64(AncientRecentLimitFlag.Name))
+		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, ctx.GlobalBool(AncientPruneFlag.Name))
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)

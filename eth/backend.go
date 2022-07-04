@@ -134,7 +134,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	ethashConfig.NotifyFull = config.Miner.NotifyFull
 
 	// Assemble the Ethereum object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false, config.AncientRecentLimit)
+	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false, config.AncientPrune)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieTimeLimit:       config.TrieTimeout,
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
-			AncientRecentLimit:  config.AncientRecentLimit,
+			AncientPrune:        config.AncientPrune,
 		}
 	)
 	eth.blockchain, err = core.NewBlockChainV2(chainDb, cacheConfig, chainConfig, &config.TxTrace, txStore, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
@@ -226,7 +226,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		eth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
+	if !config.AncientPrune {
+		eth.bloomIndexer.Start(eth.blockchain)
+	}
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)

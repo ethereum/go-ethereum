@@ -37,10 +37,6 @@ const (
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
 	freezerBatchLimit = 30000
-
-	// cleanerRecheckInterval is the frequency to check the freezer database to
-	// find the bloks that might be pruned
-	cleanerRecheckInterval = 1 * time.Minute
 )
 
 // chainFreezer is a wrapper of freezer with additional chain freezing feature.
@@ -52,10 +48,6 @@ type chainFreezer struct {
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
-	// ancientRecentLimit Number of recent blocks to keep in ancient db
-	// if not 0, blocks older than `HEAD - ancientRecentLimit` will be purged from ancient db
-	ancientRecentLimit uint64
-
 	*Freezer
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -63,17 +55,16 @@ type chainFreezer struct {
 }
 
 // newChainFreezer initializes the freezer for ancient chain data.
-func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool, ancientRecentLimit uint64) (*chainFreezer, error) {
+func newChainFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*chainFreezer, error) {
 	freezer, err := NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
 	if err != nil {
 		return nil, err
 	}
 	return &chainFreezer{
-		Freezer:            freezer,
-		ancientRecentLimit: ancientRecentLimit,
-		threshold:          params.FullImmutabilityThreshold,
-		quit:               make(chan struct{}),
-		trigger:            make(chan chan struct{}),
+		Freezer:   freezer,
+		threshold: params.FullImmutabilityThreshold,
+		quit:      make(chan struct{}),
+		trigger:   make(chan chan struct{}),
 	}, nil
 }
 
