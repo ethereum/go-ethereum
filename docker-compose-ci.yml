@@ -1,0 +1,119 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: redis-srv
+    restart: always
+    expose:
+      - 6379
+    environment:
+      - REDIS_REPLICATION_MODE=master
+    networks:
+      - cqt-net
+    entrypoint: redis-server #/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander-web
+    hostname: redis-commander
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - cqt-net
+    ports:
+      - "8081:8081"
+  
+  node:
+    image: trufflesuite/ganache-cli:v6.12.2
+    container_name: ganache-cli
+    restart: always
+    entrypoint:
+      - node
+      - /app/ganache-core.docker.cli.js
+      - --deterministic
+      - --db=/ganache_data
+      - --mnemonic
+      - 'minimum symptom minute gloom tragic situate silver mechanic salad amused elite beef'
+      - --networkId
+      - '5777'
+      - --hostname
+      - '0.0.0.0'
+    depends_on:
+      - redis-commander
+    networks:
+      - cqt-net
+    ports:
+      - "8545:8545"
+
+  cqt-virtnet:
+    image: "ghcr.io/covalenthq/cqt-virtnet:latest"
+    container_name: proof-chain
+    restart:  on-failure
+    expose:
+      - 8008
+    entrypoint: >
+     /bin/bash -l -c "
+      truffle migrate --network docker;
+      nc -v agent 8008;
+      sleep 100000;"
+    depends_on:
+      - node
+    networks:
+      - cqt-net
+    environment:
+        npm_config_user: "root"
+    ports:
+      - "8008:8008"
+
+  geth:
+    container_name: bsp-geth
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart:  on-failure
+    depends_on:
+      cqt-virtnet:
+        condition: service_started
+    entrypoint: ["geth", "--mainnet", "--port", "0", "--log.debug", "--syncmode", "full", "--datadir", "/root/.ethereum/covalent", "--replication.targets", "redis://username:@redis:6379/0?topic=replication", "--replica.result", "--replica.specimen"]
+    networks:
+      - cqt-net
+    expose:
+      - 8545 
+      - 8546 
+      - 30303 
+      - 30303/udp
+
+  agent:
+    image: "ghcr.io/covalenthq/bsp-agent:latest"
+    container_name: bsp-agent
+    restart:  on-failure
+    depends_on:
+      cqt-virtnet:
+        condition: service_started
+    entrypoint: >
+      /bin/bash -l -c "
+        echo Waiting for proof-chain to be deployed...;
+        while ! nc -v -l -k -p 8008;
+        do
+        sleep 1;
+        done;
+        echo proof-chain contracts deployed!;
+        ./bsp-agent --redis-url=redis://username:@redis:6379/0?topic=replication#replicate  --avro-codec-path=./codec/block-ethereum.avsc --binary-file-path=./bin/block-ethereum/ --replica-bucket=covalenthq-geth-block-specimen --segment-length=10 --proof-chain-address=0xEa2ff902dbeEECcc828757B881b343F9316752e5 --consumer-timeout=6000;
+        exit 0;"
+    environment:
+      - ETH_PRIVATE_KEY=${PRIVATE_KEY}
+      - ETH_RPC_URL=${RPC_URL}
+      - BLOCKCHAIN=${BLOCKCHAIN}
+    networks:
+      - cqt-net
+    ports:
+      - "8080:8080"
+
+networks:
+  cqt-net:

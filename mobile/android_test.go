@@ -1,3 +1,6 @@
+//go:build android
+// +build android
+
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //

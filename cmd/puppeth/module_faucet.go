@@ -100,7 +100,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"EthPort":       config.node.port,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
-		"FaucetName":    strings.Title(network),
+		"FaucetName":    strings.Title(network), //nolint: typecheck,staticcheck
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,

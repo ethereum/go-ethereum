@@ -154,6 +154,9 @@ var (
 		utils.MinerNotifyFullFlag,
 		utils.IgnoreLegacyReceiptsFlag,
 		configFileFlag,
+		utils.BlockReplicationTargetsFlag,
+		utils.ReplicaEnableResultFlag,
+		utils.ReplicaEnableSpecimenFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
 
 	rpcFlags = []cli.Flag{
@@ -452,6 +455,36 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 		if err := ethBackend.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
+	}
+
+	// Kill bsp-geth if --syncmode flag is 'light'
+	if ctx.String(utils.BlockReplicationTargetsFlag.Name) != "" && ctx.String(utils.SyncModeFlag.Name) == "light" {
+		utils.Fatalf("Block specimen production not supported for 'light' sync (only supported modes are 'snap' and 'full'")
+	}
+
+	// Spawn a standalone goroutine for status synchronization monitoring,
+	// if full sync is completed in block specimen creation mode set replica config flag
+	if ctx.Bool(utils.ReplicaEnableSpecimenFlag.Name) || ctx.Bool(utils.ReplicaEnableResultFlag.Name) {
+		log.Info("Synchronisation started, historical blocks synced set to 0")
+		go func() {
+			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
+			defer sub.Unsubscribe()
+			for {
+				event := <-sub.Chan()
+				if event == nil {
+					continue
+				}
+				done, ok := event.Data.(downloader.DoneEvent)
+				if !ok {
+					continue
+				}
+				if timestamp := time.Unix(int64(done.Latest.Time), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed, setting historical blocks synced to 1", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					backend.SetHistoricalBlocksSynced()
+				}
+			}
+		}()
 	}
 }
 

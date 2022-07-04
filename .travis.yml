@@ -239,7 +239,7 @@ jobs:
       if: type = cron
       os: linux
       dist: bionic
-      go: 1.18.x
+      go: 1.17.x
       env:
         - GO111MODULE=on
       script:

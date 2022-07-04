@@ -7,6 +7,7 @@
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+U = $(USER)
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -29,7 +30,7 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test: all
-	$(GORUN) build/ci.go test
+	$(GORUN) build/ci.go test -coverage
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
@@ -37,6 +38,17 @@ lint: ## Run linters.
 clean:
 	env GO111MODULE=on go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
+
+run-geth-bsp:
+	./build/bin/geth \
+  --mainnet \
+  --port 0 \
+  --log.debug \
+  --syncmode full \
+  --datadir /Users/$(U)/Library/Ethereum/workshop/ \
+  --replication.targets "redis://localhost:6379/?topic=replication" \
+  --replica.result \
+  --replica.specimen
 
 # The devtools target installs tools required for 'go generate'.
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.

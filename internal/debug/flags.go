@@ -21,7 +21,9 @@ import (
 	"io"
 	"net/http"
 	_ "net/http/pprof" // nolint: gosec
+	"net/url"
 	"os"
+	"path"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -32,6 +34,8 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sys/unix"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Memsize memsizeui.Handler
@@ -64,6 +68,11 @@ var (
 		Name:     "log.debug",
 		Usage:    "Prepends log messages with call-site location (file and line number)",
 		Category: flags.LoggingCategory,
+	}
+	logLocationFlag = &flags.DirectoryFlag{
+		Name:  "log.folder",
+		Usage: "Location where the log files should be placed",
+		Value: flags.DirectoryString("./logs/"),
 	}
 	pprofFlag = &cli.BoolFlag{
 		Name:     "pprof",
@@ -112,6 +121,7 @@ var Flags = []cli.Flag{
 	logjsonFlag,
 	backtraceAtFlag,
 	debugFlag,
+	logLocationFlag,
 	pprofFlag,
 	pprofAddrFlag,
 	pprofPortFlag,
@@ -134,15 +144,34 @@ func init() {
 func Setup(ctx *cli.Context) error {
 	var ostream log.Handler
 	output := io.Writer(os.Stderr)
+
+	var fmtr log.Format
 	if ctx.Bool(logjsonFlag.Name) {
-		ostream = log.StreamHandler(output, log.JSONFormat())
+		fmtr = log.JSONFormat()
 	} else {
 		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if usecolor {
 			output = colorable.NewColorableStderr()
 		}
-		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
+		fmtr = log.TerminalFormat(usecolor)
 	}
+
+	stdHandler := log.StreamHandler(output, fmtr)
+	locationURL, err := getLogLocationURL(ctx)
+	if err != nil {
+		log.Warn("issue with initiatilizing file logger", "err", err)
+		ostream = stdHandler
+	} else {
+		lumberjackHandler := log.StreamHandler(&lumberjack.Logger{
+			Filename:   path.Join(locationURL.Path, "log.log"),
+			MaxSize:    100,
+			MaxBackups: 7,
+			MaxAge:     10,
+		}, fmtr)
+
+		ostream = log.MultiHandler(lumberjackHandler, stdHandler)
+	}
+
 	glogger.SetHandler(ostream)
 
 	// logging
@@ -217,4 +246,29 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
+}
+
+func getLogLocationURL(ctx *cli.Context) (*url.URL, error) {
+	locationURL, err := url.Parse(ctx.String(logLocationFlag.Name))
+	if err == nil {
+		if _, existErr := os.Stat(locationURL.Path); os.IsNotExist(existErr) {
+			// directory doesn't exist, create
+			createErr := os.Mkdir(locationURL.Path, os.ModePerm)
+			if createErr != nil {
+				return nil, fmt.Errorf("error creating the directory: %w", createErr)
+			}
+		}
+
+		if !writable(locationURL.Path) {
+			return nil, fmt.Errorf("write access not present for given log location")
+		}
+
+		return locationURL, nil
+	}
+
+	return locationURL, fmt.Errorf("log-folder: %w", err)
+}
+
+func writable(path string) bool {
+	return unix.Access(path, unix.W_OK) == nil
 }
