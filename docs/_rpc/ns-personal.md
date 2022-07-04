@@ -31,7 +31,7 @@ Returns the address of the new account.
 
 ### personal_initializeWallets
 
-Initializes a new wallet at the provided URL, by generating and returning a new private key.
+Initializes a new wallet at the provided URL by generating and returning a new private key.
 
 | Client   | Method invocation                                             |
 | :--------| ------------------------------------------------------------- |
@@ -120,8 +120,8 @@ The passphrase can also be supplied as a string.
 
 ### personal_openWallet
 
-Initiates a hardware wallet opening procedure, establishing a USB
-connection and attempting to authenticate via the provided passphrase. Note,
+Initiates a hardware wallet opening procedure by establishing a USB
+connection and then attempting to authenticate via the provided passphrase. Note,
 the method may return an extra challenge requiring a second open (e.g. the
 Trezor PIN matrix challenge).
 

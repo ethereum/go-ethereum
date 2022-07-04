@@ -65,7 +65,7 @@ currently uses to store all its databases.
 
 ### admin_exportChain
 
-Exports the current blockchain into a local file, the path to which is passed as first argument.
+Exports the current blockchain into a local file.
 It optionally takes a first and last block number, in which case it exports only that range of blocks.
 
 It returns a boolean indicating whether the operation succeeded.
