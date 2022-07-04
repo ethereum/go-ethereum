@@ -8,6 +8,9 @@ need to leverage all the security of Geth's crypto implementation in a Go native
 The account management is done client side with all sensitive data held inside the application.
 This gives the user control over access permissions without relying on any third party.
 
+**Note Geth's built-in account management is convenient and straightforward to use, but
+best practise is to use the external tool *Clef* for key management.**
+
 {:toc}
 
 -   this will be removed by the toc
@@ -17,11 +20,10 @@ This gives the user control over access permissions without relying on any third
 Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be 
 stored encrypted so that even if the mobile device is accessed by a malicious third party the 
 keys are still hidden under an additional layer of security. Geth provides a keystore that enables 
-developers to store keys securely using the [`secp256k1`][secp256k1] elliptic curve, 
-implemented using [`libsecp256k`][libsecp256k1] and wrapped by Geth [`accounts`][go-accounts]. 
-Accounts are stored on disk in the [Web3 Secret Storage][wss] format. Developers should be aware 
-of these implementation details but are not required to deeply understand the cryptographic primitives 
-in order to use the keystore.
+developers to store keys securely. The Geth keystore uses [Scrypt][scrypt-docs] to store keys that are encoded
+using the [`secp256k1`][secp256k1] elliptic curve. Accounts are stored on disk in the 
+[Web3 Secret Storage][wss] format. Developers should be aware of these implementation details 
+but are not required to deeply understand the cryptographic primitives in order to use the keystore.
 
 One thing that should be understood, though, is that the cryptographic primitives underpinning the 
 keystore can operate in light or standard mode. Light mode is computationally cheaper, while standard 
@@ -218,3 +220,4 @@ to integrate best-practise account security into Go native applications using a 
 [accounts-account]:https://godoc.org/github.com/ethereum/go-ethereum/accounts#Account
 [new-account]: https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.NewAccount
 [common-hash]: https://godoc.org/github.com/ethereum/go-ethereum/common#Hash
+[scrypt-docs]: https://pkg.go.dev/golang.org/x/crypto/scrypt
