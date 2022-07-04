@@ -339,7 +339,7 @@ let chain = GethNewBigInt(1) // Chain identifier of the main net
 *Although Swift usually rewrites `NSError` returns to throws, this particular
 instance seems to have been missed for some reason (possibly due to it being a
 constructor). It will be fixed in a later version of the iOS bindings when the appropriate
-fixed are implemented upstream in the `gomobile` project.*
+fixes are implemented upstream in the `gomobile` project.*
 
 The transaction `tx` can now be signed using the authorization methods described above:
 
