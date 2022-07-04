@@ -174,10 +174,11 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 // - the preHeaders to have a set difficulty
 // - the last element to be the terminal block
 func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
-	td := new(big.Int).Set(chain.GetTd(preHeaders[0].ParentHash, preHeaders[0].Number.Uint64()-1))
+	td := chain.GetTd(preHeaders[0].ParentHash, preHeaders[0].Number.Uint64()-1)
 	if td == nil {
 		return 0, consensus.ErrUnknownAncestor
 	}
+	td = new(big.Int).Set(td)
 	// Check that all blocks before the last one are below the TTD
 	for i, head := range preHeaders {
 		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
