@@ -226,12 +226,13 @@ between `P` and `B` is large, the regeneration time can be substantial.
 
 Transaction traces include the complete status of the EVM at every point during the transaction execution, which
 can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace
-filters are available to isolate the useful information.
+filters are available to isolate the useful information. Detailed information about `debug_traceTransaction` and its
+component parts is available in the [reference documentation](/docs/rpc/ns-debug#debug_tracetransaction).
 
 ### A simple filter
 
 Filters are Javascript functions that select information from the trace to persist and discard based on some
-conditions. The following Javascript function returns only the sequence of Opciodes executed by the transaction as a
+conditions. The following Javascript function returns only the sequence of opcodes executed by the transaction as a
 comma-separated list. The function could be written directly in the Javascript console, but it is cleaner to 
 write it in a separate re-usable file and load it into the console. 
 
@@ -254,8 +255,7 @@ write it in a separate re-usable file and load it into the console.
 
 2. Run the [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console).
    
-3. Get the hash of a recent transaction. For example, if you use the Goerli network, you can get such a value
-   [here](https://goerli.etherscan.io/).
+3. Get the hash of a recent transaction from a node or block explorer.
 
 4. Run this command to run the script:
 
@@ -299,11 +299,11 @@ This parameter takes the JavaScript object formated as a string. In the case of 
 ```
 This object has three member functions:
 
-- `step`, called for each opcode
-- `fault`, called if there is a problem in the execution
-- `result`, called to produce the results that are returned by `debug.traceTransaction` after the execution is done
+- `step`, called for each opcode.
+- `fault`, called if there is a problem in the execution.
+- `result`, called to produce the results that are returned by `debug.traceTransaction` after the execution is done.
 
-It can have additional members. In this case, `retVal` is used to store the list of strings to return in `result`.
+In this case, `retVal` is used to store the list of strings to return in `result`.
 
 The `step` function adds to `retVal` the program counter and the name of the opcode there. Then, in `result`, this
 list is returned to be sent to the caller.
@@ -554,28 +554,54 @@ The output is similar to:
 ```
 
 
-### Advanced Javascript filtering
-
-The previous section demonstrated how specifying a `tracer` - in the form of a string-formatted Javascript object - in the
-second argument of `debug_traceTransaction` enables Javascript-based filtered tracing. In this mode, 
-`tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the 
-`result` and `fault` methods. The `step` method, which allows the tracer to move sequentially along the sequence of 
-executed Opcodes, was also described. 
-
-
-
-
-
-
 
 ## Other traces
 
-This tutorial has focused on `debug_traceTransaction()` which reportes information about individual transactions. There are
+This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are
 also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, 
 for specific `eth_call`s or rejected blocks. The fill list of trace functions can be explored in the 
 [reference documentation][debug-docs].
 
 
+## Go Native Tracing
+
+It is also possible to trace EVM execution using Go functions that wrap RPC calls to a Geth node. This provides 
+programmatic access to trace dumps meaning retrieval and downstream analysis of the trace information can all be 
+self-contained within a Go application. The source code for the tracers is available to browse on the
+[Geth Github][go-tracer-source]. This page will demonstrate how to handle `traceTransaction` from a Go application.
+The concepts covered here can be transferred to the other types of trace described in the reference documentation.
+
+The tracers are implemnted as functions associated with the `debug` class. The arguments
+are a `ctx` object (which configures the request), a transaction hash and a `TraceConfig` object. The `TraceConfig`
+object has the following structure:
+
+```go
+type TraceConfig struct {
+	*logger.Config
+	Tracer  *string
+	Timeout *string
+	Reexec  *uint64
+}
+```
+
+The `tracer` field in `TraceConfig` is a string-formatted Javascript object that configures the trace as described in
+the [Javascript trace filters](#javascript-trace-filters) section. Timeout is a string that overrides the default 5 second
+request timeout - the valid values are described in the [Go Time][go-time] documentation. `Reexec` is an integer that 
+defines how many blocks behind the head of the chain to look for a checkpoint to rebuild the requested state from - large
+values can lead to long state regeneration times. If the user encounter a `required historical state is not available` error
+then adjusting `Reexec` is likely to fix it.
+
+The `Tracetransaction()` Go function returns the structured logs created during the execution of EVM
+and returns them as a JSON object. 
+
+A call to `TraceTransaction()` in Go therefore looks as follows:
+
+```go
+trace, err := debug.TraceTransaction(txHash, traceConfig) (*ExecutionResult, error)
+if err != nil {
+	return nil, err
+	}
+```
 
 
 ## Summary
@@ -595,3 +621,5 @@ Hopefully with this tool you will find it easier to trace the EVM's behavior and
 [evm]: https://ethereum.org/en/developers/docs/evm
 [solidity-delcall]:https://docs.soliditylang.org/en/v0.8.14/introduction-to-smart-contracts.html#delegatecall-callcode-and-libraries
 [debug-docs]: /docs/rpc/ns-debug
+[go-tracer-source]: https://github.com/ethereum/go-ethereum/blob/master/eth/tracers/api.go
+[go-time]:https://pkg.go.dev/time#ParseDuration
