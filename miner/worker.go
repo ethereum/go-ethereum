@@ -88,7 +88,6 @@ type environment struct {
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
-	original  *state.StateDB // verkle: keep the orignal data to prove the pre-state
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
 	tcount    int            // tx count in cycle
@@ -99,6 +98,8 @@ type environment struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
+
+	preRoot common.Hash
 }
 
 // copy creates a deep copy of environment.
@@ -108,11 +109,11 @@ func (env *environment) copy() *environment {
 		state:     env.state.Copy(),
 		ancestors: env.ancestors.Clone(),
 		family:    env.family.Clone(),
-		original:  env.original.Copy(),
 		tcount:    env.tcount,
 		coinbase:  env.coinbase,
 		header:    types.CopyHeader(env.header),
 		receipts:  copyReceipts(env.receipts),
+		preRoot:   env.preRoot,
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -768,11 +769,11 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
 		state:     state,
 		coinbase:  coinbase,
-		original:  state.Copy(),
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,
 		uncles:    make(map[common.Hash]*types.Header),
+		preRoot:   parent.Root(),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -1150,8 +1151,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			return err
 		}
 
-		if tr := w.current.original.GetTrie(); tr.IsVerkle() {
-			vtr := tr.(*trie.VerkleTrie)
+		preTrie, err := env.state.Database().OpenTrie(env.preRoot)
+		if vtr, ok := preTrie.(*trie.VerkleTrie); ok {
 			keys := env.state.Witness().Keys()
 			kvs := env.state.Witness().KeyVals()
 			for _, key := range keys {
