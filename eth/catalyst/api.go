@@ -393,7 +393,7 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 // delayPayloadImport stashes the given block away for import at a later time,
 // either via a forkchoice update or a sync extension. This method is meant to
 // be called by the newpayload command when the block seems to be ok, but some
-// prerequisite prevents it from being processed (e.g. no parent, or nap sync).
+// prerequisite prevents it from being processed (e.g. no parent, or snap sync).
 func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadStatusV1, error) {
 	// Sanity check that this block's parent is not on a previously invalidated
 	// chain. If it is, mark the block as invalid too.
