@@ -17,7 +17,6 @@
 package fdlimit
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -30,7 +29,7 @@ func TestFileDescriptorLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	if hardlimit < target {
-		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", hardlimit, target))
+		t.Skipf("system limit is less than desired test target: %d < %d", hardlimit, target)
 	}
 
 	if limit, err := Current(); err != nil || limit <= 0 {

@@ -337,9 +337,9 @@ func checkStateContent(ctx *cli.Context) error {
 		hasher.Read(got)
 		if !bytes.Equal(k, got) {
 			errs++
-			fmt.Printf("Error at 0x%x\n", k)
-			fmt.Printf("  Hash:  0x%x\n", got)
-			fmt.Printf("  Data:  0x%x\n", v)
+			fmt.Printf("Error at %#x\n", k)
+			fmt.Printf("  Hash:  %#x\n", got)
+			fmt.Printf("  Data:  %#x\n", v)
 		}
 		if time.Since(lastLog) > 8*time.Second {
 			log.Info("Iterating the database", "at", fmt.Sprintf("%#x", k), "elapsed", common.PrettyDuration(time.Since(startTime)))
@@ -716,7 +716,7 @@ func showMetaData(ctx *cli.Context) error {
 		if val == nil {
 			return "<nil>"
 		}
-		return fmt.Sprintf("%d (0x%x)", *val, *val)
+		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
 	data := [][]string{
 		{"databaseVersion", pp(rawdb.ReadDatabaseVersion(db))},
@@ -726,7 +726,7 @@ func showMetaData(ctx *cli.Context) error {
 	if b := rawdb.ReadHeadBlock(db); b != nil {
 		data = append(data, []string{"headBlock.Hash", fmt.Sprintf("%v", b.Hash())})
 		data = append(data, []string{"headBlock.Root", fmt.Sprintf("%v", b.Root())})
-		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (0x%x)", b.Number(), b.Number())})
+		data = append(data, []string{"headBlock.Number", fmt.Sprintf("%d (%#x)", b.Number(), b.Number())})
 	}
 	if b := rawdb.ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
@@ -734,7 +734,7 @@ func showMetaData(ctx *cli.Context) error {
 	if h := rawdb.ReadHeadHeader(db); h != nil {
 		data = append(data, []string{"headHeader.Hash", fmt.Sprintf("%v", h.Hash())})
 		data = append(data, []string{"headHeader.Root", fmt.Sprintf("%v", h.Root)})
-		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (0x%x)", h.Number, h.Number)})
+		data = append(data, []string{"headHeader.Number", fmt.Sprintf("%d (%#x)", h.Number, h.Number)})
 	}
 	data = append(data, [][]string{{"frozen", fmt.Sprintf("%d items", ancients)},
 		{"lastPivotNumber", pp(rawdb.ReadLastPivotNumber(db))},

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -274,23 +275,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	// update after legit payload executions.
 	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		// Stash the block away for a potential forced forckchoice update to it
-		// at a later time.
-		api.remoteBlocks.put(block.Hash(), block.Header())
-
-		// Although we don't want to trigger a sync, if there is one already in
-		// progress, try to extend if with the current payload request to relieve
-		// some strain from the forkchoice update.
-		if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
-			log.Debug("Payload accepted for sync extension", "number", params.Number, "hash", params.BlockHash)
-			return beacon.PayloadStatusV1{Status: beacon.SYNCING}, nil
-		}
-		// Either no beacon sync was started yet, or it rejected the delivered
-		// payload as non-integratable on top of the existing sync. We'll just
-		// have to rely on the beacon client to forcefully update the head with
-		// a forkchoice update request.
-		log.Warn("Ignoring payload with missing parent", "number", params.Number, "hash", params.BlockHash, "parent", params.ParentHash)
-		return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
+		return api.delayPayloadImport(block)
 	}
 	// We have an existing parent, do some sanity checks to avoid the beacon client
 	// triggering too early
@@ -310,6 +295,13 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	if block.Time() <= parent.Time() {
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent), nil
+	}
+	// Another cornercase: if the node is in snap sync mode, but the CL client
+	// tries to make it import a block. That should be denied as pushing something
+	// into the database directly will conflict with the assumptions of snap sync
+	// that it has an empty db that it can fill itself.
+	if api.eth.SyncMode() != downloader.FullSync {
+		return api.delayPayloadImport(block)
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
@@ -343,6 +335,30 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 	var out beacon.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out
+}
+
+// delayPayloadImport stashes the given block away for import at a later time,
+// either via a forkchoice update or a sync extension. This method is meant to
+// be called by the newpayload command when the block seems to be ok, but some
+// prerequisite prevents it from being processed (e.g. no parent, or nap sync).
+func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadStatusV1, error) {
+	// Stash the block away for a potential forced forkchoice update to it
+	// at a later time.
+	api.remoteBlocks.put(block.Hash(), block.Header())
+
+	// Although we don't want to trigger a sync, if there is one already in
+	// progress, try to extend if with the current payload request to relieve
+	// some strain from the forkchoice update.
+	if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
+		log.Debug("Payload accepted for sync extension", "number", block.NumberU64(), "hash", block.Hash())
+		return beacon.PayloadStatusV1{Status: beacon.SYNCING}, nil
+	}
+	// Either no beacon sync was started yet, or it rejected the delivered
+	// payload as non-integratable on top of the existing sync. We'll just
+	// have to rely on the beacon client to forcefully update the head with
+	// a forkchoice update request.
+	log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash())
+	return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
 }
 
 // invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head

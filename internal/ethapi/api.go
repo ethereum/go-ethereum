@@ -837,6 +837,7 @@ type BlockOverrides struct {
 	GasLimit   *hexutil.Uint64
 	Coinbase   *common.Address
 	Random     *common.Hash
+	BaseFee    *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -861,6 +862,9 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 	if diff.Random != nil {
 		blockCtx.Random = diff.Random
+	}
+	if diff.BaseFee != nil {
+		blockCtx.BaseFee = diff.BaseFee.ToInt()
 	}
 }
 
@@ -1232,6 +1236,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	switch tx.Type() {
+	case types.LegacyTxType:
+		// if a legacy transaction has an EIP-155 chain id, include it explicitly
+		if id := tx.ChainId(); id.Sign() == 0 {
+			result.ChainID = (*hexutil.Big)(id)
+		}
 	case types.AccessListTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
@@ -1893,7 +1902,7 @@ func (api *DebugAPI) SeedHash(ctx context.Context, number uint64) (string, error
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
+	return fmt.Sprintf("%#x", ethash.SeedHash(number)), nil
 }
 
 // ChaindbProperty returns leveldb properties of the key-value database.

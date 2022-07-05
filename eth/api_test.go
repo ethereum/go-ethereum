@@ -213,7 +213,7 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Error(err)
 		}
 		if !reflect.DeepEqual(result, test.want) {
-			t.Fatalf("wrong result for range 0x%x.., limit %d:\ngot %s\nwant %s",
+			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
 	}

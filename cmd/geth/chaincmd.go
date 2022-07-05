@@ -166,10 +166,12 @@ This command dumps out the state for a given block (or latest, if none provided)
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) error {
-	// Make sure we have a valid genesis JSON
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("need genesis.json file as the only argument")
+	}
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
-		utils.Fatalf("Must supply path to genesis JSON file")
+		utils.Fatalf("invalid path to genesis file")
 	}
 	file, err := os.Open(genesisPath)
 	if err != nil {
