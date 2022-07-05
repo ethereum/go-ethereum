@@ -166,7 +166,6 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 	}
 
 	content, err := json.Marshal(&types.ForensicsContent{
-		Id:                   generateForensicsId(ancestorHash.Hex(), &lowerRoundQC, &higherRoundQC),
 		DivergingBlockHash:   ancestorHash.Hex(),
 		AcrossEpoch:          accrossEpoches,
 		DivergingBlockNumber: ancestorBlock.Number.Uint64(),
@@ -188,6 +187,7 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 	}
 
 	forensicsProof := &types.ForensicProof{
+		Id:            generateForensicsId(ancestorHash.Hex(), &lowerRoundQC, &higherRoundQC),
 		ForensicsType: "QC",
 		Content:       string(content),
 	}
@@ -325,8 +325,8 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 	lowerBlockNumHash := firstBlockInfo.Hash
 	higherBlockNumberHash := secondBlockInfo.Hash
 
-	var ancestorToLowerBlockNumHashPath []string
-	var ancestorToHigherBlockNumHashPath []string
+	var lowerBlockNumToAncestorHashPath []string
+	var higherBlockToAncestorNumHashPath []string
 	orderSwapped := false
 
 	blockNumberDifference := big.NewInt(0).Sub(secondBlockInfo.Number, firstBlockInfo.Number).Int64()
@@ -336,17 +336,17 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 		blockNumberDifference = -blockNumberDifference // and make it positive
 		orderSwapped = true
 	}
-	ancestorToLowerBlockNumHashPath = append(ancestorToLowerBlockNumHashPath, lowerBlockNumHash.Hex())
-	ancestorToHigherBlockNumHashPath = append(ancestorToHigherBlockNumHashPath, higherBlockNumberHash.Hex())
+	lowerBlockNumToAncestorHashPath = append(lowerBlockNumToAncestorHashPath, lowerBlockNumHash.Hex())
+	higherBlockToAncestorNumHashPath = append(higherBlockToAncestorNumHashPath, higherBlockNumberHash.Hex())
 
 	// First, make their block number the same to start with
 	for i := 0; i < int(blockNumberDifference); i++ {
 		ph := chain.GetHeaderByHash(higherBlockNumberHash)
 		if ph == nil {
-			return common.Hash{}, ancestorToLowerBlockNumHashPath, ancestorToHigherBlockNumHashPath, fmt.Errorf("unable to find parent block of hash %v", higherBlockNumberHash)
+			return common.Hash{}, lowerBlockNumToAncestorHashPath, higherBlockToAncestorNumHashPath, fmt.Errorf("unable to find parent block of hash %v", higherBlockNumberHash)
 		}
 		higherBlockNumberHash = ph.ParentHash
-		ancestorToHigherBlockNumHashPath = append(ancestorToHigherBlockNumHashPath, ph.ParentHash.Hex())
+		higherBlockToAncestorNumHashPath = append(higherBlockToAncestorNumHashPath, ph.ParentHash.Hex())
 	}
 
 	// Now, they are on the same starting line, we try find the common ancestor
@@ -354,9 +354,13 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 		lowerBlockNumHash = chain.GetHeaderByHash(lowerBlockNumHash).ParentHash
 		higherBlockNumberHash = chain.GetHeaderByHash(higherBlockNumberHash).ParentHash
 		// Append the path
-		ancestorToLowerBlockNumHashPath = append(ancestorToLowerBlockNumHashPath, lowerBlockNumHash.Hex())
-		ancestorToHigherBlockNumHashPath = append(ancestorToHigherBlockNumHashPath, higherBlockNumberHash.Hex())
+		lowerBlockNumToAncestorHashPath = append(lowerBlockNumToAncestorHashPath, lowerBlockNumHash.Hex())
+		higherBlockToAncestorNumHashPath = append(higherBlockToAncestorNumHashPath, higherBlockNumberHash.Hex())
 	}
+
+	// Reverse the list order as it's from ancestor to X block path.
+	ancestorToLowerBlockNumHashPath := reverse(lowerBlockNumToAncestorHashPath)
+	ancestorToHigherBlockNumHashPath := reverse(higherBlockToAncestorNumHashPath)
 	// Swap back the order. We must return in the order that matches what we acceptted in the parameter of firstBlock & secondBlock
 	if orderSwapped {
 		return lowerBlockNumHash, ancestorToHigherBlockNumHashPath, ancestorToLowerBlockNumHashPath, nil
@@ -367,4 +371,12 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 func generateForensicsId(divergingHash string, qc1 *types.QuorumCert, qc2 *types.QuorumCert) string {
 	keysList := []string{divergingHash, qc1.ProposedBlockInfo.Hash.Hex(), qc2.ProposedBlockInfo.Hash.Hex()}
 	return strings.Join(keysList[:], ":")
+}
+
+func reverse(ss []string) []string {
+	last := len(ss) - 1
+	for i := 0; i < len(ss)/2; i++ {
+		ss[i], ss[last-i] = ss[last-i], ss[i]
+	}
+	return ss
 }

@@ -295,7 +295,7 @@ func TestForensicsAcrossEpoch(t *testing.T) {
 			json.Unmarshal([]byte(forensics.ForensicsProof.Content), &content)
 
 			idToCompare := content.DivergingBlockHash + ":" + content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Hash.Hex() + ":" + content.LargerRoundInfo.QuorumCert.ProposedBlockInfo.Hash.Hex()
-			assert.Equal(t, idToCompare, content.Id)
+			assert.Equal(t, idToCompare, forensics.ForensicsProof.Id)
 			assert.True(t, content.AcrossEpoch)
 			assert.Equal(t, types.Round(900), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Round)
 			assert.Equal(t, uint64(1800), content.SmallerRoundInfo.QuorumCert.ProposedBlockInfo.Number.Uint64())
