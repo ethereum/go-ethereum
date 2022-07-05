@@ -118,7 +118,12 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	return miner, mux, cleanup
 }
 
-func NewDBForFakes(t *testing.T) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
+type TensingObject interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
+func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
 	t.Helper()
 
 	memdb := memorydb.New()
@@ -137,7 +142,7 @@ func NewDBForFakes(t *testing.T) (ethdb.Database, *core.Genesis, *params.ChainCo
 	return chainDB, genesis, chainConfig
 }
 
-func NewFakeBor(t *testing.T, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
+func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
 	t.Helper()
 
 	if chainConfig.Bor == nil {
@@ -203,7 +208,7 @@ var (
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 	testBankFunds   = big.NewInt(1000000000000000000)
 
 	testUserKey, _  = crypto.GenerateKey()
