@@ -18,7 +18,6 @@
 package catalyst
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -87,9 +86,6 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
 
-	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
-	defer cancel()
-
 	// Check whether we have the header yet in our database or not.
 	header := api.les.BlockChain().GetHeaderByHash(update.HeadBlockHash)
 	if header == nil {
@@ -97,6 +93,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		header = api.remoteHeaders.Get(update.HeadBlockHash)
 		if header == nil {
 			log.Warn("Forkchoice requested unknown head", "hash", update.HeadBlockHash)
+			// Post-Merge sync is not supported by LES yet, return syncing anyway
 			return beacon.STATUS_SYNCING, nil
 		}
 	}
@@ -150,11 +147,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			merger.FinalizePoS()
 		}
 		// If the finalized block is not in our canonical tree, somethings wrong
-		finalBlock, err := api.les.BlockChain().GetBlockByHash(ctx, update.FinalizedBlockHash)
-		if finalBlock == nil || err != nil {
+		finalHeader := api.les.BlockChain().GetHeaderByHash(update.FinalizedBlockHash)
+		if finalHeader == nil {
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("final block not available in database"))
-		} else if rawdb.ReadCanonicalHash(api.les.ApiBackend.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
+		} else if rawdb.ReadCanonicalHash(api.les.ApiBackend.ChainDb(), finalHeader.Number.Uint64()) != update.FinalizedBlockHash {
 			log.Warn("Final block not in canonical chain", "number", header.Number.Uint64(), "hash", update.HeadBlockHash)
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
 		}
@@ -164,12 +161,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	}
 	// Check if the safe block hash is in our canonical tree, if not somethings wrong
 	if update.SafeBlockHash != (common.Hash{}) {
-		safeBlock, err := api.les.BlockChain().GetBlockByHash(ctx, update.SafeBlockHash)
-		if safeBlock == nil || err != nil {
+		safeHeader := api.les.BlockChain().GetHeaderByHash(update.SafeBlockHash)
+		if safeHeader == nil {
 			log.Warn("Safe block not available in database")
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not available in database"))
 		}
-		if rawdb.ReadCanonicalHash(api.les.ApiBackend.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
+		if rawdb.ReadCanonicalHash(api.les.ApiBackend.ChainDb(), safeHeader.Number.Uint64()) != update.SafeBlockHash {
 			log.Warn("Safe block not in canonical chain")
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
 		}
@@ -223,14 +220,11 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		return beacon.PayloadStatusV1{Status: beacon.INVALIDBLOCKHASH}, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
-	defer cancel()
-
-	// If we already have the block locally, ignore the entire execution and just
+	// If we already have the header locally, ignore the entire execution and just
 	// return a fake success.
-	if block, err := api.les.BlockChain().GetBlockByHash(ctx, params.BlockHash); err == nil && block != nil {
-		log.Warn("Ignoring already known beacon payload", "number", params.Number, "hash", params.BlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)))
-		hash := block.Hash()
+	if header := api.les.BlockChain().GetHeaderByHash(params.BlockHash); header != nil {
+		log.Warn("Ignoring already known beacon payload", "number", params.Number, "hash", params.BlockHash, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
+		hash := header.Hash()
 		return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
 	}
 	// If the parent is missing, we - in theory - could trigger a sync, but that
