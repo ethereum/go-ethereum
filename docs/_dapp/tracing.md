@@ -153,7 +153,8 @@ disableStorage: false
 enableReturnData: true
 ```
 
-An example call, made in the Geth Javascript console, configured to report the maximum amount of data looks as follows:
+An example call, made in the Geth Javascript console, configured to report the maximum amount of data 
+looks as follows:
 
 ```js
 debug.traceTransaction("0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f",{enableMemory: true, disableStack: false, disableStorage: false, enableReturnData: true})
@@ -178,9 +179,7 @@ megabytes, making them very resource intensive to get out of the node and proces
 
 To avoid those issues, Geth supports running custom JavaScript tracers *within* the Ethereum node, 
 hich have full access to the EVM stack, memory and contract storage. This means developers only have to 
-gather the data they actually need, and do any processing **at** the data. Please see the next section for our *custom in-node
-tracers*.
-
+gather the data they actually need, and do any processing **at** the data.
 
 ## Pruning
 
@@ -554,7 +553,6 @@ The output is similar to:
 ```
 
 
-
 ## Other traces
 
 This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are
@@ -606,14 +604,9 @@ if err != nil {
 
 ## Summary
 
-This tutorial only taught the basics of using JavaScript to filter traces. We did not go over access to memory,
-or how to use the `db` parameter to know the state of the chain at the time of execution. All this and more is
+This page covered the basics of EVM tracing using RPC, Javascrpt and Go. More advanced usage is possible,
+including using the `db` parameter to access the state of the chain at the time of execution. All this and more is
 covered [in the reference](https://geth.ethereum.org/docs/rpc/ns-debug#javascript-based-tracing).
-
-Hopefully with this tool you will find it easier to trace the EVM's behavior and debug thorny contract issues.
-
-
-
 
 
 
