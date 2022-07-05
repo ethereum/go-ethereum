@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	txtrace "github.com/DeBankDeFi/etherlib/pkg/txtracev1"
+	txtrace2 "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -187,17 +188,34 @@ type PreArgs struct {
 }
 
 type PreResult struct {
-	Trace *[]txtrace.ActionTrace `json:"trace"`
-	Logs  []*types.Log           `json:"logs"`
+	Trace     txtrace2.ActionTraceList `json:"trace"`
+	Logs      []*types.Log             `json:"logs"`
+	StateDiff txtrace2.StateDiff       `json:"stateDiff"`
+	Error     string                   `json:"error,omitempty"`
+	GasUsed   uint64                   `json:"gasUsed"`
 }
 
-func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) (*PreResult, error) {
+func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreResult, error) {
+	preResList := make([]PreResult, 0)
 	state, header, err := api.e.APIBackend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
 	if state == nil || err != nil {
 		return nil, err
 	}
-	for i := 0; i < len(origins)-1; i++ {
+	for i := 0; i < len(origins); i++ {
 		origin := origins[i]
+		if origin.Nonce == nil {
+			preResList = append(preResList, PreResult{
+				Error: fmt.Sprintf("invalid nonce, tx index %d, nonce is nil", i),
+			})
+			continue
+		}
+		nonce := state.GetNonce(*origin.From)
+		if (uint64)(*origin.Nonce) != nonce {
+			preResList = append(preResList, PreResult{
+				Error: fmt.Sprintf("invalid nonce, tx index %d, want %d, got %d", i, nonce, *origin.Nonce),
+			})
+			continue
+		}
 		txArgs := ethapi.TransactionArgs{
 			ChainID:              (*hexutil.Big)(big.NewInt(1)),
 			From:                 origin.From,
@@ -214,64 +232,56 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) (*PreRe
 		// Get a new instance of the EVM.
 		msg, err := txArgs.ToMessage(0, header.BaseFee)
 		if err != nil {
-			return nil, err
+			preResList = append(preResList, PreResult{
+				Error: fmt.Sprintf("toMessage failed, tx index %d, err %v", i, err),
+			})
+			continue
 		}
-		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+		txHash := common.BigToHash(big.NewInt(int64(i)))
+		tracer := txtrace2.NewOeTracer(nil, header.Hash(), header.Number, txHash, uint64(i))
+		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
 		if err != nil {
-			return nil, err
+			preResList = append(preResList, PreResult{
+				Error: fmt.Sprintf("getEvm failed, tx index %d, err %v", i, err),
+			})
+			continue
 		}
 		// Execute the message.
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
-		_, err = core.ApplyMessage(evm, msg, gp)
+		state.Prepare(txHash, i)
+		result, err := core.ApplyMessage(evm, msg, gp)
 		if err := vmError(); err != nil {
-			return nil, err
+			preRes := PreResult{
+				Error: fmt.Sprintf("evm apply failed, tx index %d, err %v", i, err),
+			}
+			if result != nil {
+				preRes.GasUsed = result.UsedGas
+			}
+			preResList = append(preResList, preRes)
+			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
+			preRes := PreResult{
+				Error: fmt.Sprintf("evm apply failed, tx index %d, err %v", i, err),
+			}
+			if result != nil {
+				preRes.GasUsed = result.UsedGas
+			}
+			preResList = append(preResList, preRes)
+			continue
 		}
+		preRes := PreResult{
+			Trace:     tracer.GetTraces(),
+			Logs:      state.GetLogs(txHash, header.Hash()),
+			StateDiff: tracer.GetStateDiff(),
+		}
+		if result != nil {
+			preRes.GasUsed = result.UsedGas
+		}
+		if len(preRes.Trace) > 0 && (preRes.Trace)[0].Error != "" {
+			preRes.Error = (preRes.Trace)[0].Error
+		}
+		preResList = append(preResList, preRes)
 	}
-	origin := origins[len(origins)-1]
-	txArgs := ethapi.TransactionArgs{
-		ChainID:              (*hexutil.Big)(big.NewInt(1)),
-		From:                 origin.From,
-		To:                   origin.To,
-		Gas:                  origin.Gas,
-		GasPrice:             origin.GasPrice,
-		MaxFeePerGas:         origin.MaxFeePerGas,
-		MaxPriorityFeePerGas: origin.MaxPriorityFeePerGas,
-		Value:                origin.Value,
-		Nonce:                origin.Nonce,
-		Data:                 origin.Data,
-		Input:                origin.Input,
-	}
-	// Get a new instance of the EVM.
-	msg, err := txArgs.ToMessage(0, header.BaseFee)
-	if err != nil {
-		return nil, err
-	}
-	tracer := txtrace.NewOeTracer(nil)
-	tracer.SetFrom(msg.From())
-	tracer.SetTo(msg.To())
-	tracer.SetValue(*msg.Value())
-	tracer.SetTxIndex(uint(0))
-	tracer.SetBlockNumber(header.Number)
-	tracer.SetBlockHash(header.Hash())
-	evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
-	if err != nil {
-		return nil, err
-	}
-	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	txHash := common.BigToHash(big.NewInt(1))
-	state.Prepare(txHash, len(origins)-1)
-	result, err := core.ApplyMessage(evm, msg, gp)
-	if err := vmError(); err != nil {
-		return nil, err
-	}
-	if err != nil {
-		return nil, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
-	}
-	tracer.SetGasUsed(result.UsedGas)
-	tracer.Finalize()
-	return &PreResult{Trace: tracer.GetResult(), Logs: state.GetLogs(txHash, header.Hash())}, nil
+	return preResList, nil
 }
