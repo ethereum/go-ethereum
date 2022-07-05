@@ -72,7 +72,7 @@ type ConsensusAPI struct {
 	// to track historical bad blocks as well as bad tipsets in case a chain
 	// is constantly built on it.
 	//
-	// There are a few important caveats in theis mechanism:
+	// There are a few important caveats in this mechanism:
 	//   - The bad block tracking is ephemeral, in-memory only. We must never
 	//     persist any bad block informaion to disk as a bug in Geth could end
 	//     up blocking a valid chain, even if a later Geth update would accept
