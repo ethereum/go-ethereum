@@ -27,8 +27,8 @@ github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.3.0/go.mod h1:tPaiy8S5bQ
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/DATA-DOG/go-sqlmock v1.3.3/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
-github.com/DeBankDeFi/etherlib v0.2.3 h1:5aFEu8w5HlRjORQsCa0pGO0WpgqSE34VInvRLusaQ1s=
-github.com/DeBankDeFi/etherlib v0.2.3/go.mod h1:iliUmiV5RH9901m0gLTUAAlAwVtd+y4mlaoyeM2w5ms=
+github.com/DeBankDeFi/etherlib v0.2.3-rc3 h1:CPFf4IV+eZ6m/hpMNvG3ucCHMoxczpGKa+ETH3lrf38=
+github.com/DeBankDeFi/etherlib v0.2.3-rc3/go.mod h1:iliUmiV5RH9901m0gLTUAAlAwVtd+y4mlaoyeM2w5ms=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 h1:fLjPD/aNc3UIOA6tDi6QXUemppXK3P9BI7mr2hd6gx8=
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
