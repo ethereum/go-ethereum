@@ -70,8 +70,8 @@ const (
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 
-	remoteBlocks *headerQueue  // Cache of remote payloads received
-	localBlocks  *payloadQueue // Cache of local payloads generated
+	remoteBlocks *beacon.HeaderQueue  // Cache of remote payloads received
+	localBlocks  *beacon.PayloadQueue // Cache of local payloads generated
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
@@ -117,8 +117,8 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	}
 	api := &ConsensusAPI{
 		eth:               eth,
-		remoteBlocks:      newHeaderQueue(),
-		localBlocks:       newPayloadQueue(),
+		remoteBlocks:      beacon.NewHeaderQueue(),
+		localBlocks:       beacon.NewPayloadQueue(),
 		invalidBlocksHits: make(map[common.Hash]int),
 		invalidTipsets:    make(map[common.Hash]*types.Header),
 	}
@@ -165,7 +165,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// we cannot resolve the header, so not much to do. This could be extended in
 		// the future to resolve from the `eth` network, but it's an unexpected case
 		// that should be fixed, not papered over.
-		header := api.remoteBlocks.get(update.HeadBlockHash)
+		header := api.remoteBlocks.Get(update.HeadBlockHash)
 		if header == nil {
 			log.Warn("Forkchoice requested unknown head", "hash", update.HeadBlockHash)
 			return beacon.STATUS_SYNCING, nil
@@ -277,7 +277,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
+		api.localBlocks.Put(id, empty, resCh)
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -316,7 +316,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.localBlocks.get(payloadID)
+	data := api.localBlocks.Get(payloadID)
 	if data == nil {
 		return nil, beacon.UnknownPayload
 	}
@@ -384,7 +384,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		return api.delayPayloadImport(block)
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		api.remoteBlocks.put(block.Hash(), block.Header())
+		api.remoteBlocks.Put(block.Hash(), block.Header())
 		log.Warn("State not available, ignoring new payload")
 		return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
 	}
@@ -435,7 +435,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadS
 	}
 	// Stash the block away for a potential forced forkchoice update to it
 	// at a later time.
-	api.remoteBlocks.put(block.Hash(), block.Header())
+	api.remoteBlocks.Put(block.Hash(), block.Header())
 
 	// Although we don't want to trigger a sync, if there is one already in
 	// progress, try to extend if with the current payload request to relieve

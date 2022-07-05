@@ -50,7 +50,7 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 
 type ConsensusAPI struct {
 	les           *les.LightEthereum
-	remoteHeaders headerQueue
+	remoteHeaders *beacon.HeaderQueue
 	// Lock for the forkChoiceUpdated method
 	forkChoiceLock sync.Mutex
 }
@@ -63,7 +63,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	}
 	return &ConsensusAPI{
 		les:           les,
-		remoteHeaders: *newHeaderQueue(),
+		remoteHeaders: beacon.NewHeaderQueue(),
 	}
 }
 
@@ -94,7 +94,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	header := api.les.BlockChain().GetHeaderByHash(update.HeadBlockHash)
 	if header == nil {
 		// If not check whether we stored the header in our queue.
-		header = api.remoteHeaders.get(update.HeadBlockHash)
+		header = api.remoteHeaders.Get(update.HeadBlockHash)
 		if header == nil {
 			log.Warn("Forkchoice requested unknown head", "hash", update.HeadBlockHash)
 			return beacon.STATUS_SYNCING, nil
@@ -241,7 +241,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	// update after legit payload executions.
 	parent := api.les.BlockChain().GetHeader(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		api.remoteHeaders.put(block.Hash(), block.Header())
+		api.remoteHeaders.Put(block.Hash(), block.Header())
 		log.Warn("Ignoring payload with missing parent", "number", params.Number, "hash", params.BlockHash, "parent", params.ParentHash)
 		return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
 	}

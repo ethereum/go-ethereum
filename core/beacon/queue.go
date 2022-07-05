@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package catalyst
+package beacon
 
 import (
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -47,7 +46,7 @@ type payload struct {
 
 // resolve extracts the generated full block from the given channel if possible
 // or fallback to empty block as an alternative.
-func (req *payload) resolve() *beacon.ExecutableDataV1 {
+func (req *payload) resolve() *ExecutableDataV1 {
 	// this function can be called concurrently, prevent any
 	// concurrency issue in the first place.
 	req.lock.Lock()
@@ -71,47 +70,47 @@ func (req *payload) resolve() *beacon.ExecutableDataV1 {
 	}
 
 	if req.block != nil {
-		return beacon.BlockToExecutableData(req.block)
+		return BlockToExecutableData(req.block)
 	}
-	return beacon.BlockToExecutableData(req.empty)
+	return BlockToExecutableData(req.empty)
 }
 
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
-	id   beacon.PayloadID
+	id   PayloadID
 	data *payload
 }
 
-// payloadQueue tracks the latest handful of constructed payloads to be retrieved
+// PayloadQueue tracks the latest handful of constructed payloads to be retrieved
 // by the beacon chain if block production is requested.
-type payloadQueue struct {
+type PayloadQueue struct {
 	payloads []*payloadQueueItem
 	lock     sync.RWMutex
 }
 
-// newPayloadQueue creates a pre-initialized queue with a fixed number of slots
+// NewPayloadQueue creates a pre-initialized queue with a fixed number of slots
 // all containing empty items.
-func newPayloadQueue() *payloadQueue {
-	return &payloadQueue{
+func NewPayloadQueue() *PayloadQueue {
+	return &PayloadQueue{
 		payloads: make([]*payloadQueueItem, maxTrackedPayloads),
 	}
 }
 
-// put inserts a new payload into the queue at the given id.
-func (q *payloadQueue) put(id beacon.PayloadID, data *payload) {
+// Put inserts a new payload into the queue at the given id.
+func (q *PayloadQueue) Put(id PayloadID, empty *types.Block, resCh chan *types.Block) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	copy(q.payloads[1:], q.payloads)
 	q.payloads[0] = &payloadQueueItem{
 		id:   id,
-		data: data,
+		data: &payload{empty: empty, result: resCh},
 	}
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
+func (q *PayloadQueue) Get(id PayloadID) *ExecutableDataV1 {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -133,23 +132,23 @@ type headerQueueItem struct {
 	header *types.Header
 }
 
-// headerQueue tracks the latest handful of constructed headers to be retrieved
+// HeaderQueue tracks the latest handful of constructed headers to be retrieved
 // by the beacon chain if block production is requested.
-type headerQueue struct {
+type HeaderQueue struct {
 	headers []*headerQueueItem
 	lock    sync.RWMutex
 }
 
-// newHeaderQueue creates a pre-initialized queue with a fixed number of slots
+// NewHeaderQueue creates a pre-initialized queue with a fixed number of slots
 // all containing empty items.
-func newHeaderQueue() *headerQueue {
-	return &headerQueue{
+func NewHeaderQueue() *HeaderQueue {
+	return &HeaderQueue{
 		headers: make([]*headerQueueItem, maxTrackedHeaders),
 	}
 }
 
-// put inserts a new header into the queue at the given hash.
-func (q *headerQueue) put(hash common.Hash, data *types.Header) {
+// Put inserts a new header into the queue at the given hash.
+func (q *HeaderQueue) Put(hash common.Hash, data *types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -160,8 +159,8 @@ func (q *headerQueue) put(hash common.Hash, data *types.Header) {
 	}
 }
 
-// get retrieves a previously stored header item or nil if it does not exist.
-func (q *headerQueue) get(hash common.Hash) *types.Header {
+// Get retrieves a previously stored header item or nil if it does not exist.
+func (q *HeaderQueue) Get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
