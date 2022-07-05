@@ -47,3 +47,11 @@ profile.cov
 /dashboard/assets/package-lock.json
 
 **/yarn-error.log
+
+data/
+ganache_data/
+.env
+scripts/
+logs/
+coverage.out
+coverage.txt

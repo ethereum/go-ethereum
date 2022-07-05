@@ -1,0 +1,75 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: redis-srv
+    restart: always
+    expose:
+      - 6379
+    environment:
+      - REDIS_REPLICATION_MODE=master
+    networks:
+      - cqt-net
+    entrypoint: redis-server #/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander-web
+    hostname: redis-commander
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - cqt-net
+    ports:
+      - "8081:8081"
+
+  geth:
+    image: "ghcr.io/covalenthq/bsp-geth:latest"
+    container_name: bsp-geth
+    restart:  always
+    depends_on:
+      - redis
+    entrypoint: ["geth", "--mainnet", "--port", "0", "--log.debug", "--syncmode", "full", "--http", "--datadir", "/data/.ethereum/covalent", "--allow-insecure-unlock", "--preload", "/scripts/geth-setup.js", "--replication.targets", "redis://username:@redis:6379/0?topic=replication", "--replica.result", "--replica.specimen"]
+    networks:
+      - cqt-net
+    expose:
+      - 8545
+      - 8546 
+      - 30303 
+      - 30303/udp
+    volumes:
+      - ./scripts/:/scripts
+      - ./data/.ethereum/:/data/.ethereum/
+
+  agent:
+    image: "ghcr.io/covalenthq/bsp-agent:latest"
+    container_name: bsp-agent
+    restart:  always
+    depends_on:
+      - geth
+    volumes:
+      - /Users/$USER/.config/gcloud:/app/gcloud
+      - ./data/bin/:/app/bin
+    entrypoint: >
+      /bin/bash -l -c "
+        ./bsp-agent --redis-url=redis://username:@redis:6379/0?topic=replication#replicate  --avro-codec-path=./codec/block-ethereum.avsc --binary-file-path=./bin/block-ethereum/ --replica-bucket=covalenthq-geth-block-specimen --segment-length=1000 --proof-chain-address=0x67688076Da389cd1EcD90C4573d1D0e6BA04AC6a --consumer-timeout=6000 --gcp-svc-account=./gcloud/bsp-2.json;
+        exit 0;"
+    environment:
+      - ETH_PRIVATE_KEY=${PRIVATE_KEY}
+      - ETH_RPC_URL=${RPC_URL}
+      - BLOCKCHAIN=${BLOCKCHAIN}
+    networks:
+      - cqt-net
+    ports:
+      - "8080:8080"
+
+networks:
+  cqt-net:

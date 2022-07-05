@@ -124,7 +124,7 @@ func (w *wizard) manageComponents() {
 			serviceHosts = append(serviceHosts, server)
 			serviceNames = append(serviceNames, service)
 
-			fmt.Printf(" %d. Tear down %s on %s\n", len(serviceHosts), strings.Title(service), server)
+			fmt.Printf(" %d. Tear down %s on %s\n", len(serviceHosts), strings.Title(service), server) //nolint: typecheck,staticcheck
 		}
 	}
 	fmt.Printf(" %d. Deploy new network component\n", len(serviceHosts)+1)

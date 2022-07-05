@@ -249,7 +249,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 	// Run a sanity check to see if the devp2p is reachable
 	port := infos.portmap[infos.envvars["PORT"]]
 	if err = checkPort(client.server, port); err != nil {
-		log.Warn(fmt.Sprintf("%s devp2p port seems unreachable", strings.Title(kind)), "server", client.server, "port", port, "err", err)
+		log.Warn(fmt.Sprintf("%s devp2p port seems unreachable", strings.Title(kind)), "server", client.server, "port", port, "err", err) //nolint: typecheck,staticcheck
 	}
 	// Assemble and return the useful infos
 	stats := &nodeInfos{

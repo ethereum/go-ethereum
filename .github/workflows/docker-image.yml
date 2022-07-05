@@ -1,0 +1,28 @@
+name: docker-image-ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  push-image:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Login to GCR
+      uses: docker/login-action@v2
+      with:
+        registry: gcr.io
+        username: _json_key
+        password: ${{ secrets.GCR_JSON_KEY }}
+
+    - uses: actions/checkout@v2
+    - name: Build & Publish the Docker image
+      run: | 
+        docker build . --file Dockerfile --tag gcr.io/covalent-project/bsp-geth:latest
+        docker push gcr.io/covalent-project/bsp-geth:latest

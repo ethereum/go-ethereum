@@ -1,19 +1,3 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package flags
 
 import (
@@ -30,7 +14,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// DirectoryString is custom type which is registered in the flags library which cli uses for
+// Custom type which is registered in the flags library which cli uses for
 // argument parsing. This allows us to expand Value to an absolute path when
 // the argument is parsed
 type DirectoryString string
@@ -44,15 +28,7 @@ func (s *DirectoryString) Set(value string) error {
 	return nil
 }
 
-var (
-	_ cli.Flag              = (*DirectoryFlag)(nil)
-	_ cli.RequiredFlag      = (*DirectoryFlag)(nil)
-	_ cli.VisibleFlag       = (*DirectoryFlag)(nil)
-	_ cli.DocGenerationFlag = (*DirectoryFlag)(nil)
-	_ cli.CategorizableFlag = (*DirectoryFlag)(nil)
-)
-
-// DirectoryFlag is custom cli.Flag type which expand the received string to an absolute path.
+// Custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
 	Name string
@@ -111,6 +87,30 @@ func (f *DirectoryFlag) GetDefaultText() string {
 	return f.GetValue()
 }
 
+// Expands a file path
+// 1. replace tilde with users home dir
+// 2. expands embedded environment variables
+// 3. cleans the path, e.g. /a/b/../c -> /a/c
+// Note, it has limitations, e.g. ~someuser/tmp will not be expanded
+func expandPath(p string) string {
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
+		if home := HomeDir(); home != "" {
+			p = home + p[1:]
+		}
+	}
+	return path.Clean(os.ExpandEnv(p))
+}
+
+func HomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
+}
+
 type TextMarshaler interface {
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
@@ -132,14 +132,6 @@ func (v textMarshalerVal) String() string {
 func (v textMarshalerVal) Set(s string) error {
 	return v.v.UnmarshalText([]byte(s))
 }
-
-var (
-	_ cli.Flag              = (*TextMarshalerFlag)(nil)
-	_ cli.RequiredFlag      = (*TextMarshalerFlag)(nil)
-	_ cli.VisibleFlag       = (*TextMarshalerFlag)(nil)
-	_ cli.DocGenerationFlag = (*TextMarshalerFlag)(nil)
-	_ cli.CategorizableFlag = (*TextMarshalerFlag)(nil)
-)
 
 // TextMarshalerFlag wraps a TextMarshaler value.
 type TextMarshalerFlag struct {
@@ -212,14 +204,6 @@ func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
 	}
 	return val.(textMarshalerVal).v
 }
-
-var (
-	_ cli.Flag              = (*BigFlag)(nil)
-	_ cli.RequiredFlag      = (*BigFlag)(nil)
-	_ cli.VisibleFlag       = (*BigFlag)(nil)
-	_ cli.DocGenerationFlag = (*BigFlag)(nil)
-	_ cli.CategorizableFlag = (*BigFlag)(nil)
-)
 
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or
 // hexadecimal syntax.
@@ -306,30 +290,6 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 		return nil
 	}
 	return (*big.Int)(val.(*bigValue))
-}
-
-// Expands a file path
-// 1. replace tilde with users home dir
-// 2. expands embedded environment variables
-// 3. cleans the path, e.g. /a/b/../c -> /a/c
-// Note, it has limitations, e.g. ~someuser/tmp will not be expanded
-func expandPath(p string) string {
-	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-		if home := HomeDir(); home != "" {
-			p = home + p[1:]
-		}
-	}
-	return path.Clean(os.ExpandEnv(p))
-}
-
-func HomeDir() string {
-	if home := os.Getenv("HOME"); home != "" {
-		return home
-	}
-	if usr, err := user.Current(); err == nil {
-		return usr.HomeDir
-	}
-	return ""
 }
 
 func eachName(f cli.Flag, fn func(string)) {

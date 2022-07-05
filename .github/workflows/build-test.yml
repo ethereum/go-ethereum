@@ -1,0 +1,40 @@
+name: build-test
+
+on:
+  push:
+    branches: 
+      - main 
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  audit:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Build all
+      run: make all
+
+    - name: Run tests
+      run: make test
+
+    - name: Upload coverage to Codecov
+      run: bash <(curl -s https://codecov.io/bash) -t ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Clean
+      run: make clean

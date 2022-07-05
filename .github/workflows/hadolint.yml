@@ -1,0 +1,22 @@
+name: dockerfile-lint
+
+on:
+  push:
+    branches: 
+      - main
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  linter:
+    name: lint-dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: lint dockerfile
+        uses: brpaz/hadolint-action@master
+        with:
+          dockerfile: "Dockerfile"

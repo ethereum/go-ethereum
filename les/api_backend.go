@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -330,4 +331,14 @@ func (b *LesApiBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 
 func (b *LesApiBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
+}
+
+func (b *LesApiBackend) SetHistoricalBlocksSynced() bool {
+	if b.SyncProgress().CurrentBlock < b.SyncProgress().HighestBlock {
+		log.Crit("Light Client not fully synced yet, block specimen producer not supported in light client mode")
+		return false
+	} else {
+		log.Crit("Fully Synced but block specimen producer not supported in light client mode", "Current block", b.eth.handler.downloader.Progress().CurrentBlock, "Highest block", b.eth.handler.downloader.Progress().HighestBlock)
+		return false
+	}
 }

@@ -94,6 +94,8 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+
+	SetHistoricalBlocksSynced() bool
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

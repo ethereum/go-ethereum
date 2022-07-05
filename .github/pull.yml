@@ -1,0 +1,20 @@
+version: "1"
+rules:                      # Array of rules
+  - base: main            # Required. Target branch
+    upstream: ethereum:master    # Required. Must be in the same fork network.
+    mergeMethod: rebase  # Optional, one of [none, merge, squash, rebase, hardreset], Default: none.
+    mergeUnstable: false    # Optional, merge pull request even when the mergeable_state is not clean. Default: false
+    assignees:              # Optional
+      - cloggo
+      - noslav
+      - sudeepdino008
+    reviewers:              # Optional
+      - cloggo
+      - noslav
+      - sudeepdino008
+    conflictReviewers:      # Optional, on merge conflict assign a reviewer
+      - cloggo
+      - noslav
+      - sudeepdino008
+label: ":arrow_heading_down: pull"  # Optional
+conflictLabel: "merge-conflict"     # Optional, on merge conflict assign a custom label, Default: merge-conflict

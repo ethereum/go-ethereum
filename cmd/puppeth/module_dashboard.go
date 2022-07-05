@@ -554,7 +554,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	template.Must(template.New("").Parse(dashboardContent)).Execute(indexfile, map[string]interface{}{
 		"Network":           network,
 		"NetworkID":         conf.Genesis.Config.ChainID,
-		"NetworkTitle":      strings.Title(network),
+		"NetworkTitle":      strings.Title(network), //nolint: typecheck,staticcheck
 		"EthstatsPage":      config.ethstats,
 		"ExplorerPage":      config.explorer,
 		"FaucetPage":        config.faucet,
