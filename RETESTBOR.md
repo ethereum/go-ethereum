@@ -72,3 +72,6 @@ TransactionTests
 RLPTest
 src
 ```
+
+Run against bor client on localhost:8545 using 8 threads
+`sudo ./dretesteth.sh -t GeneralStateTests -- --testpath ~/tests --datadir /tests/config --clients t8ntool --nodes 127.0.0.1:8545 -j 8`
