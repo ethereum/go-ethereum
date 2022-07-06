@@ -46,15 +46,55 @@ type subscriptionResult struct {
 	Result json.RawMessage `json:"result,omitempty"`
 }
 
-// A value of this type can a JSON-RPC request, notification, successful response or
-// error response. Which one it is depends on the fields.
-type jsonrpcMessage struct {
-	Version string          `json:"jsonrpc,omitempty"`
+type LimitedString string
+
+//
+type prerpcMessage struct {
+	Version LimitedString   `json:"jsonrpc,omitempty"`
 	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method,omitempty"`
+	Method  LimitedString   `json:"method,omitempty"`
 	Params  json.RawMessage `json:"params,omitempty"`
 	Error   *jsonError      `json:"error,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
+}
+
+func (p *prerpcMessage) jsonrpcMessage() *jsonrpcMessage {
+	return &jsonrpcMessage{
+		Version: string(p.Version),
+		ID:      p.ID,
+		Method:  string(p.Method),
+		Params:  p.Params,
+		Error:   p.Error,
+		Result:  p.Result,
+	}
+}
+
+func (l LimitedString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(l)
+}
+
+func (l *LimitedString) UnmarshalJSON(data []byte) error {
+	var s string
+	var err error
+	if len(data) > 32 {
+		return errors.New("LimitedString max size is 32")
+	}
+	if err = json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*l = LimitedString(s)
+	return nil
+}
+
+// A value of this type can a JSON-RPC request, notification, successful response or
+// error response. Which one it is depends on the fields.
+type jsonrpcMessage struct {
+	Version string
+	ID      json.RawMessage
+	Method  string
+	Params  json.RawMessage
+	Error   *jsonError
+	Result  json.RawMessage
 }
 
 func (msg *jsonrpcMessage) isNotification() bool {
@@ -255,16 +295,17 @@ func (c *jsonCodec) closed() <-chan interface{} {
 // jsonrpcMessage.
 func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
 	if !isBatch(raw) {
-		msgs := []*jsonrpcMessage{{}}
-		json.Unmarshal(raw, &msgs[0])
-		return msgs, false
+		premsg := prerpcMessage{}
+		json.Unmarshal(raw, &premsg)
+		return []*jsonrpcMessage{premsg.jsonrpcMessage()}, false
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.Token() // skip '['
 	var msgs []*jsonrpcMessage
 	for dec.More() {
-		msgs = append(msgs, new(jsonrpcMessage))
-		dec.Decode(&msgs[len(msgs)-1])
+		premsg := prerpcMessage{}
+		dec.Decode(&premsg)
+		msgs = append(msgs, premsg.jsonrpcMessage())
 	}
 	return msgs, true
 }
