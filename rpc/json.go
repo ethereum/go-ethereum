@@ -254,7 +254,10 @@ func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err err
 	if err := c.decode(&rawmsg); err != nil {
 		return nil, false, err
 	}
-	messages, batch = parseMessage(rawmsg)
+	messages, batch, err = parseMessage(rawmsg)
+	if err != nil {
+		return nil, false, err
+	}
 	for i, msg := range messages {
 		if msg == nil {
 			// Message is JSON 'null'. Replace with zero value so it
@@ -289,25 +292,30 @@ func (c *jsonCodec) closed() <-chan interface{} {
 	return c.closeCh
 }
 
-// parseMessage parses raw bytes as a (batch of) JSON-RPC message(s). There are no error
-// checks in this function because the raw message has already been syntax-checked when it
-// is called. Any non-JSON-RPC messages in the input return the zero value of
+// parseMessage parses raw bytes as a (batch of) JSON-RPC message(s).
+// Any non-JSON-RPC messages in the input return the zero value of
 // jsonrpcMessage.
-func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool) {
+func parseMessage(raw json.RawMessage) ([]*jsonrpcMessage, bool, error) {
 	if !isBatch(raw) {
 		premsg := prerpcMessage{}
-		json.Unmarshal(raw, &premsg)
-		return []*jsonrpcMessage{premsg.jsonrpcMessage()}, false
+		err := json.Unmarshal(raw, &premsg)
+		if err != nil {
+			return nil, false, err
+		}
+		return []*jsonrpcMessage{premsg.jsonrpcMessage()}, false, nil
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.Token() // skip '['
 	var msgs []*jsonrpcMessage
 	for dec.More() {
 		premsg := prerpcMessage{}
-		dec.Decode(&premsg)
+		err := dec.Decode(&premsg)
+		if err != nil {
+			return nil, false, err
+		}
 		msgs = append(msgs, premsg.jsonrpcMessage())
 	}
-	return msgs, true
+	return msgs, true, nil
 }
 
 // isBatch returns true when the first non-whitespace characters is '['
