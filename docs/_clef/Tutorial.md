@@ -1,7 +1,12 @@
 ---
-title: Tutorial
+title: Clef Tutorial
 sort_key: A
 ---
+
+{:toc}
+
+-   this will be removed by the toc
+
 
 ## Initializing Clef
 
