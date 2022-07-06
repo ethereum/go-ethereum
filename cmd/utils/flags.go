@@ -84,6 +84,11 @@ var (
 		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
+	RedisEndpointFlag = &flags.DirectoryFlag{
+		Name:     "redis",
+		Usage:    "Redis endpoint url for database. Only if datadir is set for empty and is not in dev mode",
+		Category: flags.EthCategory,
+	}
 	RemoteDBFlag = &cli.StringFlag{
 		Name:     "remotedb",
 		Usage:    "URL for remote database",
@@ -989,6 +994,7 @@ var (
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
 		DataDirFlag,
+		RedisEndpointFlag,
 		AncientFlag,
 		RemoteDBFlag,
 	}
@@ -1463,6 +1469,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 	SetDataDir(ctx, cfg)
+	SetRedisEndpoint(ctx, cfg)
 	setSmartCard(ctx, cfg)
 
 	if ctx.IsSet(JWTSecretFlag.Name) {
@@ -1540,6 +1547,29 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.Bool(KilnFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "kiln")
 	}
+}
+
+func SetRedisEndpoint(ctx *cli.Context, cfg *node.Config) {
+	if !ctx.IsSet(RedisEndpointFlag.Name) {
+		return
+	}
+
+	if cfg.DataDir != "" {
+		log.Warn("The --"+RedisEndpointFlag.Name+" flag will be ignored because "+RedisEndpointFlag.Name+" is not empty",
+			RedisEndpointFlag.Name, ctx.String(RedisEndpointFlag.Name),
+			DataDirFlag.Name, cfg.DataDir,
+		)
+		return
+	}
+
+	if ctx.Bool(DeveloperFlag.Name) {
+		log.Warn("The --"+RedisEndpointFlag.Name+" flag will be ignored because it's in dev mode",
+			RedisEndpointFlag.Name, ctx.String(RedisEndpointFlag.Name),
+		)
+		return
+	}
+
+	cfg.RedisEndpoint = ctx.String(RedisEndpointFlag.Name)
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {

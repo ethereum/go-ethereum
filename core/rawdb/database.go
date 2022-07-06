@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb/redisdb"
 	"os"
 	"sync/atomic"
 	"time"
@@ -276,6 +277,30 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 // freezer moving immutable chain segments into cold storage.
 func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
 	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
+	if err != nil {
+		return nil, err
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)
+	if err != nil {
+		kvdb.Close()
+		return nil, err
+	}
+	return frdb, nil
+}
+
+// NewRedisDatabase created a persistent key-value database using RedisDB
+func NewRedisDatabase(endpoint string) (ethdb.Database, error) {
+	db, err := redisdb.New(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	return NewDatabase(db), nil
+}
+
+// NewRedisDatabaseWithFreezer creates a persistent key-value database with a
+// freezer moving immutable chain segments into cold storage.
+func NewRedisDatabaseWithFreezer(endpoint string, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+	kvdb, err := redisdb.New(endpoint)
 	if err != nil {
 		return nil, err
 	}

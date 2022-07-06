@@ -65,6 +65,10 @@ type Config struct {
 	// in memory.
 	DataDir string
 
+	// RedisEndpoint is the endpoint to connect to Redis. Redis database will be
+	// used if, and only if, DataDir is empty and RedisEndpoint is not empty.
+	RedisEndpoint string
+
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 
