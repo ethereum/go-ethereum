@@ -36,7 +36,7 @@ var (
 func (w *Service) IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
 	// We want to validate the chain by comparing the last checkpointed block
 	// we're storing in `checkpointWhitelist` with the peer's block.
-
+	//
 	// Check for availaibility of the last checkpointed block.
 	// This can be also be empty if our heimdall is not responding
 	// or we're running without it.

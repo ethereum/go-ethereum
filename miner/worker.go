@@ -25,6 +25,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -247,6 +248,7 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
+//nolint:staticcheck
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
 		config:             config,
@@ -393,23 +395,27 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	// 	prevF = float64(prev.Nanoseconds())
 	// 	next  float64
 	// )
+	//
 	// if inc {
 	// 	next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
 	// 	max := float64(maxRecommitInterval.Nanoseconds())
+	//
 	// 	if next > max {
 	// 		next = max
 	// 	}
 	// } else {
 	// 	next = prevF*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
 	// 	min := float64(minRecommit.Nanoseconds())
+	//
 	// 	if next < min {
 	// 		next = min
 	// 	}
 	// }
+	//
 	// log.Info("Recalc Commit", "Prev", prev, "Next", next)
 
 	//returning the Same prev value to keep the recommit interval constant
-	return time.Duration(int64(prev))
+	return prev
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.

@@ -215,6 +215,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
+//nolint: staticcheck
 func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func(), whitelistService ChainValidator) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
@@ -1379,6 +1380,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					if chunkHeaders[len(chunkHeaders)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
 					}
+
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
@@ -1386,13 +1388,16 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						rejected []*types.Header
 						td       *big.Int
 					)
+
 					if !beaconMode && ttd != nil {
 						td = d.blockchain.GetTd(chunkHeaders[0].ParentHash, chunkHeaders[0].Number.Uint64()-1)
 						if td == nil {
 							// This should never really happen, but handle gracefully for now
 							log.Error("Failed to retrieve parent header TD", "number", chunkHeaders[0].Number.Uint64()-1, "hash", chunkHeaders[0].ParentHash)
+
 							return fmt.Errorf("%w: parent TD missing", errInvalidChain)
 						}
+
 						for i, header := range chunkHeaders {
 							td = new(big.Int).Add(td, header.Difficulty)
 							if td.Cmp(ttd) >= 0 {
@@ -1406,10 +1411,12 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 								} else {
 									chunkHeaders, rejected = chunkHeaders[:i], chunkHeaders[i:]
 								}
+
 								break
 							}
 						}
 					}
+
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders, frequency); err != nil {
 							rollbackErr = err
@@ -1418,12 +1425,15 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 							if (mode == SnapSync || frequency > 1) && n > 0 && rollback == 0 {
 								rollback = chunkHeaders[0].Number.Uint64()
 							}
+
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
+
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
 						}
 						// All verifications passed, track all headers within the allowed limits
 						if mode == SnapSync {
 							head := chunkHeaders[len(chunkHeaders)-1].Number.Uint64()
+
 							if head-rollback > uint64(fsHeaderSafetyNet) {
 								rollback = head - uint64(fsHeaderSafetyNet)
 							} else {
@@ -1431,21 +1441,26 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 							}
 						}
 					}
+
 					if len(rejected) != 0 {
 						// Merge threshold reached, stop importing, but don't roll back
 						rollback = 0
 
 						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+
 						return ErrMergeTransition
 					}
+
 					if len(rejected) != 0 {
 						// Merge threshold reached, stop importing, but don't roll back
 						rollback = 0
 
 						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+
 						return ErrMergeTransition
 					}
 				}
+
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
 				if mode == FullSync || mode == SnapSync {
 					// If we've reached the allowed number of pending headers, stall a bit

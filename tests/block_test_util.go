@@ -15,6 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package tests implements execution of Ethereum JSON tests.
+
 package tests
 
 import (

@@ -65,9 +65,9 @@ type chainData struct {
 }
 
 var (
-	chain			*chainData
+	chain           *chainData
 	chainLongerFork *chainData
-	emptyChain		*chainData
+	emptyChain      *chainData
 )
 
 func init() {
@@ -78,7 +78,7 @@ func init() {
 
 	blocks, _ = makeChain(targetBlocks, 0, genesis, true)
 	emptyChain = &chainData{blocks, 0}
-		
+
 	chainLongerForkBlocks, _ := makeChain(1024, 0, blocks[len(blocks)-1], false)
 	chainLongerFork = &chainData{chainLongerForkBlocks, 0}
 }
