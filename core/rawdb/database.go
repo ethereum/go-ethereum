@@ -292,6 +292,7 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 func NewRedisDatabase(endpoint string) (ethdb.Database, error) {
 	db, err := redisdb.New(endpoint)
 	if err != nil {
+		log.Error("Error initializing Redis", err)
 		return nil, err
 	}
 	return NewDatabase(db), nil
@@ -302,6 +303,7 @@ func NewRedisDatabase(endpoint string) (ethdb.Database, error) {
 func NewRedisDatabaseWithFreezer(endpoint string, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
 	kvdb, err := redisdb.New(endpoint)
 	if err != nil {
+		log.Error("Error initializing Redis", err)
 		return nil, err
 	}
 	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)

@@ -687,11 +687,9 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		if n.config.RedisEndpoint == "" {
-			db = rawdb.NewMemoryDatabase()
-		} else {
-			db, err = rawdb.NewRedisDatabase(n.config.RedisEndpoint)
-		}
+		db = rawdb.NewMemoryDatabase()
+	} else if n.config.RedisEndpoint != "" {
+		db, err = rawdb.NewRedisDatabase(n.config.RedisEndpoint)
 	} else {
 		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
 	}
