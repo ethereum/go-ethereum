@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,7 @@ import (
 )
 
 func init() {
-	register("callTracer", newCallTracer)
+	register("callTracer", newProxy(newCallTracer))
 }
 
 type callFrame struct {
@@ -48,10 +47,7 @@ type callFrame struct {
 }
 
 type callTracer struct {
-	env       *vm.EVM
 	callstack []callFrame
-	interrupt uint32 // Atomic flag to signal execution interruption
-	reason    error  // Textual reason for the interruption
 }
 
 // newCallTracer returns a native go tracer which tracks
@@ -64,7 +60,6 @@ func newCallTracer(ctx *tracers.Context) tracers.Tracer {
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
@@ -101,12 +96,6 @@ func (t *callTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Skip if tracing was interrupted
-	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
-		return
-	}
-
 	call := callFrame{
 		Type:  typ.String(),
 		From:  addrToHex(from),
@@ -152,17 +141,11 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
-	res, err := json.Marshal(t.callstack[0])
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(res), t.reason
+	return json.Marshal(t.callstack[0])
 }
 
-// Stop terminates execution of the tracer at the first opportune moment.
+// Stop terminates execution of the tracer at the first opportune moment. Handled by proxy.
 func (t *callTracer) Stop(err error) {
-	t.reason = err
-	atomic.StoreUint32(&t.interrupt, 1)
 }
 
 func bytesToHex(s []byte) string {

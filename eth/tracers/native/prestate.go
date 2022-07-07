@@ -19,7 +19,6 @@ package native
 import (
 	"encoding/json"
 	"math/big"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +29,7 @@ import (
 )
 
 func init() {
-	register("prestateTracer", newPrestateTracer)
+	register("prestateTracer", newProxy(newPrestateTracer))
 }
 
 type prestate = map[common.Address]*account
@@ -42,13 +41,11 @@ type account struct {
 }
 
 type prestateTracer struct {
-	env       *vm.EVM
-	prestate  prestate
-	create    bool
-	to        common.Address
-	gasLimit  uint64 // Amount of gas bought for the whole tx
-	interrupt uint32 // Atomic flag to signal execution interruption
-	reason    error  // Textual reason for the interruption
+	env      *vm.EVM
+	prestate prestate
+	create   bool
+	to       common.Address
+	gasLimit uint64 // Amount of gas bought for the whole tx
 }
 
 func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
@@ -140,17 +137,11 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {}
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *prestateTracer) GetResult() (json.RawMessage, error) {
-	res, err := json.Marshal(t.prestate)
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(res), t.reason
+	return json.Marshal(t.prestate)
 }
 
-// Stop terminates execution of the tracer at the first opportune moment.
+// Stop terminates execution of the tracer at the first opportune moment. Handled by proxy.
 func (t *prestateTracer) Stop(err error) {
-	t.reason = err
-	atomic.StoreUint32(&t.interrupt, 1)
 }
 
 // lookupAccount fetches details of an account and adds it to the prestate
