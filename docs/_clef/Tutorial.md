@@ -1,19 +1,32 @@
 ---
 title: Clef Tutorial
-sort_key: A
+sort_key: B
 ---
 
 {:toc}
 - this will be removed by the toc
 
 
+## Prerequisites
+
+Please read our [Introduction to Clef](/docs/_clef/Introduction.md) page which covers installing and building and gives a
+high level overview of how Clef works.
+
+
 ## Initializing Clef
 
-First things first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with your chosen password:
+Assuming Clef has been downloaded and built, the first step in using it is `clef init`. This command initializes Clef
+which involves creating a database for storing sensitive information such as keyfiles and passwords, and encrypting it
+with a master seed that is itself encrypted using a user-defined password. This password is provided by the user 
+when prompted by Clef. The masterseed is then saved as a JSON file whose path is displayed by Clef - it is important
+to make a secure backup of this file along with the password used to encrypt it. Clef is able to access the keystore
+but it does not independently create any keystore backups - the user is responsible for making secure backups of 
+their keystore files separately.
 
-```text
-$ clef init
 
+Initialize Clef using `clef init`. The following information will be displayed in the terminal:
+
+```terminal
 WARNING!
 
 Clef is an account management tool. It may, like any software, contain bugs.
@@ -34,7 +47,7 @@ Please specify a password. Do not forget this password!
 Password:
 Repeat password:
 
-A master seed has been generated into /home/martin/.clef/masterseed.json
+A master seed has been generated into /home/user/.clef/masterseed.json
 
 This is required to be able to store credentials, such as:
 * Passwords for keystores (used by rule engine)
@@ -46,7 +59,9 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 * The master seed does not contain your accounts, those need to be backed up separately!
 ```
 
-*For readability purposes, we'll remove the WARNING printout, user confirmation and the unlocking of the master seed in the rest of this document.*
+**Note** It is assumed that the reader has read these notices about backing up and understands 
+the consequences of losing or compromising their data. The Clef warnings will be omitted from 
+the remainder of this tutorial to improve readability.
 
 ## Remote interactions
 

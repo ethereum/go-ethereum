@@ -27,7 +27,7 @@ However, Clef is not bound to Geth and can be built on its own using:
 `make clef`
 
 Once built, Clef must be initialized. This includes storing some data, some of which is sensitive (such as passwords,
-account data, signing rules etc). Initializing Clef takes that data and encrypts it using a user-provided password.
+account data, signing rules etc). Initializing Clef takes that data and encrypts it using a user-defined password.
 
 `clef init`
 
