@@ -124,57 +124,50 @@ func TestState(t *testing.T) {
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/0`, "bug in test")
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/ConstantinopleFix/3`, "bug in test")
 
-	// For Istanbul, older tests were moved into LegacyTests
-	for _, dir := range []string{
-		stateTestDir,
-		legacyStateTestDir,
-		benchmarksDir,
-	} {
-		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
-			for _, subtest := range test.Subtests() {
-				subtest := subtest
-				key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
+	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
+		for _, subtest := range test.Subtests() {
+			subtest := subtest
+			key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
-				t.Run(key+"/trie", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						_, _, err := test.Run(subtest, vmconfig, false)
-						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
-							// Ignore expected errors (TODO MariusVanDerWijden check error string)
-							return nil
-						}
-						err = st.checkFailure(t, err)
-						if err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
-							t.Errorf("in 'state_test.go', test '%s' failed with error: '%v'", name, err)
+			t.Run(key+"/trie", func(t *testing.T) {
+				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+					_, _, err := test.Run(subtest, vmconfig, false)
+					if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+						// Ignore expected errors (TODO MariusVanDerWijden check error string)
+						return nil
+					}
+					err = st.checkFailure(t, err)
+					if err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+						t.Errorf("in 'state_test.go', test '%s' failed with error: '%v'", name, err)
+						return err
+					}
+					return nil
+				})
+			})
+			t.Run(key+"/snap", func(t *testing.T) {
+				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
+					snaps, statedb, err := test.Run(subtest, vmconfig, true)
+					if snaps != nil && statedb != nil {
+						if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil &&
+							!errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+							t.Errorf("in 'rlp_test.go', test '%s' failed with error: '%v'", name, err)
 							return err
 						}
+					}
+					if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
+						// Ignore expected errors (TODO MariusVanDerWijden check error string)
 						return nil
-					})
+					}
+					err = st.checkFailure(t, err)
+					if err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+						t.Errorf("in 'state_test.go', test '%s' failed with error: '%v'", name, err)
+						return err
+					}
+					return nil
 				})
-				t.Run(key+"/snap", func(t *testing.T) {
-					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-						snaps, statedb, err := test.Run(subtest, vmconfig, true)
-						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil &&
-								!errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
-								t.Errorf("in 'rlp_test.go', test '%s' failed with error: '%v'", name, err)
-								return err
-							}
-						}
-						if err != nil && len(test.json.Post[subtest.Fork][subtest.Index].ExpectException) > 0 {
-							// Ignore expected errors (TODO MariusVanDerWijden check error string)
-							return nil
-						}
-						err = st.checkFailure(t, err)
-						if err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
-							t.Errorf("in 'state_test.go', test '%s' failed with error: '%v'", name, err)
-							return err
-						}
-						return nil
-					})
-				})
-			}
-		})
-	}
+			})
+		}
+	})
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
