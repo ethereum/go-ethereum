@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master, verkle-trie-proof-in-block-rebased ]
+    branches: [ master, verkle-trie-proof-in-block-rebased, verkle-trie-post-merge ]
 
 jobs:
 

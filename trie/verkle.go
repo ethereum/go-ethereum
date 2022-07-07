@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -228,11 +229,7 @@ func DeserializeAndVerifyVerkleProof(serialized []byte, rootC *verkle.Point, key
 }
 
 func deserializeVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []verkle.KeyValuePair) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, error) {
-	var (
-		indices []byte       // List of zis
-		yis     []*verkle.Fr // List of yis
-		others  set          // Mark when an "other" stem has been seen
-	)
+	var others set // Mark when an "other" stem has been seen
 
 	proof, err := verkle.DeserializeProof(serialized, keyvals)
 	if err != nil {
@@ -246,13 +243,25 @@ func deserializeVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []ve
 	if len(proof.Keys) != len(proof.Values) {
 		return nil, nil, nil, nil, fmt.Errorf("keys and values are of different length %d != %d", len(proof.Keys), len(proof.Values))
 	}
-	if len(proof.Keys) != len(proof.ExtStatus) {
-		return nil, nil, nil, nil, fmt.Errorf("keys and values are of different length %d != %d", len(proof.Keys), len(proof.Values))
+
+	tree, err := verkle.TreeFromProof(proof, rootC)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error rebuilding the tree from proof: %w", err)
+	}
+	for _, kv := range keyvals {
+		val, err := tree.Get(kv.Key, nil)
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("could not find key %x in tree rebuilt from proof: %w", kv.Key, err)
+		}
+
+		if !bytes.Equal(val, kv.Value) {
+			return nil, nil, nil, nil, fmt.Errorf("could not find correct value at %x in tree rebuilt from proof: %x != %x", kv.Key, val, kv.Value)
+		}
 	}
 
-	_, err = verkle.TreeFromProof(proof, rootC)
+	pe, _, _ := tree.GetProofItems(proof.Keys)
 
-	return proof, proof.Cs, indices, yis, err
+	return proof, pe.Cis, pe.Zis, pe.Yis, nil
 }
 
 // Copy the values here so as to avoid an import cycle
