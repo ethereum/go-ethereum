@@ -1,6 +1,31 @@
 
-# Retesteth - testing against bor client
+# Retesteth - bor
 
+These integration tests are included in the bor repo via using the git submodule  
+
+```
+[submodule "tests/testdata"]
+	path = tests/testdata
+	url = https://github.com/ethereum/tests.git
+```
+
+The version used is the last stable release, tagged as v10.4 from branch develop in ethereum/tests    
+Details on release code can be found here https://github.com/ethereum/tests/commit/a380655e5ffab1a5ea0f4d860224bdb19013f06a  
+
+To run the tests, we hava a `make` command:  
+``` 
+make test-integration
+```
+which is also integrated into the CI pipeline on GitHub  
+
+
+## Retesteth - bor on remote machine
+
+To explore and test the `retesteth` package, the following steps were executed.  
+This is only for educational purposes.  
+For future usage, there is no need to go through this section, the only thing needed is to have 'green' integration tests.  
+
+- `ssh` into a VM running bor 
 - Change configs by replacing geth with bor inside the docker container  
 ```
 mkdir ~/retestethBuild
@@ -9,6 +34,7 @@ wget https://raw.githubusercontent.com/ethereum/retesteth/develop/dretesteth.sh
 chmod +x dretesteth.sh
 wget https://raw.githubusercontent.com/ethereum/retesteth/develop/Dockerfile
 ```
+
 Modify the RUN git clone line in the Dockerfile for repo “retesteth” to change branch -b from master to develop. Do not modify repo branches for “winsvega/solidity” [LLLC opcode support] and “go-ethereum”.
 Modify the Dockerfile so that the eth client points to bor  
 e.g. : `https://github.com/ethereum/retesteth/blob/master/Dockerfile#L41`
@@ -22,7 +48,7 @@ to: `RUN git clone --depth 1 -b master https://github.com/maticnetwork/bor.git /
 ``` 
 git clone --branch develop https://github.com/ethereum/tests.git
 ```
-this step will be eventually replaced by adding the git submodule directly into bor repo with   
+this step is eventually replaced by adding the git submodule directly into bor repo with   
 ``` 
 git submodule add --depth 1 https://github.com/ethereum/tests.git tests/testdata
 ```
@@ -73,5 +99,5 @@ RLPTest
 src
 ```
 
-Run against bor client on localhost:8545 using 8 threads
+If you want to run retestheth against a bor client on localhost:8545 (using 8 threads), instead of isolating it into a docker image, run  
 `sudo ./dretesteth.sh -t GeneralStateTests -- --testpath ~/tests --datadir /tests/config --clients t8ntool --nodes 127.0.0.1:8545 -j 8`
