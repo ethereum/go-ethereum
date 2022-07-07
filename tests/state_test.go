@@ -59,7 +59,7 @@ func TestState(t *testing.T) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
-	// failing with bor, to be fixed
+	// FIXME POS-618
 	st.skipLoad(`.*stSStoreTest*`)
 	st.skipLoad(`.*stReturnDataTest*`)
 	st.skipLoad(`.*stShift*`)

@@ -51,7 +51,7 @@ func TestBlockchain(t *testing.T) {
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
-	// failing with bor, to be fixed
+	// FIXME POS-618
 	bt.skipLoad(`.*ValidBlocks*`)
 	bt.skipLoad(`.*InvalidBlocks*`)
 	bt.skipLoad(`.*TransitionTests*`)
