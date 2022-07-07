@@ -19,6 +19,7 @@ package node
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -269,8 +270,9 @@ func (h *httpServer) doStop() {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	err := h.server.Shutdown(ctx)
-	if err != nil {
-		h.log.Warn("Something wrong with HTTP server graceful shutdown", "error", err)
+	if errors.Is(err, context.DeadlineExceeded) {
+		h.log.Warn("Some connections are not shutdown gracefully within the time bound, close them actively")
+		h.server.Close()
 	}
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
