@@ -37,7 +37,7 @@ type proxy struct {
 	reason    error  // Textual reason for the interruption
 }
 
-// newNoopTracer returns a new noop tracer.
+// newNoopTracer returns a function that itself returns a proxy instance.
 func newProxy(ctor ctorFn) ctorFn {
 	p := new(proxy)
 	return func(ctx *tracers.Context) tracers.Tracer {
