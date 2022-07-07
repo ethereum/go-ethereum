@@ -32,7 +32,7 @@ import (
 // storage also has corresponding account data.
 func CheckDanglingStorage(chaindb ethdb.KeyValueStore) error {
 	if err := checkDanglingDiskStorage(chaindb); err != nil {
-		log.Error("Database check error", "err", err)
+		return err
 	}
 	return checkDanglingMemStorage(chaindb)
 }
@@ -78,7 +78,7 @@ func checkDanglingMemStorage(db ethdb.KeyValueStore) error {
 	err := iterateJournal(db, func(pRoot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
 		for accHash := range storage {
 			if _, ok := accounts[accHash]; !ok {
-				log.Error("Dangling storage - missing account", "account", fmt.Sprintf("%#x", accHash), "root", root)
+				return fmt.Errorf("dangling storage - missing account (accountHash: %s, accountRoot: %s)", accHash, root)
 			}
 		}
 		return nil

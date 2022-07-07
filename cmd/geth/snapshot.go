@@ -228,15 +228,6 @@ func verifyState(ctx *cli.Context) error {
 	return snapshot.CheckDanglingStorage(chaindb)
 }
 
-// checkDanglingStorage iterates the snap storage data, and verifies that all
-// storage also has corresponding account data.
-func checkDanglingStorage(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
-
-	return snapshot.CheckDanglingStorage(utils.MakeChainDatabase(ctx, stack, true))
-}
-
 // traverseState is a helper function used for pruning verification.
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present.
