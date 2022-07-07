@@ -93,6 +93,7 @@ func TestState(t *testing.T) {
 	st.skipLoad(`.*stEIP2930*`)
 	st.skipLoad(`.*stEIP1559*`)
 	st.skipLoad(`.*stEIP3607*`)
+	st.skipLoad(`.*stChangedEIP150*`)
 	st.skipLoad(`.*stLogTests*`)
 	st.skipLoad(`.*stSLoadTest*`)
 	st.skipLoad(`.*stCreateTest*`)
