@@ -52,7 +52,8 @@ that range are always accessible. Full nodes also store occasional checkpoints b
 that can be used to rebuild the state at any point on-the-fly. This means older transactions
 can be traced but if there is a large distance between the requested transaction and the most
 recent checkpoint rebuilding the state can take a long time. Tracing a single
-transaction requires reexecuting all preceding transactions in the same block.
+transaction requires reexecuting all preceding transactions in the same block
+**and** all preceding blocks until the previous stored snapshot.
 
 * A **snap synced** node holds the most recent 128 blocks in memory, so transactions in that
 range are always accessible. However, snap-sync only starts processing from a relatively recent
@@ -79,7 +80,7 @@ counter*, *opcode name*, *opcode cost*, *remaining gas*, *execution depth* and a
 *occurred error*. The structured logs can optionally also contain the content of the
 *execution stack*, *execution memory* and *contract storage*.
 
-The entire output of an raw EVM opcode trace is a JSON object having a few metadata
+The entire output of a raw EVM opcode trace is a JSON object having a few metadata
 fields: *consumed gas*, *failure status*, *return value*; and a list of *opcode entries*:
 
 ```json
@@ -118,8 +119,8 @@ An example log for a single opcode entry has the following format:
 
 ### Generating basic traces
 
-To generate a raw EVM opcode trace, Geth provides a few [RPC APIendpoints](../rpc/ns-debug). 
-The most commonly used is [`debug_traceTransaction`](../rpc/ns-debug#debug_tracetransaction).
+To generate a raw EVM opcode trace, Geth provides a few [RPC API endpoints](/docs/rpc/ns-debug).
+The most commonly used is [`debug_traceTransaction`](/docs/rpc/ns-debug#debug_tracetransaction).
 
 In its simplest form, `traceTransaction` accepts a transaction hash as its only argument. It then
 traces the transaction, aggregates all the generated data and returns it as a **large**
@@ -167,19 +168,19 @@ Alternatively, disabling *EVM Stack*, *EVM Memory*, *Storage* and *Return data* 
 results in the following, much shorter, [trace dump](https://gist.github.com/karalabe/d74a7cb33a70f2af75e7824fc772c5b4).
 
 ```
-$ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableMemory": true, "disableStorage": true}]}' localhost:8545
+$ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableStorage": true}]}' localhost:8545
 ```
 
 ### Limits of basic traces
 
 Although the raw opcode traces generated above are useful, having an individual log entry for every single
 opcode is too low level for most use cases, and will require developers to create additional tools to 
-post-process the traces. Additionally, a full opcode trace can easily go into the hundreds of 
+post-process the traces. Additionally, a full opcode trace can easily go into the hundreds of
 megabytes, making them very resource intensive to get out of the node and process externally.
 
 To avoid those issues, Geth supports running custom JavaScript tracers *within* the Ethereum node, 
-hich have full access to the EVM stack, memory and contract storage. This means developers only have to 
-gather the data they actually need, and do any processing **at** the data.
+which have full access to the EVM stack, memory and contract storage. This means developers only have to
+gather the data they actually need, and do any processing at the source.
 
 ## Pruning
 
