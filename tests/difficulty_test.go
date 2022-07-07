@@ -20,6 +20,7 @@
 package tests
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -90,8 +91,8 @@ func TestDifficulty(t *testing.T) {
 			t.Skip("difficulty below minimum")
 			return
 		}
-		if err := dt.checkFailure(t, test.Run(cfg)); err != nil {
-			t.Error(err)
+		if err := dt.checkFailure(t, test.Run(cfg)); err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+			t.Errorf("in 'difficulty_test.go', test '%s' failed with error: '%v'", name, err)
 		}
 	})
 }
