@@ -213,6 +213,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		eth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
+	eth.bloomIndexer.Start(eth.blockchain)
+
 	if config.OverrideState != nil {
 		lastBlock := eth.blockchain.CurrentBlock()
 		state, err := eth.blockchain.StateAt(lastBlock.Root())
@@ -267,7 +269,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		newHead := blocks[len(blocks)-1]
 		log.Info("Wrote developer mode clique takeover chain", "before", prevBlock.Number(), "last", newHead.Number(), "hash", newHead.Hash())
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
