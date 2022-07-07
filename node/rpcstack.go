@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -80,6 +81,10 @@ type httpServer struct {
 
 	handlerNames map[string]string
 }
+
+const (
+	shutdownTimeout = 5 * time.Second
+)
 
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
@@ -261,7 +266,12 @@ func (h *httpServer) doStop() {
 		h.wsHandler.Store((*rpcHandler)(nil))
 		wsHandler.server.Stop()
 	}
-	h.server.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	err := h.server.Shutdown(ctx)
+	if err != nil {
+		h.log.Warn("Something wrong with HTTP server graceful shutdown", "error", err)
+	}
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
