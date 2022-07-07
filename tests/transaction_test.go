@@ -20,6 +20,7 @@
 package tests
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -50,7 +51,7 @@ func TestTransaction(t *testing.T) {
 	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
 	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
 		cfg := params.MainnetChainConfig
-		if err := txt.checkFailure(t, test.Run(cfg)); err != nil {
+		if err := txt.checkFailure(t, test.Run(cfg)); err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
 			t.Errorf("in 'transaction_test.go', test '%s' failed with error: '%v'", name, err)
 		}
 	})
