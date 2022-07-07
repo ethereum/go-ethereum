@@ -109,7 +109,4 @@
 				break;
 		}
 	},
-
-	// fault is invoked when the actual execution of an opcode fails.
-	fault: function(log, db) {}
 }

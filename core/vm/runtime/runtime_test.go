@@ -688,7 +688,6 @@ func TestRuntimeJSTracer(t *testing.T) {
 	jsTracers := []string{
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
 	step: function() { this.steps++}, 
-	fault: function() {}, 
 	result: function() { 
 		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
 	}, 
@@ -701,7 +700,6 @@ func TestRuntimeJSTracer(t *testing.T) {
 		this.gasUsed = res.getGasUsed();
 	}}`,
 		`{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, steps:0,
-	fault: function() {}, 
 	result: function() { 
 		return [this.enters, this.exits,this.enterGas,this.gasUsed, this.steps].join(",") 
 	}, 
@@ -863,7 +861,6 @@ func TestJSTracerCreateTx(t *testing.T) {
 	jsTracer := `
 	{enters: 0, exits: 0,
 	step: function() {},
-	fault: function() {},
 	result: function() { return [this.enters, this.exits].join(",") },
 	enter: function(frame) { this.enters++ },
 	exit: function(res) { this.exits++ }}`
@@ -908,14 +905,12 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	stepTracer := `
 	{
 	step: function() {},
-	fault: function() {},
 	result: function() {},
 	}`
 	callFrameTracer := `
 	{
 	enter: function() {},
 	exit: function() {},
-	fault: function() {},
 	result: function() {},
 	}`
 

@@ -101,43 +101,43 @@ func TestTracer(t *testing.T) {
 		fail string
 	}{
 		{ // tests that we don't panic on bad arguments to memory access
-			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}",
+			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, result: function() { return this.depths; }}",
 			want: ``,
 			fail: "Tracer accessed out of bound memory: offset -1, end -2 at step (<eval>:1:53(15))    in server-side tracer function 'step'",
 		}, { // tests that we don't panic on bad arguments to stack peeks
-			code: "{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, fault: function() {}, result: function() { return this.depths; }}",
+			code: "{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, result: function() { return this.depths; }}",
 			want: ``,
 			fail: "Tracer accessed out of bound stack: size 0, index -1 at step (<eval>:1:53(13))    in server-side tracer function 'step'",
 		}, { //  tests that we don't panic on bad arguments to memory getUint
-			code: "{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, fault: function() {}, result: function() { return this.depths; }}",
+			code: "{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, result: function() { return this.depths; }}",
 			want: ``,
 			fail: "Tracer accessed out of bound memory: available 0, offset -64, size 32 at step (<eval>:1:58(13))    in server-side tracer function 'step'",
 		}, { // tests some general counting
-			code: "{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}",
+			code: "{count: 0, step: function() { this.count += 1; }, result: function() { return this.count; }}",
 			want: `3`,
 		}, { // tests that depth is reported correctly
-			code: "{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}",
+			code: "{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, result: function() { return this.depths; }}",
 			want: `[0,1,2]`,
 		}, { // tests memory length
-			code: "{lengths: [], step: function(log) { this.lengths.push(log.memory.length()); }, fault: function() {}, result: function() { return this.lengths; }}",
+			code: "{lengths: [], step: function(log) { this.lengths.push(log.memory.length()); }, result: function() { return this.lengths; }}",
 			want: `[0,0,0]`,
 		}, { // tests to-string of opcodes
-			code: "{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}",
+			code: "{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, result: function() { return this.opcodes; }}",
 			want: `["PUSH1","PUSH1","STOP"]`,
 		}, { // tests intrinsic gas
-			code: "{depths: [], step: function() {}, fault: function() {}, result: function(ctx) { return ctx.gasPrice+'.'+ctx.gasUsed+'.'+ctx.intrinsicGas; }}",
+			code: "{depths: [], step: function() {}, result: function(ctx) { return ctx.gasPrice+'.'+ctx.gasUsed+'.'+ctx.intrinsicGas; }}",
 			want: `"100000.6.21000"`,
 		}, {
-			code: "{res: null, step: function(log) {}, fault: function() {}, result: function() { return toWord('0xffaa') }}",
+			code: "{res: null, step: function(log) {}, result: function() { return toWord('0xffaa') }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0,"20":0,"21":0,"22":0,"23":0,"24":0,"25":0,"26":0,"27":0,"28":0,"29":0,"30":255,"31":170}`,
 		}, { // test feeding a buffer back into go
-			code: "{res: null, step: function(log) { var address = log.contract.getAddress(); this.res = toAddress(address); }, fault: function() {}, result: function() { return this.res }}",
+			code: "{res: null, step: function(log) { var address = log.contract.getAddress(); this.res = toAddress(address); }, result: function() { return this.res }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,
 		}, {
-			code: "{res: null, step: function(log) { var address = '0x0000000000000000000000000000000000000000'; this.res = toAddress(address); }, fault: function() {}, result: function() { return this.res }}",
+			code: "{res: null, step: function(log) { var address = '0x0000000000000000000000000000000000000000'; this.res = toAddress(address); }, result: function() { return this.res }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,
 		}, {
-			code: "{res: null, step: function(log) { var address = Array.prototype.slice.call(log.contract.getAddress()); this.res = toAddress(address); }, fault: function() {}, result: function() { return this.res }}",
+			code: "{res: null, step: function(log) { var address = Array.prototype.slice.call(log.contract.getAddress()); this.res = toAddress(address); }, result: function() { return this.res }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,
 		},
 	} {
@@ -149,7 +149,7 @@ func TestTracer(t *testing.T) {
 
 func TestHalt(t *testing.T) {
 	timeout := errors.New("stahp")
-	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil)
+	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil)
+	tracer, err := newJsTracer("{step: function() {}, result: function() { return null; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestNoStepExec(t *testing.T) {
 		want string
 	}{
 		{ // tests that we don't panic on accessing the db methods
-			code: "{depths: [], step: function() {}, fault: function() {},  result: function(ctx, db){ return db.getBalance(ctx.to)} }",
+			code: "{depths: [], step: function() {}, result: function(ctx, db){ return db.getBalance(ctx.to)} }",
 			want: `"0"`,
 		},
 	} {
@@ -221,7 +221,7 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
 	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
-	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, result: function() { return this.res; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
 	}
 
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, result: function() { return this.res; }}", nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
 	if err != nil {
@@ -248,14 +248,14 @@ func TestIsPrecompile(t *testing.T) {
 
 func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
+	if _, err := newJsTracer("{step: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context)); err != nil {
+	if _, err := newJsTracer("{step: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context)); err != nil {
 		t.Fatal(err)
 	}
 	// test that the enter and exit method are correctly invoked and the values passed
-	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context))
+	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context))
 	if err != nil {
 		t.Fatal(err)
 	}

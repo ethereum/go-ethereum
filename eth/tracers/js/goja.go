@@ -94,8 +94,6 @@ type jsTracer struct {
 	fromBuf           fromBufFn             // Converts an array, hex string or Uint8Array to a []byte
 	ctx               map[string]goja.Value // KV-bag passed to JS in `result`
 	activePrecompiles []common.Address      // List of active precompiles at current block
-	traceStep         bool                  // True if tracer object exposes a `step()` method
-	traceFrame        bool                  // True if tracer object exposes the `enter()` and `exit()` methods
 	gasLimit          uint64                // Amount of gas bought for the whole tx
 	err               error                 // Any error that should stop tracing
 	obj               *goja.Object          // Trace object
@@ -159,18 +157,13 @@ func newJsTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
 	if !ok {
 		return nil, errors.New("trace object must expose a function result()")
 	}
-	fault, ok := goja.AssertFunction(obj.Get("fault"))
-	if !ok {
-		return nil, errors.New("trace object must expose a function fault()")
-	}
-	step, ok := goja.AssertFunction(obj.Get("step"))
-	t.traceStep = ok
+	fault, _ := goja.AssertFunction(obj.Get("fault"))
+	step, _ := goja.AssertFunction(obj.Get("step"))
 	enter, hasEnter := goja.AssertFunction(obj.Get("enter"))
 	exit, hasExit := goja.AssertFunction(obj.Get("exit"))
 	if hasEnter != hasExit {
 		return nil, errors.New("trace object must expose either both or none of enter() and exit()")
 	}
-	t.traceFrame = hasEnter
 	t.obj = obj
 	t.step = step
 	t.enter = enter
@@ -233,7 +226,7 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
 func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	if !t.traceStep {
+	if t.step == nil {
 		return
 	}
 	if t.err != nil {
@@ -257,6 +250,9 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 
 // CaptureFault implements the Tracer interface to trace an execution fault
 func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+	if t.fault == nil {
+		return
+	}
 	if t.err != nil {
 		return
 	}
@@ -279,7 +275,7 @@ func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, duration time.Durat
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	if !t.traceFrame {
+	if t.enter == nil {
 		return
 	}
 	if t.err != nil {
@@ -304,7 +300,7 @@ func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	if !t.traceFrame {
+	if t.exit == nil {
 		return
 	}
 

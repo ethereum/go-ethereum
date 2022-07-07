@@ -25,9 +25,6 @@
 	// the final result of the tracing.
 	result: function() { return this.stack[0].ops; },
 
-	// fault is invoked when the actual execution of an opcode fails.
-	fault: function(log, db) { },
-
 	// step is invoked for every opcode that the VM executes.
 	step: function(log, db) {
 		var frame = this.stack[this.stack.length - 1];
