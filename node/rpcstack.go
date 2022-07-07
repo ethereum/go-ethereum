@@ -19,7 +19,6 @@ package node
 import (
 	"compress/gzip"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
