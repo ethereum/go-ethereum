@@ -270,8 +270,8 @@ func (h *httpServer) doStop() {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	err := h.server.Shutdown(ctx)
-	if errors.Is(err, context.DeadlineExceeded) {
-		h.log.Warn("Some connections are not shutdown gracefully within the time bound, close them actively")
+	if err == ctx.Err() {
+		h.log.Warn("HTTP server graceful shutdown timed out")
 		h.server.Close()
 	}
 	h.listener.Close()
