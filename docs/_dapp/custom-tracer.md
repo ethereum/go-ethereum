@@ -6,9 +6,12 @@ sort_key: B
 In addition to the default opcode tracer and the built-in tracers, Geth offers the possibility to write custom code
 that hook to events in the EVM to process and return the data in a consumable format. Custom tracers can be
 written either in Javascript or Go. JS tracers are good for quick prototyping and experimentation as well as for
-less intensive applications. Go tracers are performant but require Geth to be compiled with the tracer.
+less intensive applications. Go tracers are performant but require the tracer to be compiled together with the Geth source code.
 
-## Javascript trace filters
+* TOC
+{:toc}
+
+## Custom Javascript tracing
 
 Transaction traces include the complete status of the EVM at every point during the transaction execution, which
 can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace
@@ -348,47 +351,108 @@ for specific `eth_call`s or rejected blocks. The fill list of trace functions ca
 [reference documentation][debug-docs].
 
 
-## Go Native Tracing
+## Custom Go tracing
 
-It is also possible to trace EVM execution using Go functions that wrap RPC calls to a Geth node. This provides 
-programmatic access to trace dumps meaning retrieval and downstream analysis of the trace information can all be 
-self-contained within a Go application. The source code for the tracers is available to browse on the
-[Geth Github][go-tracer-source]. This page will demonstrate how to handle `traceTransaction` from a Go application.
-The concepts covered here can be transferred to the other types of trace described in the reference documentation.
+Custom tracers can also be made more performant by writing them in Go. The gain in performance mostly comes from the fact that Geth doesn't need
+to interpret JS code and can execute native functions. Geth comes with several built-in [native tracers](https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/native) which can serve as examples. Please note that unlike JS tracers, Go tracing scripts cannot be simply passed as an argument to the API. They will need to be added to and compiled with the rest of the Geth source code.
 
-The tracers are implemnted as functions associated with the `debug` class. The arguments
-are a `ctx` object (which configures the request), a transaction hash and a `TraceConfig` object. The `TraceConfig`
-object has the following structure:
+In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](install-and-build/installing-geth#build-from-source-code) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
 
 ```go
-type TraceConfig struct {
-	*logger.Config
-	Tracer  *string
-	Timeout *string
-	Reexec  *uint64
+package native
+
+import (
+    "encoding/json"
+    "math/big"
+    "sync/atomic"
+    "time"
+
+    "github.com/ethereum/go-ethereum/common"
+    "github.com/ethereum/go-ethereum/core/vm"
+    "github.com/ethereum/go-ethereum/eth/tracers"
+)
+
+func init() {
+    // This is how Geth will become aware of the tracer and register it under a given name
+    register("opcounter", newOpcounter)
+}
+
+type opcounter struct {
+    env       *vm.EVM
+    counts    map[string]int // Store opcode counts
+    interrupt uint32         // Atomic flag to signal execution interruption
+    reason    error          // Textual reason for the interruption
+}
+
+func newOpcounter(ctx *tracers.Context) tracers.Tracer {
+    return &opcounter{counts: make(map[string]int)}
+}
+
+// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
+func (t *opcounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+        t.env = env
+}
+
+// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
+func (t *opcounter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+    // Skip if tracing was interrupted
+    if atomic.LoadUint32(&t.interrupt) > 0 {
+        t.env.Cancel()
+        return
+    }
+
+    name := op.String()
+    if _, ok := t.counts[name]; !ok {
+        t.counts[name] = 0
+    }
+    t.counts[name]++
+}
+
+// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *opcounter) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {}
+
+// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// execute any code.
+func (t *opcounter) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
+// CaptureFault implements the EVMLogger interface to trace an execution fault.
+func (t *opcounter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {}
+
+// CaptureEnd is called after the call finishes to finalize the tracing.
+func (t *opcounter) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {}
+
+func (*opcounter) CaptureTxStart(gasLimit uint64) {}
+
+func (*opcounter) CaptureTxEnd(restGas uint64) {}
+
+// GetResult returns the json-encoded nested list of call traces, and any
+// error arising from the encoding or forceful termination (via `Stop`).
+func (t *opcounter) GetResult() (json.RawMessage, error) {
+    res, err := json.Marshal(t.counts)
+    if err != nil {
+        return nil, err
+    }
+    return res, t.reason
+}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (t *opcounter) Stop(err error) {
+    t.reason = err
+    atomic.StoreUint32(&t.interrupt, 1)
 }
 ```
 
-The `tracer` field in `TraceConfig` is a string-formatted Javascript object that configures the trace as described in
-the [Javascript trace filters](#javascript-trace-filters) section. Timeout is a string that overrides the default 5 second
-request timeout - the valid values are described in the [Go Time][go-time] documentation. `Reexec` is an integer that 
-defines how many blocks behind the head of the chain to look for a checkpoint to rebuild the requested state from - large
-values can lead to long state regeneration times. If the user encounter a `required historical state is not available` error
-then adjusting `Reexec` is likely to fix it.
+As can be seen every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) needs to be implemented (even if empty). Key parts to notice are the `init()` function which registers the tracer in Geth, the `CaptureState` hook where the opcode counts are incremented and `GetResult` where the result is serialized and delivered. To test this out the source is first compiled with `make geth`. Then in the console it can be invoked through the usual API methods by passing in the name it was registered under:
 
-The `Tracetransaction()` Go function returns the structured logs created during the execution of EVM
-and returns them as a JSON object. 
-
-A call to `TraceTransaction()` in Go therefore looks as follows:
-
-```go
-trace, err := debug.TraceTransaction(txHash, traceConfig) (*ExecutionResult, error)
-if err != nil {
-	return nil, err
-	}
+```console
+> debug.traceTransaction('0x7ae446a7897c056023a8104d254237a8d97783a92900a7b0f7db668a9432f384', { tracer: 'opcounter' })
+{
+    ADD: 4,
+    AND: 3,
+    CALLDATALOAD: 2,
+    ...
+}
 ```
 
 [solidity-delcall]:https://docs.soliditylang.org/en/v0.8.14/introduction-to-smart-contracts.html#delegatecall-callcode-and-libraries
 [debug-docs]: /docs/rpc/ns-debug
-[go-tracer-source]: https://github.com/ethereum/go-ethereum/blob/master/eth/tracers/api.go
-[go-time]:https://pkg.go.dev/time#ParseDuration
