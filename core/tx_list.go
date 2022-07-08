@@ -133,7 +133,7 @@ func (m *txSortedMap) filter(filter func(*types.Transaction) bool) types.Transac
 	var removed types.Transactions
 
 	// Short circuit if no transactions are available
-	if m.index.Len() == 0 {
+	if len(m.items) == 0 {
 		return nil
 	}
 
