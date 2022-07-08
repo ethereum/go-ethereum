@@ -76,10 +76,10 @@ type SimulatedBackend struct {
 
 	config *params.ChainConfig
 
-	// CloneVMConfigOn flags whether calls to Call(), PendingCall(), and
-	// EstimateGas() must clone the existing *vm.Config instead of using a fresh
-	// one. Historically the Config was always overridden, so this remains the
-	// default behaviour.
+	// CloneVMConfigOn flags whether calls to CallContract(),
+	// PendingCallContract(), and/or EstimateGas() must clone the existing
+	// *vm.Config instead of using a fresh one. Historically the Config was
+	// always overridden, so this remains the default behaviour.
 	CloneVMConfigOn struct {
 		Call, PendingCall, EstimateGas bool
 	}
@@ -107,7 +107,6 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	backend.events = filters.NewEventSystem(backend.filterSystem, false)
 
 	backend.rollback(blockchain.CurrentBlock())
-
 	return backend
 }
 
