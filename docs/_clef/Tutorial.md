@@ -353,7 +353,7 @@ Clef can be instructed to run the attested rule file simply by passing the path 
 to the `--rules` flag:
 
 ```sh
-clef --keystore go-ethereum/goerli-data/ --chainid 5 --rules rules.js
+clef --keystore go-ethereum/goerli-data/ --configdir go-ethereum/goerli-data/clef --chainid 5 --rules rules.js
 ```
 
 The following logs will be displayed in the terminal:
@@ -376,15 +376,15 @@ INFO [07-01|13:39:49.728] IPC endpoint opened                      url=go-ethere
 ```
 
 Any request that satisfies the ruleset will now be auto-approved by the rule file, for example the following request to 
-sign a transaction made in the Geth Javascript console (note that the password for account `0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3`)
-has been provided to `--setpw` and the recipient and value comply with the rules in `rules.js`:
+sign a transaction made using the Geth Javascript console (note that the password for account `0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3`
+has already been provided to `setpw` and the recipient and value comply with the rules in `rules.js`):
 
 ```js
 var tx = {to: "0xae967917c465db8578ca9024c205720b1a3651a9", from: "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", value: web3.toWei(0.01, "ether")}
 eth.sendTransaction(tx)
 ```
 
-By contrast, the following transactions will be rejected because they do not satisfy the rules in `rules.js`:
+By contrast, the following transactions *do not* satisfy the rules in `rules.js`:
 
 ```js
 // violate maximum transaction value condition
@@ -398,7 +398,8 @@ var tx = {to: "0xae967917c465db8578ca9024c205720b1a3651a9", from: "0xd4c4bb7d688
 eth.sendTransaction(tx)
 ```
 
-These latter two transactions, that do not satisfy the encoded rules in `rules.js`, pass the decision back to the UI for manual approval.
+These latter two transactions, that do not satisfy the encoded rules in `rules.js`, are not automatically approved, but instead pass the 
+decision back to the UI for manual approval by the user.
 
 
 ### Summary of basic usage
@@ -414,26 +415,41 @@ To summarize, the steps required to run Clef with an automated ruleset that requ
 **4)** set account passwords in Clef using `clef --setpw <address>`
  
 **5)** start Clef with rule file enabled using `clef --keystore <path-to-keystore> --chainid <chainID> --rules rules.js`
+
+**6)** make requests directly to Clef using the external API or connect to Geth by passing `--signer=<path to clef.ipc>` at Geth startup
  
  
-## Advanced rules
+## More rules
 
-In order to make more useful rules - like signing transactions - the signer needs access to the passwords needed
-to unlock keys from the keystore. You can inject an unlock password via `clef setpw`.
+Since rules are defined as Javascript code, rulesets of arbitrary complexity can be created and they can
+impose conditions on any part of a transaction, not only the recipient and value.
 
-```text
-$ clef setpw 0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
+Another simple example is implementing a "whitelist" of recipients where transactions that have those
+accounts in the `to` field are automatically signed (for example perhaps transactions between a user's own
+accounts might be whitelisted):
 
-Please enter a password to store for this address:
-Password:
-Repeat password:
-
-Decrypt master seed of clef
-Password:
-INFO [07-01|14:05:56.031] Credential store updated                 key=0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
+```js
+function ApproveTx(r) {
+	if (r.transaction.to.toLowerCase() == "0xd4c4bb7d6889453c6c6ea3e9eab3c4177b4fbcc3") {
+		return "Approve"
+	}
+	if (r.transaction.to.toLowerCase() == "0xae967917c465db8578ca9024c205720b1a3651a9") {
+		return "Reject"
+	}
+	// Otherwise goes to manual processing
+}
 ```
 
-Now let's update the rules to make use of the new credentials:
+In addition to addresses and values, other properties of a request can also be incorporated into a ruleset.
+The example below demonstrates a ruleset for `approve_signData` imposing the following conditions on a 
+transaction's sender and message data.
+
+1. The sender must be `0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3`
+2. The transaction message must include the text `wen-merge`, which is `77656E2D6D65726765` in hex.
+
+If these conditions are satisfied then the transaction is auto-approved (assuming the password for 
+`0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3` has been provided to `setpw`).
+
 
 ```js
 function ApproveListing() {
@@ -442,7 +458,7 @@ function ApproveListing() {
 
 function ApproveSignData(req) {
     if (req.address.toLowerCase() == "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3") {
-        if (req.messages[0].value.indexOf("bazonk") >= 0) {
+        if (req.messages[0].value.indexOf("wen-merge") >= 0) {
             return "Approve"
         }
         return "Reject"
@@ -451,59 +467,84 @@ function ApproveSignData(req) {
 }
 ```
 
-In this example:
+This file should be saved as a `.js` file, hashed and attested in Clef:
 
-- Any requests to sign data with the account `0xd9c9...` will be:
-    - Auto-approved if the message contains `bazonk`,
-    - Auto-rejected if the message does not contain `bazonk`,
-- Any other requests will be passed along for manual confirmation.
+```sh
+sha256sum rules.js
+```
 
-*Note, to make this example work, please use you own accounts. You can create a new account either via Clef or the traditional account CLI tools. If the latter was chosen, make sure both Clef and Geth use the same keystore by specifying `--keystore path/to/your/keystore` when running Clef.*
+which returns:
 
-Attest the new rule file so that Clef will accept loading it:
+```terminal
+84d9e70aa30d0e5ffb3c4b376c9490f428390a196bfdc1d36770ffd2bbe66845  rules.js
+```
 
-```text
-$ sha256sum rules.js
-f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178  rules.js
+then:
 
-$ clef attest f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
+```sh
+clef attest 84d9e70aa30d0e5ffb3c4b376c9490f428390a196bfdc1d36770ffd2bbe66845
+```
+
+which returns:
+
+```terminal
 Decrypt master seed of clef
 Password:
-INFO [07-01|14:11:28.509] Ruleset attestation updated              sha256=f163a1738b649259bb9b369c593fdc4c6b6f86cc87e343c3ba58faee03c2a178
+INFO [07-01|14:11:28.509] Ruleset attestation updated    sha256=84d9e70aa30d0e5ffb3c4b376c9490f428390a196bfdc1d36770ffd2bbe66845
 ```
 
-Restart Clef with the new rules in place:
+Now Clef can be restarted with the new rules in place:
 
+```sh
+clef --keystore go-ethereum/goerli-data/clef --configdir go-ethereum/goerli-data/clef --chainid 5 --rules rules.js
 ```
-$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4 --rules rules.js
 
+```terminal
 INFO [07-01|14:12:41.636] Rule engine configured                   file=rules.js
-INFO [07-01|14:12:41.636] Starting signer                          chainid=4 keystore=$HOME/.ethereum/rinkeby/keystore light-kdf=false advanced=false
+INFO [07-01|14:12:41.636] Starting signer                          chainid=5 keystore=go-ethereum/goerli-data/clef/keystore light-kdf=false advanced=false
 DEBUG[07-01|14:12:41.636] FS scan times                            list=46.722µs set=4.47µs diff=2.157µs
 DEBUG[07-01|14:12:41.637] Ledger support enabled
 DEBUG[07-01|14:12:41.637] Trezor support enabled via HID
 DEBUG[07-01|14:12:41.638] Trezor support enabled via WebUSB
 INFO [07-01|14:12:41.638] Audit logs configured                    file=audit.log
 DEBUG[07-01|14:12:41.638] IPC registered                           namespace=account
-INFO [07-01|14:12:41.638] IPC endpoint opened                      url=$HOME/.clef/clef.ipc
+INFO [07-01|14:12:41.638] IPC endpoint opened                      url=go-ethereum/goerli-data/clef/clef.ipc
 ------- Signer info -------
 * intapi_version : 7.0.0
 * extapi_version : 6.0.0
 * extapi_http : n/a
-* extapi_ipc : $HOME/.clef/clef.ipc
+* extapi_ipc : go-ethereum/goerli-data/clef/clef.ipc
 ```
 
-Then test signing, once with `bazonk` and once without:
+Now a request can be submitted to test that the rules are being applied as expected. Here, Clef is used independently of Geth 
+by making a request via RPC, but the same logic would be imposed if the request was made via a connected Geth node. 
+Some arbitrary text will be included in the message data that includes the term `wen-merge`. 
+The plaintext `clefdemotextthatincludeswen-merge` is `636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765` when 
+represented as a hexadecimal string. This can be passed as data to an `account_signData` request as follows:
 
+```sh
+echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0x636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765"]}' | nc -U ~/go-ethereum.goerli-data/clef/clef.ipc
 ```
-$ echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x202062617a6f6e6b2062617a2067617a0a"]}' | nc -U ~/.clef/clef.ipc
+
+This will be automatically signed, returning a result that looks like the following:
+
+```terminal
 {"jsonrpc":"2.0","id":1,"result":"0x4f93e3457027f6be99b06b3392d0ebc60615ba448bb7544687ef1248dea4f5317f789002df783979c417d969836b6fda3710f5bffb296b4d51c8aaae6e2ac4831c"}
+```
 
-$ echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x2020626f6e6b2062617a2067617a0a"]}' | nc -U ~/.clef/clef.ipc
+Alternatively, a request that does not include the phrase `wen-merge` will not automatically approve. For example, the following request passes the hexadecimal
+string representing the plaintext `clefdemotextwithoutspecialtext`:
+
+```sh
+echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0x636c656664656d6f74657874776974686f75747370656369616c74657874"]}' | nc -U ~/go-ethereum.goerli-data/clef/clef.ipc
+```
+This returns a `Request denied` message as follows:
+
+```terminal
 {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Request denied"}}
 ```
 
-Meanwhile, in the Clef output log you can see:
+Meanwhile, in the output logs in the Clef terminal you can see:
 ```text
 INFO [02-21|14:42:41] Op approved
 INFO [02-21|14:42:56] Op rejected
@@ -519,101 +560,98 @@ t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=request  meta
 t=2019-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=response data=                                     error="Request denied"
 ```
 
-For more details on writing automatic rules, please see the [rules spec](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md).
+More examples, including a ruleset for a rate-limited window, are available on the [Clef Github][rate-limited-window-example]. 
 
 
 ## Under the hood
 
-While doing the operations above, these files have been created:
+The examples on this page have provided step-by-step instructions for verious operations using Clef. However, they have not
+provided much detail as to what is happening under the hood. This section will provide some more details about what Clef
+is actually doing when various actions are invoked.
 
-```text
-$ ls -laR ~/.clef/
+Initializing Clef with a master password and providing an account password to `clef setpw` and attesting a ruleset 
+creates the following files in the directory `~/.clef/` (this path is independent of the paths provided to 
+`--keystore` and `--configdir` on startup):
 
-$HOME/.clef/:
+```terminal
+# displayed using $ ls -laR ~/.clef/
+
+/home/user/.clef/:
 total 24
 drwxr-x--x   3 user user  4096 Jul  1 13:45 .
 drwxr-xr-x 102 user user 12288 Jul  1 13:39 ..
 drwx------   2 user user  4096 Jul  1 13:25 02f90c0603f4f2f60188
 -r--------   1 user user   868 Jun 28 13:55 masterseed.json
 
-$HOME/.clef/02f90c0603f4f2f60188:
+/home/user/.clef/02f90c0603f4f2f60188:
 total 12
 drwx------ 2 user user 4096 Jul  1 13:25 .
 drwxr-x--x 3 user user 4096 Jul  1 13:45 ..
 -rw------- 1 user user  159 Jul  1 13:25 config.json
+-rw------- 1 user user  115 Jul  1 13:35 credentials.json
+```
 
-$ cat ~/.clef/02f90c0603f4f2f60188/config.json
+The file `masterseed.json` includes a json object containing the masterseed which was used to derive
+the vault directory (in this case `02f90c0603f4f2f60188`). The vault is encrypted using a password
+which is also derived from the masterseed. Inside the vault are two subdirectories: 
+
+`credentials.json`
+ 
+`config.json`
+ 
+
+Inside `credentials.json` are the confidential `ksp` data (standing for "keystore pass" - these
+are the account passwords used to unlock the keystore).
+
+The `config.json` file contains encrypted key/value pairs for configuration data. Usually this is only the `sha256` 
+hashes of any attested rulesets. 
+
+Vault locations map uniquely to masterseeds so that multiple instances of Clef can co-exist each with 
+their own attested rules and their own set of keystore passwords. This is useful for, for example, maintaining
+separate setups for Mainnet and testnets.
+
+The contents of each of these json files can be viewed using `cat` and should look something like the following:
+
+For `config.json`:
+
+```sh
+cat ~/.clef/02f90c0603f4f2f60188/config.json
+```
+
+```terminal
 {"ruleset_sha256":{"iv":"SWWEtnl+R+I+wfG7","c":"I3fjmwmamxVcfGax7D0MdUOL29/rBWcs73WBILmYK0o1CrX7wSMc3y37KsmtlZUAjp0oItYq01Ow8VGUOzilG91tDHInB5YHNtm/YkufEbo="}}
 ```
 
-In `$HOME/.clef`, the `masterseed.json` file was created, containing the master seed. This seed was then used to derive a few other things:
+and for `credentials.json`:
 
-- **Vault location**: in this case `02f90c0603f4f2f60188`.
-   - If you use a different master seed, a different vault location will be used that does not conflict with each other (e.g. `clef --signersecret /path/to/file`). This allows you to run multiple instances of Clef, each with its own rules (e.g. mainnet + testnet).
-- **`config.json`**: the encrypted key/value storage for configuration data, currently only containing the key `ruleset_sha256`, the attested hash of the automatic rules to use.
+```sh
+cat ~/.clef/02f90c0603f4f2f60188/config.json
+```
 
-
-
-
+```terminal
+{"0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3": {"iv": "6SC062CfaUW8uSqH","c":"C+S5kaJyrarrxrAESs4EmPjL5zmg5tRh0Q=="}}
+```
 
 ## Geth integration
 
-Of course, as awesome as Clef is, it's not feasible to interact with it via JSON RPC by hand. Long term, we're hoping to convince the general Ethereum community to support Clef as a general signer (it's only 3-5 methods), thus allowing your favorite DApp, Metamask, MyCrypto, etc to request signatures directly.
+This tutorial has bounced back and forth between demonstrating Clef as a standalone tool by making 'manual` JSON RPC requests from the
+terminal and integrating it as a backend singer for Geth. Using Clef for account management is considered best practise for Geth users
+because of the additional security benefits it offers over and above what it offered by Geth's built-in accounts module. Clef is
+far more flexible and composable than Geth's built-in account management tool and can interface directly with hardware wallets, while Apps
+and wallets can request signatures directly from Clef.
 
-Until then however, we're trying to pave the way via Geth. Geth v1.9.0 has built in support via `--signer <API endpoint>` for using a local or remote Clef instance as an account backend!
+Ultimately, the goal is to deprecate Geth's account management tools completely and replace them with Clef. Until then, we simply 
+encourage users to choose to use Clef as a backend signer for Geth. Tutorials demonstrating Clef/Geth integrations are provided
+on this page and also our [Getting started tutorial](/docs/_getting-started/index.md).
 
-We can try this by running Clef with our previous rules on Rinkeby (for now it's a good idea to allow auto-listing accounts, since Geth likes to retrieve them once in a while).
 
-```text
-$ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4 --rules rules.js
-```
+## Summary
 
-In a different window we can start Geth, list our accounts, even list our wallets to see where the accounts originate from:
+This page includes step-by-step instructions for basic and intermediate uses of Clef, including using it as a standalone app and a backend
+signer for Geth. Further information is available on our other Clef pages, including [Introduction](/docs/clef/introduction), 
+[Setup](/docs/clef/setup), [Rules](/docs/clef/rules), [Communication Datatypes](/docs/clef/datatypes)
+and [Communication APIs](/docs/clef/apis). Also see the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) 
+for further reading.
 
-```text
-$ geth --rinkeby --signer=~/.clef/clef.ipc console
 
-> eth.accounts
-["0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3", "0x086278a6c067775f71d6b2bb1856db6e28c30418"]
-
-> personal.listWallets
-[{
-    accounts: [{
-        address: "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3",
-        url: "extapi://$HOME/.clef/clef.ipc"
-    }, {
-        address: "0x086278a6c067775f71d6b2bb1856db6e28c30418",
-        url: "extapi://$HOME/.clef/clef.ipc"
-    }],
-    status: "ok [version=6.0.0]",
-    url: "extapi://$HOME/.clef/clef.ipc"
-}]
-
-> eth.sendTransaction({from: eth.accounts[0], to: eth.accounts[0]})
-```
-
-Lastly, when we requested a transaction to be sent, Clef prompted us in the original window to approve it:
-
-```text
---------- Transaction request-------------
-to:       0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3
-from:     0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3 [chksum ok]
-value:    0 wei
-gas:      0x5208 (21000)
-gasprice: 1000000000 wei
-nonce:    0x2366 (9062)
-
-Request context:
-	NA -> NA -> NA
-
-Additional HTTP header data, provided by the external caller:
-	User-Agent:
-	Origin:
--------------------------------------------
-Approve? [y/N]:
-> y
-```
-
-:boom:
-
-*Note, if you enable the external signer backend in Geth, all other account management is disabled. This is because long term we want to remove account management from Geth.*
+[rate-limited-window-example]:https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md#example-1-ruleset-for-a-rate-limited-window
