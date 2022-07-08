@@ -715,11 +715,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		if n.config.RedisEndpoint == "" {
-			db = rawdb.NewMemoryDatabase()
-		} else {
-			db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, freezer, namespace, readonly)
-		}
+		db = rawdb.NewMemoryDatabase()
 	} else {
 		root := n.ResolvePath(name)
 		switch {
@@ -728,7 +724,11 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 		case !filepath.IsAbs(freezer):
 			freezer = n.ResolvePath(freezer)
 		}
-		db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		if n.config.RedisEndpoint != "" {
+			db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, freezer, namespace, readonly)
+		} else {
+			db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
+		}
 	}
 
 	if err == nil {
