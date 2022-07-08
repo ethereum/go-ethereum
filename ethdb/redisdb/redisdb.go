@@ -16,14 +16,11 @@ func (db *Database) key(key []byte) string {
 }
 
 func (db *Database) Has(key []byte) (bool, error) {
-	err := db.client.Get(db.key(key)).Err()
-	if err == nil {
-		return true, nil
+	val, err := db.client.Exists(db.key(key)).Result()
+	if err != nil {
+		return false, err
 	}
-	if err == redis.Nil {
-		return false, nil
-	}
-	return false, err
+	return val > 0, nil
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {

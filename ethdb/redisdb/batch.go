@@ -37,11 +37,18 @@ func (b *batch) ValueSize() int {
 
 // Write flushes any accumulated data to the memory database.
 func (b *batch) Write() error {
-	if err := b.db.client.Del(b.deletes...).Err(); err != nil {
-		return err
+	if len(b.deletes) > 0 {
+		err := b.db.client.Del(b.deletes...).Err()
+		if err != nil {
+			return err
+		}
 	}
-	if err := b.db.client.MSet(b.writes).Err(); err != nil {
-		return err
+
+	if len(b.writes) > 0 {
+		err := b.db.client.MSet(b.writes).Err()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
