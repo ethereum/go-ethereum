@@ -132,11 +132,6 @@ func (m *txSortedMap) reheap() {
 func (m *txSortedMap) filter(filter func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
 
-	// Short circuit if no transactions are available
-	if len(m.items) == 0 {
-		return nil
-	}
-
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
 		if filter(tx) {
