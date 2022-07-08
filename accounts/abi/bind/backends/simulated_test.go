@@ -113,11 +113,11 @@ const deployedCode = `60806040526004361061003b576000357c010000000000000000000000
 // expected return value contains "hello world"
 var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-func simTestBackend(testAddr common.Address, opts ...Option) *SimulatedBackend {
+func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
-		}, 10000000, opts...,
+		}, 10000000,
 	)
 }
 
@@ -1063,44 +1063,44 @@ func TestVMConfigCloning(t *testing.T) {
 	// by CallContract(), PendingCallContract(), and EstimateGas().
 	tests := []struct {
 		name                                                      string
-		opts                                                      []Option
+		before                                                    func(*SimulatedBackend)
 		wantCallClone, wantPendingCallClone, wantEstimageGasClone bool
 	}{
 		{
 			name:                 "default behaviour",
+			before:               func(*SimulatedBackend) {},
 			wantCallClone:        false,
 			wantPendingCallClone: false,
 			wantEstimageGasClone: false,
 		},
 		{
-			name:          "only clone on ContractCall()",
-			opts:          []Option{CloneVMConfigOnCall()},
+			name: "only clone on ContractCall()",
+			before: func(s *SimulatedBackend) {
+				s.CloneVMConfigOn.Call = true
+			},
 			wantCallClone: true,
 		},
 		{
-			name:                 "only clone on PendingContractCall()",
-			opts:                 []Option{CloneVMConfigOnPendingCall()},
-			wantPendingCallClone: true,
-		},
-		{
-			name:                 "only clone on EstimateGas()",
-			opts:                 []Option{CloneVMConfigOnEstimateGas()},
-			wantEstimageGasClone: true,
-		},
-		{
-			name: "always clone, based on individual options",
-			opts: []Option{
-				CloneVMConfigOnCall(),
-				CloneVMConfigOnPendingCall(),
-				CloneVMConfigOnEstimateGas(),
+			name: "only clone on PendingContractCall()",
+			before: func(s *SimulatedBackend) {
+				s.CloneVMConfigOn.PendingCall = true
 			},
-			wantCallClone:        true,
 			wantPendingCallClone: true,
+		},
+		{
+			name: "only clone on EstimateGas()",
+			before: func(s *SimulatedBackend) {
+				s.CloneVMConfigOn.EstimateGas = true
+			},
 			wantEstimageGasClone: true,
 		},
 		{
-			name:                 "always clone, based on AlwaysCloneVMConfig() singular option",
-			opts:                 []Option{AlwaysCloneVMConfig()},
+			name: "always clone",
+			before: func(s *SimulatedBackend) {
+				s.CloneVMConfigOn.Call = true
+				s.CloneVMConfigOn.PendingCall = true
+				s.CloneVMConfigOn.EstimateGas = true
+			},
 			wantCallClone:        true,
 			wantPendingCallClone: true,
 			wantEstimageGasClone: true,
@@ -1110,8 +1110,9 @@ func TestVMConfigCloning(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-			sim := simTestBackend(testAddr, tt.opts...)
+			sim := simTestBackend(testAddr)
 			defer sim.Close()
+			tt.before(sim)
 			bgCtx := context.Background()
 
 			// To test behaviour of vm.Config cloning options, we inspect the

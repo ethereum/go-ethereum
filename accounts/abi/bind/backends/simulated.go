@@ -76,25 +76,19 @@ type SimulatedBackend struct {
 
 	config *params.ChainConfig
 
-	// cloneVMConfigOn flags when calls to SimulatedBackend.callContract() must
-	// clone the existing vm.Config instead of using a fresh one. Historically
-	// the Config was always overridden, so this remains the default behaviour.
-	cloneVMConfigOn struct {
-		call, pendingCall, estimateGas bool
+	// CloneVMConfigOn flags whether calls to Call(), PendingCall(), and
+	// EstimateGas() must clone the existing *vm.Config instead of using a fresh
+	// one. Historically the Config was always overridden, so this remains the
+	// default behaviour.
+	CloneVMConfigOn struct {
+		Call, PendingCall, EstimateGas bool
 	}
-}
-
-// An Option configures a SimulatedBackend upon construction.
-type Option interface {
-	// isOption is not exported to block outside packages from implementing this
-	// interface. See options.go for implementations.
-	isOption()
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64, opts ...Option) *SimulatedBackend {
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	genesis := core.Genesis{
 		Config:   params.AllEthashProtocolChanges,
 		GasLimit: gasLimit,
@@ -114,29 +108,14 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 
 	backend.rollback(blockchain.CurrentBlock())
 
-	for _, o := range opts {
-		switch o.(type) {
-		case cloneOnCall:
-			backend.cloneVMConfigOn.call = true
-		case cloneOnPendingCall:
-			backend.cloneVMConfigOn.pendingCall = true
-		case cloneOnEstimateGas:
-			backend.cloneVMConfigOn.estimateGas = true
-		case alwaysCloneVMConfig:
-			backend.cloneVMConfigOn.call = true
-			backend.cloneVMConfigOn.pendingCall = true
-			backend.cloneVMConfigOn.estimateGas = true
-		}
-	}
-
 	return backend
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, opts ...Option) *SimulatedBackend {
-	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit, opts...)
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
 
 // Close terminates the underlying blockchain's update loop.
@@ -471,7 +450,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB, b.cloneVMConfigOn.call)
+	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB, b.CloneVMConfigOn.Call)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +467,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.cloneVMConfigOn.pendingCall)
+	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.CloneVMConfigOn.PendingCall)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +561,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		call.Gas = gas
 
 		snapshot := b.pendingState.Snapshot()
-		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.cloneVMConfigOn.estimateGas)
+		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.CloneVMConfigOn.EstimateGas)
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil {
