@@ -69,9 +69,9 @@ Although The Merge is a profound change to Ethereum's underlying achitecture, th
 users interact with Ethereum. At The Merge responsibility for consensus logic and block propagation are handed over to 
 the consensus layer, but all of Geth’s other functionality remains intact. This means transactions, contract deployments 
 and data queries can still be handled by Geth using the same methods as before. This includes interacting with Geth using
-the JSON_RPC_API directly using tools such as [curl](https//curl.se), third party libraries such as 
-[Web3.js][web3js-link] or [Web3.py][web3py-link] in development frameworks (e.g. [Truffle][truffle-link], [Hardhat][hardhat-link], 
-[Brownie][brownie-link], [Foundry][foundry-link] or using Web3.js in Geth's built-in Javascript console. 
+the JSON_RPC_API directly using tools such as [curl](https//curl.se), third party libraries such as
+[Web3.js][web3js-link] or [Web3.py][web3py-link] in development frameworks, e.g. [Truffle][truffle-link], [Hardhat][hardhat-link],
+[Brownie][brownie-link], [Foundry][foundry-link] or using Web3.js in Geth's built-in Javascript console.
 Much more information about the Javascript console is available on the [Javascript Console page](/docs/interface/javascript-console).
 
 ## Summary

@@ -1,6 +1,6 @@
 ---
 title: Connecting to Consensus Clients
-sort_key: H
+sort_key: A3
 ---
 
 Geth is an [execution client][ex-client-link]. Historically, an execution client alone has been enough to run a full Ethereum node.
@@ -14,7 +14,7 @@ so that The Merge can happen smoothly. There are five consensus clients availabl
 
 This page will outline how Geth can be set up with a consensus client in advance of The Merge (or to interact with an alread-merged testnet).
 
-{% include note.html content=" It is recommended to practise connecting a consensus client to Geth on a testnet such as Kiln or Ropsten but to
+{% include note.html content=" It is recommended to practise connecting a consensus client to Geth on a testnet such as Sepolia or Goerli but to
 wait until merge-ready releases are available before doing it on Ethereum Mainnet." %}
 
 ## Configuring Geth
@@ -46,7 +46,7 @@ geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --a
 
 ## Consensus clients
 
-There are currently five consensus clients that can be run alongside Geth. These are:
+There are currently four consensus clients that can be run alongside Geth. These are:
  
 [Lighthouse](https://lighthouse-book.sigmaprime.io/): written in Rust
  
@@ -56,9 +56,7 @@ There are currently five consensus clients that can be run alongside Geth. These
  
 [Teku](https://pegasys.tech/teku): written in Java
  
-It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. 
-
-Instructions for installing each client are provided in the documentation linked in the list above.
+It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. Instructions for installing each client are provided in the documentation linked in the list above.
 
 The consensus client must be started with the right port configuration to establish an RPC connection 
 to the local Geth instance. In the example above, `localhost:8551` was authorized 
@@ -100,7 +98,7 @@ geth attach datadir/geth.ipc
 
 Ethereum Mainnet has not yet undergone The Merge, but some public testnets have. This means that running Geth alone is no longer
 enough to interact with merged testnets. This includes two testnets that were purpose built to test The Merge (Kiln, Kintsugi) and 
-the long-standing public PoW chain, Ropsten. If Geth is connected to these merged networks alone it will simply stall when it syncs as far
+the long-standing public PoW chain, Ropsten, as well as the relatively new testnet Sepolia. If Geth is connected to these merged networks alone it will simply stall when it syncs as far
 as the merge block, awaiting information from a consensus client. Therefore, any activity on these testnets requires Geth to be 
 connected to a consensus client. There are many instructional articles that exlain how to connect to these testnets using Geth in
 combination with various consensus clients, for example:
@@ -114,7 +112,7 @@ combination with various consensus clients, for example:
 [Connecting to Ropsten using Lighthouse](https://github.com/remyroy/ethstaker/blob/main/merge-ropsten.md)
 
 
-The Merge testing will soon progress to merging the Sepolia and Goerli testnets. Once this has happened Geth will require a connection
+The Merge testing will soon progress to merging the Goerli testnet. Once this has happened Geth will require a connection
 to a consensus client to work on those networks too.
 
 
