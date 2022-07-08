@@ -86,6 +86,11 @@ func (m *txSortedMap) Put(tx *types.Transaction) {
 func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 	var removed types.Transactions
 
+	// Short circuit if no transactions are available
+	if m.index.Len() == 0 {
+		return nil
+	}
+
 	// Pop off heap items until the threshold is reached
 	for m.index.Len() > 0 && (*m.index)[0] < threshold {
 		nonce := heap.Pop(m.index).(uint64)
@@ -126,6 +131,11 @@ func (m *txSortedMap) reheap() {
 // should only be used if followed immediately by a call to Filter or reheap()
 func (m *txSortedMap) filter(filter func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
+
+	// Short circuit if no transactions are available
+	if m.index.Len() == 0 {
+		return nil
+	}
 
 	// Collect all the transactions to filter out
 	for nonce, tx := range m.items {
