@@ -514,7 +514,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if s.trie.IsVerkle() {
 		if len(obj.code) > 0 {
 			cs := make([]byte, 32)
-			binary.BigEndian.PutUint64(cs, uint64(len(obj.code)))
+			binary.LittleEndian.PutUint64(cs, uint64(len(obj.code)))
 			if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
 				s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
 			}
