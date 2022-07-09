@@ -45,7 +45,7 @@ type returnMsgTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
-// newNoopTracer returns a new noop tracer.
+// newReturnMsgTracer returns a new noop tracer.
 func newReturnMsgTracer(_ *tracers.Context) tracers.Tracer {
 	return &returnMsgTracer{}
 }
