@@ -717,7 +717,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		}
 		// Run the actual import and log any issues
 		if err := f.insertBlock(block); err != nil {
-			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
+			log.Warn("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
 

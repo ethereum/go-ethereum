@@ -404,12 +404,11 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 			resultSigners[signer] = calcReward
 		}
 	}
-	jsonSigners, err := json.Marshal(signers)
-	if err != nil {
-		log.Error("Fail to parse json signers", "error", err)
-		return nil, err
+
+	log.Info("Signers data", "totalSigner", totalSigner, "totalReward", chainReward)
+	for addr, signer := range signers {
+		log.Info("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
 	}
-	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 
 	return resultSigners, nil
 }

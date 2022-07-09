@@ -477,7 +477,7 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 func (x *XDPoS_v2) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
 	err := x.verifyHeader(chain, header, nil, fullVerify)
 	if err != nil {
-		log.Warn("[VerifyHeader] Fail to verify header", "fullVerify", fullVerify, "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
+		log.Debug("[VerifyHeader] Fail to verify header", "fullVerify", fullVerify, "blockNum", header.Number, "blockHash", header.Hash(), "error", err)
 	}
 	return err
 }
@@ -558,7 +558,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 			4. Broadcast(Not part of consensus)
 	*/
 	if vote.ProposedBlockInfo.Round < x.currentRound {
-		log.Warn("[VerifyVoteMessage] Disqualified vote message as the proposed round does not match currentRound", "vote.ProposedBlockInfo.Round", vote.ProposedBlockInfo.Round, "currentRound", x.currentRound)
+		log.Debug("[VerifyVoteMessage] Disqualified vote message as the proposed round does not match currentRound", "vote.ProposedBlockInfo.Round", vote.ProposedBlockInfo.Round, "currentRound", x.currentRound)
 		return false, nil
 	}
 
@@ -869,7 +869,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		return false, err
 	}
 	if *proposedBlockRound-1 != round {
-		log.Debug("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+		log.Info("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 
@@ -881,25 +881,25 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		return false, err
 	}
 	if *proposedBlockRound-2 != round {
-		log.Debug("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+		log.Info("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
-	// Commit the grandParent block
-	if x.highestCommitBlock == nil || (x.highestCommitBlock.Round < round && x.highestCommitBlock.Number.Cmp(grandParentBlock.Number) == -1) {
-		x.highestCommitBlock = &types.BlockInfo{
-			Number: grandParentBlock.Number,
-			Hash:   grandParentBlock.Hash(),
-			Round:  round,
-		}
-		log.Debug("Successfully committed block", "Committed block Hash", x.highestCommitBlock.Hash, "Committed round", x.highestCommitBlock.Round)
-		// Perform forensics related operation
-		var headerQcToBeCommitted []types.Header
-		headerQcToBeCommitted = append(headerQcToBeCommitted, *parentBlock, *proposedBlockHeader)
-		go x.ForensicsProcessor.ForensicsMonitoring(blockChainReader, x, headerQcToBeCommitted, *incomingQc)
-		return true, nil
+
+	if x.highestCommitBlock != nil && (x.highestCommitBlock.Round >= round || x.highestCommitBlock.Number.Cmp(grandParentBlock.Number) == 1) {
+		return false, nil
 	}
-	// Everything else, fail to commit
-	return false, nil
+
+	// Process Commit
+	x.highestCommitBlock = &types.BlockInfo{
+		Number: grandParentBlock.Number,
+		Hash:   grandParentBlock.Hash(),
+		Round:  round,
+	}
+	log.Info("Successfully committed block", "num", x.highestCommitBlock.Number, "round", x.highestCommitBlock.Round, "hash", x.highestCommitBlock.Hash)
+	// Perform forensics related operation
+	headerQcToBeCommitted := []types.Header{*parentBlock, *proposedBlockHeader}
+	go x.ForensicsProcessor.ForensicsMonitoring(blockChainReader, x, headerQcToBeCommitted, *incomingQc)
+	return true, nil
 }
 
 // Get master nodes over extra data of epoch switch block.
