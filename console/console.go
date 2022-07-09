@@ -46,6 +46,18 @@ var (
 	exit           = regexp.MustCompile(`^\s*exit\s*;*\s*$`)
 )
 
+var apisAll = map[string]string{
+	"admin":    "1.0",
+	"clique":   "1.0",
+	"debug":    "1.0",
+	"eth":      "1.0",
+	"les":      "1.0",
+	"miner":    "1.0",
+	"personal": "1.0",
+	"txpool":   "1.0",
+	"web3":     "1.0",
+}
+
 // HistoryFile is the file within the data directory to store input scrollback.
 const HistoryFile = "history"
 
@@ -203,7 +215,10 @@ func (c *Console) initExtensions() error {
 	// Compute aliases from server-provided modules.
 	apis, err := c.client.SupportedModules()
 	if err != nil {
-		return fmt.Errorf("api modules: %v", err)
+		if !isMethodNotFoundErr(err) {
+			return fmt.Errorf("api modules: %v", err)
+		}
+		apis = apisAll
 	}
 	aliases := map[string]struct{}{"eth": {}, "personal": {}}
 	for api := range apis {
@@ -337,6 +352,8 @@ func (c *Console) Welcome() {
 		}
 		sort.Strings(modules)
 		message += " modules: " + strings.Join(modules, " ") + "\n"
+	} else if isMethodNotFoundErr(err) {
+		message += ` use all modules because does not supported "rpc_module" method`
 	}
 	message += "\nTo exit, press ctrl-d or type exit"
 	fmt.Fprintln(c.printer, message)
@@ -557,4 +574,12 @@ func (c *Console) writeHistory() error {
 		return err
 	}
 	return os.Chmod(c.histPath, 0600) // Force 0600, even if it was different previously
+}
+
+func isMethodNotFoundErr(err error) bool {
+	rpcErr, ok := err.(rpc.Error)
+	if !ok {
+		return false
+	}
+	return rpcErr.ErrorCode() == -32601
 }

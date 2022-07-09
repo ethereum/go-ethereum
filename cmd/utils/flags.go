@@ -773,6 +773,11 @@ var (
 		Usage:    "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
 		Category: flags.APICategory,
 	}
+	HeaderFlag = &cli.StringSliceFlag{
+		Name:     "header",
+		Usage:    "Set an HTTP header. <header:value>",
+		Category: flags.APICategory,
+	}
 
 	// Network Settings
 	MaxPeersFlag = &cli.IntFlag{

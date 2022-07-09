@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag}
+	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag, utils.HeaderFlag}
 
 	consoleCommand = &cli.Command{
 		Action: localConsole,
@@ -114,17 +114,13 @@ func localConsole(ctx *cli.Context) error {
 // remoteConsole will connect to a remote geth instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	if ctx.Args().Len() > 1 {
-		utils.Fatalf("invalid command-line: too many arguments")
-	}
-
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		cfg := defaultNodeConfig()
 		utils.SetDataDir(ctx, &cfg)
 		endpoint = cfg.IPCEndpoint()
 	}
-	client, err := dialRPC(endpoint)
+	client, err := dialRPC(ctx, endpoint)
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}
@@ -167,7 +163,7 @@ geth --exec "%s" console`, b.String())
 // dialRPC returns a RPC client which connects to the given endpoint.
 // The check for empty endpoint implements the defaulting logic
 // for "geth attach" with no argument.
-func dialRPC(endpoint string) (*rpc.Client, error) {
+func dialRPC(ctx *cli.Context, endpoint string) (*rpc.Client, error) {
 	if endpoint == "" {
 		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
 	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
@@ -175,5 +171,19 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	c, err := rpc.Dial(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	if ctx.IsSet(utils.HeaderFlag.Name) {
+		for _, keyValues := range ctx.StringSlice(utils.HeaderFlag.Name) {
+			keyValue := strings.Split(keyValues, ":")
+			if len(keyValue) != 2 {
+				return nil, fmt.Errorf("invalid header value: %s", keyValues)
+			}
+			k, v := keyValue[0], keyValue[1]
+			c.SetHeader(k, v)
+		}
+	}
+	return c, nil
 }
