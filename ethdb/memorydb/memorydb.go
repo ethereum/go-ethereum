@@ -136,7 +136,8 @@ func (db *Database) NewBatch() ethdb.Batch {
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
 func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
 	return &batch{
-		db: db,
+		db:     db,
+		writes: make([]keyvalue, 0, size),
 	}
 }
 
