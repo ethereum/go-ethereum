@@ -39,8 +39,8 @@ type proxy struct {
 
 // newNoopTracer returns a function that itself returns a proxy instance.
 func newProxy(ctor ctorFn) ctorFn {
-	p := new(proxy)
 	return func(ctx *tracers.Context) tracers.Tracer {
+		p := new(proxy)
 		p.tracer = ctor(ctx)
 		return p
 	}
