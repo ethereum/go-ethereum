@@ -62,7 +62,6 @@ It expects the genesis file as argument.`,
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
 		Flags:     append([]cli.Flag{utils.DataDirFlag}, utils.NetworkFlags...),
-		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The dumpgenesis command prints the genesis configuration of the network preset
 if one is set.  Otherwise it prints the genesis from the datadir.`,

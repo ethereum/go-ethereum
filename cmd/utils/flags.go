@@ -988,9 +988,7 @@ var (
 		KilnFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{
-		MainnetFlag,
-	}, TestnetFlags...)
+	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
 
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
@@ -2141,13 +2139,11 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 }
 
 func IsNetworkPreset(ctx *cli.Context) bool {
-	for _, flag := range TestnetFlags {
-		if ctx.Bool(flag.String()) {
+	for _, flag := range NetworkFlags {
+		bFlag, _ := flag.(*cli.BoolFlag)
+		if ctx.IsSet(bFlag.Name) {
 			return true
 		}
-	}
-	if ctx.Bool(MainnetFlag.Name) {
-		return true
 	}
 	return false
 }
