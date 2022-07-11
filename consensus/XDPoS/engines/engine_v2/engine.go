@@ -130,11 +130,17 @@ func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 	return sigHash(header)
 }
 
+// Initial V2 related parameters
 func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) error {
-	log.Info("[Initial] initial v2 related parameters")
+	return x.initial(chain, header)
+}
+
+func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) error {
+	log.Info("[initial] initial v2 related parameters")
 
 	if x.highestQuorumCert.ProposedBlockInfo.Hash != (common.Hash{}) { // already initialized
-		log.Info("[Initial] Already initialized", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash)
+		log.Info("[initial] Already initialized", "x.highestQuorumCert.ProposedBlockInfo.Hash", x.highestQuorumCert.ProposedBlockInfo.Hash)
+		x.isInitilised = true
 		return nil
 	}
 
@@ -142,7 +148,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	var err error
 
 	if header.Number.Int64() == x.config.V2.SwitchBlock.Int64() {
-		log.Info("[Initial] highest QC for consensus v2 first block")
+		log.Info("[initial] highest QC for consensus v2 first block")
 		blockInfo := &types.BlockInfo{
 			Hash:   header.Hash(),
 			Round:  types.Round(0),
@@ -159,7 +165,7 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 		x.highestQuorumCert = quorumCert
 
 	} else {
-		log.Info("[Initial] highest QC from current header")
+		log.Info("[initial] highest QC from current header")
 		quorumCert, _, _, err = x.getExtraFields(header)
 		if err != nil {
 			return err
@@ -179,23 +185,23 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 	if snap == nil {
 		checkpointHeader := chain.GetHeaderByNumber(x.config.V2.SwitchBlock.Uint64())
 
-		log.Info("[Initial] init first snapshot")
+		log.Info("[initial] init first snapshot")
 		_, _, masternodes, err := x.getExtraFields(checkpointHeader)
 		if err != nil {
-			log.Error("[Initial] Error while get masternodes", "error", err)
+			log.Error("[initial] Error while get masternodes", "error", err)
 			return err
 		}
 		snap := newSnapshot(lastGapNum, lastGapHeader.Hash(), masternodes)
 		x.snapshots.Add(snap.Hash, snap)
 		err = storeSnapshot(snap, x.db)
 		if err != nil {
-			log.Error("[Initial] Error while store snapshot", "error", err)
+			log.Error("[initial] Error while store snapshot", "error", err)
 			return err
 		}
 	}
 
 	// Initial timeout
-	log.Info("[Initial] miner wait period", "period", x.config.V2.WaitPeriod)
+	log.Info("[initial] miner wait period", "period", x.config.V2.WaitPeriod)
 	// avoid deadlock
 	go func() {
 		x.waitPeriodCh <- x.config.V2.WaitPeriod
@@ -203,8 +209,9 @@ func (x *XDPoS_v2) Initial(chain consensus.ChainReader, header *types.Header) er
 
 	// Kick-off the countdown timer
 	x.timeoutWorker.Reset(chain)
+	x.isInitilised = true
 
-	log.Info("[Initial] finish initialisation")
+	log.Info("[initial] finish initialisation")
 
 	return nil
 }
@@ -215,12 +222,11 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	defer x.lock.RUnlock()
 
 	if !x.isInitilised {
-		err := x.Initial(chain, parent)
+		err := x.initial(chain, parent)
 		if err != nil {
 			log.Error("[YourTurn] Error while initialising last v2 variables", "ParentBlockHash", parent.Hash(), "Error", err)
 			return false, err
 		}
-		x.isInitilised = true
 	}
 
 	waitedTime := time.Now().Unix() - parent.Time.Int64()

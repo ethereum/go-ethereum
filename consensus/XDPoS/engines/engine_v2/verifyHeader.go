@@ -19,6 +19,13 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if x.config.V2.SkipV2Validation {
 		return nil
 	}
+
+	if !x.isInitilised {
+		if err := x.initial(chain, header); err != nil {
+			return err
+		}
+	}
+
 	_, check := x.verifiedHeaders.Get(header.Hash())
 	if check {
 		return nil
