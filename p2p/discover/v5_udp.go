@@ -347,7 +347,7 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	}
 }
 
-// requestENR requests n's record.
+// RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	nodes, err := t.findnode(n, []uint{0})
 	if err != nil {
