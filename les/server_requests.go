@@ -38,6 +38,7 @@ type serverBackend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	GetHelperTrie(typ uint, index uint64) *trie.Trie
+	RecentState() int
 }
 
 // Decoder is implemented by the messages passed to the handler functions
@@ -396,7 +397,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				// Refuse to search stale state data in the database since looking for
 				// a non-exist key is kind of expensive.
 				local := bc.CurrentHeader().Number.Uint64()
-				if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
+				if !backend.ArchiveMode() && header.Number.Uint64()+uint64(backend.RecentState()) <= local {
 					p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
 					p.bumpInvalid()
 					continue

@@ -325,6 +325,12 @@ var (
 		Usage:    "Enables serving light clients before syncing",
 		Category: flags.LightCategory,
 	}
+	LightRecentStateFlag = &cli.IntFlag{
+		Name:     "light.recentstate",
+		Usage:    "Number of recent block states that should be advertised as available",
+		Value:    ethconfig.Defaults.LightRecentState,
+		Category: flags.LightCategory,
+	}
 
 	// Ethash settings
 	EthashCacheDirFlag = &flags.DirectoryFlag{
@@ -1286,6 +1292,12 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(LightNoSyncServeFlag.Name) {
 		cfg.LightNoSyncServe = ctx.Bool(LightNoSyncServeFlag.Name)
+	}
+	if ctx.IsSet(LightRecentStateFlag.Name) {
+		cfg.LightRecentState = ctx.Int(LightRecentStateFlag.Name)
+		if cfg.LightRecentState <= les.BlockSafetyMargin {
+			log.Error("LES recent state value is too small", "have", cfg.LightRecentState, "safetyMargin", les.BlockSafetyMargin)
+		}
 	}
 }
 

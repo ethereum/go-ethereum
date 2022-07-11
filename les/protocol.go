@@ -51,7 +51,7 @@ var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 24}
 const (
 	NetworkId          = 1
 	ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
-	blockSafetyMargin  = 4                // safety margin applied to block ranges specified relative to head block
+	BlockSafetyMargin  = 4                // safety margin applied to block ranges specified relative to head block
 
 	txIndexUnlimited    = 0 // this value in the "recentTxLookup" handshake field means the entire tx index history is served
 	txIndexDisabled     = 1 // this value means tx index is not served at all

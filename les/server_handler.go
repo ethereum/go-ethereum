@@ -357,6 +357,11 @@ func (h *serverHandler) AddTxsSync() bool {
 	return h.addTxsSync
 }
 
+// RecentState implements serverBackend
+func (h *serverHandler) RecentState() int {
+	return h.server.recentState
+}
+
 // getAccount retrieves an account from the state based on root.
 func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccount, error) {
 	trie, err := trie.New(common.Hash{}, root, triedb)

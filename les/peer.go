@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -551,7 +550,7 @@ func (p *serverPeer) HasBlock(hash common.Hash, number uint64, hasState bool) bo
 		since = p.chainSince
 		recent = p.chainRecent
 	}
-	return head >= number && number >= since && (recent == 0 || number+recent+4 > head)
+	return head >= number && number >= since && (recent == 0 || number+recent+BlockSafetyMargin > head)
 }
 
 // updateFlowControl updates the flow control parameters belonging to the server
@@ -1000,10 +999,10 @@ func (p *clientPeer) sendLastAnnounce() {
 func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter, server *LesServer) error {
 	recentTx := server.handler.blockchain.TxLookupLimit()
 	if recentTx != txIndexUnlimited {
-		if recentTx < blockSafetyMargin {
+		if recentTx < BlockSafetyMargin {
 			recentTx = txIndexDisabled
 		} else {
-			recentTx -= blockSafetyMargin - txIndexRecentOffset
+			recentTx -= BlockSafetyMargin - txIndexRecentOffset
 		}
 	}
 	if server.config.UltraLightOnlyAnnounce {
@@ -1011,6 +1010,9 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 	}
 	if recentTx != txIndexUnlimited && p.version < lpv4 {
 		return errors.New("Cannot serve old clients without a complete tx index")
+	}
+	if server.recentState <= BlockSafetyMargin {
+		return errors.New("configured recent state is lower than block safety margin")
 	}
 	// Note: clientPeer.headInfo should contain the last head announced to the client by us.
 	// The values announced in the handshake are dummy values for compatibility reasons and should be ignored.
@@ -1024,7 +1026,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
-			stateRecent := uint64(core.TriesInMemory - blockSafetyMargin)
+			stateRecent := uint64(server.recentState) - BlockSafetyMargin
 			if server.archiveMode {
 				stateRecent = 0
 			}

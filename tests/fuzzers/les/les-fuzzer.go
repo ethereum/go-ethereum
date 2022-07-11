@@ -252,6 +252,10 @@ func (f *fuzzer) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	return nil
 }
 
+func (f *fuzzer) RecentState() int {
+	return f.randomInt(1024)
+}
+
 type dummyMsg struct {
 	data []byte
 }

@@ -56,6 +56,7 @@ type LesServer struct {
 	lesCommons
 
 	archiveMode bool // Flag whether the ethereum node runs in archive mode.
+	recentState int
 	handler     *serverHandler
 	peers       *clientPeerSet
 	serverset   *serverSet
@@ -101,6 +102,7 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 			closeCh:          make(chan struct{}),
 		},
 		archiveMode:  e.ArchiveMode(),
+		recentState:  config.LightRecentState,
 		peers:        newClientPeerSet(),
 		serverset:    newServerSet(),
 		vfluxServer:  vfs.NewServer(time.Millisecond * 10),
