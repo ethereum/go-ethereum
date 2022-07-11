@@ -8,13 +8,17 @@ sort_key: A
   
 ## What is Clef?
 
-Clef is a tool for signing transactions and data. It is intended to become a more secure replacement 
-for Geth's built-in account management. This decouples key management from Geth itself, providing a
-more modular and flexible tool compared to Geth's account manager. Clef can be used safely in situations 
-where access to Ethereum is via a remote and/or untrusted node because signing happens locally, either
-manually or automatically using custom rulesets. The separation of Clef from the node itself enables 
-Clef to run as a daemon on the same machine as the client software, on a secure usb-stick like USB armory, 
-or even a separate VM in a QubesOS type setup.
+Clef is a tool for **signing transactions and data** in a secure local environment. 
+t is intended to become a more composable and secure replacement for Geth's built-in 
+account management. Clef decouples key management from Geth itself, meaning it can be 
+used as an idnependent, standalone key management and signing application, or it
+can be integrated into Geth. This provides a more flexible modular tool compared to 
+Geth's account manager. Clef can be used safely in situations where access to Ethereum is 
+via a remote and/or untrusted node because signing happens locally, either manually or 
+automatically using custom rulesets. The separation of Clef from the node itself enables it 
+to run as a daemon on the same machine as the client software, on a secure usb-stick like 
+[USB armory](https://inversepath.com/usbarmory), or even a separate VM in a 
+[QubesOS](https://www.qubes-os.org/) type setup.
 
 ## Installing and starting Clef
 
@@ -66,29 +70,35 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 
 ## Security model
 
-One of the major benefits of Clef is that it is decoupled from the client software, meaning it can be used by users
-and dapps to sign data and transactions in a secure, local environment and send the signed packet to an arbitrary
-Ethereum entry-point, which might include, for example, an untrusted remote node. Alternatively, Clef can simply be
-used as a standalone, composable signer that can be a backend component for decentralized applications. This requires
-a secure architecture that separates cryptographic operations from user interactions and internal/external communication.
+One of the major benefits of Clef is that it is decoupled from the client software, 
+meaning it can be used by users and dapps to sign data and transactions in a secure, 
+local environment and send the signed packet to an arbitrary Ethereum entry-point, which 
+might include, for example, an untrusted remote node. Alternatively, Clef can simply be
+used as a standalone, composable signer that can be a backend component for decentralized 
+applications. This requiresa secure architecture that separates cryptographic operations 
+from user interactions and internal/external communication.
 
 The security model of Clef is as follows:
 
-* A self-contained binary controls all cryptographic operations including encryption, decryption and storage of 
-  keystore files, and signing data and transactions.
+* A self-contained binary controls all cryptographic operations including encryption, 
+  decryption and storage of keystore files, and signing data and transactions.
 
-* A well defined "external" API is used to communicate with the Clef binary - Clef considers this external traffic 
-  to be UNTRUSTED. This means Clef does not accept any credentials and does not recognize authority of requests 
-  received over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - and expects 
-  messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). Some of the 
-  external API calls require some user interaction - if it is not received responses can be delayed indefinitely.
+* A well defined, deliberately minimal "external" API is used to communicate with the 
+  Clef binary - Clef considers this external traffic to be UNTRUSTED. This means Clef 
+  does not accept any credentials and does not recognize authority of requests received 
+  over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - 
+  and expects messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). 
+  Some of the external API calls require some user interaction (manual approve/deny)- if it is 
+  not received responses can be delayed indefinitely.
 
-* Clef communicates with the process that invoked the binary using stin/stout. The process invoking the binary
-  is usually the native console-based user interface (UI) but there is also an API that enables communication 
-  with an external UI. This has to be enabled using `--stdio-ui` at startup. This channel is considered TRUSTED 
-  and is used to pass approvals and passwords between the user and Clef. 
+* Clef communicates with the process that invoked the binary using stin/stout. The process 
+  invoking the binary is usually the native console-based user interface (UI) but there is 
+  also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` 
+  at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between 
+  the user and Clef. 
 
-The general flow for signing a transaction using Clef and an Ethereum node such as Geth is as follows:
+The general flow for a basic transaction-signing operation using Clef and an Ethereum node such as 
+Geth is as follows:
 
 ![Clef signing logic](/static/images/clef_sign_flow.png)
 
@@ -114,7 +124,7 @@ Ethereum Mainnet) respectively. The following code snippet starts Clef, providin
 keystore and connecting to the Goerli testnet:
 
 ```sh
-clef -keystore /my/keystore -chainid 5
+clef --keystore /my/keystore --chainid 5
 ```
 
 On starting Clef, the following welcome messgae is displayed in the terminal:
@@ -181,6 +191,9 @@ GLOBAL OPTIONS:
 
 ## Summary
 
-Clef is an external key management and signer tool that comes bundled with Geth but can be used as a 
-standalone application. Clef has security benefits above and beyond Geth's built-in account management.
+Clef is an external key management and signer tool that comes bundled with Geth but can either be used 
+as a backend account manager and signer for Geth or as a completely separate standalone application. Being 
+modular and composable it can be used as a component in decentralized applications or to sign data and
+transactions in untrusted environments. Clef is intended to eventually replace Geth's built-in account
+management tools.
  
