@@ -676,7 +676,7 @@ specifies the options for this specific call. The possible options are:
 
 | Client  | Method invocation                                                                            |
 |:--------|----------------------------------------------------------------------------------------------|
-| Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResurt, error)` |
+| Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResult, error)` |
 | Console | `debug.traceTransaction(txHash, [options])`                                                  |
 | RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
 
