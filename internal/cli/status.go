@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	empty "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // StatusCommand is the command to output the status of the client

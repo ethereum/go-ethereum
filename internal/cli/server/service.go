@@ -8,9 +8,8 @@ import (
 	"reflect"
 	"strings"
 
-	gproto "github.com/golang/protobuf/proto" //nolint:staticcheck,typecheck
-	"github.com/golang/protobuf/ptypes/empty"
-	grpc_net_conn "github.com/mitchellh/go-grpc-net-conn"
+	grpc_net_conn "github.com/JekaMas/go-grpc-net-conn"
+	empty "google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -38,10 +37,11 @@ func sendStreamDebugFile(stream proto.Bor_DebugPprofServer, headers map[string]s
 	}
 
 	// Wrap our conn around the response.
-	encoder := grpc_net_conn.SimpleEncoder(func(msg gproto.Message) *[]byte {
-		return &msg.(*proto.DebugFileResponse_Input).Data
+	encoder := grpc_net_conn.SimpleEncoder(func(msg *proto.DebugFileResponse_Input) *[]byte {
+		return &msg.Data
 	})
-	conn := &grpc_net_conn.Conn{
+
+	conn := &grpc_net_conn.Conn[*proto.DebugFileResponse_Input, *proto.DebugFileResponse_Input]{
 		Stream:  stream,
 		Request: &proto.DebugFileResponse_Input{},
 		Encode:  grpc_net_conn.ChunkedEncoder(encoder, chunkSize),
