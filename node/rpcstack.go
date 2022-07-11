@@ -269,8 +269,9 @@ func (h *httpServer) doStop() {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	err := h.server.Shutdown(ctx)
-	if err != nil {
-		h.log.Warn("Something wrong with HTTP server graceful shutdown", "error", err)
+	if err == ctx.Err() {
+		h.log.Warn("HTTP server graceful shutdown timed out")
+		h.server.Close()
 	}
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
