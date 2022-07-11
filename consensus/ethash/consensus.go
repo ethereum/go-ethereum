@@ -318,9 +318,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 	}
 	// If all checks passed, validate any special fields for hard forks
-	//if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
-	//return err
-	//}
+	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
+		return err
+	}
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
