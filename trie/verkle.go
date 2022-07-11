@@ -229,7 +229,7 @@ func DeserializeAndVerifyVerkleProof(serialized []byte, rootC *verkle.Point, key
 }
 
 func deserializeVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []verkle.KeyValuePair) (*verkle.Proof, []*verkle.Point, []byte, []*verkle.Fr, error) {
-	var others set // Mark when an "other" stem has been seen
+	var others set = set{} // Mark when an "other" stem has been seen
 
 	proof, err := verkle.DeserializeProof(serialized, keyvals)
 	if err != nil {
