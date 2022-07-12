@@ -20,7 +20,6 @@
 package tests
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -57,10 +56,10 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*TransitionTests*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		if err := bt.checkFailure(t, test.Run(false)); err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+		if err := bt.checkFailure(t, test.Run(false)); err != nil {
 			t.Errorf("in 'block_test.go', test '%s' without snapshotter failed with error: '%v'", name, err)
 		}
-		if err := bt.checkFailure(t, test.Run(true)); err != nil && !errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+		if err := bt.checkFailure(t, test.Run(true)); err != nil {
 			t.Errorf("in 'block_test.go', test '%s' with snapshotter failed with error: '%v'", name, err)
 		}
 	})
