@@ -33,6 +33,18 @@ for tracking or some error occurred.
 true
 ```
 
+### admin_addTrustedPeer
+
+Adds the given node to a reserved trusted list which allows the
+node to always connect, even if the slots are full.
+
+It returns a `BOOL` to indicate whether the peer was successfully added to the list.
+
+| Client  | Method invocation                              |
+|:--------|------------------------------------------------|
+| Console | `admin.addTrustedPeer(url)`                           |
+| RPC     | `{"method": "admin_addTrustedPeer", "params": [url]}` |
+
 ### admin_datadir
 
 The `datadir` administrative property can be queried for the absolute path the running Geth node
@@ -50,6 +62,30 @@ currently uses to store all its databases.
 > admin.datadir
 "/home/john/.ethereum"
 ```
+
+### admin_exportChain
+
+Exports the current blockchain into a local file.
+It optionally takes a first and last block number, in which case it exports only that range of blocks.
+
+It returns a boolean indicating whether the operation succeeded.
+
+| Client  | Method invocation                                                     |
+|:--------|---------------------------------------------------------------------- |
+| Console | `admin.exportChain(file, first, last)`                                |
+| RPC     | `{"method": "admin_exportChain", "params": [string, uint64, uint64]}` |
+
+### admin_importChain
+
+Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them
+into the canonical chain. The state from the parent block of this range is required.
+
+It returns a boolean indicating whether the operation succeeded.
+
+| Client  | Method invocation                                     |
+|:--------|-------------------------------------------------------|
+| Console | `admin.importChain(file)`                             |
+| RPC     | `{"method": "admin_importChain", "params": [string]}` |
 
 ### admin_nodeInfo
 
@@ -89,6 +125,17 @@ overlay protocol, as well as specialized information added by each of the runnin
   }
 }
 ```
+
+### admin_peerEvents
+
+PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer events from the node's p2p server.
+
+The type of events emitted by the server are as follows:
+
+- `add`: emitted when a peer is added
+- `drop`: emitted when a peer is dropped
+- `msgsend`: emitted when a message is successfully sent to a peer
+- `msgrecv`: emitted when a message is received from a peer
 
 ### admin_peers
 
@@ -140,6 +187,29 @@ protocols (e.g. `eth`, `les`, `shh`, `bzz`).
     }
 }]
 ```
+
+### admin_removePeer
+
+Disconnects from a remote node if the connection exists.
+
+It returns a boolean indicating validations succeeded. Note a `true` value doesn't necessarily mean
+that there was a connection which was disconnected.
+
+| Client  | Method invocation                                    |
+|:--------|----------------------------------------------------- |
+| Console | `admin.removePeer(url)`                              |
+| RPC     | `{"method": "admin_removePeer", "params": [string]}` |
+
+### admin_removeTrustedPeer
+
+Removes a remote node from the trusted peer set, but it does not disconnect it automatically.
+
+It returns a boolean indicating validations succeeded.
+
+| Client  | Method invocation                                    |
+|:--------|----------------------------------------------------- |
+| Console | `admin.removeTrustedPeer(url)`                              |
+| RPC     | `{"method": "admin_removeTrustedPeer", "params": [string]}` |
 
 ### admin_startHTTP
 

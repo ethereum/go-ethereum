@@ -8,6 +8,15 @@ The personal API manages private keys in the key store.
 * TOC
 {:toc}
 
+### personal_deriveAccount
+
+Requests a HD wallet to derive a new account, optionally pinning it for later reuse.
+
+| Client   | Method invocation                                                        |
+| :--------| ------------------------------------------------------------------------ |
+| Console  | `personal.deriveAccount(url, path, pin)`                                 |
+| RPC      | `{"method": "personal_deriveAccount", "params": [string, string, bool]}` |
+
 ### personal_importRawKey
 
 Imports the given unencrypted private key (hex string) into the key store,
@@ -19,6 +28,15 @@ Returns the address of the new account.
 | :--------| ----------------------------------------------------------------- |
 | Console  | `personal.importRawKey(keydata, passphrase)`                      |
 | RPC      | `{"method": "personal_importRawKey", "params": [string, string]}` |
+
+### personal_initializeWallets
+
+Initializes a new wallet at the provided URL by generating and returning a new private key.
+
+| Client   | Method invocation                                             |
+| :--------| ------------------------------------------------------------- |
+| Console  | `personal.initializeWallet(url)`                              |
+| RPC      | `{"method": "personal_initializeWallet", "params": [string]}` |
 
 ### personal_listAccounts
 
@@ -35,6 +53,29 @@ in the key store.
 ``` javascript
 > personal.listAccounts
 ["0x5e97870f263700f46aa00d967821199b9bc5a120", "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"]
+```
+
+### personal_listWallets
+
+Returns a list of wallets this node manages.
+
+| Client   | Method invocation                                   |
+| :--------| --------------------------------------------------- |
+| Console  | `personal.listWallets`                              |
+| RPC      | `{"method": "personal_listWallets", "params": []}`  |
+
+#### Example
+
+``` javascript
+> personal.listWallets
+[{
+  accounts: [{
+    address: "0x51594065a986c58d4698c23e3d932b68a22c4d21",
+    url: "keystore:///var/folders/cp/k3x0xm3959qf9l0pcbbdxdt80000gn/T/go-ethereum-keystore65174700/UTC--2022-06-28T10-31-09.477982000Z--51594065a986c58d4698c23e3d932b68a22c4d21"
+  }],
+  status: "Unlocked",
+  url: "keystore:///var/folders/cp/k3x0xm3959qf9l0pcbbdxdt80000gn/T/go-ethereum-keystore65174700/UTC--2022-06-28T10-31-09.477982000Z--51594065a986c58d4698c23e3d932b68a22c4d21"
+}]
 ```
 
 ### personal_lockAccount
@@ -76,6 +117,18 @@ The passphrase can also be supplied as a string.
 > personal.newAccount("h4ck3r")
 "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"
 ```
+
+### personal_openWallet
+
+Initiates a hardware wallet opening procedure by establishing a USB
+connection and then attempting to authenticate via the provided passphrase. Note,
+the method may return an extra challenge requiring a second open (e.g. the
+Trezor PIN matrix challenge).
+
+| Client   | Method invocation                                               |
+| :--------| -----------------------------------------------------------     |
+| Console  | `personal.openWallet(url, passphrase)`                          |
+| RPC      | `{"method": "personal_openWallet", "params": [string, string]}` |
 
 ### personal_unlockAccount
 
@@ -121,6 +174,15 @@ Unlock account 0x5e97870f263700f46aa00d967821199b9bc5a120
 Passphrase: 
 true
 ```
+
+### personal_unpair
+
+Deletes a pairing between wallet and geth.
+
+| Client   | Method invocation                                           |
+| :--------| ----------------------------------------------------------- |
+| Console  | `personal.unpair(url, pin)`                                 |
+| RPC      | `{"method": "personal_unpair", "params": [string, string]}` |
 
 ### personal_sendTransaction
 

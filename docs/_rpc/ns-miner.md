@@ -40,6 +40,15 @@ below this limit are excluded from the mining process.
 | Console | `miner.setGasPrice(number)`                           |
 | RPC     | `{"method": "miner_setGasPrice", "params": [number]}` |
 
+### miner_setRecommitInterval
+
+Updates the interval for recomitting the miner sealing work.
+
+| Client  | Method invocation                                             |
+|:--------|---------------------------------------------------------------|
+| Console | `miner.setRecommitInterval(interval int)`                     |
+| RPC     | `{"method": "miner_setRecommitInterval", "params": [number]}` |
+
 ### miner_start
 
 Start the CPU mining process with the given number of threads and generate a new DAG

@@ -84,6 +84,31 @@ profile data to disk.
 | RPC     | `{"method": "debug_cpuProfile", "params": [string, number]}` |
 
 
+### debug_dbAncient
+
+Retrieves an ancient binary blob from the freezer. The freezer is a collection of append-only immutable files.
+The first argument `kind` specifies which table to look up data from. The list of all table kinds are as follows:
+
+- `headers`: block headers
+- `hashes`: canonical hash table (block number -> block hash)
+- `bodies`: block bodies
+- `receipts`: block receipts
+- `diffs`: total difficulty table (block number -> td)
+
+| Client  | Method invocation                                           |
+|:--------|-------------------------------------------------------------|
+| Console | `debug.dbAncient(kind string, number uint64)`               |
+| RPC     | `{"method": "debug_dbAncient", "params": [string, number]}` |
+
+### debug_dbAncients
+
+Returns the number of ancient items in the ancient store.
+
+| Client  | Method invocation                |
+|:--------|----------------------------------|
+| Console | `debug.dbAncients()`             |
+| RPC     | `{"method": "debug_dbAncients"}` |
+
 ### debug_dbGet
 
 Returns the raw value of a key stored in the database.
