@@ -7,7 +7,7 @@ This guide explains how to set up a private network of multiple Geth nodes. An E
 
 ## Prerequisites
 
-To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](../../_site/docs/install-and-build/installing-geth.html)). It is also helpful to understand Geth fundamentals (see [Getting Started](../../docs/_getting-started/index.md)).
+To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/install-and-build/installing-geth)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting-started)).
 
 
 ## Private Networks
@@ -76,6 +76,8 @@ The `period` configuration option sets the target block time of the chain.
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
     "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "berlinBlock": 0,
     "clique": {
       "period": 5,
       "epoch": 30000
@@ -106,6 +108,8 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
     "byzantiumBlock": 0,
     "constantinopleBlock": 0,
     "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "berlinBlock": 0,
     "ethash": {}
   },
   "difficulty": "1",
@@ -119,7 +123,7 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
 
 ### Initializing the Geth Database
 
-To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument. It makes sense to store `genesis.json` in the top-level directory or the data directory. In the following example the data directory is `data` and `genesis.json` is in the top level project directory.
+To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument.
 
 ```shell
 geth init --datadir data genesis.json
@@ -134,7 +138,7 @@ geth --datadir data --networkid 12345
 
 ### Scheduling Hard Forks
 
-As Ethereum protocol development progresses, new features become available. To enable these features on an existing private network, a hard fork must be scheduled. To do this, a future block number must be chosen which determines precisely when the hard fork will activate. Continuing the `genesis.json` example above and assuming the current block number is 35421, a hard fork might be scheduled for block 40000. This hard fork might upgrade the network to conform to the 'Instabul' specs. First, all the Geth instances on the private network must be recent enough to support the specific hard fork. If so, `genesis.json` can be updated so that the `instabulBlock` key gets the value 40000. The Geth instances are then shut down and `geth init` is run to update their configuration. When the nodes are restarted they will pick up where they left off and run normally until block 40000, at which point they will automatically upgrade.
+As Ethereum protocol development progresses, new features become available. To enable these features on an existing private network, a hard fork must be scheduled. To do this, a future block number must be chosen which determines precisely when the hard fork will activate. Continuing the `genesis.json` example above and assuming the current block number is 35421, a hard fork might be scheduled for block 40000. This hard fork might upgrade the network to conform to the 'London' specs. First, all the Geth instances on the private network must be recent enough to support the specific hard fork. If so, `genesis.json` can be updated so that the `londonBlock` key gets the value 40000. The Geth instances are then shut down and `geth init` is run to update their configuration. When the nodes are restarted they will pick up where they left off and run normally until block 40000, at which point they will automatically upgrade.
 
 The modification to `genesis.json` is as follows:
 
@@ -142,7 +146,7 @@ The modification to `genesis.json` is as follows:
 {
   "config": {
   
-    "istanbulBlock": 40000,
+    "londonBlock": 40000,
     
   },
   
@@ -158,7 +162,7 @@ geth init --datadir data genesis.json
 
 ### Setting Up Networking
 
-With the node configured and initialized, the next step is to set up a peer-to-peer network. This requires a bootstrap node. The bootstrap node is a normal node that is designated to be the entry point that other nodes use to join the network. Any node can be chosen to be the bootstrap node. The way an individual node is chosen in the example below is by providing its associated data directory to calls to Geth.
+With the node configured and initialized, the next step is to set up a peer-to-peer network. This requires a bootstrap node. The bootstrap node is a normal node that is designated to be the entry point that other nodes use to join the network. Any node can be chosen to be the bootstrap node.
 
 To configure a bootstrap node, the IP address of the machine the bootstrap node will run on must be known. The bootsrap node needs to know its own IP address so that it can broadcast it to other nodes. On a local machine this can be found using tools such as `ifconfig` and on cloud instances such as Amazon EC2 the IP address of the virtual machine can be found in the management console. Any firewalls must allow UDP and TCP traffic on port 30303.
 
@@ -180,7 +184,7 @@ This command should print a base64 string such as the following example. Other n
 "enr:-Je4QEiMeOxy_h0aweL2DtZmxnUMy-XPQcZllrMt_2V1lzynOwSx7GnjCf1k8BAsZD5dvHOBLuldzLYxpoD5UcqISiwDg2V0aMfGhGlQhqmAgmlkgnY0gmlwhKwQ_gSJc2VjcDI1NmsxoQKX_WLWgDKONsGvxtp9OeSIv2fRoGwu5vMtxfNGdut4cIN0Y3CCdl-DdWRwgnZf"
 ```
 
-If the nodes are intended to across the Internet, the bootnode and all other nodes must have public IP addresses assigned, and both TCP and UDP traffic can pass their firewalls. If Internet connectivity is not required or all member nodes connect using well-known IPs, Geth should be set up to restrict peer-to-peer connectivity to an IP subnet. Doing so will further isolate the network and prevents cross-connecting with other blockchain networks in case the nodes are reachable from the Internet. Use the
+If the nodes are intended to connect across the Internet, the bootnode and all other nodes must have public IP addresses assigned, and both TCP and UDP traffic can pass their firewalls. If Internet connectivity is not required or all member nodes connect using well-known IPs, Geth should be set up to restrict peer-to-peer connectivity to an IP subnet. Doing so will further isolate the network and prevents cross-connecting with other blockchain networks in case the nodes are reachable from the Internet. Use the
 `--netrestrict` flag to configure a whitelist of IP networks:
 
 ```shell
@@ -258,7 +262,7 @@ Path of the secret key file: node1/keystore/UTC--2022-05-13T14-25-49.229126160Z-
 - You must remember your password! Without the password, it's impossible to decrypt the key!
 ```
 
-The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in eachnode's data directory.
+The keyfile and account password should be backed up securely. These steps can then be repeated for Node 2. These commands create keyfiles that are stored in the `keystore` directory in `node1` and `node2` data directories. In order to unlock the accounts later the passwords for each account should be saved to a text file in each node's data directory.
 
 In each data directory save a copy of the following `genesis.json` to the top level project directory. The account addresses in the `alloc` field should be replaced with those created for each node in the previous step (without the leading `0x`).
 
