@@ -80,9 +80,14 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 		config.Epoch = utils.EpochLength
 	}
 
+	// For testing and testing project, default to mainnet config
+	if config.V2 == nil {
+		config.V2 = params.XDPoSV2Config
+	}
+
+	log.Info("xdc config loading", "config", config)
+
 	waitPeriodCh := make(chan int)
-	// TODO: This shall be configurable or replaced
-	config.V2 = params.DevnetXDPoSV2Config
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)

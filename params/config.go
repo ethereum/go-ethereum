@@ -29,15 +29,20 @@ const (
 )
 
 var (
-	XDCMainnetGenesisHash = common.HexToHash("9326145f8a2c8c00bbe13afc7d7f3d9c868b5ef39d89f2f4e9390e9720298624") // XDC Mainnet genesis hash to enforce below configs on
+	XDCMainnetGenesisHash = common.HexToHash("4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1") // XDC Mainnet genesis hash to enforce below configs on
 	MainnetGenesisHash    = common.HexToHash("8d13370621558f4ed0da587934473c0404729f28b0ff1d50e5fdd840457a2f17") // Mainnet genesis hash to enforce below configs on
-	TestnetGenesisHash    = common.HexToHash("dffc8ae3b45965404b4fd73ce7f0e13e822ac0fc23ce7e95b42bc5f1e57023a5") // Testnet genesis hash to enforce below configs on
+	TestnetGenesisHash    = common.HexToHash("bdea512b4f12ff1135ec92c00dc047ffb93890c2ea1aa0eefe9b013d80640075") // Testnet genesis hash to enforce below configs on
+	DevnetGenesisHash     = common.HexToHash("ab6fd3cb7d1a489e03250c7d14c2d6d819a6a528d6380b31e8410951964ef423") // Devnet genesis hash to enforce below configs on
 )
 
 var (
 	XDPoSV2Config = &V2{
-		TimeoutPeriod: 50,
-		CertThreshold: common.MaxMasternodesV2*2/3 + 1,
+		SwitchBlock:          big.NewInt(9999999999),
+		CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+		TimeoutSyncThreshold: 3,
+		TimeoutPeriod:        60,
+		WaitPeriod:           10,
+		MinePeriod:           10,
 	}
 	TestXDPoSV2Config = &V2{
 		SwitchBlock:          big.NewInt(900),
@@ -59,7 +64,7 @@ var (
 
 	// XDPoSChain mainnet config
 	XDCMainnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(88),
+		ChainId:        big.NewInt(50),
 		HomesteadBlock: big.NewInt(1),
 		EIP150Block:    big.NewInt(2),
 		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
@@ -69,10 +74,10 @@ var (
 		XDPoS: &XDPoSConfig{
 			Period:              2,
 			Epoch:               900,
-			Reward:              250,
+			Reward:              5000,
 			RewardCheckpoint:    900,
-			Gap:                 5,
-			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			Gap:                 450,
+			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2:                  XDPoSV2Config,
 		},
 	}
@@ -94,17 +99,45 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(3),
-		HomesteadBlock:      big.NewInt(0),
+		ChainId:             big.NewInt(51),
+		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.HexToHash("0x62e0fde86e34c263e250fbcd5ca4598ba8ca10a1d166c8526bb127e10b313311"),
-		EIP155Block:         big.NewInt(10),
-		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(1700000),
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(2),
+		EIP150Hash:          common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:         big.NewInt(3),
+		EIP158Block:         big.NewInt(3),
+		ByzantiumBlock:      big.NewInt(4),
 		ConstantinopleBlock: nil,
-		Ethash:              new(EthashConfig),
+		XDPoS: &XDPoSConfig{
+			Period:              2,
+			Epoch:               900,
+			Reward:              5000,
+			RewardCheckpoint:    900,
+			Gap:                 450,
+			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
+			V2:                  TestXDPoSV2Config,
+		},
+	}
+
+	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	DevnetChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(551),
+		HomesteadBlock: big.NewInt(1),
+		EIP150Block:    big.NewInt(2),
+		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:    big.NewInt(3),
+		EIP158Block:    big.NewInt(3),
+		ByzantiumBlock: big.NewInt(4),
+		XDPoS: &XDPoSConfig{
+			Period:              2,
+			Epoch:               900,
+			Reward:              5000,
+			RewardCheckpoint:    900,
+			Gap:                 450,
+			FoudationWalletAddr: common.HexToAddress("0x746249c61f5832c5eed53172776b460491bdcd5c"),
+			V2:                  DevnetXDPoSV2Config,
+		},
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
