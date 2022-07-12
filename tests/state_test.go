@@ -59,6 +59,8 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// FIXME POS-618
+	st.skipLoad(`.*micro/*`)
+	st.skipLoad(`.*main/*`)
 	st.skipLoad(`.*stSStoreTest*`)
 	st.skipLoad(`.*stReturnDataTest*`)
 	st.skipLoad(`.*stShift*`)
