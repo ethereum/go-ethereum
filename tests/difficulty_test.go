@@ -91,7 +91,7 @@ func TestDifficulty(t *testing.T) {
 			return
 		}
 		if err := dt.checkFailure(t, test.Run(cfg)); err != nil {
-			t.Error(err)
+			t.Errorf("in 'difficulty_test.go', test '%s' failed with error: '%v'", name, err)
 		}
 	})
 }
