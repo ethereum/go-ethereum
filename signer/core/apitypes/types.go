@@ -335,11 +335,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 	buffer := bytes.Buffer{}
 
-	// Verify extra data
-	if exp, got := len(typedData.Types[primaryType]), len(data); exp < got {
-		return nil, fmt.Errorf("there is extra data provided in the message (%d < %d)", exp, got)
-	}
-
 	// Add typehash
 	buffer.Write(typedData.TypeHash(primaryType))
 
