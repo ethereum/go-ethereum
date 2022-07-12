@@ -22,7 +22,6 @@ package tests
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -149,8 +148,7 @@ func TestState(t *testing.T) {
 					withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 						snaps, statedb, err := test.Run(subtest, vmconfig, true)
 						if snaps != nil && statedb != nil {
-							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil &&
-								!errors.Is(err, UnsupportedForkError{Name: "Merge"}) {
+							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
 								t.Errorf("in 'rlp_test.go', test '%s' failed with error: '%v'", name, err)
 								return err
 							}
