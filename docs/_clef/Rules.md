@@ -1,26 +1,53 @@
 ---
 title: Rules
-sort_key: B
+sort_key: C
 ---
 
-The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)
+This page provides a fairly low-level explanation for how rules are implemented in 
+Clef. It is a good idea to read the [Introduction to Clef](/docs/clef/introduction)
+and the [Clef tutorial](/docs/clef/tutorial) before diving in to this page.
 
-It enables usecases like the following:
+{:toc}
+-   this will be removed by the toc
+  
+## Introduction
 
-* I want to auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value to maximum `1 ether` per 24h period
-* I want to auto-approve transaction to contract `EthAlarmClock` with `data`=`0xdeadbeef`, if `value=0`, `gas < 44k` and `gasPrice < 40Gwei`
+Rules in Clef are sets of conditions that determine whether a given action can be
+signed automatically without requiring manual approval from the user. This can be
+useful for automatically approving transactions between a user's own accounts, or
+to approve patterns that are commonly used by applications. This is a UI improvement
+for users making lots of transactions and also a security improvement because transactions
+that do not fit the pattern defined by a ruleset will not be signed unless they are 
+reviewed and manually approved by the end user.
 
-The two main features that are required for this to work well are;
+Rules can define conditions such as:
 
-1. Rule Implementation: how to create, manage and interpret rules in a flexible but secure manner
-2. Credential managements and credentials; how to provide auto-unlock without exposing keys unnecessarily.
+* Auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value 
+  to maximum `1 ether` per 24h period.
+* Auto-approve transaction to contract `Uniswapv2` with `value` up to 1 ether, if 
+  `gas < 44k` and `gasPrice < 40Gwei`.
+* Auto-approve signing if the data to be signed contains the string `"approve_me"`.
+* Auto-approve any requests to list accounts in keystore if the request arrives over IPC
 
-The section below deals with both of them
+Because the rules are Javascript files they can be customized to implement any arbitrary logic on
+the available request data.
+
+There are two core concepts that enable this rule-making procedure to work well:
+
+1. Rule Implementation: rules are created, managed and interpreted in a flexible but secure manner
+2. Credential management: Auto-unlock is enabled without uneccessarily exposing keys.
+
+This page will explain how these are achieved in Clef.
 
 ## Rule Implementation
 
-A ruleset file is implemented as a `js` file. Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
-defined in the UI protocol. Example:
+Although rules in Clef are written in Javascript, Clef itself is written in Go. To
+implement the Javascript rules in Clef, a ruleset engine is included in the `signer` binary 
+that uses [OttoVM](https://github.com/robertkrimen/otto) to parse and interpret the Javascript and
+implement the rules from.
+
+Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the 
+`json-rpc` defined in the [UI protocol](/docs/clef/apis). Example:
 
 ```js
 function asBig(str) {
@@ -39,7 +66,8 @@ function ApproveTx(req) {
 		return "Approve"
 	}
 	// If we return "Reject", it will be rejected.
-	// By not returning anything, it will be passed to the next UI, for manual processing
+	// By not returning anything, the decision to approve/reject
+	// will be passed to the next UI, for manual processing
 }
 
 // Approve listings if request made from IPC
@@ -48,15 +76,19 @@ function ApproveListing(req){
 }
 ```
 
-Whenever the external API is called (and the ruleset is enabled), the `signer` calls the UI, which is an instance of a ruleset-engine. The ruleset-engine
-invokes the corresponding method. In doing so, there are three possible outcomes:
+Whenever the external API is called (and the ruleset is enabled), the `signer` calls the UI, 
+which is an instance of a ruleset-engine. The ruleset-engine invokes the corresponding method. 
 
-1. JS returns "Approve"
-  * Auto-approve request
-2. JS returns "Reject"
-  * Auto-reject request
-3. Error occurs, or something else is returned
-  * Pass on to `next` ui: the regular UI channel.
+There are several possible outcomes that are handled in different ways:
+
+| Return value      |    Action   |
+| ----------- | ----------- |
+| "Approve"      | Auto-approve request       |
+| "Reject"   | Auto-approve request        |
+| Error |  Pass decision to UI for manual approval  |
+| Unexpected value | Pass decision to UI for manual approval   |
+| Nothing   | Pass decision to UI for manual approval  |
+
 
 A more advanced example can be found below, "Example 1: ruleset for a rate-limited window", using `storage` to `Put` and `Get` `string`s by key.
 
