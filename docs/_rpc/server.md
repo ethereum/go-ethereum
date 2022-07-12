@@ -3,8 +3,17 @@ title: JSON-RPC Server
 sort_key: A
 ---
 
-Geth supports all standard web3 JSON-RPC APIs. You can find documentation for
-these APIs on the [Ethereum Wiki JSON-RPC page][web3-rpc].
+Interacting with Geth requires sending requests to specific JSON_RPC API 
+endpoints. Geth supports all standard Web3 [JSON-RPC API][web3-rpc] endpoints. 
+The RPC requests must be sent to the node and the response returned to the client 
+using some transport protocol. This page outlines the available transport protocols 
+in Geth, providing the information users require to choose a transport protocol for 
+a specific user scenario.
+
+{:toc}
+-   this will be removed by the toc
+
+## Introduction
 
 JSON-RPC is provided on multiple transports. Geth supports JSON-RPC over HTTP,
 WebSocket and Unix Domain Sockets. Transports must be enabled through
@@ -18,72 +27,197 @@ For example, the `eth_call` method resides in the `eth` namespace.
 Access to RPC methods can be enabled on a per-namespace basis. Find
 documentation for individual namespaces in the sidebar.
 
+## RPC
+
+[RPC (Remote Procedure Calls)][rpc] are programs that execute a procedure in an address
+space other than their own. Address spaces can be separate processes on a single
+machine or different machines. RPC is a client-server interaction where a client sends 
+a request that includes a payload that invokes some method in the server and returns
+the result in a response to the client. The RPC has to be implemented using some transport 
+system - for Geth this transport system can be IPC, HTTP or Websockets. These are individually
+enabled using command line flags when Geth is started.
+
+Regardless of the transport protocol, the RPC address determines whether the RPC methods
+are accessible from the local machine or from other machines on the same network. The default
+for Geth is to expose `localhost:8545` (equivalent to `127.0.0.1:8545`) for RPC communication.
+This default only allows other processes on the same machine to communicate with the node
+via RPC. However, using a custom non-local address (e.g. `192.168.1.321`) enables access to
+other computers on the network. Those other computers could then execute RPC methods by sending
+them to `192.168.1.321:8545`. Access to the Geth RPC could then be available to any computers
+on the internet if internet traffic for port 8545 is forwarded to `192.168.1.321:8545`. Clearly, 
+this is a **massive security risk**, so it is recommended to use local access only in most 
+scenarios, and where remote access is required the internet connection must be configured so 
+that it does not forward internet traffic to Geth.
+
+## Transport protocols
+
+There are three transport protocols available in Geth: IPC, HTTP and Websockets. 
+
 ### HTTP Server
 
-To enable the HTTP server, use the `--http` flag.
+[HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP) is a unidirectional transport protocol
+that connects a client and server. The client sends a request to the server, and the server
+returns a response back to the client. Each response is associated with a specific request
+and after a response is sent the connection between client and server is closed. Each new
+HTTP request creates a new connection between the client and server that lasts until the response
+is sent. HTTP requests are composed of the protocol version, method, headers, host information
+and the request data being sent to the server. 
 
-    geth --http
+HTTP is very widely used and understood and this familiarity makes it a good default RPC transport
+protocol. It also has some specific advantages over Websockets in some scenarios, such as when a
+client wishes to retrieve the current state of some resource that does not continually update.
+Historical values such as finalized states of the Ethereum blockchain, or infrequently
+updating values such as most account balances, are ideally served over HTTP. The idempotency and
+safety properties of HTTP are well suited to scenarios that must be resilient to message delivery
+failures. Interactions with Geth fall into this category, and are therefore well served by HTTP.
 
-By default, geth accepts connections from the loopback interface (127.0.0.1).
-The default listening port is 8545. You can customize address and port using the
-`--http.port` and `--http.addr` flags.
+To start Geth using HTTP as the transport protocol for the RPC connection, include the `--http` flag:
 
-    geth --http --http.port 3334
+```sh
+geth --http
+```
 
-JSON-RPC method namespaces must be whitelisted in order to be available through
-the HTTP server. An RPC error with error code `-32602` is generated if you call a
-namespace that isn't whitelisted. The default whitelist allows access to the "eth", "net"
-and "web3" namespaces. To overwrite the default whitelist and enable access to other APIs 
-like account management ("personal") and debugging ("debug"), they must be configured via the 
-`--http.api` flag. We do not recommend enabling such APIs over HTTP, however, 
-since access to these methods increases the attack surface.
+If no other commands are provided, Geth falls back to its default behaviour of accepting connections 
+from the local loopback interface (127.0.0.1). The default listening port is 8545. The ip address and 
+listening port can be customized using the `--http.addr` and `--http.port` flags:
 
-    geth --http --http.api personal,eth,net,web3
+```sh
+geth --http --http.port 3334
+```
 
-Since the HTTP server is reachable from any local application, additional
-protection is built into the server to prevent misuse of the API from web pages.
-If you want enable access to the API from a web page, you must configure the
-server to accept Cross-Origin requests with the `--http.corsdomain` flag.
+Not all of the JSON-RPC method namespaces are enabled for HTTP requests by default. 
+Instead, they have to be whitelisted explicitly when Geth is started. Calling non-whitelisted 
+RPC namespaces returns an RPC error with code `-32602`. 
 
-Example: if you want to use [Remix][remix] with geth, allow requests from the
-remix domain.
+The default whitelist allows access to the `eth`, `net` and `web3` namespaces. To enable access 
+to other APIs like account management (`personal`) and debugging (`debug`), they must be configured 
+using the `--http.api` flag. Enabling these APIs over HTTP is **not recommended** because access 
+to these methods increases the attack surface.
 
-    geth --http --http.corsdomain https://remix.ethereum.org
+```sh
+geth --http --http.api personal,eth,net,web3
+```
 
-Use `--http.corsdomain '*'` to enable access from any origin.
+Since the HTTP server is reachable from any local application, additional protection is built into 
+the server to prevent misuse of the API from web pages. To enable access to the API from a web page
+(for example to use the online IDE, [Remix](https://remix.ethereum.org)), the server needs to be
+configured to accept Cross-Origin requests. This is achieved using the `--http.corsdomain` flag.
+
+```sh
+geth --http --http.corsdomain https://remix.ethereum.org
+```
+
+The `--http.corsdomain` command also acceptsd wildcards that enable access to the RPC from any
+origin: 
+
+```sh
+--http.corsdomain '*'
+```
 
 ### WebSocket Server
 
-Configuration of the WebSocket endpoint is similar to the HTTP transport. To
-enable WebSocket access, use `--ws` flag. The default WebSocket port is 8546.
+Websocket is a bidirectional transport protocol. Unlike HTTP, Websocket is *stateful*, meaning
+it maintains a connection between client and server untilit is explicitly terminated by one
+or other party. The persistent connection between the client and server is known as a "Websocket"
+that enables message exchange. The connection is established using a 'handshake' procedure that 
+configures both parties.
+
+This continuous messaging format works well for real-time applications, where data is continuously 
+streamed from the server and ingested by the client. For Geth specifically, Websocket is required
+to subscribe to events, since events are pushed from server to client over an open Websocket. 
+This could not work over HTTP because actions can only be initiated by request. Websocket
+is also probably preferential wherever large numbers of requetss are expected, since the overhead 
+per message is lower for Websocket compared to HTTP.
+
+Configuration of the WebSocket endpoint in Geth follows the same pattern as the HTTP transport. 
+WebSocket access can be enabled using the `--ws` flag. If no additional information is provided, 
+Geth falls back to its default behaviour which is to establish the Websocket on port 8546.
 The `--ws.addr`, `--ws.port` and `--ws.api` flags can be used to customize settings
-for the WebSocket server.
+for the WebSocket server. For example, to start Geth with a Websocket connection for RPC using
+the custom port 3334 and whitelisting the `eth`, `net` and `web3` namespaces:
 
-    geth --ws --ws.port 3334 --ws.api eth,net,web3
+```sh
+geth --ws --ws.port 3334 --ws.api eth,net,web3
+```
 
-Cross-Origin request protection also applies to the WebSocket server. Use the
-`--ws.origins` flag to allow access to the server from web pages:
+Cross-Origin request protection also applies to the WebSocket server. The
+`--ws.origins` flag can be used to allow access to the server from web pages:
 
-    geth --ws --ws.origins http://myapp.example.com
+```sh
+geth --ws --ws.origins http://myapp.example.com
+```
 
-As with `--http.corsdomain`, using `--ws.origins '*'` allows access from any origin.
+As with `--http.corsdomain`, using the wildcard `--ws.origins '*'` allows access from any origin.
+
+{% include note.html content=" By default, **account unlocking is forbidden when HTTP or 
+Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an 
+attacker that manages to access the node via the externally-exposed HTTP/WS port can then 
+control the unlocked account. It is possible to force account unlock by including the 
+`--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert 
+users that completely understand how it can be used safely. 
+This is not a hypothetical risk: **there are bots that continually scan for http-enabled 
+Ethereum nodes to attack**" %}
+
 
 ### IPC Server
 
-JSON-RPC APIs are also provided on a UNIX domain socket. This server is enabled
-by default and has access to all JSON-RPC namespaces.
+IPC is normally available for use in local environments where the node and the console
+exist on the same machine. Geth creates a pipe in the computers local file system 
+(at `ipcpath`) that configures a connection between node and console. The `geth.ipc` file can
+also be used by other processes on the same machine to interact with Geth.
+
+On UNIX-based systems (Linux, OSX) the IPC is a UNIX domain socket. On Windows IPC is
+provided using named pipes. The IPC server is enabled by default and has access to all 
+JSON-RPC namespaces.
 
 The listening socket is placed into the data directory by default. On Linux and macOS,
 the default location of the geth socket is
 
-    ~/.ethereum/geth.ipc
+```sh
+~/.ethereum/geth.ipc
+```
 
 On Windows, IPC is provided via named pipes. The default location of the geth pipe is:
 
-    \\.\pipe\geth.ipc
-    
-You can configure the location of the socket using the `--ipcpath` flag. IPC can
-be disabled using the `--ipcdisable` flag.
+```sh
+\\.\pipe\geth.ipc
+```
+
+The location of the socket can be customized using the `--ipcpath` flag. IPC can be disabled 
+using the `--ipcdisable` flag.
+
+## Choosing a transport protocol
+
+The following table summarizes the relative strengths and weaknesses of each transport
+protocol so that users can make informed decisions about which to use.
+
+|                                     |     HTTP    |     WS   |   IPC   |
+| :----------------------------------:|:-----------:|:--------:|:-------:|
+| Unidirectional                      |    **Y**    |     N    |     N   |
+| Bidirectional                       |      N      |   **Y**  |   **Y** |
+| Real-time data                      |      N      |   **Y**  |   **Y** |
+| event subscription                  |      N      |   **Y**  |   **Y** |
+| RESTful                             |    **Y**    |     N    |     N   |
+| Closes connection between requests  |    **Y**    |     N    |     N   |
+| Maintains continuous connections    |      N      |   **Y**  |   **Y** |
+
+As a general rule IPC is most secure because it is limited to interactions on the 
+local machine and cannot be exposed to external traffic. It can also be used
+to subscribe to events. HTTP is a familiar and idempotent transport that closes 
+connections between requests and can therefore have lower overall overheads if the number 
+of requests is fairly low. Websockets provides a continuous open channel that can enable
+event subscriptions and streaming and handle large volumes of requests with smaller per-message
+overheads.
+
+
+## Summary
+
+RPC requests to a Geth node can be made using three different transport protocols. The 
+protocols are enabled at startup using their respective flags. The right choice of transport
+protocol depends on the specific use case.
+
 
 [web3-rpc]: https://github.com/ethereum/execution-apis
 [remix]: https://remix.ethereum.org
+[rpc]: https://www.ibm.com/docs/en/aix/7.1?topic=concepts-remote-procedure-call
+
