@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -28,6 +29,23 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		listBlockHash[0] = currentHash
 		parentNumber := number.Uint64() - 1
 		parentHash := currentHash
+
+		// check and wait the latest block is already in the disk
+		// sometimes blocks are yet inserted into block
+		for timeout := 0; ; timeout++ {
+			parentHeader := chain.GetHeader(parentHash, parentNumber)
+			if parentHeader != nil { // found the latest block in the disk
+				break
+			}
+			log.Info("[V2 Hook Penalty] parentHeader is nil, wait block to be writen in disk", "parentNumber", parentNumber)
+			time.Sleep(200 * time.Millisecond) // 0.2s
+
+			if timeout > 50 { // wait over 10s
+				log.Error("[V2 Hook Penalty] parentHeader is nil, wait too long not writen in to disk", "parentNumber", parentNumber)
+				return []common.Address{}, fmt.Errorf("parentHeader is nil")
+			}
+		}
+
 		for i := uint64(1); ; i++ {
 			parentHeader := chain.GetHeader(parentHash, parentNumber)
 			isEpochSwitch, _, err := adaptor.EngineV2.IsEpochSwitch(parentHeader)
