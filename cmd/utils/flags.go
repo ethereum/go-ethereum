@@ -89,6 +89,11 @@ var (
 		Usage:    "URL for Redis database",
 		Category: flags.EthCategory,
 	}
+	RedisPasswordFlag = &cli.StringFlag{
+		Name:     "redis-pass",
+		Usage:    "Password for Redis database, if necessary",
+		Category: flags.EthCategory,
+	}
 	RemoteDBFlag = &cli.StringFlag{
 		Name:     "remotedb",
 		Usage:    "URL for remote database",
@@ -1563,6 +1568,7 @@ func SetRedisEndpoint(ctx *cli.Context, cfg *node.Config) {
 	}
 
 	cfg.RedisEndpoint = url
+	cfg.RedisPassword = ctx.String(RedisPasswordFlag.Name)
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {

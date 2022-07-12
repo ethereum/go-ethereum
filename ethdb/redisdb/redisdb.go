@@ -2,6 +2,7 @@ package redisdb
 
 import (
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/go-redis/redis"
 	"time"
 )
@@ -9,8 +10,10 @@ import (
 // Database is a key-value lookup for redis.
 type Database struct {
 	client *redis.Client
+	log    log.Logger // Contextual logger tracking the database endpoint
 }
 
+// key convert slice to string
 func (db *Database) key(key []byte) string {
 	return string(key)
 }
@@ -24,7 +27,7 @@ func (db *Database) Has(key []byte) (bool, error) {
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {
-	v, err := db.client.Get(db.key(key)).Result()
+	val, err := db.client.Get(db.key(key)).Result()
 	if err != nil {
 		if err == redis.Nil {
 			//TODO return nil or empty slice?
@@ -33,7 +36,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return []byte(v), nil
+	return []byte(val), nil
 }
 
 func (db *Database) Put(key []byte, value []byte) error {
@@ -77,11 +80,12 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	return newSnapshot(db)
 }
 
-func New(endpoint string) (*Database, error) {
+func New(endpoint, password string) (*Database, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     endpoint,
-		Password: "", // no password set
-		DB:       0,  // use default DB
+		Password: password, // no password set
+		DB:       0,        // use default DB
 	})
-	return &Database{rdb}, nil
+	logger := log.New("endpoint", endpoint)
+	return &Database{rdb, logger}, nil
 }

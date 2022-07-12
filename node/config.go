@@ -69,6 +69,9 @@ type Config struct {
 	// used if, and only if, DataDir is empty and RedisEndpoint is not empty.
 	RedisEndpoint string
 
+	// RedisPassword is the password to connect to Redis.
+	RedisPassword string
+
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
 

@@ -289,8 +289,8 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer 
 }
 
 // NewRedisDatabase created a persistent key-value database using RedisDB
-func NewRedisDatabase(endpoint string) (ethdb.Database, error) {
-	db, err := redisdb.New(endpoint)
+func NewRedisDatabase(endpoint string, password string) (ethdb.Database, error) {
+	db, err := redisdb.New(endpoint, password)
 	if err != nil {
 		log.Error("Error initializing Redis", err)
 		return nil, err
@@ -300,8 +300,8 @@ func NewRedisDatabase(endpoint string) (ethdb.Database, error) {
 
 // NewRedisDatabaseWithFreezer creates a persistent key-value database with a
 // freezer moving immutable chain segments into cold storage.
-func NewRedisDatabaseWithFreezer(endpoint string, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
-	kvdb, err := redisdb.New(endpoint)
+func NewRedisDatabaseWithFreezer(endpoint string, password string, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+	kvdb, err := redisdb.New(endpoint, password)
 	if err != nil {
 		log.Error("Error initializing Redis", err)
 		return nil, err

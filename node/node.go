@@ -689,7 +689,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
 	} else if n.config.RedisEndpoint != "" {
-		db, err = rawdb.NewRedisDatabase(n.config.RedisEndpoint)
+		db, err = rawdb.NewRedisDatabase(n.config.RedisEndpoint, n.config.RedisPassword)
 	} else {
 		db, err = rawdb.NewLevelDBDatabase(n.ResolvePath(name), cache, handles, namespace, readonly)
 	}
@@ -725,7 +725,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer,
 			freezer = n.ResolvePath(freezer)
 		}
 		if n.config.RedisEndpoint != "" {
-			db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, freezer, namespace, readonly)
+			db, err = rawdb.NewRedisDatabaseWithFreezer(n.config.RedisEndpoint, n.config.RedisPassword, freezer, namespace, readonly)
 		} else {
 			db, err = rawdb.NewLevelDBDatabaseWithFreezer(root, cache, handles, freezer, namespace, readonly)
 		}
