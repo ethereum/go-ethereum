@@ -11,7 +11,7 @@ sort_key: A
 Clef is a tool for **signing transactions and data** in a secure local environment. 
 t is intended to become a more composable and secure replacement for Geth's built-in 
 account management. Clef decouples key management from Geth itself, meaning it can be 
-used as an idnependent, standalone key management and signing application, or it
+used as an independent, standalone key management and signing application, or it
 can be integrated into Geth. This provides a more flexible modular tool compared to 
 Geth's account manager. Clef can be used safely in situations where access to Ethereum is 
 via a remote and/or untrusted node because signing happens locally, either manually or 
@@ -30,8 +30,9 @@ However, Clef is not bound to Geth and can be built on its own using:
 
 `make clef`
 
-Once built, Clef must be initialized. This includes storing some data, some of which is sensitive (such as passwords,
-account data, signing rules etc). Initializing Clef takes that data and encrypts it using a user-defined password.
+Once built, Clef must be initialized. This includes storing some data, some of which is sensitive 
+(such as passwords, account data, signing rules etc). Initializing Clef takes that data and 
+encrypts it using a user-defined password.
 
 `clef init`
 
@@ -75,7 +76,7 @@ meaning it can be used by users and dapps to sign data and transactions in a sec
 local environment and send the signed packet to an arbitrary Ethereum entry-point, which 
 might include, for example, an untrusted remote node. Alternatively, Clef can simply be
 used as a standalone, composable signer that can be a backend component for decentralized 
-applications. This requiresa secure architecture that separates cryptographic operations 
+applications. This requires a secure architecture that separates cryptographic operations 
 from user interactions and internal/external communication.
 
 The security model of Clef is as follows:
@@ -96,6 +97,14 @@ The security model of Clef is as follows:
   also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` 
   at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between 
   the user and Clef. 
+
+* Clef does not store keys - the user is responsible for securely storing and backing up keyfiles. 
+  Clef does store account passwords in its encrypted vault if they are explicitly provided to 
+  Clef by the user to enable automatic account unlocking.
+
+The external API never handles any sensitive data directly, but it can be used to request Clef to
+sign some data or a transaction. It is the internal API that controls signing and triggers requests for
+manual approval (automatic approves actions that conform to attested rulesets) and passwords.
 
 The general flow for a basic transaction-signing operation using Clef and an Ethereum node such as 
 Geth is as follows:

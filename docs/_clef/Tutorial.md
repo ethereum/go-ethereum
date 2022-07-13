@@ -340,9 +340,9 @@ interactions that satisfy the conditions encoded in `rules.js` in Clef.
 
 ### Account passwords
 
-The rules described in `rules.js` above require access to the accounts in the Clef keystore which are protected
-by user-defined passwords. The signer therefore requires access to these passwords in order to automatically 
-unlock the keystore and sign data and transactions using the accounts.
+The rules described in `rules.js` above require access to the accounts in the Clef keystore which 
+are protected by user-defined passwords. The signer therefore requires access to these passwords 
+in order to automatically unlock the keystore and sign data and transactions using the accounts.
 
 This is done using `clef setpw`, passing the account address as the sole argument:
 
@@ -362,10 +362,15 @@ Password:
 INFO [07-01|14:05:56.031] Credential store updated   key=0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3
 ```
 
+Note that Clef does not really 'unlock' an account, it just abstracts the process of providing the
+password away from the end-user in specific, predefined scenarios. If an account password 
+exists in the Clef vault and the rule evaluates to "Approve" then Clef decrypts the password, 
+uses it to decrypt the key, does the requested signing and then re-locks the account. 
+
 
 ### Implementing rules
 
-Clef can be instructed to run the attested rule file simply by passing the path to `rules.js` 
+Clef can be instructed to run an attested rule file simply by passing the path to `rules.js` 
 to the `--rules` flag:
 
 ```sh
@@ -391,8 +396,9 @@ INFO [07-01|13:39:49.728] IPC endpoint opened                      url=go-ethere
 * extapi_ipc : go-ethereum/goerli-data/clef/clef.ipc
 ```
 
-Any request that satisfies the ruleset will now be auto-approved by the rule file, for example the following request to 
-sign a transaction made using the Geth Javascript console (note that the password for account `0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3`
+Any request that satisfies the ruleset will now be auto-approved by the rule file, for example 
+the following request to sign a transaction made using the Geth Javascript console 
+(note that the password for account `0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3`
 has already been provided to `setpw` and the recipient and value comply with the rules in `rules.js`):
 
 ```js
@@ -535,8 +541,9 @@ Finally, a request can be submitted to test that the rules are being applied as 
 Here, Clef is used independently of Geth by making a request via RPC, but the same logic 
 would be imposed if the request was made via a connected Geth node. Some arbitrary text 
 will be included in the message data that includes the term `wen-merge`. The plaintext 
-`clefdemotextthatincludeswen-merge` is `636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765` when 
-represented as a hexadecimal string. This can be passed as data to an `account_signData` request as follows:
+`clefdemotextthatincludeswen-merge` is `636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765` 
+when represented as a hexadecimal string. This can be passed as data to an `account_signData` 
+request as follows:
 
 ```sh
 echo '{"id": 1, "jsonrpc":"2.0", "method":"account_signData", "params":["data/plain", "0x636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765"]}' | nc -U ~/go-ethereum.goerli-data/clef/clef.ipc
