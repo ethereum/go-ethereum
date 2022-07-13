@@ -29,13 +29,13 @@ documentation for individual namespaces in the sidebar.
 
 ## RPC
 
-[RPC (Remote Procedure Calls)][rpc] are programs that execute a procedure in an address
+[RPC (Remote Procedure Calls)][rpc] are communication mechanisms that enable programs to execute a procedure in an address
 space other than their own. Address spaces can be separate processes on a single
 machine or different machines. RPC is a client-server interaction where a client sends 
 a request that includes a payload that invokes some method in the server and returns
 the result in a response to the client. The RPC has to be implemented using some transport 
-system - for Geth this transport system can be IPC, HTTP or Websockets. These are individually
-enabled using command line flags when Geth is started.
+system - for Geth this transport system can be IPC, HTTP or Websockets. HTTP and Websockets are individually
+enabled using command line flags when Geth is started (IPC is enabled by default).
 
 Regardless of the transport protocol, the RPC address determines whether the RPC methods
 are accessible from the local machine or from other machines on the same network. The default
@@ -118,7 +118,7 @@ origin:
 
 Websocket is a bidirectional transport protocol. Unlike HTTP, Websocket is *stateful*, meaning
 it maintains a connection between client and server until it is explicitly terminated by one
-or other party. The persistent connection between the client and server is known as a "Websocket"
+or other party. The persistent connection between the client and server is known as a 'Websocket'
 that enables message exchange. The connection is established using a 'handshake' procedure that 
 configures both parties.
 
