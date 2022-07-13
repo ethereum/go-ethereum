@@ -50,6 +50,10 @@ a code {
     margin-bottom: -0.25em;
 }
 
+pre table {
+    white-space: pre;
+}
+
 table {
     margin-top: 16px;
     margin-bottom: 16px;
@@ -76,6 +80,11 @@ img[alt="Remix"]{
     margin-bottom: 2rem;
 }
 
+img[alt="Clef ruleset logic"]{
+    width: 800px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
 img[alt="Clef signing logic"]{
     width: 800px; 
     margin-top: 2rem;
