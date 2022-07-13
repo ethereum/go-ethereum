@@ -1364,7 +1364,7 @@ func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	accTrie.Commit(nil)
+	accTrie.Commit(false)
 	return accTrie, entries
 }
 
@@ -1420,7 +1420,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	trie.Commit(nil)
+	trie.Commit(false)
 	return trie, entries
 }
 
@@ -1444,7 +1444,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 		// Create a storage trie
 		stTrie, stEntries := makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), i, db)
 		stRoot := stTrie.Hash()
-		stTrie.Commit(nil)
+		stTrie.Commit(false)
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
 			Balance:  big.NewInt(int64(i)),
@@ -1460,7 +1460,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 	}
 	sort.Sort(entries)
 
-	accTrie.Commit(nil)
+	accTrie.Commit(false)
 	return accTrie, entries, storageTries, storageEntries
 }
 
@@ -1491,7 +1491,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 			stTrie, stEntries = makeStorageTrieWithSeed(common.BytesToHash(key), uint64(slots), 0, db)
 		}
 		stRoot := stTrie.Hash()
-		stTrie.Commit(nil)
+		stTrie.Commit(false)
 
 		value, _ := rlp.EncodeToBytes(&types.StateAccount{
 			Nonce:    i,
@@ -1507,7 +1507,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 		storageEntries[common.BytesToHash(key)] = stEntries
 	}
 	sort.Sort(entries)
-	accTrie.Commit(nil)
+	accTrie.Commit(false)
 	return accTrie, entries, storageTries, storageEntries
 }
 
@@ -1530,7 +1530,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	trie.Commit(nil)
+	trie.Commit(false)
 	return trie, entries
 }
 
@@ -1581,7 +1581,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (*trie
 		entries = append(entries, elem)
 	}
 	sort.Sort(entries)
-	trie.Commit(nil)
+	trie.Commit(false)
 	return trie, entries
 }
 

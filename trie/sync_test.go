@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,8 +51,13 @@ func makeTestTrie() (*Database, *SecureTrie, map[string][]byte) {
 			trie.Update(key, val)
 		}
 	}
-	trie.Commit(nil)
-
+	_, nodes, err := trie.Commit(false)
+	if err != nil {
+		panic(fmt.Errorf("failed to commit trie %v", err))
+	}
+	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
+		panic(fmt.Errorf("failed to commit db %v", err))
+	}
 	// Return the generated trie
 	return triedb, trie, content
 }

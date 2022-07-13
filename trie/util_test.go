@@ -66,7 +66,7 @@ func TestTrieTracer(t *testing.T) {
 	}
 
 	// Commit the changes
-	trie.Commit(nil)
+	trie.Commit(false)
 
 	// Delete all the elements, check deletion set
 	for _, val := range vals {
