@@ -3,8 +3,8 @@ title: JSON-RPC Server
 sort_key: A
 ---
 
-Interacting with Geth requires sending requests to specific JSON_RPC API 
-endpoints. Geth supports all standard Web3 [JSON-RPC API][web3-rpc] endpoints. 
+Interacting with Geth requires sending requests to specific JSON-RPC API 
+methods. Geth supports all standard Web3 [JSON-RPC API][web3-rpc] endpoints. 
 The RPC requests must be sent to the node and the response returned to the client 
 using some transport protocol. This page outlines the available transport protocols 
 in Geth, providing the information users require to choose a transport protocol for 
@@ -117,7 +117,7 @@ origin:
 ### WebSocket Server
 
 Websocket is a bidirectional transport protocol. Unlike HTTP, Websocket is *stateful*, meaning
-it maintains a connection between client and server untilit is explicitly terminated by one
+it maintains a connection between client and server until it is explicitly terminated by one
 or other party. The persistent connection between the client and server is known as a "Websocket"
 that enables message exchange. The connection is established using a 'handshake' procedure that 
 configures both parties.
@@ -220,4 +220,3 @@ protocol depends on the specific use case.
 [web3-rpc]: https://github.com/ethereum/execution-apis
 [remix]: https://remix.ethereum.org
 [rpc]: https://www.ibm.com/docs/en/aix/7.1?topic=concepts-remote-procedure-call
-
