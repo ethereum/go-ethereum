@@ -35,9 +35,9 @@ var (
 
 // fetchWhitelistCheckpoint fetched the latest checkpoint from it's local heimdall
 // and verifies the data against bor data.
-func (h *ethHandler) fetchWhitelistCheckpoint(bor *bor.Bor) (uint64, common.Hash, error) {
+func (h *ethHandler) fetchWhitelistCheckpoint(ctx context.Context, bor *bor.Bor) (uint64, common.Hash, error) {
 	// check for checkpoint whitelisting: bor
-	checkpoint, err := bor.HeimdallClient.FetchLatestCheckpoint()
+	checkpoint, err := bor.HeimdallClient.FetchLatestCheckpoint(ctx)
 	if err != nil {
 		log.Debug("Failed to fetch latest checkpoint for whitelisting")
 		return 0, common.Hash{}, errCheckpoint
@@ -51,7 +51,7 @@ func (h *ethHandler) fetchWhitelistCheckpoint(bor *bor.Bor) (uint64, common.Hash
 	}
 
 	// verify the root hash of checkpoint
-	roothash, err := h.ethAPI.GetRootHash(context.Background(), checkpoint.StartBlock.Uint64(), checkpoint.EndBlock.Uint64())
+	roothash, err := h.ethAPI.GetRootHash(ctx, checkpoint.StartBlock.Uint64(), checkpoint.EndBlock.Uint64())
 	if err != nil {
 		log.Debug("Failed to get root hash of checkpoint while whitelisting")
 		return 0, common.Hash{}, errRootHash

@@ -1,6 +1,7 @@
 package statefull
 
 import (
+	"context"
 	"math"
 	"math/big"
 
@@ -59,6 +60,7 @@ func GetSystemMessage(toAddress common.Address, data []byte) callmsg {
 
 // apply message
 func ApplyMessage(
+	_ context.Context,
 	msg callmsg,
 	state *state.StateDB,
 	header *types.Header,

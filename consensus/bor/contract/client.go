@@ -88,7 +88,7 @@ func (gc *GenesisContractsClient) CommitState(
 	}
 
 	msg := statefull.GetSystemMessage(common.HexToAddress(gc.StateReceiverContract), data)
-	gasUsed, err := statefull.ApplyMessage(msg, state, header, gc.chainConfig, chCtx)
+	gasUsed, err := statefull.ApplyMessage(context.Background(), msg, state, header, gc.chainConfig, chCtx)
 
 	// Logging event log with time and individual gasUsed
 	log.Info("→ committing new state", "eventRecord", event.String(gasUsed))

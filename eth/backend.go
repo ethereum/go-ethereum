@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -632,7 +633,8 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	}
 
 	// first run the checkpoint whitelist
-	err := s.handleWhitelistCheckpoint()
+	// TODO: add context timeout if needed
+	err := s.handleWhitelistCheckpoint(context.Background())
 	if err != nil {
 		if errors.Is(err, ErrBorConsensusWithoutHeimdall) || errors.Is(err, ErrNotBorConsensus) {
 			return
@@ -647,7 +649,8 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	for {
 		select {
 		case <-ticker.C:
-			err := s.handleWhitelistCheckpoint()
+			// TODO: add context timeout if needed
+			err = s.handleWhitelistCheckpoint(context.Background())
 			if err != nil {
 				log.Warn("unable to whitelist checkpoint", "err", err)
 			}
@@ -663,7 +666,7 @@ var (
 )
 
 // handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
-func (s *Ethereum) handleWhitelistCheckpoint() error {
+func (s *Ethereum) handleWhitelistCheckpoint(ctx context.Context) error {
 	ethHandler := (*ethHandler)(s.handler)
 
 	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
@@ -675,7 +678,7 @@ func (s *Ethereum) handleWhitelistCheckpoint() error {
 		return ErrBorConsensusWithoutHeimdall
 	}
 
-	endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint(bor)
+	endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint(ctx, bor)
 	if err != nil {
 		return err
 	}
