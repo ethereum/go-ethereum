@@ -37,17 +37,14 @@ the result in a response to the client. The RPC has to be implemented using some
 system - for Geth this transport system can be IPC, HTTP or Websockets. HTTP and Websockets are individually
 enabled using command line flags when Geth is started (IPC is enabled by default).
 
-Regardless of the transport protocol, the RPC address determines whether the RPC methods
-are accessible from the local machine or from other machines on the same network. The default
-for Geth is to expose `localhost:8545` (equivalent to `127.0.0.1:8545`) for RPC communication.
-This default only allows other processes on the same machine to communicate with the node
-via RPC. However, using a custom non-local address (e.g. `192.168.1.321`) enables access to
-other computers on the network. Those other computers could then execute RPC methods by sending
-them to `192.168.1.321:8545`. Access to the Geth RPC could then be available to any computers
-on the internet if internet traffic for port 8545 is forwarded to `192.168.1.321:8545`. Clearly, 
-this is a **massive security risk**, so it is recommended to use local access only in most 
-scenarios, and where remote access is required the internet connection must be configured so 
-that it does not forward internet traffic to Geth.
+Regardless of the transport protocol, the RPC address determines which ports are exposed for incoming
+RPC requests to Geth. The default for Geth is to expose `localhost:8545` (equivalent to `127.0.0.1:8545`) 
+for RPC communication for HTTP and 8546 for Websocket. To restrict RPC access to processes running on the 
+local machine, a firewall needs to be configured to block port 8545/8546 (or whatever custom port has been defined). 
+Leaving the RPC port open allows access to the Geth RPC to any computers on the internet. Clearly, this is 
+a **massive security risk**, so it is recommended to configure Geth with the RPC port blocked to all non-local 
+traffic in most scenarios, and where remote access is required a firewall must be configured so that it blocks 
+inbound requests from all ip addresses apart from ones that are explicitly whitelisted.
 
 ## Transport protocols
 
