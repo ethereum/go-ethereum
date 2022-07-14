@@ -101,31 +101,24 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   NewEthereumAPI(apiBackend),
 		}, {
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   NewBlockChainAPI(apiBackend),
 		}, {
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   NewTransactionAPI(apiBackend, nonceLock),
 		}, {
 			Namespace: "txpool",
-			Version:   "1.0",
 			Service:   NewTxPoolAPI(apiBackend),
 		}, {
 			Namespace: "debug",
-			Version:   "1.0",
 			Service:   NewDebugAPI(apiBackend),
 		}, {
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
 		}, {
 			Namespace: "personal",
-			Version:   "1.0",
 			Service:   NewPersonalAccountAPI(apiBackend, nonceLock),
 		},
 	}
