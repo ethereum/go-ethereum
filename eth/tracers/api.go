@@ -918,7 +918,6 @@ func APIs(backend Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "debug",
-			Version:   "1.0",
 			Service:   NewAPI(backend),
 		},
 	}
