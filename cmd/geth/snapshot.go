@@ -612,7 +612,10 @@ func convertToVerkle(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+	if chaindb == nil {
+		return errors.New("nil chaindb")
+	}
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")
@@ -645,21 +648,19 @@ func convertToVerkle(ctx *cli.Context) error {
 		rangeStart = ctx.Uint64(utils.VerkleConversionInsertRangeStartFlag.Name)
 		rangeEnd   = rangeStart + ctx.Uint64(utils.VerkleConversionInsertRangeSizeFlag.Name)
 		wg         sync.WaitGroup
+		flushError error
 	)
 
 	if rangeEnd > 256 {
 		rangeEnd = 256
 	}
 
-	convdb, err := rawdb.NewLevelDBDatabase("verkle", 128, 128, "", false)
-	if err != nil {
-		panic(err)
-	}
-
 	flushCh := make(chan verkle.VerkleNode)
 	saveverkle := func(node verkle.VerkleNode) {
 		flushCh <- node
 	}
+	var flushWg sync.WaitGroup
+	flushWg.Add(1)
 	go func() {
 		for node := range flushCh {
 			comm := node.ComputeCommitment()
@@ -668,10 +669,12 @@ func convertToVerkle(ctx *cli.Context) error {
 				panic(err)
 			}
 			commB := comm.Bytes()
-			if err := convdb.Put(commB[:], s); err != nil {
-				panic(err)
+			if err := chaindb.Put(commB[:], s); err != nil {
+				flushError = err
+				break
 			}
 		}
+		flushWg.Done()
 	}()
 
 	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, root, false, false, false)
@@ -730,7 +733,7 @@ func convertToVerkle(ctx *cli.Context) error {
 				hug.node.ComputeCommitment()
 				hashed := hug.node.ToHashedNode()
 				flushCh <- hug.node
-				root.InsertStem(hug.stem, hashed, convdb.Get)
+				root.InsertStem(hug.stem, hashed, chaindb.Get)
 			}
 			wg.Done()
 		}()
@@ -758,7 +761,11 @@ func convertToVerkle(ctx *cli.Context) error {
 		for i, b := range acc.Balance.Bytes() {
 			balance[len(acc.Balance.Bytes())-1-i] = b
 		}
-		stem := trieUtils.GetTreeKeyVersion(accIt.Hash().Bytes())[:]
+		addr := rawdb.ReadPreimage(chaindb, accIt.Hash())
+		if addr == nil {
+			return fmt.Errorf("could not find preimage for address %x %v %v", accIt.Hash(), acc, accIt.Error())
+		}
+		stem := trieUtils.GetTreeKeyVersion(addr)
 
 		// Store the account code if present
 		if !bytes.Equal(acc.CodeHash, emptyCode) {
@@ -774,7 +781,7 @@ func convertToVerkle(ctx *cli.Context) error {
 
 			for i := 128; i < len(chunks); {
 				values := make([][]byte, 256)
-				chunkkey := trieUtils.GetTreeKeyCodeChunk(accIt.Hash().Bytes(), uint256.NewInt(uint64(i)))
+				chunkkey := trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i)))
 				j := i
 				for ; (j-i) < 256 && j < len(chunks); j++ {
 					values[(j-128)%256] = chunks[j][:]
@@ -806,7 +813,11 @@ func convertToVerkle(ctx *cli.Context) error {
 				return err
 			}
 			for storageIt.Next() {
-				slotkey := trieUtils.GetTreeKeyStorageSlot(accIt.Hash().Bytes(), uint256.NewInt(0).SetBytes(storageIt.Slot()))
+				slotnr := rawdb.ReadPreimage(chaindb, storageIt.Hash())
+				if slotnr == nil {
+					return fmt.Errorf("could not find preimage for slot %x", storageIt.Hash())
+				}
+				slotkey := trieUtils.GetTreeKeyStorageSlot(addr, uint256.NewInt(0).SetBytes(slotnr))
 
 				var value [32]byte
 				copy(value[:len(storageIt.Slot())-1], storageIt.Slot())
@@ -839,8 +850,8 @@ func convertToVerkle(ctx *cli.Context) error {
 			}
 			// Finish with storing the complete account header group
 			// inside the tree.
-			treeHuggers[int(stem[0])/rootPerCPU] <- &treeHugger{stem: stem[:], node: verkle.NewLeafNode(stem[:], newValues)}
 		}
+		treeHuggers[int(stem[0])/rootPerCPU] <- &treeHugger{stem: stem[:], node: verkle.NewLeafNode(stem[:], newValues)}
 
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -856,10 +867,15 @@ func convertToVerkle(ctx *cli.Context) error {
 		close(hugger)
 	}
 	wg.Wait()
+	if flushError != nil {
+		log.Error("Error encountered by the flusing goroutine", "error", flushError)
+	}
 
 	vRoot := verkle.MergeTrees(subRoots)
 	vRoot.ComputeCommitment()
 	vRoot.(*verkle.InternalNode).Flush(saveverkle)
+	close(flushCh)
+	flushWg.Wait()
 
 	if rangeStart != 0 || rangeEnd != 256 {
 		children := vRoot.(*verkle.InternalNode).Children()
@@ -948,12 +964,7 @@ func verifyVerkle(ctx *cli.Context) error {
 		rangeEnd = 256
 	}
 
-	convdb, err := rawdb.NewLevelDBDatabase("verkle", 128, 128, "", false)
-	if err != nil {
-		panic(err)
-	}
-
-	serializedRoot, err := convdb.Get(rootC[:])
+	serializedRoot, err := chaindb.Get(rootC[:])
 	if err != nil {
 		return err
 	}
@@ -962,5 +973,5 @@ func verifyVerkle(ctx *cli.Context) error {
 		return err
 	}
 
-	return checkChildren(root, convdb.Get)
+	return checkChildren(root, chaindb.Get)
 }
