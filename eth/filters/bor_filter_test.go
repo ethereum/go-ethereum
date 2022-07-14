@@ -119,12 +119,6 @@ func TestBorFilters(t *testing.T) {
 
 		}
 
-		temp := rawdb.ReadBorReceipt(db, block.Hash(), block.NumberU64())
-		if temp != nil {
-			fmt.Printf("temp: %+v\n", temp)
-			fmt.Printf("temp.Logs: %+v\n", temp.Logs[0])
-		}
-
 	}
 
 	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
