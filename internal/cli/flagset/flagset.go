@@ -202,10 +202,11 @@ func (f *Flagset) BigIntFlag(b *BigIntFlag) {
 }
 
 type SliceStringFlag struct {
-	Name  string
-	Usage string
-	Value *[]string
-	Group string
+	Name    string
+	Usage   string
+	Value   *[]string
+	Default []string
+	Group   string
 }
 
 func (i *SliceStringFlag) String() string {
@@ -217,8 +218,8 @@ func (i *SliceStringFlag) String() string {
 }
 
 func (i *SliceStringFlag) Set(value string) error {
-	*i.Value = append(*i.Value, strings.Split(value, ",")...)
-
+	// overwritting insted of appending
+	*i.Value = strings.Split(value, ",")
 	return nil
 }
 

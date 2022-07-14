@@ -22,8 +22,8 @@ func TestConfigDefault(t *testing.T) {
 
 func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
-		Chain:      "0",
-		NoSnapshot: true,
+		Chain:    "0",
+		Snapshot: true,
 		RequiredBlocks: map[string]string{
 			"a": "b",
 		},
@@ -54,8 +54,8 @@ func TestConfigMerge(t *testing.T) {
 	}
 
 	expected := &Config{
-		Chain:      "1",
-		NoSnapshot: false,
+		Chain:    "1",
+		Snapshot: false,
 		RequiredBlocks: map[string]string{
 			"a": "b",
 			"b": "c",
@@ -64,7 +64,6 @@ func TestConfigMerge(t *testing.T) {
 			MaxPeers: 10,
 			Discovery: &P2PDiscovery{
 				StaticNodes: []string{
-					"a",
 					"b",
 				},
 			},
