@@ -18,10 +18,13 @@ import (
 )
 
 func TestBorFilters(t *testing.T) {
+	t.Parallel()
+
 	dir, err := ioutil.TempDir("", "filtertest")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer os.RemoveAll(dir)
 
 	var (
@@ -35,10 +38,12 @@ func TestBorFilters(t *testing.T) {
 		hash3 = common.BytesToHash([]byte("topic3"))
 		hash4 = common.BytesToHash([]byte("topic4"))
 	)
+
 	defer db.Close()
 
 	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
 	sprint := params.TestChainConfig.Bor.Sprint
+
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 7: //state-sync tx at block 8
@@ -86,6 +91,7 @@ func TestBorFilters(t *testing.T) {
 			gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x1000"), big.NewInt(1000), 1000, gen.BaseFee(), nil))
 		}
 	})
+
 	for i, block := range chain {
 		// write the block to database
 		rawdb.WriteBlock(db, block)
@@ -93,8 +99,10 @@ func TestBorFilters(t *testing.T) {
 		rawdb.WriteHeadBlockHash(db, block.Hash())
 
 		blockBatch := db.NewBatch()
+
 		// since all the transactions are state-sync, we will not include them as normal receipts
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), []*types.Receipt{})
+
 		// check for blocks with receipts. Since the only receipt is state-sync, we can chack the length of receipts
 		if len(receipts[i]) > 0 {
 			// write the state-sync receipts to database
@@ -106,19 +114,18 @@ func TestBorFilters(t *testing.T) {
 			// 4. Transactions in the block(except state-sync) i.e. 0 in our case
 			// 5. AllLogs - StateSyncLogs ; since we only have state-sync tx, it will be 0
 			types.DeriveFieldsForBorLogs(receipts[i][0].Logs, block.Hash(), block.NumberU64(), uint(0), uint(0))
+
 			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
 				Status: types.ReceiptStatusSuccessful, // make receipt status successful
 				Logs:   receipts[i][0].Logs,
 			})
-			rawdb.WriteBorTxLookupEntry(blockBatch, block.Hash(), block.NumberU64())
 
+			rawdb.WriteBorTxLookupEntry(blockBatch, block.Hash(), block.NumberU64())
 		}
 
 		if err := blockBatch.Write(); err != nil {
 			fmt.Println("Failed to write block into disk", "err", err)
-
 		}
-
 	}
 
 	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
@@ -130,18 +137,22 @@ func TestBorFilters(t *testing.T) {
 
 	filter = NewBorBlockLogsRangeFilter(backend, sprint, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
+
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
 	}
+
 	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
 	filter = NewBorBlockLogsRangeFilter(backend, sprint, 992, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
+
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
 	}
+
 	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
