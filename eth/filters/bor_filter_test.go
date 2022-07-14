@@ -28,7 +28,7 @@ func TestBorFilters(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
+		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
