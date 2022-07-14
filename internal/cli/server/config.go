@@ -40,8 +40,8 @@ type Config struct {
 	// Chain is the chain to sync with
 	Chain string `hcl:"chain,optional"`
 
-	// Name, or identity of the node
-	Name string `hcl:"name,optional"`
+	// Identity of the node
+	Identity string `hcl:"identity,optional"`
 
 	// RequiredBlocks is a list of required (block number, hash) pairs to accept
 	RequiredBlocks map[string]string `hcl:"requiredblocks,optional"`
@@ -61,8 +61,8 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gc-mode,optional"`
 
-	// NoSnapshot disables the snapshot database mode
-	NoSnapshot bool `hcl:"no-snapshot,optional"`
+	// Snapshot disables/enables the snapshot database mode
+	Snapshot bool `hcl:"snapshot,optional"`
 
 	// Ethstats is the address of the ethstats server to send telemetry
 	Ethstats string `hcl:"ethstats,optional"`
@@ -217,12 +217,6 @@ type JsonRPCConfig struct {
 	// IPCPath is the path of the ipc endpoint
 	IPCPath string `hcl:"ipc-path,optional"`
 
-	// VHost is the list of valid virtual hosts
-	VHost []string `hcl:"vhost,optional"`
-
-	// Cors is the list of Cors endpoints
-	Cors []string `hcl:"cors,optional"`
-
 	// GasCap is the global gas cap for eth-call variants.
 	GasCap uint64 `hcl:"gas-cap,optional"`
 
@@ -232,10 +226,10 @@ type JsonRPCConfig struct {
 	// Http has the json-rpc http related settings
 	Http *APIConfig `hcl:"http,block"`
 
-	// Http has the json-rpc websocket related settings
+	// Ws has the json-rpc websocket related settings
 	Ws *APIConfig `hcl:"ws,block"`
 
-	// Http has the json-rpc graphql related settings
+	// Graphql has the json-rpc graphql related settings
 	Graphql *APIConfig `hcl:"graphql,block"`
 }
 
@@ -258,7 +252,13 @@ type APIConfig struct {
 	Host string `hcl:"host,optional"`
 
 	// Modules is the list of enabled api modules
-	Modules []string `hcl:"modules,optional"`
+	API []string `hcl:"modules,optional"`
+
+	// VHost is the list of valid virtual hosts
+	VHost []string `hcl:"vhost,optional"`
+
+	// Cors is the list of Cors endpoints
+	Cors []string `hcl:"cors,optional"`
 }
 
 type GpoConfig struct {
@@ -387,7 +387,7 @@ type DeveloperConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Chain:          "mainnet",
-		Name:           Hostname(),
+		Identity:       Hostname(),
 		RequiredBlocks: map[string]string{},
 		LogLevel:       "INFO",
 		DataDir:        defaultDataDir(),
@@ -412,9 +412,9 @@ func DefaultConfig() *Config {
 			URL:     "http://localhost:1317",
 			Without: false,
 		},
-		SyncMode:   "full",
-		GcMode:     "full",
-		NoSnapshot: false,
+		SyncMode: "full",
+		GcMode:   "full",
+		Snapshot: true,
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
@@ -444,8 +444,6 @@ func DefaultConfig() *Config {
 		JsonRPC: &JsonRPCConfig{
 			IPCDisable: false,
 			IPCPath:    "",
-			Cors:       []string{"*"},
-			VHost:      []string{"*"},
 			GasCap:     ethconfig.Defaults.RPCGasCap,
 			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
 			Http: &APIConfig{
@@ -453,17 +451,23 @@ func DefaultConfig() *Config {
 				Port:    8545,
 				Prefix:  "",
 				Host:    "localhost",
-				Modules: []string{"eth", "net", "web3", "txpool", "bor"},
+				API:     []string{"eth", "net", "web3", "txpool", "bor"},
+				Cors:    []string{"*"},
+				VHost:   []string{"*"},
 			},
 			Ws: &APIConfig{
 				Enabled: false,
 				Port:    8546,
 				Prefix:  "",
 				Host:    "localhost",
-				Modules: []string{"web3", "net"},
+				API:     []string{"web3", "net"},
+				Cors:    []string{"*"},
+				VHost:   []string{"*"},
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
+				Cors:    []string{"*"},
+				VHost:   []string{"*"},
 			},
 		},
 		Ethstats: "",
@@ -864,7 +868,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	}
 
 	// snapshot disable check
-	if c.NoSnapshot {
+	if !c.Snapshot {
 		if n.SyncMode == downloader.SnapSync {
 			log.Info("Snap sync requested, enabling --snapshot")
 		} else {
@@ -908,15 +912,15 @@ func (c *Config) buildNode() (*node.Config, error) {
 			ListenAddr:      c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV5:     c.P2P.Discovery.V5Enabled,
 		},
-		HTTPModules:         c.JsonRPC.Http.Modules,
-		HTTPCors:            c.JsonRPC.Cors,
-		HTTPVirtualHosts:    c.JsonRPC.VHost,
+		HTTPModules:         c.JsonRPC.Http.API,
+		HTTPCors:            c.JsonRPC.Http.Cors,
+		HTTPVirtualHosts:    c.JsonRPC.Http.VHost,
 		HTTPPathPrefix:      c.JsonRPC.Http.Prefix,
-		WSModules:           c.JsonRPC.Ws.Modules,
-		WSOrigins:           c.JsonRPC.Cors,
+		WSModules:           c.JsonRPC.Ws.API,
+		WSOrigins:           c.JsonRPC.Ws.Cors,
 		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
-		GraphQLCors:         c.JsonRPC.Cors,
-		GraphQLVirtualHosts: c.JsonRPC.VHost,
+		GraphQLCors:         c.JsonRPC.Graphql.Cors,
+		GraphQLVirtualHosts: c.JsonRPC.Graphql.VHost,
 	}
 
 	// dev mode
@@ -999,7 +1003,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 
 func (c *Config) Merge(cc ...*Config) error {
 	for _, elem := range cc {
-		if err := mergo.Merge(c, elem, mergo.WithOverwriteWithEmptyValue, mergo.WithAppendSlice); err != nil {
+		if err := mergo.Merge(c, elem, mergo.WithOverwriteWithEmptyValue); err != nil {
 			return fmt.Errorf("failed to merge configurations: %v", err)
 		}
 	}

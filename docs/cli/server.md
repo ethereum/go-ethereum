@@ -6,7 +6,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```chain```: Name of the chain to sync
 
-- ```name```: Name/Identity of the node
+- ```identity```: Name/Identity of the node
 
 - ```log-level```: Set log level for the server
 
@@ -22,7 +22,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```requiredblocks```: Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
 
-- ```no-snapshot```: Disables the snapshot-database mode (default = false)
+- ```snapshot```: Disables/Enables the snapshot-database mode (default = true)
 
 - ```bor.heimdall```: URL of Heimdall service
 
@@ -88,9 +88,17 @@ The ```bor server``` command runs the Bor client.
 
 - ```ipcpath```: Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
-- ```jsonrpc.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
+- ```http.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
 
-- ```jsonrpc.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+- ```http.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+
+- ```ws.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
+
+- ```ws.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+
+- ```graphql.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
+
+- ```graphql.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 
 - ```http```: Enable the HTTP-RPC server
 
@@ -100,7 +108,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.rpcprefix```: HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
 
-- ```http.modules```: API's offered over the HTTP-RPC interface
+- ```http.api```: API's offered over the HTTP-RPC interface
 
 - ```ws```: Enable the WS-RPC server
 
@@ -110,7 +118,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```ws.rpcprefix```: HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
 
-- ```ws.modules```: API's offered over the WS-RPC interface
+- ```ws.api```: API's offered over the WS-RPC interface
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
 
