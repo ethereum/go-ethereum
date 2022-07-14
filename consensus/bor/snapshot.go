@@ -131,7 +131,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		}
 
 		// check if signer is in validator set
-		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
+		if !snap.ValidatorSet.HasAddress(signer) {
 			return nil, &UnauthorizedSignerError{number, signer.Bytes()}
 		}
 
@@ -201,18 +201,18 @@ func (s *Snapshot) signers() []common.Address {
 }
 
 // Difficulty returns the difficulty for a particular signer at the current snapshot number
-func (s *Snapshot) Difficulty(signer common.Address) uint64 {
+func Difficulty(validatorSet *valset.ValidatorSet, signer common.Address) uint64 {
 	// if signer is empty
 	if signer == (common.Address{}) {
 		return 1
 	}
 
-	validators := s.ValidatorSet.Validators
-	proposer := s.ValidatorSet.GetProposer().Address
+	validators := validatorSet.Validators
+	proposer := validatorSet.GetProposer().Address
 	totalValidators := len(validators)
 
-	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
+	proposerIndex, _ := validatorSet.GetByAddress(proposer)
+	signerIndex, _ := validatorSet.GetByAddress(signer)
 
 	// temp index
 	tempIndex := signerIndex

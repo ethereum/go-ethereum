@@ -5,11 +5,12 @@ import (
 	"io/ioutil"
 	"os"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

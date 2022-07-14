@@ -59,8 +59,9 @@ func (api *PublicFilterAPI) NewDeposits(ctx context.Context, crit ethereum.State
 	}
 
 	rpcSub := notifier.CreateSubscription()
+
 	go func() {
-		stateSyncData := make(chan *types.StateSyncData)
+		stateSyncData := make(chan *types.StateSyncData, 10)
 		stateSyncSub := api.events.SubscribeNewDeposits(stateSyncData)
 
 		for {

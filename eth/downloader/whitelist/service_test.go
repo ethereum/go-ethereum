@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,11 +28,11 @@ func TestWhitelistCheckpoint(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		s.enqueueCheckpointWhitelist(uint64(i), common.Hash{})
 	}
-	assert.Equal(t, s.length(), 10, "expected 10 items in whitelist")
+	require.Equal(t, s.length(), 10, "expected 10 items in whitelist")
 
 	s.enqueueCheckpointWhitelist(11, common.Hash{})
 	s.dequeueCheckpointWhitelist()
-	assert.Equal(t, s.length(), 10, "expected 10 items in whitelist")
+	require.Equal(t, s.length(), 10, "expected 10 items in whitelist")
 }
 
 // TestIsValidChain checks che IsValidChain function in isolation
@@ -44,14 +44,14 @@ func TestIsValidChain(t *testing.T) {
 
 	// case1: no checkpoint whitelist, should consider the chain as valid
 	res, err := s.IsValidChain(nil, nil)
-	assert.NilError(t, err, "expected no error")
-	assert.Equal(t, res, true, "expected chain to be valid")
+	require.NoError(t, err, "expected no error")
+	require.Equal(t, res, true, "expected chain to be valid")
 
 	// add checkpoint entries and mock fetchHeadersByNumber function
 	s.ProcessCheckpoint(uint64(0), common.Hash{})
 	s.ProcessCheckpoint(uint64(1), common.Hash{})
 
-	assert.Equal(t, s.length(), 2, "expected 2 items in whitelist")
+	require.Equal(t, s.length(), 2, "expected 2 items in whitelist")
 
 	// create a false function, returning absolutely nothing
 	falseFetchHeadersByNumber := func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
@@ -69,7 +69,7 @@ func TestIsValidChain(t *testing.T) {
 		t.Fatalf("expected error ErrNoRemoteCheckoint, got %v", err)
 	}
 
-	assert.Equal(t, res, false, "expected chain to be invalid")
+	require.Equal(t, res, false, "expected chain to be invalid")
 
 	// case3: correct fetchHeadersByNumber function provided, should consider the chain as valid
 	// create a mock function, returning a the required header
@@ -92,16 +92,16 @@ func TestIsValidChain(t *testing.T) {
 	}
 
 	res, err = s.IsValidChain(nil, fetchHeadersByNumber)
-	assert.NilError(t, err, "expected no error")
-	assert.Equal(t, res, true, "expected chain to be valid")
+	require.NoError(t, err, "expected no error")
+	require.Equal(t, res, true, "expected chain to be valid")
 
 	// add one more checkpoint whitelist entry
 	s.ProcessCheckpoint(uint64(2), common.Hash{})
-	assert.Equal(t, s.length(), 3, "expected 3 items in whitelist")
+	require.Equal(t, s.length(), 3, "expected 3 items in whitelist")
 
 	// case4: correct fetchHeadersByNumber function provided with wrong header
 	// for block number 2. Should consider the chain as invalid and throw an error
 	res, err = s.IsValidChain(nil, fetchHeadersByNumber)
-	assert.Equal(t, err, ErrCheckpointMismatch, "expected checkpoint mismatch error")
-	assert.Equal(t, res, false, "expected chain to be invalid")
+	require.Equal(t, err, ErrCheckpointMismatch, "expected checkpoint mismatch error")
+	require.Equal(t, res, false, "expected chain to be invalid")
 }

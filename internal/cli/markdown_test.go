@@ -3,12 +3,12 @@ package cli
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodeBlock(t *testing.T) {
 	t.Parallel()
-	assert := assert.New(t)
+	assert := require.New(t)
 
 	lines := []string{
 		"abc",

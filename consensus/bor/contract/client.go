@@ -102,7 +102,8 @@ func (gc *GenesisContractsClient) CommitState(
 
 func (gc *GenesisContractsClient) LastStateId(snapshotNumber uint64) (*big.Int, error) {
 	blockNr := rpc.BlockNumber(snapshotNumber)
-	method := "lastStateId"
+
+	const method = "lastStateId"
 
 	data, err := gc.stateReceiverABI.Pack(method)
 	if err != nil {

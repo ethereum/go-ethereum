@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -55,11 +55,11 @@ func TestGenesisContractChange(t *testing.T) {
 	genesis := genspec.MustCommit(db)
 
 	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	config := params.ChainConfig{}
 	chain, err := core.NewBlockChain(db, nil, &config, b, vm.Config{}, nil, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	addBlock := func(root common.Hash, num int64) (common.Hash, *state.StateDB) {
 		h := &types.Header{
@@ -70,37 +70,37 @@ func TestGenesisContractChange(t *testing.T) {
 
 		// write state to database
 		root, err := statedb.Commit(false)
-		assert.NoError(t, err)
-		assert.NoError(t, statedb.Database().TrieDB().Commit(root, true, nil))
+		require.NoError(t, err)
+		require.NoError(t, statedb.Database().TrieDB().Commit(root, true, nil))
 
 		statedb, err := state.New(h.Root, state.NewDatabase(db), nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		return root, statedb
 	}
 
-	assert.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
 
 	root := genesis.Root()
 
 	// code does not change
 	root, statedb = addBlock(root, 1)
-	assert.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
 
 	// code changes 1st time
 	root, statedb = addBlock(root, 2)
-	assert.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
 
 	// code same as 1st change
 	root, statedb = addBlock(root, 3)
-	assert.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
 
 	// code changes 2nd time
 	_, statedb = addBlock(root, 4)
-	assert.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
+	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
 
 	// make sure balance change DOES NOT take effect
-	assert.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
+	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
 }
 
 func TestEncodeSigHeaderJaipur(t *testing.T) {
@@ -124,19 +124,19 @@ func TestEncodeSigHeaderJaipur(t *testing.T) {
 
 	// Jaipur NOT enabled and BaseFee not set
 	hash := SealHash(h, &params.BorConfig{JaipurBlock: 10})
-	assert.Equal(t, hash, hashWithoutBaseFee)
+	require.Equal(t, hash, hashWithoutBaseFee)
 
 	// Jaipur enabled (Jaipur=0) and BaseFee not set
 	hash = SealHash(h, &params.BorConfig{JaipurBlock: 0})
-	assert.Equal(t, hash, hashWithoutBaseFee)
+	require.Equal(t, hash, hashWithoutBaseFee)
 
 	h.BaseFee = big.NewInt(2)
 
 	// Jaipur enabled (Jaipur=Header block) and BaseFee set
 	hash = SealHash(h, &params.BorConfig{JaipurBlock: 1})
-	assert.Equal(t, hash, hashWithBaseFee)
+	require.Equal(t, hash, hashWithBaseFee)
 
 	// Jaipur NOT enabled and BaseFee set
 	hash = SealHash(h, &params.BorConfig{JaipurBlock: 10})
-	assert.Equal(t, hash, hashWithoutBaseFee)
+	require.Equal(t, hash, hashWithoutBaseFee)
 }

@@ -3,14 +3,16 @@ package valset
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-
-	"gotest.tools/assert"
 )
 
 func NewValidatorFromKey(key string, votingPower int64) *Validator {
 	privKey, _ := crypto.HexToECDSA(key)
+
 	return NewValidator(crypto.PubkeyToAddress(privKey.PublicKey), votingPower)
 }
 
@@ -50,7 +52,7 @@ func TestIncrementProposerPriority(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		valSet.IncrementProposerPriority(1)
 
-		assert.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
+		require.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
 	}
 
 	// Validator set length = 2
@@ -61,7 +63,7 @@ func TestIncrementProposerPriority(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		valSet.IncrementProposerPriority(1)
 
-		assert.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
+		require.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
 	}
 
 	// Validator set length = 3
@@ -72,7 +74,7 @@ func TestIncrementProposerPriority(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		valSet.IncrementProposerPriority(1)
 
-		assert.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
+		require.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
 	}
 
 	// Validator set length = 4
@@ -83,7 +85,7 @@ func TestIncrementProposerPriority(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		valSet.IncrementProposerPriority(1)
 
-		assert.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
+		require.Equal(t, expectedPropsers[i].Address, valSet.GetProposer().Address)
 	}
 }
 
@@ -99,7 +101,7 @@ func TestRescalePriorities(t *testing.T) {
 
 	expectedPriorities := []int64{0}
 	for i, val := range valSet.Validators {
-		assert.Equal(t, expectedPriorities[i], val.ProposerPriority)
+		require.Equal(t, expectedPriorities[i], val.ProposerPriority)
 	}
 
 	// Validator set length = 2
@@ -110,7 +112,7 @@ func TestRescalePriorities(t *testing.T) {
 
 	expectedPriorities = []int64{50, -50}
 	for i, val := range valSet.Validators {
-		assert.Equal(t, expectedPriorities[i], val.ProposerPriority)
+		require.Equal(t, expectedPriorities[i], val.ProposerPriority)
 	}
 
 	// Validator set length = 3
@@ -121,7 +123,7 @@ func TestRescalePriorities(t *testing.T) {
 
 	expectedPriorities = []int64{-17, 5, 11}
 	for i, val := range valSet.Validators {
-		assert.Equal(t, expectedPriorities[i], val.ProposerPriority)
+		require.Equal(t, expectedPriorities[i], val.ProposerPriority)
 	}
 
 	// Validator set length = 4
@@ -132,7 +134,7 @@ func TestRescalePriorities(t *testing.T) {
 
 	expectedPriorities = []int64{-6, 3, 1, 2}
 	for i, val := range valSet.Validators {
-		assert.Equal(t, expectedPriorities[i], val.ProposerPriority)
+		require.Equal(t, expectedPriorities[i], val.ProposerPriority)
 	}
 }
 
@@ -148,18 +150,18 @@ func TestGetValidatorByAddressAndIndex(t *testing.T) {
 
 		assert.DeepEqual(t, val, valByIndex)
 		assert.DeepEqual(t, val, valByAddress)
-		assert.DeepEqual(t, val.Address, common.BytesToAddress(addr))
+		assert.DeepEqual(t, val.Address, addr)
 	}
 
 	tempAddress := common.HexToAddress("0x12345")
 
 	// Negative Testcase
 	idx, _ := valSet.GetByAddress(tempAddress)
-	assert.Equal(t, idx, -1)
+	require.Equal(t, idx, -1)
 
 	// checking for validator index out of range
 	addr, _ := valSet.GetByIndex(100)
-	assert.Equal(t, common.BytesToAddress(addr), common.Address{})
+	require.Equal(t, addr, common.Address{})
 }
 
 func TestUpdateWithChangeSet(t *testing.T) {
@@ -169,28 +171,29 @@ func TestUpdateWithChangeSet(t *testing.T) {
 	valSet := NewValidatorSet(vals[:4])
 
 	// halved the power of vals[2] and doubled the power of vals[3]
-	val2 := NewValidatorFromKey("c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd7", 150) // signer2
-	val3 := NewValidatorFromKey("c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd6", 800) // signer3
+	vals[2].VotingPower = 150
+	vals[3].VotingPower = 800
 
 	// Adding new temp validator in the set
-	tempSigner := "c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd5"
+	const tempSigner = "c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd5"
+
 	tempVal := NewValidatorFromKey(tempSigner, 250)
 
 	// check totalVotingPower before updating validator set
-	assert.Equal(t, int64(1000), valSet.TotalVotingPower())
+	require.Equal(t, int64(1000), valSet.TotalVotingPower())
 
-	err := valSet.UpdateWithChangeSet([]*Validator{val2, val3, tempVal})
-	assert.NilError(t, err)
+	err := valSet.UpdateWithChangeSet([]*Validator{vals[2], vals[3], tempVal})
+	require.NoError(t, err)
 
 	// check totalVotingPower after updating validator set
-	assert.Equal(t, int64(1500), valSet.TotalVotingPower())
+	require.Equal(t, int64(1500), valSet.TotalVotingPower())
 
 	_, updatedVal2 := valSet.GetByAddress(vals[2].Address)
-	assert.Equal(t, int64(150), updatedVal2.VotingPower)
+	require.Equal(t, int64(150), updatedVal2.VotingPower)
 
 	_, updatedVal3 := valSet.GetByAddress(vals[3].Address)
-	assert.Equal(t, int64(800), updatedVal3.VotingPower)
+	require.Equal(t, int64(800), updatedVal3.VotingPower)
 
 	_, updatedTempVal := valSet.GetByAddress(tempVal.Address)
-	assert.Equal(t, int64(250), updatedTempVal.VotingPower)
+	require.Equal(t, int64(250), updatedTempVal.VotingPower)
 }
