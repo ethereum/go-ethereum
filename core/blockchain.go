@@ -748,13 +748,13 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	var parentHash common.Hash
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
+		if block == nil {
+			return fmt.Errorf("export failed on #%d: not found", nr)
+		}
 		if nr > first && block.Hash() != parentHash {
 			return fmt.Errorf("export failed: chain reorg during export")
 		}
 		parentHash = block.Hash()
-		if block == nil {
-			return fmt.Errorf("export failed on #%d: not found", nr)
-		}
 		if err := block.EncodeRLP(w); err != nil {
 			return err
 		}
