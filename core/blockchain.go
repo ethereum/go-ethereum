@@ -754,7 +754,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
 		}
-		if nr > first && block.Hash() != parentHash {
+		if nr > first && block.ParentHash() != parentHash {
 			return fmt.Errorf("export failed: chain reorg during export")
 		}
 		parentHash = block.Hash()
