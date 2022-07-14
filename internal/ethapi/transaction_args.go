@@ -169,13 +169,11 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	// chain id as the default.
 	want := b.ChainConfig().ChainID
 	if args.ChainID != nil {
-		got := (*big.Int)(args.ChainID)
-		if want.Cmp(got) != 0 {
-			return fmt.Errorf("chainId does not match local (got=%s, want=%s)", got.String(), want.String())
+		if have := (*big.Int)(args.ChainID); have.Cmp(want) != 0 {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, want)
 		}
 	} else {
-		id := (*hexutil.Big)(want)
-		args.ChainID = id
+		args.ChainID = (*hexutil.Big)(want)
 	}
 	return nil
 }
