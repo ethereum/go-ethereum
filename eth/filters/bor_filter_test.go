@@ -3,9 +3,7 @@ package filters
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,13 +17,6 @@ import (
 
 func TestBorFilters(t *testing.T) {
 	t.Parallel()
-
-	dir, err := ioutil.TempDir("", "filtertest")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.RemoveAll(dir)
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
