@@ -249,17 +249,16 @@ func (s *Sync) Missing(max int) ([]string, []common.Hash, []common.Hash) {
 		s.queue.Pop()
 		s.fetches[depth]++
 
-		switch item.(type) {
+		switch item := item.(type) {
 		case common.Hash:
-			codeHashes = append(codeHashes, item.(common.Hash))
+			codeHashes = append(codeHashes, item)
 		case string:
-			path := item.(string)
-			req, ok := s.nodeReqs[path]
+			req, ok := s.nodeReqs[item]
 			if !ok {
-				log.Error("Missing node request", "path", path)
+				log.Error("Missing node request", "path", item)
 				continue // System very wrong, shouldn't happen
 			}
-			nodePaths = append(nodePaths, path)
+			nodePaths = append(nodePaths, item)
 			nodeHashes = append(nodeHashes, req.hash)
 		}
 	}
