@@ -554,7 +554,7 @@ func (c *ChainConfig) IsShangai(num *big.Int) bool {
 
 // IsCancun returns whether num is either equal to the Cancun fork block or greater.
 func (c *ChainConfig) IsCancun(num *big.Int) bool {
-	return isForked(c.ShangaiBlock, num)
+	return isForked(c.CancunBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
