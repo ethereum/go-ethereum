@@ -278,7 +278,7 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	}
 }
 
-// TestZeroRequestID_66 checks that a message with a request ID of zero is still handled
+// TestZeroRequestID checks that a message with a request ID of zero is still handled
 // by the node.
 func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	conn, err := s.dial()
@@ -504,7 +504,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	}
 }
 
-// TestNewPooledTxs_66 tests whether a node will do a GetPooledTransactions
+// TestNewPooledTxs tests whether a node will do a GetPooledTransactions
 // request upon receiving a NewPooledTransactionHashes announcement.
 func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	// send the next block to ensure the node is no longer syncing and
