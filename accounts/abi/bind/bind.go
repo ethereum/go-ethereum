@@ -43,6 +43,28 @@ const (
 	LangObjC
 )
 
+func isKeyWord(arg string) bool {
+	switch arg {
+	case "range":
+	case "func":
+	case "make":
+	case "for":
+	case "new":
+	case "switch":
+	case "case":
+	case "var":
+	case "const":
+	case "type":
+	case "iota":
+	case "return":
+	case "struct":
+	default:
+		return false
+	}
+
+	return true
+}
+
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
@@ -114,7 +136,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
-				if input.Name == "" || input.Name == "range" {
+				if input.Name == "" || isKeyWord(input.Name) {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
 				if hasStruct(input.Type) {
