@@ -1891,7 +1891,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	defer db.Close()
 
-	newChain, err := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	newChain, err := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
@@ -1969,7 +1969,7 @@ func TestIssue23496(t *testing.T) {
 		}
 	)
 
-	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -2024,7 +2024,7 @@ func TestIssue23496(t *testing.T) {
 
 	defer db.Close()
 
-	chain, err = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -55,7 +54,7 @@ func CreateMockServer(config *Config) (*Server, error) {
 	config.GRPC.Addr = fmt.Sprintf(":%d", port)
 
 	// datadir
-	datadir, _ := ioutil.TempDir("/tmp", "bor-cli-test")
+	datadir, _ := os.MkdirTemp("/tmp", "bor-cli-test")
 	config.DataDir = datadir
 
 	// find available port for http server

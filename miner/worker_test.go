@@ -114,7 +114,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	db2 := rawdb.NewMemoryDatabase()
 	b.Genesis.MustCommit(db2)
 
-	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -650,7 +650,7 @@ func BenchmarkBorMining(b *testing.B) {
 	db2 := rawdb.NewMemoryDatabase()
 	back.Genesis.MustCommit(db2)
 
-	chain, _ := core.NewBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db2, nil, back.chain.Config(), engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.

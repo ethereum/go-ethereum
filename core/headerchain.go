@@ -283,10 +283,22 @@ func (hc *HeaderChain) writeHeadersAndSetHead(headers []*types.Header, forker *F
 			lastHeader: lastHeader,
 		}
 	)
+
 	// Ask the fork choicer if the reorg is necessary
-	if reorg, err := forker.ReorgNeeded(hc.CurrentHeader(), lastHeader); err != nil {
+	reorg, err := forker.ReorgNeeded(hc.CurrentHeader(), lastHeader)
+	if err != nil {
 		return nil, err
 	} else if !reorg {
+		if inserted != 0 {
+			result.status = SideStatTy
+		}
+		return result, nil
+	}
+
+	isValid, err := forker.ValidateReorg(hc.CurrentHeader(), headers)
+	if err != nil {
+		return nil, err
+	} else if !isValid {
 		if inserted != 0 {
 			result.status = SideStatTy
 		}

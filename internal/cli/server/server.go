@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/beacon" //nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor"    //nolint:typecheck
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -182,7 +182,7 @@ func NewServer(config *Config) (*Server, error) {
 
 	// graphql is started from another place
 	if config.JsonRPC.Graphql.Enabled {
-		if err := graphql.New(stack, srv.backend.APIBackend, config.JsonRPC.Cors, config.JsonRPC.VHost); err != nil {
+		if err := graphql.New(stack, srv.backend.APIBackend, config.JsonRPC.Graphql.Cors, config.JsonRPC.Graphql.VHost); err != nil {
 			return nil, fmt.Errorf("failed to register the GraphQL service: %v", err)
 		}
 	}
@@ -201,7 +201,7 @@ func NewServer(config *Config) (*Server, error) {
 		}
 	}
 
-	if err := srv.setupMetrics(config.Telemetry, config.Name); err != nil {
+	if err := srv.setupMetrics(config.Telemetry, config.Identity); err != nil {
 		return nil, err
 	}
 

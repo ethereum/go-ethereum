@@ -606,7 +606,7 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 		return err
 	}
 
-	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
+	if !snap.ValidatorSet.HasAddress(signer) {
 		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
 		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
@@ -623,19 +623,23 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
 
-	if parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, c.config) {
+	if IsBlockOnTime(parent, header, number, succession, c.config) {
 		return &BlockTooSoonError{number, succession}
 	}
 
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		difficulty := snap.Difficulty(signer)
+		difficulty := Difficulty(snap.ValidatorSet, signer)
 		if header.Difficulty.Uint64() != difficulty {
 			return &WrongDifficultyError{number, difficulty, header.Difficulty.Uint64(), signer.Bytes()}
 		}
 	}
 
 	return nil
+}
+
+func IsBlockOnTime(parent *types.Header, header *types.Header, number uint64, succession int, cfg *params.BorConfig) bool {
+	return parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, cfg)
 }
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
@@ -653,7 +657,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = new(big.Int).SetUint64(snap.Difficulty(c.signer))
+	header.Difficulty = new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, c.signer))
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -716,7 +720,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	headerNumber := header.Number.Uint64()
 
-	if headerNumber%c.config.Sprint == 0 {
+	if IsSprintStart(headerNumber, c.config.Sprint) {
 		ctx := context.Background()
 
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
@@ -727,7 +731,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 		}
 
 		if c.HeimdallClient != nil {
-			// commit statees
+			// commit states
 			stateSyncData, err = c.CommitStates(ctx, state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
@@ -790,7 +794,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 
 	headerNumber := header.Number.Uint64()
 
-	if headerNumber%c.config.Sprint == 0 {
+	if IsSprintStart(headerNumber, c.config.Sprint) {
 		ctx := context.Background()
 
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
@@ -867,7 +871,7 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 	}
 
 	// Bail out if we're unauthorized to sign a block
-	if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
+	if !snap.ValidatorSet.HasAddress(signer) {
 		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
 		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
 	}
@@ -945,7 +949,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainHeaderReader, _ uint64, parent
 		return nil
 	}
 
-	return new(big.Int).SetUint64(snap.Difficulty(c.signer))
+	return new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, c.signer))
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -1059,7 +1063,6 @@ func (c *Bor) CommitStates(
 	header *types.Header,
 	chain statefull.ChainContext,
 ) ([]*types.StateSyncData, error) {
-	stateSyncs := make([]*types.StateSyncData, 0)
 	number := header.Number.Uint64()
 
 	_lastStateID, err := c.GenesisContractsClient.LastStateId(number - 1)
@@ -1087,15 +1090,17 @@ func (c *Bor) CommitStates(
 	}
 
 	totalGas := 0 /// limit on gas for state sync per block
-
 	chainID := c.chainConfig.ChainID.String()
+	stateSyncs := make([]*types.StateSyncData, len(eventRecords))
+
+	var gasUsed uint64
 
 	for _, eventRecord := range eventRecords {
 		if eventRecord.ID <= lastStateID {
 			continue
 		}
 
-		if err := validateEventRecord(eventRecord, number, to, lastStateID, chainID); err != nil {
+		if err = validateEventRecord(eventRecord, number, to, lastStateID, chainID); err != nil {
 			log.Error("while validating event record", "block", number, "to", to, "stateID", lastStateID, "error", err.Error())
 			break
 		}
@@ -1109,7 +1114,10 @@ func (c *Bor) CommitStates(
 
 		stateSyncs = append(stateSyncs, &stateData)
 
-		gasUsed, err := c.GenesisContractsClient.CommitState(eventRecord, state, header, chain)
+		// we expect that this call MUST emit an event, otherwise we wouldn't make a receipt
+		// if the receiver address is not a contract then we'll skip the most of the execution and emitting an event as well
+		// https://github.com/maticnetwork/genesis-contracts/blob/master/contracts/StateReceiver.sol#L27
+		gasUsed, err = c.GenesisContractsClient.CommitState(eventRecord, state, header, chain)
 		if err != nil {
 			return nil, err
 		}

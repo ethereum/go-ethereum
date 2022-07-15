@@ -39,7 +39,7 @@ func convertTo32(input []byte) (output [32]byte) {
 	return
 }
 
-func convert(input []([32]byte)) [][]byte {
+func convert(input [][32]byte) [][]byte {
 	output := make([][]byte, 0, len(input))
 
 	for _, in := range input {
