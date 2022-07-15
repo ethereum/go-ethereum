@@ -35,6 +35,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/cmd/utils"
 	"github.com/scroll-tech/go-ethereum/eth/catalyst"
 	"github.com/scroll-tech/go-ethereum/eth/ethconfig"
+	"github.com/scroll-tech/go-ethereum/internal/debug"
 	"github.com/scroll-tech/go-ethereum/internal/ethapi"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
@@ -148,6 +149,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
+	applyTraceConfig(ctx, &cfg.Eth)
 	applyMetricConfig(ctx, &cfg)
 
 	return stack, cfg
@@ -209,6 +211,12 @@ func dumpConfig(ctx *cli.Context) error {
 	dump.Write(out)
 
 	return nil
+}
+
+func applyTraceConfig(ctx *cli.Context, cfg *ethconfig.Config) {
+	subCfg := debug.ConfigTrace(ctx)
+	cfg.TraceCacheLimit = subCfg.TraceCacheLimit
+	cfg.MPTWitness = subCfg.MPTWitness
 }
 
 func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {

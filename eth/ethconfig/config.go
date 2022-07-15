@@ -87,12 +87,11 @@ var Defaults = Config{
 		GasPrice: big.NewInt(params.GWei),
 		Recommit: 3 * time.Second,
 	},
-	TxPool:          core.DefaultTxPoolConfig,
-	RPCGasCap:       50000000,
-	RPCEVMTimeout:   5 * time.Second,
-	GPO:             FullNodeGPO,
-	RPCTxFeeCap:     1, // 1 ether
-	TraceCacheLimit: 32,
+	TxPool:        core.DefaultTxPoolConfig,
+	RPCGasCap:     50000000,
+	RPCEVMTimeout: 5 * time.Second,
+	GPO:           FullNodeGPO,
+	RPCTxFeeCap:   1, // 1 ether
 }
 
 func init() {
@@ -208,6 +207,7 @@ type Config struct {
 
 	// Trace option
 	TraceCacheLimit int
+	MPTWitness      int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

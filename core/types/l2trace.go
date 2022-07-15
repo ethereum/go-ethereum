@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"runtime"
 	"sync"
 
@@ -25,6 +26,7 @@ type BlockResult struct {
 	BlockTrace       *BlockTrace        `json:"blockTrace"`
 	StorageTrace     *StorageTrace      `json:"storageTrace"`
 	ExecutionResults []*ExecutionResult `json:"executionResults"`
+	MPTWitness       *json.RawMessage   `json:"mptwitness,omitempty"`
 }
 
 // StorageTrace stores proofs of storage needed by storage circuit

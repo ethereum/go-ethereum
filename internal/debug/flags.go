@@ -91,6 +91,18 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
+	// NoTrace settings
+	traceCacheLimitFlag = cli.IntFlag{
+		Name:  "trace.limit",
+		Usage: "Handle the latest several blockResults",
+		Value: 32,
+	}
+	// mpt witness settings
+	mptWitnessFlag = cli.IntFlag{
+		Name:  "trace.mptwitness",
+		Usage: "Output witness for mpt circuit with Specified order (default = no output, 1 = by executing order",
+		Value: 0,
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
@@ -107,6 +119,8 @@ var Flags = []cli.Flag{
 	blockprofilerateFlag,
 	cpuprofileFlag,
 	traceFlag,
+	traceCacheLimitFlag,
+	mptWitnessFlag,
 }
 
 var glogger *log.GlogHandler
@@ -115,6 +129,23 @@ func init() {
 	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
+}
+
+// TraceConfig export options about trace
+type TraceConfig struct {
+	TracePath string
+	// Trace option
+	TraceCacheLimit int
+	MPTWitness      int
+}
+
+func ConfigTrace(ctx *cli.Context) *TraceConfig {
+	cfg := new(TraceConfig)
+	cfg.TracePath = ctx.GlobalString(traceFlag.Name)
+	cfg.TraceCacheLimit = ctx.GlobalInt(traceCacheLimitFlag.Name)
+	cfg.MPTWitness = ctx.GlobalInt(mptWitnessFlag.Name)
+
+	return cfg
 }
 
 // Setup initializes profiling and logging based on the CLI flags.

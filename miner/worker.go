@@ -1163,6 +1163,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
+	// when block is not mined by myself, we just omit
 	// complete storage before Finalize state (only RootAfter left unknown)
 	storage := &types.StorageTrace{
 		RootBefore:    s.GetRootHash(),
@@ -1174,6 +1175,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+	storage.RootAfter = block.Header().Root
+
 	if w.isRunning() {
 		if interval != nil {
 			interval()

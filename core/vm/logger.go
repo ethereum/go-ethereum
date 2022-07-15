@@ -318,7 +318,7 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 	theLog.getOrInitExtraData()
 	// handling additional updating for CALL/STATICCALL/CALLCODE/CREATE/CREATE2 only
 	// append extraData part for the log, capture the account status (the nonce / balance has been updated in capture enter)
-	wrappedStatus, _ := getWrappedAccountForAddr(l, to)
+	wrappedStatus := getWrappedAccountForAddr(l, to)
 	theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
 }
 
@@ -347,7 +347,7 @@ func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 		}
 
 		lastAccData := theLog.ExtraData.StateList[dataLen-1]
-		wrappedStatus, _ := getWrappedAccountForAddr(l, lastAccData.Address)
+		wrappedStatus := getWrappedAccountForAddr(l, lastAccData.Address)
 		theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
 	default:
 		//do nothing for other op code
