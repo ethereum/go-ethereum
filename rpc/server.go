@@ -42,10 +42,11 @@ const (
 
 // Server is an RPC server.
 type Server struct {
-	services serviceRegistry
-	idgen    func() ID
-	run      int32
-	codecs   mapset.Set
+	services     serviceRegistry
+	idgen        func() ID
+	run          int32
+	codecs       mapset.Set
+	OriginRpcUrl string
 }
 
 // NewServer creates a new server instance with no registered handlers.
@@ -99,6 +100,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 
 	h := newHandler(ctx, codec, s.idgen, &s.services)
 	h.allowSubscribe = false
+	h.originRpcUrl = s.OriginRpcUrl
 	defer h.close(io.EOF, nil)
 
 	reqs, batch, err := codec.readBatch()
