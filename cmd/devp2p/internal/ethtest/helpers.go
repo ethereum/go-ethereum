@@ -61,10 +61,10 @@ func (s *Suite) dial() (*Conn, error) {
 	}
 	// set default p2p capabilities
 	conn.caps = []p2p.Cap{
-		{Name: "eth", Version: 65},
 		{Name: "eth", Version: 66},
+		{Name: "eth", Version: 67},
 	}
-	conn.ourHighestProtoVersion = 66
+	conn.ourHighestProtoVersion = 67
 	return &conn, nil
 }
 
