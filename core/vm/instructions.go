@@ -389,7 +389,45 @@ func touchEachChunksOnReadAndChargeGasWithAddress(offset, size uint64, address, 
 	return touchEachChunksOnReadAndChargeGas(offset, size, addrPoint, code, accesses, deployment)
 }
 
-// touchEachChunksAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
+// touchChunkOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
+func touchChunkOnReadAndChargeGas(chunks [][32]byte, offset uint64, evals [][]byte, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
+	// note that in the case where the executed code is outside the range of
+	// the contract code but touches the last leaf with contract code in it,
+	// we don't include the last leaf of code in the AccessWitness. The
+	// reason that we do not need the last leaf is the account's code size
+	// is already in the AccessWitness so a stateless verifier can see that
+	// the code from the last leaf is not needed.
+	if code != nil && offset > uint64(len(code)) {
+		return 0
+	}
+	var (
+		chunknr             = offset / 31
+		statelessGasCharged uint64
+	)
+
+	// Build the chunk address from the evaluated address of its whole group
+	var index [32]byte
+	copy(index[:], evals[chunknr/256])
+	index[31] = byte(chunknr % 256)
+
+	var overflow bool
+	statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, accesses.TouchAddressOnReadAndComputeGas(index[:]))
+	if overflow {
+		panic("overflow when adding gas")
+	}
+
+	if len(code) > 0 {
+		if deployment {
+			accesses.SetLeafValue(index[:], nil)
+		} else {
+			accesses.SetLeafValue(index[:], chunks[chunknr][:])
+		}
+	}
+
+	return statelessGasCharged
+}
+
+// touchEachChunksOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
 func touchEachChunksOnReadAndChargeGas(offset, size uint64, addrPoint *verkle.Point, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,

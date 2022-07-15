@@ -22,6 +22,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/holiman/uint256"
 )
 
 // Config are the configuration options for the Interpreter
@@ -154,6 +157,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		gasCopy uint64 // for EVMLogger to log gas remaining before execution
 		logged  bool   // deferred EVMLogger should ignore already logged steps
 		res     []byte // result of the opcode execution function
+
+		chunks     [][32]byte
+		chunkEvals [][]byte
 	)
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -174,6 +180,22 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}()
 	}
+
+	// Evaluate one address per group of 256, 31-byte chunks
+	if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
+		chunks, err = trie.ChunkifyCode(contract.Code)
+
+		totalEvals := len(contract.Code) / 31 / 256
+		if len(contract.Code)%(256*31) != 0 {
+			totalEvals += 1
+		}
+
+		chunkEvals = make([][]byte, totalEvals)
+		for i := 0; i < totalEvals; i++ {
+			chunkEvals[i] = utils.GetTreeKeyCodeChunkWithEvaluatedAddress(contract.AddressPoint(), uint256.NewInt(uint64(i)*256))
+		}
+	}
+
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
@@ -184,10 +206,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
-			// if the PC ends up in a new "page" of verkleized code, charge the
-			// associated witness costs.
-			contract.Gas -= touchEachChunksOnReadAndChargeGas(pc, 1, contract.AddressPoint(), contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
+		if chunks != nil {
+			// if the PC ends up in a new "chunk" of verkleized code, charge the
+			// associated costs.
+			contract.Gas -= touchChunkOnReadAndChargeGas(chunks, pc, chunkEvals, contract.Code, in.evm.TxContext.Accesses, contract.IsDeployment)
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are
