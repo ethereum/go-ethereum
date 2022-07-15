@@ -280,22 +280,6 @@ func (c *Conn) snapRequest(msg Message, id uint64, chain *Chain) (Message, error
 	return c.ReadSnap(id)
 }
 
-// getBlockHeaders66 executes the given `GetBlockHeaders` request over the eth66 protocol.
-func getBlockHeaders66(chain *Chain, conn *Conn, request *GetBlockHeaders, id uint64) ([]*types.Header, error) {
-	request.RequestId = id
-	if err := conn.Write(request); err != nil {
-		return nil, fmt.Errorf("could not write to connection: %v", err)
-	}
-	// wait for response
-	msg := conn.waitForResponse(chain, timeout, request.RequestId)
-	resp, ok := msg.(*BlockHeaders)
-	if !ok {
-		return nil, fmt.Errorf("unexpected message received: %s", pretty.Sdump(msg))
-	}
-	headers := []*types.Header(resp.BlockHeadersPacket)
-	return headers, nil
-}
-
 // headersMatch returns whether the received headers match the given request
 func headersMatch(expected []*types.Header, headers []*types.Header) bool {
 	return reflect.DeepEqual(expected, headers)
