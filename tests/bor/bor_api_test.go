@@ -40,7 +40,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 
 	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).MinTimes(1)
 	h.EXPECT().Close().MinTimes(1)
-	h.EXPECT().FetchLatestCheckpoint(gomock.Any()).Return(&checkpoint.Checkpoint{
+	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{
 		Proposer:   res.Result.SelectedProducers[0].Address,
 		StartBlock: big.NewInt(0),
 		EndBlock:   big.NewInt(int64(spanSize)),

@@ -59,7 +59,8 @@ func NewHeimdallClient(urlString string) *HeimdallClient {
 const (
 	fetchStateSyncEventsFormat = "from-id=%d&to-time=%d&limit=%d"
 	fetchStateSyncEventsPath   = "clerk/event-record/list"
-	fetchLatestCheckpoint      = "/checkpoints/latest"
+	fetchCheckpoint            = "/checkpoints/%s"
+	fetchCheckpointCount       = "/checkpoints/count"
 
 	fetchSpanFormat = "bor/span/%d"
 )
@@ -115,9 +116,9 @@ func (h *HeimdallClient) Span(ctx context.Context, spanID uint64) (*span.Heimdal
 	return &response.Result, nil
 }
 
-// FetchLatestCheckpoint fetches the latest bor submitted checkpoint from heimdall
-func (h *HeimdallClient) FetchLatestCheckpoint(ctx context.Context) (*checkpoint.Checkpoint, error) {
-	url, err := latestCheckpointURL(h.urlString)
+// FetchCheckpoint fetches the checkpoint from heimdall
+func (h *HeimdallClient) FetchCheckpoint(ctx context.Context, number int64) (*checkpoint.Checkpoint, error) {
+	url, err := checkpointURL(h.urlString, number)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +129,21 @@ func (h *HeimdallClient) FetchLatestCheckpoint(ctx context.Context) (*checkpoint
 	}
 
 	return &response.Result, nil
+}
+
+// FetchCheckpointCount fetches the checkpoint count from heimdall
+func (h *HeimdallClient) FetchCheckpointCount(ctx context.Context) (int64, error) {
+	url, err := checkpointCountURL(h.urlString)
+	if err != nil {
+		return 0, err
+	}
+
+	response, err := FetchWithRetry[checkpoint.CheckpointCountResponse](ctx, h.client, url, h.closeCh)
+	if err != nil {
+		return 0, err
+	}
+
+	return response.Result.Result, nil
 }
 
 // FetchWithRetry returns data from heimdall with retry
@@ -210,8 +226,19 @@ func stateSyncURL(urlString string, fromID uint64, to int64) (*url.URL, error) {
 	return makeURL(urlString, fetchStateSyncEventsPath, queryParams)
 }
 
-func latestCheckpointURL(urlString string) (*url.URL, error) {
-	return makeURL(urlString, fetchLatestCheckpoint, "")
+func checkpointURL(urlString string, number int64) (*url.URL, error) {
+	url := ""
+	if number == -1 {
+		url = fmt.Sprintf(fetchCheckpoint, "latest")
+	} else {
+		url = fmt.Sprintf(fetchCheckpoint, fmt.Sprint(number))
+	}
+
+	return makeURL(urlString, url, "")
+}
+
+func checkpointCountURL(urlString string) (*url.URL, error) {
+	return makeURL(urlString, fetchCheckpointCount, "")
 }
 
 func makeURL(urlString, rawPath, rawQuery string) (*url.URL, error) {

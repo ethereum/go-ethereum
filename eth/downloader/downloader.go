@@ -144,21 +144,13 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
 
-	ChainValidator
+	ethereum.ChainValidator
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
-}
-
-// interface for whitelist service
-type ChainValidator interface {
-	IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
-	ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash)
-	GetCheckpointWhitelist() map[uint64]common.Hash
-	PurgeCheckpointWhitelist()
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -216,7 +208,7 @@ type BlockChain interface {
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 //nolint: staticcheck
-func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func(), whitelistService ChainValidator) *Downloader {
+func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func(), whitelistService ethereum.ChainValidator) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -799,9 +791,11 @@ func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
-	// Check the validity of chain to be downloaded
-	if _, err := d.IsValidChain(remoteHeader, d.getFetchHeadersByNumber(p)); err != nil {
-		return 0, err
+	// Check the validity of peer from which the chain is to be downloaded
+	if d.ChainValidator != nil {
+		if _, err := d.IsValidPeer(remoteHeader, d.getFetchHeadersByNumber(p)); err != nil {
+			return 0, err
+		}
 	}
 
 	// Figure out the valid ancestor range to prevent rewrite attacks

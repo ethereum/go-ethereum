@@ -22,6 +22,7 @@ import (
 	"math/big"
 	mrand "math/rand"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -54,18 +55,21 @@ type ForkChoice struct {
 	// local td is equal to the extern one. It can be nil for light
 	// client
 	preserve func(header *types.Header) bool
+
+	validator ethereum.ChainValidator
 }
 
-func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool) *ForkChoice {
+func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool, validator ethereum.ChainValidator) *ForkChoice {
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
 		log.Crit("Failed to initialize random seed", "err", err)
 	}
 	return &ForkChoice{
-		chain:    chainReader,
-		rand:     mrand.New(mrand.NewSource(seed.Int64())),
-		preserve: preserve,
+		chain:     chainReader,
+		rand:      mrand.New(mrand.NewSource(seed.Int64())), //nolint:gosec
+		preserve:  preserve,
+		validator: validator,
 	}
 }
 
@@ -105,4 +109,16 @@ func (f *ForkChoice) ReorgNeeded(current *types.Header, header *types.Header) (b
 		}
 	}
 	return reorg, nil
+}
+
+// ValidateReorg calls the chain validator service to check if the reorg is valid or not
+func (f *ForkChoice) ValidateReorg(current *types.Header, chain []*types.Header) (bool, error) {
+	// Call the bor chain validator service
+	if f.validator != nil {
+		if isValid := f.validator.IsValidChain(current, chain); !isValid {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

@@ -32,6 +32,9 @@ bor:
 protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
+generate-mocks:
+	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
+
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."

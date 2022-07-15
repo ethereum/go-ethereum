@@ -1,6 +1,7 @@
 package bor
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall" //nolint:typecheck
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -58,7 +60,7 @@ func TestGenesisContractChange(t *testing.T) {
 	require.NoError(t, err)
 
 	config := params.ChainConfig{}
-	chain, err := core.NewBlockChain(db, nil, &config, b, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, &config, b, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	addBlock := func(root common.Hash, num int64) (common.Hash, *state.StateDB) {
@@ -139,4 +141,49 @@ func TestEncodeSigHeaderJaipur(t *testing.T) {
 	// Jaipur NOT enabled and BaseFee set
 	hash = SealHash(h, &params.BorConfig{JaipurBlock: 10})
 	require.Equal(t, hash, hashWithoutBaseFee)
+}
+
+// TestCheckpoint can be used for to fetch checkpoint
+// count and checkpoint for debugging purpose.
+// Also, this is kept only for local use.
+func TestCheckpoint(t *testing.T) {
+	t.Skip()
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// TODO: For testing, add heimdall url here
+	h := heimdall.NewHeimdallClient("http://localhost:1317")
+
+	count, err := h.FetchCheckpointCount(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("Count:", count)
+
+	checkpoint1, err := h.FetchCheckpoint(ctx, count)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("Checkpoint1:", checkpoint1)
+
+	checkpoint2, err := h.FetchCheckpoint(ctx, 10000)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("Checkpoint2:", checkpoint2)
+
+	checkpoint3, err := h.FetchCheckpoint(ctx, -1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("Checkpoint3:", checkpoint3)
+
+	if checkpoint3.RootHash != checkpoint1.RootHash {
+		t.Fatal("Invalid root hash")
+	}
 }
