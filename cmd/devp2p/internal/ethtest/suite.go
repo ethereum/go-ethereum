@@ -87,7 +87,7 @@ func (s *Suite) SnapTests() []utesting.Test {
 }
 
 // TestStatus attempts to connect to the given node and exchange
-// a status message with it on the eth66 protocol.
+// a status message with it on the eth protocol.
 func (s *Suite) TestStatus(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
@@ -100,7 +100,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 }
 
 // TestGetBlockHeaders tests whether the given node can respond to
-// an eth66 `GetBlockHeaders` request and that the response is accurate.
+// an eth `GetBlockHeaders` request and that the response is accurate.
 func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
@@ -309,8 +309,7 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 }
 
 // TestGetBlockBodies tests whether the given node can respond to
-// a `GetBlockBodies` request and that the response is accurate over
-// the eth66 protocol.
+// a `GetBlockBodies` request and that the response is accurate.
 func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {
@@ -346,15 +345,14 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 }
 
 // TestBroadcast tests whether a block announcement is correctly
-// propagated to the given node's peer(s) on the eth66 protocol.
+// propagated to the node's peers.
 func (s *Suite) TestBroadcast(t *utesting.T) {
 	if err := s.sendNextBlock(); err != nil {
 		t.Fatalf("block broadcast failed: %v", err)
 	}
 }
 
-// TestLargeAnnounce tests the announcement mechanism with a large
-// block over the eth66 protocol.
+// TestLargeAnnounce tests the announcement mechanism with a large block.
 func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	nextBlock := len(s.chain.blocks)
 	blocks := []*NewBlock{
@@ -400,8 +398,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 	}
 }
 
-// TestOldAnnounce tests the announcement mechanism with an old block,
-// over the eth66 protocol.
+// TestOldAnnounce tests the announcement mechanism with an old block.
 func (s *Suite) TestOldAnnounce(t *utesting.T) {
 	if err := s.oldAnnounce(); err != nil {
 		t.Fatal(err)
@@ -423,8 +420,7 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 	}
 }
 
-// TestMaliciousStatus sends a status package with a large total
-// difficulty over the eth66 protocol.
+// TestMaliciousStatus sends a status package with a large total difficulty.
 func (s *Suite) TestMaliciousStatus(t *utesting.T) {
 	conn, err := s.dial()
 	if err != nil {

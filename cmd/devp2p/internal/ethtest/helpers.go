@@ -68,9 +68,7 @@ func (s *Suite) dial() (*Conn, error) {
 	return &conn, nil
 }
 
-// dial66 attempts to dial the given node and perform a handshake,
-// returning the created Conn with additional snap/1 capabilities if
-// successful.
+// dialSnap creates a connection with snap/1 capability.
 func (s *Suite) dialSnap() (*Conn, error) {
 	conn, err := s.dial()
 	if err != nil {
@@ -220,7 +218,7 @@ func (s *Suite) createSendAndRecvConns() (*Conn, *Conn, error) {
 	return sendConn, recvConn, nil
 }
 
-// readAndServe serves eth66 GetBlockHeaders requests while waiting
+// readAndServe serves GetBlockHeaders requests while waiting
 // on another message from the node.
 func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
