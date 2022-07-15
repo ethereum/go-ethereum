@@ -52,27 +52,27 @@ func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, e
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
 		// status
-		{Name: "TestStatus66", Fn: s.TestStatus},
+		{Name: "TestStatus", Fn: s.TestStatus},
 		// get block headers
-		{Name: "TestGetBlockHeaders66", Fn: s.TestGetBlockHeaders},
-		{Name: "TestSimultaneousRequests66", Fn: s.TestSimultaneousRequests},
-		{Name: "TestSameRequestID66", Fn: s.TestSameRequestID},
-		{Name: "TestZeroRequestID66", Fn: s.TestZeroRequestID},
+		{Name: "TestGetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "TestSimultaneousRequests", Fn: s.TestSimultaneousRequests},
+		{Name: "TestSameRequestID", Fn: s.TestSameRequestID},
+		{Name: "TestZeroRequestID", Fn: s.TestZeroRequestID},
 		// get block bodies
-		{Name: "TestGetBlockBodies66", Fn: s.TestGetBlockBodies},
+		{Name: "TestGetBlockBodies", Fn: s.TestGetBlockBodies},
 		// broadcast
-		{Name: "TestBroadcast66", Fn: s.TestBroadcast},
-		{Name: "TestLargeAnnounce66", Fn: s.TestLargeAnnounce},
-		{Name: "TestOldAnnounce66", Fn: s.TestOldAnnounce},
-		{Name: "TestBlockHashAnnounce66", Fn: s.TestBlockHashAnnounce},
+		{Name: "TestBroadcast", Fn: s.TestBroadcast},
+		{Name: "TestLargeAnnounce", Fn: s.TestLargeAnnounce},
+		{Name: "TestOldAnnounce", Fn: s.TestOldAnnounce},
+		{Name: "TestBlockHashAnnounce", Fn: s.TestBlockHashAnnounce},
 		// malicious handshakes + status
-		{Name: "TestMaliciousHandshake66", Fn: s.TestMaliciousHandshake},
-		{Name: "TestMaliciousStatus66", Fn: s.TestMaliciousStatus},
+		{Name: "TestMaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "TestMaliciousStatus", Fn: s.TestMaliciousStatus},
 		// test transactions
-		{Name: "TestTransaction66", Fn: s.TestTransaction},
-		{Name: "TestMaliciousTx66", Fn: s.TestMaliciousTx},
-		{Name: "TestLargeTxRequest66", Fn: s.TestLargeTxRequest},
-		{Name: "TestNewPooledTxs66", Fn: s.TestNewPooledTxs},
+		{Name: "TestTransaction", Fn: s.TestTransaction},
+		{Name: "TestMaliciousTx", Fn: s.TestMaliciousTx},
+		{Name: "TestLargeTxRequest", Fn: s.TestLargeTxRequest},
+		{Name: "TestNewPooledTxs", Fn: s.TestNewPooledTxs},
 	}
 }
 
