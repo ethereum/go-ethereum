@@ -79,7 +79,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 
 	// Wait for the transaction announcement
 	for {
-		switch msg := recvConn.readAndServe66(s.chain, timeout).(type) {
+		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
 		case *Transactions:
 			recTxs := *msg
 			// if you receive an old tx propagation, read from connection again
@@ -196,7 +196,7 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	recvHashes := make([]common.Hash, 0)
 
 	for i := 0; i < 3; i++ {
-		switch msg := recvConn.readAndServe66(s.chain, timeout).(type) {
+		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
 		case *Transactions:
 			for _, tx := range *msg {
 				recvHashes = append(recvHashes, tx.Hash())
@@ -235,7 +235,7 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 // checkMaliciousTxPropagation checks whether the given malicious transactions were
 // propagated by the node.
 func checkMaliciousTxPropagation(s *Suite, txs []*types.Transaction, conn *Conn) error {
-	switch msg := conn.readAndServe66(s.chain, time.Second*8).(type) {
+	switch msg := conn.readAndServe(s.chain, time.Second*8).(type) {
 	case *Transactions:
 		// check to see if any of the failing txs were in the announcement
 		recvTxs := make([]common.Hash, len(*msg))

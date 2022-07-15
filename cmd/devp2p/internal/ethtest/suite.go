@@ -385,7 +385,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 			t.Fatalf("could not write to connection: %v", err)
 		}
 		// Invalid announcement, check that peer disconnected
-		switch msg := conn.readAndServe66(s.chain, 8*time.Second).(type) {
+		switch msg := conn.readAndServe(s.chain, 8*time.Second).(type) {
 		case *Disconnect:
 		case *Error:
 			break
@@ -541,7 +541,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 
 	// wait for GetPooledTxs request
 	for {
-		msg := conn.readAndServe66(s.chain, timeout)
+		msg := conn.readAndServe(s.chain, timeout)
 		switch msg := msg.(type) {
 		case *GetPooledTransactions:
 			if len(msg.GetPooledTransactionsPacket) != len(hashes) {

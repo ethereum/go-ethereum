@@ -222,7 +222,7 @@ func (s *Suite) createSendAndRecvConns() (*Conn, *Conn, error) {
 
 // readAndServe serves eth66 GetBlockHeaders requests while waiting
 // on another message from the node.
-func (c *Conn) readAndServe66(chain *Chain, timeout time.Duration) Message {
+func (c *Conn) readAndServe(chain *Chain, timeout time.Duration) Message {
 	start := time.Now()
 	for time.Since(start) < timeout {
 		c.SetReadDeadline(time.Now().Add(10 * time.Second))
@@ -289,7 +289,7 @@ func headersMatch(expected []*types.Header, headers []*types.Header) bool {
 // request ID is received.
 func (c *Conn) waitForResponse(chain *Chain, timeout time.Duration, requestID uint64) Message {
 	for {
-		msg := c.readAndServe66(chain, timeout)
+		msg := c.readAndServe(chain, timeout)
 		if msg.ReqID() == requestID {
 			return msg
 		}
@@ -343,7 +343,7 @@ func (s *Suite) testAnnounce(sendConn, receiveConn *Conn, blockAnnouncement *New
 // waitAnnounce waits for a NewBlock or NewBlockHashes announcement from the node.
 func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 	for {
-		switch msg := conn.readAndServe66(s.chain, timeout).(type) {
+		switch msg := conn.readAndServe(s.chain, timeout).(type) {
 		case *NewBlock:
 			if !reflect.DeepEqual(blockAnnouncement.Block.Header(), msg.Block.Header()) {
 				return fmt.Errorf("wrong header in block announcement: \nexpected %v "+
@@ -421,7 +421,7 @@ func (s *Suite) oldAnnounce() error {
 		return fmt.Errorf("could not write to connection: %v", err)
 	}
 	// wait to see if the announcement is propagated
-	switch msg := receiveConn.readAndServe66(s.chain, time.Second*8).(type) {
+	switch msg := receiveConn.readAndServe(s.chain, time.Second*8).(type) {
 	case *NewBlock:
 		block := *msg
 		if block.Block.Hash() == oldBlockAnnounce.Block.Hash() {
@@ -502,7 +502,7 @@ func (s *Suite) maliciousHandshakes(t *utesting.T) error {
 		}
 		// check that the peer disconnected
 		for i := 0; i < 2; i++ {
-			switch msg := conn.readAndServe66(s.chain, 20*time.Second).(type) {
+			switch msg := conn.readAndServe(s.chain, 20*time.Second).(type) {
 			case *Disconnect:
 			case *Error:
 			case *Hello:
@@ -546,7 +546,7 @@ func (s *Suite) maliciousStatus(conn *Conn) error {
 	}
 
 	// wait for disconnect
-	switch msg := conn.readAndServe66(s.chain, timeout).(type) {
+	switch msg := conn.readAndServe(s.chain, timeout).(type) {
 	case *Disconnect:
 		return nil
 	case *Error:
@@ -606,7 +606,7 @@ func (s *Suite) hashAnnounce() error {
 	}
 
 	// wait for block announcement
-	msg = recvConn.readAndServe66(s.chain, timeout)
+	msg = recvConn.readAndServe(s.chain, timeout)
 	switch msg := msg.(type) {
 	case *NewBlockHashes:
 		hashes := *msg
