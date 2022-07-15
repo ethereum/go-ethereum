@@ -407,6 +407,9 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
 	}
+	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+		return nil, errors.New("not contained in netrestrict list")
+	}
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
 	}
