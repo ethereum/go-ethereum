@@ -81,7 +81,6 @@ func (r *v2Reporter) run() {
 			}
 		}
 	}
-
 }
 
 func (r *v2Reporter) send() {
@@ -90,7 +89,6 @@ func (r *v2Reporter) send() {
 		namespace := r.namespace
 
 		switch metric := i.(type) {
-
 		case metrics.Counter:
 			v := metric.Count()
 			l := r.cache[name]

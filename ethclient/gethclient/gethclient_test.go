@@ -222,7 +222,6 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if proof.Key != testSlot.String() {
 		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
 	}
-
 }
 
 func testGCStats(t *testing.T, client *rpc.Client) {

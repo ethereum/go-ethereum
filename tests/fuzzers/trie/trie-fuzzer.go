@@ -84,11 +84,9 @@ func (ds *dataSource) Ended() bool {
 }
 
 func Generate(input []byte) randTest {
-
 	var allKeys [][]byte
 	r := newDataSource(input)
 	genKey := func() []byte {
-
 		if len(allKeys) < 2 || r.readByte() < 0x0f {
 			// new key
 			key := make([]byte, r.readByte()%50)
@@ -103,7 +101,6 @@ func Generate(input []byte) randTest {
 	var steps randTest
 
 	for i := 0; !r.Ended(); i++ {
-
 		step := randTestStep{op: int(r.readByte()) % opMax}
 		switch step.op {
 		case opUpdate:
@@ -141,7 +138,6 @@ func Fuzz(input []byte) int {
 }
 
 func runRandTest(rt randTest) error {
-
 	triedb := trie.NewDatabase(memorydb.New())
 
 	tr := trie.NewEmpty(triedb)

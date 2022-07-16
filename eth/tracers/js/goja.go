@@ -878,7 +878,6 @@ func (r *callframeResult) GetError() goja.Value {
 		return r.vm.ToValue(r.err.Error())
 	}
 	return goja.Undefined()
-
 }
 
 func (r *callframeResult) setupObject() *goja.Object {
