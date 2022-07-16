@@ -28,9 +28,10 @@ linters:
     - durationcheck
     - exportloopref
     - gosec
+    - whitespace
 
-    #- structcheck # lots of false positives
-    #- errcheck #lot of false positives
+    # - structcheck # lots of false positives
+    # - errcheck #lot of false positives
     # - contextcheck
     # - errchkjson # lots of false positives
     # - errorlint # this check crashes
