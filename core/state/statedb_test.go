@@ -521,6 +521,7 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	states[1].GetOrNewStateObject(addr)
 	states[1].SetState(addr, key, val)
 	states[1].SetBalance(addr, balance)
+	states[1].FlushMVWriteSet()
 
 	// Tx1 read
 	v = states[2].GetState(addr, key)
@@ -547,6 +548,7 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	states[3].Finalise(false)
 	v = states[3].GetState(addr, key)
 	assert.Equal(t, common.Hash{}, v)
+	states[3].FlushMVWriteSet()
 
 	// Tx4 read
 	v = states[4].GetState(addr, key)
@@ -581,6 +583,7 @@ func TestMVHashMapRevert(t *testing.T) {
 	states[0].GetOrNewStateObject(addr)
 	states[0].SetState(addr, key, val)
 	states[0].SetBalance(addr, balance)
+	states[0].FlushMVWriteSet()
 
 	// Tx1 perform some ops and then revert
 	snapshot := states[1].Snapshot()
@@ -601,6 +604,7 @@ func TestMVHashMapRevert(t *testing.T) {
 	assert.Equal(t, val, v)
 	assert.Equal(t, balance, b)
 	states[1].Finalise(false)
+	states[1].FlushMVWriteSet()
 
 	// Tx2 check the state and balance
 	v = states[2].GetState(addr, key)
@@ -639,11 +643,13 @@ func TestMVHashMapMarkEstimate(t *testing.T) {
 	states[0].SetState(addr, key, val)
 	v = states[0].GetState(addr, key)
 	assert.Equal(t, val, v)
+	states[0].FlushMVWriteSet()
 
 	// Tx1 write
 	states[1].GetOrNewStateObject(addr)
 	states[1].SetState(addr, key, val)
 	states[1].SetBalance(addr, balance)
+	states[1].FlushMVWriteSet()
 
 	// Tx2 read
 	v = states[2].GetState(addr, key)
@@ -696,12 +702,14 @@ func TestMVHashMapOverwrite(t *testing.T) {
 	states[0].GetOrNewStateObject(addr)
 	states[0].SetState(addr, key, val1)
 	states[0].SetBalance(addr, balance1)
+	states[0].FlushMVWriteSet()
 
 	// Tx1 write
 	states[1].SetState(addr, key, val2)
 	states[1].SetBalance(addr, balance2)
 	v := states[1].GetState(addr, key)
 	b := states[1].GetBalance(addr)
+	states[1].FlushMVWriteSet()
 
 	assert.Equal(t, val2, v)
 	assert.Equal(t, balance2, b)
@@ -774,14 +782,17 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 
 	// Tx0 write
 	states[0].GetOrNewStateObject(addr)
+	states[0].FlushMVWriteSet()
 
 	// Tx2 write
 	states[2].SetState(addr, key2, val2)
+	states[2].FlushMVWriteSet()
 
 	// Tx1 write
 	tx1Snapshot := states[1].Snapshot()
 	states[1].SetState(addr, key1, val1)
 	states[1].SetBalance(addr, balance1)
+	states[1].FlushMVWriteSet()
 
 	// Tx1 read
 	assert.Equal(t, val1, states[1].GetState(addr, key1))
@@ -813,6 +824,7 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 
 	// Tx1 revert
 	states[1].RevertToSnapshot(tx1Snapshot)
+	states[1].FlushMVWriteSet()
 
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key1))
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
@@ -853,6 +865,7 @@ func TestApplyMVWriteSet(t *testing.T) {
 
 	addr1 := common.HexToAddress("0x01")
 	addr2 := common.HexToAddress("0x02")
+	addr3 := common.HexToAddress("0x03")
 	key1 := common.HexToHash("0x01")
 	key2 := common.HexToHash("0x02")
 	val1 := common.HexToHash("0x01")
@@ -862,13 +875,19 @@ func TestApplyMVWriteSet(t *testing.T) {
 	code := []byte{1, 2, 3}
 
 	// Tx0 write
+	states[0].GetOrNewStateObject(addr1)
 	states[0].SetState(addr1, key1, val1)
 	states[0].SetBalance(addr1, balance1)
 	states[0].SetState(addr2, key2, val2)
+	states[0].GetOrNewStateObject(addr3)
+	states[0].Finalise(false)
+	states[0].FlushMVWriteSet()
 
+	sSingleProcess.GetOrNewStateObject(addr1)
 	sSingleProcess.SetState(addr1, key1, val1)
 	sSingleProcess.SetBalance(addr1, balance1)
 	sSingleProcess.SetState(addr2, key2, val2)
+	sSingleProcess.GetOrNewStateObject(addr3)
 
 	sClean.ApplyMVWriteSet(states[0].MVWriteList())
 
@@ -878,6 +897,8 @@ func TestApplyMVWriteSet(t *testing.T) {
 	states[1].SetState(addr1, key2, val2)
 	states[1].SetBalance(addr1, balance2)
 	states[1].SetNonce(addr1, 1)
+	states[1].Finalise(false)
+	states[1].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key2, val2)
 	sSingleProcess.SetBalance(addr1, balance2)
@@ -891,6 +912,8 @@ func TestApplyMVWriteSet(t *testing.T) {
 	states[2].SetState(addr1, key1, val2)
 	states[2].SetBalance(addr1, balance2)
 	states[2].SetNonce(addr1, 2)
+	states[2].Finalise(false)
+	states[2].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key1, val2)
 	sSingleProcess.SetBalance(addr1, balance2)
@@ -903,6 +926,8 @@ func TestApplyMVWriteSet(t *testing.T) {
 	// Tx3 write
 	states[3].Suicide(addr2)
 	states[3].SetCode(addr1, code)
+	states[3].Finalise(false)
+	states[3].FlushMVWriteSet()
 
 	sSingleProcess.Suicide(addr2)
 	sSingleProcess.SetCode(addr1, code)

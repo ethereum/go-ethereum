@@ -47,22 +47,28 @@ func (txo TxnOutput) hasNewWrite(cmpSet []WriteDescriptor) bool {
 }
 
 type TxnInputOutput struct {
-	inputs  []TxnInput
-	outputs []TxnOutput
+	inputs     []TxnInput
+	outputs    []TxnOutput // write sets that should be checked during validation
+	allOutputs []TxnOutput // entire write sets in MVHashMap. allOutputs should always be a parent set of outputs
 }
 
-func (io *TxnInputOutput) readSet(txnIdx int) []ReadDescriptor {
+func (io *TxnInputOutput) ReadSet(txnIdx int) []ReadDescriptor {
 	return io.inputs[txnIdx]
 }
 
-func (io *TxnInputOutput) writeSet(txnIdx int) []WriteDescriptor {
+func (io *TxnInputOutput) WriteSet(txnIdx int) []WriteDescriptor {
 	return io.outputs[txnIdx]
+}
+
+func (io *TxnInputOutput) AllWriteSet(txnIdx int) []WriteDescriptor {
+	return io.allOutputs[txnIdx]
 }
 
 func MakeTxnInputOutput(numTx int) *TxnInputOutput {
 	return &TxnInputOutput{
-		inputs:  make([]TxnInput, numTx),
-		outputs: make([]TxnOutput, numTx),
+		inputs:     make([]TxnInput, numTx),
+		outputs:    make([]TxnOutput, numTx),
+		allOutputs: make([]TxnOutput, numTx),
 	}
 }
 
@@ -72,4 +78,8 @@ func (io *TxnInputOutput) recordRead(txId int, input []ReadDescriptor) {
 
 func (io *TxnInputOutput) recordWrite(txId int, output []WriteDescriptor) {
 	io.outputs[txId] = output
+}
+
+func (io *TxnInputOutput) recordAllWrite(txId int, output []WriteDescriptor) {
+	io.allOutputs[txId] = output
 }

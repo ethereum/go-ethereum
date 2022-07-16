@@ -81,10 +81,12 @@ type StateDB struct {
 	stateObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
 
 	// Block-stm related fields
-	mvHashmap   *blockstm.MVHashMap
-	incarnation int
-	readMap     map[string]blockstm.ReadDescriptor
-	writeMap    map[string]blockstm.WriteDescriptor
+	mvHashmap       *blockstm.MVHashMap
+	incarnation     int
+	readMap         map[string]blockstm.ReadDescriptor
+	writeMap        map[string]blockstm.WriteDescriptor
+	newStateObjects map[common.Address]struct{}
+	invalidRead     bool
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -145,6 +147,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjects:        make(map[common.Address]*stateObject),
 		stateObjectsPending: make(map[common.Address]struct{}),
 		stateObjectsDirty:   make(map[common.Address]struct{}),
+		newStateObjects:     make(map[common.Address]struct{}),
 		logs:                make(map[common.Hash][]*types.Log),
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
@@ -178,6 +181,20 @@ func (s *StateDB) MVWriteList() []blockstm.WriteDescriptor {
 	writes := make([]blockstm.WriteDescriptor, 0, len(s.writeMap))
 
 	for _, v := range s.writeMap {
+		if len(v.Path) != common.AddressLength {
+			writes = append(writes, v)
+		} else if _, ok := s.newStateObjects[common.BytesToAddress(v.Path)]; ok {
+			writes = append(writes, v)
+		}
+	}
+
+	return writes
+}
+
+func (s *StateDB) MVFullWriteList() []blockstm.WriteDescriptor {
+	writes := make([]blockstm.WriteDescriptor, 0, len(s.writeMap))
+
+	for _, v := range s.writeMap {
 		writes = append(writes, v)
 	}
 
@@ -204,6 +221,14 @@ func (s *StateDB) ensureWriteMap() {
 	if s.writeMap == nil {
 		s.writeMap = make(map[string]blockstm.WriteDescriptor)
 	}
+}
+
+func (s *StateDB) HadInvalidRead() bool {
+	return s.invalidRead
+}
+
+func (s *StateDB) SetIncarnation(inc int) {
+	s.incarnation = inc
 }
 
 func MVRead[T any](s *StateDB, k []byte, defaultV T, readStorage func(s *StateDB) T) (v T) {
@@ -238,6 +263,7 @@ func MVRead[T any](s *StateDB, k []byte, defaultV T, readStorage func(s *StateDB
 		}
 	case blockstm.MVReadResultDependency:
 		{
+			s.invalidRead = true
 			return defaultV
 		}
 	case blockstm.MVReadResultNone:
@@ -262,7 +288,6 @@ func MVRead[T any](s *StateDB, k []byte, defaultV T, readStorage func(s *StateDB
 func MVWrite(s *StateDB, k []byte) {
 	if s.mvHashmap != nil {
 		s.ensureWriteMap()
-		s.mvHashmap.Write(k, s.Version(), s)
 		s.writeMap[string(k)] = blockstm.WriteDescriptor{
 			Path: k,
 			V:    s.Version(),
@@ -281,6 +306,15 @@ func MVWritten(s *StateDB, k []byte) bool {
 	return ok
 }
 
+// Apply entries in the write set to MVHashMap. Note that this function does not clear the write set.
+func (s *StateDB) FlushMVWriteSet() {
+	if s.mvHashmap != nil && s.writeMap != nil {
+		s.mvHashmap.FlushMVWriteSet(s.MVFullWriteList())
+	}
+}
+
+// Apply entries in a given write set to StateDB. Note that this function does not change MVHashMap nor write set
+// of the current StateDB.
 func (sw *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 	for i := range writes {
 		path := writes[i].Path
@@ -304,7 +338,8 @@ func (sw *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 			case codePath:
 				sw.SetCode(addr, sr.GetCode(addr))
 			case suicidePath:
-				if suicided := sr.HasSuicided(addr); suicided {
+				stateObject := sr.getDeletedStateObject(addr)
+				if stateObject != nil && stateObject.deleted {
 					sw.Suicide(addr)
 				}
 			default:
@@ -606,6 +641,12 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
+
+	if s.mvHashmap != nil {
+		// ensure a read balance operation is recorded in mvHashmap
+		s.GetBalance(addr)
+	}
+
 	if stateObject != nil {
 		stateObject = s.mvRecordWritten(stateObject)
 		stateObject.AddBalance(amount)
@@ -616,6 +657,12 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(addr)
+
+	if s.mvHashmap != nil {
+		// ensure a read balance operation is recorded in mvHashmap
+		s.GetBalance(addr)
+	}
+
 	if stateObject != nil {
 		stateObject = s.mvRecordWritten(stateObject)
 		stateObject.SubBalance(amount)
@@ -859,6 +906,8 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
 	}
 	s.setStateObject(newobj)
+	s.newStateObjects[addr] = struct{}{}
+
 	MVWrite(s, addr.Bytes())
 	if prev != nil && !prev.deleted {
 		return newobj, prev
@@ -923,6 +972,7 @@ func (s *StateDB) Copy() *StateDB {
 		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
+		newStateObjects:     make(map[common.Address]struct{}, len(s.newStateObjects)),
 		refund:              s.refund,
 		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:             s.logSize,

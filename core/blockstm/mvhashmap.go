@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/emirpasic/gods/maps/treemap"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const FlagDone = 0
@@ -81,7 +83,7 @@ func (mv *MVHashMap) Write(k []byte, v Version, data interface{}) {
 			panic(fmt.Errorf("existing transaction value does not have lower incarnation: %v, %v",
 				string(k), v.TxnIndex))
 		} else if ci.(*WriteCell).flag == FlagEstimate {
-			println("marking previous estimate as done tx", v.TxnIndex, v.Incarnation)
+			log.Debug("mvhashmap marking previous estimate as done", "tx index", v.TxnIndex, "incarnation", v.Incarnation)
 		}
 
 		ci.(*WriteCell).flag = FlagDone
@@ -190,10 +192,16 @@ func (mv *MVHashMap) Read(k []byte, txIdx int) (res MVReadResult) {
 	return
 }
 
+func (mv *MVHashMap) FlushMVWriteSet(writes []WriteDescriptor) {
+	for _, v := range writes {
+		mv.Write(v.Path, v.V, v.Val)
+	}
+}
+
 func ValidateVersion(txIdx int, lastInputOutput *TxnInputOutput, versionedData *MVHashMap) (valid bool) {
 	valid = true
 
-	for _, rd := range lastInputOutput.readSet(txIdx) {
+	for _, rd := range lastInputOutput.ReadSet(txIdx) {
 		mvResult := versionedData.Read(rd.Path, txIdx)
 		switch mvResult.Status() {
 		case MVReadResultDone:
