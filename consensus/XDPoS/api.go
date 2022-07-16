@@ -91,6 +91,11 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	return api.XDPoS.GetAuthorisedSignersFromSnapshot(api.chain, header)
 }
 
+// Get the latest v2 committed block information. Note: This only applies to v2 engine. it doesn't make sense for v1
+func (api *API) GetLatestCommittedBlockHeader() *types.BlockInfo {
+	return api.XDPoS.EngineV2.GetLatestCommittedBlockInfo()
+}
+
 func (api *API) NetworkInformation() NetworkInformation {
 	info := NetworkInformation{}
 	info.NetworkId = api.chain.Config().ChainId

@@ -1019,3 +1019,7 @@ func (x *XDPoS_v2) periodicJob() {
 		}
 	}()
 }
+
+func (x *XDPoS_v2) GetLatestCommittedBlockInfo() *types.BlockInfo {
+	return x.highestCommitBlock
+}

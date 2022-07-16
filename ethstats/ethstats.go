@@ -511,6 +511,13 @@ type blockStats struct {
 	Uncles     uncleStats     `json:"uncles"`
 }
 
+// blockStats is the information to report about individual blocks.
+type latestCommittedBlockStats struct {
+	Number *big.Int    `json:"number"`
+	Hash   common.Hash `json:"hash"`
+	Round  uint64      `json:"round"`
+}
+
 // txStats is the information to report about individual transactions.
 type txStats struct {
 	Hash common.Hash `json:"hash"`
@@ -539,6 +546,17 @@ func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 		"id":    s.node,
 		"block": details,
 	}
+
+	// Get the latest committed block information
+	if (s.engine.(*XDPoS.XDPoS).EngineV2 != nil) && (s.engine.(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo() != nil) {
+		latestCommittedBlockInfo := s.engine.(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo()
+		stats["latestCommittedBlockInfo"] = &latestCommittedBlockStats{
+			Number: latestCommittedBlockInfo.Number,
+			Round:  uint64(latestCommittedBlockInfo.Round),
+			Hash:   latestCommittedBlockInfo.Hash,
+		}
+	}
+
 	report := map[string][]interface{}{
 		"emit": {"block", stats},
 	}
