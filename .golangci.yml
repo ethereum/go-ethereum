@@ -66,6 +66,10 @@ issues:
       text: 'SA1019: package github.com/golang/protobuf/proto is deprecated'
     - path: accounts/usbwallet/trezor/
       text: 'SA1019: package github.com/golang/protobuf/proto is deprecated'
+
+    - path: crypto/
+      linters:
+        - gocritic
   exclude:
     - 'SA1019: event.TypeMux is deprecated: use Feed'
     - 'SA1019: strings.Title is deprecated'
