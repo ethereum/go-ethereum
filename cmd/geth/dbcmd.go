@@ -416,7 +416,7 @@ func dbGet(ctx *cli.Context) error {
 
 	data, err := db.Get(key)
 	if err != nil {
-		log.Info("Get operation failed", "key", fmt.Sprintf("0x%#x", key), "error", err)
+		log.Info("Get operation failed", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
 	fmt.Printf("key %#x: %#x\n", key, data)
@@ -444,7 +444,7 @@ func dbDelete(ctx *cli.Context) error {
 		fmt.Printf("Previous value: %#x\n", data)
 	}
 	if err = db.Delete(key); err != nil {
-		log.Info("Delete operation returned an error", "key", fmt.Sprintf("0x%#x", key), "error", err)
+		log.Info("Delete operation returned an error", "key", fmt.Sprintf("%#x", key), "error", err)
 		return err
 	}
 	return nil
