@@ -280,7 +280,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
     "petersburgBlock": 0,
     "istanbulBlock": 0,
     "muirGlacierBlock": 0,
-    "berlinBlock: 0,
+    "berlinBlock": 0,
     "londonBlock": 0,
     "arrowGlacierBlock": 0,
     "grayGlacierBlock": 0,
