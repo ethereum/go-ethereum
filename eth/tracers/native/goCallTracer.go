@@ -1,20 +1,28 @@
-package tracers
+package native
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
-	"encoding/json"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
-	"time"
 
 	"github.com/holiman/uint256"
 )
+
+func init() {
+	// we chose the wildcard to be false due to wanting to be up the queue in the lookup list (ahead of interpreted languages)
+	// tracers.RegisterLookup(false, newGoCallTracer)
+	register("goCallTracer", newGoCallTracer)
+}
 
 type call struct {
 	Type      string         `json:"type"`
@@ -45,13 +53,15 @@ type CallTracer struct {
 	callStack []*call
 	descended bool
 	statedb   *state.StateDB
+	interrupt uint32 // Atomic flag to signal execution interruption
+	reason    error  // Textual reason for the interruption
 }
 
-func NewCallTracer(statedb *state.StateDB) TracerResult {
+// newGoCallTracer returns a new goCallTracer Tracer, originally written by AusIV.
+func newGoCallTracer(ctx *tracers.Context) tracers.Tracer {
 	return &CallTracer{
 		callStack: []*call{},
 		descended: false,
-		statedb:   statedb,
 	}
 }
 
@@ -59,9 +69,23 @@ func (tracer *CallTracer) i() int {
 	return len(tracer.callStack) - 1
 }
 
+// GetResult returns the json-encoded nested list of call traces, and any
+// error arising from the encoding or forceful termination (via `Stop`).
 func (tracer *CallTracer) GetResult() (json.RawMessage, error) {
+	if len(tracer.callStack) != 1 {
+		return nil, errors.New("incorrect number of top-level calls")
+	}
 	res, err := json.Marshal(tracer.callStack[0])
-	return json.RawMessage(res), err
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(res), tracer.reason
+}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (tracer *CallTracer) Stop(err error) {
+	tracer.reason = err
+	atomic.StoreUint32(&tracer.interrupt, 1)
 }
 
 func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
@@ -121,10 +145,9 @@ func (tracer *CallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	if op == vm.SELFDESTRUCT {
 		hvalue := hexutil.Big(*tracer.statedb.GetBalance(scope.Contract.Caller()))
 		tracer.descend(&call{
-			Type: op.String(),
-			From: scope.Contract.Caller(),
-			To:   toAddress(scope.Stack.Back(0)),
-			// TODO: Is this input correct?
+			Type:      op.String(),
+			From:      scope.Contract.Caller(),
+			To:        toAddress(scope.Stack.Back(0)),
 			Input:     scope.Contract.Input,
 			Value:     &hvalue,
 			gasIn:     gas,
@@ -174,7 +197,6 @@ func (tracer *CallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	}
 	if depth == len(tracer.callStack)-1 {
 		c := tracer.callStack[tracer.i()]
-		// c.Time = fmt.Sprintf("%v", time.Since(c.startTime))
 		tracer.callStack = tracer.callStack[:len(tracer.callStack)-1]
 		if vm.StringToOp(c.Type) == vm.CREATE || vm.StringToOp(c.Type) == vm.CREATE2 {
 			c.GasUsed = hexutil.Uint64(c.gasIn - c.gasCost - gas)
@@ -197,9 +219,10 @@ func (tracer *CallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 	}
 	return
 }
-func (tracer *CallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) { }
-func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) { }
+func (tracer *CallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) {
+}
+func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
 func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
-func (tracer *CallTracer) CaptureTxEnd(restGas uint64) {}
-func (tracer *CallTracer) CaptureTxStart(gasLimit uint64) {}
-func (tracer *CallTracer) Stop(err error) {}
+func (tracer *CallTracer) CaptureTxEnd(restGas uint64)                          {}
+func (tracer *CallTracer) CaptureTxStart(gasLimit uint64)                       {}
