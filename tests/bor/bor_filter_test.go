@@ -1,3 +1,5 @@
+//go:build integration
+
 package filters
 
 import (
@@ -12,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -20,7 +23,7 @@ func TestBorFilters(t *testing.T) {
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
-		backend = &TestBackend{DB: db}
+		backend = &filters.TestBackend{DB: db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
 
@@ -119,14 +122,14 @@ func TestBorFilters(t *testing.T) {
 		}
 	}
 
-	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	filter := filters.NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -137,7 +140,7 @@ func TestBorFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 992, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 992, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -148,7 +151,7 @@ func TestBorFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 1, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 1, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 2 {
@@ -156,7 +159,7 @@ func TestBorFilters(t *testing.T) {
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}})
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
@@ -164,14 +167,14 @@ func TestBorFilters(t *testing.T) {
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{failAddr}, nil)
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{failAddr}, nil)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
+	filter = filters.NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
