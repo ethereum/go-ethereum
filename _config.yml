@@ -65,7 +65,7 @@ collections:
     permalink: docs/:collection/:slug
     caption: Clef
     sidebar_index: 7
-    frontpage: _clef/Tutorial.md
+    frontpage: _clef/Introduction.md
   vulnerabilities:
     output: true
     permalink: docs/:collection/:slug
