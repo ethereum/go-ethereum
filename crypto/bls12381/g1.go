@@ -85,12 +85,12 @@ func (g *G1) fromBytesUnchecked(in []byte) (*PointG1, error) {
 
 // FromBytes constructs a new point given uncompressed byte input.
 // FromBytes does not take zcash flags into account.
-// Byte input expected to be larger than 96 bytes.
-// First 96 bytes should be concatenation of x and y values.
+// Byte input expected to be 96 bytes.
+// The 96 bytes should be the concatenation of the x and y values.
 // Point (0, 0) is considered as infinity.
 func (g *G1) FromBytes(in []byte) (*PointG1, error) {
 	if len(in) != 96 {
-		return nil, errors.New("input string should be equal or larger than 96")
+		return nil, errors.New("input should be 96 bytes long")
 	}
 	p0, err := fromBytes(in[:48])
 	if err != nil {

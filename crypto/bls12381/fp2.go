@@ -44,7 +44,7 @@ func newFp2() *fp2 {
 
 func (e *fp2) fromBytes(in []byte) (*fe2, error) {
 	if len(in) != 96 {
-		return nil, errors.New("length of input string should be 96 bytes")
+		return nil, errors.New("input should be 96 bytes long")
 	}
 	c1, err := fromBytes(in[:48])
 	if err != nil {

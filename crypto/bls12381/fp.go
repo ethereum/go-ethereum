@@ -24,7 +24,7 @@ import (
 func fromBytes(in []byte) (*fe, error) {
 	fe := &fe{}
 	if len(in) != 48 {
-		return nil, errors.New("input string should be equal 48 bytes")
+		return nil, errors.New("input should be 48 bytes long")
 	}
 	fe.setBytes(in)
 	if !fe.isValid() {
@@ -37,7 +37,7 @@ func fromBytes(in []byte) (*fe, error) {
 func fromBig(in *big.Int) (*fe, error) {
 	fe := new(fe).setBig(in)
 	if !fe.isValid() {
-		return nil, errors.New("invalid input string")
+		return nil, errors.New("invalid input")
 	}
 	toMont(fe, fe)
 	return fe, nil
