@@ -1416,8 +1416,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	for {
 		// Retrieve the current access list to expand
-		accessList := prevTracer.AccessList()
-		log.Trace("Creating access list", "input", accessList)
+		al := prevTracer.AccessList()
+		args.AccessList = &al
+		log.Trace("Creating access list", "input", args.AccessList)
 
 		// If no gas amount was specified, each unique access list needs it's own
 		// gas calculation. This is quite expensive, but we need to be accurate
@@ -1430,15 +1431,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		// Set the accesslist to the last al
-		args.AccessList = &accessList
 		msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
 		if err != nil {
 			return nil, 0, nil, err
 		}
 
 		// Apply the transaction with the access list tracer
-		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
+		tracer := logger.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
 		if err != nil {
@@ -1449,7 +1448,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
-			return accessList, res.UsedGas, res.Err, nil
+			return *args.AccessList, res.UsedGas, res.Err, nil
 		}
 		prevTracer = tracer
 	}
