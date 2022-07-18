@@ -176,6 +176,9 @@ func (s *StateDB) Snaps() *snapshot.Tree {
 }
 
 func (s *StateDB) Witness() *types.AccessWitness {
+	if s.witness == nil {
+		s.witness = types.NewAccessWitness()
+	}
 	return s.witness
 }
 
