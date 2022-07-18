@@ -283,15 +283,3 @@ func (w *wizard) manageGenesis() {
 		return
 	}
 }
-
-// saveGenesis JSON encodes an arbitrary genesis spec into a pre-defined file.
-func saveGenesis(folder, network, client string, spec interface{}) {
-	path := filepath.Join(folder, fmt.Sprintf("%s-%s.json", network, client))
-
-	out, _ := json.MarshalIndent(spec, "", "  ")
-	if err := os.WriteFile(path, out, 0644); err != nil {
-		log.Error("Failed to save genesis file", "client", client, "err", err)
-		return
-	}
-	log.Info("Saved genesis chain spec", "client", client, "path", path)
-}
