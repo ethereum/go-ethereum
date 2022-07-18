@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/henridf/eip44s-proto/spec"
 	"github.com/urfave/cli/v2"
 )
 
@@ -259,6 +261,93 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	}
 	log.Info("Exported blockchain", "file", fn)
 
+	return nil
+}
+
+func numberedFileName(basename string, n int) string {
+	suffix := filepath.Ext(basename)
+	name := strings.TrimSuffix(basename, suffix)
+	name = name + fmt.Sprintf("-%d", n) + suffix
+	return name
+}
+
+func ExportHistory(bc *core.BlockChain, fn string, targetSize int) error {
+	return ExportHistoryRange(bc, fn, uint64(0), bc.CurrentBlock().NumberU64(), targetSize)
+}
+
+func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint64, targetSize int) error {
+	var blocks []*spec.Block
+	size := 0
+	fileno := 1
+	var parentHash common.Hash
+	for nr := first; nr <= last; nr++ {
+		block := bc.GetBlockByNumber(nr)
+		if block == nil {
+			return fmt.Errorf("export failed on #%d: not found", nr)
+		}
+		if nr > first && block.ParentHash() != parentHash {
+			return fmt.Errorf("export failed: chain reorg during export")
+		}
+		parentHash = block.Hash()
+		sb := &spec.Block{}
+		if err := spec.FillBlock(sb, *block); err != nil {
+			return err
+		}
+		receipts := bc.GetReceiptsByHash(block.Hash())
+		if receipts == nil {
+			return fmt.Errorf("nil receipts for block %d %s\n", nr, block.Hash())
+		}
+		spec.FillReceipts(sb, receipts)
+		blocks = append(blocks, sb)
+		var stReceipts []*types.ReceiptForStorage
+		for _, receipt := range receipts {
+			stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
+		}
+		size += sb.SizeSSZ()
+		if targetSize > 0 && size > targetSize {
+			size = 0
+			fn := numberedFileName(fn, fileno)
+			fileno++
+			writeSSZ(fn, blocks)
+			blocks = []*spec.Block{}
+		}
+	}
+	if targetSize > 0 {
+		fn = numberedFileName(fn, fileno)
+	}
+	writeSSZ(fn, blocks)
+	return nil
+}
+
+func writeSSZ(fn string, blocks []*spec.Block) error {
+	arc := spec.ArchiveBody{
+		Blocks: blocks,
+	}
+	archdr := spec.ArchiveHeader{
+		Version:         spec.Version,
+		HeadBlockNumber: arc.Blocks[0].Header.BlockNumber,
+		BlockCount:      uint32(len(arc.Blocks)),
+	}
+
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	b, err := archdr.MarshalSSZ()
+	if err != nil {
+		return fmt.Errorf("marshalling SSZ header: %s", err)
+	}
+	if _, err := fh.Write(b); err != nil {
+		return fmt.Errorf("writing SSZ header ssz: %s", err)
+	}
+	if b, err = arc.MarshalSSZ(); err != nil {
+		return fmt.Errorf("marshalling SSZ body: %s", err)
+	}
+	if _, err = fh.Write(b); err != nil {
+		return fmt.Errorf("writing SSZ body: %s", err)
+	}
 	return nil
 }
 

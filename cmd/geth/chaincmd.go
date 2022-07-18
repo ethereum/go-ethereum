@@ -103,7 +103,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 	exportCommand = &cli.Command{
 		Action:    exportChain,
 		Name:      "export",
-		Usage:     "Export blockchain into file",
+		Usage:     "Export blockchain into RLP file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: flags.Merge([]cli.Flag{
 			utils.CacheFlag,
@@ -115,6 +115,19 @@ Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing. If the file ends with .gz, the output will
 be gzipped.`,
+	}
+	exportHistoryCommand = &cli.Command{
+		Action:    exportHistory,
+		Name:      "export-history",
+		Usage:     "Export blockchain history (blocks+receipts) into SSZ file",
+		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
+		Flags: append([]cli.Flag{
+			utils.ExportTargetSizeFlag,
+		}, utils.DatabasePathFlags...),
+		Description: `
+Requires a first argument of the file to write to. If -targetSize option is present, 
+output is split into sequential numbered files capped at (approximately) that size.
+Optional second and third arguments control the first and last block to write.`,
 	}
 	importPreimagesCommand = &cli.Command{
 		Action:    importPreimages,
@@ -291,6 +304,45 @@ func importChain(ctx *cli.Context) error {
 
 	showLeveldbStats(db)
 	return importErr
+}
+
+func exportHistory(ctx *cli.Context) error {
+	if ctx.Args().Len() < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chain, _ := utils.MakeChain(ctx, stack)
+	start := time.Now()
+
+	var err error
+	fp := ctx.Args().First()
+	targetSize := ctx.Int(utils.ExportTargetSizeFlag.Name)
+	if ctx.Args().Len() < 3 {
+		err = utils.ExportHistory(chain, fp, targetSize)
+	} else {
+		// This can be improved to allow for numbers larger than 9223372036854775807
+		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		if ferr != nil || lerr != nil {
+			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+		}
+		if first < 0 || last < 0 {
+			utils.Fatalf("Export error: block number must be greater than 0\n")
+		}
+		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
+		}
+		err = utils.ExportHistoryRange(chain, fp, uint64(first), uint64(last), targetSize)
+	}
+
+	if err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	fmt.Printf("Export done in %v\n", time.Since(start))
+	return nil
 }
 
 func exportChain(ctx *cli.Context) error {

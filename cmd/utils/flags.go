@@ -976,6 +976,10 @@ var (
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+	ExportTargetSizeFlag = &cli.IntFlag{
+		Name:  "export.targetsize",
+		Usage: "Export target file size (uncompressed)",
+	}
 )
 
 var (
