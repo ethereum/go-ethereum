@@ -2,7 +2,8 @@ package filters
 
 import (
 	context "context"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 
 	common "github.com/ethereum/go-ethereum/common"
 	core "github.com/ethereum/go-ethereum/core"
@@ -16,7 +17,6 @@ import (
 )
 
 type TestBackend struct {
-	mux             *event.TypeMux
 	DB              ethdb.Database
 	sections        uint64
 	txFeed          event.Feed
@@ -35,21 +35,23 @@ func (b *TestBackend) BloomStatus() (uint64, uint64) {
 func (b *TestBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	number := rawdb.ReadHeaderNumber(b.DB, hash)
 	if number == nil {
-		return nil, nil
+		return &types.Receipt{}, nil
 	}
 
 	receipt := rawdb.ReadBorReceipt(b.DB, hash, *number)
 	if receipt == nil {
-		return nil, nil
+		return &types.Receipt{}, nil
 	}
+
 	return receipt, nil
 }
 
 func (b *TestBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
 	receipt, err := b.GetBorBlockReceipt(ctx, hash)
 	if receipt == nil || err != nil {
-		return nil, nil
+		return []*types.Log{}, nil
 	}
+
 	return receipt.Logs, nil
 }
 
@@ -62,25 +64,30 @@ func (b *TestBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		hash common.Hash
 		num  uint64
 	)
+
 	if blockNr == rpc.LatestBlockNumber {
 		hash = rawdb.ReadHeadBlockHash(b.DB)
 		number := rawdb.ReadHeaderNumber(b.DB, hash)
+
 		if number == nil {
-			return nil, nil
+			return &types.Header{}, nil
 		}
+
 		num = *number
 	} else {
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.DB, num)
 	}
+
 	return rawdb.ReadHeader(b.DB, hash, num), nil
 }
 
 func (b *TestBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	number := rawdb.ReadHeaderNumber(b.DB, hash)
 	if number == nil {
-		return nil, nil
+		return &types.Header{}, nil
 	}
+
 	return rawdb.ReadHeader(b.DB, hash, *number), nil
 }
 
@@ -88,6 +95,7 @@ func (b *TestBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	if number := rawdb.ReadHeaderNumber(b.DB, hash); number != nil {
 		return rawdb.ReadReceipts(b.DB, hash, *number, params.TestChainConfig), nil
 	}
+
 	return nil, nil
 }
 
@@ -96,12 +104,14 @@ func (b *TestBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 	if number == nil {
 		return nil, nil
 	}
+
 	receipts := rawdb.ReadReceipts(b.DB, hash, *number, params.TestChainConfig)
 
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
 	}
+
 	return logs, nil
 }
 
@@ -141,7 +151,13 @@ func (b *TestBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 
 				task.Bitsets = make([][]byte, len(task.Sections))
 				for i, section := range task.Sections {
-					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
+					nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+
+					if err != nil {
+						panic(err)
+					}
+
+					if nBig.Int64()%4 != 0 { // Handle occasional missing deliveries
 						head := rawdb.ReadCanonicalHash(b.DB, (section+1)*params.BloomBitsBlocks-1)
 						task.Bitsets[i], _ = rawdb.ReadBloomBits(b.DB, task.Bit, section, head)
 					}

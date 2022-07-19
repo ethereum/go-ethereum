@@ -122,6 +122,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 
 	b.Log("Running filter benchmarks...")
 	start = time.Now()
+
 	var backend *TestBackend
 
 	for i := 0; i < benchFilterCnt; i++ {

@@ -10,6 +10,7 @@ import (
 	types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -27,6 +28,7 @@ func newTestHeader(blockNumber uint) *types.Header {
 	head := types.Header{
 		Number: big.NewInt(int64(blockNumber)),
 	}
+
 	return &head
 }
 
@@ -40,6 +42,7 @@ func newTestReceipt(contractAddr common.Address, topicAddress common.Hash) *type
 	}
 
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+
 	return receipt
 }
 
@@ -49,6 +52,7 @@ func (backend *MockBackend) expectBorReceiptsFromMock(hashes []*common.Hash) {
 			backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(nil, nil)
 			continue
 		}
+
 		backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(newTestReceipt(addr, *hashes[i]), nil)
 	}
 }
@@ -78,9 +82,11 @@ func TestBorFilters(t *testing.T) {
 
 	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, 18, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, err := filter.Logs(context.Background())
+
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
@@ -119,6 +125,7 @@ func TestBorFilters(t *testing.T) {
 	filter = NewBorBlockLogsRangeFilter(backend, sprint, 1, 16, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
+
 	if len(logs) != 2 {
 		t.Error("expected 2 log, got", len(logs))
 	}
