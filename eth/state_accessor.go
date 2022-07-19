@@ -41,8 +41,8 @@ var noopReleaser = func() {}
 // parent block.
 //
 // An additional release function will be returned if the requested state is
-// available. The release is expected be invoked when the state is used, though
-// it can be noop in some cases, otherwise the resources leaking can happen.
+// available. Release is expected to be invoked when the returned state is no longer needed.
+// Its purpose is to prevent resource leaking. Though it can be noop in some cases.
 //
 // Parameters:
 // - block:      The block for which we want the state(state = block.Root)
