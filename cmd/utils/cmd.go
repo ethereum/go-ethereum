@@ -299,10 +299,6 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 		}
 		spec.FillReceipts(sb, receipts)
 		blocks = append(blocks, sb)
-		var stReceipts []*types.ReceiptForStorage
-		for _, receipt := range receipts {
-			stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
-		}
 		size += sb.SizeSSZ()
 		if targetSize > 0 && size > targetSize {
 			size = 0
