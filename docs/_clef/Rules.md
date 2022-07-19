@@ -20,12 +20,12 @@ for users making lots of transactions and also a security improvement because tr
 that do not fit the pattern defined by a ruleset will not be signed unless they are 
 reviewed and manually approved by the end user.
 
-Rules can define conditions such as:
+Rules can define arbitrary conditions such as:
 
-* Auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value 
-  to maximum `1 ether` per 24h period.
+* Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and 
+  `1 ether` per 24h period.
 
-* Auto-approve transaction to contract `Uniswapv2` with `value` up to 1 ether, if 
+* Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if 
   `gas < 44k` and `gasPrice < 40Gwei`.
 
 * Auto-approve signing if the data to be signed contains the string `"approve_me"`.
@@ -35,21 +35,18 @@ Rules can define conditions such as:
 Because the rules are Javascript files they can be customized to implement any arbitrary logic on
 the available request data.
 
-There are two core concepts that enable this rule-making procedure to work well:
-
-1. **Rule Implementation**: rules are created, managed and interpreted in a flexible but secure manner
-2. **Credential management**: Auto-unlock is enabled without uneccessarily exposing keys.
-
-This page will explain how these are achieved in Clef.
+This page will explain how rules are implemented in Clef and how best to manage credentials
+when automatic rulesets are enabled.
 
 ## Rule Implementation
 
 Although rules in Clef are written in Javascript, Clef itself is written in Go. To
-implement the Javascript rules in Clef, a ruleset engine is included in the `signer` binary 
-that uses [OttoVM](https://github.com/robertkrimen/otto) to parse and interpret the Javascript and
-implement the rules.
+implement the Javascript rules in Clef, a virtual machine 
+([OttoVM](https://github.com/robertkrimen/otto)) is embedded into the `signer` binary
+that parses and interprets the Javascript code and imposes their logic in Clef. This 
+virtual machine is called the 'ruleset engine'.
 
-The ruleset engine sits in front of the command line interface where it auto-approves
+The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves
 any requests that meet the conditions defined in a set of authenticated rule files. This
 prevents the user from having to manually approve or reject every request - instead they
 can define common patterns in a rule file and abstract that task away to the ruleset engine.
@@ -57,11 +54,11 @@ The general architecture is as follows:
 
 ![Clef ruleset logic](/static/images/clef_ruleset.png)
 
-Under the hood, the ruleset-engine is an instance of a `signerUI` that evaluates a Javascript file for
+When Clef receives a request, the ruleset engine evaluates a Javascript file for
 each method defined in the internal [UI API docs](/docs/clef/apis). For example the code 
-snippet below calls the function `ApproveTx` which is invoking the `ui_approveTx` 
-[JSON_RPC API endpoint](/docs/clef/apis/#ui-api). Each method execution instantiates a fresh 
-virtual machine to run the Javascript code.
+snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` 
+is invoking the `ui_approveTx` [JSON_RPC API endpoint](/docs/clef/apis/#ui-api). Every time an RPC
+method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 
 ```js
 function asBig(str) {
@@ -101,9 +98,7 @@ When a request is made via the external API, the logic flow is as follows:
 * Assuming the call returns "Approve", request is signed.
 
 
-The ruleset might not return "Approve", for example if the request does not 
-satisfy the conditions defined in `ruleset.js` or the request is somehow
-invalid. There are five possible outcomes from the ruleset engine that are 
+There are five possible outcomes from the ruleset engine that are 
 handled in different ways:
  
 | Return value      |    Action                                 |
@@ -137,9 +132,10 @@ for defining rules correctly in `ruleset.js`:
 * Otto VM uses ES5. ES6-specific features (such as Typed Arrays) are not supported.
   
 * The regular expression engine (re2/regexp) in Otto VM is not fully compatible 
-  with the ECMA5 specification.
+  with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
   
-* Strict mode is not supported. "Use strict" will parse but it does nothing.
+* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) 
+  is not supported. "Use strict" will parse but it does nothing.
 
 
 ## Credential management
@@ -222,10 +218,10 @@ Below are some examples of `ruleset.js` files.
 
 ```js
 function ApproveTx(r) {
-	if (r.transaction.from.toLowerCase() == "0x0000000000000000000000000000000000001337") {
+	if (r.transaction.to.toLowerCase() == "0x0000000000000000000000000000000000001337") {
 		return "Approve"
 	}
-	if (r.transaction.from.toLowerCase() == "0x000000000000000000000000000000000000dead") {
+	if (r.transaction.to.toLowerCase() == "0x000000000000000000000000000000000000dead") {
 		return "Reject"
 	}
 	// Otherwise goes to manual processing
