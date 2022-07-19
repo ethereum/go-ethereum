@@ -17,6 +17,7 @@
 package beacon
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -42,9 +43,10 @@ type payloadAttributesMarshaling struct {
 
 // BlobsBundleV1 holds the blobs of an execution payload, to be retrieved separately
 type BlobsBundleV1 struct {
-	BlockHash common.Hash           `json:"blockHash"     gencodec:"required"`
-	KZGs      []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
-	Blobs     []types.Blob          `json:"blobs"      gencodec:"required"`
+	BlockHash       common.Hash           `json:"blockHash"     gencodec:"required"`
+	KZGs            []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
+	Blobs           []types.Blob          `json:"blobs"      gencodec:"required"`
+	AggregatedProof types.KZGProof        `json:"aggregatedProof" gencodec:"required"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
@@ -213,13 +215,18 @@ func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
 	blobsBundle := &BlobsBundleV1{BlockHash: blockHash}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
-			versionedHashes, kzgs, blobs := tx.BlobWrapData()
+			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
 			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
 				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
 					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
 			}
+			var zProof types.KZGProof
+			if zProof == aggProof {
+				return nil, errors.New("aggregated proof is not available in blobs")
+			}
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
 			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
+			blobsBundle.AggregatedProof = aggProof
 		}
 	}
 	return blobsBundle, nil

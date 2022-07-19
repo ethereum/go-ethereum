@@ -446,8 +446,9 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		},
 	}
 	wrapData := &types.BlobTxWrapData{
-		BlobKzgs: types.BlobKzgs{types.KZGCommitment{0: 0xc0}},
-		Blobs:    types.Blobs{types.Blob{}},
+		BlobKzgs:           types.BlobKzgs{types.KZGCommitment{0: 0xc0}},
+		Blobs:              types.Blobs{types.Blob{}},
+		KzgAggregatedProof: types.KZGProof{0: 0xd0},
 	}
 	blobTx, err := types.SignNewTx(testKey, types.NewDankSigner(common.Big1), txdata, types.WithTxWrapData(wrapData))
 	if err != nil {

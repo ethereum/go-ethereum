@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/protolambda/ztyp/view"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,6 +53,7 @@ type txJSON struct {
 	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 	Blobs               Blobs         `json:"blobs,omitempty"`
 	BlobKzgs            BlobKzgs      `json:"blobKzgs,omitempty"`
+	KzgAggregatedProof  KZGProof      `json:"kzgAggregatedProof,omitempty"`
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -123,6 +123,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		}
 		enc.Blobs = t.wrapData.blobs()
 		enc.BlobKzgs = t.wrapData.kzgs()
+		enc.KzgAggregatedProof = t.wrapData.aggregatedProof()
 	}
 	return json.Marshal(&enc)
 }
@@ -349,11 +350,12 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
 		t.wrapData = &BlobTxWrapData{
-			BlobKzgs: dec.BlobKzgs,
-			Blobs:    dec.Blobs,
+			BlobKzgs:           dec.BlobKzgs,
+			Blobs:              dec.Blobs,
+			KzgAggregatedProof: dec.KzgAggregatedProof,
 		}
 		// Verify that versioned hashes match kzgs, and kzgs match blobs.
-		if err := t.wrapData.verifyBlobsBatched(&itx, kzg.VerifyBlobs); err != nil {
+		if err := t.wrapData.verifyBlobs(&itx); err != nil {
 			return fmt.Errorf("blob wrapping data is invalid: %v", err)
 		}
 	default:

@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/protolambda/go-kzg/bls"
 )
 
@@ -114,7 +116,7 @@ func (batch *BlobsBatch) Verify() error {
 // By regrouping the above equation around the `L` points we can reduce the length of the MSM further
 // (down to just `n` scalar multiplications) by making it look like this:
 //     (r_0*b0_0 + r_1*b1_0 + r_2*b2_0) * L_0 + (r_0*b0_1 + r_1*b1_1 + r_2*b2_1) * L_1
-func VerifyBlobs(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
+func VerifyBlobsLegacy(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 	// Prepare objects to hold our two MSMs
 	lPoints := make([]bls.G1Point, params.FieldElementsPerBlob)
 	lScalars := make([]bls.Fr, params.FieldElementsPerBlob)
@@ -163,6 +165,50 @@ func VerifyBlobs(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 	return nil
 }
 
+// ComputeProof returns KZG Proof of polynomial in evaluation form at point z
+func ComputeProof(eval []bls.Fr, z *bls.Fr) (*bls.G1Point, error) {
+	if len(eval) != params.FieldElementsPerBlob {
+		return nil, errors.New("invalid eval polynomial for proof")
+	}
+
+	// To avoid overflow/underflow, convert elements into int
+	var poly [params.FieldElementsPerBlob]big.Int
+	for i := range poly {
+		frToBig(&poly[i], &eval[i])
+	}
+	var zB big.Int
+	frToBig(&zB, z)
+
+	// Shift our polynomial first (in evaluation form we can't handle the division remainder)
+	var yB big.Int
+	var y bls.Fr
+	EvaluatePolyInEvaluationForm(&y, eval, z)
+	frToBig(&yB, &y)
+	var polyShifted [params.FieldElementsPerBlob]big.Int
+
+	for i := range polyShifted {
+		polyShifted[i].Mod(new(big.Int).Sub(&poly[i], &yB), BLSModulus)
+	}
+
+	var denomPoly [params.FieldElementsPerBlob]big.Int
+	for i := range denomPoly {
+		// Make sure we won't induce a division by zero later. Shouldn't happen if using Fiat-Shamir challenges
+		if Domain[i].Cmp(&zB) == 0 {
+			return nil, errors.New("inavlid z challenge")
+		}
+		denomPoly[i].Mod(new(big.Int).Sub(Domain[i], &zB), BLSModulus)
+	}
+
+	// Calculate quotient polynomial by doing point-by-point division
+	var quotientPoly [params.FieldElementsPerBlob]bls.Fr
+	for i := range quotientPoly {
+		var tmp big.Int
+		blsDiv(&tmp, &polyShifted[i], &denomPoly[i])
+		BigToFr(&quotientPoly[i], &tmp)
+	}
+	return bls.LinCombG1(kzgSetupLagrange, quotientPoly[:]), nil
+}
+
 type JSONTrustedSetup struct {
 	SetupG1       []bls.G1Point
 	SetupG2       []bls.G2Point
@@ -182,4 +228,6 @@ func init() {
 	kzgSetupG2 = parsedSetup.SetupG2
 	kzgSetupLagrange = parsedSetup.SetupLagrange
 	KzgSetupG1 = parsedSetup.SetupG1
+
+	initDomain()
 }

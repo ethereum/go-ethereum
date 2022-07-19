@@ -66,7 +66,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// Send the transaction
-	if err = sendConn.Write(&Transactions{tx}); err != nil {
+	if err = sendConn.Write(&Transactions{types.NewNetworkTransaction(tx)}); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}
 	// peer receiving connection to node
@@ -82,7 +82,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 			recTxs := *msg
 			// if you receive an old tx propagation, read from connection again
 			if len(recTxs) == 1 && prevTx != nil {
-				if recTxs[0] == prevTx {
+				if recTxs[0].Tx == prevTx {
 					continue
 				}
 			}
@@ -168,7 +168,7 @@ func sendMaliciousTx(s *Suite, tx *types.Transaction, isEth66 bool) error {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// write malicious tx
-	if err = conn.Write(&Transactions{tx}); err != nil {
+	if err = conn.Write(&Transactions{types.NewNetworkTransaction(tx)}); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}
 	return nil
@@ -179,7 +179,11 @@ var nonce = uint64(99)
 // sendMultipleSuccessfulTxs sends the given transactions to the node and
 // expects the node to accept and propagate them.
 func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction) error {
-	txMsg := Transactions(txs)
+	ntxs := make([]*types.NetworkTransaction, len(txs))
+	for i := range txs {
+		ntxs[i] = types.NewNetworkTransaction(txs[i])
+	}
+	txMsg := Transactions(ntxs)
 	t.Logf("sending %d txs\n", len(txs))
 
 	sendConn, recvConn, err := s.createSendAndRecvConns(true)

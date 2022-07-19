@@ -25,7 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/protolambda/go-kzg/bls"
 	"github.com/protolambda/ztyp/codec"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -91,19 +90,14 @@ func WithTxWrapData(wrapData TxWrapData) TxOption {
 	}
 }
 
-// JoinBlobBatchVerify adds the kzgs and blobs to a batch for verification.
-// The commitments and blobs must have equal length and should be valid points and field elements.
-//
-// An early error may be returned if the input is verified immediately.
-type JoinBlobBatchVerify func(kzgs []*bls.G1Point, blobs [][]bls.Fr) error
-
 type TxWrapData interface {
 	copy() TxWrapData
 	kzgs() BlobKzgs
 	blobs() Blobs
+	aggregatedProof() KZGProof
 	encodeTyped(w io.Writer, txdata TxData) error
 	sizeWrapData() common.StorageSize
-	verifyBlobsBatched(inner TxData, joinBatch JoinBlobBatchVerify) error
+	verifyBlobs(inner TxData) error
 }
 
 // TxData is the underlying data of a transaction.
@@ -273,7 +267,7 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, TxWrapData, error) {
 	case BlobTxType:
 		var wrapped BlobTxWrapper
 		err := DecodeSSZ(b[1:], &wrapped)
-		return &wrapped.Tx, &BlobTxWrapData{BlobKzgs: wrapped.BlobKzgs, Blobs: wrapped.Blobs}, err
+		return &wrapped.Tx, &BlobTxWrapData{BlobKzgs: wrapped.BlobKzgs, Blobs: wrapped.Blobs, KzgAggregatedProof: wrapped.KzgAggregatedProof}, err
 	default:
 		minimal, err := tx.decodeTypedMinimal(b)
 		return minimal, nil, err
@@ -516,25 +510,23 @@ func (tx *Transaction) IsIncomplete() bool {
 	return tx.Type() == BlobTxType && tx.wrapData == nil
 }
 
-// VerifyBlobsBatched runs basic pre-verification and then joins the batch if pre-verification is valid.
-// The batch should be verified for the blobs to really be valid.
-// A transaction without blobs does not join the batch verification.
-func (tx *Transaction) VerifyBlobsBatched(joinBatch JoinBlobBatchVerify) error {
+// VerifyBlobs verifies the blob transaction
+func (tx *Transaction) VerifyBlobs() error {
 	if tx.wrapData != nil {
-		return tx.wrapData.verifyBlobsBatched(tx.inner, joinBatch)
+		return tx.wrapData.verifyBlobs(tx.inner)
 	}
 	return nil
 }
 
 // BlobWrapData returns the blob and kzg data, if any.
 // kzgs and blobs may be empty if the transaction is not wrapped.
-func (tx *Transaction) BlobWrapData() (versionedHashes []common.Hash, kzgs BlobKzgs, blobs Blobs) {
+func (tx *Transaction) BlobWrapData() (versionedHashes []common.Hash, kzgs BlobKzgs, blobs Blobs, aggProof KZGProof) {
 	if blobWrap, ok := tx.wrapData.(*BlobTxWrapData); ok {
 		if signedBlobTx, ok := tx.inner.(*SignedBlobTx); ok {
-			return signedBlobTx.Message.BlobVersionedHashes, blobWrap.BlobKzgs, blobWrap.Blobs
+			return signedBlobTx.Message.BlobVersionedHashes, blobWrap.BlobKzgs, blobWrap.Blobs, blobWrap.KzgAggregatedProof
 		}
 	}
-	return nil, nil, nil
+	return nil, nil, nil, KZGProof{}
 }
 
 // WithSignature returns a new transaction with the given signature.

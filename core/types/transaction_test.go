@@ -493,8 +493,9 @@ func TestTransactionCoding(t *testing.T) {
 				},
 			}
 			wrapData = &BlobTxWrapData{
-				BlobKzgs: BlobKzgs{KZGCommitment{0: 0xc0}},
-				Blobs:    Blobs{Blob{}},
+				BlobKzgs:           BlobKzgs{KZGCommitment{0: 0xc0}},
+				Blobs:              Blobs{Blob{}},
+				KzgAggregatedProof: KZGProof{0: 0xd0},
 			}
 		}
 		tx, err := SignNewTx(key, signer, txdata, WithTxWrapData(wrapData))

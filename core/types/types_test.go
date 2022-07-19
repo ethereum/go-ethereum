@@ -136,8 +136,9 @@ func benchRLP(b *testing.B, encode bool) {
 						BlobVersionedHashes: VersionedHashesView{common.Hash{0xaa}},
 					},
 				}, WithTxWrapData(&BlobTxWrapData{
-					BlobKzgs: BlobKzgs{KZGCommitment{0xbb}},
-					Blobs:    Blobs{Blob{}},
+					BlobKzgs:           BlobKzgs{KZGCommitment{0xbb}},
+					Blobs:              Blobs{Blob{}},
+					KzgAggregatedProof: KZGProof{0xbc},
 				})),
 		},
 	} {

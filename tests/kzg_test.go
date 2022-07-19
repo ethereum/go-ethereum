@@ -208,31 +208,37 @@ func TestVerifyBlobs(t *testing.T) {
 		Blobs:    []types.Blob{blob1, blob2},
 	}
 
-	// Extract cryptographic material out of the blobs/commitments
-	commitments, err := blobData.BlobKzgs.Parse()
-	if err != nil {
-		t.Fatalf("failed to parse commitments: %v", err)
+	var hashes []common.Hash
+	for i := 0; i < len(blobData.BlobKzgs); i++ {
+		hashes = append(hashes, blobData.BlobKzgs[i].ComputeVersionedHash())
 	}
-	blobs, err := blobData.Blobs.Parse()
-	if err != nil {
-		t.Fatalf("failed to parse blobs: %v", err)
+	txData := &types.SignedBlobTx{
+		Message: types.BlobTxMessage{
+			BlobVersionedHashes: hashes,
+		},
 	}
+	_, _, aggregatedProof, err := blobData.Blobs.ComputeCommitmentsAndAggregatedProof()
+	if err != nil {
+		t.Fatalf("bad CommitmentsAndAggregatedProof: %v", err)
+	}
+	wrapData := &types.BlobTxWrapData{
+		BlobKzgs:           blobData.BlobKzgs,
+		Blobs:              blobData.Blobs,
+		KzgAggregatedProof: aggregatedProof,
+	}
+	tx := types.NewTx(txData, types.WithTxWrapData(wrapData))
 
 	// Verify the blobs against the commitments!!
-	err = kzg.VerifyBlobs(commitments, blobs)
+	err = tx.VerifyBlobs()
 	if err != nil {
 		t.Fatalf("bad verifyBlobs: %v", err)
 	}
 
 	// Now let's do a bad case:
 	// mutate a single chunk of a single blob and VerifyBlobs() must fail
-	blobData.Blobs[0][42][1] = 0x42
-	blobs, err = blobData.Blobs.Parse()
-	if err != nil {
-		t.Fatalf("internal blobs: %v", err)
-	}
-
-	err = kzg.VerifyBlobs(commitments, blobs)
+	wrapData.Blobs[0][42][1] = 0x42
+	tx = types.NewTx(txData, types.WithTxWrapData(wrapData))
+	err = tx.VerifyBlobs()
 	if err == nil {
 		t.Fatal("bad VerifyBlobs actually succeeded, expected error")
 	}

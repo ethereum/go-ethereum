@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -1012,24 +1011,9 @@ func (pool *TxPool) filterInvalidTxsLocked(txs []*types.Transaction, errs []erro
 
 // filterInvalidBlobTxsLocked marks all blob txs (if any) with an error if the blobs or kzg commitments are invalid
 func (pool *TxPool) filterInvalidBlobTxsLocked(txs []*types.Transaction, errs []error) {
-	// We batch multiple transactions together.
-	var batchVerify kzg.BlobsBatch
 	for i, tx := range txs {
-		if errs[i] != nil {
-			continue
-		}
-		errs[i] = tx.VerifyBlobsBatched(batchVerify.Join)
-	}
-	if err := batchVerify.Verify(); err != nil {
-		// we'll have to verify each individual blob tx (can still use batch per tx)
-		// to not throw away the good ones because of some bad tx.
-		for i, tx := range txs {
-			if errs[i] != nil {
-				continue
-			}
-			// all blobs within the tx can still be batched together
-			errs[i] = tx.VerifyBlobsBatched(kzg.VerifyBlobs)
-		}
+		// all blobs within the tx can still be batched together
+		errs[i] = tx.VerifyBlobs()
 	}
 }
 

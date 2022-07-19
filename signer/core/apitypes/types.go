@@ -159,6 +159,10 @@ func (args *SendTxArgs) ToTransaction() *types.Transaction {
 			wrapData.BlobKzgs = append(wrapData.BlobKzgs, commitment)
 			wrapData.Blobs = append(wrapData.Blobs, bl)
 		}
+		_, _, aggProof, err := types.Blobs(args.Blobs).ComputeCommitmentsAndAggregatedProof()
+		if err == nil {
+			wrapData.KzgAggregatedProof = aggProof
+		}
 		data = &types.SignedBlobTx{Message: msg}
 		return types.NewTx(data, types.WithTxWrapData(&wrapData))
 	case args.MaxFeePerGas != nil:
