@@ -86,7 +86,7 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	// add a constant point
 	ret.Add(ret, getTreePolyIndex0Point)
 
-	return pointToHash(ret, subIndex)
+	return PointToHash(ret, subIndex)
 
 }
 
@@ -158,7 +158,7 @@ func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
+func PointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	// The output of Byte() is big engian for banderwagon. This
 	// introduces an imbalance in the tree, because hashes are
 	// elements of a 253-bit field. This means more than half the
@@ -193,7 +193,7 @@ func getTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.I
 	// add the pre-evaluated address
 	ret.Add(ret, evaluated)
 
-	return pointToHash(ret, subIndex)
+	return PointToHash(ret, subIndex)
 
 }
 

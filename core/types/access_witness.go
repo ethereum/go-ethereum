@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 )
 
 type VerkleStem [31]byte
@@ -51,6 +52,10 @@ type AccessWitness struct {
 	// that a location had before the execution of this
 	// block.
 	InitialValue map[string][]byte
+
+	// Caches all the points that correspond to an address,
+	// so they are not recalculated.
+	addrToPoint map[string]*verkle.Point
 }
 
 func NewAccessWitness() *AccessWitness {
@@ -58,6 +63,7 @@ func NewAccessWitness() *AccessWitness {
 		Branches:     make(map[VerkleStem]Mode),
 		Chunks:       make(map[common.Hash]Mode),
 		InitialValue: make(map[string][]byte),
+		addrToPoint:  make(map[string]*verkle.Point),
 	}
 }
 
@@ -194,6 +200,13 @@ func (aw *AccessWitness) Merge(other *AccessWitness) {
 			aw.InitialValue[k] = v
 		}
 	}
+
+	// TODO see if merging improves performance
+	//for k, v := range other.addrToPoint {
+	//if _, ok := aw.addrToPoint[k]; !ok {
+	//aw.addrToPoint[k] = v
+	//}
+	//}
 }
 
 // Key returns, predictably, the list of keys that were touched during the
@@ -221,11 +234,28 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 		Branches:     make(map[VerkleStem]Mode),
 		Chunks:       make(map[common.Hash]Mode),
 		InitialValue: make(map[string][]byte),
+		addrToPoint:  make(map[string]*verkle.Point),
 	}
 
 	naw.Merge(aw)
 
 	return naw
+}
+
+func (aw *AccessWitness) getTreeKeyHeader(addr []byte) *verkle.Point {
+	if point, ok := aw.addrToPoint[string(addr)]; ok {
+		return point
+	}
+
+	point := utils.EvaluateAddressPoint(addr)
+	aw.addrToPoint[string(addr)] = point
+	return point
+}
+
+func (aw *AccessWitness) GetTreeKeyVersionCached(addr []byte) []byte {
+	p := aw.getTreeKeyHeader(addr)
+	v := utils.PointToHash(p, utils.VersionLeafKey)
+	return v[:]
 }
 
 func (aw *AccessWitness) TouchAndChargeProofOfAbsence(addr []byte) uint64 {
@@ -235,7 +265,7 @@ func (aw *AccessWitness) TouchAndChargeProofOfAbsence(addr []byte) uint64 {
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(addr[:])
+	versionkey := aw.GetTreeKeyVersionCached(addr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -259,7 +289,7 @@ func (aw *AccessWitness) TouchAndChargeMessageCall(addr []byte) uint64 {
 		cskey [32]byte
 	)
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(addr[:])
+	versionkey := aw.GetTreeKeyVersionCached(addr[:])
 	copy(cskey[:], versionkey)
 	cskey[31] = utils.CodeSizeLeafKey
 	gas += aw.TouchAddressOnReadAndComputeGas(versionkey)
@@ -296,7 +326,7 @@ func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSen
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(addr[:])
+	versionkey := aw.GetTreeKeyVersionCached(addr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -323,7 +353,7 @@ func (aw *AccessWitness) TouchAndChargeContractCreateCompleted(addr []byte, with
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(addr[:])
+	versionkey := aw.GetTreeKeyVersionCached(addr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -343,7 +373,8 @@ func (aw *AccessWitness) TouchAndChargeContractCreateCompleted(addr []byte, with
 
 func (aw *AccessWitness) SetLeafValuesContractCreateCompleted(addr, codeSize, codeKeccak []byte) {
 	var ckkey [32]byte
-	cskey := utils.GetTreeKeyCodeSize(addr[:])
+	cskey := aw.GetTreeKeyVersionCached(addr[:])
+	cskey[31] = utils.CodeSizeLeafKey
 	copy(ckkey[:], cskey)
 	ckkey[31] = utils.CodeKeccakLeafKey
 
@@ -358,7 +389,7 @@ func (aw *AccessWitness) TouchTxOriginAndComputeGas(originAddr []byte) uint64 {
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(originAddr[:])
+	versionkey := aw.GetTreeKeyVersionCached(originAddr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -384,7 +415,7 @@ func (aw *AccessWitness) TouchTxExistingAndComputeGas(targetAddr []byte, sendsVa
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	versionkey := aw.GetTreeKeyVersionCached(targetAddr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -413,7 +444,7 @@ func (aw *AccessWitness) SetTxOriginTouchedLeaves(originAddr, originBalance, ori
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(originAddr[:])
+	versionkey := aw.GetTreeKeyVersionCached(originAddr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -436,7 +467,7 @@ func (aw *AccessWitness) SetTxExistingTouchedLeaves(targetAddr, targetBalance, t
 	)
 
 	// Only evaluate the polynomial once
-	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	versionkey := aw.GetTreeKeyVersionCached(targetAddr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -455,7 +486,7 @@ func (aw *AccessWitness) SetTxExistingTouchedLeaves(targetAddr, targetBalance, t
 
 func (aw *AccessWitness) SetGetObjectTouchedLeaves(targetAddr, version, targetBalance, targetNonce, targetCodeHash []byte) {
 	var balancekey, ckkey, noncekey [32]byte
-	versionkey := utils.GetTreeKeyVersion(targetAddr[:])
+	versionkey := aw.GetTreeKeyVersionCached(targetAddr[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
 	copy(noncekey[:], versionkey)
@@ -471,7 +502,8 @@ func (aw *AccessWitness) SetGetObjectTouchedLeaves(targetAddr, version, targetBa
 
 func (aw *AccessWitness) SetObjectCodeTouchedLeaves(addr, cs, ch []byte) {
 	var ckkey [32]byte
-	cskey := utils.GetTreeKeyCodeSize(addr[:])
+	cskey := aw.GetTreeKeyVersionCached(addr[:])
+	cskey[31] = utils.CodeSizeLeafKey
 	copy(ckkey[:], cskey)
 	ckkey[31] = utils.CodeKeccakLeafKey
 

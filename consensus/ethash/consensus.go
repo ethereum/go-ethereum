@@ -681,13 +681,14 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsCancun(header.Number) {
 		coinbase := utils.GetTreeKeyBalance(header.Coinbase.Bytes())
 		state.Witness().TouchAddressOnReadAndComputeGas(coinbase)
-		coinbase[31] = 0 // mark version
+		coinbase[31] = utils.VersionLeafKey // mark version
 		state.Witness().TouchAddressOnReadAndComputeGas(coinbase)
-		coinbase[31] = 2 // mark nonce
+		coinbase[31] = utils.NonceLeafKey // mark nonce
 		state.Witness().TouchAddressOnReadAndComputeGas(coinbase)
-		coinbase[31] = 3 // mark code keccak
+		coinbase[31] = utils.CodeKeccakLeafKey // mark code keccak
 		state.Witness().TouchAddressOnReadAndComputeGas(coinbase)
 		balance := state.GetBalance(header.Coinbase)
+		coinbase[31] = utils.BalanceLeafKey
 		state.Witness().SetLeafValue(coinbase, balance.Bytes())
 	}
 	state.AddBalance(header.Coinbase, reward)
