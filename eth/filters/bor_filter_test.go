@@ -2,131 +2,93 @@ package filters
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
+	types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	gomock "github.com/golang/mock/gomock"
 )
+
+var (
+	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr    = crypto.PubkeyToAddress(key1.PublicKey)
+
+	hash1 = common.BytesToHash([]byte("topic1"))
+	hash2 = common.BytesToHash([]byte("topic2"))
+	hash3 = common.BytesToHash([]byte("topic3"))
+	hash4 = common.BytesToHash([]byte("topic4"))
+)
+
+func newTestHeader(blockNumber uint) *types.Header {
+	head := types.Header{
+		Number: big.NewInt(int64(blockNumber)),
+	}
+	return &head
+}
+
+func newTestReceipt(contractAddr common.Address, topicAddress common.Hash) *types.Receipt {
+	receipt := types.NewReceipt(nil, false, 0)
+	receipt.Logs = []*types.Log{
+		{
+			Address: contractAddr,
+			Topics:  []common.Hash{topicAddress},
+		},
+	}
+
+	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	return receipt
+}
+
+func (backend *MockBackend) expectBorReceiptsFromMock(hashes []*common.Hash) {
+	for i := range hashes {
+		if hashes[i] == nil {
+			backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(nil, nil)
+			continue
+		}
+		backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(newTestReceipt(addr, *hashes[i]), nil)
+	}
+}
 
 func TestBorFilters(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		backend = &TestBackend{DB: db}
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr    = crypto.PubkeyToAddress(key1.PublicKey)
+		db = rawdb.NewMemoryDatabase()
 
-		hash1 = common.BytesToHash([]byte("topic1"))
-		hash2 = common.BytesToHash([]byte("topic2"))
-		hash3 = common.BytesToHash([]byte("topic3"))
-		hash4 = common.BytesToHash([]byte("topic4"))
+		sprint = params.TestChainConfig.Bor.Sprint
 	)
 
 	defer db.Close()
 
-	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
-	sprint := params.TestChainConfig.Bor.Sprint
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
-		switch i {
-		case 7: //state-sync tx at block 8
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash1},
-				},
-			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(8, common.HexToAddress("0x8"), big.NewInt(8), 8, gen.BaseFee(), nil))
+	backend := NewMockBackend(ctrl)
 
-		case 23: //state-sync tx at block 24
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash2},
-				},
-			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(24, common.HexToAddress("0x24"), big.NewInt(24), 24, gen.BaseFee(), nil))
+	// should return the following at all times
+	backend.EXPECT().ChainDb().Return(db).AnyTimes()
+	backend.EXPECT().HeaderByNumber(gomock.Any(), gomock.Any()).Return(newTestHeader(1), nil).AnyTimes()
 
-		case 991: //state-sync tx at block 992
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash3},
-				},
-			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(992, common.HexToAddress("0x992"), big.NewInt(992), 992, gen.BaseFee(), nil))
+	// Block 1
+	backend.expectBorReceiptsFromMock([]*common.Hash{nil, &hash1, &hash2, &hash3, &hash4})
 
-		case 999: //state-sync tx at block 1000
-			receipt := types.NewReceipt(nil, false, 0)
-			receipt.Logs = []*types.Log{
-				{
-					Address: addr,
-					Topics:  []common.Hash{hash4},
-				},
-			}
-			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x1000"), big.NewInt(1000), 1000, gen.BaseFee(), nil))
-		}
-	})
-
-	for i, block := range chain {
-		// write the block to database
-		rawdb.WriteBlock(db, block)
-		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-		rawdb.WriteHeadBlockHash(db, block.Hash())
-
-		blockBatch := db.NewBatch()
-
-		// since all the transactions are state-sync, we will not include them as normal receipts
-		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), []*types.Receipt{})
-
-		// check for blocks with receipts. Since the only receipt is state-sync, we can chack the length of receipts
-		if len(receipts[i]) > 0 {
-			// write the state-sync receipts to database
-			// State sync logs don't have tx index, tx hash and other necessary fields, DeriveFieldsForBorLogs will fill those fields for websocket subscriptions
-			// DeriveFieldsForBorLogs argurments:
-			// 1. State-sync logs
-			// 2. Block Hash
-			// 3. Block Number
-			// 4. Transactions in the block(except state-sync) i.e. 0 in our case
-			// 5. AllLogs - StateSyncLogs ; since we only have state-sync tx, it will be 0
-			types.DeriveFieldsForBorLogs(receipts[i][0].Logs, block.Hash(), block.NumberU64(), uint(0), uint(0))
-
-			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
-				Status: types.ReceiptStatusSuccessful, // make receipt status successful
-				Logs:   receipts[i][0].Logs,
-			})
-
-			rawdb.WriteBorTxLookupEntry(blockBatch, block.Hash(), block.NumberU64())
-		}
-
-		if err := blockBatch.Write(); err != nil {
-			fmt.Println("Failed to write block into disk", "err", err)
-		}
+	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, 18, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	logs, err := filter.Logs(context.Background())
+	if err != nil {
+		t.Error(err)
 	}
-
-	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
-
-	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
+	// Block 2
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash3})
+
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 990, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -137,7 +99,10 @@ func TestBorFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 992, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
+	// Block 3
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, &hash3})
+
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 992, 1000, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -148,30 +113,42 @@ func TestBorFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 1, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
+	// Block 4
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3})
+
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 1, 16, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 2 {
 		t.Error("expected 2 log, got", len(logs))
 	}
 
+	// Block 5
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
+
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}})
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, nil, [][]common.Hash{{failHash}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
+
+	// Block 6
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, []common.Address{failAddr}, nil)
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, []common.Address{failAddr}, nil)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
+	// Block 7
+	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
+
+	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, nil, [][]common.Hash{{failHash}, {hash1}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
