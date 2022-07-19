@@ -45,19 +45,34 @@ const (
 
 func isKeyWord(arg string) bool {
 	switch arg {
-	case "range":
-	case "func":
-	case "make":
-	case "for":
-	case "new":
-	case "switch":
+	case "break":
 	case "case":
-	case "var":
+	case "chan":
 	case "const":
-	case "type":
+	case "continue":
+	case "default":
+	case "defer":
+	case "else":
+	case "fallthrough":
+	case "for":
+	case "func":
+	case "go":
+	case "goto":
+	case "if":
+	case "import":
+	case "interface":
 	case "iota":
+	case "map":
+	case "make":
+	case "new":
+	case "package":
+	case "range":
 	case "return":
+	case "select":
 	case "struct":
+	case "switch":
+	case "type":
+	case "var":
 	default:
 		return false
 	}
@@ -180,7 +195,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
 			for j, input := range normalized.Inputs {
-				if input.Name == "" {
+				if input.Name == "" || isKeyWord(input.Name) {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
 				// Event is a bit special, we need to define event struct in binding,
