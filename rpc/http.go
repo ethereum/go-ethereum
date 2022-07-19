@@ -87,6 +87,14 @@ type HTTPTimeouts struct {
 	// ReadHeaderTimeout. It is valid to use them both.
 	ReadTimeout time.Duration
 
+	// ReadHeaderTimeout is the amount of time allowed to read
+	// request headers. The connection's read deadline is reset
+	// after reading the headers and the Handler can decide what
+	// is considered too slow for the body. If ReadHeaderTimeout
+	// is zero, the value of ReadTimeout is used. If both are
+	// zero, there is no timeout.
+	ReadHeaderTimeout time.Duration
+
 	// WriteTimeout is the maximum duration before timing out
 	// writes of the response. It is reset whenever a new
 	// request's header is read. Like ReadTimeout, it does not
@@ -103,9 +111,10 @@ type HTTPTimeouts struct {
 // DefaultHTTPTimeouts represents the default timeout values used if further
 // configuration is not provided.
 var DefaultHTTPTimeouts = HTTPTimeouts{
-	ReadTimeout:  30 * time.Second,
-	WriteTimeout: 30 * time.Second,
-	IdleTimeout:  120 * time.Second,
+	ReadTimeout:       30 * time.Second,
+	ReadHeaderTimeout: 30 * time.Second,
+	WriteTimeout:      30 * time.Second,
+	IdleTimeout:       120 * time.Second,
 }
 
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
