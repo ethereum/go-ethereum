@@ -164,6 +164,7 @@ type AncientStore interface {
 
 // Database contains all the methods required by the high level database to not
 // only access the key-value data store but also the chain freezer.
+//go:generate mockgen -destination=../eth/filters/IDatabase.go -package=filters . Database
 type Database interface {
 	Reader
 	Writer

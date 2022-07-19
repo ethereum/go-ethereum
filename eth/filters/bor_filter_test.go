@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -17,19 +16,12 @@ import (
 var (
 	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr    = crypto.PubkeyToAddress(key1.PublicKey)
-
-	hash1 = common.BytesToHash([]byte("topic1"))
-	hash2 = common.BytesToHash([]byte("topic2"))
-	hash3 = common.BytesToHash([]byte("topic3"))
-	hash4 = common.BytesToHash([]byte("topic4"))
 )
 
 func newTestHeader(blockNumber uint) *types.Header {
-	head := types.Header{
+	return &types.Header{
 		Number: big.NewInt(int64(blockNumber)),
 	}
-
-	return &head
 }
 
 func newTestReceipt(contractAddr common.Address, topicAddress common.Hash) *types.Receipt {
@@ -47,29 +39,31 @@ func newTestReceipt(contractAddr common.Address, topicAddress common.Hash) *type
 }
 
 func (backend *MockBackend) expectBorReceiptsFromMock(hashes []*common.Hash) {
-	for i := range hashes {
-		if hashes[i] == nil {
+	for _, h := range hashes {
+		if h == nil {
 			backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(nil, nil)
 			continue
 		}
 
-		backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(newTestReceipt(addr, *hashes[i]), nil)
+		backend.EXPECT().GetBorBlockReceipt(gomock.Any(), gomock.Any()).Return(newTestReceipt(addr, *h), nil)
 	}
 }
 
 func TestBorFilters(t *testing.T) {
 	t.Parallel()
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	var (
-		db = rawdb.NewMemoryDatabase()
+		hash1 = common.BytesToHash([]byte("topic1"))
+		hash2 = common.BytesToHash([]byte("topic2"))
+		hash3 = common.BytesToHash([]byte("topic3"))
+		hash4 = common.BytesToHash([]byte("topic4"))
+		db    = NewMockDatabase(ctrl)
 
 		sprint = params.TestChainConfig.Bor.Sprint
 	)
-
-	defer db.Close()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	backend := NewMockBackend(ctrl)
 
