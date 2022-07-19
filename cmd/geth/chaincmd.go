@@ -332,6 +332,9 @@ func exportHistory(ctx *cli.Context) error {
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
+		if last <= first {
+			utils.Fatalf("Export error: last block must be greater than first block\n")
+		}
 		if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
 			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
 		}

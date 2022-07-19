@@ -308,15 +308,18 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 			size = 0
 			fn := numberedFileName(fn, fileno)
 			fileno++
-			writeSSZ(fn, blocks)
+			log.Info("Writing blockchain history", "file", fn)
+			if err := writeSSZ(fn, blocks); err != nil {
+				return err
+			}
 			blocks = []*spec.Block{}
 		}
 	}
 	if targetSize > 0 {
 		fn = numberedFileName(fn, fileno)
 	}
-	writeSSZ(fn, blocks)
-	return nil
+	log.Info("Writing blockchain history", "file", fn)
+	return writeSSZ(fn, blocks)
 }
 
 func writeSSZ(fn string, blocks []*spec.Block) error {
