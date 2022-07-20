@@ -44,6 +44,9 @@ var (
 
 	// eip1559Config is a chain config with EIP-1559 enabled at block 0.
 	eip1559Config *params.ChainConfig
+
+	// preEip1559Config is a chain config without EIP-1559 enabled.
+	preEip1559Config *params.ChainConfig
 )
 
 func init() {
@@ -54,6 +57,11 @@ func init() {
 	eip1559Config = &cpy
 	eip1559Config.BerlinBlock = common.Big0
 	eip1559Config.LondonBlock = common.Big0
+
+	cpy2 := *params.TestChainConfig
+	preEip1559Config = &cpy2
+	preEip1559Config.BerlinBlock = common.Big0
+	preEip1559Config.LondonBlock = nil
 }
 
 type testBlockChain struct {
@@ -103,6 +111,20 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 		Nonce:      nonce,
 		GasTipCap:  tip,
 		GasFeeCap:  gasFee,
+		Gas:        gaslimit,
+		To:         &common.Address{},
+		Value:      big.NewInt(100),
+		Data:       nil,
+		AccessList: nil,
+	})
+	return tx
+}
+
+func accessListTx(nonce uint64, gaslimit uint64, gasPrice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
+	tx, _ := types.SignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.AccessListTx{
+		ChainID:    params.TestChainConfig.ChainID,
+		Nonce:      nonce,
+		GasPrice:   gasPrice,
 		Gas:        gaslimit,
 		To:         &common.Address{},
 		Value:      big.NewInt(100),
@@ -390,6 +412,28 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 
 	if err := pool.AddRemote(tx); err != ErrTipAboveFeeCap {
 		t.Error("expected", ErrTipAboveFeeCap, "got", err)
+	}
+}
+
+func TestSkipTransactionTipWithoutLondon(t *testing.T) {
+	t.Parallel()
+
+	var (
+		key, _     = crypto.GenerateKey()
+		address    = crypto.PubkeyToAddress(key.PublicKey)
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		trigger    = false
+	)
+	// setup pool and state with an account balance
+	statedb.SetBalance(address, new(big.Int).SetUint64(10*params.Ether))
+	blockchain := &testChain{&testBlockChain{1000000000, statedb, new(event.Feed)}, address, &trigger}
+	pool := NewTxPool(testTxPoolConfig, preEip1559Config, blockchain)
+	defer pool.Stop()
+
+	tx := accessListTx(0, 100000, big.NewInt(1), key)
+
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
 	}
 }
 
