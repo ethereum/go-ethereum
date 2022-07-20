@@ -95,17 +95,12 @@ func (f *FullService) APIs() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "admin",
-			Version:   "1.0",
 		},
 		{
 			Namespace: "debug",
-			Version:   "1.0",
-			Public:    true,
 		},
 		{
 			Namespace: "net",
-			Version:   "1.0",
-			Public:    true,
 		},
 	}
 }

@@ -432,7 +432,7 @@ func runRandTest(rt randTest) bool {
 			v := tr.Get(step.key)
 			want := values[string(step.key)]
 			if string(v) != want {
-				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
+				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
 		case opCommit:
 			_, _, rt[i].err = tr.Commit(nil)
@@ -625,7 +625,7 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 		benchmarkCommitAfterHash(b, nil)
 	})
 	var a types.StateAccount
-	onleaf := func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash) error {
+	onleaf := func(paths [][]byte, hexpath []byte, leaf []byte, parent common.Hash, parentPath []byte) error {
 		rlp.DecodeBytes(leaf, &a)
 		return nil
 	}

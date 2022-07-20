@@ -55,7 +55,7 @@ func (n *Nonce) GetBytes() []byte {
 
 // GetHex retrieves the hex string representation of the block nonce.
 func (n *Nonce) GetHex() string {
-	return fmt.Sprintf("0x%x", n.nonce[:])
+	return fmt.Sprintf("%#x", n.nonce[:])
 }
 
 // String returns a printable representation of the nonce.
@@ -75,7 +75,7 @@ func (b *Bloom) GetBytes() []byte {
 
 // GetHex retrieves the hex string representation of the bloom filter.
 func (b *Bloom) GetHex() string {
-	return fmt.Sprintf("0x%x", b.bloom[:])
+	return fmt.Sprintf("%#x", b.bloom[:])
 }
 
 // String returns a printable representation of the bloom filter.
