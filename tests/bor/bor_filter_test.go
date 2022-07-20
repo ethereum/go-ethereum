@@ -1,6 +1,6 @@
 //go:build integration
 
-package filters
+package bor
 
 import (
 	"context"
