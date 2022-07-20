@@ -304,7 +304,6 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 			size = 0
 			fn := numberedFileName(fn, fileno)
 			fileno++
-			log.Info("Writing blockchain history", "file", fn)
 			if err := writeSSZ(fn, blocks); err != nil {
 				return err
 			}
@@ -314,7 +313,6 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 	if targetSize > 0 {
 		fn = numberedFileName(fn, fileno)
 	}
-	log.Info("Writing blockchain history", "file", fn)
 	return writeSSZ(fn, blocks)
 }
 
@@ -327,6 +325,12 @@ func writeSSZ(fn string, blocks []*spec.Block) error {
 		HeadBlockNumber: arc.Blocks[0].Header.BlockNumber,
 		BlockCount:      uint32(len(arc.Blocks)),
 	}
+	h32, err := arc.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+	log.Info("Writing blockchain history", "file", fn, "start", blocks[0].Header.BlockNumber,
+		"end", blocks[len(blocks)-1].Header.BlockNumber, "root", fmt.Sprintf("%x", h32))
 
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
