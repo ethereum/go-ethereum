@@ -6,9 +6,11 @@ import (
 	"hash"
 	"math"
 	"math/big"
+	"strings"
 
 	txtrace "github.com/DeBankDeFi/etherlib/pkg/txtracev1"
 	txtrace2 "github.com/DeBankDeFi/etherlib/pkg/txtracev2"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -173,6 +175,12 @@ func (api *PreExecAPI) TraceTransaction(ctx context.Context, origin *PreExecTx) 
 	return tracer.GetResult(), nil
 }
 
+const (
+	UnKnown            = 1000
+	InsufficientBalane = 1001
+	Reverted           = 1002
+)
+
 type PreArgs struct {
 	ChainId              *big.Int        `json:"chainId,omitempty"`
 	From                 *common.Address `json:"from"`
@@ -187,11 +195,44 @@ type PreArgs struct {
 	Input                *hexutil.Bytes  `json:"input"`
 }
 
+type PreError struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+
+func toPreError(err error, result *core.ExecutionResult) PreError {
+	preErr := PreError{
+		Code: UnKnown,
+	}
+	if err != nil {
+		preErr.Msg = err.Error()
+	}
+	if result != nil && result.Err != nil {
+		preErr.Msg = result.Err.Error()
+	}
+	if strings.HasPrefix(preErr.Msg, "execution reverted") {
+		preErr.Code = Reverted
+		if result != nil {
+			preErr.Msg, _ = abi.UnpackRevert(result.Revert())
+		}
+	}
+	if strings.HasPrefix(preErr.Msg, "out of gas") {
+		preErr.Code = Reverted
+	}
+	if strings.HasPrefix(preErr.Msg, "insufficient funds for transfer") {
+		preErr.Code = InsufficientBalane
+	}
+	if strings.HasPrefix(preErr.Msg, "insufficient balance for transfer") {
+		preErr.Code = InsufficientBalane
+	}
+	return preErr
+}
+
 type PreResult struct {
 	Trace     txtrace2.ActionTraceList `json:"trace"`
 	Logs      []*types.Log             `json:"logs"`
 	StateDiff txtrace2.StateDiff       `json:"stateDiff"`
-	Error     string                   `json:"error,omitempty"`
+	Error     PreError                 `json:"error,omitempty"`
 	GasUsed   uint64                   `json:"gasUsed"`
 }
 
@@ -205,14 +246,19 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		origin := origins[i]
 		if origin.Nonce == nil {
 			preResList = append(preResList, PreResult{
-				Error: fmt.Sprintf("invalid nonce, tx index %d, nonce is nil", i),
+				Error: PreError{
+					Code: UnKnown,
+					Msg:  "nonce is nil",
+				},
 			})
 			continue
 		}
-		nonce := state.GetNonce(*origin.From)
-		if (uint64)(*origin.Nonce) != nonce {
+		if i > 0 && (uint64)(*origin.Nonce) <= (uint64)(*origins[i-1].Nonce) {
 			preResList = append(preResList, PreResult{
-				Error: fmt.Sprintf("invalid nonce, tx index %d, want %d, got %d", i, nonce, *origin.Nonce),
+				Error: PreError{
+					Code: UnKnown,
+					Msg:  fmt.Sprintf("nonce decreases, tx index %d has nonce %d, tx index %d has nonce %d", i-1, (uint64)(*origins[i-1].Nonce), i, (uint64)(*origin.Nonce)),
+				},
 			})
 			continue
 		}
@@ -225,24 +271,30 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 			MaxFeePerGas:         origin.MaxFeePerGas,
 			MaxPriorityFeePerGas: origin.MaxPriorityFeePerGas,
 			Value:                origin.Value,
-			Nonce:                origin.Nonce,
 			Data:                 origin.Data,
 			Input:                origin.Input,
 		}
 		// Get a new instance of the EVM.
-		msg, err := txArgs.ToMessage(0, header.BaseFee)
+		msg, err := txArgs.ToMessage(0, nil)
 		if err != nil {
 			preResList = append(preResList, PreResult{
-				Error: fmt.Sprintf("toMessage failed, tx index %d, err %v", i, err),
+				Error: PreError{
+					Code: UnKnown,
+					Msg:  err.Error(),
+				},
 			})
 			continue
 		}
 		txHash := common.BigToHash(big.NewInt(int64(i)))
 		tracer := txtrace2.NewOeTracer(nil, header.Hash(), header.Number, txHash, uint64(i))
 		evm, vmError, err := api.e.APIBackend.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true, Debug: true, Tracer: tracer})
+		evm.Context.BaseFee = big.NewInt(0)
 		if err != nil {
 			preResList = append(preResList, PreResult{
-				Error: fmt.Sprintf("getEvm failed, tx index %d, err %v", i, err),
+				Error: PreError{
+					Code: UnKnown,
+					Msg:  err.Error(),
+				},
 			})
 			continue
 		}
@@ -252,7 +304,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		result, err := core.ApplyMessage(evm, msg, gp)
 		if err := vmError(); err != nil {
 			preRes := PreResult{
-				Error: fmt.Sprintf("evm apply failed, tx index %d, err %v", i, err),
+				Error: toPreError(err, result),
 			}
 			if result != nil {
 				preRes.GasUsed = result.UsedGas
@@ -262,7 +314,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		if err != nil {
 			preRes := PreResult{
-				Error: fmt.Sprintf("evm apply failed, tx index %d, err %v", i, err),
+				Error: toPreError(err, result),
 			}
 			if result != nil {
 				preRes.GasUsed = result.UsedGas
@@ -277,9 +329,16 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 		}
 		if result != nil {
 			preRes.GasUsed = result.UsedGas
+			if result.Failed() {
+				preRes.Error = toPreError(err, result)
+			}
 		}
-		if len(preRes.Trace) > 0 && (preRes.Trace)[0].Error != "" {
-			preRes.Error = (preRes.Trace)[0].Error
+
+		if preRes.Error.Msg == "" && len(preRes.Trace) > 0 && (preRes.Trace)[0].Error != "" {
+			preRes.Error = PreError{
+				Code: UnKnown,
+				Msg:  (preRes.Trace)[0].Error,
+			}
 		}
 		preResList = append(preResList, preRes)
 	}
