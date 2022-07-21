@@ -40,5 +40,6 @@ func main() {
 	err = trie.DeserializeAndVerifyVerkleProof(block.Header().VerkleProof, &root, block.Header().VerkleKeyVals)
 	if err != nil {
 		fmt.Printf("error verifying proof: %v\n", err)
+		os.Exit(1)
 	}
 }
