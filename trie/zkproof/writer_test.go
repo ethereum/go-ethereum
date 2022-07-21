@@ -171,6 +171,17 @@ func TestFailedCallTx(t *testing.T) {
 
 }
 
+//notice: now only work with OP_ORDER=2
+func TestDeleteTx(t *testing.T) {
+	trace := loadStaff(t, "delete_trace.json")
+	traces, err := HandleBlockResult(trace)
+	outObj, _ := json.Marshal(traces)
+	t.Log(string(outObj))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMutipleTx(t *testing.T) {
 	trace := loadStaff(t, "multi_txs.json")
 	traces, err := HandleBlockResult(trace)

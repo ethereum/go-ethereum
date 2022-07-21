@@ -704,15 +704,26 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	}
 	state.StartPrefetcher("miner")
 
-	// fetch coinbase's proof
-	proof, err := state.GetProof(header.Coinbase)
-	if err != nil {
-		log.Error("Proof for coinbase not available", "coinbase", header.Coinbase.String(), "error", err)
-		// but we still mark the proofs map with nil array
-	}
-	wrappedProof := make([]hexutil.Bytes, len(proof))
-	for i, bt := range proof {
-		wrappedProof[i] = bt
+	proofs := make(map[string][]hexutil.Bytes)
+	// init proof with coinbase's proof
+	for _, coinbase := range []common.Address{w.coinbase, header.Coinbase} {
+		if coinbase == (common.Address{}) {
+			continue
+		}
+
+		key := coinbase.String()
+		if _, exist := proofs[key]; !exist {
+			proof, err := state.GetProof(coinbase)
+			if err != nil {
+				log.Error("Proof for coinbase not available", "coinbase", coinbase, "error", err)
+				// but we still mark the proofs map with nil array
+			}
+			wrappedProof := make([]hexutil.Bytes, len(proof))
+			for i, bt := range proof {
+				wrappedProof[i] = bt
+			}
+			proofs[key] = wrappedProof
+		}
 	}
 
 	env := &environment{
@@ -722,7 +733,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		family:        mapset.NewSet(),
 		uncles:        mapset.NewSet(),
 		header:        header,
-		proofs:        map[string][]hexutil.Bytes{header.Coinbase.String(): wrappedProof},
+		proofs:        proofs,
 		storageProofs: make(map[string]map[string][]hexutil.Bytes),
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
@@ -842,12 +853,12 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	}
 
 	// collect affected account after tx being applied
-	for _, acc := range []*common.Address{&from, to} {
+	for acc := range map[common.Address]bool{from: true, (*to): true, w.coinbase: true} {
 		after = append(after, &types.AccountWrapper{
-			Address:  *acc,
-			Nonce:    w.current.state.GetNonce(*acc),
-			Balance:  (*hexutil.Big)(w.current.state.GetBalance(*acc)),
-			CodeHash: w.current.state.GetCodeHash(*acc),
+			Address:  acc,
+			Nonce:    w.current.state.GetNonce(acc),
+			Balance:  (*hexutil.Big)(w.current.state.GetBalance(acc)),
+			CodeHash: w.current.state.GetCodeHash(acc),
 		})
 	}
 

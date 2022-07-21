@@ -357,7 +357,7 @@ func (w *zktrieProofWriter) traceAccountUpdate(addr common.Address, updateAccDat
 
 	var proof proofList
 	if err := w.tracingZktrie.Prove(addr.Bytes32(), 0, &proof); err != nil {
-		return nil, fmt.Errorf("prove BEFORE state fail: %s", err)
+		return nil, fmt.Errorf("prove BEFORE state for <%x> fail: %s", addr.Bytes(), err)
 	}
 
 	decodeProofForMPTPath(proof, out.AccountPath[0])
