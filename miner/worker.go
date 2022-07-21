@@ -944,7 +944,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
 	// than the user-specified one.
-	if interrupt != nil {
+	if interrupt != nil && atomic.LoadInt32(interrupt) >= commitInterruptResubmit {
 		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
 	return nil
