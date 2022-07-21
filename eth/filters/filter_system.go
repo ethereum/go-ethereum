@@ -450,7 +450,7 @@ func (es *EventSystem) eventLoop() {
 		es.chainSub.Unsubscribe()
 	}()
 
-	index := make(filterIndex)
+	index := make(filterIndex, LastIndexSubscription-1)
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
