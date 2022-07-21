@@ -408,7 +408,7 @@ func touchChunkOnReadAndChargeGas(chunks [][32]byte, offset uint64, evals [][]by
 	// Build the chunk address from the evaluated address of its whole group
 	var index [32]byte
 	copy(index[:], evals[chunknr/256])
-	index[31] = byte(chunknr % 256)
+	index[31] = byte((128 + chunknr) % 256)
 
 	var overflow bool
 	statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, accesses.TouchAddressOnReadAndComputeGas(index[:]))
