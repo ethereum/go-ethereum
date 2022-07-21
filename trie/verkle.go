@@ -197,7 +197,11 @@ func (trie *VerkleTrie) IsVerkle() bool {
 }
 
 func (trie *VerkleTrie) ProveAndSerialize(keys [][]byte, kv map[string][]byte) ([]byte, []verkle.KeyValuePair, error) {
-	proof, _, _, _ := verkle.MakeVerkleMultiProof(trie.root, keys, kv)
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(trie.root, keys, kv)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	p, kvps, err := verkle.SerializeProof(proof)
 	if err != nil {
 		return nil, nil, err
