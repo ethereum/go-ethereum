@@ -33,26 +33,26 @@ func (s *Service) Start() {
 	go s.srv.ListenAndServe()
 }
 
-func getRouter(backend *Backend) http.Handler {
+func getRouter(localRelay *LocalRelay) http.Handler {
 	router := mux.NewRouter()
 
 	// Add routes
-	router.HandleFunc("/", backend.handleIndex).Methods(http.MethodGet)
-	router.HandleFunc(_PathStatus, backend.handleStatus).Methods(http.MethodGet)
-	router.HandleFunc(_PathRegisterValidator, backend.handleRegisterValidator).Methods(http.MethodPost)
-	router.HandleFunc(_PathGetHeader, backend.handleGetHeader).Methods(http.MethodGet)
-	router.HandleFunc(_PathGetPayload, backend.handleGetPayload).Methods(http.MethodPost)
+	router.HandleFunc("/", localRelay.handleIndex).Methods(http.MethodGet)
+	router.HandleFunc(_PathStatus, localRelay.handleStatus).Methods(http.MethodGet)
+	router.HandleFunc(_PathRegisterValidator, localRelay.handleRegisterValidator).Methods(http.MethodPost)
+	router.HandleFunc(_PathGetHeader, localRelay.handleGetHeader).Methods(http.MethodGet)
+	router.HandleFunc(_PathGetPayload, localRelay.handleGetPayload).Methods(http.MethodPost)
 
 	// Add logging and return router
 	loggedRouter := httplogger.LoggingMiddleware(router)
 	return loggedRouter
 }
 
-func NewService(listenAddr string, backend *Backend) *Service {
+func NewService(listenAddr string, localRelay *LocalRelay) *Service {
 	return &Service{
 		srv: &http.Server{
 			Addr:    listenAddr,
-			Handler: getRouter(backend),
+			Handler: getRouter(localRelay),
 			/*
 				ReadTimeout:
 				ReadHeaderTimeout:
@@ -65,21 +65,33 @@ func NewService(listenAddr string, backend *Backend) *Service {
 
 type BuilderConfig struct {
 	EnableValidatorChecks bool
-	SecretKey             string
+	BuilderSecretKey      string
+	RelaySecretKey        string
 	ListenAddr            string
 	GenesisForkVersion    string
 	BellatrixForkVersion  string
 	GenesisValidatorsRoot string
 	BeaconEndpoint        string
+	RemoteRelayEndpoint   string
 }
 
 func Register(stack *node.Node, backend *eth.Ethereum, cfg *BuilderConfig) error {
-	envSkBytes, err := hexutil.Decode(cfg.SecretKey)
+	envRelaySkBytes, err := hexutil.Decode(cfg.RelaySecretKey)
 	if err != nil {
 		return errors.New("incorrect builder API secret key provided")
 	}
 
-	sk, err := bls.SecretKeyFromBytes(envSkBytes[:])
+	relaySk, err := bls.SecretKeyFromBytes(envRelaySkBytes[:])
+	if err != nil {
+		return errors.New("incorrect builder API secret key provided")
+	}
+
+	envBuilderSkBytes, err := hexutil.Decode(cfg.BuilderSecretKey)
+	if err != nil {
+		return errors.New("incorrect builder API secret key provided")
+	}
+
+	builderSk, err := bls.SecretKeyFromBytes(envBuilderSkBytes[:])
 	if err != nil {
 		return errors.New("incorrect builder API secret key provided")
 	}
@@ -98,8 +110,20 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *BuilderConfig) error
 	var beaconClient IBeaconClient
 	beaconClient = NewBeaconClient(cfg.BeaconEndpoint)
 
-	builderBackend := NewBackend(sk, beaconClient, ForkData{cfg.GenesisForkVersion, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot}, builderSigningDomain, proposerSigningDomain, cfg.EnableValidatorChecks)
-	builderService := NewService(cfg.ListenAddr, builderBackend)
+	localRelay := NewLocalRelay(relaySk, beaconClient, builderSigningDomain, proposerSigningDomain, ForkData{cfg.GenesisForkVersion, cfg.BellatrixForkVersion, cfg.GenesisValidatorsRoot}, cfg.EnableValidatorChecks)
+
+	var relay IRelay
+	if cfg.RemoteRelayEndpoint != "" {
+		relay, err = NewRemoteRelay(cfg.RemoteRelayEndpoint, localRelay)
+		if err != nil {
+			return err
+		}
+	} else {
+		relay = localRelay
+	}
+
+	builderBackend := NewBuilder(builderSk, beaconClient, relay, builderSigningDomain)
+	builderService := NewService(cfg.ListenAddr, localRelay)
 	builderService.Start()
 
 	backend.SetSealedBlockHook(builderBackend.newSealedBlock)

@@ -578,8 +578,14 @@ var (
 	}
 	BuilderSecretKey = cli.StringFlag{
 		Name:   "builder.secret_key",
-		Usage:  "Builder API key used for signing headers",
+		Usage:  "Builder key used for signing blocks",
 		EnvVar: "BUILDER_SECRET_KEY",
+		Value:  "0x2fc12ae741f29701f8e30f5de6350766c020cb80768a0ff01e6838ffd2431e11",
+	}
+	BuilderRelaySecretKey = cli.StringFlag{
+		Name:   "builder.relay_secret_key",
+		Usage:  "Builder local relay API key used for signing headers",
+		EnvVar: "BUILDER_RELAY_SECRET_KEY",
 		Value:  "0x2fc12ae741f29701f8e30f5de6350766c020cb80768a0ff01e6838ffd2431e11",
 	}
 	BuilderListenAddr = cli.StringFlag{
@@ -611,6 +617,12 @@ var (
 		Usage:  "Beacon endpoint to connect to for beacon chain data",
 		EnvVar: "BUILDER_BEACON_ENDPOINT",
 		Value:  "http://127.0.0.1:5052",
+	}
+	BuilderRemoteRelayEndpoint = cli.StringFlag{
+		Name:   "builder.remote_relay_endpoint",
+		Usage:  "Relay endpoint to connect to for validator registration data, if not provided will expose validator registration locally",
+		EnvVar: "BUILDER_REMOTE_RELAY_ENDPOINT",
+		Value:  "",
 	}
 	// RPC settings
 	IPCDisabledFlag = cli.BoolFlag{

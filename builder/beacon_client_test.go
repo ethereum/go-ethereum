@@ -204,11 +204,11 @@ func TestOnForkchoiceUpdate(t *testing.T) {
 }`)
 
 	bc := NewBeaconClient(mbn.srv.URL)
-	pubkeyHex, err := bc.onForkchoiceUpdate()
+	slot, err := bc.onForkchoiceUpdate()
 	require.NoError(t, err)
-	require.Equal(t, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74b"), pubkeyHex)
+	require.Equal(t, slot, uint64(32))
 
-	pubkeyHex, err = bc.getProposerForNextSlot(32)
+	pubkeyHex, err := bc.getProposerForNextSlot(32)
 	require.NoError(t, err)
 	require.Equal(t, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74b"), pubkeyHex)
 
@@ -221,9 +221,9 @@ func TestOnForkchoiceUpdate(t *testing.T) {
 	mbn.headersCode = 404
 	mbn.headersResp = []byte(`{ "code": 404, "message": "State not found" }`)
 
-	pubkeyHex, err = NewBeaconClient(mbn.srv.URL).onForkchoiceUpdate()
+	slot, err = NewBeaconClient(mbn.srv.URL).onForkchoiceUpdate()
 	require.EqualError(t, err, "State not found")
-	require.Equal(t, PubkeyHex(""), pubkeyHex)
+	require.Equal(t, slot, uint64(0))
 
 	// Check that client does not fetch new proposers if epoch did not change
 	mbn.headersCode = 200
@@ -238,9 +238,9 @@ func TestOnForkchoiceUpdate(t *testing.T) {
   ]
 }`)
 
-	pubkeyHex, err = bc.onForkchoiceUpdate()
+	slot, err = bc.onForkchoiceUpdate()
 	require.NoError(t, err, "")
-	require.Equal(t, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74b"), pubkeyHex)
+	require.Equal(t, slot, uint64(32))
 
 	mbn.headersResp = []byte(`{ "data": [ { "header": { "message": { "slot": "63", "proposer_index": "1" } } } ] }`)
 	mbn.proposerDuties[2] = []byte(`{
@@ -253,9 +253,9 @@ func TestOnForkchoiceUpdate(t *testing.T) {
   ]
 }`)
 
-	pubkeyHex, err = bc.onForkchoiceUpdate()
+	slot, err = bc.onForkchoiceUpdate()
 	require.NoError(t, err, "")
-	require.Equal(t, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74d"), pubkeyHex)
+	require.Equal(t, slot, uint64(64))
 
 	pubkeyHex, err = bc.getProposerForNextSlot(64)
 	require.NoError(t, err)
@@ -263,6 +263,6 @@ func TestOnForkchoiceUpdate(t *testing.T) {
 
 	// Check proposers map error is routed out
 	mbn.headersResp = []byte(`{ "data": [ { "header": { "message": { "slot": "65", "proposer_index": "1" } } } ] }`)
-	pubkeyHex, err = bc.onForkchoiceUpdate()
+	slot, err = bc.onForkchoiceUpdate()
 	require.EqualError(t, err, "inconsistent proposer mapping")
 }

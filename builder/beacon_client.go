@@ -16,6 +16,7 @@ import (
 
 type testBeaconClient struct {
 	validator *ValidatorPrivateData
+	slot      uint64
 }
 
 func (b *testBeaconClient) isValidator(pubkey PubkeyHex) bool {
@@ -24,8 +25,8 @@ func (b *testBeaconClient) isValidator(pubkey PubkeyHex) bool {
 func (b *testBeaconClient) getProposerForNextSlot(requestedSlot uint64) (PubkeyHex, error) {
 	return PubkeyHex(hexutil.Encode(b.validator.Pk)), nil
 }
-func (b *testBeaconClient) onForkchoiceUpdate() (PubkeyHex, error) {
-	return PubkeyHex(hexutil.Encode(b.validator.Pk)), nil
+func (b *testBeaconClient) onForkchoiceUpdate() (uint64, error) {
+	return b.slot, nil
 }
 
 type BeaconClient struct {
@@ -62,13 +63,13 @@ func (b *BeaconClient) getProposerForNextSlot(requestedSlot uint64) (PubkeyHex, 
 
 /* Returns next slot's proposer pubkey */
 // TODO: what happens if no block for previous slot - should still get next slot
-func (b *BeaconClient) onForkchoiceUpdate() (PubkeyHex, error) {
+func (b *BeaconClient) onForkchoiceUpdate() (uint64, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	currentSlot, err := fetchCurrentSlot(b.endpoint)
 	if err != nil {
-		return PubkeyHex(""), err
+		return 0, err
 	}
 
 	nextSlot := currentSlot + 1
@@ -80,7 +81,7 @@ func (b *BeaconClient) onForkchoiceUpdate() (PubkeyHex, error) {
 		// TODO: this should be prepared in advance, possibly just fetch for next epoch in advance
 		slotProposerMap, err := fetchEpochProposersMap(b.endpoint, nextSlotEpoch)
 		if err != nil {
-			return PubkeyHex(""), err
+			return 0, err
 		}
 
 		b.currentEpoch = nextSlotEpoch
@@ -90,10 +91,10 @@ func (b *BeaconClient) onForkchoiceUpdate() (PubkeyHex, error) {
 	nextSlotProposer, found := b.slotProposerMap[nextSlot]
 	if !found {
 		log.Error("inconsistent proposer mapping", "currentSlot", currentSlot, "slotProposerMap", b.slotProposerMap)
-		return PubkeyHex(""), errors.New("inconsistent proposer mapping")
+		return 0, errors.New("inconsistent proposer mapping")
 	}
 	b.nextSlotProposer = nextSlotProposer
-	return nextSlotProposer, nil
+	return nextSlot, nil
 }
 
 func fetchCurrentSlot(endpoint string) (uint64, error) {

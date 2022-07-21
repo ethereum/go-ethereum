@@ -88,7 +88,7 @@ type Ethereum struct {
 	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
 	closeBloomHandler chan struct{}
 
-	newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block)
+	newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block, *beaconTypes.PayloadAttributesV1)
 	forkchoiceHook     func(*beaconTypes.PayloadAttributesV1)
 
 	APIBackend *EthAPIBackend
@@ -384,13 +384,13 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
-func (s *Ethereum) SetSealedBlockHook(newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block)) {
+func (s *Ethereum) SetSealedBlockHook(newSealedBlockHook func(*beaconTypes.ExecutableDataV1, *types.Block, *beaconTypes.PayloadAttributesV1)) {
 	s.newSealedBlockHook = newSealedBlockHook
 }
 
-func (s *Ethereum) NewSealedBlock(data *beaconTypes.ExecutableDataV1, block *types.Block) {
+func (s *Ethereum) NewSealedBlock(data *beaconTypes.ExecutableDataV1, block *types.Block, payloadAttributes *beaconTypes.PayloadAttributesV1) {
 	if s.newSealedBlockHook != nil {
-		s.newSealedBlockHook(data, block)
+		s.newSealedBlockHook(data, block, payloadAttributes)
 	}
 }
 

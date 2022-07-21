@@ -158,11 +158,13 @@ var (
 	builderApiFlags = []cli.Flag{
 		utils.BuilderEnableValidatorChecks,
 		utils.BuilderSecretKey,
+		utils.BuilderRelaySecretKey,
 		utils.BuilderListenAddr,
 		utils.BuilderGenesisForkVersion,
 		utils.BuilderBellatrixForkVersion,
 		utils.BuilderGenesisValidatorsRoot,
 		utils.BuilderBeaconEndpoint,
+		utils.BuilderRemoteRelayEndpoint,
 	}
 
 	rpcFlags = []cli.Flag{

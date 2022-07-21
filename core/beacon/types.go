@@ -34,6 +34,7 @@ type PayloadAttributesV1 struct {
 	Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
 	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
 	GasLimit              uint64
+	Slot                  uint64
 }
 
 // JSON type overrides for PayloadAttributesV1.

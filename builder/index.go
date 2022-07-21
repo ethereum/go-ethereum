@@ -75,7 +75,7 @@ func parseIndexTemplate() (*template.Template, error) {
 
             <p>
             <h2>
-                Registered Validators: {{ .NoValidators }}
+				{{ .ValidatorsStats }}
             </h2>
             </p>
 

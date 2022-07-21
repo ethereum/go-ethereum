@@ -214,7 +214,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		resultPayload := &payload{empty: empty, result: resCh}
 		api.localBlocks.put(id, resultPayload)
 		go func() {
-			api.eth.NewSealedBlock(resultPayload.resolve())
+			executableData, block := resultPayload.resolve()
+			api.eth.NewSealedBlock(executableData, block, payloadAttributes)
 		}()
 		return valid(&id), nil
 	}

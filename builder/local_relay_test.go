@@ -20,19 +20,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBackend(t *testing.T) (*Backend, *ValidatorPrivateData) {
+func newTestBackend(t *testing.T) (*Builder, *LocalRelay, *ValidatorPrivateData) {
 	validator := NewRandomValidator()
 	sk, _ := bls.GenerateRandomSecretKey()
 	bDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, boostTypes.Hash{})
 	genesisValidatorsRoot := boostTypes.Hash(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"))
 	cDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeBeaconProposer, [4]byte{0x02, 0x0, 0x0, 0x0}, genesisValidatorsRoot)
-	backend := NewBackend(sk, &testBeaconClient{validator}, ForkData{}, bDomain, cDomain, true)
+	beaconClient := &testBeaconClient{validator: validator}
+	localRelay := NewLocalRelay(sk, beaconClient, bDomain, cDomain, ForkData{}, true)
+	backend := NewBuilder(sk, beaconClient, localRelay, bDomain)
 	// service := NewService("127.0.0.1:31545", backend)
 
-	return backend, validator
+	return backend, localRelay, validator
 }
 
-func testRequest(t *testing.T, backend *Backend, method string, path string, payload any) *httptest.ResponseRecorder {
+func testRequest(t *testing.T, localRelay *LocalRelay, method string, path string, payload any) *httptest.ResponseRecorder {
 	var req *http.Request
 	var err error
 
@@ -46,30 +48,30 @@ func testRequest(t *testing.T, backend *Backend, method string, path string, pay
 
 	require.NoError(t, err)
 	rr := httptest.NewRecorder()
-	getRouter(backend).ServeHTTP(rr, req)
+	getRouter(localRelay).ServeHTTP(rr, req)
 	return rr
 }
 
 func TestValidatorRegistration(t *testing.T) {
-	backend, _ := newTestBackend(t)
-	log.Error("rsk", "sk", hexutil.Encode(backend.builderSecretKey.Serialize()))
+	_, relay, _ := newTestBackend(t)
+	log.Error("rsk", "sk", hexutil.Encode(relay.relaySecretKey.Serialize()))
 
 	v := NewRandomValidator()
-	payload, err := prepareRegistrationMessage(t, backend.builderSigningDomain, v)
+	payload, err := prepareRegistrationMessage(t, relay.builderSigningDomain, v)
 	require.NoError(t, err)
 
-	rr := testRequest(t, backend, "POST", "/eth/v1/builder/validators", payload)
+	rr := testRequest(t, relay, "POST", "/eth/v1/builder/validators", payload)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, backend.validators, PubkeyHex(v.Pk.String()))
-	require.Equal(t, ValidatorData{FeeRecipient: payload[0].Message.FeeRecipient, GasLimit: payload[0].Message.GasLimit, Timestamp: payload[0].Message.Timestamp}, backend.validators[PubkeyHex(v.Pk.String())])
+	require.Contains(t, relay.validators, PubkeyHex(v.Pk.String()))
+	require.Equal(t, ValidatorData{Pubkey: PubkeyHex(v.Pk.String()), FeeRecipient: payload[0].Message.FeeRecipient, GasLimit: payload[0].Message.GasLimit, Timestamp: payload[0].Message.Timestamp}, relay.validators[PubkeyHex(v.Pk.String())])
 
-	rr = testRequest(t, backend, "POST", "/eth/v1/builder/validators", payload)
+	rr = testRequest(t, relay, "POST", "/eth/v1/builder/validators", payload)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	payload[0].Message.Timestamp += 1
 	// Invalid signature
 	payload[0].Signature[len(payload[0].Signature)-1] = 0x00
-	rr = testRequest(t, backend, "POST", "/eth/v1/builder/validators", payload)
+	rr = testRequest(t, relay, "POST", "/eth/v1/builder/validators", payload)
 	require.Equal(t, http.StatusBadRequest, rr.Code)
 	require.Equal(t, `{"code":400,"message":"invalid signature"}`+"\n", rr.Body.String())
 
@@ -97,19 +99,19 @@ func prepareRegistrationMessage(t *testing.T, domain boostTypes.Domain, v *Valid
 	}}, nil
 }
 
-func registerValidator(t *testing.T, v *ValidatorPrivateData, backend *Backend) {
-	payload, err := prepareRegistrationMessage(t, backend.builderSigningDomain, v)
+func registerValidator(t *testing.T, v *ValidatorPrivateData, relay *LocalRelay) {
+	payload, err := prepareRegistrationMessage(t, relay.builderSigningDomain, v)
 	require.NoError(t, err)
 
 	log.Info("Registering", "payload", payload[0].Message)
-	rr := testRequest(t, backend, "POST", "/eth/v1/builder/validators", payload)
+	rr := testRequest(t, relay, "POST", "/eth/v1/builder/validators", payload)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, backend.validators, PubkeyHex(v.Pk.String()))
-	require.Equal(t, ValidatorData{FeeRecipient: payload[0].Message.FeeRecipient, GasLimit: payload[0].Message.GasLimit, Timestamp: payload[0].Message.Timestamp}, backend.validators[PubkeyHex(v.Pk.String())])
+	require.Contains(t, relay.validators, PubkeyHex(v.Pk.String()))
+	require.Equal(t, ValidatorData{Pubkey: PubkeyHex(v.Pk.String()), FeeRecipient: payload[0].Message.FeeRecipient, GasLimit: payload[0].Message.GasLimit, Timestamp: payload[0].Message.Timestamp}, relay.validators[PubkeyHex(v.Pk.String())])
 }
 
 func TestGetHeader(t *testing.T) {
-	backend, validator := newTestBackend(t)
+	backend, relay, validator := newTestBackend(t)
 
 	forkchoiceData := &beacon.ExecutableDataV1{
 		ParentHash:    common.HexToHash("0xafafafa"),
@@ -124,33 +126,39 @@ func TestGetHeader(t *testing.T) {
 	}
 
 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", 0, forkchoiceData.ParentHash.Hex(), validator.Pk.String())
-	rr := testRequest(t, backend, "GET", path, nil)
+	rr := testRequest(t, relay, "GET", path, nil)
 	require.Equal(t, `{"code":400,"message":"unknown validator"}`+"\n", rr.Body.String())
 
-	registerValidator(t, validator, backend)
+	registerValidator(t, validator, relay)
 
-	rr = testRequest(t, backend, "GET", path, nil)
+	rr = testRequest(t, relay, "GET", path, nil)
 	require.Equal(t, `{"code":400,"message":"unknown payload"}`+"\n", rr.Body.String())
 
 	path = fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", 0, forkchoiceData.ParentHash.Hex(), NewRandomValidator().Pk.String())
-	rr = testRequest(t, backend, "GET", path, nil)
-	require.Equal(t, `{"code":400,"message":"unknown validator"}`+"\n", rr.Body.String())
+	rr = testRequest(t, relay, "GET", path, nil)
+	require.Equal(t, ``, rr.Body.String())
+	require.Equal(t, 204, rr.Code)
 
-	backend.newSealedBlock(forkchoiceData, forkchoiceBlock)
+	backend.newSealedBlock(forkchoiceData, forkchoiceBlock, &beacon.PayloadAttributesV1{})
 
 	path = fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", 0, forkchoiceData.ParentHash.Hex(), validator.Pk.String())
-	rr = testRequest(t, backend, "GET", path, nil)
+	rr = testRequest(t, relay, "GET", path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	bid := new(boostTypes.GetHeaderResponse)
 	err := json.Unmarshal(rr.Body.Bytes(), bid)
 	require.NoError(t, err)
 
-	expectedHeader, err := payloadToPayloadHeader(executableDataToExecutionPayload(forkchoiceData), forkchoiceData)
+	executionPayload, err := executableDataToExecutionPayload(forkchoiceData)
+	require.NoError(t, err)
+	expectedHeader, err := boostTypes.PayloadToPayloadHeader(executionPayload)
+	require.NoError(t, err)
+	expectedValue := new(boostTypes.U256Str)
+	err = expectedValue.FromBig(forkchoiceBlock.Profit)
 	require.NoError(t, err)
 	require.EqualValues(t, &boostTypes.BuilderBid{
 		Header: expectedHeader,
-		Value:  *new(boostTypes.U256Str).FromBig(forkchoiceBlock.Profit),
+		Value:  *expectedValue,
 		Pubkey: backend.builderPublicKey,
 	}, bid.Data.Message)
 
@@ -162,7 +170,7 @@ func TestGetHeader(t *testing.T) {
 }
 
 func TestGetPayload(t *testing.T) {
-	backend, validator := newTestBackend(t)
+	backend, relay, validator := newTestBackend(t)
 
 	forkchoiceData := &beacon.ExecutableDataV1{
 		ParentHash:    common.HexToHash("0xafafafa"),
@@ -175,11 +183,11 @@ func TestGetPayload(t *testing.T) {
 		Profit: big.NewInt(10),
 	}
 
-	registerValidator(t, validator, backend)
-	backend.newSealedBlock(forkchoiceData, forkchoiceBlock)
+	registerValidator(t, validator, relay)
+	backend.newSealedBlock(forkchoiceData, forkchoiceBlock, &beacon.PayloadAttributesV1{})
 
 	path := fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", 0, forkchoiceData.ParentHash.Hex(), validator.Pk.String())
-	rr := testRequest(t, backend, "GET", path, nil)
+	rr := testRequest(t, relay, "GET", path, nil)
 	require.Equal(t, http.StatusOK, rr.Code)
 
 	bid := new(boostTypes.GetHeaderResponse)
@@ -207,11 +215,11 @@ func TestGetPayload(t *testing.T) {
 	}
 
 	// TODO: test wrong signing domain
-	signature, err := validator.Sign(msg, backend.proposerSigningDomain)
+	signature, err := validator.Sign(msg, relay.proposerSigningDomain)
 	require.NoError(t, err)
 
 	// Call getPayload with invalid signature
-	rr = testRequest(t, backend, "POST", "/eth/v1/builder/blinded_blocks", boostTypes.SignedBlindedBeaconBlock{
+	rr = testRequest(t, relay, "POST", "/eth/v1/builder/blinded_blocks", boostTypes.SignedBlindedBeaconBlock{
 		Message:   msg,
 		Signature: boostTypes.Signature{0x09},
 	})
@@ -219,7 +227,7 @@ func TestGetPayload(t *testing.T) {
 	require.Equal(t, `{"code":400,"message":"invalid signature"}`+"\n", rr.Body.String())
 
 	// Call getPayload with correct signature
-	rr = testRequest(t, backend, "POST", "/eth/v1/builder/blinded_blocks", boostTypes.SignedBlindedBeaconBlock{
+	rr = testRequest(t, relay, "POST", "/eth/v1/builder/blinded_blocks", boostTypes.SignedBlindedBeaconBlock{
 		Message:   msg,
 		Signature: signature,
 	})

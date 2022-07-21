@@ -247,7 +247,7 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 // The difference is that if the execution fails, the returned result is nil
 // and the concrete error is dropped silently.
 func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, gasLimit uint64, random common.Hash, noTxs bool) (chan *types.Block, error) {
-	resCh, _, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, gasLimit, random, noTxs)
+	resCh, _, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, gasLimit, random, noTxs, false)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, c
 // If the generation is failed or the underlying work is already closed, an error
 // will be returned.
 func (miner *Miner) GetSealingBlockSync(parent common.Hash, timestamp uint64, coinbase common.Address, gasLimit uint64, random common.Hash, noTxs bool) (*types.Block, error) {
-	resCh, errCh, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, gasLimit, random, noTxs)
+	resCh, errCh, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, gasLimit, random, noTxs, false)
 	if err != nil {
 		return nil, err
 	}
