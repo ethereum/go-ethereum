@@ -89,6 +89,7 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 
 	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(valueBuf)
+	defer valueBuf.Reset()
 
 	// StackTrie requires values to be inserted in increasing hash order, which is not the
 	// order that `list` provides hashes in. This insertion sequence ensures that the
