@@ -35,7 +35,9 @@ var mumbaiTestnet = &Chain{
 					"25275000": 5,
 				},
 				ProducerDelay: 6,
-				Sprint:        64,
+				Sprint: map[string]uint64{
+					"0": 64,
+				},
 				BackupMultiplier: map[string]uint64{
 					"0":        2,
 					"25275000": 5,

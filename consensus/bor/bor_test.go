@@ -23,7 +23,9 @@ func TestGenesisContractChange(t *testing.T) {
 
 	b := &Bor{
 		config: &params.BorConfig{
-			Sprint: 10, // skip sprint transactions in sprint
+			Sprint: map[string]uint64{
+				"0": 10,
+			}, // skip sprint transactions in sprint
 			BlockAlloc: map[string]interface{}{
 				// write as interface since that is how it is decoded in genesis
 				"2": map[string]interface{}{

@@ -279,7 +279,9 @@ var (
 				"0": 2,
 			},
 			ProducerDelay: 6,
-			Sprint:        64,
+			Sprint: map[string]uint64{
+				"0": 64,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -311,7 +313,9 @@ var (
 				"0": 1,
 			},
 			ProducerDelay: 3,
-			Sprint:        32,
+			Sprint: map[string]uint64{
+				"0": 32,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -347,7 +351,9 @@ var (
 				"25275000": 5,
 			},
 			ProducerDelay: 6,
-			Sprint:        64,
+			Sprint: map[string]uint64{
+				"0": 64,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
@@ -391,7 +397,9 @@ var (
 				"0": 2,
 			},
 			ProducerDelay: 6,
-			Sprint:        64,
+			Sprint: map[string]uint64{
+				"0": 64,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -551,7 +559,7 @@ func (c *CliqueConfig) String() string {
 type BorConfig struct {
 	Period                   map[string]uint64      `json:"period"`                   // Number of seconds between blocks to enforce
 	ProducerDelay            uint64                 `json:"producerDelay"`            // Number of seconds delay between two producer interval
-	Sprint                   uint64                 `json:"sprint"`                   // Epoch length to proposer
+	Sprint                   map[string]uint64      `json:"sprint"`                   // Epoch length to proposer
 	BackupMultiplier         map[string]uint64      `json:"backupMultiplier"`         // Backup multiplier to determine the wiggle time
 	ValidatorContract        string                 `json:"validatorContract"`        // Validator set contract
 	StateReceiverContract    string                 `json:"stateReceiverContract"`    // State receiver contract
@@ -564,6 +572,10 @@ type BorConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (b *BorConfig) String() string {
 	return "bor"
+}
+
+func (c *BorConfig) CalculateSprint(number uint64) uint64 {
+	return c.calculateBorConfigHelper(c.Sprint, number)
 }
 
 func (c *BorConfig) CalculateBackupMultiplier(number uint64) uint64 {
