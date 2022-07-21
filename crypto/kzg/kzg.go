@@ -204,7 +204,7 @@ func ComputeProof(eval []bls.Fr, z *bls.Fr) (*bls.G1Point, error) {
 	for i := range quotientPoly {
 		var tmp big.Int
 		blsDiv(&tmp, &polyShifted[i], &denomPoly[i])
-		BigToFr(&quotientPoly[i], &tmp)
+		_ = BigToFr(&quotientPoly[i], &tmp)
 	}
 	return bls.LinCombG1(kzgSetupLagrange, quotientPoly[:]), nil
 }

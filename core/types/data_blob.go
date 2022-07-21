@@ -17,9 +17,6 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
-const MAX_TX_WRAP_KZG_COMMITMENTS = 1 << 24
-const LIMIT_BLOBS_PER_TX = 1 << 24
-
 // Compressed BLS12-381 G1 element
 type KZGCommitment [48]byte
 
@@ -257,7 +254,7 @@ func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
 		i := len(*li)
 		*li = append(*li, KZGCommitment{})
 		return &(*li)[i]
-	}, 48, MAX_TX_WRAP_KZG_COMMITMENTS)
+	}, 48, params.MaxBlobsPerBlock)
 }
 
 func (li BlobKzgs) Serialize(w *codec.EncodingWriter) error {
@@ -277,7 +274,7 @@ func (li *BlobKzgs) FixedLength() uint64 {
 func (li BlobKzgs) HashTreeRoot(hFn tree.HashFn) tree.Root {
 	return hFn.ComplexListHTR(func(i uint64) tree.HTR {
 		return &li[i]
-	}, uint64(len(li)), MAX_TX_WRAP_KZG_COMMITMENTS)
+	}, uint64(len(li)), params.MaxBlobsPerBlock)
 }
 
 func (li BlobKzgs) copy() BlobKzgs {
@@ -306,7 +303,7 @@ func (a *Blobs) Deserialize(dr *codec.DecodingReader) error {
 		i := len(*a)
 		*a = append(*a, Blob{})
 		return &(*a)[i]
-	}, params.FieldElementsPerBlob*32, LIMIT_BLOBS_PER_TX)
+	}, params.FieldElementsPerBlob*32, params.FieldElementsPerBlob)
 }
 
 func (a Blobs) Serialize(w *codec.EncodingWriter) error {
@@ -330,7 +327,7 @@ func (li Blobs) HashTreeRoot(hFn tree.HashFn) tree.Root {
 			return &li[i]
 		}
 		return nil
-	}, length, LIMIT_BLOBS_PER_TX)
+	}, length, params.MaxBlobsPerBlock)
 }
 
 func (blobs Blobs) copy() Blobs {
@@ -397,13 +394,22 @@ func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGComm
 	return commitments, versionedHashes, kzgProof, nil
 }
 
-type randomChallengeHasher struct {
-	b Blobs
-	c BlobKzgs
+type BlobsAndCommitments struct {
+	Blobs    Blobs
+	BlobKzgs BlobKzgs
 }
 
-func (h *randomChallengeHasher) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.HashTreeRoot(&h.b, &h.c)
+func (h *BlobsAndCommitments) HashTreeRoot(hFn tree.HashFn) tree.Root {
+	return hFn.HashTreeRoot(&h.Blobs, &h.BlobKzgs)
+}
+
+type PolynomialAndCommitment struct {
+	b Blob
+	c KZGCommitment
+}
+
+func (p *PolynomialAndCommitment) HashTreeRoot(hFn tree.HashFn) tree.Root {
+	return hFn.HashTreeRoot(&p.b, &p.c)
 }
 
 type BlobTxWrapper struct {
@@ -481,7 +487,8 @@ func (b *BlobTxWrapData) verifyBlobs(inner TxData) error {
 	}
 	var aggregateCommitment KZGCommitment
 	copy(aggregateCommitment[:], bls.ToCompressedG1(aggregateCommitmentG1))
-	root := tree.GetHashFn().HashTreeRoot(&aggregateBlob, &aggregateCommitment)
+	hasher := PolynomialAndCommitment{aggregateBlob, aggregateCommitment}
+	root := hasher.HashTreeRoot(tree.GetHashFn())
 	var z bls.Fr
 	hashToFr(&z, root)
 
@@ -548,7 +555,7 @@ func computePowers(r *bls.Fr, n int) []bls.Fr {
 
 func computeAggregateKzgCommitment(blobs Blobs, commitments []KZGCommitment) ([]bls.Fr, *bls.G1Point, error) {
 	// create challenges
-	hasher := randomChallengeHasher{blobs, commitments}
+	hasher := BlobsAndCommitments{blobs, commitments}
 	root := hasher.HashTreeRoot(tree.GetHashFn())
 	var r bls.Fr
 	hashToFr(&r, root)
@@ -573,6 +580,11 @@ func computeAggregateKzgCommitment(blobs Blobs, commitments []KZGCommitment) ([]
 }
 
 func hashToFr(out *bls.Fr, root tree.Root) {
-	zB := new(big.Int).Mod(new(big.Int).SetBytes(root[:]), kzg.BLSModulus)
-	kzg.BigToFr(out, zB)
+	// re-interpret as little-endian
+	var b [32]byte = root
+	for i := 0; i < 16; i++ {
+		b[31-i], b[i] = b[i], b[31-i]
+	}
+	zB := new(big.Int).Mod(new(big.Int).SetBytes(b[:]), kzg.BLSModulus)
+	_ = kzg.BigToFr(out, zB)
 }

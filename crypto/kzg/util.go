@@ -24,7 +24,7 @@ func initDomain() {
 	rootOfUnity := new(big.Int).Exp(primitiveRoot, exp, BLSModulus)
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
 		Domain[i] = new(big.Int).Exp(rootOfUnity, big.NewInt(int64(i)), BLSModulus)
-		BigToFr(&DomainFr[i], Domain[i])
+		_ = BigToFr(&DomainFr[i], Domain[i])
 	}
 }
 
@@ -90,7 +90,7 @@ func frToBig(b *big.Int, val *bls.Fr) {
 	b.SetBytes(v[:])
 }
 
-func BigToFr(out *bls.Fr, in *big.Int) {
+func BigToFr(out *bls.Fr, in *big.Int) bool {
 	var b [32]byte
 	inb := in.Bytes()
 	copy(b[32-len(inb):], inb)
@@ -98,7 +98,7 @@ func BigToFr(out *bls.Fr, in *big.Int) {
 	for i := 0; i < 16; i++ {
 		b[31-i], b[i] = b[i], b[31-i]
 	}
-	bls.FrFrom32(out, b)
+	return bls.FrFrom32(out, b)
 }
 
 func blsModInv(out *big.Int, x *big.Int) {
