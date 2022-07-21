@@ -225,6 +225,9 @@ func toPreError(err error, result *core.ExecutionResult) PreError {
 	if strings.HasPrefix(preErr.Msg, "insufficient balance for transfer") {
 		preErr.Code = InsufficientBalane
 	}
+	if strings.HasPrefix(preErr.Msg, "insufficient funds for gas * price") {
+		preErr.Code = InsufficientBalane
+	}
 	return preErr
 }
 
@@ -336,7 +339,7 @@ func (api *PreExecAPI) TraceMany(ctx context.Context, origins []PreArgs) ([]PreR
 
 		if preRes.Error.Msg == "" && len(preRes.Trace) > 0 && (preRes.Trace)[0].Error != "" {
 			preRes.Error = PreError{
-				Code: UnKnown,
+				Code: Reverted,
 				Msg:  (preRes.Trace)[0].Error,
 			}
 		}
