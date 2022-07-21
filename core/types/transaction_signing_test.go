@@ -17,6 +17,7 @@
 package types
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -127,8 +128,8 @@ func TestChainId(t *testing.T) {
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(2)), tx)
-	if err != ErrInvalidChainId {
-		t.Error("expected error:", ErrInvalidChainId)
+	if !errors.Is(err, NewInvalidChainIdError(big.NewInt(1))) {
+		t.Error("expected error:", NewInvalidChainIdError(big.NewInt(1)), err)
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(1)), tx)

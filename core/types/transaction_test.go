@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -137,7 +138,7 @@ func TestEIP2930Signer(t *testing.T) {
 			tx:             tx0,
 			signer:         signer1,
 			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
-			wantSenderErr:  ErrInvalidChainId,
+			wantSenderErr:  NewInvalidChainIdError(big.NewInt(0)),
 			wantHash:       common.HexToHash("1ccd12d8bbdb96ea391af49a35ab641e219b2dd638dea375f2bc94dd290f2549"),
 		},
 		{
@@ -151,17 +152,17 @@ func TestEIP2930Signer(t *testing.T) {
 			// This checks what happens when trying to sign an unsigned tx for the wrong chain.
 			tx:             tx1,
 			signer:         signer2,
-			wantSenderErr:  ErrInvalidChainId,
+			wantSenderErr:  NewInvalidChainIdError(big.NewInt(1)),
 			wantSignerHash: common.HexToHash("367967247499343401261d718ed5aa4c9486583e4d89251afce47f4a33c33362"),
-			wantSignErr:    ErrInvalidChainId,
+			wantSignErr:    NewInvalidChainIdError(big.NewInt(1)),
 		},
 		{
 			// This checks what happens when trying to re-sign a signed tx for the wrong chain.
 			tx:             tx2,
 			signer:         signer1,
-			wantSenderErr:  ErrInvalidChainId,
+			wantSenderErr:  NewInvalidChainIdError(big.NewInt(2)),
 			wantSignerHash: common.HexToHash("846ad7672f2a3a40c1f959cd4a8ad21786d620077084d84c8d7c077714caa139"),
-			wantSignErr:    ErrInvalidChainId,
+			wantSignErr:    NewInvalidChainIdError(big.NewInt(2)),
 		},
 	}
 
@@ -171,14 +172,14 @@ func TestEIP2930Signer(t *testing.T) {
 			t.Errorf("test %d: wrong sig hash: got %x, want %x", i, sigHash, test.wantSignerHash)
 		}
 		sender, err := Sender(test.signer, test.tx)
-		if err != test.wantSenderErr {
+		if !errors.Is(err, test.wantSenderErr) {
 			t.Errorf("test %d: wrong Sender error %q", i, err)
 		}
 		if err == nil && sender != keyAddr {
 			t.Errorf("test %d: wrong sender address %x", i, sender)
 		}
 		signedTx, err := SignTx(test.tx, test.signer, key)
-		if err != test.wantSignErr {
+		if !errors.Is(err, test.wantSignErr) {
 			t.Fatalf("test %d: wrong SignTx error %q", i, err)
 		}
 		if signedTx != nil {
