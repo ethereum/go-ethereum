@@ -3,7 +3,7 @@ title: Built-in tracers
 sort_key: C
 ---
 
-Geth comes bundled with a choice of tracers ready for usage through the tracing API. Some of them are implemented natively in Go, and others in JS. In this page a summary of each of these will be outlined. They have to be specified by name when sending a request. The only exception is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods and cannot be specified by name.
+Geth comes bundled with a choice of tracers ready for usage through the [tracing API](/docs/rpc/ns-debug). Some of them are implemented natively in Go, and others in JS. In this page a summary of each of these will be outlined. They have to be specified by name when sending a request. The only exception is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods and cannot be specified by name.
 
 * TOC
 {:toc}
@@ -37,7 +37,7 @@ The following tracers are implement in Go and as such have offer good performanc
 
 Solidity contract functions are [addressed](https://docs.soliditylang.org/en/develop/abi-spec.html#function-selector) by the first four four byte of the Keccak-256 hash of their signature. Therefore when calling the function of a contract, the caller must send this function selector as well as the ABI-encoded arguments as call data.
 
-The `4byteTracer` collects the function selectors of every function executed in the lifetime of a transaction, along with te size of the supplied call data. The result is a `map[string]int` where the keys are `SELECTOR-CALLDATASIZE` and the values are number of occurances of this key. E.g.:
+The `4byteTracer` collects the function selectors of every function executed in the lifetime of a transaction, along with the size of the supplied call data. The result is a `map[string]int` where the keys are `SELECTOR-CALLDATASIZE` and the values are number of occurances of this key. E.g.:
 
 ```terminal
 > debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
@@ -78,7 +78,7 @@ This tracer is noop. It returns an empty object and is only meant for testing th
 
 ### prestateTracer
 
-Executing a transaction requires the prior state, including account of sender and recipient, contracts that are called during execution, etc. The `prestateTracer` replays the tx and tracks every part of state that is touched. This is similar to the concept of a stateless witness, the difference being this tracer doesn't return any cryptographic proof, rather only the trie leaves. The result is an object. The keys are addresses of accounts. The value is an object with the following fields:
+Executing a transaction requires the prior state, including account of sender and recipient, contracts that are called during execution, etc. The `prestateTracer` replays the tx and tracks every part of state that is touched. This is similar to the concept of a [stateless witness](https://ethresear.ch/t/the-stateless-client-concept/172), the difference being this tracer doesn't return any cryptographic proof, rather only the trie leaves. The result is an object. The keys are addresses of accounts. The value is an object with the following fields:
 
 | field   | type              | description                   |
 |---------|-------------------|-------------------------------|
