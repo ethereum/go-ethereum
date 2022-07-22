@@ -1396,11 +1396,11 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 				}
 				fb := rawdb.ReadBlock(blockchain.db, ch, block.NumberU64())
 				if fb == nil {
-					t.Errorf("unable to retrieve block %d for canonical hash: %s", block.NumberU64(), ch.Hex())
+					t.Errorf("unable to retrieve block #%d for canonical hash: %s", block.NumberU64(), ch.Hex())
 					return
 				}
 				if fb.Hash() != block.Hash() {
-					t.Errorf("invalid block hash for block %d, want %s, got %s", block.NumberU64(), block.Hash().Hex(), fb.Hash().Hex())
+					t.Errorf("invalid block hash for block #%d, want %s, got %s", block.NumberU64(), block.Hash().Hex(), fb.Hash().Hex())
 					return
 				}
 				return
@@ -1840,7 +1840,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 		t.Fatal("expected error from InsertReceiptChain.")
 	}
 	if ancientChain.CurrentFastBlock().NumberU64() != 0 {
-		t.Fatalf("failed to rollback ancient data, want %d, have %d", 0, ancientChain.CurrentFastBlock().NumberU64())
+		t.Fatalf("failed to rollback ancient data, want #%d, have #%d", 0, ancientChain.CurrentFastBlock().NumberU64())
 	}
 	if frozen, err := ancientChain.db.Ancients(); err != nil || frozen != 1 {
 		t.Fatalf("failed to truncate ancient data, frozen index is %d", frozen)
@@ -1970,7 +1970,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		nonce++
 	})
 	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+		t.Fatalf("block #%d: failed to insert into chain: %v", n, err)
 	}
 
 	lastPrunedIndex := len(blocks) - TriesInMemory - 1
@@ -1979,11 +1979,11 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+		t.Errorf("Block #%d not pruned", lastPrunedBlock.NumberU64())
 	}
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+		t.Errorf("Block #%d pruned", firstNonPrunedBlock.NumberU64())
 	}
 
 	// Activate the transition in the middle of the chain
@@ -2838,12 +2838,12 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
+		t.Errorf("Block #%d not pruned", lastPrunedBlock.NumberU64())
 	}
 	firstNonPrunedBlock := blocks[len(blocks)-TriesInMemory]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
-		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
+		t.Errorf("Block #%d pruned", firstNonPrunedBlock.NumberU64())
 	}
 	// Now re-import some old blocks
 	blockToReimport := blocks[5:8]
@@ -3432,17 +3432,17 @@ func TestInitThenFailCreateContract(t *testing.T) {
 	{
 		block := blocks[0]
 		if _, err := chain.InsertChain([]*types.Block{blocks[0]}); err != nil {
-			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+			t.Fatalf("block #%d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
 		statedb, _ = chain.State()
 		if got, exp := statedb.GetBalance(aa), big.NewInt(100000); got.Cmp(exp) != 0 {
-			t.Fatalf("block %d: got %v exp %v", block.NumberU64(), got, exp)
+			t.Fatalf("block #%d: got %v exp %v", block.NumberU64(), got, exp)
 		}
 	}
 	// Import the rest of the blocks
 	for _, block := range blocks[1:] {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+			t.Fatalf("block #%d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
 	}
 }

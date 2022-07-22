@@ -127,13 +127,13 @@ func (basic *snapshotTestBasic) verify(t *testing.T, chain *BlockChain, blocks [
 	verifyCutoff(t, chain, true, blocks, basic.expCanonicalBlocks)
 
 	if head := chain.CurrentHeader(); head.Number.Uint64() != basic.expHeadHeader {
-		t.Errorf("Head header mismatch: have %d, want %d", head.Number, basic.expHeadHeader)
+		t.Errorf("Head header mismatch: have #%d, want #%d", head.Number, basic.expHeadHeader)
 	}
 	if head := chain.CurrentFastBlock(); head.NumberU64() != basic.expHeadFastBlock {
-		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadFastBlock)
+		t.Errorf("Head fast block mismatch: have #%d, want #%d", head.NumberU64(), basic.expHeadFastBlock)
 	}
 	if head := chain.CurrentBlock(); head.NumberU64() != basic.expHeadBlock {
-		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), basic.expHeadBlock)
+		t.Errorf("Head block mismatch: have #%d, want #%d", head.NumberU64(), basic.expHeadBlock)
 	}
 
 	// Check the disk layer, ensure they are matched

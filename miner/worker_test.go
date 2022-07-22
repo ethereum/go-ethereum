@@ -261,7 +261,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		case ev := <-sub.Chan():
 			block := ev.Data.(core.NewMinedBlockEvent).Block
 			if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-				t.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
+				t.Fatalf("failed to insert new mined block #%d: %v", block.NumberU64(), err)
 			}
 		case <-time.After(3 * time.Second): // Worker needs 1s to include new changes.
 			t.Fatalf("timeout")
@@ -588,7 +588,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			t.Error("Unexpected block nonce")
 		}
 		if block.NumberU64() != number {
-			t.Errorf("Mismatched block number, want %d got %d", number, block.NumberU64())
+			t.Errorf("Mismatched block number, want #%d got #%d", number, block.NumberU64())
 		}
 	}
 	var cases = []struct {

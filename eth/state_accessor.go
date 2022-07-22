@@ -96,7 +96,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 			}
 			parent := eth.blockchain.GetBlock(current.ParentHash(), current.NumberU64()-1)
 			if parent == nil {
-				return nil, fmt.Errorf("missing block %v %d", current.ParentHash(), current.NumberU64()-1)
+				return nil, fmt.Errorf("missing block %v #%d", current.ParentHash(), current.NumberU64()-1)
 			}
 			current = parent
 
@@ -133,17 +133,17 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		}
 		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
 		if err != nil {
-			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
+			return nil, fmt.Errorf("processing block #%d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
 		root, err := statedb.Commit(eth.blockchain.Config().IsEIP158(current.Number()))
 		if err != nil {
-			return nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
+			return nil, fmt.Errorf("stateAtBlock commit failed, number #%d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
 		statedb, err = state.New(root, database, nil)
 		if err != nil {
-			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
+			return nil, fmt.Errorf("state reset after block #%d failed: %v", current.NumberU64(), err)
 		}
 		database.TrieDB().Reference(root, common.Hash{})
 		if parent != (common.Hash{}) {

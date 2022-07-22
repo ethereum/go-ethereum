@@ -159,14 +159,14 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		preHeaders[i] = block.Header()
 
 		blob, _ := json.Marshal(block.Header())
-		t.Logf("Log header before the merging %d: %v", block.NumberU64(), string(blob))
+		t.Logf("Log header before the merging #%d: %v", block.NumberU64(), string(blob))
 	}
 	postHeaders := make([]*types.Header, len(postBlocks))
 	for i, block := range postBlocks {
 		postHeaders[i] = block.Header()
 
 		blob, _ := json.Marshal(block.Header())
-		t.Logf("Log header after the merging %d: %v", block.NumberU64(), string(blob))
+		t.Logf("Log header after the merging #%d: %v", block.NumberU64(), string(blob))
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
 	chain, _ := NewBlockChain(testdb, nil, chainConfig, runEngine, vm.Config{}, nil, nil)

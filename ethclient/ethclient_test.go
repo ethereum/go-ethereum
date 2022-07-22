@@ -434,7 +434,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if blockNumber != 2 {
-		t.Fatalf("BlockNumber returned wrong number: %d", blockNumber)
+		t.Fatalf("BlockNumber returned wrong number: #%d", blockNumber)
 	}
 	// Get current block by number
 	block, err := ec.BlockByNumber(context.Background(), new(big.Int).SetUint64(blockNumber))
@@ -442,7 +442,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if block.NumberU64() != blockNumber {
-		t.Fatalf("BlockByNumber returned wrong block: want %d got %d", blockNumber, block.NumberU64())
+		t.Fatalf("BlockByNumber returned wrong block: want #%d got #%d", blockNumber, block.NumberU64())
 	}
 	// Get current block by hash
 	blockH, err := ec.BlockByHash(context.Background(), block.Hash())

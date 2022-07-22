@@ -189,7 +189,7 @@ loop:
 		switch msg := c.Read().(type) {
 		case *Status:
 			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
-				return nil, fmt.Errorf("wrong head block in status, want:  %#x (block %d) have %#x",
+				return nil, fmt.Errorf("wrong head block in status, want:  %#x (block #%d) have %#x",
 					want, chain.blocks[chain.Len()-1].NumberU64(), have)
 			}
 			if have, want := msg.TD.Cmp(chain.TD()), 0; have != want {

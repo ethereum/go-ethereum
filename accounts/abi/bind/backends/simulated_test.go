@@ -249,7 +249,7 @@ func TestBlockByNumber(t *testing.T) {
 		t.Errorf("could not get recent block: %v", err)
 	}
 	if block.NumberU64() != 0 {
-		t.Errorf("did not get most recent block, instead got block number %v", block.NumberU64())
+		t.Errorf("did not get most recent block, instead got block number #%v", block.NumberU64())
 	}
 
 	// create one block
@@ -260,7 +260,7 @@ func TestBlockByNumber(t *testing.T) {
 		t.Errorf("could not get recent block: %v", err)
 	}
 	if block.NumberU64() != 1 {
-		t.Errorf("did not get most recent block, instead got block number %v", block.NumberU64())
+		t.Errorf("did not get most recent block, instead got block number #%v", block.NumberU64())
 	}
 
 	blockByNumber, err := sim.BlockByNumber(bgCtx, big.NewInt(1))
