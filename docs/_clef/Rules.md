@@ -13,12 +13,11 @@ and the [Clef tutorial](/docs/clef/tutorial) before diving in to this page.
 ## Introduction
 
 Rules in Clef are sets of conditions that determine whether a given action can be
-signed automatically without requiring manual approval from the user. This can be
+approved automatically without requiring manual intervention from the user. This can be
 useful for automatically approving transactions between a user's own accounts, or
-to approve patterns that are commonly used by applications. This is a UI improvement
-for users making lots of transactions and also a security improvement because transactions
-that do not fit the pattern defined by a ruleset will not be signed unless they are 
-reviewed and manually approved by the end user.
+approving patterns that are commonly used by applications. Automatic signing also 
+requires Clef to have access to account passwords which is configured independently 
+of the ruleset. 
 
 Rules can define arbitrary conditions such as:
 
@@ -40,11 +39,6 @@ when automatic rulesets are enabled.
 
 ## Rule Implementation
 
-Although rules in Clef are written in Javascript, Clef itself is written in Go. To
-implement the Javascript rules in Clef, a virtual machine 
-([OttoVM](https://github.com/robertkrimen/otto)) is embedded into the `signer` binary
-that parses and interprets the Javascript code and imposes their logic in Clef. This 
-virtual machine is called the 'ruleset engine'.
 
 The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves
 any requests that meet the conditions defined in a set of authenticated rule files. This
@@ -103,11 +97,9 @@ handled in different ways:
  
 | Return value      |    Action                                 |
 | ------------------| ----------------------------------------- |
-| Approve           | Auto-approve request       			    |
-| Reject            | Auto-reject request        				|
-| Error             | Pass decision to UI for manual approval   |
-| Unexpected value  | Pass decision to UI for manual approval   |
-| Nothing           | Pass decision to UI for manual approval   |
+| "Approve"           | Auto-approve request       			    |
+| "Reject"            | Auto-reject request        				|
+| Anything else             | Pass decision to UI for manual approval   |
  
  
 There are some additional noteworthy implementation details that are important 
@@ -167,7 +159,7 @@ that the `signer` binary needs to contain a Javascript engine. This is an
 additional attack surface. The only viable attack is for an adversary to 
 somehow extract cryptographic keys from memory during the Javascript VM execution.
 The hash-based rule attestation condition means the actual Javascript code 
-executed by the Javascript engine is not a viable attack surface. A much simpler
+executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler
 attack would be to surreptitiously insert an attested "always-approve" rule 
 instead of attempting to exploit the Javascript virtual machine. The Javascript
 engine is quite simple to implement and there are currently no known security
@@ -191,10 +183,6 @@ of implementing an insecure rule.
 
 ### File security
 
-A ruleset should have its file permissions set to prevent attacks where an adversary
-drops files onto the user's disk. Specifically, `ruleset.js` should only be loaded if it
-is set to `readonly` (`r-xx-xx-x`). To update the ruleset, it should be explicitly made
-writeable then set back to `readonly` before being reloaded.
 
 ### Credential security
 
