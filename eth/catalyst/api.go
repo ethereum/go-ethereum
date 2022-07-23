@@ -74,7 +74,7 @@ type ConsensusAPI struct {
 	//
 	// There are a few important caveats in this mechanism:
 	//   - The bad block tracking is ephemeral, in-memory only. We must never
-	//     persist any bad block informaion to disk as a bug in Geth could end
+	//     persist any bad block information to disk as a bug in Geth could end
 	//     up blocking a valid chain, even if a later Geth update would accept
 	//     it.
 	//   - Bad blocks will get forgotten after a certain threshold of import
