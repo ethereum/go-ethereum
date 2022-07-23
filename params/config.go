@@ -157,6 +157,7 @@ var (
 		BerlinBlock:             big.NewInt(0),
 		LondonBlock:             big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(17_000_000_000_000_000),
+		MergeNetsplitBlock:      big.NewInt(1735371),
 		Ethash:                  new(EthashConfig),
 	}
 
