@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/rand"
@@ -582,36 +581,6 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	// Marshal the genesis spec files for go-ethereum and all the other clients
 	genesis, _ := conf.Genesis.MarshalJSON()
 	files[filepath.Join(workdir, network+".json")] = genesis
-
-	if conf.Genesis.Config.Ethash != nil {
-		cppSpec, err := newAlethGenesisSpec(network, conf.Genesis)
-		if err != nil {
-			return nil, err
-		}
-		cppSpecJSON, _ := json.Marshal(cppSpec)
-		files[filepath.Join(workdir, network+"-cpp.json")] = cppSpecJSON
-
-		harmonySpecJSON, _ := conf.Genesis.MarshalJSON()
-		files[filepath.Join(workdir, network+"-harmony.json")] = harmonySpecJSON
-
-		paritySpec, err := newParityChainSpec(network, conf.Genesis, conf.bootnodes)
-		if err != nil {
-			return nil, err
-		}
-		paritySpecJSON, _ := json.Marshal(paritySpec)
-		files[filepath.Join(workdir, network+"-parity.json")] = paritySpecJSON
-
-		pyethSpec, err := newPyEthereumGenesisSpec(network, conf.Genesis)
-		if err != nil {
-			return nil, err
-		}
-		pyethSpecJSON, _ := json.Marshal(pyethSpec)
-		files[filepath.Join(workdir, network+"-python.json")] = pyethSpecJSON
-	} else {
-		for _, client := range []string{"cpp", "harmony", "parity", "python"} {
-			files[filepath.Join(workdir, network+"-"+client+".json")] = []byte{}
-		}
-	}
 	files[filepath.Join(workdir, "puppeth.png")] = dashboardMascot
 
 	// Upload the deployment files to the remote server (and clean up afterwards)

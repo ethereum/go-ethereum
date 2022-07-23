@@ -678,12 +678,10 @@ func (ethash *Ethash) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "eth",
-			Version:   "1.0",
 			Service:   &API{ethash},
 		},
 		{
 			Namespace: "ethash",
-			Version:   "1.0",
 			Service:   &API{ethash},
 		},
 	}

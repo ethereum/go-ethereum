@@ -197,7 +197,7 @@ func printList(l types.DerivableList) {
 	for i := 0; i < l.Len(); i++ {
 		var buf bytes.Buffer
 		l.EncodeIndex(i, &buf)
-		fmt.Printf("\"0x%x\",\n", buf.Bytes())
+		fmt.Printf("\"%#x\",\n", buf.Bytes())
 	}
 	fmt.Printf("},\n")
 }

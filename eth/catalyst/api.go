@@ -31,18 +31,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Register adds catalyst APIs to the full node.
+// Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	log.Warn("Catalyst mode enabled", "protocol", "eth")
+	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
-			Version:       "1.0",
 			Service:       NewConsensusAPI(backend),
 			Authenticated: true,
 		},
@@ -62,7 +62,7 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
-		panic("Catalyst started without valid total difficulty")
+		log.Warn("Engine API started without valid total difficulty")
 	}
 	return &ConsensusAPI{
 		eth:          eth,
@@ -73,7 +73,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-// 		we return success, which can be used to check if the catalyst mode is enabled
+// 		we return success, which can be used to check if the engine API is enabled
 // If the total difficulty was not reached:
 // 		we return INVALID
 // If the finalizedBlockHash is set:
@@ -223,7 +223,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
+	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}
@@ -274,23 +274,7 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	// update after legit payload executions.
 	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		// Stash the block away for a potential forced forckchoice update to it
-		// at a later time.
-		api.remoteBlocks.put(block.Hash(), block.Header())
-
-		// Although we don't want to trigger a sync, if there is one already in
-		// progress, try to extend if with the current payload request to relieve
-		// some strain from the forkchoice update.
-		if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
-			log.Debug("Payload accepted for sync extension", "number", params.Number, "hash", params.BlockHash)
-			return beacon.PayloadStatusV1{Status: beacon.SYNCING}, nil
-		}
-		// Either no beacon sync was started yet, or it rejected the delivered
-		// payload as non-integratable on top of the existing sync. We'll just
-		// have to rely on the beacon client to forcefully update the head with
-		// a forkchoice update request.
-		log.Warn("Ignoring payload with missing parent", "number", params.Number, "hash", params.BlockHash, "parent", params.ParentHash)
-		return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
+		return api.delayPayloadImport(block)
 	}
 	// We have an existing parent, do some sanity checks to avoid the beacon client
 	// triggering too early
@@ -310,6 +294,13 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	if block.Time() <= parent.Time() {
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent), nil
+	}
+	// Another cornercase: if the node is in snap sync mode, but the CL client
+	// tries to make it import a block. That should be denied as pushing something
+	// into the database directly will conflict with the assumptions of snap sync
+	// that it has an empty db that it can fill itself.
+	if api.eth.SyncMode() != downloader.FullSync {
+		return api.delayPayloadImport(block)
 	}
 	if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 		api.remoteBlocks.put(block.Hash(), block.Header())
@@ -343,6 +334,30 @@ func computePayloadId(headBlockHash common.Hash, params *beacon.PayloadAttribute
 	var out beacon.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	return out
+}
+
+// delayPayloadImport stashes the given block away for import at a later time,
+// either via a forkchoice update or a sync extension. This method is meant to
+// be called by the newpayload command when the block seems to be ok, but some
+// prerequisite prevents it from being processed (e.g. no parent, or nap sync).
+func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadStatusV1, error) {
+	// Stash the block away for a potential forced forkchoice update to it
+	// at a later time.
+	api.remoteBlocks.put(block.Hash(), block.Header())
+
+	// Although we don't want to trigger a sync, if there is one already in
+	// progress, try to extend if with the current payload request to relieve
+	// some strain from the forkchoice update.
+	if err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header()); err == nil {
+		log.Debug("Payload accepted for sync extension", "number", block.NumberU64(), "hash", block.Hash())
+		return beacon.PayloadStatusV1{Status: beacon.SYNCING}, nil
+	}
+	// Either no beacon sync was started yet, or it rejected the delivered
+	// payload as non-integratable on top of the existing sync. We'll just
+	// have to rely on the beacon client to forcefully update the head with
+	// a forkchoice update request.
+	log.Warn("Ignoring payload with missing parent", "number", block.NumberU64(), "hash", block.Hash(), "parent", block.ParentHash())
+	return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
 }
 
 // invalid returns a response "INVALID" with the latest valid hash supplied by latest or to the current head

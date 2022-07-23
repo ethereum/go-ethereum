@@ -166,7 +166,7 @@ func ParseSelector(unescapedSelector string) (SelectorMarshaling, error) {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector '%s': unexpected string '%s'", unescapedSelector, rest)
 	}
 
-	// Reassemble the fake ABI and constuct the JSON
+	// Reassemble the fake ABI and construct the JSON
 	fakeArgs, err := assembleArgs(args)
 	if err != nil {
 		return SelectorMarshaling{}, fmt.Errorf("failed to parse selector: %v", err)
