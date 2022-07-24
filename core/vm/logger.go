@@ -349,6 +349,8 @@ func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 		lastAccData := theLog.ExtraData.StateList[dataLen-1]
 		wrappedStatus := getWrappedAccountForAddr(l, lastAccData.Address)
 		theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
+		code := getCodeForAddr(l, lastAccData.Address)
+		theLog.ExtraData.CodeList = append(theLog.ExtraData.CodeList, hexutil.Encode(code))
 	default:
 		//do nothing for other op code
 		return

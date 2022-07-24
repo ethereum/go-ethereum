@@ -107,6 +107,9 @@ type ExtraData struct {
 	// Indicate the call succeeds or not for CALL/CREATE op
 	CallFailed bool `json:"callFailed,omitempty"`
 	// CALL | CALLCODE | DELEGATECALL | STATICCALL: [tx.to address’s code, stack.nth_last(1) address’s code]
+	// CREATE | CREATE2: [created contract’s code]
+	// CODESIZE | CODECOPY: [contract’s code]
+	// EXTCODESIZE | EXTCODECOPY: [stack.nth_last(0) address’s code]
 	CodeList []string `json:"codeList,omitempty"`
 	// SSTORE | SLOAD: [storageProof]
 	// SELFDESTRUCT: [contract address’s account, stack.nth_last(0) address’s account]

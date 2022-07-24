@@ -11,8 +11,8 @@ type traceFunc func(l *StructLogger, scope *ScopeContext, extraData *types.Extra
 var (
 	// OpcodeExecs the map to load opcodes' trace funcs.
 	OpcodeExecs = map[OpCode][]traceFunc{
-		CALL:         {traceToAddressCode, traceLastNAddressCode(1), traceCaller, traceLastNAddressAccount(1)},
-		CALLCODE:     {traceToAddressCode, traceLastNAddressCode(1), traceCaller, traceLastNAddressAccount(1)},
+		CALL:         {traceToAddressCode, traceLastNAddressCode(1), traceContractAccount, traceLastNAddressAccount(1)}, // contract account is the caller, stack.nth_last(1) is the callee's address
+		CALLCODE:     {traceToAddressCode, traceLastNAddressCode(1), traceContractAccount, traceLastNAddressAccount(1)}, // contract account is the caller, stack.nth_last(1) is the callee's address
 		DELEGATECALL: {traceToAddressCode, traceLastNAddressCode(1)},
 		STATICCALL:   {traceToAddressCode, traceLastNAddressCode(1), traceLastNAddressAccount(1)},
 		CREATE:       {}, // sender is already recorded in ExecutionResult, callee is recorded in CaptureEnter&CaptureExit
@@ -23,6 +23,10 @@ var (
 		SELFBALANCE:  {traceContractAccount},
 		BALANCE:      {traceLastNAddressAccount(0)},
 		EXTCODEHASH:  {traceLastNAddressAccount(0)},
+		CODESIZE:     {traceContractCode},
+		CODECOPY:     {traceContractCode},
+		EXTCODESIZE:  {traceLastNAddressCode(0)},
+		EXTCODECOPY:  {traceLastNAddressCode(0)},
 	}
 )
 
@@ -48,6 +52,13 @@ func traceLastNAddressCode(n int) traceFunc {
 		extraData.CodeList = append(extraData.CodeList, hexutil.Encode(code))
 		return nil
 	}
+}
+
+// traceContractCode gets the contract's code
+func traceContractCode(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
+	code := l.env.StateDB.GetCode(scope.Contract.Address())
+	extraData.CodeList = append(extraData.CodeList, hexutil.Encode(code))
+	return nil
 }
 
 // traceStorage get contract's storage at storage_address
@@ -89,17 +100,6 @@ func traceLastNAddressAccount(n int) traceFunc {
 	}
 }
 
-// traceCaller gets caller address's account.
-func traceCaller(l *StructLogger, scope *ScopeContext, extraData *types.ExtraData) error {
-	address := scope.Contract.CallerAddress
-	state := getWrappedAccountForAddr(l, address)
-
-	extraData.StateList = append(extraData.StateList, state)
-	l.statesAffected[scope.Contract.Address()] = struct{}{}
-
-	return nil
-}
-
 // StorageWrapper will be empty
 func getWrappedAccountForAddr(l *StructLogger, address common.Address) *types.AccountWrapper {
 	return &types.AccountWrapper{
@@ -121,4 +121,8 @@ func getWrappedAccountForStorage(l *StructLogger, address common.Address, key co
 			Value: l.env.StateDB.GetState(address, key).String(),
 		},
 	}
+}
+
+func getCodeForAddr(l *StructLogger, address common.Address) []byte {
+	return l.env.StateDB.GetCode(address)
 }
