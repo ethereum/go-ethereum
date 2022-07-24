@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Xinfin XDPoSchain<br/>
+  XinFin XDPoSchain<br/>
   Enterprise ready hybrid blockchain for global trade and finance
 </p>
 <br/>
@@ -58,4 +58,4 @@ If at a later stage if some predecided amount of owners ( investors ) vote that 
 
 Simple create a pull request along with proper reasoning, we'll get back to you.
 
-Our Channels : [Telegram Developer Group](https://t.me/XinFinDevelopers)  or [Public Slack Group](https://launchpass.com/xinfin-public)
+Our Channels : [Telegram Developer Group](https://t.me/XinFinDevelopers)  or [XDC.Dev](https://xdc.dev)
