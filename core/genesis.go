@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -83,7 +84,12 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 // flush adds allocated genesis accounts into a fresh new statedb and
 // commit the state changes into the given database handler.
 func (ga *GenesisAlloc) flush(db ethdb.Database) (common.Hash, error) {
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	triedb := state.NewDatabase(db)
+	snaps, err := snapshot.New(db, triedb.TrieDB(), 1, common.Hash{}, false, true, false)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	statedb, err := state.New(common.Hash{}, triedb, snaps)
 	if err != nil {
 		return common.Hash{}, err
 	}
