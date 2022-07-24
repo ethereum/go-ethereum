@@ -121,7 +121,7 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 
 			binary.LittleEndian.PutUint64(nonce[:8], data.Nonce)
 		}
-		db.witness.SetGetObjectTouchedLeaves(address.Bytes(), version, balance[:], nonce[:], data.CodeHash)
+		db.Witness().SetGetObjectTouchedLeaves(address.Bytes(), version, balance[:], nonce[:], data.CodeHash)
 	}
 
 	if data.Balance == nil {
