@@ -37,9 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Register adds catalyst APIs to the full node.
+// Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	log.Warn("Catalyst mode enabled", "protocol", "eth")
+	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
@@ -62,7 +62,7 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
-		panic("Catalyst started without valid total difficulty")
+		log.Warn("Engine API started without valid total difficulty")
 	}
 	return &ConsensusAPI{
 		eth:          eth,
@@ -73,7 +73,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-// 		we return success, which can be used to check if the catalyst mode is enabled
+// 		we return success, which can be used to check if the engine API is enabled
 // If the total difficulty was not reached:
 // 		we return INVALID
 // If the finalizedBlockHash is set:
@@ -223,7 +223,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
+	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}
