@@ -235,6 +235,8 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			log.Warn("Safe block not in canonical chain")
 			return beacon.STATUS_INVALID, beacon.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
 		}
+		// Set the safe block
+		api.eth.BlockChain().SetSafe(safeBlock)
 	}
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
