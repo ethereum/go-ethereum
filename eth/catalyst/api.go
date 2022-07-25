@@ -62,7 +62,7 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
-		log.Warn("Engine API started without valid total difficulty")
+		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	return &ConsensusAPI{
 		eth:          eth,
