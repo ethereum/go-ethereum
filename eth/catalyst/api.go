@@ -447,6 +447,12 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	if api.invalidBlocksHits[badHash] >= invalidBlockHitEviction {
 		log.Warn("Too many bad block import attempt, trying", "number", invalid.Number, "hash", badHash)
 		delete(api.invalidBlocksHits, badHash)
+
+		for descendant, badHeader := range api.invalidTipsets {
+			if badHeader.Hash() == badHash {
+				delete(api.invalidTipsets, descendant)
+			}
+		}
 		return nil
 	}
 	// Not too many failures yet, mark the head of the invalid chain as invalid
