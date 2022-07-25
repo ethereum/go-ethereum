@@ -773,8 +773,8 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		if status.Status == beacon.INVALID {
-			panic("success")
+		if status.Status == beacon.VALID {
+			t.Error("invalid status: VALID on an invalid chain")
 		}
 		// Now reorg to the head of the invalid chain
 		resp, err := apiB.ForkchoiceUpdatedV1(beacon.ForkchoiceStateV1{HeadBlockHash: payload.BlockHash, SafeBlockHash: payload.BlockHash, FinalizedBlockHash: payload.ParentHash}, nil)
@@ -782,7 +782,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 			t.Fatal(err)
 		}
 		if resp.PayloadStatus.Status == beacon.VALID {
-			t.Errorf("invalid status: expected INVALID got: %v", resp.PayloadStatus.Status)
+			t.Error("invalid status: VALID on an invalid chain")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
