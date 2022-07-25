@@ -458,7 +458,7 @@ func (c *ChainConfig) String() string {
 
 	// Add a special section for the merge as it's non-obvious
 	if c.TerminalTotalDifficulty == nil {
-		banner += "Merge not configured!\n"
+		banner += "The Merge is not yet available for this network!\n"
 		banner += " - Hard-fork specification: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)"
 	} else {
 		banner += "Merge configured:\n"
