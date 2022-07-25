@@ -426,6 +426,7 @@ func (api *ConsensusAPI) setInvalidAncestor(invalid *types.Header, origin *types
 	defer api.invalidLock.Unlock()
 
 	api.invalidTipsets[origin.Hash()] = invalid
+	api.invalidBlocksHits[invalid.Hash()]++
 }
 
 // checkInvalidAncestor checks whether the specified chain end links to a known
@@ -458,13 +459,13 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	// Not too many failures yet, mark the head of the invalid chain as invalid
 	if check != head {
 		log.Warn("Marked new chain head as invalid", "hash", head, "badnumber", invalid.Number, "badhash", badHash)
-		api.invalidTipsets[head] = invalid
-		if len(api.invalidTipsets) > invalidTipsetsCap {
+		for len(api.invalidTipsets) >= invalidTipsetsCap {
 			for key := range api.invalidTipsets {
 				delete(api.invalidTipsets, key)
 				break
 			}
 		}
+		api.invalidTipsets[head] = invalid
 	}
 	failure := "links to previously rejected block"
 	return &beacon.PayloadStatusV1{
