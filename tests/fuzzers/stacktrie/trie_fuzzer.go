@@ -138,7 +138,6 @@ func Debug(data []byte) int {
 }
 
 func (f *fuzzer) fuzz() int {
-
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
 		spongeA     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}

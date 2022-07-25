@@ -352,7 +352,6 @@ func TestRandomCases(t *testing.T) {
 		{op: 1, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 25
 	}
 	runRandTest(rt)
-
 }
 
 // randTest performs random trie operations.

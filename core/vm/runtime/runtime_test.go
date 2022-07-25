@@ -379,7 +379,6 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 // BenchmarkSimpleLoop test a pretty simple loop which loops until OOG
 // 55 ms
 func BenchmarkSimpleLoop(b *testing.B) {
-
 	staticCallIdentity := []byte{
 		byte(vm.JUMPDEST), //  [ count ]
 		// push args for the call
@@ -498,7 +497,6 @@ func TestEip2929Cases(t *testing.T) {
 	t.Skip("Test only useful for generating documentation")
 	id := 1
 	prettyPrint := func(comment string, code []byte) {
-
 		instrs := make([]string, 0)
 		it := asm.NewInstructionIterator(code)
 		for it.Next() {

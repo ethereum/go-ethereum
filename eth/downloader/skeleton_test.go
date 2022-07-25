@@ -790,7 +790,6 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		check := func() error {
 			if len(progress.Subchains) != len(tt.midstate) {
 				return fmt.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
-
 			}
 			for j := 0; j < len(progress.Subchains); j++ {
 				if progress.Subchains[j].Head != tt.midstate[j].Head {

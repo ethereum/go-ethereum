@@ -817,7 +817,6 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
-
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {
