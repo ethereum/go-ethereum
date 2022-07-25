@@ -80,6 +80,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.Without,
 		Default: c.cliConfig.Heimdall.Without,
 	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "bor.heimdallgRPC",
+		Usage:   "Address of Heimdall gRPC service",
+		Value:   &c.cliConfig.Heimdall.GRPCAddress,
+		Default: c.cliConfig.Heimdall.GRPCAddress,
+	})
 
 	// txpool options
 	f.SliceStringFlag(&flagset.SliceStringFlag{

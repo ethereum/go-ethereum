@@ -31,10 +31,18 @@ var (
 		Usage: "Run without Heimdall service (for testing purpose)",
 	}
 
+	// HeimdallgRPCAddressFlag flag for heimdall gRPC address
+	HeimdallgRPCAddressFlag = cli.StringFlag{
+		Name:  "bor.heimdallgRPC",
+		Usage: "Address of Heimdall gRPC service",
+		Value: ":3132",
+	}
+
 	// BorFlags all bor related flags
 	BorFlags = []cli.Flag{
 		HeimdallURLFlag,
 		WithoutHeimdallFlag,
+		HeimdallgRPCAddressFlag,
 	}
 )
 
@@ -57,6 +65,7 @@ func getGenesis(genesisPath string) (*core.Genesis, error) {
 func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
 	cfg.HeimdallURL = ctx.GlobalString(HeimdallURLFlag.Name)
 	cfg.WithoutHeimdall = ctx.GlobalBool(WithoutHeimdallFlag.Name)
+	cfg.HeimdallgRPCAddress = ctx.GlobalString(HeimdallgRPCAddressFlag.Name)
 }
 
 // CreateBorEthereum Creates bor ethereum object from eth.Config

@@ -216,6 +216,9 @@ type Config struct {
 	// No heimdall service
 	WithoutHeimdall bool
 
+	// Address to connect to Heimdall gRPC server
+	HeimdallgRPCAddress string
+
 	// Bor logs flag
 	BorLogs bool
 
