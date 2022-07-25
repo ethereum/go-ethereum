@@ -628,6 +628,10 @@ func (vals *ValidatorSet) updateValidators(updates []*Validator, deletes []*Vali
 	vals.applyUpdates(updates)
 	vals.applyRemovals(deletes)
 
+	vals.UpdateValidatorMap()
+}
+
+func (vals *ValidatorSet) UpdateValidatorMap() {
 	vals.validatorsMap = make(map[common.Address]int, len(vals.Validators))
 
 	for i, val := range vals.Validators {
