@@ -44,7 +44,7 @@ type RemoteRelay struct {
 	validatorSlotMap     map[uint64]ValidatorData
 }
 
-func NewRemoteRelay(endpoint string, localRelay *LocalRelay) (*RemoteRelay, error) {
+func NewRemoteRelay(endpoint string, localRelay *LocalRelay) *RemoteRelay {
 	r := &RemoteRelay{
 		endpoint:             endpoint,
 		client:               http.Client{Timeout: time.Second},
@@ -55,7 +55,10 @@ func NewRemoteRelay(endpoint string, localRelay *LocalRelay) (*RemoteRelay, erro
 	}
 
 	err := r.updateValidatorsMap(0, 3)
-	return r, err
+	if err != nil {
+		log.Error("could not connect to remote relay, continuing anyway", "err", err)
+	}
+	return r
 }
 
 type GetValidatorRelayResponse []struct {

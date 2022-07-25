@@ -114,10 +114,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *BuilderConfig) error
 
 	var relay IRelay
 	if cfg.RemoteRelayEndpoint != "" {
-		relay, err = NewRemoteRelay(cfg.RemoteRelayEndpoint, localRelay)
-		if err != nil {
-			return err
-		}
+		relay = NewRemoteRelay(cfg.RemoteRelayEndpoint, localRelay)
 	} else {
 		relay = localRelay
 	}

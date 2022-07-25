@@ -45,8 +45,7 @@ func TestRemoteRelay(t *testing.T) {
 	}
 
 	srv := httptest.NewServer(r)
-	relay, err := NewRemoteRelay(srv.URL, nil)
-	require.NoError(t, err)
+	relay := NewRemoteRelay(srv.URL, nil)
 	vd, found := relay.validatorSlotMap[123]
 	require.True(t, found)
 	expectedValidator_123 := ValidatorData{
@@ -57,7 +56,7 @@ func TestRemoteRelay(t *testing.T) {
 	}
 	require.Equal(t, expectedValidator_123, vd)
 
-	vd, err = relay.GetValidatorForSlot(123)
+	vd, err := relay.GetValidatorForSlot(123)
 	require.NoError(t, err)
 	require.Equal(t, expectedValidator_123, vd)
 
