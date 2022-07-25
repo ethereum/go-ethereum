@@ -446,7 +446,8 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	}
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
-		return nil
+		log.Crit("could not find the difficulty for block", "hash", hash)
+		return big.NewInt(0)
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
