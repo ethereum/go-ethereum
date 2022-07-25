@@ -167,7 +167,7 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 	return abort, results
 }
 
-// verifyTerminalPoWBlock verifies that the preHeaders confirm to the specification
+// verifyTerminalPoWBlock verifies that the preHeaders conform to the specification
 // wrt. their total difficulty.
 // It expects:
 // - preHeaders to be at least 1 element
