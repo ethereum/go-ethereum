@@ -2,6 +2,7 @@ package heimdallgrpc
 
 import (
 	"github.com/ethereum/go-ethereum/log"
+
 	proto "github.com/maticnetwork/polyproto/heimdall"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
