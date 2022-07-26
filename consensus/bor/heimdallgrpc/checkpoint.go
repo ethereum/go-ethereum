@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 
 	proto "github.com/maticnetwork/polyproto/heimdall"
+	protoutils "github.com/maticnetwork/polyproto/utils"
 )
 
 func (h *HeimdallGRPCClient) FetchCheckpointCount(ctx context.Context) (int64, error) {
@@ -31,8 +32,8 @@ func (h *HeimdallGRPCClient) FetchCheckpoint(ctx context.Context, number int64) 
 	checkpoint := &checkpoint.Checkpoint{
 		StartBlock: new(big.Int).SetUint64(res.Result.StartBlock),
 		EndBlock:   new(big.Int).SetUint64(res.Result.EndBlock),
-		RootHash:   ConvertH256ToHash(res.Result.RootHash),
-		Proposer:   ConvertH160toAddress(res.Result.Proposer),
+		RootHash:   protoutils.ConvertH256ToHash(res.Result.RootHash),
+		Proposer:   protoutils.ConvertH160toAddress(res.Result.Proposer),
 		BorChainID: res.Result.BorChainID,
 		Timestamp:  uint64(res.Result.Timestamp.GetSeconds()),
 	}

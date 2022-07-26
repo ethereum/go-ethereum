@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 
 	proto "github.com/maticnetwork/polyproto/heimdall"
+	protoutils "github.com/maticnetwork/polyproto/utils"
 )
 
 func (h *HeimdallGRPCClient) Span(ctx context.Context, spanID uint64) (*span.HeimdallSpan, error) {
@@ -50,7 +51,7 @@ func parseSpan(protoSpan *proto.Span) *span.HeimdallSpan {
 func parseValidator(validator *proto.Validator) *valset.Validator {
 	return &valset.Validator{
 		ID:               validator.ID,
-		Address:          ConvertH160toAddress(validator.Address),
+		Address:          protoutils.ConvertH160toAddress(validator.Address),
 		VotingPower:      validator.VotingPower,
 		ProposerPriority: validator.ProposerPriority,
 	}
