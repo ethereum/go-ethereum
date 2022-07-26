@@ -51,6 +51,9 @@ linters-settings:
       - G404 # Use of weak random number generator - lots of FP
       - G107 # Potential http request -- those are intentional
       - G306 # G306: Expect WriteFile permissions to be 0600 or less
+  gocritic:
+    disabled-checks:
+      - ifElseChain
 
 issues:
   exclude-rules:
