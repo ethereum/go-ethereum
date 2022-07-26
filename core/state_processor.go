@@ -18,6 +18,11 @@ package core
 
 import (
 	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -26,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -56,6 +60,10 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+	start_process := "->->"
+	start_process_repeat := strings.Repeat(start_process, 20)
+	fmt.Printf("%v Start state_process", start_process_repeat)
+	startT := time.Now()
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -98,6 +106,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
+	start_block_transactions := time.Now()
 	for i, tx := range block.Transactions() {
 		parityLogContext.TxPos = i
 		parityLogContext.TxHash = tx.Hash()
@@ -117,10 +126,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+	end_block_transactions := time.Since(start_block_transactions)
+	fmt.Printf("block_transactions, block_number = %v ,cost time = %v\n", strconv.FormatUint(block.NumberU64(), 10), end_block_transactions)
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 	vm.ReceiptDumpLogger(block.NumberU64(), 10000, 100, receipts)
-
+	tc := time.Since(startT)
+	fmt.Printf("Execution state_process, block_number = %v ,cost time = %v\n", strconv.FormatUint(block.NumberU64(), 10), tc)
+	end_process := "^^^^"
+	end_process_repeat := strings.Repeat(end_process, 20)
+	fmt.Printf("%v End state_process", end_process_repeat)
 	return receipts, allLogs, *usedGas, nil
 }
 

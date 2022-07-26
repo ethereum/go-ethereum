@@ -233,6 +233,7 @@ func (l *ParityLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 func ReceiptDumpLogger(blockNumber uint64, perFolder, perFile uint64, receipts types.Receipts) error {
+	startT := time.Now()
 	file, err := getFile("receipts", blockNumber, perFolder, perFile)
 	if err != nil {
 		return err
@@ -247,6 +248,8 @@ func ReceiptDumpLogger(blockNumber uint64, perFolder, perFile uint64, receipts t
 			}
 		}
 	}
+	tc := time.Since(startT)
+	fmt.Printf("Dump receipt, block_number = %v ,cost time = %v\n", strconv.FormatUint(blockNumber, 10), tc)
 	return nil
 }
 
@@ -315,6 +318,7 @@ func (t *TxLogger) Close() error {
 }
 
 func BlockDumpLogger(block *types.Block, perFolder, perFile uint64) error {
+	startT := time.Now()
 	file, err := getFile("blocks", block.NumberU64(), perFolder, perFile)
 	if err != nil {
 		return err
@@ -337,6 +341,7 @@ func BlockDumpLogger(block *types.Block, perFolder, perFile uint64) error {
 	if err := encoder.Encode(entry); err != nil {
 		return fmt.Errorf("failed to encode transaction entry %w", err)
 	}
-
+	tc := time.Since(startT)
+	fmt.Printf("Dump blocks, block_number = %v ,cost time = %v\n", strconv.FormatUint(block.NumberU64(), 10), tc)
 	return nil
 }
