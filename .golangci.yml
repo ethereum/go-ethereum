@@ -56,6 +56,7 @@ linters-settings:
       - ifElseChain
       - captLocal
       - appendAssign
+      - exitAfterDefer
 
 issues:
   exclude-rules:
