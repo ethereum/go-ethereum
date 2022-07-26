@@ -80,6 +80,7 @@ const (
 var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
+	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
 )
 
 // environment is the worker's current environment and holds all
@@ -158,6 +159,7 @@ const (
 	commitInterruptNone int32 = iota
 	commitInterruptNewHead
 	commitInterruptResubmit
+	commitInterruptTimeout
 )
 
 // newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
@@ -844,42 +846,26 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	var coalescedLogs []*types.Log
 
 	for {
-		// In the following three cases, we will interrupt the execution of the transaction.
-		// (1) new head block event arrival, the interrupt signal is 1
-		// (2) worker start or restart, the interrupt signal is 1
-		// (3) worker recreate the sealing block with any newly arrived transactions, the interrupt signal is 2.
-		// For the first two cases, the semi-finished work will be discarded.
-		// For the third case, the semi-finished work will be submitted to the consensus engine.
-		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
-			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
-			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
-				ratio := float64(gasLimit-env.gasPool.Gas()) / float64(gasLimit)
-				if ratio < 0.1 {
-					ratio = 0.1
-				}
-				w.resubmitAdjustCh <- &intervalAdjust{
-					ratio: ratio,
-					inc:   true,
-				}
-				return errBlockInterruptedByRecommit
+		// Check interruption signal and abort building if it's fired.
+		if interrupt != nil {
+			if signal := atomic.LoadInt32(interrupt); signal != commitInterruptNone {
+				return signalToErr(signal)
 			}
-			return errBlockInterruptedByNewHead
 		}
-		// If we don't have enough gas for any further transactions then we're done
+		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
-		// Retrieve the next transaction and abort if all done
+		// Retrieve the next transaction and abort if all done.
 		tx := txs.Peek()
 		if tx == nil {
 			break
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
-		//
-		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(env.signer, tx)
+
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
@@ -926,7 +912,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			txs.Shift()
 		}
 	}
-
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
@@ -942,11 +927,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-	// than the user-specified one.
-	if interrupt != nil {
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	}
 	return nil
 }
 
@@ -960,6 +940,7 @@ type generateParams struct {
 	noUncle    bool           // Flag whether the uncle block inclusion is allowed
 	noExtra    bool           // Flag whether the extra field assignment is allowed
 	noTxs      bool           // Flag whether an empty block without any transaction is expected
+	timeout    time.Duration  // The time allowance for building block, 0 means no limit
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -986,15 +967,15 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 		timestamp = parent.Time() + 1
 	}
-	// Construct the sealing block header, set the extra field if it's allowed
-	num := parent.Number()
+	// Construct the sealing block header.
 	header := &types.Header{
 		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		GasLimit:   core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil),
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
+	// Set the extra field if it's allowed.
 	if !genParams.noExtra && len(w.extra) != 0 {
 		header.Extra = w.extra
 	}
@@ -1082,7 +1063,18 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	defer work.discard()
 
 	if !params.noTxs {
-		w.fillTransactions(nil, work)
+		var interrupt *int32
+		if params.timeout != 0 {
+			interrupt = new(int32)
+			timer := time.AfterFunc(params.timeout, func() {
+				atomic.StoreInt32(interrupt, commitInterruptTimeout)
+			})
+			defer timer.Stop()
+		}
+		err := w.fillTransactions(interrupt, work)
+		if errors.Is(err, errBlockInterruptedByTimeout) {
+			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(params.timeout))
+		}
 	}
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
@@ -1113,13 +1105,36 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		w.commit(work.copy(), nil, false, start)
 	}
-
-	// Fill pending transactions from the txpool
+	// Fill pending transactions from the txpool into the block.
 	err = w.fillTransactions(interrupt, work)
-	if errors.Is(err, errBlockInterruptedByNewHead) {
+	switch {
+	case err == nil:
+		// The entire block is filled, decrease resubmit interval in case
+		// of current interval is larger than the user-specified one.
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+
+	case errors.Is(err, errBlockInterruptedByRecommit):
+		// Notify resubmit loop to increase resubmitting interval if the
+		// interruption is due to frequent commits.
+		gaslimit := work.header.GasLimit
+		ratio := float64(gaslimit-work.gasPool.Gas()) / float64(gaslimit)
+		if ratio < 0.1 {
+			ratio = 0.1
+		}
+		w.resubmitAdjustCh <- &intervalAdjust{
+			ratio: ratio,
+			inc:   true,
+		}
+
+	case errors.Is(err, errBlockInterruptedByNewHead):
+		// If the block building is interrupted by newhead event, discard it
+		// totally. Committing the interrupted block introduces unnecessary
+		// delay, and possibly causes miner to mine on the previous head,
+		// which could result in higher uncle rate.
 		work.discard()
 		return
 	}
+	// Submit the generated block for consensus sealing.
 	w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
@@ -1170,7 +1185,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool, timeout time.Duration) (chan *types.Block, chan error, error) {
 	var (
 		resCh = make(chan *types.Block, 1)
 		errCh = make(chan error, 1)
@@ -1185,6 +1200,7 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			noUncle:    true,
 			noExtra:    true,
 			noTxs:      noTxs,
+			timeout:    timeout,
 		},
 		result: resCh,
 		err:    errCh,
@@ -1230,4 +1246,19 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+// signalToErr converts the interruption signal to a concrete error type for return.
+// The given signal must be a valid interruption signal.
+func signalToErr(signal int32) error {
+	switch signal {
+	case commitInterruptNewHead:
+		return errBlockInterruptedByNewHead
+	case commitInterruptResubmit:
+		return errBlockInterruptedByRecommit
+	case commitInterruptTimeout:
+		return errBlockInterruptedByTimeout
+	default:
+		panic(fmt.Errorf("undefined signal %d", signal))
+	}
 }
