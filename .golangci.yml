@@ -55,6 +55,7 @@ linters-settings:
     disabled-checks:
       - ifElseChain
       - captLocal
+      - appendAssign
 
 issues:
   exclude-rules:
