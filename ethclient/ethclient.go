@@ -505,14 +505,6 @@ func (ec *Client) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&hex), nil
 }
 
-// FeeHistoryResult is the result of FeeHistory.
-type FeeHistoryResult struct {
-	OldestBlock  *big.Int     `json:"oldestBlock"`
-	Reward       [][]*big.Int `json:"reward,omitempty"`
-	BaseFee      []*big.Int   `json:"baseFeePerGas,omitempty"`
-	GasUsedRatio []float64    `json:"gasUsedRatio"`
-}
-
 type feeHistoryResultMarshaling struct {
 	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
 	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
@@ -521,7 +513,7 @@ type feeHistoryResultMarshaling struct {
 }
 
 // FeeHistory retrieves the fee market history.
-func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*FeeHistoryResult, error) {
+func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*ethereum.FeeHistory, error) {
 	var res feeHistoryResultMarshaling
 	if err := ec.c.CallContext(ctx, &res, "eth_feeHistory", hexutil.Uint(blockCount), toBlockNumArg(lastBlock), rewardPercentiles); err != nil {
 		return nil, err
@@ -537,7 +529,7 @@ func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *
 	for i, b := range res.BaseFee {
 		baseFee[i] = (*big.Int)(b)
 	}
-	return &FeeHistoryResult{
+	return &ethereum.FeeHistory{
 		OldestBlock:  (*big.Int)(res.OldestBlock),
 		Reward:       reward,
 		BaseFee:      baseFee,
