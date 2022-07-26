@@ -304,6 +304,26 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:    minStack(2, 1),
 			maxStack:    maxStack(2, 1),
 		},
+		SETMODMAX: {
+			execute:  opSetModMAX,
+			minStack: minStack(1, 0),
+			maxStack: minStack(1, 0),
+		},
+		ADDMODMAX: {
+			execute:  opAddModMAX,
+			minStack: minStack(1, 0),
+			maxStack: minStack(1, 0),
+		},
+		SUBMODMAX: {
+			execute:  opSubModMAX,
+			minStack: minStack(1, 0),
+			maxStack: minStack(1, 0),
+		},
+		MULMONTMAX: {
+			execute:  opMulMontMAX,
+			minStack: minStack(1, 0),
+			maxStack: minStack(1, 0),
+		},
 		LT: {
 			execute:     opLt,
 			constantGas: GasFastestStep,

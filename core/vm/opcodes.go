@@ -46,6 +46,10 @@ const (
 	MULMOD     OpCode = 0x9
 	EXP        OpCode = 0xa
 	SIGNEXTEND OpCode = 0xb
+	SETMODMAX  OpCode = 0xc
+	MULMONTMAX OpCode = 0xd
+	ADDMODMAX  OpCode = 0xe
+	SUBMODMAX  OpCode = 0xf
 )
 
 // 0x10 range - comparison ops.
