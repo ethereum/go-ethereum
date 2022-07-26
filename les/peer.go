@@ -598,7 +598,7 @@ func (p *serverPeer) Handshake(genesis common.Hash, forkid forkid.ID, forkFilter
 		if p.trusted {
 			p.announceType = announceTypeSigned
 		}
-		*lists = (*lists).add("announceType", p.announceType)
+		*lists = lists.add("announceType", p.announceType)
 	}, func(recv keyValueMap) error {
 		var (
 			rHash common.Hash
@@ -1018,9 +1018,9 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 	return p.handshake(td, head, headNum, genesis, forkID, forkFilter, func(lists *keyValueList) {
 		// Add some information which services server can offer.
 		if !server.config.UltraLightOnlyAnnounce {
-			*lists = (*lists).add("serveHeaders", nil)
-			*lists = (*lists).add("serveChainSince", uint64(0))
-			*lists = (*lists).add("serveStateSince", uint64(0))
+			*lists = lists.add("serveHeaders", nil)
+			*lists = lists.add("serveChainSince", uint64(0))
+			*lists = lists.add("serveStateSince", uint64(0))
 
 			// If local ethereum node is running in archive mode, advertise ourselves we have
 			// all version state data. Otherwise only recent state is available.
@@ -1028,14 +1028,14 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 			if server.archiveMode {
 				stateRecent = 0
 			}
-			*lists = (*lists).add("serveRecentState", stateRecent)
-			*lists = (*lists).add("txRelay", nil)
+			*lists = lists.add("serveRecentState", stateRecent)
+			*lists = lists.add("txRelay", nil)
 		}
 		if p.version >= lpv4 {
-			*lists = (*lists).add("recentTxLookup", recentTx)
+			*lists = lists.add("recentTxLookup", recentTx)
 		}
-		*lists = (*lists).add("flowControl/BL", server.defParams.BufLimit)
-		*lists = (*lists).add("flowControl/MRR", server.defParams.MinRecharge)
+		*lists = lists.add("flowControl/BL", server.defParams.BufLimit)
+		*lists = lists.add("flowControl/MRR", server.defParams.MinRecharge)
 
 		var costList RequestCostList
 		if server.costTracker.testCostList != nil {
@@ -1043,7 +1043,7 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		} else {
 			costList = server.costTracker.makeCostList(server.costTracker.globalFactor())
 		}
-		*lists = (*lists).add("flowControl/MRC", costList)
+		*lists = lists.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode(ProtocolLengths[uint(p.version)])
 		p.fcParams = server.defParams
 
@@ -1052,8 +1052,8 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		if server.oracle != nil && server.oracle.IsRunning() {
 			cp, height := server.oracle.StableCheckpoint()
 			if cp != nil {
-				*lists = (*lists).add("checkpoint/value", cp)
-				*lists = (*lists).add("checkpoint/registerHeight", height)
+				*lists = lists.add("checkpoint/value", cp)
+				*lists = lists.add("checkpoint/registerHeight", height)
 			}
 		}
 	}, func(recv keyValueMap) error {

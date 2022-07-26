@@ -133,7 +133,7 @@ func TestHandshake(t *testing.T) {
 	go func() {
 		errCh1 <- peer1.handshake(td, head, headNum, genesis, forkID1, filter1, func(list *keyValueList) {
 			var announceType uint64 = announceTypeSigned
-			*list = (*list).add("announceType", announceType)
+			*list = list.add("announceType", announceType)
 		}, nil)
 	}()
 	go func() {
