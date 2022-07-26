@@ -85,7 +85,7 @@ func (c *collector) addTimer(name string, m metrics.Timer) {
 }
 
 func (c *collector) addResettingTimer(name string, m metrics.ResettingTimer) {
-	if len(m.Values()) <= 0 {
+	if len(m.Values()) == 0 {
 		return
 	}
 	ps := m.Percentiles([]float64{50, 95, 99})

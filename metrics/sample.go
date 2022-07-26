@@ -179,7 +179,7 @@ func (s *ExpDecaySample) update(t time.Time, v int64) {
 		s.t0 = t
 		s.t1 = s.t0.Add(rescaleThreshold)
 		for _, v := range values {
-			v.k = v.k * math.Exp(-s.alpha*s.t0.Sub(t0).Seconds())
+			v.k *= math.Exp(-s.alpha * s.t0.Sub(t0).Seconds())
 			s.values.Push(v)
 		}
 	}

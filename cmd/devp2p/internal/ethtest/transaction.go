@@ -325,7 +325,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 	}
 	gas := nextTx.Gas()
 
-	nonce = nonce + 1
+	nonce++
 	// generate txs
 	for i := 0; i < numTxs; i++ {
 		tx := generateTx(s.chain.chainConfig, nonce, gas)
@@ -334,7 +334,7 @@ func generateTxs(s *Suite, numTxs int) (map[common.Hash]common.Hash, []*types.Tr
 		}
 		txHashMap[tx.Hash()] = tx.Hash()
 		txs[i] = tx
-		nonce = nonce + 1
+		nonce++
 	}
 	return txHashMap, txs, nil
 }

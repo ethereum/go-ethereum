@@ -304,13 +304,13 @@ func (f Flags) String() string {
 	for index, flag := range f.setup.flags {
 		if f.mask&(bitMask(1)<<uint(index)) != 0 {
 			if comma {
-				s = s + ", "
+				s += ", "
 			}
-			s = s + flag.name
+			s += flag.name
 			comma = true
 		}
 	}
-	s = s + "]"
+	s += "]"
 	return s
 }
 

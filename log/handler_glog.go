@@ -127,7 +127,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if !strings.HasSuffix(parts[0], ".go") {
 			matcher += "/[^/]+\\.go"
 		}
-		matcher = matcher + "$"
+		matcher += "$"
 
 		re, _ := regexp.Compile(matcher)
 		filter = append(filter, pattern{re, Lvl(level)})

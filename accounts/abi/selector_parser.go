@@ -68,16 +68,16 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	}
 	// handle arrays
 	for len(rest) > 0 && rest[0] == '[' {
-		parsedType = parsedType + string(rest[0])
+		parsedType += string(rest[0])
 		rest = rest[1:]
 		for len(rest) > 0 && isDigit(rest[0]) {
-			parsedType = parsedType + string(rest[0])
+			parsedType += string(rest[0])
 			rest = rest[1:]
 		}
 		if len(rest) == 0 || rest[0] != ']' {
 			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", unescapedSelector[0])
 		}
-		parsedType = parsedType + string(rest[0])
+		parsedType += string(rest[0])
 		rest = rest[1:]
 	}
 	return parsedType, rest, nil

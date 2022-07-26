@@ -143,7 +143,7 @@ func (f *fuzzer) fuzz() int {
 			vals[index%len(vals)] = f.randBytes(20) // In theory it can't be same
 		case 2:
 			// Gapped entry slice
-			index = index % len(keys)
+			index %= len(keys)
 			keys = append(keys[:index], keys[index+1:]...)
 			vals = append(vals[:index], vals[index+1:]...)
 		case 3:

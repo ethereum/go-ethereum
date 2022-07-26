@@ -410,7 +410,7 @@ func (t *Trackers) tune() {
 	}
 	// First thread reaching the tuning point, update the estimates and return
 	t.roundtrip = time.Duration((1-tuningImpact)*float64(t.roundtrip) + tuningImpact*float64(t.medianRoundTrip()))
-	t.confidence = t.confidence + (1-t.confidence)/2
+	t.confidence += (1 - t.confidence) / 2
 
 	t.tuned = time.Now()
 	t.log.Debug("Recalculated msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout(), "next", t.tuned.Add(t.roundtrip))

@@ -513,7 +513,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			taskQueue.PopItem()
 			progress = true
 			delete(taskPool, header.Hash())
-			proc = proc - 1
+			proc--
 			log.Error("Fetch reservation already delivered", "number", header.Number.Uint64())
 			continue
 		}
@@ -535,7 +535,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			// If it's a noop, we can skip this task
 			delete(taskPool, header.Hash())
 			taskQueue.PopItem()
-			proc = proc - 1
+			proc--
 			progress = true
 			continue
 		}

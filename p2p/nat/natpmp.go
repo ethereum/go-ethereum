@@ -119,7 +119,7 @@ func potentialGateways() (gws []net.IP) {
 				if lan10.Contains(x.IP) || lan176.Contains(x.IP) || lan192.Contains(x.IP) {
 					ip := x.IP.Mask(x.Mask).To4()
 					if ip != nil {
-						ip[3] = ip[3] | 0x01
+						ip[3] |= 0x01
 						gws = append(gws, ip)
 					}
 				}

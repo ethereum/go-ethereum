@@ -646,7 +646,7 @@ func (t *freezerTable) releaseFilesBefore(num uint32, remove bool) {
 // it will return error.
 func (t *freezerTable) getIndices(from, count uint64) ([]*indexEntry, error) {
 	// Apply the table-offset
-	from = from - t.itemOffset
+	from -= t.itemOffset
 	// For reading N items, we need N+1 indices.
 	buffer := make([]byte, (count+1)*indexEntrySize)
 	if _, err := t.index.ReadAt(buffer, int64(from*indexEntrySize)); err != nil {

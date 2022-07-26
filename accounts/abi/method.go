@@ -124,7 +124,7 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 		state = ""
 	}
 	if state != "" {
-		state = state + " "
+		state += " "
 	}
 	identity := fmt.Sprintf("function %v", rawName)
 	if funType == Fallback {
