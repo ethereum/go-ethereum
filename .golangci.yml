@@ -72,7 +72,8 @@ issues:
       text: 'SA1019: package github.com/golang/protobuf/proto is deprecated'
     - path: accounts/usbwallet/trezor/
       text: 'SA1019: package github.com/golang/protobuf/proto is deprecated'
-
+    - path: core/rawdb/database.go
+      text: "elseif: can replace 'else {if cond {}}' with 'else if cond {}"
     - path: crypto/
       linters:
         - gocritic
