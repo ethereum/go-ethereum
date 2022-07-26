@@ -54,6 +54,7 @@ linters-settings:
   gocritic:
     disabled-checks:
       - ifElseChain
+      - captLocal
 
 issues:
   exclude-rules:
