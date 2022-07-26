@@ -55,16 +55,17 @@ type ExecutionTask struct {
 	msg    types.Message
 	config *params.ChainConfig
 
-	gasLimit     uint64
-	blockNumber  *big.Int
-	blockHash    common.Hash
-	blockContext vm.BlockContext
-	tx           *types.Transaction
-	index        int
-	statedb      *state.StateDB // State database that stores the modified values after tx execution.
-	cleanStateDB *state.StateDB // A clean copy of the initial statedb. It should not be modified.
-	evmConfig    vm.Config
-	result       *ExecutionResult
+	gasLimit          uint64
+	blockNumber       *big.Int
+	blockHash         common.Hash
+	blockContext      vm.BlockContext
+	tx                *types.Transaction
+	index             int
+	statedb           *state.StateDB // State database that stores the modified values after tx execution.
+	cleanStateDB      *state.StateDB // A clean copy of the initial statedb. It should not be modified.
+	evmConfig         vm.Config
+	result            *ExecutionResult
+	shouldDelayFeeCal *bool
 }
 
 func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (err error) {
@@ -91,7 +92,11 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	}()
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+	if *task.shouldDelayFeeCal {
+		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+	} else {
+		task.result, err = ApplyMessage(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+	}
 
 	if task.statedb.HadInvalidRead() || err != nil {
 		err = blockstm.ErrExecAbort
@@ -99,8 +104,6 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	}
 
 	task.statedb.Finalise(false)
-
-	task.result = result
 
 	return
 }
@@ -140,6 +143,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	tasks := make([]blockstm.ExecTask, 0, len(block.Transactions()))
 
+	shouldDelayFeeCal := true
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
@@ -148,18 +153,26 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 
+		bc := NewEVMBlockContext(header, p.bc, nil)
+
 		cleansdb := statedb.Copy()
 
+		if msg.From() == bc.Coinbase {
+			shouldDelayFeeCal = false
+		}
+
 		task := &ExecutionTask{
-			msg:          msg,
-			config:       p.config,
-			gasLimit:     block.GasLimit(),
-			blockNumber:  blockNumber,
-			blockHash:    blockHash,
-			tx:           tx,
-			index:        i,
-			cleanStateDB: cleansdb,
-			blockContext: NewEVMBlockContext(header, p.bc, nil),
+			msg:               msg,
+			config:            p.config,
+			gasLimit:          block.GasLimit(),
+			blockNumber:       blockNumber,
+			blockHash:         blockHash,
+			tx:                tx,
+			index:             i,
+			cleanStateDB:      cleansdb,
+			blockContext:      bc,
+			evmConfig:         cfg,
+			shouldDelayFeeCal: &shouldDelayFeeCal,
 		}
 
 		tasks = append(tasks, task)
@@ -172,13 +185,43 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, nil, 0, err
 	}
 
+	london := p.config.IsLondon(blockNumber)
+
 	for _, task := range tasks {
 		task := task.(*ExecutionTask)
 		statedb.Prepare(task.tx.Hash(), task.index)
+
+		coinbaseBalance := statedb.GetBalance(task.blockContext.Coinbase)
+
 		statedb.ApplyMVWriteSet(task.MVWriteList())
 
 		for _, l := range task.statedb.GetLogs(task.tx.Hash(), blockHash) {
 			statedb.AddLog(l)
+		}
+
+		if shouldDelayFeeCal {
+			if london {
+				statedb.AddBalance(task.result.BurntContractAddress, task.result.FeeBurnt)
+			}
+
+			statedb.AddBalance(task.blockContext.Coinbase, task.result.FeeTipped)
+			output1 := new(big.Int).SetBytes(task.result.senderInitBalance.Bytes())
+			output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
+
+			// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
+			// add transfer log
+			AddFeeTransferLog(
+				statedb,
+
+				task.msg.From(),
+				task.blockContext.Coinbase,
+
+				task.result.FeeTipped,
+				task.result.senderInitBalance,
+				coinbaseBalance,
+				output1.Sub(output1, task.result.FeeTipped),
+				output2.Add(output2, task.result.FeeTipped),
+			)
 		}
 
 		for k, v := range task.statedb.Preimages() {
