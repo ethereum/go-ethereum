@@ -221,7 +221,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 		// TODO (MariusVanDerWijden) following tests are currently broken,
 		// fixed in upcoming merge-kiln-v2 pr
 		// {parent.Time() + 1, false},
-		//{uint64(time.Now().Unix()) + uint64(time.Minute), false},
+		// {uint64(time.Now().Unix()) + uint64(time.Minute), false},
 	}
 
 	for i, test := range tests {
@@ -748,7 +748,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	var invalidChain []*beacon.ExecutableDataV1
 	// create a valid payload (P1)
 	// payload1 := getNewPayload(t, apiA, commonAncestor)
-	//invalidChain = append(invalidChain, payload1)
+	// invalidChain = append(invalidChain, payload1)
 
 	// create an invalid payload2 (P2)
 	payload2 := getNewPayload(t, apiA, commonAncestor)

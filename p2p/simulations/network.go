@@ -1020,7 +1020,7 @@ func (net *Network) Load(snap *Snapshot) error {
 	for _, conn := range snap.Conns {
 		if !net.GetNode(conn.One).Up() || !net.GetNode(conn.Other).Up() {
 			// in this case, at least one of the nodes of a connection is not up,
-			//so it would result in the snapshot `Load` to fail
+			// so it would result in the snapshot `Load` to fail
 			continue
 		}
 		if err := net.Connect(conn.One, conn.Other); err != nil {

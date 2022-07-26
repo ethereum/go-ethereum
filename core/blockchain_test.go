@@ -2029,7 +2029,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 //   ^    ^    ^  pruned
 func TestPrunedImportSide(t *testing.T) {
 	// glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
-	//glogger.Verbosity(3)
+	// glogger.Verbosity(3)
 	//log.Root().SetHandler(log.Handler(glogger))
 	testSideImport(t, 3, 3, -1)
 	testSideImport(t, 3, -3, -1)
@@ -2040,7 +2040,7 @@ func TestPrunedImportSide(t *testing.T) {
 
 func TestPrunedImportSideWithMerging(t *testing.T) {
 	// glogger := log.NewGlogHandler(log.StreamHandler(os.Stdout, log.TerminalFormat(false)))
-	//glogger.Verbosity(3)
+	// glogger.Verbosity(3)
 	//log.Root().SetHandler(log.Handler(glogger))
 	testSideImport(t, 3, 3, 0)
 	testSideImport(t, 3, -3, 0)

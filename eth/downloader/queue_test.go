@@ -387,7 +387,7 @@ func XTestDelivery(t *testing.T) {
 		for i := 0; i < 50; i++ {
 			time.Sleep(300 * time.Millisecond)
 			// world.tick()
-			//fmt.Printf("trying to progress\n")
+			// fmt.Printf("trying to progress\n")
 			world.progress(rand.Intn(100))
 		}
 		for i := 0; i < 50; i++ {
