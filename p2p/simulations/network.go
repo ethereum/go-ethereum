@@ -702,7 +702,7 @@ func (net *Network) Reset() {
 	net.lock.Lock()
 	defer net.lock.Unlock()
 
-	//re-initialize the maps
+	// re-initialize the maps
 	net.connMap = make(map[string]int)
 	net.nodeMap = make(map[enode.ID]int)
 	net.propertyMap = make(map[string][]int)
@@ -1019,7 +1019,7 @@ func (net *Network) Load(snap *Snapshot) error {
 	// Start connecting.
 	for _, conn := range snap.Conns {
 		if !net.GetNode(conn.One).Up() || !net.GetNode(conn.Other).Up() {
-			//in this case, at least one of the nodes of a connection is not up,
+			// in this case, at least one of the nodes of a connection is not up,
 			//so it would result in the snapshot `Load` to fail
 			continue
 		}

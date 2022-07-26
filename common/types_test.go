@@ -177,7 +177,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		}
 	}
 
-	//These should throw exceptions:
+	// These should throw exceptions:
 	var r2 []MixedcaseAddress
 	for _, r := range []string{
 		`["0x11111111111111111111122222222222233333"]`,     // Too short
@@ -186,7 +186,7 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		`["0x111111111111111111111222222222222333332344"]`, // Too long
 		`["1111111111111111111112222222222223333323"]`,     // Missing 0x
 		`["x1111111111111111111112222222222223333323"]`,    // Missing 0
-		`["0xG111111111111111111112222222222223333323"]`,   //Non-hex
+		`["0xG111111111111111111112222222222223333323"]`,   // Non-hex
 	} {
 		if err := json.Unmarshal([]byte(r), &r2); err == nil {
 			t.Errorf("Expected failure, input %v", r)

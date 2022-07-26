@@ -105,7 +105,7 @@ func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimi
 
 // GetContext cannot be reliably implemented without identity preservation (https://github.com/golang/go/issues/16876)
 // Even then it's awkward to unpack the subtleties of a Go context out to Java.
-//func (opts *TransactOpts) GetContext() *Context { return &Context{opts.opts.Context} }
+// func (opts *TransactOpts) GetContext() *Context { return &Context{opts.opts.Context} }
 
 func (opts *TransactOpts) SetFrom(from *Address) { opts.opts.From = from.address }
 func (opts *TransactOpts) SetNonce(nonce int64)  { opts.opts.Nonce = big.NewInt(nonce) }

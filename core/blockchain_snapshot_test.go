@@ -172,7 +172,7 @@ func (basic *snapshotTestBasic) dump() string {
 	}
 	fmt.Fprint(buffer, "\n")
 
-	//if crash {
+	// if crash {
 	//	fmt.Fprintf(buffer, "\nCRASH\n\n")
 	//} else {
 	//	fmt.Fprintf(buffer, "\nSetHead(%d)\n\n", basic.setHead)

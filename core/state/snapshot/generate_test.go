@@ -584,7 +584,7 @@ func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	{
 		// 100 accounts exist only in snapshot
 		for i := 0; i < 1000; i++ {
-			//acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
+			// acc := &Account{Balance: big.NewInt(int64(i)), Root: stTrie.Hash().Bytes(), CodeHash: emptyCode.Bytes()}
 			acc := &Account{Balance: big.NewInt(int64(i)), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}
 			val, _ := rlp.EncodeToBytes(acc)
 			key := hashData([]byte(fmt.Sprintf("acc-%d", i)))
@@ -690,7 +690,7 @@ func TestGenerateWithMalformedSnapdata(t *testing.T) {
 }
 
 func TestGenerateFromEmptySnap(t *testing.T) {
-	//enableLogging()
+	// enableLogging()
 	accountCheckRange = 10
 	storageCheckRange = 20
 	helper := newHelper()

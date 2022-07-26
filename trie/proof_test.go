@@ -1061,7 +1061,7 @@ func nonRandomTrie(n int) (*Trie, map[string]*kv) {
 		key := make([]byte, 32)
 		binary.LittleEndian.PutUint64(key, i)
 		binary.LittleEndian.PutUint64(value, i-max)
-		//value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		// value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		elem := &kv{key, value, false}
 		trie.Update(elem.k, elem.v)
 		vals[string(elem.k)] = elem

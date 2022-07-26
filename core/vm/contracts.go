@@ -333,7 +333,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		// def mult_complexity(x):
 		//    ceiling(x/8)^2
 		//
-		//where is x is max(length_of_MODULUS, length_of_BASE)
+		// where is x is max(length_of_MODULUS, length_of_BASE)
 		gas = gas.Add(gas, big7)
 		gas = gas.Div(gas, big8)
 		gas.Mul(gas, gas)
@@ -961,7 +961,7 @@ func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
 		}
 	}
 	out := make([]byte, 48)
-	copy(out[:], in[16:])
+	copy(out, in[16:])
 	return out, nil
 }
 

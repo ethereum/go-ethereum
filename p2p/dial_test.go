@@ -531,7 +531,7 @@ func (it *dialTestIterator) Next() bool {
 		return false
 	}
 	it.cur = it.buf[0]
-	copy(it.buf[:], it.buf[1:])
+	copy(it.buf, it.buf[1:])
 	it.buf = it.buf[:len(it.buf)-1]
 	return true
 }

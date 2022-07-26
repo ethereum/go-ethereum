@@ -54,7 +54,7 @@ func TestFreezerBasics(t *testing.T) {
 	// Write 15 bytes 255 times, results in 85 files
 	writeChunks(t, f, 255, 15)
 
-	//print(t, f, 0)
+	// print(t, f, 0)
 	//print(t, f, 1)
 	//print(t, f, 2)
 	//

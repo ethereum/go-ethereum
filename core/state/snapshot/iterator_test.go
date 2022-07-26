@@ -582,7 +582,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x04"), 1); err != nil {
 		t.Fatalf("failed to flatten snapshot stack: %v", err)
 	}
-	//verifyIterator(t, 7, it)
+	// verifyIterator(t, 7, it)
 }
 
 func TestAccountIteratorSeek(t *testing.T) {

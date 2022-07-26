@@ -276,10 +276,10 @@ func XTestDelivery(t *testing.T) {
 		defer wg.Done()
 		c := 1
 		for {
-			//fmt.Printf("getting headers from %d\n", c)
+			// fmt.Printf("getting headers from %d\n", c)
 			hdrs := world.headers(c)
 			l := len(hdrs)
-			//fmt.Printf("scheduling %d headers, first %d last %d\n",
+			// fmt.Printf("scheduling %d headers, first %d last %d\n",
 			//	l, hdrs[0].Number.Uint64(), hdrs[len(hdrs)-1].Number.Uint64())
 			q.Schedule(hdrs, uint64(c))
 			c += l
@@ -352,7 +352,7 @@ func XTestDelivery(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
 			time.Sleep(300 * time.Millisecond)
-			//world.tick()
+			// world.tick()
 			//fmt.Printf("trying to progress\n")
 			world.progress(rand.Intn(100))
 		}
@@ -412,7 +412,7 @@ func (n *network) forget(blocknum uint64) {
 func (n *network) progress(numBlocks int) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-	//fmt.Printf("progressing...\n")
+	// fmt.Printf("progressing...\n")
 	newBlocks, newR := makeChain(numBlocks, 0, n.chain[len(n.chain)-1], false)
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
@@ -427,7 +427,7 @@ func (n *network) headers(from int) []*types.Header {
 	for index >= len(n.chain) {
 		// wait for progress
 		n.cond.L.Lock()
-		//fmt.Printf("header going into wait\n")
+		// fmt.Printf("header going into wait\n")
 		n.cond.Wait()
 		index = from - n.offset
 		n.cond.L.Unlock()

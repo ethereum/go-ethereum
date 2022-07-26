@@ -183,7 +183,7 @@ var typedData = apitypes.TypedData{
 
 func TestSignData(t *testing.T) {
 	api, control := setup(t)
-	//Create two accounts
+	// Create two accounts
 	createAccount(control, api, t)
 	createAccount(control, api, t)
 	control.approveCh <- "1"

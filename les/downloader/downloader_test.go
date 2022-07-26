@@ -840,7 +840,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 
 	// Create peers of every type
 	tester.newPeer("peer 66", eth.ETH66, chain)
-	//tester.newPeer("peer 65", eth.ETH67, chain)
+	// tester.newPeer("peer 65", eth.ETH67, chain)
 
 	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil, mode); err != nil {
@@ -1206,7 +1206,7 @@ func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.Sync
 	t.Helper()
 
 	p := d.Progress()
-	//p.KnownStates, p.PulledStates = 0, 0
+	// p.KnownStates, p.PulledStates = 0, 0
 	//want.KnownStates, want.PulledStates = 0, 0
 	if p != want {
 		t.Fatalf("%s progress mismatch:\nhave %+v\nwant %+v", stage, p, want)

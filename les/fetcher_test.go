@@ -153,7 +153,7 @@ func TestTrustedAnnouncementsLes2(t *testing.T) { testTrustedAnnouncement(t, 2) 
 func TestTrustedAnnouncementsLes3(t *testing.T) { testTrustedAnnouncement(t, 3) }
 
 func testTrustedAnnouncement(t *testing.T, protocol int) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	var (
 		servers   []*testServer
 		teardowns []func()

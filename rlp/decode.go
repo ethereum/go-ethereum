@@ -1053,7 +1053,7 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 			// The error needs to be adjusted to become ErrCanonInt in this case.
 			return 0, ErrCanonSize
 		}
-		return binary.BigEndian.Uint64(buffer[:]), nil
+		return binary.BigEndian.Uint64(buffer), nil
 	}
 }
 

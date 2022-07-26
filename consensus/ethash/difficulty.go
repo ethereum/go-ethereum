@@ -163,7 +163,7 @@ func MakeDifficultyCalculatorU256(bombDelay *big.Int) func(time uint64, parent *
 		y := new(uint256.Int)
 		y.SetFromBig(parent.Difficulty)    // y: p_diff
 		pDiff := y.Clone()                 // pdiff: p_diff
-		z := new(uint256.Int).SetUint64(x) //z : +-adj_factor (either pos or negative)
+		z := new(uint256.Int).SetUint64(x) // z : +-adj_factor (either pos or negative)
 		y.Rsh(y, difficultyBoundDivisor)   // y: p__diff / 2048
 		z.Mul(y, z)                        // z: (p_diff / 2048 ) * (+- adj_factor)
 

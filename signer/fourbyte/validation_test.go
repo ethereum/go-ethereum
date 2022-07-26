@@ -125,7 +125,7 @@ func TestTransactionValidation(t *testing.T) {
 				}
 				t.Errorf("Test %d, expected %d messages, got %d", i, test.numMessages, got)
 			} else {
-				//Debug printout, remove later
+				// Debug printout, remove later
 				for _, msg := range msgs.Messages {
 					t.Logf("* [%d] %s: %s", i, msg.Typ, msg.Message)
 				}

@@ -254,7 +254,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		// database with a valid starting snapshot.
 		insertAccount := func(account common.Hash, data []byte) {
 			if bytes.Compare(account[:], genMarker) <= 0 {
-				rawdb.WriteAccountSnapshot(db, account, data[:])
+				rawdb.WriteAccountSnapshot(db, account, data)
 			}
 		}
 		insertAccount(accNoModNoCache, accNoModNoCache[:])
@@ -269,7 +269,7 @@ func TestDiskPartialMerge(t *testing.T) {
 		// the  database with a valid starting snapshot.
 		insertStorage := func(account common.Hash, slot common.Hash, data []byte) {
 			if bytes.Compare(append(account[:], slot[:]...), genMarker) <= 0 {
-				rawdb.WriteStorageSnapshot(db, account, slot, data[:])
+				rawdb.WriteStorageSnapshot(db, account, slot, data)
 			}
 		}
 		insertAccount(conNoModNoCache, conNoModNoCache[:])

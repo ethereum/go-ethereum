@@ -230,7 +230,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		stateSyncStart: make(chan *stateSync),
 		//syncStatsState: stateSyncStats{
 		//	processed: rawdb.ReadFastTrieProgress(stateDb),
-		//},
+		// },
 		trackStateReq: make(chan *stateReq),
 	}
 	go dl.stateFetcher()

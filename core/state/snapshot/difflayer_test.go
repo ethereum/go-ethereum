@@ -188,7 +188,7 @@ func TestMergeDelete(t *testing.T) {
 	}
 	// If we add more granular metering of memory, we can enable this again,
 	// but it's not implemented for now
-	//if have, want := merged.memory, child.memory; have != want {
+	// if have, want := merged.memory, child.memory; have != want {
 	//	t.Errorf("mem wrong: have %d, want %d", have, want)
 	//}
 }

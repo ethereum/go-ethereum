@@ -229,7 +229,7 @@ type (
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
-		//The UI may make changes to the TX
+		// The UI may make changes to the TX
 		Transaction apitypes.SendTxArgs `json:"transaction"`
 		Approved    bool                `json:"approved"`
 	}

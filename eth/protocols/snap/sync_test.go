@@ -154,7 +154,7 @@ func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 		codeRequestHandler:    defaultCodeRequestHandler,
 		term:                  term,
 	}
-	//stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+	// stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
 	//peer.logger.SetHandler(stderrHandler)
 	return peer
 }
@@ -464,7 +464,7 @@ func proofHappyStorageRequestHandler(t *testPeer, requestId uint64, root common.
 	return nil
 }
 
-//func emptyCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
+// func emptyCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
 //	var bytecodes [][]byte
 //	t.remote.OnByteCodes(t, id, bytecodes)
 //	return nil
@@ -506,7 +506,7 @@ func starvingAccountRequestHandler(t *testPeer, requestId uint64, root common.Ha
 	return defaultAccountRequestHandler(t, requestId, root, origin, limit, 500)
 }
 
-//func misdeliveringAccountRequestHandler(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, cap uint64) error {
+// func misdeliveringAccountRequestHandler(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, cap uint64) error {
 //	return defaultAccountRequestHandler(t, requestId-1, root, origin, 500)
 //}
 
@@ -1520,10 +1520,10 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Databas
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
 		slotValue := key32(i + seed)
-		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
+		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue))
 
 		slotKey := key32(i)
-		key := crypto.Keccak256Hash(slotKey[:])
+		key := crypto.Keccak256Hash(slotKey)
 
 		elem := &kv{key[:], rlpSlotValue}
 		trie.Update(elem.k, elem.v)
@@ -1571,10 +1571,10 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (*trie
 	// Fill other slots if required
 	for i := uint64(1); i <= uint64(n); i++ {
 		slotKey := key32(i)
-		key := crypto.Keccak256Hash(slotKey[:])
+		key := crypto.Keccak256Hash(slotKey)
 
 		slotValue := key32(i)
-		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue[:]))
+		rlpSlotValue, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(slotValue))
 
 		elem := &kv{key[:], rlpSlotValue}
 		trie.Update(elem.k, elem.v)

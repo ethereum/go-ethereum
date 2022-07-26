@@ -62,7 +62,7 @@ func TestBloomExtensively(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		data := fmt.Sprintf("xxxxxxxxxx data %d yyyyyyyyyyyyyy", i)
 		b.Add([]byte(data))
-		//b.Add(new(big.Int).SetBytes([]byte(data)))
+		// b.Add(new(big.Int).SetBytes([]byte(data)))
 	}
 	got := crypto.Keccak256Hash(b.Bytes())
 	if got != exp {

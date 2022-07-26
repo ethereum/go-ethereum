@@ -111,9 +111,9 @@ func (f *fuzzer) fuzz() int {
 	var time uint64
 	{
 		childTime := f.readUint64(1, 0xFFFFFFFFFFFFFFFF)
-		//fmt.Printf("childTime: %x\n",childTime)
+		// fmt.Printf("childTime: %x\n",childTime)
 		delta := f.readUint64(1, childTime)
-		//fmt.Printf("delta: %v\n", delta)
+		// fmt.Printf("delta: %v\n", delta)
 		pTime := childTime - delta
 		header.Time = pTime
 		time = childTime

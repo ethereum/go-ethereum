@@ -388,7 +388,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 				{[]byte{1}, []byte{0}},
 			},
 			nBytes: 5000,
-			//0x6b3724a41b8c38b46d4d02fba2bb2074c47a507eb16a9a4b978f91d32e406faf
+			// 0x6b3724a41b8c38b46d4d02fba2bb2074c47a507eb16a9a4b978f91d32e406faf
 			expHashes: []common.Hash{s.chain.RootAt(999)},
 		},
 		{ // nonsensically long path

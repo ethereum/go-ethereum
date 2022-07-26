@@ -221,7 +221,7 @@ func (i *bbInput) sealClique(block *types.Block) (*types.Block, error) {
 	}
 	// Extra is fixed 32 byte vanity and 65 byte signature
 	header.Extra = make([]byte, 32+65)
-	copy(header.Extra[0:32], i.Clique.Vanity.Bytes()[:])
+	copy(header.Extra[0:32], i.Clique.Vanity.Bytes())
 
 	// Sign the seal hash and fill in the rest of the extra data
 	h := clique.SealHash(header)
