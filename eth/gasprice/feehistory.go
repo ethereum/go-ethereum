@@ -290,11 +290,9 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 		i := int(fees.blockNumber - oldestBlock)
 		if fees.results.baseFee != nil {
 			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.nextBaseFee, fees.results.gasUsedRatio
-		} else {
+		} else if i < firstMissing {
 			// getting no block and no error means we are requesting into the future (might happen because of a reorg)
-			if i < firstMissing {
-				firstMissing = i
-			}
+			firstMissing = i
 		}
 	}
 	if firstMissing == 0 {

@@ -48,10 +48,8 @@ func TestWeightedRandomSelect(t *testing.T) {
 		c := s.Choose()
 		if c == nil {
 			t.Errorf("expected item, got nil")
-		} else {
-			if c.(*testWrsItem).idx != w {
-				t.Errorf("expected another item")
-			}
+		} else if c.(*testWrsItem).idx != w {
+			t.Errorf("expected another item")
 		}
 		w = -2
 		if s.Choose() != nil {

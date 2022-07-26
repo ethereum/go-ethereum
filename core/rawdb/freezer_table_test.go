@@ -1224,10 +1224,8 @@ func runRandTest(rt randTest) bool {
 			got, err := f.RetrieveItems(atomic.LoadUint64(&f.itemHidden), head-tail, 100000)
 			if err != nil {
 				rt[i].err = err
-			} else {
-				if !reflect.DeepEqual(got, values) {
-					rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v", got, values)
-				}
+			} else if !reflect.DeepEqual(got, values) {
+				rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v", got, values)
 			}
 
 		case opAppend:
@@ -1250,10 +1248,8 @@ func runRandTest(rt randTest) bool {
 			got, err := f.RetrieveItems(step.items[0], uint64(len(step.items)), 100000)
 			if err != nil {
 				rt[i].err = err
-			} else {
-				if !reflect.DeepEqual(got, blobs) {
-					rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v %v", got, blobs, step.items)
-				}
+			} else if !reflect.DeepEqual(got, blobs) {
+				rt[i].err = fmt.Errorf("mismatch on retrieved values %v %v %v", got, blobs, step.items)
 			}
 
 		case opTruncateHead:

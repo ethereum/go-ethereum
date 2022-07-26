@@ -676,10 +676,8 @@ func (n *nodeBalance) timeUntil(priority int64) (time.Duration, bool) {
 		} else {
 			diffTime = float64(pos) / timePrice
 		}
-	} else {
-		if targetPos > 0 {
-			return 0, true
-		}
+	} else if targetPos > 0 {
+		return 0, true
 	}
 	neg := n.balance.negValue(now)
 	if targetNeg > neg {

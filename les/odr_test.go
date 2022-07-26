@@ -413,10 +413,8 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		err := client.handler.backend.odr.RetrieveTxStatus(ctx, r)
 		if err != nil {
 			t.Errorf("Failed to retrieve tx status %v", err)
-		} else {
-			if !reflect.DeepEqual(testspec.results, r.Status) {
-				t.Errorf("Result mismatch, diff")
-			}
+		} else if !reflect.DeepEqual(testspec.results, r.Status) {
+			t.Errorf("Result mismatch, diff")
 		}
 
 		// Close all connected peers and start the next round

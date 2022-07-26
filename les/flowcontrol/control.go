@@ -279,10 +279,8 @@ func (node *ServerNode) UpdateParams(params ServerParams) {
 	node.recalcBLE(mclock.Now())
 	if params.BufLimit > node.params.BufLimit {
 		node.bufEstimate += params.BufLimit - node.params.BufLimit
-	} else {
-		if node.bufEstimate > params.BufLimit {
-			node.bufEstimate = params.BufLimit
-		}
+	} else if node.bufEstimate > params.BufLimit {
+		node.bufEstimate = params.BufLimit
 	}
 	node.params = params
 }

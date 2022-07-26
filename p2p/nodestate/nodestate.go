@@ -676,10 +676,8 @@ func (ns *NodeStateMachine) setState(n *enode.Node, setFlags, resetFlags Flags, 
 		if node.db {
 			ns.deleteNode(id)
 		}
-	} else {
-		if changed&ns.saveFlags != 0 {
-			node.dirty = true
-		}
+	} else if changed&ns.saveFlags != 0 {
+		node.dirty = true
 	}
 	callback := func() {
 		for _, sub := range ns.stateSubs {
@@ -937,10 +935,8 @@ func (ns *NodeStateMachine) setField(n *enode.Node, field Field, value interface
 		if node.db {
 			ns.deleteNode(id)
 		}
-	} else {
-		if f.encode != nil {
-			node.dirty = true
-		}
+	} else if f.encode != nil {
+		node.dirty = true
 	}
 	state := node.state
 	callback := func() {

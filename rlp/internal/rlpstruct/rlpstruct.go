@@ -134,11 +134,9 @@ func ProcessFields(allFields []Field) ([]Field, []Tags, error) {
 				firstOptionalName = name
 			}
 			anyOptional = true
-		} else {
-			if anyOptional {
-				msg := fmt.Sprintf("must be optional because preceding field %q is optional", firstOptionalName)
-				return nil, nil, TagError{Field: name, Err: msg}
-			}
+		} else if anyOptional {
+			msg := fmt.Sprintf("must be optional because preceding field %q is optional", firstOptionalName)
+			return nil, nil, TagError{Field: name, Err: msg}
 		}
 	}
 	return fields, tags, nil

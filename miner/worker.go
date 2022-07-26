@@ -604,13 +604,11 @@ func (w *worker) mainLoop() {
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 				}
-			} else {
+			} else if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
-				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, true, time.Now().Unix())
-				}
+				w.commitWork(nil, true, time.Now().Unix())
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 

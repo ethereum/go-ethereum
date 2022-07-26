@@ -665,10 +665,8 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		if blocks[2].Header().GasLimit != ncm.GasLimit() {
 			t.Errorf("last  block gasLimit mismatch: have: %d, want %d", ncm.GasLimit(), blocks[2].Header().GasLimit)
 		}
-	} else {
-		if ncm.CurrentHeader().Hash() != headers[2].Hash() {
-			t.Errorf("last header hash mismatch: have: %x, want %x", ncm.CurrentHeader().Hash(), headers[2].Hash())
-		}
+	} else if ncm.CurrentHeader().Hash() != headers[2].Hash() {
+		t.Errorf("last header hash mismatch: have: %x, want %x", ncm.CurrentHeader().Hash(), headers[2].Hash())
 	}
 	ncm.Stop()
 }
@@ -3313,10 +3311,8 @@ func TestDeleteRecreateSlotsAcrossManyBlocks(t *testing.T) {
 					t.Fatalf("block %d, slot %d, got %x exp %x", blockNum, slot, gotValue, expValue)
 				}
 			}
-		} else {
-			if statedb.Exist(aa) {
-				t.Fatalf("block %d, expected %v to not exist, it did", blockNum, aa)
-			}
+		} else if statedb.Exist(aa) {
+			t.Fatalf("block %d, expected %v to not exist, it did", blockNum, aa)
 		}
 	}
 }

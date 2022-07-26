@@ -222,10 +222,8 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 						sel = utils.NewWeightedRandomSelect(selectPeerWeight)
 					}
 					sel.Update(selectPeerItem{peer: peer, req: req, weight: uint64(bufRemain*1000000) + 1})
-				} else {
-					if bestWait == 0 || wait < bestWait {
-						bestWait = wait
-					}
+				} else if bestWait == 0 || wait < bestWait {
+					bestWait = wait
 				}
 				checkedPeers[peer] = struct{}{}
 			}

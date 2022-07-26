@@ -128,12 +128,10 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		if err != nil {
 			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 		}
-	} else {
-		if parsedType[0] == "uint" || parsedType[0] == "int" {
-			// this should fail because it means that there's something wrong with
-			// the abi type (the compiler should always format it to the size...always)
-			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
-		}
+	} else if parsedType[0] == "uint" || parsedType[0] == "int" {
+		// this should fail because it means that there's something wrong with
+		// the abi type (the compiler should always format it to the size...always)
+		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
 	// varType is the parsed abi type
 	switch varType := parsedType[1]; varType {

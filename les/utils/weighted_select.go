@@ -71,17 +71,15 @@ func (w *WeightedRandomSelect) setWeight(item WrsItem, weight uint64) {
 		if weight == 0 {
 			delete(w.idx, item)
 		}
-	} else {
-		if weight != 0 {
-			if w.root.itemCnt == w.root.maxItems {
-				// add a new level
-				newRoot := &wrsNode{sumCost: w.root.sumCost, itemCnt: w.root.itemCnt, level: w.root.level + 1, maxItems: w.root.maxItems * wrsBranches}
-				newRoot.items[0] = w.root
-				newRoot.weights[0] = w.root.sumCost
-				w.root = newRoot
-			}
-			w.idx[item] = w.root.insert(item, weight)
+	} else if weight != 0 {
+		if w.root.itemCnt == w.root.maxItems {
+			// add a new level
+			newRoot := &wrsNode{sumCost: w.root.sumCost, itemCnt: w.root.itemCnt, level: w.root.level + 1, maxItems: w.root.maxItems * wrsBranches}
+			newRoot.items[0] = w.root
+			newRoot.weights[0] = w.root.sumCost
+			w.root = newRoot
 		}
+		w.idx[item] = w.root.insert(item, weight)
 	}
 }
 

@@ -1060,11 +1060,9 @@ func (p *clientPeer) Handshake(td *big.Int, head common.Hash, headNum uint64, ge
 		p.server = recv.get("flowControl/MRR", nil) == nil
 		if p.server {
 			p.announceType = announceTypeNone // connected to another server, send no messages
-		} else {
-			if recv.get("announceType", &p.announceType) != nil {
-				// set default announceType on server side
-				p.announceType = announceTypeSimple
-			}
+		} else if recv.get("announceType", &p.announceType) != nil {
+			// set default announceType on server side
+			p.announceType = announceTypeSimple
 		}
 		return nil
 	})

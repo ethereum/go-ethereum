@@ -169,11 +169,9 @@ func wordWrap(s string, width int) string {
 		if over {
 			output.WriteByte('\n')
 			lineLength = 0
-		} else {
-			if lineLength != 0 {
-				output.WriteByte(' ')
-				lineLength++
-			}
+		} else if lineLength != 0 {
+			output.WriteByte(' ')
+			lineLength++
 		}
 
 		output.WriteString(word)
