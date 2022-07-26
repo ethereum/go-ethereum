@@ -119,7 +119,6 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 		for i := 1; i < int(req.Amount); i++ {
 			blockNumber -= (1 - req.Skip)
 			headers[i] = c.blocks[blockNumber].Header()
-
 		}
 
 		return headers, nil

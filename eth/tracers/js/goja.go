@@ -548,10 +548,10 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 		return []byte{}, nil
 	}
 	if end < begin || begin < 0 {
-		return nil, fmt.Errorf("Tracer accessed out of bound memory: offset %d, end %d", begin, end)
+		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
 	if mo.memory.Len() < int(end) {
-		return nil, fmt.Errorf("Tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), begin, end-begin)
+		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), begin, end-begin)
 	}
 	return mo.memory.GetCopy(begin, end-begin), nil
 }
@@ -573,7 +573,7 @@ func (mo *memoryObj) GetUint(addr int64) goja.Value {
 // getUint returns the 32 bytes at the specified address interpreted as a uint.
 func (mo *memoryObj) getUint(addr int64) (*big.Int, error) {
 	if mo.memory.Len() < int(addr)+32 || addr < 0 {
-		return nil, fmt.Errorf("Tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), addr, 32)
+		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), addr, 32)
 	}
 	return new(big.Int).SetBytes(mo.memory.GetPtr(addr, 32)), nil
 }
@@ -613,7 +613,7 @@ func (s *stackObj) Peek(idx int) goja.Value {
 // peek returns the nth-from-the-top element of the stack.
 func (s *stackObj) peek(idx int) (*big.Int, error) {
 	if len(s.stack.Data()) <= idx || idx < 0 {
-		return nil, fmt.Errorf("Tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data()), idx)
+		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data()), idx)
 	}
 	return s.stack.Back(idx).ToBig(), nil
 }
@@ -878,7 +878,6 @@ func (r *callframeResult) GetError() goja.Value {
 		return r.vm.ToValue(r.err.Error())
 	}
 	return goja.Undefined()
-
 }
 
 func (r *callframeResult) setupObject() *goja.Object {

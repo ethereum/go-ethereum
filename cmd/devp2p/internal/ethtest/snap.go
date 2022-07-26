@@ -350,7 +350,6 @@ func hexToCompact(hex []byte) []byte {
 
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-
 	key := common.FromHex("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 	// helper function to iterate the key, and generate the compact-encoded
 	// trie paths along the way.

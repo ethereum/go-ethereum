@@ -545,7 +545,6 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		return math.U256Bytes(b), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
-
 }
 
 // dataMismatchError generates an error for a mismatch between
@@ -672,7 +671,6 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 	}
 	if strings.HasPrefix(encType, "bytes") {
 		return fmt.Sprintf("%s", encValue), nil
-
 	}
 	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 		if b, err := parseInteger(encType, encValue); err != nil {

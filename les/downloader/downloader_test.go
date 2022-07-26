@@ -621,7 +621,6 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 		t.Fatalf("block synchronization failed: %v", err)
 	}
 	tester.terminate()
-
 }
 
 // Tests that simple synchronization against a forked chain works correctly. In

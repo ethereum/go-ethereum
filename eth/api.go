@@ -272,6 +272,8 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		block = api.eth.blockchain.CurrentBlock()
 	} else if blockNr == rpc.FinalizedBlockNumber {
 		block = api.eth.blockchain.CurrentFinalizedBlock()
+	} else if blockNr == rpc.SafeBlockNumber {
+		block = api.eth.blockchain.CurrentSafeBlock()
 	} else {
 		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 	}
@@ -350,6 +352,8 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 				block = api.eth.blockchain.CurrentBlock()
 			} else if number == rpc.FinalizedBlockNumber {
 				block = api.eth.blockchain.CurrentFinalizedBlock()
+			} else if number == rpc.SafeBlockNumber {
+				block = api.eth.blockchain.CurrentSafeBlock()
 			} else {
 				block = api.eth.blockchain.GetBlockByNumber(uint64(number))
 			}
@@ -582,5 +586,5 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
-	return 0, fmt.Errorf("No state found")
+	return 0, fmt.Errorf("no state found")
 }
