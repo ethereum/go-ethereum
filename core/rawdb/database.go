@@ -218,17 +218,19 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			// Otherwise, key-value store continues where the freezer left off, all is fine.
 			// We might have duplicate blocks (crash after freezer write but before key-value
 			// store deletion, but that's fine).
-		} else if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
+		} else {
 			// If the freezer is empty, ensure nothing was moved yet from the key-value
 			// store, otherwise we'll end up missing data. We check block #1 to decide
 			// if we froze anything previously or not, but do take care of databases with
 			// only the genesis block.
-			// Key-value store contains more data than the genesis block, make sure we
-			// didn't freeze anything yet.
-			if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
-				return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+			if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
+				// Key-value store contains more data than the genesis block, make sure we
+				// didn't freeze anything yet.
+				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+				}
+				// Block #1 is still in the database, we're allowed to init a new feezer
 			}
-			// Block #1 is still in the database, we're allowed to init a new feezer
 			// Otherwise, the head header is still the genesis, we're allowed to init a new
 			// freezer.
 		}
