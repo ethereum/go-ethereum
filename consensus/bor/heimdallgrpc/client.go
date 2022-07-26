@@ -1,8 +1,7 @@
 package heimdallgrpc
 
 import (
-	"log"
-
+	"github.com/ethereum/go-ethereum/log"
 	proto "github.com/maticnetwork/polyproto/heimdall"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -13,25 +12,24 @@ const (
 )
 
 type HeimdallGRPCClient struct {
-	conn    *grpc.ClientConn
-	client  proto.HeimdallClient
-	closeCh chan struct{}
+	conn   *grpc.ClientConn
+	client proto.HeimdallClient
 }
 
 func NewHeimdallGRPCClient(address string) *HeimdallGRPCClient {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to Heimdall gRPC server: %v", err)
+		log.Error("Failed to connect to Heimdall gRPC server: %v", err)
+		panic(err)
 	}
 
 	return &HeimdallGRPCClient{
-		conn:    conn,
-		client:  proto.NewHeimdallClient(conn),
-		closeCh: make(chan struct{}),
+		conn:   conn,
+		client: proto.NewHeimdallClient(conn),
 	}
 }
 
 func (h *HeimdallGRPCClient) Close() {
-	close(h.closeCh)
+	log.Debug("Shutdown detected, Closing Heimdall gRPC client")
 	h.conn.Close()
 }

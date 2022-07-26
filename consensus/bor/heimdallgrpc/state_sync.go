@@ -9,7 +9,7 @@ import (
 	proto "github.com/maticnetwork/polyproto/heimdall"
 )
 
-func (h *HeimdallGRPCClient) StateSyncEvents(fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
+func (h *HeimdallGRPCClient) StateSyncEvents(ctx context.Context, fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
 	eventRecords := make([]*clerk.EventRecordWithTime, 0)
 
 	req := &proto.StateSyncEventsRequest{

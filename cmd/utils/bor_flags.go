@@ -35,7 +35,7 @@ var (
 	HeimdallgRPCAddressFlag = cli.StringFlag{
 		Name:  "bor.heimdallgRPC",
 		Usage: "Address of Heimdall gRPC service",
-		Value: ":3132",
+		Value: "",
 	}
 
 	// BorFlags all bor related flags

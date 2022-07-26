@@ -414,7 +414,7 @@ func DefaultConfig() *Config {
 		Heimdall: &HeimdallConfig{
 			URL:         "http://localhost:1317",
 			Without:     false,
-			GRPCAddress: ":3132",
+			GRPCAddress: "",
 		},
 		SyncMode: "full",
 		GcMode:   "full",

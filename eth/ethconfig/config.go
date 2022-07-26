@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/contract"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall" //nolint:typecheck
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdallgrpc"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -249,7 +250,14 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 		if ethConfig.WithoutHeimdall {
 			return bor.New(chainConfig, db, blockchainAPI, spanner, nil, genesisContractsClient)
 		} else {
-			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdall.NewHeimdallClient(ethConfig.HeimdallURL), genesisContractsClient)
+			var heimdallClient bor.IHeimdallClient
+			if ethConfig.HeimdallgRPCAddress != "" {
+				heimdallClient = heimdallgrpc.NewHeimdallGRPCClient(ethConfig.HeimdallgRPCAddress)
+			} else {
+				heimdallClient = heimdall.NewHeimdallClient(ethConfig.HeimdallURL)
+			}
+
+			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient)
 		}
 	} else {
 		switch config.PowMode {
