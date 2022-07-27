@@ -26,6 +26,8 @@
 
 - [```debug pprof```](./debug_pprof.md)
 
+- [```dumpconfig```](./dumpconfig.md)
+
 - [```fingerprint```](./fingerprint.md)
 
 - [```peers```](./peers.md)
