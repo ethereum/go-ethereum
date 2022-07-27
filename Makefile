@@ -28,6 +28,8 @@ GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1
 bor:
 	mkdir -p $(GOPATH)/bin/
 	go build -o $(GOBIN)/bor ./cmd/cli/main.go
+	cp $(GOBIN)/bor $(GOPATH)/bin/
+	@echo "Done building."
 
 protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
