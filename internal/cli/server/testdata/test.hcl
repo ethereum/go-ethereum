@@ -1,11 +1,11 @@
-data-dir = "./data"
+datadir = "./data"
 
 requiredblocks = {
 	a = "b"
 }
 
 p2p {
-	max-peers = 30
+	maxpeers = 30
 }
 
 txpool {
@@ -13,5 +13,5 @@ txpool {
 }
 
 gpo {
-	max-price = "100"
+	maxprice = "100"
 }

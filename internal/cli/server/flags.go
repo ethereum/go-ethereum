@@ -38,7 +38,7 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage: "Path of the directory to store keystores",
 		Value: &c.cliConfig.KeyStoreDir,
 	})
-	f.SliceStringFlag(&flagset.SliceStringFlag{
+	f.StringFlag(&flagset.StringFlag{
 		Name:  "config",
 		Usage: "File for the config file",
 		Value: &c.configFile,

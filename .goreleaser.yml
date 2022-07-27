@@ -90,6 +90,9 @@ nfpms:
       - src: builder/files/genesis-testnet-v4.json
         dst: /etc/bor/genesis-testnet-v4.json
         type: config
+      - src: builder/files/config.toml
+        dst: /var/lib/bor/config.toml
+        type: config
 
     overrides:
       rpm:
