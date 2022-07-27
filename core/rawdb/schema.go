@@ -251,3 +251,24 @@ func configKey(hash common.Hash) []byte {
 func genesisKey(hash common.Hash) []byte {
 	return append(genesisPrefix, hash.Bytes()...)
 }
+
+// FreezerTableInfo retrieves the basic information about the specified freezer table.
+func FreezerTableInfo(kind string) (bool, bool, string) {
+	if noCompression, ok := FreezerNoSnappy[kind]; ok {
+		return true, noCompression, ""
+	}
+	// The freezer table of sub-ancient store should also be
+	// registered here for checking.
+	return false, false, "" // non-existent
+}
+
+// FreezerTables returns all supported tables in the freezer.
+func FreezerTables() []string {
+	var ret []string
+	for table := range FreezerNoSnappy {
+		ret = append(ret, table)
+	}
+	// The freezer table of sub-ancient store should also be
+	// registered here for return.
+	return ret
+}
