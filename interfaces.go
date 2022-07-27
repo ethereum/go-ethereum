@@ -204,10 +204,10 @@ type GasPricer interface {
 // FeeHistory provides recent fee market data that consumers can use to determine
 // a reasonable maxPriorityFeePerGas value.
 type FeeHistory struct {
-	OldestBlock  *big.Int     `json:"oldestBlock"`             // block coresponding to first response value
-	Reward       [][]*big.Int `json:"reward,omitempty"`        // list every txs priority fee per block
-	BaseFee      []*big.Int   `json:"baseFeePerGas,omitempty"` // list of each block's base fee
-	GasUsedRatio []float64    `json:"gasUsedRatio"`            // ratio of gas used out of the total avaialble limit
+	OldestBlock  *big.Int     // block coresponding to first response value
+	Reward       [][]*big.Int // list every txs priority fee per block
+	BaseFee      []*big.Int   // list of each block's base fee
+	GasUsedRatio []float64    // ratio of gas used out of the total avaialble limit
 }
 
 // A PendingStateReader provides access to the pending state, which is the result of all
