@@ -201,6 +201,10 @@ func (s *StateDB) MVFullWriteList() []blockstm.WriteDescriptor {
 	return writes
 }
 
+func (s *StateDB) MVReadMap() map[string]blockstm.ReadDescriptor {
+	return s.readMap
+}
+
 func (s *StateDB) MVReadList() []blockstm.ReadDescriptor {
 	reads := make([]blockstm.ReadDescriptor, 0, len(s.readMap))
 
