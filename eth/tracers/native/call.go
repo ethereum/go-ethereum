@@ -83,7 +83,7 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 	t.callstack[0].GasUsed = uintToHex(gasUsed)
 	if err != nil {
 		t.callstack[0].Error = err.Error()
-		if err.Error() == "execution reverted" && len(output) > 0 {
+		if err == vm.ErrExecutionReverted && len(output) > 0 {
 			t.callstack[0].Output = bytesToHex(output)
 		}
 	} else {
