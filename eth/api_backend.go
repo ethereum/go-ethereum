@@ -67,11 +67,18 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
-		return block.Header(), nil
+		if block != nil {
+			return block.Header(), nil
+		}
+		return nil, errors.New("pending block not found")
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
-		return b.eth.blockchain.CurrentBlock().Header(), nil
+		block := b.eth.blockchain.CurrentBlock()
+		if block != nil {
+			return block.Header(), nil
+		}
+		return nil, errors.New("latest block not found")
 	}
 	if number == rpc.FinalizedBlockNumber {
 		block := b.eth.blockchain.CurrentFinalizedBlock()
