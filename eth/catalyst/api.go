@@ -482,7 +482,7 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	// if the last valid hash is the terminal pow block, return 0x0 for latest valid hash
 	lastValid := &invalid.ParentHash
 	if header := api.eth.BlockChain().GetHeaderByHash(invalid.ParentHash); header != nil && header.Difficulty.BitLen() == 0 {
-		lastValid = nil
+		lastValid = &common.Hash{}
 	}
 
 	failure := "links to previously rejected block"
