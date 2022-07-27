@@ -15,7 +15,7 @@ func (h *HeimdallGRPCClient) Span(ctx context.Context, spanID uint64) (*span.Hei
 		ID: spanID,
 	}
 
-	res, err := h.client.Span(context.Background(), req)
+	res, err := h.client.Span(ctx, req)
 	if err != nil {
 		return nil, err
 	}

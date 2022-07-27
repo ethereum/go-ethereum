@@ -11,7 +11,7 @@ import (
 )
 
 func (h *HeimdallGRPCClient) FetchCheckpointCount(ctx context.Context) (int64, error) {
-	res, err := h.client.FetchCheckpointCount(context.Background(), nil)
+	res, err := h.client.FetchCheckpointCount(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -24,7 +24,7 @@ func (h *HeimdallGRPCClient) FetchCheckpoint(ctx context.Context, number int64) 
 		ID: number,
 	}
 
-	res, err := h.client.FetchCheckpoint(context.Background(), req)
+	res, err := h.client.FetchCheckpoint(ctx, req)
 	if err != nil {
 		return nil, err
 	}
