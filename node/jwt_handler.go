@@ -24,7 +24,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-const expiryTime = 60 * time.Second
+const jwtExpiryTimeout = 60 * time.Second
 
 type jwtHandler struct {
 	keyFunc func(token *jwt.Token) (interface{}, error)
@@ -70,9 +70,9 @@ func (handler *jwtHandler) ServeHTTP(out http.ResponseWriter, r *http.Request) {
 		http.Error(out, "token is expired", http.StatusForbidden)
 	case claims.IssuedAt == nil:
 		http.Error(out, "missing issued-at", http.StatusForbidden)
-	case time.Since(claims.IssuedAt.Time) > expiryTime:
+	case time.Since(claims.IssuedAt.Time) > jwtExpiryTimeout:
 		http.Error(out, "stale token", http.StatusForbidden)
-	case time.Until(claims.IssuedAt.Time) > expiryTime:
+	case time.Until(claims.IssuedAt.Time) > jwtExpiryTimeout:
 		http.Error(out, "future token", http.StatusForbidden)
 	default:
 		handler.next.ServeHTTP(out, r)
