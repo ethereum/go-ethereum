@@ -7,8 +7,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/mitchellh/cli"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Command is the command to start the sever
@@ -21,7 +22,7 @@ type Command struct {
 	// final configuration
 	config *Config
 
-	configFile []string
+	configFile string
 
 	srv *Server
 }
@@ -50,34 +51,57 @@ func (c *Command) Synopsis() string {
 	return "Run the Bor server"
 }
 
-// Run implements the cli.Command interface
-func (c *Command) Run(args []string) int {
+func (c *Command) extractFlags(args []string) error {
+	config := *DefaultConfig()
+
 	flags := c.Flags()
 	if err := flags.Parse(args); err != nil {
 		c.UI.Error(err.Error())
-		return 1
+		c.config = &config
+
+		return err
 	}
 
-	// read config file
-	config := DefaultConfig()
-	for _, configFile := range c.configFile {
-		cfg, err := readConfigFile(configFile)
+	// TODO: Check if this can be removed or not
+	// read cli flags
+	if err := config.Merge(c.cliConfig); err != nil {
+		c.UI.Error(err.Error())
+		c.config = &config
+
+		return err
+	}
+	// read if config file is provided, this will overwrite the cli flags, if provided
+	if c.configFile != "" {
+		log.Warn("Config File provided, this will overwrite the cli flags.", "configFile:", c.configFile)
+		cfg, err := readConfigFile(c.configFile)
 		if err != nil {
 			c.UI.Error(err.Error())
-			return 1
+			c.config = &config
+
+			return err
 		}
 		if err := config.Merge(cfg); err != nil {
 			c.UI.Error(err.Error())
-			return 1
+			c.config = &config
+
+			return err
 		}
 	}
-	if err := config.Merge(c.cliConfig); err != nil {
+
+	c.config = &config
+
+	return nil
+}
+
+// Run implements the cli.Command interface
+func (c *Command) Run(args []string) int {
+	err := c.extractFlags(args)
+	if err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
-	c.config = config
 
-	srv, err := NewServer(config)
+	srv, err := NewServer(c.config)
 	if err != nil {
 		c.UI.Error(err.Error())
 		return 1
@@ -111,4 +135,9 @@ func (c *Command) handleSignals() int {
 		}
 	}
 	return 1
+}
+
+// GetConfig returns the user specified config
+func (c *Command) GetConfig() *Config {
+	return c.cliConfig
 }

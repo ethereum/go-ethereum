@@ -82,6 +82,11 @@ func Commands() map[string]MarkDownCommandFactory {
 				UI: ui,
 			}, nil
 		},
+		"dumpconfig": func() (MarkDownCommand, error) {
+			return &DumpconfigCommand{
+				Meta2: meta2,
+			}, nil
+		},
 		"debug": func() (MarkDownCommand, error) {
 			return &DebugCommand{
 				UI: ui,

@@ -1,21 +1,50 @@
 package server
 
 import (
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConfigLegacy(t *testing.T) {
-	toml := `[Node.P2P]
-StaticNodes = ["node1"]
-TrustedNodes = ["node2"]`
 
-	config, err := readLegacyConfig([]byte(toml))
-	if err != nil {
-		t.Fatal(err)
+	readFile := func(path string) {
+		config, err := readLegacyConfig(path)
+		assert.NoError(t, err)
+
+		assert.Equal(t, config, &Config{
+			DataDir: "./data",
+			RequiredBlocks: map[string]string{
+				"a": "b",
+			},
+			P2P: &P2PConfig{
+				MaxPeers: 30,
+			},
+			TxPool: &TxPoolConfig{
+				Locals:    []string{},
+				Rejournal: 1 * time.Hour,
+				LifeTime:  1 * time.Second,
+			},
+			Gpo: &GpoConfig{
+				MaxPrice:    big.NewInt(100),
+				IgnorePrice: big.NewInt(2),
+			},
+			Sealer: &SealerConfig{
+				Enabled:  false,
+				GasCeil:  20000000,
+				GasPrice: big.NewInt(30000000000),
+			},
+			Cache: &CacheConfig{
+				Cache:     1024,
+				Rejournal: 1 * time.Hour,
+			},
+		})
 	}
 
-	assert.Equal(t, config.P2P.Discovery.StaticNodes, []string{"node1"})
-	assert.Equal(t, config.P2P.Discovery.TrustedNodes, []string{"node2"})
+	// read file in hcl format
+	t.Run("toml", func(t *testing.T) {
+		readFile("./testdata/test.toml")
+	})
 }
