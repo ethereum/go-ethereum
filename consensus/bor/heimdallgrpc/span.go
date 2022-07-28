@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
+	"github.com/ethereum/go-ethereum/log"
 
 	proto "github.com/maticnetwork/polyproto/heimdall"
 	protoutils "github.com/maticnetwork/polyproto/utils"
@@ -15,10 +16,14 @@ func (h *HeimdallGRPCClient) Span(ctx context.Context, spanID uint64) (*span.Hei
 		ID: spanID,
 	}
 
+	log.Info("Fetching span", "spanID", spanID)
+
 	res, err := h.client.Span(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info("Fetched span", "spanID", spanID)
 
 	return parseSpan(res.Result), nil
 }
