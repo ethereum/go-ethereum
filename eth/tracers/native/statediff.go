@@ -45,7 +45,6 @@ type stateDiffTracer struct {
 	create    bool
 	from      common.Address
 	to        common.Address
-	gasPrice  *big.Int
 	gasLimit  uint64 // Amount of gas bought for the whole tx
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -64,6 +63,7 @@ func (t *stateDiffTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 	t.from = from
 	t.to = to
 
+	t.lookupAccount(env.Context.Coinbase)
 	t.lookupAccount(from)
 	t.lookupAccount(to)
 
@@ -138,6 +138,17 @@ func (t *stateDiffTracer) CaptureTxEnd(restGas uint64) {
 	fromBal := hexutil.MustDecodeBig(t.diffstate[t.from].After.Balance)
 	fromBal.Add(fromBal, refundGas)
 	t.diffstate[t.from].After.Balance = hexutil.EncodeBig(fromBal)
+
+	// Refund the used gas to miner
+	miner := t.env.Context.Coinbase
+	gasPrice := t.env.TxContext.GasPrice
+	if !t.env.Config.NoBaseFee && t.env.Context.BaseFee != nil {
+		gasPrice.Sub(gasPrice, t.env.Context.BaseFee)
+	}
+	usedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit-restGas))
+	minerBal := hexutil.MustDecodeBig(t.diffstate[miner].After.Balance)
+	minerBal.Add(minerBal, usedGas)
+	t.diffstate[miner].After.Balance = hexutil.EncodeBig(minerBal)
 
 	for addr, diff := range t.diffstate {
 		for key := range diff.Before.Storage {
