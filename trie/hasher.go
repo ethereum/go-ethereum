@@ -30,7 +30,7 @@ type hasher struct {
 	sha      crypto.KeccakState
 	tmp      []byte
 	encbuf   rlp.EncoderBuffer
-	parallel bool // Whether to use paralallel threads when hashing
+	parallel bool // Whether to use parallel threads when hashing
 }
 
 // hasherPool holds pureHashers

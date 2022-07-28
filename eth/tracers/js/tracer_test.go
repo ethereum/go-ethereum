@@ -103,15 +103,15 @@ func TestTracer(t *testing.T) {
 		{ // tests that we don't panic on bad arguments to memory access
 			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}",
 			want: ``,
-			fail: "Tracer accessed out of bound memory: offset -1, end -2 at step (<eval>:1:53(15))    in server-side tracer function 'step'",
+			fail: "tracer accessed out of bound memory: offset -1, end -2 at step (<eval>:1:53(15))    in server-side tracer function 'step'",
 		}, { // tests that we don't panic on bad arguments to stack peeks
 			code: "{depths: [], step: function(log) { this.depths.push(log.stack.peek(-1)); }, fault: function() {}, result: function() { return this.depths; }}",
 			want: ``,
-			fail: "Tracer accessed out of bound stack: size 0, index -1 at step (<eval>:1:53(13))    in server-side tracer function 'step'",
+			fail: "tracer accessed out of bound stack: size 0, index -1 at step (<eval>:1:53(13))    in server-side tracer function 'step'",
 		}, { //  tests that we don't panic on bad arguments to memory getUint
 			code: "{ depths: [], step: function(log, db) { this.depths.push(log.memory.getUint(-64));}, fault: function() {}, result: function() { return this.depths; }}",
 			want: ``,
-			fail: "Tracer accessed out of bound memory: available 0, offset -64, size 32 at step (<eval>:1:58(13))    in server-side tracer function 'step'",
+			fail: "tracer accessed out of bound memory: available 0, offset -64, size 32 at step (<eval>:1:58(13))    in server-side tracer function 'step'",
 		}, { // tests some general counting
 			code: "{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}",
 			want: `3`,
@@ -232,7 +232,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Error(err)
 	}
 	if string(res) != "false" {
-		t.Errorf("Tracer should not consider blake2f as precompile in byzantium")
+		t.Errorf("tracer should not consider blake2f as precompile in byzantium")
 	}
 
 	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
@@ -242,7 +242,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Error(err)
 	}
 	if string(res) != "true" {
-		t.Errorf("Tracer should consider blake2f as precompile in istanbul")
+		t.Errorf("tracer should consider blake2f as precompile in istanbul")
 	}
 }
 

@@ -137,6 +137,13 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	b.resume()
 }
 
+// SetBadBlockCallback sets the callback to run when a bad block is hit by the
+// block processor. This method is not thread safe and should be set only once
+// on startup before system events are fired.
+func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
+	d.badBlock = onBadBlock
+}
+
 // BeaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
