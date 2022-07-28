@@ -428,7 +428,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) (beacon.PayloadS
 		// and cannot afford concurrent out-if-band modifications via imports.
 		log.Warn("Ignoring payload while snap syncing", "number", block.NumberU64(), "hash", block.Hash())
 	}
-	return beacon.PayloadStatusV1{Status: beacon.ACCEPTED}, nil
+	return beacon.PayloadStatusV1{Status: beacon.SYNCING}, nil
 }
 
 // setInvalidAncestor is a callback for the downloader to notify us if a bad block

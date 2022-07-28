@@ -662,8 +662,8 @@ func TestEmptyBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Status != beacon.ACCEPTED {
-		t.Errorf("invalid status: expected ACCEPTED got: %v", status.Status)
+	if status.Status != beacon.SYNCING {
+		t.Errorf("invalid status: expected SYNCING got: %v", status.Status)
 	}
 	if status.LatestValidHash != nil {
 		t.Fatalf("invalid LVH: got %v wanted nil", status.LatestValidHash)
