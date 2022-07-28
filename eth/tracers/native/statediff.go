@@ -43,7 +43,9 @@ type stateDiffTracer struct {
 	env       *vm.EVM
 	diffstate diffstate
 	create    bool
+	from      common.Address
 	to        common.Address
+	gasPrice  *big.Int
 	gasLimit  uint64 // Amount of gas bought for the whole tx
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -59,6 +61,7 @@ func newStateDiffTracer(ctx *tracers.Context) tracers.Tracer {
 func (t *stateDiffTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.create = create
+	t.from = from
 	t.to = to
 
 	t.lookupAccount(from)
@@ -130,6 +133,12 @@ func (t *stateDiffTracer) CaptureTxStart(gasLimit uint64) {
 }
 
 func (t *stateDiffTracer) CaptureTxEnd(restGas uint64) {
+	// Refund the from address with rest gas
+	refundGas := new(big.Int).Mul(t.env.TxContext.GasPrice, new(big.Int).SetUint64(restGas))
+	fromBal := hexutil.MustDecodeBig(t.diffstate[t.from].After.Balance)
+	fromBal.Add(fromBal, refundGas)
+	t.diffstate[t.from].After.Balance = hexutil.EncodeBig(fromBal)
+
 	for addr, diff := range t.diffstate {
 		for key := range diff.Before.Storage {
 			t.diffstate[addr].After.Storage[key] = t.env.StateDB.GetState(addr, key)
