@@ -479,10 +479,15 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 		}
 		api.invalidTipsets[head] = invalid
 	}
+	// If the last valid hash is the terminal pow block, return 0x0 for latest valid hash
+	lastValid := &invalid.ParentHash
+	if header := api.eth.BlockChain().GetHeader(invalid.ParentHash, invalid.Number.Uint64()-1); header != nil && header.Difficulty.Sign() != 0 {
+		lastValid = &common.Hash{}
+	}
 	failure := "links to previously rejected block"
 	return &beacon.PayloadStatusV1{
 		Status:          beacon.INVALID,
-		LatestValidHash: &invalid.ParentHash,
+		LatestValidHash: lastValid,
 		ValidationError: &failure,
 	}
 }
