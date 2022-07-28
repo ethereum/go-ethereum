@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	register("diffstateTracer", newdiffstateTracer)
+	register("stateDiffTracer", newStateDiffTracer)
 }
 
 type diffstate = map[common.Address]*diffaccount
@@ -39,7 +39,7 @@ type diffaccount struct {
 	After  account `json:"after"`
 }
 
-type diffstateTracer struct {
+type stateDiffTracer struct {
 	env       *vm.EVM
 	diffstate diffstate
 	create    bool
@@ -49,14 +49,14 @@ type diffstateTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
-func newdiffstateTracer(ctx *tracers.Context) tracers.Tracer {
+func newStateDiffTracer(ctx *tracers.Context) tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &diffstateTracer{diffstate: diffstate{}}
+	return &stateDiffTracer{diffstate: diffstate{}}
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *diffstateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *stateDiffTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.create = create
 	t.to = to
@@ -80,7 +80,7 @@ func (t *diffstateTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *diffstateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *stateDiffTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 	if t.create {
 		// Exclude created contract.
 		delete(t.diffstate, t.to)
@@ -94,7 +94,7 @@ func (t *diffstateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durat
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *diffstateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *stateDiffTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
@@ -123,27 +123,27 @@ func (t *diffstateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *diffstateTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *stateDiffTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *diffstateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *stateDiffTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
 
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *diffstateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+func (t *stateDiffTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
-func (t *diffstateTracer) CaptureTxStart(gasLimit uint64) {
+func (t *stateDiffTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-func (t *diffstateTracer) CaptureTxEnd(restGas uint64) {}
+func (t *stateDiffTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
-func (t *diffstateTracer) GetResult() (json.RawMessage, error) {
+func (t *stateDiffTracer) GetResult() (json.RawMessage, error) {
 	res, err := json.Marshal(t.diffstate)
 	if err != nil {
 		return nil, err
@@ -152,14 +152,14 @@ func (t *diffstateTracer) GetResult() (json.RawMessage, error) {
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *diffstateTracer) Stop(err error) {
+func (t *stateDiffTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
 }
 
 // lookupAccount fetches details of an account and adds it to the diffstate
 // if it doesn't exist there.
-func (t *diffstateTracer) lookupAccount(addr common.Address) {
+func (t *stateDiffTracer) lookupAccount(addr common.Address) {
 	if _, ok := t.diffstate[addr]; ok {
 		return
 	}
@@ -182,7 +182,7 @@ func (t *diffstateTracer) lookupAccount(addr common.Address) {
 // lookupStorage fetches the requested storage slot and adds
 // it to the diffstate of the given contract. It assumes `lookupAccount`
 // has been performed on the contract before.
-func (t *diffstateTracer) lookupStorage(addr common.Address, key common.Hash) {
+func (t *stateDiffTracer) lookupStorage(addr common.Address, key common.Hash) {
 	if _, ok := t.diffstate[addr].Before.Storage[key]; ok {
 		return
 	}
