@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -59,6 +60,13 @@ const (
 	// invalidTipsetsCap is the max number of recent block hashes tracked that
 	// have lead to some bad ancestor block. It's just an OOM protection.
 	invalidTipsetsCap = 512
+)
+
+var (
+	// defaultTTD is the ttd set by some CL nodes in exchangeTransitionConfiguration
+	// before the merge ttd is really set.
+	// its set to 2**256 - 2**10
+	defaultTTD = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), new(big.Int).Lsh(big.NewInt(1), 10))
 )
 
 type ConsensusAPI struct {
@@ -269,6 +277,16 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
+	if config.TerminalTotalDifficulty.ToInt().Cmp(defaultTTD) == 0 {
+		if ttd == nil {
+			log.Warn("Correctly connected to beacon node, terminal total difficulty not yet specified")
+			return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(defaultTTD)}, nil
+		}
+		log.Warn("Correctly connected to beacon node, beacon node not updated", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
+		return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
+
+	}
+
 	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
