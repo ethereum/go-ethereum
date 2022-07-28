@@ -125,7 +125,7 @@ type jsTracer struct {
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
-func newJsTracer(code string, ctx *tracers.Context) (tracers.Tracer, error) {
+func newJsTracer(code string, ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	if c, ok := assetTracers[code]; ok {
 		code = c
 	}
