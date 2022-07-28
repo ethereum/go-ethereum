@@ -1,34 +1,36 @@
 ---
 title: Backup & Restore
-sort_key: C
 ---
 
-Most important info first: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**.
+**Keep secure backups of your keystore and password!**
 
 ## Data Directory
 
-Everything `geth` persists gets written inside its data directory. The default data
-directory locations are platform specific:
+All data relating to a specific Geth instance gets written inside a data directory.
+The default data directory locations are platform specific:
 
 * Mac: `~/Library/Ethereum`
 * Linux: `~/.ethereum`
 * Windows: `%LOCALAPPDATA%\Ethereum`
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories
-should be transportable between nodes, platforms, implementations (C++, Go, Python).
+should be transportable between nodes, platforms, and client implementations.
 
 To configure the location of the data directory, the `--datadir` parameter can be
 specified. See [CLI Options](../interface/command-line-options) for more details.
+There may exist multiple data directories for multiple networks (e.g. a separate directory
+for Ethereum Mainnet and the Goerli testnet). Each would have subdirectories for their
+blockchain data and keystore.
 
-Note the [ethash dag](../interface/mining) is stored at `~/.ethash` (Mac/Linux) or
-`%APPDATA%\Ethash` (Windows) so that it can be reused by all clients. You can store this
-in a different location by using a symbolic link.
+It is important to backup the files in the keystore securely. These files are encrypted
+using an account password. This needs to be securely backed up too. There is no way to
+decrypt the keys without the password!
 
 ## Cleanup
 
 Geth's blockchain and state databases can be removed with:
 
-```
+```sh
 geth removedb
 ```
 
@@ -39,14 +41,14 @@ directories that can be re-created on synchronisation and does not touch the key
 
 Export the blockchain in binary format with:
 
-```
+```sh
 geth export <filename>
 ```
 
 Or if you want to back up portions of the chain over time, a first and last block can be
 specified. For example, to back up the first epoch:
 
-```
+```sh
 geth export <filename> 0 29999
 ```
 
@@ -55,11 +57,8 @@ truncated.
 
 Import binary-format blockchain exports with:
 
-```
+```sh
 geth import <filename>
 ```
-
-_See https://eth.wiki/en/howto/blockchain-import-and-export-instructions for more info_
-
 
 And finally: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**

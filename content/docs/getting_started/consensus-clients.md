@@ -3,19 +3,13 @@ title: Connecting to Consensus Clients
 sort_key: A3
 ---
 
-Geth is an [execution client][ex-client-link]. Historically, an execution client alone has been enough to run a full Ethereum node.
-However, Ethereum will soon swap its consensus mechanism from [proof-of-work][pow-link] (PoW) to 
-[proof-of-stake][pos-link] (PoS) in a transition known as [The Merge](/docs/interface/merge). 
+Geth is an [execution client][ex-client-link]. Historically, an execution client alone was enough to 
+run a full Ethereum node. However, ever since Ethereum swapped from [proof-of-work][pow-link] (PoW) to 
+[proof-of-stake][pos-link] (PoS) based consensus, Geth has needed to be coupled to another piece of 
+software called a ["consensus client"][con-client-link]. 
 
-When that happens, Geth will not be able to track the Ethereum chain on its own. Instead, it will need to 
-be coupled to another piece of software called a ["consensus client"][con-client-link]. For Geth users that 
-intend to continue to run full nodes after The Merge, it is sensible to start running a consensus client now, 
-so that The Merge can happen smoothly. There are five consensus clients available, all of which connect to Geth in the same way. 
-
-This page will outline how Geth can be set up with a consensus client in advance of The Merge (or to interact with an alread-merged testnet).
-
-{% include note.html content=" It is recommended to practise connecting a consensus client to Geth on a testnet such as Sepolia or Goerli but to
-wait until merge-ready releases are available before doing it on Ethereum Mainnet." %}
+There are four consensus clients available, all of which connect to Geth in the same way. This page will 
+outline how Geth can be set up with a consensus client.
 
 ## Configuring Geth
 
@@ -32,10 +26,6 @@ The authorization must then be applied to a specific address/port. This is achie
 `--authrpc.addr` and a port number to `--authrpc.port`. It is also safe to provide either `localhost` or a wildcard
 `*` to `--authrpc.vhosts` so that incoming requests from virtual hosts are accepted by Geth because it only 
 applies to the port authenticated using `jwtsecret`. 
-
-The Merge itself will be triggered using a terminal total difficulty (TTD). The specific value for the TTD has not yet
-been decided. When it is decided, Geth needs to know what it is in order to merge successfully. This will most likely be 
-included in a new release, so Geth will have to be stopped, updated and restarted in advance of The Merge.
 
 A complete command to start Geth so that it can connect to a consensus client looks as follows:
 
@@ -56,7 +46,8 @@ There are currently four consensus clients that can be run alongside Geth. These
  
 [Teku](https://pegasys.tech/teku): written in Java
  
-It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. Instructions for installing each client are provided in the documentation linked in the list above.
+It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. 
+Instructions for installing each client are provided in the documentation linked in the list above.
 
 The consensus client must be started with the right port configuration to establish an RPC connection 
 to the local Geth instance. In the example above, `localhost:8551` was authorized 
@@ -73,48 +64,23 @@ More information on this can be found in the documentation for each consensus cl
 
 ## Validators
 
-After The Merge, miners are no longer responsible for securing the Ethereum blockchain. Instead, this becomes the responsibility
-of validators that have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients
-have their own validator software that is described in detail in their respective documentation. The easiest way to handle 
-staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link]. The launchpad is also
-available for [Prater][prater-launchpad-link], [Ropsten][ropsten-launchpad-link] and [Kiln][kiln-launchpad-link] testnets. It is
-also highly recommended to review the [Merge readiness checklist][checklist-link].
+Validators are responsible for securing the Ethereum blockchain. Validators have staked at least 32 ETH into a 
+deposit contract and run validator software. Each of the consensus clients have their own validator software that 
+is described in detail in their respective documentation. The easiest way to handle staking and validator 
+key generation is to use the Ethereum Foundation [Staking Launchpad][launchpad-link]. The Launchpad guides users
+through the process of generating validator keys and connecting the validator to the consensus client.
 
 ## Using Geth
 
-After the merge, Geth will follow the head of the chain via its connection to the consensus client. However, Geth is still 
-the portal for users to send transactions to Ethereum. Overall, Geth will not change very much from a user-perspective. 
-The Geth Javascript console is still available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will 
-remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the 
-[Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started using the following command
-in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
+Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available 
+for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js 
+or HTTP requests with commands as json payloads. These options are explained in more detail on the 
+[Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started 
+using the following command in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
 
 ```shell
 geth attach datadir/geth.ipc
 ```
-
-
-## Testnets
-
-Ethereum Mainnet has not yet undergone The Merge, but some public testnets have. This means that running Geth alone is no longer
-enough to interact with merged testnets. This includes two testnets that were purpose built to test The Merge (Kiln, Kintsugi) and 
-the long-standing public PoW chain, Ropsten, as well as the relatively new testnet Sepolia. If Geth is connected to these merged networks alone it will simply stall when it syncs as far
-as the merge block, awaiting information from a consensus client. Therefore, any activity on these testnets requires Geth to be 
-connected to a consensus client. There are many instructional articles that exlain how to connect to these testnets using Geth in
-combination with various consensus clients, for example:
-
-[Connecting to Kiln using Teku](https://github.com/chrishobcroft/TestingTheMerge/blob/main/geku.md)
- 
-[Connecting to Kiln using Lighthouse](https://github.com/remyroy/ethstaker/blob/main/merge-devnet.md)
- 
-[Connecting to Kiln using Prysm](https://hackmd.io/@prysmaticlabs/B1Q2SluWq)
-  
-[Connecting to Ropsten using Lighthouse](https://github.com/remyroy/ethstaker/blob/main/merge-ropsten.md)
-
-
-The Merge testing will soon progress to merging the Goerli testnet. Once this has happened Geth will require a connection
-to a consensus client to work on those networks too.
-
 
 ## Summary
 

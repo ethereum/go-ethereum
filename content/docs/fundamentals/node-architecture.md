@@ -3,13 +3,15 @@
 
 Geth is an [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/#execution-clients). 
 Originally, an execution client alone was enough to run a full Ethereum node.
-However, ever since Ethereum turned off proof-of-work and implemented proof-of-stake,
-Geth must to be coupled to another piece of software called a 
-[“consensus client”](https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients).
+However, ever since Ethereum turned off [proof-of-work](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/) and implemented [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/),
+Geth has needed to be coupled to another piece of software called a 
+[“consensus client”](https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients) in order to
+keep track of the Ethereum blockchain.
 
-The execution client is responsible for transaction handling, transaction gossip, state management and 
-the Ethereum Virtual Machine (EVM). However, Geth is **not** responsible for block building, block gossiping 
-or handling consensus logic. These are in the remit of the consensus client.
+The execution client is responsible for transaction handling, transaction gossip, state management and supporting
+the Ethereum Virtual Machine ([EVM])(https://ethereum.org/en/developers/docs/evm/). However, Geth is **not** 
+responsible for block building, block gossiping or handling consensus logic. These are in the remit of the 
+consensus client.
 
 The relationship between the two Ethereum clients is shown in the schematic below. The two clients each 
 connect to their own respective peer-to-peer (P2P) networks. This is because the execution clients gossip 
@@ -23,8 +25,8 @@ Geth to be executed. Executing the transactions locally is how the client valida
 do not violate any Ethereum rules and that the proposed update to Ethereum’s state is correct. Likewise, 
 when the node is selected to be a block producer the consensus client must be able to request bundles of 
 transactions from Geth to include in the new block. This inter-client communication is handled by a local 
-RPC connection using the engine API which is part of the JSON-RPC API exposed by Geth.
-
+RPC connection using the [engine API](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md) 
+which is exposed internally over port 8551 by default.
 
 
 ## What does Geth do?
@@ -43,4 +45,4 @@ In summary, Geth is:
 	- home to the Ethereum Virtual Machine, Ethereum's state and transaction pool.
 
 
-
+Read more about [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/).
