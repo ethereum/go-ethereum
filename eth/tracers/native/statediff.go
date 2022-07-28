@@ -85,12 +85,6 @@ func (t *stateDiffTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durat
 		// Exclude created contract.
 		delete(t.diffstate, t.to)
 	}
-
-	for addr, diff := range t.diffstate {
-		for key := range diff.Before.Storage {
-			t.diffstate[addr].After.Storage[key] = t.env.StateDB.GetState(addr, key)
-		}
-	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -139,7 +133,13 @@ func (t *stateDiffTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-func (t *stateDiffTracer) CaptureTxEnd(restGas uint64) {}
+func (t *stateDiffTracer) CaptureTxEnd(restGas uint64) {
+	for addr, diff := range t.diffstate {
+		for key := range diff.Before.Storage {
+			t.diffstate[addr].After.Storage[key] = t.env.StateDB.GetState(addr, key)
+		}
+	}
+}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
