@@ -295,7 +295,7 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	if err != nil {
 		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
 	}
-	return t.TryUpdate(key, data)
+	return t.tryUpdate(key, data)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to
@@ -307,6 +307,14 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	// Encoding []byte cannot fail, ok to ignore the error.
+	v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
+	return t.tryUpdate(key, v)
+}
+
+// tryUpdate expects an RLP-encoded value and performs the core function
+// for TryUpdate and TryUpdateAccount.
+func (t *Trie) tryUpdate(key, value []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
