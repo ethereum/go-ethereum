@@ -79,15 +79,13 @@ func NewNodeFromBytes(b []byte) (*Node, error) {
 		if len(b) != 2*zkt.ElemBytesLen {
 			return nil, ErrNodeBytesBadSize
 		}
-		n.ChildL, n.ChildR = &zkt.Hash{}, &zkt.Hash{}
-		copy(n.ChildL[:], b[:zkt.ElemBytesLen])
-		copy(n.ChildR[:], b[zkt.ElemBytesLen:zkt.ElemBytesLen*2])
+		n.ChildL, _ = zkt.NewHashFromBytes(b[:zkt.ElemBytesLen])
+		n.ChildR, _ = zkt.NewHashFromBytes(b[zkt.ElemBytesLen : zkt.ElemBytesLen*2])
 	case NodeTypeLeaf:
 		if len(b) < zkt.ElemBytesLen+4 {
 			return nil, ErrNodeBytesBadSize
 		}
-		n.NodeKey = &zkt.Hash{}
-		copy(n.NodeKey[:], b[0:32])
+		n.NodeKey, _ = zkt.NewHashFromBytes(b[0:32])
 		mark := binary.LittleEndian.Uint32(b[32:36])
 		preimageLen := int(mark & 255)
 		n.CompressedFlags = mark >> 8
@@ -181,12 +179,12 @@ func (n *Node) Value() []byte {
 	switch n.Type {
 	case NodeTypeMiddle: // {Type || ChildL || ChildR}
 		bytes := []byte{byte(n.Type)}
-		bytes = append(bytes, n.ChildL[:]...)
-		bytes = append(bytes, n.ChildR[:]...)
+		bytes = append(bytes, n.ChildL.Bytes()...)
+		bytes = append(bytes, n.ChildR.Bytes()...)
 		return bytes
 	case NodeTypeLeaf: // {Type || Data...}
 		bytes := []byte{byte(n.Type)}
-		bytes = append(bytes, n.NodeKey[:]...)
+		bytes = append(bytes, n.NodeKey.Bytes()...)
 		tmp := make([]byte, 4)
 		compressedFlag := (n.CompressedFlags << 8) + uint32(len(n.ValuePreimage))
 		binary.LittleEndian.PutUint32(tmp, compressedFlag)
