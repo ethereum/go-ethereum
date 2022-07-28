@@ -130,40 +130,40 @@ When Grafana is up and running, it should be reachable at `localhost:3000`. A br
 to access a visualization dashboard. The browser will prompt for login credentials (user: `admin` and password: `admin`). 
 When prompted, the default password should be changed and saved.
 
-![](./grafana1.png)
+![](assets/grafana1.png)
 
 The browser first redirects to the Grafana home page to set up the source data. 
 Click on the configuration icon in the left bar and select "Data sources".
 
-![](./grafana2.png)
+![](assets/grafana2.png)
 
 There aren't any data sources yet, click on "Add data source" to define one.
 
-![](./grafana3.png)
+![](assets/grafana3.png)
 
 Select "InfluxDB" and proceed.
 
-![](./grafana4.png)
+![](assets/grafana4.png)
 
 Data source configuration is pretty straight forward if you are running tools on the same machine. You need to set the 
 InfluxDB address and details for accessing the database. Refer to the picture below.
 
-![](./grafana5.png)
+![](assets/grafana5.png)
 
 If everything is complete and InfluxDB is reachable, click on "Save and test" and wait for the confirmation to pop up.
 
-![](./grafana6.png)
+![](assets/grafana6.png)
 
 Grafana is now set up to read data from InfluxDB. Now you need to create a dashboard which will interpret and display it. 
 Dashboards properties are encoded in JSON files which can be created by anybody and easily imported. On the left bar, 
 click on "Create and Import".
 
-![](./grafana7.png)
+![](assets/grafana7.png)
 
 For a Geth monitoring dashboard, copy the ID of [this dashboard](https://grafana.com/grafana/dashboards/13877/) 
 and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
 
-![](./grafana8.png)
+![](assets/grafana8.png)
 
 The dashboards can be customized further. Each panel can be edited, moved, removed or added. 
 To learn more about how dashboards work, refer to [Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
