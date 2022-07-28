@@ -154,6 +154,23 @@ func (t *Trie) Get(key []byte) []byte {
 	return res
 }
 
+func (t *Trie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	res, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		return &types.StateAccount{}, err
+	}
+	if didResolve {
+		t.root = newroot
+	}
+	if res == nil {
+		return nil, nil
+	}
+	var ret types.StateAccount
+	err = rlp.DecodeBytes(res, &ret)
+	return &ret, err
+}
+
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
@@ -295,7 +312,9 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	if err != nil {
 		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
 	}
-	return t.TryUpdate(key, data)
+	// Encoding []byte cannot fail, ok to ignore the error.
+	v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(data[:]))
+	return t.tryUpdate(key, v)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to
@@ -307,6 +326,12 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	return t.tryUpdate(key, value)
+}
+
+// tryUpdate expects an RLP-encoded value and performs the core function
+// for TryUpdate and TryUpdateAccount.
+func (t *Trie) tryUpdate(key, value []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {

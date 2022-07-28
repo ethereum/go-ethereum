@@ -331,7 +331,11 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						if len(task) == len(common.Address{}) {
+							sf.trie.TryGetAccount(task)
+						} else {
+							sf.trie.TryGet(task)
+						}
 						sf.seen[string(task)] = struct{}{}
 					}
 				}

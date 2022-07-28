@@ -537,20 +537,16 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// If snapshot unavailable or reading from it failed, load from the database
 	if data == nil {
 		start := time.Now()
-		enc, err := s.trie.TryGet(addr.Bytes())
+		var err error
+		data, err = s.trie.TryGetAccount(addr.Bytes())
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)
 		}
 		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %v", addr.Bytes(), err))
+			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 			return nil
 		}
-		if len(enc) == 0 {
-			return nil
-		}
-		data = new(types.StateAccount)
-		if err := rlp.DecodeBytes(enc, data); err != nil {
-			log.Error("Failed to decode state object", "addr", addr, "err", err)
+		if data == nil {
 			return nil
 		}
 	}

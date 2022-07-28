@@ -112,6 +112,16 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
+func (t *odrTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	key = crypto.Keccak256(key)
+	var res *types.StateAccount
+	err := t.do(key, func() (err error) {
+		res, err = t.trie.TryGetAccount(key)
+		return err
+	})
+	return res, err
+}
+
 func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
