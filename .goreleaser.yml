@@ -75,12 +75,18 @@ nfpms:
     description: Polygon Blockchain
     license: GPLv3 LGPLv3
 
+    bindir: /usr/local/bin
+
     formats:
       - apk
       - deb
       - rpm
 
     contents:
+      - dst: /var/lib/bor
+        type: dir
+        file_info:
+          mode: 0777
       - src: builder/files/bor.service
         dst: /lib/systemd/system/bor.service
         type: config
@@ -93,6 +99,9 @@ nfpms:
       - src: builder/files/config.toml
         dst: /var/lib/bor/config.toml
         type: config
+
+    scripts:
+      postinstall: builder/files/bor-post-install.sh
 
     overrides:
       rpm:
