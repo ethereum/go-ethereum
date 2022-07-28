@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -36,15 +37,16 @@ func init() {
 }
 
 type callFrame struct {
-	Type    vm.OpCode      `json:"-"`
-	From    common.Address `json:"from"`
-	Gas     uint64         `json:"gas"`
-	GasUsed uint64         `json:"gasUsed"`
-	To      common.Address `json:"to,omitempty" rlp:"optional"`
-	Input   []byte         `json:"input" rlp:"optional"`
-	Output  []byte         `json:"output,omitempty" rlp:"optional"`
-	Error   string         `json:"error,omitempty" rlp:"optional"`
-	Calls   []callFrame    `json:"calls,omitempty" rlp:"optional"`
+	Type     vm.OpCode      `json:"-"`
+	From     common.Address `json:"from"`
+	Gas      uint64         `json:"gas"`
+	GasUsed  uint64         `json:"gasUsed"`
+	To       common.Address `json:"to,omitempty" rlp:"optional"`
+	Input    []byte         `json:"input" rlp:"optional"`
+	Output   []byte         `json:"output,omitempty" rlp:"optional"`
+	Error    string         `json:"error,omitempty" rlp:"optional"`
+	Revertal string         `json:"revertReason,omitempty"`
+	Calls    []callFrame    `json:"calls,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value *big.Int `json:"value,omitempty" rlp:"optional"`
@@ -109,13 +111,20 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 	t.callstack[0].GasUsed = gasUsed
 	output = common.CopyBytes(output)
-	if err != nil {
-		t.callstack[0].Error = err.Error()
-		if err.Error() == "execution reverted" && len(output) > 0 {
-			t.callstack[0].Output = output
-		}
-	} else {
+	if err == nil {
 		t.callstack[0].Output = output
+		return
+	}
+	t.callstack[0].Error = err.Error()
+	if !errors.Is(err, vm.ErrExecutionReverted) || len(output) == 0 {
+		return
+	}
+	t.callstack[0].Output = output
+	if len(output) < 4 {
+		return
+	}
+	if unpacked, err := abi.UnpackRevert(output); err == nil {
+		t.callstack[0].Revertal = unpacked
 	}
 }
 
