@@ -1,41 +1,3 @@
----
-title: What is Geth
-root: ..
----
-
-## What is Geth?
-
-Geth (go-ethereum) is a [Go](https://go.dev/) implementation of [Ethereum](http://ethereum.org) - a 
-gateway into the decentralized web.
-
-Running Geth alongside a consensus client turns a computer into an Ethereum node. 
-Nodes communicate with one another, agreeing on the data they should each add to their local databases. 
-Ethereum itself is the network of connected nodes running Ethereum software.
-
-
-## Why run a node?
-
-Running your own node enables you to use Ethereum in a truly private, self-sufficient and trustless 
-manner. You don't need to trust information you receive because you can verify the data yourself 
-using your Geth instance. 
-
-**"Don't trust, verify"**
-
-![node basic](/assets/node-basic.png)
-
-Your node verifies all changes to its database by itself. This means: 
-
-- you don’t have to trust any other nodes in the network.
-- You never have to leak your addresses and balances to other nodes.
-- You can use Ethereum securely and privately. Most wallet software can be pointed to your own local node.
-- You can program your own custom RPC endpoints and make your own modifications to the source code.
-- You get low latency, fast access to Ethereum.
-
-A large and diverse set of nodes independently verifying new information is critical for Ethereum’s health, 
-security and operational resiliency.
-
-**If you run a full node, the whole Ethereum network benefits.**
-
 
 ## Node architecture
 
@@ -79,8 +41,6 @@ using Geth's built-in console, web3 development frameworks such as Hardhat and T
 In summary, Geth is:
 	- a user gateway to Ethereum 
 	- home to the Ethereum Virtual Machine, Ethereum's state and transaction pool.
-
-
 
 
 
