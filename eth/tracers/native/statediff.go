@@ -81,10 +81,6 @@ func (t *stateDiffTracer) CaptureStart(env *vm.EVM, from common.Address, to comm
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *stateDiffTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if t.create {
-		// Exclude created contract.
-		delete(t.diffstate, t.to)
-	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
