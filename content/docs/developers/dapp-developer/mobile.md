@@ -1,148 +1,197 @@
 ---
-title: Mobile Account Management
-sort_key: G
+title: Geth for Mobile
+sort_key: F
 ---
 
-To provide Ethereum integration for your mobile applications, the very first thing you
-should be interested in doing is account management.
+Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. 
+This is because being able to verify data, follow the chain and submit transactions without 
+relying on centralized intermediaries is critical for censorship resistant access 
+to the network. Doing so on a mobile device is the most convenient route for many users. 
+This relies on Geth running a [light client](/docs/interface/les) on the mobile 
+device and exposing an API that developers can use to build mobile apps on top of Geth. This 
+page outlines how to download Geth for mobile and how to get started with managing Ethereum 
+accounts in mobile applications. Ethereum mobile development is relatively nascent, but there is 
+an active developer community. For further information on Geth mobile development visit the 
+#mobile channel in the [Geth discord](https://discord.gg/wQdpS5aA).
 
-Although all current leading Ethereum implementations provide account management built in,
-it is ill advised to keep accounts in any location that is shared between multiple
-applications and/or multiple people. The same way you do not entrust your ISP (who is
-after all your gateway into the internet) with your login credentials; you should not
-entrust an Ethereum node (who is your gateway into the Ethereum network) with your
-credentials either.
+## Download and install
 
-The proper way to handle user accounts in your mobile applications is to do client side
-account management, everything self-contained within your own application. This way you
-can ensure as fine grained (or as coarse) access permissions to the sensitive data as
-deemed necessary, without relying on any third party application's functionality and/or
-vulnerabilities.
+### Android
 
-To support this, `go-ethereum` provides a simple, yet thorough accounts library that gives
-you all the tools to do properly secured account management via encrypted keystores and
-passphrase protected accounts. You can leverage all the security of the `go-ethereum`
-crypto implementation while at the same time running everything in your own application.
+#### Android Studio
 
-## Encrypted keystores
+Geth for Mobile bundles can be downloaded directly from [the download page](https://geth.ethereum.org/downloads/) 
+and inserted into a project in Android Studio via `File -> New -> New module... -> Import .JAR/.AAR Package`.
 
-Although handling your users' accounts locally on their own mobile device does provide
-certain security guarantees, access keys to Ethereum accounts should never lay around in
-clear-text form. As such, we provide an encrypted keystore that provides the proper
-security guarantees for you without requiring a thorough understanding from your part of
-the associated cryptographic primitives.
+It is also necessary to configure `gradle` to link the mobile library bundle to the
+application. This can be done by adding a new entry to the `dependencies` section of the
+`build.gradle` script, pointing it to the module that was just added (named `geth` by default).
 
-The important thing to know when using the encrypted keystore is that the cryptographic
-primitives used within can operate either in *standard* or *light* mode. The former
-provides a higher level of security at the cost of increased computational burden and
-resource consumption:
+```gradle
+dependencies {
+    // All previous dependencies
+    compile project(':geth')
+}
+```
 
- * *standard* needs 256MB memory and 1 second processing on a modern CPU to access a key
- * *light* needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
+#### Manual build
 
-As such, *light* is more suitable for mobile applications, but you should be aware of the
-trade-offs nonetheless.
+Geth can also be built it locally using a `make` command. This will create an Android 
+archive called `geth.aar` in the `build/bin` folder that can be imported into Android 
+Studio as described above.
 
-*For those interested in the cryptographic and/or implementation details, the key-store
-uses the `secp256k1` elliptic curve as defined in the [Standards for Efficient
-Cryptography](sec2), implemented by the [`libsecp256k`][secp256k1] library and wrapped by
-[`github.com/ethereum/go-ethereum/accounts`][accounts-go]. Accounts are stored on disk in
-the [Web3 Secret Storage][secstore] format.*
+```shell
+$ make android
+[...]
+Done building.
+Import "build/bin/geth.aar" to use the library.
+```
+
+### iOS
+
+Geth must be downloaded and built locally for IoS. Building locally is achieved using the 
+`make` command. This will create an iOS XCode framework called `Geth.framework` in the 
+`build/bin` folder that can be imported into XCode as described above.
+
+```bash
+$ make ios
+[...]
+Done building.
+Import "build/bin/Geth.framework" to use the library.
+```
+
+## Mobile API
+
+Similarly to the reusable [Go libraries](/docs/dapp/native), the mobile wrappers focus on 
+three main usage areas:
+
+- Simplified client side account management
+- Remote node interfacing via different transports
+- Contract interactions through auto-generated bindings
+
+The Geth mobile API is broadly equivalent to the [Go API](/docs/dapp/native). 
+The source code can be found in the `mobile` section of Geth's 
+[Github](https://github.com/ethereum/go-ethereum/tree/master/mobile).
+
+## Mobile Account Management
+
+Best practise for account management is to do it client-side, with all sensitive information
+self-contained inside the local application. This ensures the developer/user retains
+fine-grained control over the access permissions for user-data instead of outsourcing security
+to a third party.
+
+To support this, Geth provides an accounts library that includes the tools required
+for secure account management via encrypted keystores and passphrase protected accounts,
+similarly to running a full Geth node.
+
+### Encrypted keystores
+
+Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should
+be stored encrypted so that even if the mobile device is accessed by a malicious third party
+the keys are still hidden under an additional layer of security. Geth provides a keystore 
+that enables developers to store keys securely using the [`secp256k1` elliptic curve](sec2), 
+implemented using [`libsecp256k`][secp256k1] and wrapped by [Geth accounts][accounts-go]. 
+Accounts are stored on disk in the [Web3 Secret Storage][secstore] format. Developers should be 
+aware of these implementation details but are not required to deeply understand the cryptographic
+primitives in order to use the keystore.
+
+One thing that should be understood, though, is that the cryptographic primitives underpinning
+the keystore can operate in *light* or *standard* mode. Light mode is computationally cheaper, while
+standard mode has extra security. Light mode is appropriate for mobile devices, but developers
+should be aware that there is a security trade-off.
+
+* *standard* needs 256MB memory and 1 second processing on a modern CPU to access a key
+* *light* needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
 
 ### Keystores on Android (Java)
 
 The encrypted keystore on Android is implemented by the `KeyStore` class from the
-`org.ethereum.geth` package. The configuration constants (for the *standard* or *light*
-security modes described above) are located in the `Geth` abstract class, similarly from
-the `org.ethereum.geth` package. Hence to do client side account management on Android,
-you'll need to import two classes into your Java code:
+`org.ethereum.geth` package. The configuration constants are located in the `Geth` 
+abstract class, similarly from the `org.ethereum.geth` package. 
+Hence to do client side account management on Android, two classes should be
+imported into the Java code:
 
 ```java
 import org.ethereum.geth.Geth;
 import org.ethereum.geth.KeyStore;
 ```
 
-Afterwards you can create a new encrypted keystore via:
+Then new encrypted keystore can be created via:
 
 ```java
 KeyStore ks = new KeyStore("/path/to/keystore", Geth.LightScryptN, Geth.LightScryptP);
 ```
 
-The path to the keystore folder needs to be a location that is writable by the local
-mobile application but non-readable for other installed applications (for security reasons
-obviously), so we'd recommend placing it inside your app's data directory. If you are
-creating the `KeyStore` from within a class extending an Android object, you will most
-probably have access to the `Context.getFilesDir()` method via `this.getFilesDir()`, so
-you could set the keystore path to `this.getFilesDir() + "/keystore"`.
+The keystore should be in a location writable by the local mobile application but 
+on-readable for other installed applications such as inside the app's data directory. 
+If the `KeyStore` is created from within a class extending an Android object, access 
+to the `Context.getFilesDir()` method is probably provided via `this.getFilesDir()`, 
+so the keystore path could be set to `this.getFilesDir() + "/keystore"`.
 
 The last two arguments of the `KeyStore` constructor are the crypto parameters defining
-how resource-intensive the keystore encryption should be. You can choose between
+how resource-intensive the keystore encryption should be. The choices are
 `Geth.StandardScryptN, Geth.StandardScryptP`, `Geth.LightScryptN, Geth.LightScryptP` or
-specify your own numbers (please make sure you understand the underlying cryptography for
-this). We recommend using the *light* version.
+custom numbers. The *light* version is recommended.
+
 
 ### Keystores on iOS (Swift 3)
 
 The encrypted keystore on iOS is implemented by the `GethKeyStore` class from the `Geth`
-framework. The configuration constants (for the *standard* or *light* security modes
-described above) are located in the same namespace as global variables. Hence to do client
-side account management on iOS, you'll need to import the framework into your Swift code:
+framework. The configuration constants are located in the same namespace as global 
+variables. Hence to do client side account management on iOS, `Geth` framework should be 
+imported into the Swift code:
 
 ```swift
 import Geth
 ```
 
-Afterwards you can create a new encrypted account manager via:
+Then a new encrypted account manager can be created using:
 
 ```swift
 let ks = GethNewKeyStore("/path/to/keystore", GethLightScryptN, GethLightScryptP);
 ```
 
-The path to the keystore folder needs to be a location that is writable by the local
-mobile application but non-readable for other installed applications (for security reasons
-obviously), so we'd recommend placing it inside your app's document directory. You should
-be able to retrieve the document directory via `let datadir =
-NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]`, so you
-could set the keystore path to `datadir + "/keystore"`.
+The keystore folder needs to be in a location writable by the local mobile application 
+but non-readable for other installed applications such as inside the app's document 
+directory. The document directory shopuld be retrievable using
+`let datadir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]`, 
+so the keystore path could be `datadir + "/keystore"`.
 
 The last two arguments of the `GethNewKeyStore` factory method are the crypto parameters
-defining how resource-intensive the keystore encryption should be. You can choose between
+defining how resource-intensive the keystore encryption should be. The choices are
 `GethStandardScryptN, GethStandardScryptP`, `GethLightScryptN, GethLightScryptP` or
-specify your own numbers (please make sure you understand the underlying cryptography for
-this). We recommend using the *light* version.
+custom numbers. The *light* version is recommended.
 
-## Account lifecycle
+### Account lifecycle
 
-Having created an encrypted keystore for your Ethereum accounts, you can use this for the
-entire account lifecycle requirements of your mobile application. This includes the basic
-functionality of creating new accounts and deleting existing ones; as well as the more
-advanced functionality of updating access credentials, exporting existing accounts, and
-importing them on another device.
+The encyrpted keystore can be used for the entire account lifecycle requirements of a mobile
+application. This includes the basic functionality of creating new accounts and deleting 
+existing ones as well as more advanced functions like updating access credentials and account
+import/export.
 
-Although the keystore defines the encryption strength it uses to store your accounts,
+Although the keystore defines the encryption strength it uses to store accounts,
 there is no global master password that can grant access to all of them. Rather each
 account is maintained individually, and stored on disk in its [encrypted format][secstore]
 individually, ensuring a much cleaner and stricter separation of credentials.
 
-This individuality however means that any operation requiring access to an account will
+This individuality means that any operation requiring access to an account will
 need to provide the necessary authentication credentials for that particular account in
 the form of a passphrase:
 
  * When creating a new account, the caller must supply a passphrase to encrypt the account
-   with. This passphrase will be required for any subsequent access, the lack of which
-   will forever forfeit using the newly created account.
+   with. This passphrase will be required for any subsequent access.
  * When deleting an existing account, the caller must supply a passphrase to verify
    ownership of the account. This isn't cryptographically necessary, rather a protective
    measure against accidental loss of accounts.
  * When updating an existing account, the caller must supply both current and new
    passphrases. After completing the operation, the account will not be accessible via the
-   old passphrase any more.
+   old passphrase.
  * When exporting an existing account, the caller must supply both the current passphrase
    to decrypt the account, as well as an export passphrase to re-encrypt it with before
    returning the key-file to the user. This is required to allow moving accounts between
    devices without sharing original credentials.
  * When importing a new account, the caller must supply both the encryption passphrase of
-   the key-file being imported, as well as a new passhprase with which to store the
+   the key-file being imported, as well as a new passphrase with which to store the
    account. This is required to allow storing account with different credentials than used
    for moving them around.
 
@@ -153,9 +202,9 @@ guarantee that account credentials cannot be brute forced in any meaningful time
 ### Accounts on Android (Java)
 
 An Ethereum account on Android is implemented by the `Account` class from the
-`org.ethereum.geth` package. Assuming we already have an instance of a `KeyStore` called
-`ks` from the previous section, we can easily execute all of the described lifecycle
-operations with a handful of function calls.
+`org.ethereum.geth` package. Assuming an instance of a `KeyStore` called
+`ks` exists, all of the described lifecycle operations can be executed with 
+a handful of function calls:
 
 ```java
 // Create a new account with the specified encryption passphrase.
@@ -176,16 +225,15 @@ ks.deleteAccount(newAcc, "Update password");
 Account impAcc = ks.importKey(jsonAcc, "Export password", "Import password");
 ```
 
-*Although instances of `Account` can be used to access various information about specific
+Although instances of `Account` can be used to access various information about specific
 Ethereum accounts, they do not contain any sensitive data (such as passphrases or private
-keys), rather act solely as identifiers for client code and the keystore.*
+keys), rather they act solely as identifiers for client code and the keystore.
 
 ### Accounts on iOS (Swift 3)
 
 An Ethereum account on iOS is implemented by the `GethAccount` class from the `Geth`
-framework. Assuming we already have an instance of a `GethKeyStore` called `ks` from the
-previous section, we can easily execute all of the described lifecycle operations with a
-handful of function calls.
+framework. Assuming an instance of a `GethKeyStore` called `ks` exists, all of the described 
+lifecycle operations can be executed with a handful of function calls:
 
 ```swift
 // Create a new account with the specified encryption passphrase.
@@ -206,20 +254,20 @@ try! ks?.delete(newAcc, passphrase: "Update password")
 let impAcc  = try! ks?.importKey(jsonKey, passphrase: "Export password", newPassphrase: "Import password")
 ```
 
-*Although instances of `GethAccount` can be used to access various information about
+Although instances of `GethAccount` can be used to access various information about
 specific Ethereum accounts, they do not contain any sensitive data (such as passphrases or
-private keys), rather act solely as identifiers for client code and the keystore.*
+private keys), rather they act solely as identifiers for client code and the keystore.
 
 ## Signing authorization
 
 As mentioned above, account objects do not hold the sensitive private keys of the
-associated Ethereum accounts, but are merely placeholders to identify the cryptographic
+associated Ethereum accounts - they are merely placeholders to identify the cryptographic
 keys with. All operations that require authorization (e.g. transaction signing) are
 performed by the account manager after granting it access to the private keys.
 
 There are a few different ways one can authorize the account manager to execute signing
-operations, each having its advantages and drawbacks. Since the different methods have
-wildly different security guarantees, it is essential to be clear on how each works:
+operations. Since the different methods have very different security guarantees, 
+it is essential to be clear on how each works:
 
  * **Single authorization**: The simplest way to sign a transaction via the keystore is to
    provide the passphrase of the account every time something needs to be signed, which
@@ -240,17 +288,12 @@ wildly different security guarantees, it is essential to be clear on how each wo
    manager can sign transactions while a particular account is unlocked** (e.g. device
    left unattended; application running untrusted code).
 
-*Note, creating transactions is out of scope here, so the remainder of this section will
-assume we already have a transaction to sign, and will focus only on creating an
-authorized version of it. Creating an actually meaningful transaction will be covered
-later.*
 
 ### Signing on Android (Java)
 
-Assuming we already have an instance of a `KeyStore` called `ks` from the previous
-sections, we can create a new account to sign transactions with via it's already
-demonstrated `newAccount` method; and to avoid going into transaction creation for now, we
-can hard-code a random transaction to sign instead.
+Assuming an instance of a `KeyStore` called `ks` exists, a new account to sign transactions 
+can be created using its `newAccount` method. For this demonstation a hard-coded 
+example transaction is created to sign:
 
 ```java
 // Create a new account to sign transactions with
@@ -261,8 +304,7 @@ Transaction tx = new Transaction(
 BigInt chain = new BigInt(1); // Chain identifier of the main net
 ```
 
-With the boilerplate out of the way, we can now sign transaction using the authorization
-mechanisms described above:
+The transaction `tx` can be signed using the authorization mechanisms described above:
 
 ```java
 // Sign a transaction with a single authorization
@@ -280,10 +322,9 @@ signed = ks.signTx(signer, tx, chain);
 
 ### Signing on iOS (Swift 3)
 
-Assuming we already have an instance of a `GethKeyStore` called `ks` from the previous
-sections, we can create a new account to sign transactions with via it's already
-demonstrated `newAccount` method; and to avoid going into transaction creation for now, we
-can hard-code a random transaction to sign instead.
+Assuming an instance of a `GethKeyStore` called `ks` exists, a new account 
+can be created to sign transactions with its `newAccount` method. For 
+this demonstation a hard-coded example transaction is created to sign:
 
 ```swift
 // Create a new account to sign transactions with
@@ -295,13 +336,12 @@ let tx    = GethNewTransaction(1, to, GethNewBigInt(0), GethNewBigInt(0), GethNe
 let chain = GethNewBigInt(1) // Chain identifier of the main net
 ```
 
-*Note, although Swift usually rewrites `NSError` returns to throws, this particular
+*Although Swift usually rewrites `NSError` returns to throws, this particular
 instance seems to have been missed for some reason (possibly due to it being a
 constructor). It will be fixed in a later version of the iOS bindings when the appropriate
-fixed are implemented upstream in the `gomobile` project.*
+fixes are implemented upstream in the `gomobile` project.*
 
-With the boilerplate out of the way, we can now sign transaction using the authorization
-methods described above:
+The transaction `tx` can now be signed using the authorization methods described above:
 
 ```swift
 // Sign a transaction with a single authorization
@@ -316,6 +356,11 @@ try! ks?.lock(signer?.getAddress())
 try! ks?.timedUnlock(signer, passphrase: "Signer password", timeout: 1000000000)
 signed = try! ks?.signTx(signer, tx: tx, chainID: chain)
 ```
+
+## Summary
+
+This page introduced Geth for mobile. In addition to download and installation instructions, basic
+account management was demonstrated for mobile applications on iOS and Android.
 
 [sec2]: https://www.secg.org/sec2-v2.pdf
 [accounts-go]: https://godoc.org/github.com/ethereum/go-ethereum/accounts

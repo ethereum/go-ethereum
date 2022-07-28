@@ -1,26 +1,58 @@
 ---
 title: Rules
-sort_key: B
+sort_key: C
 ---
 
-The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)
+This page provides a fairly low-level explanation for how rules are implemented in 
+Clef. It is a good idea to read the [Introduction to Clef](/docs/clef/introduction)
+and the [Clef tutorial](/docs/clef/tutorial) before diving in to this page.
 
-It enables usecases like the following:
+{:toc}
+-   this will be removed by the toc
+  
+## Introduction
 
-* I want to auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value to maximum `1 ether` per 24h period
-* I want to auto-approve transaction to contract `EthAlarmClock` with `data`=`0xdeadbeef`, if `value=0`, `gas < 44k` and `gasPrice < 40Gwei`
+Rules in Clef are sets of conditions that determine whether a given action can be
+approved automatically without requiring manual intervention from the user. This can be
+useful for automatically approving transactions between a user's own accounts, or
+approving patterns that are commonly used by applications. Automatic signing also 
+requires Clef to have access to account passwords which is configured independently 
+of the ruleset. 
 
-The two main features that are required for this to work well are;
+Rules can define arbitrary conditions such as:
 
-1. Rule Implementation: how to create, manage and interpret rules in a flexible but secure manner
-2. Credential managements and credentials; how to provide auto-unlock without exposing keys unnecessarily.
+* Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and 
+  `1 ether` per 24h period.
 
-The section below deals with both of them
+* Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if 
+  `gas < 44k` and `gasPrice < 40Gwei`.
+
+* Auto-approve signing if the data to be signed contains the string `"approve_me"`.
+
+* Auto-approve any requests to list accounts in keystore if the request arrives over IPC
+
+Because the rules are Javascript files they can be customized to implement any arbitrary logic on
+the available request data.
+
+This page will explain how rules are implemented in Clef and how best to manage credentials
+when automatic rulesets are enabled.
 
 ## Rule Implementation
 
-A ruleset file is implemented as a `js` file. Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
-defined in the UI protocol. Example:
+
+The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves
+any requests that meet the conditions defined in a set of authenticated rule files. This
+prevents the user from having to manually approve or reject every request - instead they
+can define common patterns in a rule file and abstract that task away to the ruleset engine.
+The general architecture is as follows:
+
+![Clef ruleset logic](/static/images/clef_ruleset.png)
+
+When Clef receives a request, the ruleset engine evaluates a Javascript file for
+each method defined in the internal [UI API docs](/docs/clef/apis). For example the code 
+snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` 
+is invoking the `ui_approveTx` [JSON_RPC API endpoint](/docs/clef/apis/#ui-api). Every time an RPC
+method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 
 ```js
 function asBig(str) {
@@ -39,7 +71,8 @@ function ApproveTx(req) {
 		return "Approve"
 	}
 	// If we return "Reject", it will be rejected.
-	// By not returning anything, it will be passed to the next UI, for manual processing
+	// By not returning anything, the decision to approve/reject
+	// will be passed to the next UI, for manual processing
 }
 
 // Approve listings if request made from IPC
@@ -48,98 +81,165 @@ function ApproveListing(req){
 }
 ```
 
-Whenever the external API is called (and the ruleset is enabled), the `signer` calls the UI, which is an instance of a ruleset-engine. The ruleset-engine
-invokes the corresponding method. In doing so, there are three possible outcomes:
+When a request is made via the external API, the logic flow is as follows:
 
-1. JS returns "Approve"
-  * Auto-approve request
-2. JS returns "Reject"
-  * Auto-reject request
-3. Error occurs, or something else is returned
-  * Pass on to `next` ui: the regular UI channel.
+* Request is made to the `signer` binary using external API
+   
+* `signer` calls the UI - in this case the ruleset engine
 
-A more advanced example can be found below, "Example 1: ruleset for a rate-limited window", using `storage` to `Put` and `Get` `string`s by key.
+* UI evaluates whether the call conforms to rules in an attested rulefile
 
-* At the time of writing, storage only exists as an ephemeral unencrypted implementation, to be used during testing.
+* Assuming the call returns "Approve", request is signed.
 
-### Things to note
 
-The Otto vm has a few [caveats](https://github.com/robertkrimen/otto):
+There are five possible outcomes from the ruleset engine that are 
+handled in different ways:
+ 
+| Return value      |    Action                                 |
+| ------------------| ----------------------------------------- |
+| "Approve"           | Auto-approve request       			    |
+| "Reject"            | Auto-reject request        				|
+| Anything else             | Pass decision to UI for manual approval   |
+ 
+ 
+There are some additional noteworthy implementation details that are important 
+for defining rules correctly in `ruleset.js`:
 
-* "use strict" will parse, but does nothing.
-* The regular expression engine (re2/regexp) is not fully compatible with the ECMA5 specification.
-* Otto targets ES5. ES6 features (eg: Typed Arrays) are not supported.
-
-Additionally, a few more have been added
-
-* The rule execution cannot load external javascript files.
-* The only preloaded library is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the github repository.
-* Each invocation is made in a fresh virtual machine. This means that you cannot store data in global variables between invocations. This is a deliberate choice -- if you want to store data, use the disk-backed `storage`, since rules should not rely on ephemeral data.
-* Javascript API parameters are _always_ an object. This is also a design choice, to ensure that parameters are accessed by _key_ and not by order. This is to prevent mistakes due to missing parameters or parameter changes.
-* The JS engine has access to `storage` and `console`.
-
-#### Security considerations
-
-##### Security of ruleset
-
-Some security precautions can be made, such as:
-
-* Never load `ruleset.js` unless the file is `readonly` (`r-??-??-?`). If the user wishes to modify the ruleset, he must make it writeable and then set back to readonly.
-  * This is to prevent attacks where files are dropped on the users disk.
-* Since we're going to have to have some form of secure storage (not defined in this section), we could also store the `sha3` of the `ruleset.js` file in there.
-  * If the user wishes to modify the ruleset, he'd then have to perform e.g. `signer --attest /path/to/ruleset --credential <creds>`
-
-##### Security of implementation
-
-The drawbacks of this very flexible solution is that the `signer` needs to contain a javascript engine. This is pretty simple to implement, since it's already
-implemented for `geth`. There are no known security vulnerabilities in, nor have we had any security-problems with it so far.
-
-The javascript engine would be an added attack surface; but if the validation of `rulesets` is made good (with hash-based attestation), the actual javascript cannot be considered
-an attack surface -- if an attacker can control the ruleset, a much simpler attack would be to implement an "always-approve" rule instead of exploiting the js vm. The only benefit
-to be gained from attacking the actual `signer` process from the `js` side would be if it could somehow extract cryptographic keys from memory.
-
-##### Security in usability
-
-Javascript is flexible, but also easy to get wrong, especially when users assume that `js` can handle large integers natively. Typical errors
-include trying to multiply `gasCost` with `gas` without using `bigint`:s.
-
-It's unclear whether any other DSL could be more secure; since there's always the possibility of erroneously implementing a rule.
+* The code in `ruleset.js` **cannot** load external Javascript files. 
+  
+* The Javascript engine can access `storage` and `console`
+  
+* The only preloaded library in the Javascript environment is 
+  `bignumber.js` version `2.0.3`.
+  
+* Each invocation is made in a fresh virtual machine meaning data cannot be 
+  stored in global variables between invocations.
+  
+* Since no global variable storage is available, disk backed `storage` must be 
+  used - rules should not rely on ephemeral data.
+  
+* Javascript API parameters are always objects. This ensures parameters are 
+  accessed by _key_ to avoid misordering errors. 
+  
+* Otto VM uses ES5. ES6-specific features (such as Typed Arrays) are not supported.
+  
+* The regular expression engine (re2/regexp) in Otto VM is not fully compatible 
+  with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
+  
+* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) 
+  is not supported. "Use strict" will parse but it does nothing.
 
 
 ## Credential management
 
-The ability to auto-approve transaction means that the signer needs to have necessary credentials to decrypt keyfiles. These passwords are hereafter called `ksp` (keystore pass).
+The ability to auto-approve transaction requires that the signer has
+the necessary credentials, i.e. account passwords, to decrypt keyfiles. 
+These are stored encrypted as follows:
 
-### Example implementation
-
-Upon startup of the signer, the signer is given a switch: `--seed <path/to/masterseed>`
-The `seed` contains a blob of bytes, which is the master seed for the `signer`.
+When the `signer` is started it generates a seed that is locked with a 
+user specified password. The seed is saved to a location that defaults to
+`$HOME/.clef/masterseed.json`. The `seed` itself is a blob of bytes.
 
 The `signer` uses the `seed` to:
 
-* Generate the `path` where the settings are stored.
-  * `./settings/1df094eb-c2b1-4689-90dd-790046d38025/vault.dat`
-  * `./settings/1df094eb-c2b1-4689-90dd-790046d38025/rules.js`
-* Generate the encryption password for `vault.dat`.
+* Generate the `path` where the configuration and credentials data are stored.
+  * `$HOME/.clef/790046d38025/config.json`
+  * `$HOME/.clef/790046d38025/credentials.json`
+* Generate the encryption password for the config and credentials files.
 
-The `vault.dat` would be an encrypted container storing the following information:
+`config.json` stores the hashes of any attested rulesets. `credentials.json`
+stores encrypted account passwords. The masterseed is required to decrypt
+these files. The decrypted account passwords can then be used to decrypt keyfiles.
 
-* `ksp` entries
-* `sha256` hash of `rules.js`
-* Information about pair:ed callers (not yet specified)
+## Security
 
-### Security considerations
+### The Javascript VM
+The downside of the very flexible rule implementation included in Clef is
+that the `signer` binary needs to contain a Javascript engine. This is an
+additional attack surface. The only viable attack is for an adversary to 
+somehow extract cryptographic keys from memory during the Javascript VM execution.
+The hash-based rule attestation condition means the actual Javascript code 
+executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler
+attack would be to surreptitiously insert an attested "always-approve" rule 
+instead of attempting to exploit the Javascript virtual machine. The Javascript
+engine is quite simple to implement and there are currently no known security
+vulnerabilities, not have there been any security problems identified for the
+similar Javascript VM implemented in Geth.
 
-This would leave it up to the user to ensure that the `path/to/masterseed` is handled in a secure way. It's difficult to get around this, although one could
-imagine leveraging OS-level keychains where supported. The setup is however in general similar to how ssh-keys are  stored in `.ssh/`.
+### Writing rules
+
+Since the user has complete freedom to write custom rules, it is plausible that those rules
+could create unintended security vulnerabilities. This can only really be protected by 
+coding very carefully and trying to test rulesets (e.g. on a private testnet) before 
+implementing them on a public network.
+
+Javascript is very flexible but also easy to write incorrectly. For example, users
+might assume that javascript can handle large integers natively rather than explicitly
+using `bigInt`. This is an error commonly encountered in the Ethereum context when 
+users attempt to multiply `gas` by `gasCost`.
+
+It’s unclear whether any other language would be more secure - there is alwas the possibility
+of implementing an insecure rule.
+
+### File security
 
 
-# Implementation status
+### Credential security
 
-This is now implemented (with ephemeral non-encrypted storage for now, so not yet enabled).
+Clef implements a secure, encrypted vault for storing sensitive data. This vault is
+encrypted using a `masterseed` which the user is responsible for storing and backing
+up safely and securely. Since this `masterseed` is used to decrypt the secure vault, 
+and its security is not handled by Clef, it could represent a security vulnerability
+if the user does not implement best practise in keeping it safe.
 
-## Example 1: ruleset for a rate-limited window
+The same is also true for keys. Keys are not stored by Clef, they are only accessed
+using account passwords that Clef does store in its vault. The keys themselves are stored
+in an external `keystore` whose security is the responsibility of the user. If the
+keys are compromised, the account is not safe irrespective of the security benefits
+derived from Clef.
 
+## Ruleset examples
+
+Below are some examples of `ruleset.js` files.
+
+### Example 1: Allow destination
+
+```js
+function ApproveTx(r) {
+	if (r.transaction.to.toLowerCase() == "0x0000000000000000000000000000000000001337") {
+		return "Approve"
+	}
+	if (r.transaction.to.toLowerCase() == "0x000000000000000000000000000000000000dead") {
+		return "Reject"
+	}
+	// Otherwise goes to manual processing
+}
+```
+
+### Example 2: Allow listing
+
+```js
+function ApproveListing() {
+	return "Approve"
+}
+```
+
+### Example 3: Approve signing data
+
+```js
+function ApproveSignData(req) {
+    if (req.address.toLowerCase() == "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3") {
+        if (req.messages[0].value.indexOf("bazonk") >= 0) {
+            return "Approve"
+        }
+        return "Reject"
+    }
+    // Otherwise goes to manual processing
+}
+```
+
+
+### Example 4: Rate-limited window
 
 ```js
 function big(str) {
@@ -214,24 +314,11 @@ function OnApprovedTx(resp) {
 }
 ```
 
-## Example 2: allow destination
+## Summary
 
-```js
-function ApproveTx(r) {
-	if (r.transaction.from.toLowerCase() == "0x0000000000000000000000000000000000001337") {
-		return "Approve"
-	}
-	if (r.transaction.from.toLowerCase() == "0x000000000000000000000000000000000000dead") {
-		return "Reject"
-	}
-	// Otherwise goes to manual processing
-}
-```
+Rules are sets of conditions encoded in Javascript files that enable certain actions to 
+be auto-approved by Clef. This page outlined the implementation details and security 
+considerations that will help to build suitrable ruleset files. See the 
+[Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
 
-## Example 3: Allow listing
 
-```js
-function ApproveListing() {
-	return "Approve"
-}
-```
