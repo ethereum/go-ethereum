@@ -8,7 +8,7 @@
   RestartSec=5s
   ExecStart=/usr/local/bin/bor server -config="/var/lib/bor/config.toml"
   Type=simple
-  User=ubuntu
+  User=bor
   KillSignal=SIGINT
   TimeoutStopSec=120
 
