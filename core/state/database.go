@@ -71,7 +71,9 @@ type Trie interface {
 	// trie.MissingNodeError is returned.
 	TryGet(key []byte) ([]byte, error)
 
-	// TryUpdateAccount abstract an account write in the trie.
+	TryGetAccount(key []byte) (*types.StateAccount, error)
+
+	// TryUpdateAccount abstract an account write to the trie.
 	TryUpdateAccount(key []byte, account *types.StateAccount) error
 
 	// TryUpdate associates key with value in the trie. If value has length zero, any

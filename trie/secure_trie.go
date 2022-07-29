@@ -82,6 +82,10 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
+func (t *SecureTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	return t.trie.TryGetAccount(t.hashKey(key))
+}
+
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
 func (t *SecureTrie) TryGetNode(path []byte) ([]byte, int, error) {

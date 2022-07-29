@@ -154,6 +154,26 @@ func (t *Trie) Get(key []byte) []byte {
 	return res
 }
 
+func (t *Trie) GetAccount(key []byte) *types.StateAccount {
+	res, err := t.TryGetAccount(key)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+	}
+	return res
+}
+func (t *Trie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	res, err := t.TryGet(key)
+	if err != nil {
+		return nil, fmt.Errorf("Unhandled trie error: %v", err)
+	}
+	if res == nil {
+		return nil, nil
+	}
+	var ret types.StateAccount
+	err = rlp.DecodeBytes(res, &ret)
+	return &ret, err
+}
+
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
