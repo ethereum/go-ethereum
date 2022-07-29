@@ -118,13 +118,15 @@ func (b *Builder) newSealedBlock(data *beacon.ExecutableDataV1, block *types.Blo
 		return
 	}
 
-	blockBidMsg := boostTypes.BidTraceMessage{
+	blockBidMsg := boostTypes.BidTrace{
 		Slot:                 payloadAttributes.Slot,
 		ParentHash:           payload.ParentHash,
 		BlockHash:            payload.BlockHash,
 		BuilderPubkey:        b.builderPublicKey,
 		ProposerPubkey:       pubkey,
 		ProposerFeeRecipient: boostTypes.Address(payloadAttributes.SuggestedFeeRecipient),
+		GasLimit:             data.GasLimit,
+		GasUsed:              data.GasUsed,
 		Value:                *value,
 	}
 

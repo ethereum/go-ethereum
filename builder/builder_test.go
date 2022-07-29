@@ -13,22 +13,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/*
-func NewBuilder(sk *bls.SecretKey, bc IBeaconClient, relay IRelay, builderSigningDomain boostTypes.Domain) *Builder {
-func (b *Builder) onForkchoice(payloadAttributes *beacon.PayloadAttributesV1) {
-func (b *Builder) newSealedBlock(data *beacon.ExecutableDataV1, block *types.Block, payloadAttributes *beacon.PayloadAttributesV1) {
-*/
-
 func TestOnNewSealedBlock(t *testing.T) {
+	vsk, err := bls.SecretKeyFromBytes(hexutil.MustDecode("0x370bb8c1a6e62b2882f6ec76762a67b39609002076b95aae5b023997cf9b2dc9"))
+	require.NoError(t, err)
+	validator := &ValidatorPrivateData{
+		sk: vsk,
+		Pk: hexutil.MustDecode("0xb67d2c11bcab8c4394fc2faa9601d0b99c7f4b37e14911101da7d97077917862eed4563203d34b91b5cf0aa44d6cfa05"),
+	}
+
 	testBeacon := testBeaconClient{
-		validator: NewRandomValidator(),
+		validator: validator,
 		slot:      56,
 	}
 
 	feeRecipient, _ := boostTypes.HexToAddress("0xabcf8e0d4e9587369b2301d0790347320302cc00")
 	testRelay := testRelay{
 		validator: ValidatorData{
-			Pubkey:       PubkeyHex(testBeacon.validator.Pk),
+			Pubkey:       PubkeyHex(testBeacon.validator.Pk.String()),
 			FeeRecipient: feeRecipient,
 			GasLimit:     10,
 			Timestamp:    15,
@@ -76,13 +77,18 @@ func TestOnNewSealedBlock(t *testing.T) {
 
 	require.NotNil(t, testRelay.submittedMsg)
 
-	expectedMessage := boostTypes.BidTraceMessage{
+	expectedProposerPubkey, err := boostTypes.HexToPubkey(testBeacon.validator.Pk.String())
+	require.NoError(t, err)
+
+	expectedMessage := boostTypes.BidTrace{
 		Slot:                 uint64(25),
 		ParentHash:           boostTypes.Hash{0x02, 0x03},
 		BlockHash:            boostTypes.Hash{0x09, 0xff},
 		BuilderPubkey:        builder.builderPublicKey,
-		ProposerPubkey:       boostTypes.PublicKey{},
+		ProposerPubkey:       expectedProposerPubkey,
 		ProposerFeeRecipient: boostTypes.Address{0x04, 0x10},
+		GasLimit:             uint64(50),
+		GasUsed:              uint64(100),
 		Value:                boostTypes.U256Str{0x0a},
 	}
 
@@ -106,7 +112,7 @@ func TestOnNewSealedBlock(t *testing.T) {
 	}
 	require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsg.ExecutionPayload)
 
-	expectedSignature, err := boostTypes.HexToSignature("0xb79f75f81c834d104afbf1fb45f2cc19d5b0b4367184a43b88e696c88e6ab1a150be1fde9de5d1ca28bd955063164ae001c99d516c6ccd278c6bfb2af9c08805e39698a4a4e0713681a012921c1e9d8d14be95b49f654aba1fb493892a00795d")
+	expectedSignature, err := boostTypes.HexToSignature("0xadebce714127deea6b04c8f63e650ad6b4c0d3df14ecd9759bef741cd6d72509090f5e172033ce40475c322c0c0e3fae0e78a880a66cb324913ea490472d93e187a9a91284b05137f1554688c5e9b1ee73539a2b005b103e8bd50e973e8e0f49")
 
 	require.NoError(t, err)
 	require.Equal(t, expectedSignature, testRelay.submittedMsg.Signature)
