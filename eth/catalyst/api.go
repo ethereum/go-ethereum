@@ -576,17 +576,18 @@ func (api *ConsensusAPI) heartbeat() {
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
-				if time.Since(offlineLogged) > beaconUpdateTimeout {
-					if lastTransitionUpdate.IsZero() {
-						log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
-					} else {
-						log.Warn("Previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
+			if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
+				if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
+					if time.Since(offlineLogged) > beaconUpdateTimeout {
+						if lastTransitionUpdate.IsZero() {
+							log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
+						} else {
+							log.Warn("Previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
+						}
+						offlineLogged = time.Now()
 					}
-					offlineLogged = time.Now()
+					continue
 				}
-				continue
-			} else if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
 				if time.Since(offlineLogged) > beaconUpdateTimeout {
 					if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
 						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
