@@ -27,7 +27,7 @@ unless by explicit agreement because the work is contributing to some more compl
 feature branch.
 
 All pull requests will be reviewed according to the 
-[Code Review guidelines](/content/docs/developers/geth-developer/Code-Review-Guidelines.md).
+[Code Review guidelines](/content/docs/developers/geth-developer/code-review-guidelines.md).
 
 We encourage an early pull request approach, meaning pull requests are created as early
 as possible even without the completed fix/feature. This will let core devs and other 
