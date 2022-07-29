@@ -22,6 +22,17 @@ Please make sure your contributions adhere to our coding guidelines:
 	E.g. "eth, rpc: make trace configs optional"
 
 
+Pull requests generally need to be based on and opened against the `master` branch,
+unless by explicit agreement because the work is contributing to some more complex
+feature branch.
+
+All pull requests will be reviewed according to the 
+[Code Review guidelines](/content/docs/developers/geth-developer/Code-Review-Guidelines.md).
+
+We encourage an early pull request approach, meaning pull requests are created as early
+as possible even without the completed fix/feature. This will let core devs and other 
+volunteers know you picked up an issue. These early PRs should indicate 'in progress' status.
+
 ## Contributing to the Geth website
 
 The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please

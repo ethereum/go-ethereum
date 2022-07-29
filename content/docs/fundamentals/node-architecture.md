@@ -1,3 +1,7 @@
+---
+title: Node architecture
+root: ..
+---
 
 ## Node architecture
 
