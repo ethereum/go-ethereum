@@ -207,7 +207,7 @@ undefined
 ### personal_sign
 
 The sign method calculates an Ethereum specific signature with:
-`sign(keccak256("\x19Ethereum Signed Message:\n" + len(message) + message)))`.
+`sign(keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))`.
 
 By adding a prefix to the message makes the calculated signature recognisable as an Ethereum specific signature. This prevents misuse where a malicious DApp can sign arbitrary data (e.g. transaction) and use the signature to impersonate the victim.
 
@@ -253,3 +253,4 @@ SignTransaction will create a transaction from the given arguments and tries to 
 > personal.ecRecover("0xdeadbeaf", "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b")
 "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83"
 ```
+

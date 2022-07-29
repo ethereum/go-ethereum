@@ -753,7 +753,7 @@ Specifying the `tracer` option in the second argument enables JavaScript-based t
 `log` has the following fields:
 
  - `op`: Object, an OpCode object representing the current opcode
- - `stack`: array[big.Int], the EVM execution stack
+ - `stack`: Object, a structure representing the EVM execution stack
  - `memory`: Object, a structure representing the contract's memory space
  - `contract`: Object, an object representing the account executing the current operation
 
@@ -945,3 +945,4 @@ Writes a goroutine blocking profile to the given file.
 |:--------|-----------------------------------------------------------|
 | Console | `debug.writeMutexProfile(file)`                           |
 | RPC     | `{"method": "debug_writeMutexProfile", "params": [file]}` |
+

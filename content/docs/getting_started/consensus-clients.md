@@ -8,8 +8,8 @@ run a full Ethereum node. However, ever since Ethereum swapped from [proof-of-wo
 [proof-of-stake][pos-link] (PoS) based consensus, Geth has needed to be coupled to another piece of 
 software called a ["consensus client"][con-client-link]. 
 
-There are four consensus clients available, all of which connect to Geth in the same way. This page will 
-outline how Geth can be set up with a consensus client.
+There are five consensus clients available, all of which connect to Geth in the same way. 
+This page will outline how Geth can be set up with a consensus client to form a complete Ethereum node.
 
 ## Configuring Geth
 
@@ -45,6 +45,8 @@ There are currently four consensus clients that can be run alongside Geth. These
 [Prysm](https://docs.prylabs.network/docs/getting-started/): written in Go
  
 [Teku](https://pegasys.tech/teku): written in Java
+
+[Lodestar](https://lodestar.chainsafe.io/): written in Typescript
  
 It is recommended to consider [client diversity][client-div-link] when choosing a consensus client. 
 Instructions for installing each client are provided in the documentation linked in the list above.
@@ -59,8 +61,8 @@ Each consensus client has a command similar to `--jwt-secret` that takes the fil
 be consistent with the `--authrpc.jwtsecret` path provided to Geth.
 
 The consensus clients all expose a [Beacon API][beacon-api-link] that can be used to check the status
-of the Beacon client or download blocks and consensus data by sending requests using tools such as [Curl](https://curl.se).
-More information on this can be found in the documentation for each consensus client.
+of the Beacon client or download blocks and consensus data by sending requests using tools such as 
+[Curl](https://curl.se). More information on this can be found in the documentation for each consensus client.
 
 ## Validators
 
@@ -84,10 +86,9 @@ geth attach datadir/geth.ipc
 
 ## Summary
 
-As The Merge approaches it is important for Geth users to prepare by installing and running a consensus client. Otherwise, Geth will stop
-following the head of the chain immediately after The Merge. There are five consensus clients to choose from. This page provided an overview
-of how to choose a consensus client and configure Geth to connect to it. This pre-emptive action will protect against disruption to users as a 
-result of The Merge.
+Now that Ethereum has implemented proof-of-stake, Geth users are required to install and run a consensus client. 
+Otherwise, Geth will not be able to track the head of the chain. There are five consensus clients to choose from. 
+This page provided an overview of how to choose a consensus client and configure Geth to connect to it.
 
 
 [pow-link]:https://ethereum.org/en/developers/docs/consensus-mechanisms/pow

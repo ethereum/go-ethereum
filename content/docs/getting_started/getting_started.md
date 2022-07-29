@@ -8,14 +8,22 @@ This page explains how to set up Geth and execute some basic tasks using the com
 In order to use Geth, the software must first be installed. There are several ways Geth can be 
 installed depending on the operating system and the user's choice of installation method, for 
 example using a package manager, container or building from source. Instructions for installing 
-Geth can be found on the ["Install and Build"](install-and-build/installing-geth) pages. 
-The tutorial on this page assumes Geth and the associated developer tools have been installed successfully.
+Geth can be found on the ["Install and Build"](install-and-build/installing-geth) pages. Geth
+also needs to be connected to a consensus client in order to function as an Ethereum node.
+The tutorial on this page assumes Geth and a consensus client have been installed successfully and
+that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see 
+[Security](/content/docs/fundamentals/security.md).
 
 This page provides step-by-step instructions covering the fundamentals of using Geth. This includes 
 generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. 
-It is considered best-practice to use [Clef](/docs/clef/Introduction) for account management - this 
-is explained in the [Geth with Clef](/docs/getting-started/geth_with_clef) tutorial. In this 
-introductory tutorial, Geth's built-in account management tools are used instead.
+This page uses Geth's built in account management tool. This is the simplest method for creating and accessing
+accounts in Geth, is sufficiently secure for many purposes and provides a good entry point for undersatanding
+some of the basic Geth workflows. However, Geth also comes bundled with an external signer and account management
+tool called [Clef](/tools/Clef/introduction). It is best practise to use Clef instead of Geth's built-in account 
+management tools because Clef is decoupled from Geth and can be run in a separate, secure environment. 
+This page should be used as an initial entry point into basic Geth and readers should plan to advance from this 
+page to [Getting started with Geth and Clef](/content/docs/getting_started/getting-started-with-clef.md). 
+Eventually, Clef is intended to replace Geth's built-in account management tools.
 
 {:toc}
 -   this will be removed by the toc
@@ -28,11 +36,14 @@ necessary:
 - Experience using the command line
 - Basic knowledge about Ethereum and testnets
 - Basic knowledge about HTTP and JavaScript
+- Basic knowledge of node architecture and consensus clients
 
 Users that need to revisit these fundamentals can find helpful resources relating to the command 
 line [here][cli], Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), 
 http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and 
-Javascript [here](https://www.javascript.com/learn).
+Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found
+[here](/content/docs/fundamentals/node-architecture.md) and our guide for configuring Geth to connect to a 
+consensus client is [here](/content/docs/getting_started/consensus-clients.md).
 
 {% include note.html content="If Geth was installed from source on Linux, `make` saves the 
 binaries for Geth and the associated tools in `/build/bin`. To run these programs it is 
@@ -46,17 +57,19 @@ or provide their path (e.g. `./build/bin/geth`). These instructions can be ignor
 
 Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. 
 Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being 
-managed by a central server. Nodes compete to generate new blocks of transactions to send to its peers 
-because they are rewarded for doing so in Ethereum's native token, ether (ETH). On receiving a new block, 
-each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called 
-a "blockchain". The information provided in each block is used by Geth to update its "state" - the ether 
-balance of each account on Ethereum. There are two types of account: externally-owned accounts (EOAs) and 
-contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts 
-that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, 
-where the public key is used to derive a unique address for the user and the private key is used to protect 
-the account and securely sign messages. Therefore, in order to use Ethereum, it is first necessary to generate 
-an EOA (hereafter, "account"). This tutorial will guide the user through creating an account, funding it 
-with ether and sending some to another address.
+managed by a central server. Every 12 seconds one node is randomly selected to generate a new block
+containing a list of transactions that nodes receiving the block should execute. This "block proposer" node
+sends the new block to its peers. On receiving a new block, each node checks that it is valid and adds 
+it to their database. The sequence of discrete blocks is called a "blockchain". 
+
+The information provided in each block is used by Geth to update its "state" - the ether 
+balance of each account on Ethereum and the data stored by each smart contract. There are two types of account: 
+externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they 
+receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. 
+Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and 
+the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, 
+it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guide the user through 
+creating an account, funding it with ether and sending some to another address.
 
 Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs/accounts/).
 

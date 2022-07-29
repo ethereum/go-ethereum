@@ -16,6 +16,8 @@ of smart contracts and contains an embedded computer known as the *Ethereum Virt
 
 Running Geth alongside a consensus client turns a computer into an Ethereum node.
 
+
+
 ## What is Ethereum?
 
 Ethereum is a technology for building apps and organizations, holding assets, transacting and 
@@ -34,6 +36,7 @@ using your Geth instance.
 **"Don't trust, verify"**
 
 [Read more about running a node](http://https://ethereum.org/en/run-a-node/#main-content)
+
 
 
 
