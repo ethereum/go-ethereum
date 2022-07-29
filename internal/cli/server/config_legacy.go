@@ -15,7 +15,7 @@ func readLegacyConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read toml config file: %v", err)
 	}
 
-	var conf Config
+	conf := *DefaultConfig()
 
 	if _, err := toml.Decode(tomlData, &conf); err != nil {
 		return nil, fmt.Errorf("failed to decode toml config file: %v", err)
