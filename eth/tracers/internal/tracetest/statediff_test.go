@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -132,7 +131,7 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !stateDiffJsonEqual(ret, test.Result) {
+			if !jsonEqual(ret, test.Result, new(stateDiffTrace), new(stateDiffTrace)) {
 				// uncomment this for easier debugging
 				have, _ := json.MarshalIndent(ret, "", " ")
 				want, _ := json.MarshalIndent(test.Result, "", " ")
@@ -141,22 +140,4 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 		})
 	}
-}
-
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
-// comparison
-func stateDiffJsonEqual(x, y interface{}) bool {
-	xTrace := new(stateDiffTrace)
-	yTrace := new(stateDiffTrace)
-	if xj, err := json.Marshal(x); err == nil {
-		json.Unmarshal(xj, xTrace)
-	} else {
-		return false
-	}
-	if yj, err := json.Marshal(y); err == nil {
-		json.Unmarshal(yj, yTrace)
-	} else {
-		return false
-	}
-	return reflect.DeepEqual(xTrace, yTrace)
 }
