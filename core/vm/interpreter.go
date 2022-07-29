@@ -43,7 +43,7 @@ type ScopeContext struct {
 	Memory      *Memory
 	Stack       *Stack
 	Contract    *Contract
-	evmmaxField *mont_arith.Field
+	EVMMAXField *mont_arith.Field
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
@@ -206,7 +206,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Memory check needs to be done prior to evaluating the dynamic gas portion,
 			// to detect calculation overflows
 			if operation.memorySize != nil {
-				memSize, overflow := operation.memorySize(stack)
+				err, memSize, overflow := operation.memorySize(stack, callContext)
+                if err != nil {
+                    return nil, ErrOutOfGas
+                }
 				if overflow {
 					return nil, ErrGasUintOverflow
 				}

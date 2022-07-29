@@ -25,8 +25,8 @@ import (
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
 	gasFunc       func(*EVM, *ScopeContext, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
-	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
-	memorySizeFunc func(*Stack) (size uint64, overflow bool)
+	// memorySizeFunc returns whether an error occured that should end this execution frame, the required size, and whether the operation overflowed a uint64
+	memorySizeFunc func(*Stack, *ScopeContext) (err error, size uint64, overflow bool)
 )
 
 type operation struct {
