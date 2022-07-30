@@ -176,7 +176,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
 			Debug:                   true,
-			Tracer:                  vm.NewStructLogger(&vm.LogConfig{EnableMemory: true}),
+			Tracer:                  vm.NewStructLogger(&vm.LogConfig{EnableMemory: false}),
 		}
 		cacheConfig = &core.CacheConfig{
 			TrieCleanLimit:      config.TrieCleanCache,
