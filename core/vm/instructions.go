@@ -25,6 +25,7 @@ import (
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
     "github.com/jwasinger/mont-arith"
+    "fmt"
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -84,23 +85,28 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 func opSetModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	params_offsets := scope.Stack.pop()
 
-	mod_size := uint64(byte(params_offsets[0])) * 8
-	mod_offset := uint64(byte(params_offsets[0] >> 8)) * mod_size
+    fmt.Println(params_offsets)
+	mod_limbs := uint64(byte(params_offsets[0] >> 8))
+	mod_offset := uint64(byte(params_offsets[0])) * mod_limbs * 8
 
-    mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_size))
+    mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_limbs) * 8)
+    fmt.Printf("mod_bytes: %x\n", mod_bytes)
+    modLimbs := mont_arith.IntToLimbs(mont_arith.LEBytesToInt(mod_bytes), uint(mod_limbs))
+    fmt.Printf("modLimbs: %x\n", modLimbs)
 
-    scope.EVMMAXField.SetMod(mont_arith.IntToLimbs(mont_arith.LEBytesToInt(mod_bytes), uint(mod_size)))
+    scope.EVMMAXField = mont_arith.NewField(mont_arith.DefaultPreset())
+    scope.EVMMAXField.SetMod(modLimbs)
 	return nil, nil
 }
 
 func opAddModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+    fmt.Println("OpAddModMAX")
 	params_offsets := scope.Stack.pop()
     elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
-    // TODO explore caching the offsets in EVMMAXField as we already got them from the memory gas funcs
-	out_offset := uint64(byte(params_offsets[0])) * elemSize
-	x_offset := uint64(byte(params_offsets[0] >> 8)) * elemSize
-	y_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	out_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	x_offset := uint64(byte(params_offsets[0]) >> 8) * elemSize
+	y_offset := uint64(byte(params_offsets[0])) * elemSize
 
     out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
     x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
@@ -111,12 +117,13 @@ func opAddModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 }
 
 func opSubModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+    fmt.Println("OpSubModMAX")
 	params_offsets := scope.Stack.pop()
     elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
-	out_offset := uint64(byte(params_offsets[0])) * elemSize
-	x_offset := uint64(byte(params_offsets[0] >> 8)) * elemSize
-	y_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	out_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	x_offset := uint64(byte(params_offsets[0]) >> 8) * elemSize
+	y_offset := uint64(byte(params_offsets[0])) * elemSize
 
     out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
     x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
@@ -127,12 +134,13 @@ func opSubModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 }
 
 func opMulMontMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+    fmt.Println("OpMulMontMAX")
 	params_offsets := scope.Stack.pop()
     elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
-	out_offset := uint64(byte(params_offsets[0])) * elemSize
-	x_offset := uint64(byte(params_offsets[0] >> 8)) * elemSize
-	y_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	out_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	x_offset := uint64(byte(params_offsets[0]) >> 8) * elemSize
+	y_offset := uint64(byte(params_offsets[0])) * elemSize
 
     out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
     x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))

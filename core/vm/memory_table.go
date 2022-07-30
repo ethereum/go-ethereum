@@ -16,6 +16,10 @@
 
 package vm
 
+import (
+    "fmt"
+)
+
 func memoryKeccak256(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
@@ -112,7 +116,7 @@ func memoryLog(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
-func max(x, y uint64) uint64 {
+func max(x, y byte) byte{
 	if x > y {
         return x
     }
@@ -121,15 +125,17 @@ func max(x, y uint64) uint64 {
 
 func memoryEVMMAXArith(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
    if scope.EVMMAXField == nil {
+        fmt.Println("shit")
         return ErrOutOfGas, 0, false
    }
+   fmt.Println("EVMMAXArith fn")
 	params_offsets := scope.Stack.peek()
     elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
-	out_offset := uint64(byte(params_offsets[0])) * elemSize
-	x_offset := uint64(byte(params_offsets[0] >> 8)) * elemSize
-	y_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	out_offset := byte(params_offsets[0] >> 16)
+	x_offset := byte(params_offsets[0] >> 8)
+	y_offset := byte(params_offsets[0])
+    max_offset := uint64(max(max(out_offset, x_offset), y_offset)) * elemSize
 
-    max_offset := max(max(x_offset, y_offset), out_offset)
     return nil, max_offset + elemSize, false
 }

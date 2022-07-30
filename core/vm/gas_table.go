@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+    "fmt"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -443,10 +444,10 @@ func gasSelfdestruct(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, 
 func gasSetModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	params_offsets := scope.Stack.peek()
 
-	mod_limb_count := uint64(byte(params_offsets[0]))
-	mod_offset := uint64(byte(params_offsets[0] >> 8)) * mod_limb_count * 8
+	mod_offset := uint64(byte(params_offsets[0])) * 8
+	mod_limb_count := uint64(byte(params_offsets[0] >> 8))
 
-    if mod_offset + mod_limb_count * 8 > memorySize || mod_limb_count == 0 || mod_limb_count > 11 {
+    if mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || mod_limb_count > 11 {
         return 0, ErrOutOfGas
     }
 
@@ -454,13 +455,16 @@ func gasSetModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, err
 }
 
 func gasAddModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return 0, nil
+    fmt.Println("gasAddMod")
+    return 0, nil // TODO charge static cost based on configured limb-count
 }
 
 func gasSubModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return 0, nil
+    fmt.Println("gasSubMod")
+    return 0, nil // TODO charge static cost based on configured limb-count
 }
 
 func gasMulMontMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return 0, nil
+    fmt.Println("gasMulMont")
+    return 0, nil // TODO charge static cost based on configured limb-count
 }

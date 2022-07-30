@@ -47,9 +47,9 @@ const (
 	EXP        OpCode = 0xa
 	SIGNEXTEND OpCode = 0xb
 	SETMODMAX  OpCode = 0xc
-	MULMONTMAX OpCode = 0xd
-	ADDMODMAX  OpCode = 0xe
-	SUBMODMAX  OpCode = 0xf
+	ADDMODMAX  OpCode = 0xd
+	SUBMODMAX  OpCode = 0xe
+	MULMONTMAX OpCode = 0xf
 )
 
 // 0x10 range - comparison ops.
@@ -246,6 +246,9 @@ var opCodeToString = map[OpCode]string{
 	EQ:         "EQ",
 	ISZERO:     "ISZERO",
 	SIGNEXTEND: "SIGNEXTEND",
+    SETMODMAX: "SETMODMAX",
+    ADDMODMAX: "ADDMODMAX",
+    MULMONTMAX: "MULMONTMAX",
 
 	// 0x10 range - bit ops.
 	AND:    "AND",
