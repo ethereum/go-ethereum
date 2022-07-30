@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
-    "fmt"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -455,16 +454,16 @@ func gasSetModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, err
 }
 
 func gasAddModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-    fmt.Println("gasAddMod")
+    //fmt.Println("gasAddMod")
     return 0, nil // TODO charge static cost based on configured limb-count
 }
 
 func gasSubModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-    fmt.Println("gasSubMod")
+    //fmt.Println("gasSubMod")
     return 0, nil // TODO charge static cost based on configured limb-count
 }
 
 func gasMulMontMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-    fmt.Println("gasMulMont")
+    //fmt.Println("gasMulMont")
     return 0, nil // TODO charge static cost based on configured limb-count
 }
