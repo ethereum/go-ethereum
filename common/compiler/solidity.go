@@ -71,8 +71,12 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}
 		var userdoc, devdoc interface{}
-		json.Unmarshal([]byte(info.Userdoc), &userdoc)
-		json.Unmarshal([]byte(info.Devdoc), &devdoc)
+		if err := json.Unmarshal([]byte(info.Userdoc), &userdoc); err != nil {
+			return contracts, err
+		}
+		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
+			return contracts, err
+		}
 
 		contracts[name] = &Contract{
 			Code:        "0x" + info.Bin,
