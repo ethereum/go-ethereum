@@ -88,6 +88,7 @@ const (
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
 	receiptsCacheLimit  = 32
+	logsCacheLimit      = 32
 	txLookupCacheLimit  = 1024
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
@@ -198,6 +199,7 @@ type BlockChain struct {
 	bodyCache     *lru.Cache     // Cache for the most recent block bodies
 	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
+	logsCache     *lru.Cache     // Cache for the most recent logs per block
 	blockCache    *lru.Cache     // Cache for the most recent entire blocks
 	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
@@ -225,6 +227,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
+	logsCache, _ := lru.New(logsCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
@@ -244,6 +247,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bodyCache:     bodyCache,
 		bodyRLPCache:  bodyRLPCache,
 		receiptsCache: receiptsCache,
+		logsCache:     logsCache,
 		blockCache:    blockCache,
 		txLookupCache: txLookupCache,
 		futureBlocks:  futureBlocks,
@@ -681,6 +685,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 	bc.bodyCache.Purge()
 	bc.bodyRLPCache.Purge()
 	bc.receiptsCache.Purge()
+	bc.logsCache.Purge()
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()

@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -265,6 +266,9 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 	logsList, err := f.backend.GetLogs(ctx, header.Hash())
 	if err != nil {
 		return nil, err
+	}
+	if logsList == nil {
+		return nil, fmt.Errorf("failed to get logs for block #%d (0x%s)", header.Number.Uint64(), header.Hash().TerminalString())
 	}
 	var unfiltered []*types.Log
 	for _, logs := range logsList {
