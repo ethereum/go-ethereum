@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,13 +30,13 @@ func duplicateInArray(arr []common.Hash) bool {
 			visited[arr[i]] = true
 		}
 	}
+
 	return false
 }
 
 func areDifferentHashes(receipts []map[string]interface{}) bool {
 	addresses := []common.Hash{}
 	for i := 0; i < len(receipts); i++ {
-
 		addresses = append(addresses, receipts[i]["transactionHash"].(common.Hash))
 		if duplicateInArray(addresses) {
 			return false
@@ -60,6 +61,12 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		hash4      = common.BytesToHash([]byte("topic4"))
 		hash5      = common.BytesToHash([]byte("topic5"))
 	)
+
+	defer func() {
+		if err := stack.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 
 	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
 	sprint := params.TestChainConfig.Bor.Sprint
@@ -133,12 +140,9 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		blockBatch := db.NewBatch()
 
 		if i%int(sprint-1) != 0 {
-
 			// if it is not sprint start write all the transactions as normal transactions.
 			rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
-
 		} else {
-
 			// check for blocks with receipts. Since in state-sync block, we have 1 normal txn and 1 state-sync txn.
 			if len(receipts[i]) > 0 {
 				// We write receipts for the normal transaction.
@@ -166,11 +170,10 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		}
 
 		if err := blockBatch.Write(); err != nil {
-
 			fmt.Println("Failed to write block into disk", "err", err)
 		}
-
 	}
+
 	publicBlockchainAPI := backend.PublicBlockChainAPI()
 
 	// check 1 : zero transactions
@@ -178,6 +181,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	assert.Equal(t, 0, len(receiptsOut))
 
 	// check 2 : one transactions ( normal )
@@ -185,6 +189,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	assert.Equal(t, 1, len(receiptsOut))
 	assert.True(t, areDifferentHashes(receiptsOut))
 
@@ -193,6 +198,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	assert.Equal(t, 2, len(receiptsOut))
 	assert.True(t, areDifferentHashes(receiptsOut))
 
@@ -204,5 +210,4 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 
 	assert.Equal(t, 2, len(receiptsOut))
 	assert.True(t, areDifferentHashes(receiptsOut))
-
 }
