@@ -122,7 +122,7 @@ type withPeer struct {
 
 // NewHeadsWithPeers send a notification each time a new (header) block is
 // appended to the chain, and includes the peer that first provided the block
-func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	if tsMap == nil { tsMap, _ = lru.New(100000) }
@@ -161,7 +161,7 @@ func (api *PublicFilterAPI) NewHeadsWithPeers(ctx context.Context) (*rpc.Subscri
 // NewFullBlocksWithPeers send a notification each time a new full block plus
 // transactions and receipts is appended to the chain, and includes the peer
 // that first provided the block
-func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Subscription, error) {
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	if tsMap == nil { tsMap, _ = lru.New(100000) }
@@ -251,7 +251,7 @@ func (api *PublicFilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Su
 // NewPendingTransactionsWithPeers creates a subscription that is triggered
 // each time a transaction enters the transaction pool, and includes the peer
 // that first provided the transaction
-func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	if tsMap == nil { tsMap, _ = lru.New(100000) }
@@ -291,7 +291,7 @@ func (api *PublicFilterAPI) NewPendingTransactionsWithPeers(ctx context.Context)
 
 // NewTransactionReceipts creates a subscription that is triggered for each
 // receipt in a newly confirmed block.
-func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Subscription, error) {
 	if blockPeerMap == nil { blockPeerMap, _ = lru.New(250) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -326,7 +326,7 @@ func (api *PublicFilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Su
 }
 
 // ReorgFeed
-func (api *PublicFilterAPI) ReorgFeed(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) ReorgFeed(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported

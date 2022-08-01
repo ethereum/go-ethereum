@@ -315,7 +315,6 @@ func (c *Conn) ReadSnap(id uint64) (Message, error) {
 			return nil, fmt.Errorf("could not rlp decode message: %v", err)
 		}
 		return snpMsg.(Message), nil
-
 	}
 	return nil, fmt.Errorf("request timed out")
 }

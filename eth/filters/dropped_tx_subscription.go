@@ -82,7 +82,7 @@ func replacementHashString(h common.Hash) string {
 }
 
 // DroppedTransactions send a notification each time a transaction is dropped from the mempool
-func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -125,7 +125,7 @@ func (api *PublicFilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subsc
 	return rpcSub, nil
 }
 
-func (api *PublicFilterAPI) dropLoop() {
+func (api *FilterAPI) dropLoop() {
 	dropped := make(chan core.DropTxsEvent)
 	droppedSub := api.backend.SubscribeDropTxsEvent(dropped)
 	defer droppedSub.Unsubscribe()
@@ -139,7 +139,7 @@ func (api *PublicFilterAPI) dropLoop() {
 }
 
 // RejectedTransactions send a notification each time a transaction is rejected from entering the mempool
-func (api *PublicFilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subscription, error) {
+func (api *FilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subscription, error) {
 	if txPeerMap == nil { txPeerMap, _ = lru.New(100000) }
 	if peerIDMap == nil { peerIDMap = &sync.Map{} }
 	notifier, supported := rpc.NotifierFromContext(ctx)

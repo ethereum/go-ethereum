@@ -129,7 +129,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 			{
 				Name:  "Full message for signing",
 				Typ:   "hexdata",
-				Value: fmt.Sprintf("0x%x", msg),
+				Value: fmt.Sprintf("%#x", msg),
 			},
 		}
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
@@ -161,7 +161,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 			{
 				Name:  "Clique header",
 				Typ:   "clique",
-				Value: fmt.Sprintf("clique header %d [0x%x]", header.Number, header.Hash()),
+				Value: fmt.Sprintf("clique header %d [%#x]", header.Number, header.Hash()),
 			},
 		}
 		// Clique uses V on the form 0 or 1
@@ -233,23 +233,17 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 // - the signature preimage (hash)
 func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress,
 	typedData apitypes.TypedData, validationMessages *apitypes.ValidationMessages) (hexutil.Bytes, hexutil.Bytes, error) {
-	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	sighash, rawData, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return nil, nil, err
 	}
-	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	if err != nil {
-		return nil, nil, err
-	}
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
-	sighash := crypto.Keccak256(rawData)
 	messages, err := typedData.Format()
 	if err != nil {
 		return nil, nil, err
 	}
 	req := &SignDataRequest{
 		ContentType: apitypes.DataTyped.Mime,
-		Rawdata:     rawData,
+		Rawdata:     []byte(rawData),
 		Messages:    messages,
 		Hash:        sighash,
 		Address:     addr}
