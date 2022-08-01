@@ -1888,8 +1888,8 @@ func NewDebugAPI(b Backend) *DebugAPI {
 	return &DebugAPI{b: b}
 }
 
-// GetHeader retrieves the RLP encoding for a single header.
-func (api *DebugAPI) GetHeader(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+// GetRawHeader retrieves the RLP encoding for a single header.
+func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	var hash common.Hash
 	if h, ok := blockNrOrHash.Hash(); ok {
 		hash = h
@@ -1907,8 +1907,8 @@ func (api *DebugAPI) GetHeader(ctx context.Context, blockNrOrHash rpc.BlockNumbe
 	return rlp.EncodeToBytes(header)
 }
 
-// GetBlock retrieves the RLP encoded for a single block.
-func (api *DebugAPI) GetBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+// GetRawBlock retrieves the RLP encoded for a single block.
+func (api *DebugAPI) GetRawBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	var hash common.Hash
 	if h, ok := blockNrOrHash.Hash(); ok {
 		hash = h
@@ -1926,8 +1926,8 @@ func (api *DebugAPI) GetBlock(ctx context.Context, blockNrOrHash rpc.BlockNumber
 	return rlp.EncodeToBytes(block)
 }
 
-// GetReceipts retrieves the binary-encoded receipts of a single block.
-func (api *DebugAPI) GetReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
+// GetRawReceipts retrieves the binary-encoded receipts of a single block.
+func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
 	var hash common.Hash
 	if h, ok := blockNrOrHash.Hash(); ok {
 		hash = h
@@ -1953,8 +1953,8 @@ func (api *DebugAPI) GetReceipts(ctx context.Context, blockNrOrHash rpc.BlockNum
 	return result, nil
 }
 
-// GetTransaction returns the bytes of the transaction for the given hash.
-func (s *DebugAPI) GetTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+// GetRawTransaction returns the bytes of the transaction for the given hash.
+func (s *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
 	tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
