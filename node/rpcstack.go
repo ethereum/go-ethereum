@@ -199,22 +199,33 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
-		// First try to route in the mux.
-		// Requests to a path below root are handled by the mux,
-		// which has all the handlers registered via Node.RegisterHandler.
-		// These are made available when RPC is enabled.
-		muxHandler, pattern := h.mux.Handler(r)
-		if pattern != "" {
-			muxHandler.ServeHTTP(w, r)
-			return
-		}
-
-		if checkPath(r, h.httpConfig.prefix) {
-			rpc.ServeHTTP(w, r)
-			return
+		served := make(chan struct{})
+		go func() {
+			// First try to route in the mux.
+			// Requests to a path below root are handled by the mux,
+			// which has all the handlers registered via Node.RegisterHandler.
+			// These are made available when RPC is enabled.
+			muxHandler, pattern := h.mux.Handler(r)
+			if pattern != "" {
+				muxHandler.ServeHTTP(w, r)
+			} else if checkPath(r, h.httpConfig.prefix) {
+				rpc.ServeHTTP(w, r)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+			served <- struct{}{}
+		}()
+		select {
+		// Hack to work around https://github.com/golang/go/issues/47229.
+		// Timeout 10ms early, otherwise stdlib closes connection.
+		case <-time.After(h.timeouts.WriteTimeout - (10 * time.Millisecond)):
+			w.WriteHeader(http.StatusRequestTimeout)
+			if _, err := w.Write([]byte("Request timed out")); err != nil {
+				log.Warn("failed to write timeout message", "err", err)
+			}
+		case <-served:
 		}
 	}
-	w.WriteHeader(http.StatusNotFound)
 }
 
 // checkPath checks whether a given request URL matches a given path prefix.
