@@ -78,17 +78,26 @@ func (f *Feed) Subscribe(channel interface{}) Subscription {
 		panic(errBadChannel)
 	}
 	sub := &feedSub{feed: f, channel: chanval, err: make(chan error, 1)}
-
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.etype != chantyp.Elem() {
+	if !f.typecheck(chantyp.Elem()) {
 		panic(feedTypeError{op: "Subscribe", got: chantyp, want: reflect.ChanOf(reflect.SendDir, f.etype)})
 	}
 	// Add the select case to the inbox.
 	// The next Send will add it to f.sendCases.
 	cas := reflect.SelectCase{Dir: reflect.SelectSend, Chan: chanval}
+	f.mu.Lock()
 	f.inbox = append(f.inbox, cas)
+	f.mu.Unlock()
 	return sub
+}
+
+func (f *Feed) typecheck(typ reflect.Type) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.etype == nil {
+		f.etype = typ
+		return true
+	}
+	return f.etype == typ
 }
 
 func (f *Feed) remove(sub *feedSub) {
@@ -126,13 +135,12 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	f.mu.Lock()
 	f.sendCases = append(f.sendCases, f.inbox...)
 	f.inbox = nil
+	f.mu.Unlock()
 
-	if f.etype != rvalue.Type() {
+	if !f.typecheck(rvalue.Type()) {
 		f.sendLock <- struct{}{}
-		f.mu.Unlock()
 		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
 	}
-	f.mu.Unlock()
 
 	// Set the sent value on all channels.
 	for i := firstSubSendCase; i < len(f.sendCases); i++ {
