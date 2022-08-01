@@ -97,7 +97,7 @@ func TestBorFilters(t *testing.T) {
 		// since all the transactions are state-sync, we will not include them as normal receipts
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), []*types.Receipt{})
 
-		// check for blocks with receipts. Since the only receipt is state-sync, we can chack the length of receipts
+		// check for blocks with receipts. Since the only receipt is state-sync, we can check the length of receipts
 		if len(receipts[i]) > 0 {
 			// write the state-sync receipts to database
 			// State sync logs don't have tx index, tx hash and other necessary fields, DeriveFieldsForBorLogs will fill those fields for websocket subscriptions
