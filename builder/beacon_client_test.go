@@ -212,10 +212,10 @@ func TestOnForkchoiceUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, PubkeyHex("0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74b"), pubkeyHex)
 
-	pubkeyHex, err = bc.getProposerForNextSlot(31)
+	_, err = bc.getProposerForNextSlot(31)
 	require.EqualError(t, err, "slot out of sync")
 
-	pubkeyHex, err = bc.getProposerForNextSlot(33)
+	_, err = bc.getProposerForNextSlot(33)
 	require.EqualError(t, err, "slot out of sync")
 
 	mbn.headersCode = 404
@@ -263,6 +263,6 @@ func TestOnForkchoiceUpdate(t *testing.T) {
 
 	// Check proposers map error is routed out
 	mbn.headersResp = []byte(`{ "data": [ { "header": { "message": { "slot": "65", "proposer_index": "1" } } } ] }`)
-	slot, err = bc.onForkchoiceUpdate()
+	_, err = bc.onForkchoiceUpdate()
 	require.EqualError(t, err, "inconsistent proposer mapping")
 }

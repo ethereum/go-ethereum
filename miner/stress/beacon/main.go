@@ -164,7 +164,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 		return nil, nil, err
 	}
 	data, err := n.api.GetPayloadV1(*payload.PayloadID)
-	return data, nil, nil
+	return data, nil, err
 }
 
 func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {

@@ -2,6 +2,7 @@ package builder
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -97,12 +98,20 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *BuilderConfig) error
 	}
 
 	genesisForkVersionBytes, err := hexutil.Decode(cfg.GenesisForkVersion)
+	if err != nil {
+		return fmt.Errorf("invalid genesisForkVersion: %w", err)
+	}
+
 	var genesisForkVersion [4]byte
 	copy(genesisForkVersion[:], genesisForkVersionBytes[:4])
 	builderSigningDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, boostTypes.Root{})
 
 	genesisValidatorsRoot := boostTypes.Root(common.HexToHash(cfg.GenesisValidatorsRoot))
 	bellatrixForkVersionBytes, err := hexutil.Decode(cfg.BellatrixForkVersion)
+	if err != nil {
+		return fmt.Errorf("invalid bellatrixForkVersion: %w", err)
+	}
+
 	var bellatrixForkVersion [4]byte
 	copy(bellatrixForkVersion[:], bellatrixForkVersionBytes[:4])
 	proposerSigningDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeBeaconProposer, bellatrixForkVersion, genesisValidatorsRoot)

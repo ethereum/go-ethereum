@@ -45,5 +45,5 @@ func (v *ValidatorPrivateData) PrepareRegistrationMessage(feeRecipientHex string
 	if err != nil {
 		return boostTypes.SignedValidatorRegistration{}, err
 	}
-	return boostTypes.SignedValidatorRegistration{msg, signature}, nil
+	return boostTypes.SignedValidatorRegistration{Message: msg, Signature: signature}, nil
 }
