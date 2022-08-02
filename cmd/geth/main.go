@@ -117,6 +117,7 @@ var (
 		utils.CacheSnapshotFlag,
 		utils.CacheNoPrefetchFlag,
 		utils.CachePreimagesFlag,
+		utils.CacheLogCacheSizeFlag,
 		utils.FDLimitFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,

@@ -34,14 +34,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/naoina/toml"
 )
 
@@ -187,18 +185,13 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		}
 	}
 
-	// Enable filter RPC API.
-	filterBackend := backend.(filters.Backend)
-	filterSystem := filters.NewFilterSystem(filterBackend, filters.Config{})
+	// Configure log filter RPC API.
 	isLightClient := cfg.Eth.SyncMode == downloader.LightSync
-	stack.RegisterAPIs([]rpc.API{{
-		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
-	}})
+	filterSystem := utils.RegisterFilterAPI(ctx, stack, backend, isLightClient)
 
 	// Configure GraphQL if requested.
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, filterSystem, cfg.Node)
+		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
 
 	// Add the Ethereum Stats daemon if requested.
