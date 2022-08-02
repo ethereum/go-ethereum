@@ -641,9 +641,9 @@ func (api *ConsensusAPI) heartbeat() {
 						}
 					} else {
 						if lastTransitionUpdate.IsZero() {
-							message = "Merge is configured, but no beacon client seen. Please ensure you have one available before the transition arrives!"
+							message = "Merge is configured, but no beacon client seen. Please ensure you have one available before the transision arrives!"
 						} else {
-							message = "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transition arrives!"
+							message = "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transision arrives!"
 						}
 					}
 					if eta == 0 {
