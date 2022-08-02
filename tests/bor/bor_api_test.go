@@ -2,7 +2,6 @@ package bor
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -170,7 +169,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		}
 
 		if err := blockBatch.Write(); err != nil {
-			fmt.Println("Failed to write block into disk", "err", err)
+			t.Error("Failed to write block into disk", "err", err)
 		}
 	}
 
@@ -179,7 +178,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	// check 1 : zero transactions
 	receiptsOut, err := publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(1))
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 
 	assert.Equal(t, 0, len(receiptsOut))
@@ -187,7 +186,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	// check 2 : one transactions ( normal )
 	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(2))
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 
 	assert.Equal(t, 1, len(receiptsOut))
@@ -196,7 +195,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	// check 3 : two transactions ( both normal )
 	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(3))
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 
 	assert.Equal(t, 2, len(receiptsOut))
@@ -205,7 +204,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 	// check 4 : two transactions ( one normal + one state-sync)
 	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(4))
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 
 	assert.Equal(t, 2, len(receiptsOut))
