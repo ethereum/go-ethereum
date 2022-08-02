@@ -155,13 +155,10 @@ func (t *Trie) Get(key []byte) []byte {
 }
 
 func (t *Trie) TryGetAccount(key []byte) (*types.StateAccount, error) {
-	res, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	res, err := t.TryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 		return &types.StateAccount{}, err
-	}
-	if didResolve {
-		t.root = newroot
 	}
 	if res == nil {
 		return nil, nil
@@ -312,9 +309,7 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	if err != nil {
 		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
 	}
-	// Encoding []byte cannot fail, ok to ignore the error.
-	v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(data[:]))
-	return t.tryUpdate(key, v)
+	return t.tryUpdate(key, data)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to
