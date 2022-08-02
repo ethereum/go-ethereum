@@ -186,6 +186,25 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 }
 
+func DialWithAuth(ctx context.Context, rawurl string, auth HeaderAuthProvider) (*Client, error) {
+	u, err := url.Parse(rawurl)
+	if err != nil {
+		return nil, err
+	}
+	switch u.Scheme {
+	case "http", "https":
+		return DialHTTPWithAuth(rawurl, auth)
+	case "ws", "wss":
+		return DialWebsocketWithAuth(ctx, rawurl, "", auth)
+	case "stdio":
+		return DialStdIO(ctx)
+	case "":
+		return DialIPC(ctx, rawurl)
+	default:
+		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
+	}
+}
+
 // ClientFromContext retrieves the client from the context, if any. This can be used to perform
 // 'reverse calls' in a handler method.
 func ClientFromContext(ctx context.Context) (*Client, bool) {

@@ -45,6 +45,7 @@ type httpConn struct {
 	closeCh   chan interface{}
 	mu        sync.Mutex // protects headers
 	headers   http.Header
+	auth      HeaderAuthProvider // authorization provider. Must be called on each request as token claims the current time
 }
 
 // httpConn implements ServerCodec, but it is treated specially by Client
@@ -137,6 +138,33 @@ func DialHTTP(endpoint string) (*Client, error) {
 	return DialHTTPWithClient(endpoint, new(http.Client))
 }
 
+// DialHTTPWithAuth creates a new authenticated RPC client that connects to an RPC server over HTTP.
+func DialHTTPWithAuth(endpoint string, auth HeaderAuthProvider) (*Client, error) {
+	if auth == nil {
+		return nil, errors.New("cannot dial http endpoint with auth without auth-provider")
+	}
+	// Sanity check URL so we don't end up with a client that will fail every request.
+	_, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	client := new(http.Client)
+	initctx := context.Background()
+	headers := make(http.Header, 2)
+	headers.Set("accept", contentType)
+	headers.Set("content-type", contentType)
+	return newClient(initctx, func(context.Context) (ServerCodec, error) {
+		hc := &httpConn{
+			client:  client,
+			headers: headers,
+			url:     endpoint,
+			closeCh: make(chan interface{}),
+			auth:    auth,
+		}
+		return hc, nil
+	})
+}
+
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
 	respBody, err := hc.doRequest(ctx, msg)
@@ -186,6 +214,11 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	hc.mu.Lock()
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
+	if hc.auth != nil {
+		if err := hc.auth.AddAuthHeader(&req.Header); err != nil {
+			return nil, err
+		}
+	}
 
 	// do request
 	resp, err := hc.client.Do(req)

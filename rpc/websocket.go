@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -213,6 +214,43 @@ func DialWebsocket(ctx context.Context, endpoint, origin string) (*Client, error
 		WriteBufferPool: wsBufferPool,
 	}
 	return DialWebsocketWithDialer(ctx, endpoint, origin, dialer)
+}
+
+// DialWebsocketWithAuth creates a new RPC client that communicates with a JSON-RPC server
+// that is listening on the given endpoint. It uses the HeaderAuthProvider to authenticate
+// the initial HTTP connection/upgrade.
+//
+// The context is used for the initial connection establishment. It does not
+// affect subsequent interactions with the client.
+func DialWebsocketWithAuth(ctx context.Context, endpoint, origin string, auth HeaderAuthProvider) (*Client, error) {
+	if auth == nil {
+		return nil, errors.New("cannot dial websocket endpoint with auth without auth-provider")
+	}
+	endpoint, header, err := wsClientHeaders(endpoint, origin)
+	if err != nil {
+		return nil, err
+	}
+	dialer := websocket.Dialer{
+		ReadBufferSize:  wsReadBuffer,
+		WriteBufferSize: wsWriteBuffer,
+		WriteBufferPool: wsBufferPool,
+	}
+	return newClient(ctx, func(ctx context.Context) (ServerCodec, error) {
+		// every time we reconnect, we may use new authentication headers
+		dialHeader := header.Clone()
+		if err = auth.AddAuthHeader(&dialHeader); err != nil {
+			return nil, err
+		}
+		conn, resp, err := dialer.DialContext(ctx, endpoint, dialHeader)
+		if err != nil {
+			hErr := wsHandshakeError{err: err}
+			if resp != nil {
+				hErr.status = resp.Status
+			}
+			return nil, hErr
+		}
+		return newWebsocketCodec(conn, endpoint, dialHeader), nil
+	})
 }
 
 func wsClientHeaders(endpoint, origin string) (string, http.Header, error) {
