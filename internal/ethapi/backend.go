@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -88,7 +89,7 @@ type Backend interface {
 
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
-	// filters.Backend
+	filters.Backend
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

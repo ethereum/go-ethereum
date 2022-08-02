@@ -2033,9 +2033,8 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 
 // RegisterFilterAPI adds the eth log filtering RPC API to the node.
 func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconfig.Config) *filters.FilterSystem {
-	filterBackend := backend.(filters.Backend)
 	isLightClient := ethcfg.SyncMode == downloader.LightSync
-	filterSystem := filters.NewFilterSystem(filterBackend, filters.Config{
+	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
 	stack.RegisterAPIs([]rpc.API{{
