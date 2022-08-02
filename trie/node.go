@@ -79,15 +79,17 @@ func (n hashNode) String() string   { return n.fstring("") }
 func (n valueNode) String() string  { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
-	resp := fmt.Sprintf("[\n%s  ", ind)
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("[\n%s  ", ind))
 	for i, node := range &n.Children {
 		if node == nil {
-			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+			buf.WriteString(fmt.Sprintf("%s: <nil> ", indices[i]))
 		} else {
-			resp += fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  "))
+			buf.WriteString(fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  ")))
 		}
 	}
-	return resp + fmt.Sprintf("\n%s] ", ind)
+	buf.WriteString(fmt.Sprintf("\n%s] ", ind))
+	return buf.String()
 }
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
