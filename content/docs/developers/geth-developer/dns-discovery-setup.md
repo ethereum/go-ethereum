@@ -5,16 +5,16 @@ sort_key: C
 
 This document explains how to set up an [EIP 1459][dns-eip] node list using the devp2p
 developer tool. The focus of this guide is creating a public list for the Ethereum mainnet
-and public testnets, but you may also find this helpful if you want to set up DNS-based
-discovery for a private network.
+and public testnets, but it may also be helpful for setting up DNS-based discovery for a 
+private network.
 
 DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT
-is unavailable. In this guide, we'll create node lists by crawling the discovery DHT, then
+is unavailable. In this guide, node lists will be created by crawling the discovery DHT, then
 publishing the resulting node sets under chosen DNS names.
 
 ### Installing the devp2p command
 
-cmd/devp2p is a developer utility and is not included in the Geth distribution. You can
+`cmd/devp2p` is a developer utility and is not included in the Geth distribution. You can
 install this command using `go get`:
 
 ```shell
