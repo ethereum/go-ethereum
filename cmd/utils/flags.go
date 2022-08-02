@@ -497,6 +497,7 @@ var (
 		Name:     "cache.logcache",
 		Usage:    "Size of the block logs cache (for RPC filters)",
 		Category: flags.PerfCategory,
+		Value:    ethconfig.Defaults.FilterLogCacheSize,
 	}
 	FDLimitFlag = &cli.IntFlag{
 		Name:     "fdlimit",
@@ -1815,6 +1816,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
+	if ctx.IsSet(CacheLogCacheSizeFlag.Name) {
+		cfg.FilterLogCacheSize = ctx.Int(CacheLogCacheSizeFlag.Name)
+	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		// If snap-sync is requested, this flag is also required
 		if cfg.SyncMode == downloader.SnapSync {
@@ -2028,15 +2032,12 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 }
 
 // RegisterFilterAPI adds the eth log filtering RPC API to the node.
-func RegisterFilterAPI(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isLightClient bool) *filters.FilterSystem {
-	var cfg filters.Config
-	if ctx.IsSet(CacheLogCacheSizeFlag.Name) {
-		cfg.LogCacheSize = ctx.Int(CacheLogCacheSizeFlag.Name)
-	}
-
+func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconfig.Config) *filters.FilterSystem {
 	filterBackend := backend.(filters.Backend)
-
-	filterSystem := filters.NewFilterSystem(filterBackend, cfg)
+	isLightClient := ethcfg.SyncMode == downloader.LightSync
+	filterSystem := filters.NewFilterSystem(filterBackend, filters.Config{
+		LogCacheSize: ethcfg.FilterLogCacheSize,
+	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
