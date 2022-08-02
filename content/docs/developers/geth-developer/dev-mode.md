@@ -24,21 +24,15 @@ Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart co
 
 Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial. 
 
-First, `http` (or `ws`) must be enabled so that the Javascript console can be attached to the Geth node, and some namespaces must be specified so that certain functions can be executed from the Javascript console, specifically `eth`, `web3` and `personal`. Alternatively, Geth can be started with the `console` command.
-
-Finally, Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. The full command is as follows:
+Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, enable `http` and the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. For this tutorial some other namespaces will also be enabled. The full command is as follows:
 
 ```shell
-
 geth --dev --http --http.api eth,web3,personal,net --http.corsdomain "http://remix.ethereum.org"
-
 ```
 
 The terminal will display the following logs, confirming Geth has started successfully in developer mode:
 
 ```terminal
-
-
 INFO [05-09|10:49:02.951] Starting Geth in ephemeral dev mode... 
 INFO [05-09|10:49:02.952] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [05-09|10:49:02.952] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
@@ -73,22 +67,17 @@ INFO [05-09|10:49:03.315] Etherbase automatically configured       address=0x7Aa
 INFO [05-09|10:49:03.316] Commit new sealing work                  number=1 sealhash=2372a2..7fb8e7 uncles=0 txs=0 gas=0 fees=0 elapsed="202.366µs"
 WARN [05-09|10:49:03.316] Block sealing failed                     err="sealing paused while waiting for transactions"
 INFO [05-09|10:49:03.316] Commit new sealing work                  number=1 sealhash=2372a2..7fb8e7 uncles=0 txs=0 gas=0 fees=0 elapsed="540.054µs"
-
 ```
 
-This terminal must be left running throughout the entire tutorial. In a second terminal, attach a Javascript console:
-
+This terminal must be left running throughout the entire tutorial. In a second terminal, attach a Javascript console. By default the `ipc` file is saved in the `datadir`:
 
 ```shell
-
-geth attach http://127.0.0.1:8545
-
+geth attach <datadir>/geth.ipc
 ```
 
 The Javascript terminal will open with the following welcome message:
 
 ```terminal
-
 Welcome to the Geth Javascript console!
 
 instance: Geth/v1.10.18-unstable-8d84a701-20220503/linux-amd64/go.1.18.1
@@ -98,52 +87,41 @@ at block: 0 (Thu Jan 01 1970 01:00:00 GMT+0100 (BST))
 
 To exit, press ctrl-d or type exit
 >
-
 ```
 
-In the [Getting Started](/docs/getting-started/) tutorial it was explained that using the external signing and account management tool, Clef, was best practise for generating and securing user accounts. However, for simplicity this tutorial will use Geth's built-in account management. First, the existing accounts can be displayed using `eth.accounts`:
+For simplicity this tutorial uses Geth's built-in account management. First, the existing accounts can be displayed using `eth.accounts`:
 
 ```shell
-
 eth.accounts
-
 ```
 
 An array containing a single address will be displayed in the terminal, despite no accounts having yet been explicitly created. This is the "coinbase" account. The coinbase address is the recipient of the total amount of ether created at the local network genesis. Querying the ether balance of the coinbase account will return a very large number. The coinbase account can be invoked as `eth.accounts[0]` or as `eth.coinbase`:
 
 ```terminal
-
 > eth.coinbase==eth.accounts[0]
 true
-
 ```
 
 The following command can be used to query the balance. The return value is in units of Wei, which is divided by 1<sup>18</sup> to give units of ether. This can be done explicitly or by calling the `web3.FromWei()` function:
 
 ```shell
-
 eth.getBalance(eth.coinbase)/1e18
 
 // or
 
 web3.fromWei(eth.getBalance(eth.coinbase))
-
 ```
 
 Using `web3.fromWei()` is less error prone because the correct multiplier is built in. These commands both return the following:
 
 ```terminal
-
 1.157920892373162e+59
-
 ```
 
 A new account can be created and some of the ether from the coinbase transferred across to it. A new account is generated using the `newAccount` function in the `personal` namespace:
 
 ```shell
-
 personal.newAccount()
-
 ```
 
 The terminal will display a request for a password, twice. Once provided, a new account will be created and its address printed to the terminal. The account creation is also logged in the Geth terminal, including the location of the keyfile in the keystore. It is a good idea to back up the password somewhere at this point. If this were an account on a live network, intended to own assets of real-world value, it would be critical to back up the account password and the keystore in a secure manner.
@@ -151,23 +129,18 @@ The terminal will display a request for a password, twice. Once provided, a new 
 To reconfirm the account creation, running `eth.accounts` in the Javascript console should display an array containing two account addresses, one being the coinbase and the other being the newly generated address. The following command transfers 50 ETH from the coinbase to the new account:
 
 ```shell
-
 eth.sendTransaction({from: eth.coinbase, to: eth.accounts[1], value: web3.toWei(50, "ether")})
-
 ```
 
 A transaction hash will be returned to the console. This transaction hash will also be displayed in the logs in the Geth console, followed by logs confirming that a new block was mined (remember in the local development network blocks are mined when transactions are pending). The transaction details can be displayed in the Javascript console by passing the transaction hash to `eth.getTransaction()`:
 
 ```shell
-
 eth.getTransaction("0x62044d2cab405388891ee6d53747817f34c0f00341cde548c0ce9834e9718f27")
-
 ```
 
 The transaction details are displayed as follows:
 
 ```terminal
-
 {
   accessList: [],
   blockHash: "0xdef68762539ebfb247e31d749acc26ab5df3163aabf9d450b6001c200d17da8a",
@@ -189,8 +162,6 @@ The transaction details are displayed as follows:
   v: "0x0",
   value: 50000000000000000000
 }
-
-
 ```
 
 Now that the user account is funded with ether, a contract can be created ready to deploy to the Geth node.
@@ -200,9 +171,7 @@ Now that the user account is funded with ether, a contract can be created ready 
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
 
-
 ```Solidity
-
 pragma solidity >=0.7.0;
 
 contract Storage{
@@ -220,28 +189,25 @@ contract Storage{
     
     }
 }
-
 ```
 
 Solidity is a high-level language that makes code executable by the Ethereum virtual machine (EVM) readable to humans. This means that there is an intermediate step between writing code in Solidity and deploying it to Ethereum. This step is called "compilation" and it converts human-readable code into EVM-executable byte-code. This byte-code is then included in a transaction sent from the Geth node during contract deployment. This can all be done directly from the Geth Javascript console; however this tutorial uses an online IDE called Remix to handle the compilation and deployment of the contract to the local Geth node.
-
 
 
 ## Compile and deploy using Remix
 
 In a web browser, open <https://remix.ethereum.org>. This opens an online smart contract development environment. On the left-hand side of the screen there is a side-bar menu that toggles between several toolboxes that are displayed in a vertical panel. On the right hand side of the screen there is an editor and a terminal. This layout is similar to the default layout of many other IDEs such as [VSCode](https://code.visualstudio.com/). The contract defined in the previous section, `Storage.sol` is already available in the `Contracts` directory in Remix. It can be opened and reviewed in the editor.
 
-![Remix](/static/images/remix.png)
-
+![Remix](/assets/remix.png)
 
 The Solidity logo is present as an icon in the Remix side-bar. Clicking this icon opens the Solidity compiler wizard. This can be used to compile `Storage.sol` ready. With `Solidity.sol` open in the editor window, simply click the `Compile 1_Storage.sol` button. A green tick will appear next to the Solidity icon to confirm that the contract has compiled successfully. This means the contract bytecode is available.
 
-![Remix-compiler](/static/images/remix-compiler.png)
+![Remix-compiler](assets/remix-compiler.png)
 
 Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
 
 
-![Remix-deploy](/static/images/remix-deploy.png)
+![Remix-deploy](assets/remix-deploy.png)
 
 
 To deploy `Storage.sol`, click `DEPLOY`.
@@ -250,13 +216,11 @@ The following logs in the Geth terminal confirm that the contract was successful
 
 
 ```terminal
-
 INFO [05-09|12:27:09.680] Setting new local account                address=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62
 INFO [05-09|12:27:09.680] Submitted contract creation              hash=0xbf2d2d1c393a882ffb6c90e6d1713906fd799651ae683237223b897d4781c4f2 from=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62 nonce=1 contract=0x4aA11DdfD817dD70e9FF2A2bf9c0306e8EC450d3 value=0
 INFO [05-09|12:27:09.681] Commit new sealing work                  number=2 sealhash=845a53..f22818 uncles=0 txs=1 gas=125,677 fees=0.0003141925 elapsed="335.991µs"
 INFO [05-09|12:27:09.681] Successfully sealed new block            number=2 sealhash=845a53..f22818 hash=e927bc..f2c8ed elapsed="703.415µs"
 INFO [05-09|12:27:09.681] 🔨 mined potential block                  number=2 hash=e927bc..f2c8ed
-
 ```
 
 ## Interact with contract using Remix
@@ -265,23 +229,20 @@ The contract is now deployed on a local testnet version of the Etheruem blockcha
 
 After deploying the contract in Remix, the `Deployed Contracts` tab in the sidebar automatically populates with the public functions exposed by `Storage.sol`. To send a value to the contract storage, type a number in the field adjacent to the `store` button, then click the button.
 
-![Remix-func](/static/images/remix-func.png)
+![Remix-func](/assets/remix-func.png)
 
 In the Geth terminal, the following logs confirm that the transaction was successful (the actual values will vary from the example below):
 
 ```terminal
-
 INFO [05-09|13:41:58.644] Submitted transaction                    hash=0xfa3cd8df6841c5d3706d3bacfb881d2b985d0b55bdba440f1fdafa4ed5b5cc31 from=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62 nonce=2 recipient=0x4aA11DdfD817dD70e9FF2A2bf9c0306e8EC450d3 value=0
 INFO [05-09|13:41:58.644] Commit new sealing work                  number=3 sealhash=5442e3..f49739 uncles=0 txs=1 gas=43724   fees=0.00010931   elapsed="334.446µs"
 INFO [05-09|13:41:58.645] Successfully sealed new block            number=3 sealhash=5442e3..f49739 hash=c076c8..eeee77 elapsed="581.374µs"
 INFO [05-09|13:41:58.645] 🔨 mined potential block                  number=3 hash=c076c8..eeee77
-
 ```
 
 The transaction hash can be used to retrieve the transaction details using the Geth Javascript console, which will return the following information:
 
 ```terminal
-
 {
   accessList: [],
   blockHash: "0xc076c88200618f4cbbfb4fe7c3eb8d93566724755acc6c4e9a355cc090eeee77",
@@ -303,25 +264,19 @@ The transaction hash can be used to retrieve the transaction details using the G
   v: "0x1",
   value: 0
 }
-
 ```
 
 The `from` address is the account that sent the transaction, the `to` address is the deployment address of the contract. The value entered into Remix is now in storage at that contract address. This can be retrieved using Remix by calling the `retrieve` function - to do this simply click the `retrieve` button. Alternatively, it can be retrieved using `web3.getStorageAt` using the Geth Javascript console. The following command returns the value in the contract storage (replace the given address with the correct one displayed in the Geth logs).
 
 ```shell
-
 web3.eth.getStorageAt("0x407d73d8a49eeb85d32cf465507dd71d507100c1", 0)
-
 ```
 
 This returns a value that looks like the following:
 
 ```terminal
-
 "0x000000000000000000000000000000000000000000000000000000000000000038"
-
 ```
-
 
 The returned value is a left-padded hexadecimal value. For example, the return value `0x000000000000000000000000000000000000000000000000000000000000000038` corresponds to a value of `56` entered as a uint256 to Remix. After converting from hexadecimal string to decimal number the returned value should be equal to that provided to Remix in the previous step.
 
@@ -330,9 +285,7 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode. 
 
 ```shell
-
 geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org"
-
 ```
 
 ## Re-using accounts
