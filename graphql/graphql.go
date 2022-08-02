@@ -978,7 +978,7 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 		hash = header.Hash()
 	}
 	// Construct the range filter
-	filter := filters.NewBlockFilter(b.r.backend, hash, addresses, topics)
+	filter := b.r.filterSystem.NewBlockFilter(hash, addresses, topics)
 
 	// Run the filter and return all the logs
 	return runFilter(ctx, b.r, filter)
@@ -1137,7 +1137,8 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
-	backend ethapi.Backend
+	backend      ethapi.Backend
+	filterSystem *filters.FilterSystem
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
@@ -1284,7 +1285,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := filters.NewRangeFilter(r.backend, begin, end, addresses, topics)
+	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
 	return runFilter(ctx, r, filter)
 }
 

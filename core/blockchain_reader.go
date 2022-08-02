@@ -222,23 +222,6 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-// GetLogsByHash retrieves the logs for all transactions in a given block.
-func (bc *BlockChain) GetLogsByHash(hash common.Hash) [][]*types.Log {
-	if logs, ok := bc.logsCache.Get(hash); ok {
-		return logs.([][]*types.Log)
-	}
-	number := rawdb.ReadHeaderNumber(bc.db, hash)
-	if number == nil {
-		return nil
-	}
-	logs := rawdb.ReadLogs(bc.db, hash, *number, bc.chainConfig)
-	if logs == nil {
-		return nil
-	}
-	bc.logsCache.Add(hash, logs)
-	return logs
-}
-
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
