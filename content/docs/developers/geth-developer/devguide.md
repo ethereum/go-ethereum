@@ -1,5 +1,5 @@
 ---
-title: Developer Guide
+title: Getting Started
 sort_key: A
 ---
 
@@ -8,7 +8,7 @@ Developers are people who are interested to build, develop, debug, submit
 a bug report or pull request or otherwise contribute to the Geth source code.
 
 Please see [Contributing](/content/docs/developers/contributing.md) for the
-GHeth contribution guidelines.
+Geth contribution guidelines.
 
 ## Building and Testing
 
@@ -60,9 +60,9 @@ go test -v -bench . -run BenchmarkJoin
 
 For more information, see the [go test flags][testflag] documentation.
 
-### Getting Stack Traces
+### Stack Traces
 
-If `geth` is started with the `--pprof` option, a debugging HTTP server is made available
+If Geth is started with the `--pprof` option, a debugging HTTP server is made available
 on port 6060. Navigating to <http://localhost:6060/debug/pprof> displays the heap,
 running routines etc. By clicking "full goroutine stack dump" a trace can be generated
 that is useful for debugging.
