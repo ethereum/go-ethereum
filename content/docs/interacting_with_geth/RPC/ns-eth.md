@@ -5,9 +5,6 @@ sort_key: C
 
 Geth provides several extensions to the standard "eth" JSON-RPC namespace.
 
-* TOC
-{:toc}
-
 ### eth_subscribe, eth_unsubscribe
 
 These methods are used for real-time events through subscriptions. See the [subscription
@@ -188,8 +185,8 @@ curl --data '{"method":"eth_createAccessList","params":[{"from": "0x8cd02c6cbd83
 
 The method `eth_createAccessList` returns list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
 
-That is, it gives you the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. Like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined.
-Adding an `accessList` to your transaction does not necessary result in lower gas usage compared to a transaction without an access list.
+That is, it gives the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. Like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined.
+Adding an `accessList` to a transaction does not necessary result in lower gas usage compared to a transaction without an access list.
 
 Example:
 ```json

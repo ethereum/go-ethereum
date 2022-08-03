@@ -3,7 +3,7 @@ title: les Namespace
 sort_key: C
 ---
 
-The `les` API allows you to manage LES server settings, including client parameters and payment settings for prioritized clients. It also provides functions to query checkpoint information in both server and client mode.
+The `les` API is for managing LES server settings, including client parameters and payment settings for prioritized clients. It also provides functions to query checkpoint information in both server and client mode.
 
 * TOC
 {:toc}

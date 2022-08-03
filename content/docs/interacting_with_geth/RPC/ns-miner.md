@@ -3,15 +3,11 @@ title: miner Namespace
 sort_key: C
 ---
 
-The `miner` API allows you to remote control the node's mining operation and set various
-mining specific settings.
-
-* TOC
-{:toc}
+The `miner` API is **now deprecated** because mining was switched off at the transition to proof-of-stake. It existed to provide remote control the node's mining operation and set various mining specific settings. It is provided here for historical interest!
 
 ### miner_getHashrate
 
-Get your hashrate in H/s (Hash operations per second).
+Get hashrate in H/s (Hash operations per second).
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|
@@ -82,7 +78,7 @@ Sets the etherbase, where mining rewards will go.
 
 ### miner_setGasLimit
 
-Sets the gas limit the miner will target when mining. Note: on networks where EIP-1559 is activated, this should be set to twice what you want the gas target (i.e. the effective gas used on average per block) to be. 
+Sets the gas limit the miner will target when mining. Note: on networks where EIP-1559 is activated, this should be set to twice the gas target (i.e. the effective gas used on average per block) to be. 
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|

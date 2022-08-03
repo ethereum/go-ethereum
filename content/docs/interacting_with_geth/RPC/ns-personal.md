@@ -5,9 +5,6 @@ sort_key: C
 
 The personal API manages private keys in the key store.
 
-* TOC
-{:toc}
-
 ### personal_deriveAccount
 
 Requests a HD wallet to derive a new account, optionally pinning it for later reuse.
@@ -165,7 +162,7 @@ Supplying the passphrase and unlock duration as arguments:
 true
 ```
 
-If you want to type in the passphrase and stil override the default unlock duration,
+To type in the passphrase and still override the default unlock duration,
 pass `null` as the passphrase.
 
 ```
@@ -177,7 +174,7 @@ true
 
 ### personal_unpair
 
-Deletes a pairing between wallet and geth.
+Deletes a pairing between wallet and Geth.
 
 | Client   | Method invocation                                           |
 | :--------| ----------------------------------------------------------- |

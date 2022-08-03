@@ -3,11 +3,7 @@ title: clique Namespace
 sort_key: C
 ---
 
-The `clique` API provides access to the state of the clique consensus engine. You can use
-this API to manage signer votes and to check the health of a private network.
-
-* TOC
-{:toc}
+The `clique` API provides access to the state of the clique consensus engine. This API cna be used to manage signer votes and to check the health of a private network.
 
 ### clique_getSnapshot
 

@@ -5,8 +5,6 @@ sort_key: C
 
 The `net` API provides insight about the networking aspect of the client.
 
-* TOC
-{:toc}
 
 ### net_listening
 

@@ -19,7 +19,7 @@ The *transaction call object* contains all the necessary parameters for executin
 | `maxPriorityFeePerGas` | `Quantity` | <32   | Yes      | Maximum tip per gas that's given directly to the miner. Relevant for type-2 transactions. |
 | `value`    | `Quantity` | <32   | Yes      | Amount of `wei` to simulate sending along with the transaction. Defaults to `0`. |
 | `nonce`     | `Quantity`   | <8   | Yes      | Nonce of sender account. |
-| `input`     | `Binary`   | any   | Yes      | Binary data to send to the target contract. Generally the 4 byte hash of the method signature followed by the ABI encoded parameters. For details please see the [Ethereum Contract ABI](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI). This field was previously called `data`. |
+| `input`     | `Binary`   | any   | Yes      | Binary data to send to the target contract. Generally the 4 byte hash of the method signature followed by the ABI encoded parameters. For details please see the [Ethereum Contract ABI](https://docs.soliditylang.org/en/v0.7.0/abi-spec.html). This field was previously called `data`. |
 | `accessList`     | `AccessList`   | any   | Yes      | A list of addresses and storage keys that the transaction plans to access. Used in non-legacy, i.e. type 1 and 2 transactions. |
 | `chainId`     | `Quantity`   | <32   | Yes      | Transaction only valid on networks with this chain ID. Used in non-legacy, i.e. type 1 and 2 transactions. |
 

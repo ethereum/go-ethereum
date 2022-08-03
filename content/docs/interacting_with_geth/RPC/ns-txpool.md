@@ -3,12 +3,9 @@ title: txpool Namespace
 sort_key: C
 ---
 
-The `txpool` API gives you access to several non-standard RPC methods to inspect the contents of the
+The `txpool` API gives access to several non-standard RPC methods to inspect the contents of the
 transaction pool containing all the currently pending transactions as well as the ones queued for
 future processing.
-
-* TOC
-{:toc}
 
 ### txpool_content
 

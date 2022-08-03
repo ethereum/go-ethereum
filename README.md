@@ -8,3 +8,8 @@ Resources:
 - some draft figma files for design sketching:  https://www.figma.com/file/ekzIgwyeVKLtFSAcnA0Q0D/geth-website?node-id=6%3A31
 - content planning notes: https://www.notion.so/efdn/Content-Strategy-3252234338814a749374fa7f11049083
 - meeting notes: https://www.notion.so/efdn/Call-notes-46aa0202810a402ebfda07b046761cbd
+
+
+Notes:
+
+**Dev note**: Remember that the fiules in `vulnerabilities` must be served at the same URLs as they are currently to avoid breaking some Geth functions related to security auditing. 
