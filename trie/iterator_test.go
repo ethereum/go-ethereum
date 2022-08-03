@@ -509,7 +509,7 @@ func (l *loggingDb) Close() error {
 }
 
 // makeLargeTestTrie create a sample test trie
-func makeLargeTestTrie() (*Database, *SecureTrie, *loggingDb) {
+func makeLargeTestTrie() (*Database, *StateTrie, *loggingDb) {
 	// Create an empty trie
 	logDb := &loggingDb{0, memorydb.New()}
 	triedb := NewDatabase(logDb)

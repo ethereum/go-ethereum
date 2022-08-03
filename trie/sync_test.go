@@ -26,7 +26,7 @@ import (
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
-func makeTestTrie() (*Database, *SecureTrie, map[string][]byte) {
+func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
 	trie, _ := NewSecure(common.Hash{}, common.Hash{}, triedb)

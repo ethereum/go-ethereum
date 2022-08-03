@@ -142,7 +142,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 type testHelper struct {
 	diskdb  ethdb.Database
 	triedb  *trie.Database
-	accTrie *trie.SecureTrie
+	accTrie *trie.StateTrie
 }
 
 func newHelper() *testHelper {

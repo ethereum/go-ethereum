@@ -413,15 +413,15 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.New(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+			accTrie, err := trie.NewSecure(common.Hash{}, req.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
 			acc, err := accTrie.TryGetAccount(account[:])
-			if err != nil {
+			if err != nil || acc == nil {
 				return nil, nil
 			}
-			stTrie, err := trie.New(account, acc.Root, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewSecure(account, acc.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}

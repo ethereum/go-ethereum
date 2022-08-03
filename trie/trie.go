@@ -25,10 +25,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -152,20 +150,6 @@ func (t *Trie) Get(key []byte) []byte {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
-}
-
-func (t *Trie) TryGetAccount(key []byte) (*types.StateAccount, error) {
-	res, err := t.TryGet(key)
-	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-		return &types.StateAccount{}, err
-	}
-	if res == nil {
-		return nil, nil
-	}
-	var ret types.StateAccount
-	err = rlp.DecodeBytes(res, &ret)
-	return &ret, err
 }
 
 // TryGet returns the value for key stored in the trie.
@@ -302,14 +286,6 @@ func (t *Trie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
-}
-
-func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	data, err := rlp.EncodeToBytes(acc)
-	if err != nil {
-		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
-	}
-	return t.tryUpdate(key, data)
 }
 
 // TryUpdate associates key with value in the trie. Subsequent calls to
