@@ -130,7 +130,6 @@ func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPool
 // This Testcase tests functions for RPC API calls.
 // NOTE : Changes to this function might affect the child testcases.
 func TestAPIs(t *testing.T) {
-	t.Parallel()
 
 	defer func() {
 		if err := stack.Close(); err != nil {
