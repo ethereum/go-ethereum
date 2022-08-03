@@ -282,7 +282,7 @@ func TestReplication(t *testing.T) {
 			t.Errorf("trie2 doesn't have %q => %q", kv.k, kv.v)
 		}
 	}
-	hash, _, err := trie2.Commit(false)
+	hash, nodes, err := trie2.Commit(false)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
@@ -290,6 +290,14 @@ func TestReplication(t *testing.T) {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
 
+	// recreate the trie after commit
+	if nodes != nil {
+		triedb.Update(NewWithNodeSet(nodes))
+	}
+	trie2, err = New(common.Hash{}, hash, triedb)
+	if err != nil {
+		t.Fatalf("can't recreate trie at %x: %v", exp, err)
+	}
 	// perform some insertions on the new trie.
 	vals2 := []struct{ k, v string }{
 		{"do", "verb"},
