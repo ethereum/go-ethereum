@@ -1392,9 +1392,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
-	// If the gas amount is not set, extract this as it will depend on access
-	// lists and we'll need to reestimate every time
-	nogas := args.Gas == nil
+	// If the gas amount is not set, default to RPC gas cap.
+	if args.Gas == nil {
+		tmp := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &tmp
+	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
 	if err := args.setDefaults(ctx, b); err != nil {
@@ -1420,15 +1422,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)
 
-		// If no gas amount was specified, each unique access list needs it's own
-		// gas calculation. This is quite expensive, but we need to be accurate
-		// and it's convered by the sender only anyway.
-		if nogas {
-			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
-				return nil, 0, nil, err // shouldn't happen, just in case
-			}
-		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		// Set the accesslist to the last al
