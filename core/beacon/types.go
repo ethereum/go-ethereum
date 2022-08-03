@@ -226,8 +226,13 @@ func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
 			}
 			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
 			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
-			blobsBundle.AggregatedProof = aggProof
 		}
 	}
+
+	_, _, aggregatedProof, err := types.Blobs(blobsBundle.Blobs).ComputeCommitmentsAndAggregatedProof()
+	if err != nil {
+		return nil, err
+	}
+	blobsBundle.AggregatedProof = aggregatedProof
 	return blobsBundle, nil
 }
