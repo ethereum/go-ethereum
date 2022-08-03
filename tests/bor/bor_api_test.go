@@ -25,7 +25,7 @@ import (
 
 var (
 	key1, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	addr       = crypto.PubkeyToAddress(key1.PublicKey)
+	addrr      = crypto.PubkeyToAddress(key1.PublicKey)
 	stack, _   = node.New(&node.DefaultConfig)
 	backend, _ = eth.New(stack, &ethconfig.Defaults)
 	db         = backend.ChainDb()
@@ -138,7 +138,7 @@ func TestAPIs(t *testing.T) {
 		}
 	}()
 
-	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
+	genesis := core.GenesisBlockForTesting(db, addrr, big.NewInt(1000000))
 	sprint := params.TestChainConfig.Bor.Sprint
 
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 6, func(i int, gen *core.BlockGen) {
@@ -148,7 +148,7 @@ func TestAPIs(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash1},
 				},
 			}
@@ -159,7 +159,7 @@ func TestAPIs(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash2},
 				},
 			}
@@ -169,7 +169,7 @@ func TestAPIs(t *testing.T) {
 			receipt2 := types.NewReceipt(nil, false, 0)
 			receipt2.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash3},
 				},
 			}
@@ -180,7 +180,7 @@ func TestAPIs(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash4},
 				},
 			}
@@ -191,7 +191,7 @@ func TestAPIs(t *testing.T) {
 			receipt2 := types.NewReceipt(nil, false, 0)
 			receipt2.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash5},
 				},
 			}
