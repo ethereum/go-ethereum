@@ -908,9 +908,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 	// Commit objects to the trie, measuring the elapsed time
 	var (
-		accounts int
-		storages int
-		nodes    = trie.NewMergedNodeSet()
+		accountTrieNodes int
+		storageTrieNodes int
+		nodes            = trie.NewMergedNodeSet()
 	)
 	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
@@ -930,7 +930,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
 				}
-				storages += set.Len()
+				storageTrieNodes += set.Len()
 			}
 		}
 	}
@@ -956,7 +956,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if err := nodes.Merge(set); err != nil {
 			return common.Hash{}, err
 		}
-		accounts = set.Len()
+		accountTrieNodes = set.Len()
 	}
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
@@ -965,8 +965,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		storageUpdatedMeter.Mark(int64(s.StorageUpdated))
 		accountDeletedMeter.Mark(int64(s.AccountDeleted))
 		storageDeletedMeter.Mark(int64(s.StorageDeleted))
-		accountCommittedMeter.Mark(int64(accounts))
-		storageCommittedMeter.Mark(int64(storages))
+		accountTrieCommittedMeter.Mark(int64(accountTrieNodes))
+		storageTriesCommittedMeter.Mark(int64(storageTrieNodes))
 		s.AccountUpdated, s.AccountDeleted = 0, 0
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}

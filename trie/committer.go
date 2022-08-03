@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -37,25 +36,12 @@ type committer struct {
 	collectLeaf bool
 }
 
-// committers live in a global sync.Pool
-var committerPool = sync.Pool{
-	New: func() interface{} {
-		return &committer{}
-	},
-}
-
 // newCommitter creates a new committer or picks one from the pool.
 func newCommitter(owner common.Hash, collectLeaf bool) *committer {
-	ret := committerPool.Get().(*committer)
-	ret.nodes = NewNodeSet(owner)
-	ret.collectLeaf = collectLeaf
-	return ret
-}
-
-func returnCommitterToPool(h *committer) {
-	h.nodes = nil
-	h.collectLeaf = false
-	committerPool.Put(h)
+	return &committer{
+		nodes:       NewNodeSet(owner),
+		collectLeaf: collectLeaf,
+	}
 }
 
 // Commit collapses a node down into a hash node and inserts it into the database
@@ -173,7 +159,7 @@ func (c *committer) store(path []byte, n node) node {
 			size: uint16(size),
 		}
 	)
-	// Collect the dirty node to nodeset.
+	// Collect the dirty node to nodeset for return.
 	c.nodes.add(string(path), mnode)
 
 	// Collect the corresponding leaf node if it's required. We don't check

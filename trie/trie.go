@@ -602,9 +602,6 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
 
-	h := newCommitter(t.owner, collectLeaf)
-	defer returnCommitterToPool(h)
-
 	// Do a quick check if we really need to commit. This can happen e.g.
 	// if we load a trie for reading storage values, but don't write to it.
 	if hashedNode, dirty := t.root.cache(); !dirty {
@@ -613,6 +610,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
+	h := newCommitter(t.owner, collectLeaf)
 	newRoot, nodes, err := h.Commit(t.root)
 	if err != nil {
 		return common.Hash{}, nil, err
