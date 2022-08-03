@@ -770,7 +770,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	// ensured that children are inserted first, then parent so that children
 	// can be linked with their parent correctly. The order of writing between
 	// different tries(account trie, storage tries) is not required.
-	for owner, subset := range nodes.nodes {
+	for owner, subset := range nodes.sets {
 		for _, path := range subset.paths {
 			n, ok := subset.nodes[path]
 			if !ok {
@@ -781,8 +781,8 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	// Link up the account trie and storage trie if the node points
 	// to an account trie leaf.
-	if set, present := nodes.nodes[common.Hash{}]; present {
-		for _, n := range set.leafs {
+	if set, present := nodes.sets[common.Hash{}]; present {
+		for _, n := range set.leaves {
 			var account types.StateAccount
 			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
 				return err

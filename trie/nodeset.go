@@ -33,13 +33,15 @@ type memoryNode struct {
 // NodeSet contains all dirty nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
-	owner common.Hash            // the identifier of the trie
-	paths []string               // the path of dirty nodes, sort by insertion order
-	nodes map[string]*memoryNode // the map of dirty nodes, keyed by node path
-	leafs []*leaf                // the list of dirty leafs
+	owner  common.Hash            // the identifier of the trie
+	paths  []string               // the path of dirty nodes, sort by insertion order
+	nodes  map[string]*memoryNode // the map of dirty nodes, keyed by node path
+	leaves []*leaf                // the list of dirty leaves
 }
 
-// NewNodeSet initializes an empty dirty node set.
+// NewNodeSet initializes an empty node set to be used for tracking dirty nodes
+// from a specific account or storage trie. The owner is zero for the account
+// trie and the owning account address hash for storage tries.
 func NewNodeSet(owner common.Hash) *NodeSet {
 	return &NodeSet{
 		owner: owner,
@@ -55,7 +57,7 @@ func (set *NodeSet) add(path string, node *memoryNode) {
 
 // addLeaf caches the provided leaf node.
 func (set *NodeSet) addLeaf(node *leaf) {
-	set.leafs = append(set.leafs, node)
+	set.leaves = append(set.leaves, node)
 }
 
 // Len returns the number of dirty nodes contained in the set.
@@ -65,12 +67,12 @@ func (set *NodeSet) Len() int {
 
 // MergedNodeSet represents a merged dirty node set for a group of tries.
 type MergedNodeSet struct {
-	nodes map[common.Hash]*NodeSet
+	sets map[common.Hash]*NodeSet
 }
 
 // NewMergedNodeSet initializes an empty merged set.
 func NewMergedNodeSet() *MergedNodeSet {
-	return &MergedNodeSet{nodes: make(map[common.Hash]*NodeSet)}
+	return &MergedNodeSet{sets: make(map[common.Hash]*NodeSet)}
 }
 
 // NewWithNodeSet constructs a merged nodeset with the provided single set.
@@ -83,10 +85,10 @@ func NewWithNodeSet(set *NodeSet) *MergedNodeSet {
 // Merge merges the provided dirty nodes of a trie into the set. The assumption
 // is held that no duplicated set belonging to the same trie will be merged twice.
 func (set *MergedNodeSet) Merge(other *NodeSet) error {
-	_, present := set.nodes[other.owner]
+	_, present := set.sets[other.owner]
 	if present {
-		return fmt.Errorf("duplicated trie %x", other.owner)
+		return fmt.Errorf("duplicate trie for owner %#x", other.owner)
 	}
-	set.nodes[other.owner] = other
+	set.sets[other.owner] = other
 	return nil
 }

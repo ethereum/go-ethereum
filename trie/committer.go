@@ -177,7 +177,7 @@ func (c *committer) store(path []byte, n node) node {
 
 // estimateSize estimates the size of an rlp-encoded node, without actually
 // rlp-encoding it (zero allocs). This method has been experimentally tried, and with a trie
-// with 1000 leafs, the only errors above 1% are on small shortnodes, where this
+// with 1000 leaves, the only errors above 1% are on small shortnodes, where this
 // method overestimates by 2 or 3 bytes (e.g. 37 instead of 35)
 func estimateSize(n node) int {
 	switch n := n.(type) {
