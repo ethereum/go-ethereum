@@ -51,9 +51,8 @@ const (
 	opUpdate = iota
 	opDelete
 	opGet
-	opCommit
 	opHash
-	opReset
+	opCommit
 	opItercheckhash
 	opProve
 	opMax // boundary value, not an actual op
@@ -157,19 +156,9 @@ func runRandTest(rt randTest) error {
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
-		case opCommit:
-			_, nodes, err := tr.Commit(false)
-			if err != nil {
-				rt[i].err = err
-			}
-			if nodes != nil {
-				if err := triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
-					return err
-				}
-			}
 		case opHash:
 			tr.Hash()
-		case opReset:
+		case opCommit:
 			hash, nodes, err := tr.Commit(false)
 			if err != nil {
 				return err

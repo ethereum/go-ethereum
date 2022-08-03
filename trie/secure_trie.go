@@ -165,6 +165,8 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 // collectLeaf is true) will be encapsulated into a nodeset for return.
 // The returned nodeset can be nil if the trie is clean(nothing to commit).
 // All cached preimages will be also flushed if preimages recording is enabled.
+// Once the trie is committed, it's not usable anymore. A new trie must
+// be created with new root and updated trie database for following usage
 func (t *SecureTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {

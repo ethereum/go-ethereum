@@ -92,6 +92,8 @@ type Trie interface {
 	// corresponding node hash. All collected nodes(including dirty leaves if
 	// collectLeaf is true) will be encapsulated into a nodeset for return.
 	// The returned nodeset can be nil if the trie is clean(nothing to commit).
+	// Once the trie is committed, it's not usable anymore. A new trie must
+	// be created with new root and updated trie database for following usage
 	Commit(collectLeaf bool) (common.Hash, *trie.NodeSet, error)
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration

@@ -590,8 +590,8 @@ func (t *Trie) Hash() common.Hash {
 // corresponding node hash. All collected nodes(including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
 // The returned nodeset can be nil if the trie is clean(nothing to commit).
-// Note that all dirty nodes will also be cached in the nodestore inside
-// the trie to ensure these nodes can still be accessed after the commit.
+// Once the trie is committed, it's not usable anymore. A new trie must
+// be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	defer t.tracer.reset()
 

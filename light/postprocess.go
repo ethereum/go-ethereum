@@ -221,10 +221,16 @@ func (c *ChtIndexerBackend) Commit() error {
 	if err != nil {
 		return err
 	}
+	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
 		if err := c.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
+	}
+	// Re-create trie with newly generated root and updated database.
+	c.trie, err = trie.New(common.Hash{}, root, c.triedb)
+	if err != nil {
+		return err
 	}
 	// Pruning historical trie nodes if necessary.
 	if !c.disablePruning {
@@ -462,10 +468,16 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	if err != nil {
 		return err
 	}
+	// Commit trie changes into trie database in case it's not nil.
 	if nodes != nil {
 		if err := b.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
+	}
+	// Re-create trie with newly generated root and updated database.
+	b.trie, err = trie.New(common.Hash{}, root, b.triedb)
+	if err != nil {
+		return err
 	}
 	// Pruning historical trie nodes if necessary.
 	if !b.disablePruning {
