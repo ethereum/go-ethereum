@@ -343,6 +343,7 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		} else {
 			blockRlp = fmt.Sprintf("0x%x", rlpBytes)
 		}
+
 		if blockJSON, err = ethapi.RPCMarshalBlock(block, true, true, api.eth.APIBackend.ChainConfig(), api.eth.chainDb); err != nil {
 			blockJSON = map[string]interface{}{"error": err.Error()}
 		}
