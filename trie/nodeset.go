@@ -18,9 +18,52 @@ package trie
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+// memoryNode is all the information we know about a single cached trie node
+// in the memory.
+type memoryNode struct {
+	hash common.Hash // Node hash, computed by hashing rlp value
+	size uint16      // Byte size of the useful cached data
+	node node        // Cached collapsed trie node, or raw rlp data
+}
+
+// memoryNodeSize is the raw size of a memoryNode data structure without any
+// node data included. It's an approximate size, but should be a lot better
+// than not counting them.
+var memoryNodeSize = int(reflect.TypeOf(memoryNode{}).Size())
+
+// rlp returns the raw rlp encoded blob of the cached trie node, either directly
+// from the cache, or by regenerating it from the collapsed node.
+func (n *memoryNode) rlp() []byte {
+	if n.node == nil {
+		return nil
+	}
+	if node, ok := n.node.(rawNode); ok {
+		return node
+	}
+	return nodeToBytes(n.node)
+}
+
+// obj returns the decoded and expanded trie node, either directly from the cache,
+// or by regenerating it from the rlp encoded blob.
+func (n *memoryNode) obj() node {
+	if n.node == nil {
+		return nil
+	}
+	if node, ok := n.node.(rawNode); ok {
+		return mustDecodeNode(n.hash[:], node)
+	}
+	return expandNode(n.hash[:], n.node)
+}
+
+// memorySize returns the total memory size used by this node.
+func (n *memoryNode) memorySize(key int) int {
+	return int(n.size) + memoryNodeSize + key
+}
 
 // NodeSet contains all dirty nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.

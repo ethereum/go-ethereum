@@ -55,9 +55,9 @@ type LeafCallback func(keys [][]byte, path []byte, leaf []byte, parent common.Ha
 
 // Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
 // top of a database. Whenever trie performs a commit operation, the generated
-// dirty nodes will be cached in the internal store. It's users' responsibility
-// to manage the memory usage and re-create trie if necessary in order to avoid
-// out-of-memory issue.
+// nodes will be gathered and returned in a set. Once the trie is committed,
+// it's not usable anymore. Callers have to re-create the trie with new root
+// based on the updated trie database.
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
@@ -69,8 +69,9 @@ type Trie struct {
 	// actually unhashed nodes.
 	unhashed int
 
-	// nodes is the place to cache dirty nodes and access trie node from.
-	nodes *nodeStore
+	// db is the handler trie can retrieve nodes from. It's
+	// only for reading purpose and not available for writing.
+	db *Database
 
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
@@ -88,7 +89,7 @@ func (t *Trie) Copy() *Trie {
 		root:     t.root,
 		owner:    t.owner,
 		unhashed: t.unhashed,
-		nodes:    t.nodes.copy(),
+		db:       t.db,
 		tracer:   t.tracer.copy(),
 	}
 }
@@ -101,13 +102,9 @@ func (t *Trie) Copy() *Trie {
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
-	store, err := newNodeStore(db)
-	if err != nil {
-		return nil, err
-	}
 	trie := &Trie{
 		owner: owner,
-		nodes: store,
+		db:    db,
 		//tracer: newTracer(),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
@@ -224,7 +221,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.nodes.readBlob(t.owner, common.BytesToHash(hash), path)
+		blob, err := t.db.Node(common.BytesToHash(hash))
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -560,10 +557,25 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
-// resolveHash loads node from the underlying store with the given
+// resolveHash loads node from the underlying database with the provided
 // node hash and path prefix.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
-	return t.nodes.readNode(t.owner, common.BytesToHash(n), prefix)
+	hash := common.BytesToHash(n)
+	if node := t.db.node(hash); node != nil {
+		return node, nil
+	}
+	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
+}
+
+// resolveHash loads rlp-encoded node blob from the underlying database
+// with the provided node hash and path prefix.
+func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
+	hash := common.BytesToHash(n)
+	blob, _ := t.db.Node(hash)
+	if len(blob) != 0 {
+		return blob, nil
+	}
+	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
 }
 
 // Hash returns the root hash of the trie. It does not write to the
@@ -601,7 +613,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
-	newRoot, nodes, err := h.Commit(t.root, t.nodes)
+	newRoot, nodes, err := h.Commit(t.root)
 	if err != nil {
 		return common.Hash{}, nil, err
 	}
@@ -627,11 +639,6 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
+	t.db = nil
 	t.tracer.reset()
-	t.nodes = nil
-}
-
-// Size returns the total memory usage used by caching nodes internally.
-func (t *Trie) Size() common.StorageSize {
-	return t.nodes.size()
 }

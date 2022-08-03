@@ -29,11 +29,10 @@ type leaf struct {
 	parent common.Hash // the hash of parent node
 }
 
-// committer is a type used for the trie Commit operation. The committer will
+// committer is the tool used for the trie Commit operation. The committer will
 // capture all dirty nodes during the commit process and keep them cached in
 // insertion order.
 type committer struct {
-	owner       common.Hash
 	nodes       *NodeSet
 	collectLeaf bool
 }
@@ -48,22 +47,20 @@ var committerPool = sync.Pool{
 // newCommitter creates a new committer or picks one from the pool.
 func newCommitter(owner common.Hash, collectLeaf bool) *committer {
 	ret := committerPool.Get().(*committer)
-	ret.owner = owner
 	ret.nodes = NewNodeSet(owner)
 	ret.collectLeaf = collectLeaf
 	return ret
 }
 
 func returnCommitterToPool(h *committer) {
-	h.owner = common.Hash{}
 	h.nodes = nil
 	h.collectLeaf = false
 	committerPool.Put(h)
 }
 
 // Commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) Commit(n node, db *nodeStore) (hashNode, *NodeSet, error) {
-	h, err := c.commit(nil, n, db)
+func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
+	h, err := c.commit(nil, n)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -71,7 +68,7 @@ func (c *committer) Commit(n node, db *nodeStore) (hashNode, *NodeSet, error) {
 }
 
 // commit collapses a node down into a hash node and inserts it into the database
-func (c *committer) commit(path []byte, n node, db *nodeStore) (node, error) {
+func (c *committer) commit(path []byte, n node) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -86,7 +83,7 @@ func (c *committer) commit(path []byte, n node, db *nodeStore) (node, error) {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			childV, err := c.commit(append(path, cn.Key...), cn.Val, db)
+			childV, err := c.commit(append(path, cn.Key...), cn.Val)
 			if err != nil {
 				return nil, err
 			}
@@ -94,20 +91,20 @@ func (c *committer) commit(path []byte, n node, db *nodeStore) (node, error) {
 		}
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode := c.store(path, collapsed, db)
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
 		return collapsed, nil
 	case *fullNode:
-		hashedKids, err := c.commitChildren(path, cn, db)
+		hashedKids, err := c.commitChildren(path, cn)
 		if err != nil {
 			return nil, err
 		}
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
-		hashedNode := c.store(path, collapsed, db)
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		}
@@ -121,7 +118,7 @@ func (c *committer) commit(path []byte, n node, db *nodeStore) (node, error) {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, db *nodeStore) ([17]node, error) {
+func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 	var children [17]node
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -138,7 +135,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, db *nodeStore) ([17
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		hashed, err := c.commit(append(path, byte(i)), child, db)
+		hashed, err := c.commit(append(path, byte(i)), child)
 		if err != nil {
 			return children, err
 		}
@@ -154,7 +151,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, db *nodeStore) ([17
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (c *committer) store(path []byte, n node, db *nodeStore) node {
+func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 
@@ -177,9 +174,6 @@ func (c *committer) store(path []byte, n node, db *nodeStore) node {
 		}
 		spath = string(path)
 	)
-	// Insert the dirty nodes into internal store for accessing later.
-	db.write(spath, mnode)
-
 	// Collect the dirty node to nodeset.
 	c.nodes.add(spath, mnode)
 

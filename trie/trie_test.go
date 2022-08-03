@@ -24,7 +24,6 @@ import (
 	"hash"
 	"math/big"
 	"math/rand"
-	"os"
 	"reflect"
 	"testing"
 	"testing/quick"
@@ -35,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -44,12 +42,6 @@ import (
 func init() {
 	spew.Config.Indent = "    "
 	spew.Config.DisableMethods = false
-}
-
-// Used for testing
-func newEmpty() *Trie {
-	trie := NewEmpty(NewDatabase(memorydb.New()))
-	return trie
 }
 
 func TestEmptyTrie(t *testing.T) {
@@ -158,7 +150,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 }
 
 func TestInsert(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 
 	updateString(trie, "doe", "reindeer")
 	updateString(trie, "dog", "puppy")
@@ -170,7 +162,7 @@ func TestInsert(t *testing.T) {
 		t.Errorf("case 1: exp %x got %x", exp, root)
 	}
 
-	trie = newEmpty()
+	trie = NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
@@ -184,7 +176,8 @@ func TestInsert(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	trie := newEmpty()
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	trie := NewEmpty(db)
 	updateString(trie, "doe", "reindeer")
 	updateString(trie, "dog", "puppy")
 	updateString(trie, "dogglesworth", "cat")
@@ -194,21 +187,21 @@ func TestGet(t *testing.T) {
 		if !bytes.Equal(res, []byte("puppy")) {
 			t.Errorf("expected puppy got %x", res)
 		}
-
 		unknown := getString(trie, "unknown")
 		if unknown != nil {
 			t.Errorf("expected nil got %x", unknown)
 		}
-
 		if i == 1 {
 			return
 		}
-		trie.Commit(false)
+		root, nodes, _ := trie.Commit(false)
+		db.Update(NewWithNodeSet(nodes))
+		trie, _ = New(common.Hash{}, root, db)
 	}
 }
 
 func TestDelete(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -235,7 +228,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestEmptyValues(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
@@ -318,7 +311,7 @@ func TestReplication(t *testing.T) {
 }
 
 func TestLargeValue(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
 	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
@@ -372,9 +365,8 @@ const (
 	opUpdate = iota
 	opDelete
 	opGet
-	opCommit
 	opHash
-	opReset
+	opCommit
 	opItercheckhash
 	opNodeDiff
 	opMax // boundary value, not an actual op
@@ -436,19 +428,9 @@ func runRandTest(rt randTest) bool {
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
-		case opCommit:
-			_, nodes, err := tr.Commit(false)
-			if err != nil {
-				rt[i].err = err
-				return false
-			}
-			if nodes != nil {
-				triedb.Update(NewWithNodeSet(nodes))
-			}
-			origTrie = tr.Copy()
 		case opHash:
 			tr.Hash()
-		case opReset:
+		case opCommit:
 			hash, nodes, err := tr.Commit(false)
 			if err != nil {
 				rt[i].err = err
@@ -546,45 +528,31 @@ func TestRandom(t *testing.T) {
 	}
 }
 
-func BenchmarkGet(b *testing.B)      { benchGet(b, false) }
-func BenchmarkGetDB(b *testing.B)    { benchGet(b, true) }
+func BenchmarkGet(b *testing.B)      { benchGet(b) }
 func BenchmarkUpdateBE(b *testing.B) { benchUpdate(b, binary.BigEndian) }
 func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
 
 const benchElemCount = 20000
 
-func benchGet(b *testing.B, commit bool) {
+func benchGet(b *testing.B) {
 	triedb := NewDatabase(rawdb.NewMemoryDatabase())
 	trie := NewEmpty(triedb)
-	if commit {
-		triedb = tempDB(b)
-		trie = NewEmpty(triedb)
-	}
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
 		binary.LittleEndian.PutUint64(k, uint64(i))
 		trie.Update(k, k)
 	}
 	binary.LittleEndian.PutUint64(k, benchElemCount/2)
-	if commit {
-		trie.Commit(false)
-	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		trie.Get(k)
 	}
 	b.StopTimer()
-
-	if commit {
-		ldb := triedb.diskdb.(*leveldb.Database)
-		ldb.Close()
-		os.RemoveAll(ldb.Path())
-	}
 }
 
 func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	k := make([]byte, 32)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -614,7 +582,7 @@ func BenchmarkHash(b *testing.B) {
 	// entries, then adding N more.
 	addresses, accounts := makeAccounts(2 * b.N)
 	// Insert the accounts into the trie and hash it
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	i := 0
 	for ; i < len(addresses)/2; i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
@@ -645,7 +613,7 @@ func BenchmarkCommitAfterHash(b *testing.B) {
 func benchmarkCommitAfterHash(b *testing.B, collectLeaf bool) {
 	// Make the random benchmark deterministic
 	addresses, accounts := makeAccounts(b.N)
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -659,7 +627,7 @@ func benchmarkCommitAfterHash(b *testing.B, collectLeaf bool) {
 func TestTinyTrie(t *testing.T) {
 	// Create a realistic account trie to hash
 	_, accounts := makeAccounts(5)
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	trie.Update(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000001337"), accounts[3])
 	if exp, root := common.HexToHash("8c6a85a4d9fda98feff88450299e574e5378e32391f75a055d470ac0653f1005"), trie.Hash(); exp != root {
 		t.Errorf("1: got %x, exp %x", root, exp)
@@ -672,7 +640,7 @@ func TestTinyTrie(t *testing.T) {
 	if exp, root := common.HexToHash("0608c1d1dc3905fa22204c7a0e43644831c3b6d3def0f274be623a948197e64a"), trie.Hash(); exp != root {
 		t.Errorf("3: got %x, exp %x", root, exp)
 	}
-	checktr := newEmpty()
+	checktr := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		checktr.Update(it.Key, it.Value)
@@ -685,7 +653,7 @@ func TestTinyTrie(t *testing.T) {
 func TestCommitAfterHash(t *testing.T) {
 	// Create a realistic account trie to hash
 	addresses, accounts := makeAccounts(1000)
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -1012,7 +980,7 @@ func BenchmarkHashFixedSize(b *testing.B) {
 
 func benchmarkHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
 	b.ReportAllocs()
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -1063,7 +1031,7 @@ func BenchmarkCommitAfterHashFixedSize(b *testing.B) {
 
 func benchmarkCommitAfterHashFixedSize(b *testing.B, addresses [][20]byte, accounts [][]byte) {
 	b.ReportAllocs()
-	trie := newEmpty()
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	for i := 0; i < len(addresses); i++ {
 		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
 	}
@@ -1126,15 +1094,6 @@ func benchmarkDerefRootFixedSize(b *testing.B, addresses [][20]byte, accounts []
 	b.StartTimer()
 	triedb.Dereference(h)
 	b.StopTimer()
-}
-
-func tempDB(tb testing.TB) *Database {
-	dir := tb.TempDir()
-	diskdb, err := leveldb.New(dir, 256, 0, "", false)
-	if err != nil {
-		panic(fmt.Sprintf("can't create temporary database: %v", err))
-	}
-	return NewDatabase(diskdb)
 }
 
 func getString(trie *Trie, k string) []byte {
