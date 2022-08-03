@@ -16,7 +16,7 @@ func TestConfigDefault(t *testing.T) {
 	_, err := config.buildNode()
 	assert.NoError(t, err)
 
-	_, err = config.buildEth(nil)
+	_, err = config.buildEth(nil, nil)
 	assert.NoError(t, err)
 }
 
@@ -24,7 +24,7 @@ func TestConfigMerge(t *testing.T) {
 	c0 := &Config{
 		Chain:    "0",
 		Snapshot: true,
-		Whitelist: map[string]string{
+		RequiredBlocks: map[string]string{
 			"a": "b",
 		},
 		TxPool: &TxPoolConfig{
@@ -40,7 +40,7 @@ func TestConfigMerge(t *testing.T) {
 	}
 	c1 := &Config{
 		Chain: "1",
-		Whitelist: map[string]string{
+		RequiredBlocks: map[string]string{
 			"b": "c",
 		},
 		P2P: &P2PConfig{
@@ -52,26 +52,51 @@ func TestConfigMerge(t *testing.T) {
 			},
 		},
 	}
+
 	expected := &Config{
 		Chain:    "1",
-		Snapshot: true,
-		Whitelist: map[string]string{
+		Snapshot: false,
+		RequiredBlocks: map[string]string{
 			"a": "b",
 			"b": "c",
 		},
-		TxPool: &TxPoolConfig{
-			LifeTime: 5 * time.Second,
-		},
 		P2P: &P2PConfig{
 			MaxPeers: 10,
 			Discovery: &P2PDiscovery{
 				StaticNodes: []string{
-					"a",
 					"b",
 				},
 			},
 		},
 	}
+
+	assert.NoError(t, c0.Merge(c1))
+	assert.Equal(t, c0, expected)
+}
+
+func TestDefaultDatatypeOverride(t *testing.T) {
+	t.Parallel()
+
+	// This test is specific to `maxpeers` flag (for now) to check
+	// if default datatype value (0 in case of uint64) is overridden.
+	c0 := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 30,
+		},
+	}
+
+	c1 := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 0,
+		},
+	}
+
+	expected := &Config{
+		P2P: &P2PConfig{
+			MaxPeers: 0,
+		},
+	}
+
 	assert.NoError(t, c0.Merge(c1))
 	assert.Equal(t, c0, expected)
 }
@@ -80,16 +105,17 @@ func TestConfigLoadFile(t *testing.T) {
 	readFile := func(path string) {
 		config, err := readConfigFile(path)
 		assert.NoError(t, err)
+
 		assert.Equal(t, config, &Config{
 			DataDir: "./data",
-			Whitelist: map[string]string{
+			RequiredBlocks: map[string]string{
 				"a": "b",
 			},
 			P2P: &P2PConfig{
 				MaxPeers: 30,
 			},
 			TxPool: &TxPoolConfig{
-				LifeTime: time.Duration(1 * time.Second),
+				LifeTime: 1 * time.Second,
 			},
 			Gpo: &GpoConfig{
 				MaxPrice: big.NewInt(100),
@@ -101,11 +127,12 @@ func TestConfigLoadFile(t *testing.T) {
 
 	// read file in hcl format
 	t.Run("hcl", func(t *testing.T) {
-		readFile("./testdata/simple.hcl")
+		readFile("./testdata/test.hcl")
 	})
+
 	// read file in json format
 	t.Run("json", func(t *testing.T) {
-		readFile("./testdata/simple.json")
+		readFile("./testdata/test.json")
 	})
 }
 
@@ -129,5 +156,16 @@ func TestConfigBootnodesDefault(t *testing.T) {
 		cfg, err := config.buildNode()
 		assert.NoError(t, err)
 		assert.Len(t, cfg.P2P.BootstrapNodes, 1)
+	})
+}
+
+func TestMakePasswordListFromFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ReadPasswordFile", func(t *testing.T) {
+		t.Parallel()
+
+		result, _ := MakePasswordListFromFile("./testdata/password.txt")
+		assert.Equal(t, []string{"test1", "test2"}, result)
 	})
 }

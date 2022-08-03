@@ -1,8 +1,7 @@
-package bor
+package valset
 
 import (
 	"bytes"
-	// "encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -43,9 +42,12 @@ func (v *Validator) Cmp(other *Validator) *Validator {
 	if v == nil {
 		return other
 	}
+
 	if other == nil {
 		return v
 	}
+
+	// nolint:nestif
 	if v.ProposerPriority > other.ProposerPriority {
 		return v
 	} else if v.ProposerPriority < other.ProposerPriority {
@@ -66,6 +68,7 @@ func (v *Validator) String() string {
 	if v == nil {
 		return "nil-Validator"
 	}
+
 	return fmt.Sprintf("Validator{%v Power:%v Priority:%v}",
 		v.Address.Hex(),
 		v.VotingPower,
@@ -87,6 +90,7 @@ func (v *Validator) HeaderBytes() []byte {
 	result := make([]byte, 40)
 	copy(result[:20], v.Address.Bytes())
 	copy(result[20:], v.PowerBytes())
+
 	return result
 }
 
@@ -95,6 +99,7 @@ func (v *Validator) PowerBytes() []byte {
 	powerBytes := big.NewInt(0).SetInt64(v.VotingPower).Bytes()
 	result := make([]byte, 20)
 	copy(result[20-len(powerBytes):], powerBytes)
+
 	return result
 }
 
@@ -114,6 +119,7 @@ func ParseValidators(validatorsBytes []byte) ([]*Validator, error) {
 	}
 
 	result := make([]*Validator, len(validatorsBytes)/40)
+
 	for i := 0; i < len(validatorsBytes); i += 40 {
 		address := make([]byte, 20)
 		power := make([]byte, 20)
@@ -142,6 +148,7 @@ func SortMinimalValByAddress(a []MinimalVal) []MinimalVal {
 	sort.Slice(a, func(i, j int) bool {
 		return bytes.Compare(a[i].Signer.Bytes(), a[j].Signer.Bytes()) < 0
 	})
+
 	return a
 }
 
@@ -150,5 +157,6 @@ func ValidatorsToMinimalValidators(vals []Validator) (minVals []MinimalVal) {
 	for _, val := range vals {
 		minVals = append(minVals, val.MinimalVal())
 	}
+
 	return
 }
