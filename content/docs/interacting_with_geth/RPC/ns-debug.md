@@ -3,11 +3,8 @@ title: debug Namespace
 sort_key: C
 ---
 
-The `debug` API gives you access to several non-standard RPC methods, which will allow you
-to inspect, debug and set certain debugging flags during runtime.
+The `debug` API gives access to several non-standard RPC methods, which allow inspection, debugging and setting certain debugging flags during runtime.
 
-* TOC
-{:toc}
 
 ### debug_accountRange
 
@@ -228,7 +225,7 @@ Retrieves and returns the RLP encoded block by number.
 | Console | `debug.getBlockRlp(number, [options])`                |
 | RPC     | `{"method": "debug_getBlockRlp", "params": [number]}` |
 
-References: [RLP](https://github.com/ethereum/wiki/wiki/RLP)
+References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/#top)
 
 ### debug_getHeaderRlp
 
@@ -365,7 +362,7 @@ collection.
 ### debug_setHead
 
 Sets the current head of the local chain by block number. **Note**, this is a
-destructive action and may severely damage your chain. Use with *extreme* caution.
+destructive action and may severely damage the chain. Use with *extreme* caution.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -374,7 +371,7 @@ destructive action and may severely damage your chain. Use with *extreme* cautio
 | RPC     | `{"method": "debug_setHead", "params": [number]}` |
 
 References:
-[Ethash](https://eth.wiki/en/concepts/ethash/ethash)
+[Ethash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash)
 
 ### debug_setMutexProfileFraction
 
@@ -516,7 +513,7 @@ fail.
 | RPC     | `{"method": "debug_traceBlock", "params": [blockRlp, {}]}`               |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)
 
 #### Example
 
@@ -566,7 +563,7 @@ block that is already present in the database.
 | RPC     | `{"method": "debug_traceBlockByNumber", "params": [number, {}]}`               |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)
 
 ### debug_traceBlockByHash
 
@@ -580,7 +577,7 @@ block that is already present in the database.
 | RPC     | `{"method": "debug_traceBlockByHash", "params": [hash {}]}`                     |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)
 
 
 ### debug_traceBlockFromFile
@@ -594,11 +591,11 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a
 | RPC     | `{"method": "debug_traceBlockFromFile", "params": [fileName, {}]}`               |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. A tracer can be specified as a third argument, similar to `debug_traceTransaction`. It returns the same output as `debug_traceTransaction`.
+The `debug_traceCall` method enables running an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. A tracer can be specified as a third argument, similar to `debug_traceTransaction`. It returns the same output as `debug_traceTransaction`.
 
 | Client  | Method invocation                 |
 |:-------:|-----------------------------------|
@@ -689,7 +686,7 @@ as it was executed on the network. It will replay any transaction that may have 
 to this one before it will finally attempt to execute the transaction that corresponds to the given
 hash.
 
-In addition to the hash of the transaction you may give it a secondary *optional* argument, which
+In addition to the hash of the transaction it can take a secondary *optional* argument, which
 specifies the options for this specific call. The possible options are:
 
 * `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
@@ -744,7 +741,7 @@ specifies the options for this specific call. The possible options are:
 
 #### JavaScript-based tracing
 
-Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 3 additional methods, namely: `step`, `enter` and `exit`. You must provide either `step`, or `enter` AND `exit` (i.e. these two must be exposed together). You may expose all three if you choose to do so.
+Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 3 additional methods, namely: `step`, `enter` and `exit`. One of either `step`, or `enter` AND `exit` must be provided(i.e. `enter` and `exit` must be exposed together). All three can be provided together.
 
 ##### Step
 
@@ -768,7 +765,7 @@ and the following methods:
 
 If error is non-empty, all other fields should be ignored.
 
-For efficiency, the same `log` object is reused on each execution step, updated with current values; make sure to copy values you want to preserve beyond the current call. For instance, this step function will not work:
+For efficiency, the same `log` object is reused on each execution step, updated with current values; make sure to copy values that are needed beyond the current call. For instance, this step function will not work:
 
     function(log) {
       this.logs.append(log);
@@ -887,30 +884,27 @@ Sets the logging verbosity pattern.
 
 #### Examples
 
-If you want to see messages from a particular Go package (directory)
+To see messages from a particular Go package (directory)
 and all subdirectories, use:
 
 ``` javascript
 > debug.vmodule("eth/*=6")
 ```
 
-If you want to restrict messages to a particular package (e.g. p2p)
+To restrict messages to a particular package (e.g. p2p)
 but exclude subdirectories, use:
 
 ``` javascript
 > debug.vmodule("p2p=6")
 ```
 
-If you want to see log messages from a particular source file, use
+To see log messages from a particular source file, use
 
 ``` javascript
 > debug.vmodule("server.go=6")
 ```
 
-You can compose these basic patterns. If you want to see all
-output from peer.go in a package below eth (eth/peer.go,
-eth/downloader/peer.go) as well as output from package p2p
-at level <= 5, use:
+To see all output from peer.go in a package below eth (eth/peer.go, eth/downloader/peer.go) as well as output from package p2p at level <= 5, use:
 
 ``` javascript
 debug.vmodule("eth/*/peer.go=6,p2p=5")

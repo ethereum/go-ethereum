@@ -38,9 +38,36 @@ Note that the Ethstats dashboard is not a reliable source of information about t
 network because submitting data to the Ethstats server is voluntary and has to be configured by
 individual nodes. Therefore, many nodes are omitted from the summary statistics.
 
+## How to use
+
+To report statistics about the local node to Ethstats, an Ethstats server and Ethstats client both have 
+to be installed alongside Geth. There are several options for installing Ethstats clients and servers,
+each with detailed installation instructions. They all share the common trait that an Ethstats service is
+started with a specific URL that can be passed to Geth. 
+
+[EthNetStats "Classic"](https://github.com/ethereum/eth-netstats)
+[EthNet Intelligence API](https://github.com/ethereum/eth-net-intelligence-api)
+[Goerli Ethstats client](https://github.com/goerli/ethstats-client)
+[Goerli Ethstats server](https://github.com/goerli/ethstats-server)
+
+If enabled, Geth spins up a minimal Ethstats reporting daemon that pushes statistics about the
+local node to the Ethstats server. 
+
+To enable this, start Geth with the `ethstats` flag, passing the Ethstats service (nodename:secret@host:port) URL.
+
+```sh
+geth <other commands> --ethstats node1:secret:127.0.0.1:9000
+```
+
+The local node will then report to Ethstats, and the statistics will be displayed in a dashboard that can be
+accessed via the web browser.
+
+## Note on WS_secret
+
+The `WS_secret` parameter is required for connecting to an Ethstats server. For a local network this can be user-defined 
+on startup by providing it as an environment variable. However, for Ethereum mainnet and the public testnets predefined 
+values must be known. Historically these have been made available on Gitter and Skype channels or of a forum, but these are
+no longer in use. The user will have to track down existing Ethstats users to request the `WS_secret`.
 
 
 
-.. UNFINISHED
-
-Reporting URL of a ethstats service (nodename:secret@host:port)

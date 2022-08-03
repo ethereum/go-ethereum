@@ -3,12 +3,8 @@ title: admin Namespace
 sort_key: C
 ---
 
-The `admin` API gives you access to several non-standard RPC methods, which will allow you to have
-a fine grained control over your Geth instance, including but not limited to network peer and RPC
-endpoint management.
+The `admin` API gives access to several non-standard RPC methods, which allows fine grained control over a Geth instance, including but not limited to network peer and RPC endpoint management.
 
-* TOC
-{:toc}
 
 ### admin_addPeer
 
@@ -16,7 +12,7 @@ The `addPeer` administrative method requests adding a new remote node to the lis
 nodes. The node will try to maintain connectivity to these nodes at all times, reconnecting every
 once in a while if the remote connection goes down.
 
-The method accepts a single argument, the [`enode`](https://github.com/ethereum/wiki/wiki/enode-url-format)
+The method accepts a single argument, the [`enode`](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode)
 URL of the remote peer to start tracking and returns a `BOOL` indicating whether the peer was accepted
 for tracking or some error occurred.
 
@@ -91,7 +87,7 @@ It returns a boolean indicating whether the operation succeeded.
 
 The `nodeInfo` administrative property can be queried for all the information known about the running
 Geth node at the networking granularity. These include general information about the node itself as a
-participant of the [ÐΞVp2p](https://github.com/ethereum/wiki/wiki/%C3%90%CE%9EVp2p-Wire-Protocol) P2P
+participant of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P
 overlay protocol, as well as specialized information added by each of the running application protocols
 (e.g. `eth`, `les`, `shh`, `bzz`).
 
@@ -141,7 +137,7 @@ The type of events emitted by the server are as follows:
 
 The `peers` administrative property can be queried for all the information known about the connected
 remote nodes at the networking granularity. These include general information about the nodes themselves
-as participants of the [ÐΞVp2p](https://github.com/ethereum/wiki/wiki/%C3%90%CE%9EVp2p-Wire-Protocol)
+as participants of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md)
 P2P overlay protocol, as well as specialized information added by each of the running application
 protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 

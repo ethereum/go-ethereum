@@ -5,13 +5,13 @@ sort_key: C
 
 In addition to the [JSON-RPC APIs](../rpc/server), Geth supports the GraphQL API as specified by [EIP-1767](eip-1767). GraphQL lets you specify which fields of an objects you need as part of the query, eliminating the extra load on the client for filling in fields which are not needed. It also allows for combining several traditional JSON-RPC requests into one query which translates into less overhead and more performance.
 
-The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence you'll have to enable and configure the relevant `--http` flags, and the `--graphql` flag itself:
+The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence the relevant `--http` flags and the `--graphql` flag  should be passed to Geth:
 
 ```bash
 geth --http --graphql
 ```
 
-Now you can start querying against `http://localhost:8545/graphql`. To change the port, you'll need to provide `--http.port`, e.g.:
+Now queries can be raised against `http://localhost:8545/graphql`. To change the port, provide a custom port number to `--http.port`, e.g.:
 
 ```bash
 geth --http --http.port 9545 --graphql
@@ -19,7 +19,7 @@ geth --http --http.port 9545 --graphql
 
 ### GraphiQL
 
-An easy way to get started right away and try out queries is the GraphiQL interface shipped with Geth. To open it visit `http://localhost:8545/graphql/ui`. To see how this works let's read the sender, recipient and value of all transactions in block number 6000000. Try this out in GraphiQL:
+An easy way to try out queries is the GraphiQL interface shipped with Geth. To open it visit `http://localhost:8545/graphql/ui`. To see how this works let's read the sender, recipient and value of all transactions in block number 6000000. In GraphiQL:
 
 ```graphql
 query txInfo {
@@ -31,9 +31,9 @@ GraphiQL also provides a way to explore the schema Geth provides to help you for
 
 ### Query
 
-Reading out data from Geth is the biggest use-case for GraphQL. However after trying out queries in the UI you may want to do it programmatically. You can consult the official [docs](graphql-code) to find bindings for your language. Or use your favorite tool for sending HTTP requests. For sake of completeness we briefly touch on two approaches here. First via cURL, and second via a JS script.
+Reading out data from Geth is the biggest use-case for GraphQL. In addition to using the UI queries can also be sent programmatically. The official GraphQL[docs](graphql-code) explain how to find bindings for many languages, or send http requests from the terminal using tools such as Curl.
 
-Here's how you'd get the latest block's number via cURL. Note the use of a JSON object for the data section:
+For example, the code snippet below shows how to obtain the latest block number using Curl. Note the use of a JSON object for the data section:
 
 ```bash
 ❯ curl -X POST http://localhost:8545/graphql -H "Content-Type: application/json" --data '{ "query": "query { block { number } }" }'
@@ -46,7 +46,7 @@ Alternatively store the JSON-ified query in a file (let's call it `block-num.que
 ❯ curl -X POST http://localhost:8545/graphql -H "Content-Type: application/json" --data '@block-num.query'
 ```
 
-Executing a simple query in JS looks like the following. Here we're using the lightweight library `graphql-request` to perform the request. Note the use of variables instead of hardcoding the block number in the query:
+Executing a simple query in JS looks as follows. Here the lightweight library `graphql-request` is used to perform the request. Note the use of variables instead of hardcoding the block number in the query:
 
 ```javascript
 const { request, gql } = require('graphql-request')
