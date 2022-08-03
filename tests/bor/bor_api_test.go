@@ -61,6 +61,7 @@ func areDifferentHashes(receipts []map[string]interface{}) bool {
 	return true
 }
 
+// Test for GetTransactionReceiptsByBlock
 func testGetTransactionReceiptsByBlock(t *testing.T, publicBlockchainAPI *ethapi.PublicBlockChainAPI) {
 	// check 1 : zero transactions
 	receiptsOut, err := publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(1))
@@ -99,6 +100,7 @@ func testGetTransactionReceiptsByBlock(t *testing.T, publicBlockchainAPI *ethapi
 
 }
 
+// Test for GetTransactionByBlockNumberAndIndex
 func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPoolAPI *ethapi.PublicTransactionPoolAPI) {
 	// check 1 : False ( no transaction )
 	tx := publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(1), 0)
@@ -125,6 +127,8 @@ func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPool
 	assert.Equal(t, common.HexToAddress("0x0"), *tx.To)
 }
 
+// This Testcase tests functions for RPC API calls.
+// NOTE : Changes to this function might affect the child testcases.
 func TestAPIs(t *testing.T) {
 	t.Parallel()
 
@@ -240,9 +244,11 @@ func TestAPIs(t *testing.T) {
 		}
 	}
 
+	// Testing GetTransactionReceiptsByBlock
 	publicBlockchainAPI := backend.PublicBlockChainAPI()
 	testGetTransactionReceiptsByBlock(t, publicBlockchainAPI)
 
+	// Testing GetTransactionByBlockNumberAndIndex
 	nonceLock := new(ethapi.AddrLocker)
 	publicTransactionPoolAPI := ethapi.NewPublicTransactionPoolAPI(backend.APIBackend, nonceLock)
 	testGetTransactionByBlockNumberAndIndex(t, publicTransactionPoolAPI)
