@@ -637,6 +637,6 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
-	t.db = nil
+	//t.db = nil
 	t.tracer.reset()
 }
