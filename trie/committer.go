@@ -172,10 +172,9 @@ func (c *committer) store(path []byte, n node) node {
 			node: simplifyNode(n),
 			size: uint16(size),
 		}
-		spath = string(path)
 	)
 	// Collect the dirty node to nodeset.
-	c.nodes.add(spath, mnode)
+	c.nodes.add(string(path), mnode)
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
