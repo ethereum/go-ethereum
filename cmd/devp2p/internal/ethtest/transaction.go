@@ -62,7 +62,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 	}
 	defer sendConn.Close()
 	defer recvConn.Close()
-	if err = sendConn.peer(s.chain, nil); err != nil {
+	if err = sendConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// Send the transaction
@@ -70,7 +70,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 		return fmt.Errorf("failed to write to connection: %v", err)
 	}
 	// peer receiving connection to node
-	if err = recvConn.peer(s.chain, nil); err != nil {
+	if err = recvConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func (s *Suite) sendMaliciousTxs(t *utesting.T) error {
 		return fmt.Errorf("dial failed: %v", err)
 	}
 	defer recvConn.Close()
-	if err = recvConn.peer(s.chain, nil); err != nil {
+	if err = recvConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func sendMaliciousTx(s *Suite, tx *types.Transaction) error {
 		return fmt.Errorf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 
@@ -204,10 +204,10 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	}
 	defer sendConn.Close()
 	defer recvConn.Close()
-	if err = sendConn.peer(s.chain, nil); err != nil {
+	if err = sendConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
-	if err = recvConn.peer(s.chain, nil); err != nil {
+	if err = recvConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 

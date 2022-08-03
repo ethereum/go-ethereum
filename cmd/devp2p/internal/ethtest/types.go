@@ -19,10 +19,13 @@ package ethtest
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"net"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -157,6 +160,29 @@ type Conn struct {
 	ourHighestProtoVersion     uint
 	ourHighestSnapProtoVersion uint
 	caps                       []p2p.Cap
+}
+
+// Dial opens a connection with a peer.
+func Dial(dest *enode.Node) (*Conn, error) {
+	// dial
+	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", dest.IP(), dest.TCP()))
+	if err != nil {
+		return nil, err
+	}
+	conn := Conn{Conn: rlpx.NewConn(fd, dest.Pubkey())}
+	// do encHandshake
+	conn.ourKey, _ = crypto.GenerateKey()
+	_, err = conn.Handshake(conn.ourKey)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	// set default p2p capabilities
+	conn.caps = []p2p.Cap{
+		{Name: "eth", Version: 66},
+	}
+	conn.ourHighestProtoVersion = 66
+	return &conn, nil
 }
 
 // Read reads an eth66 packet from the connection.

@@ -103,7 +103,7 @@ func runGeth() (*node.Node, error) {
 }
 
 func setupGeth(stack *node.Node) error {
-	chain, err := loadChain(halfchainFile, genesisFile)
+	chain, err := LoadChain(halfchainFile, genesisFile)
 	if err != nil {
 		return err
 	}

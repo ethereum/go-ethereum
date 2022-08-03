@@ -38,7 +38,7 @@ type Suite struct {
 // be used to test the given node against the given blockchain
 // data.
 func NewSuite(dest *enode.Node, chainfile string, genesisfile string) (*Suite, error) {
-	chain, err := loadChain(chainfile, genesisfile)
+	chain, err := LoadChain(chainfile, genesisfile)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (s *Suite) TestStatus(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 }
@@ -107,7 +107,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
@@ -143,7 +143,7 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// create requests
@@ -286,7 +286,7 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	req := &GetBlockHeaders{
@@ -316,7 +316,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// create block bodies request
@@ -376,7 +376,7 @@ func (s *Suite) TestLargeAnnounce(t *utesting.T) {
 		if err != nil {
 			t.Fatalf("dial failed: %v", err)
 		}
-		if err := conn.peer(s.chain, nil); err != nil {
+		if err := conn.Peer(s.chain, nil); err != nil {
 			t.Fatalf("peering failed: %v", err)
 		}
 		if err := conn.Write(blockAnnouncement); err != nil {
@@ -472,7 +472,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// create and send pooled tx request
@@ -529,7 +529,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 

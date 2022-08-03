@@ -80,9 +80,9 @@ func (s *Suite) dialSnap() (*Conn, error) {
 	return conn, nil
 }
 
-// peer performs both the protocol handshake and the status message
-// exchange with the node in order to peer with it.
-func (c *Conn) peer(chain *Chain, status *Status) error {
+// Peer performs both the protocol handshake and the status message
+// exchange with the node in order to Peer with it.
+func (c *Conn) Peer(chain *Chain, status *Status) error {
 	if err := c.handshake(); err != nil {
 		return fmt.Errorf("handshake failed: %v", err)
 	}
@@ -305,10 +305,10 @@ func (s *Suite) sendNextBlock() error {
 	}
 	defer sendConn.Close()
 	defer recvConn.Close()
-	if err = sendConn.peer(s.chain, nil); err != nil {
+	if err = sendConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
-	if err = recvConn.peer(s.chain, nil); err != nil {
+	if err = recvConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// create new block announcement
@@ -411,10 +411,10 @@ func (s *Suite) oldAnnounce() error {
 	}
 	defer sendConn.Close()
 	defer receiveConn.Close()
-	if err := sendConn.peer(s.chain, nil); err != nil {
+	if err := sendConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
-	if err := receiveConn.peer(s.chain, nil); err != nil {
+	if err := receiveConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 	// create old block announcement
@@ -569,10 +569,10 @@ func (s *Suite) hashAnnounce() error {
 	}
 	defer sendConn.Close()
 	defer recvConn.Close()
-	if err := sendConn.peer(s.chain, nil); err != nil {
+	if err := sendConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
-	if err := recvConn.peer(s.chain, nil); err != nil {
+	if err := recvConn.Peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
 

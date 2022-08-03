@@ -133,7 +133,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	LoadChain
 	chain, err := loadChain(chainFile, genesisFile)
 	if err != nil {
 		t.Fatal(err)

@@ -38,7 +38,7 @@ func (s *Suite) TestSnapStatus(t *utesting.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.peer(s.chain, nil); err != nil {
+	if err := conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 }
@@ -475,7 +475,7 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
@@ -550,7 +550,7 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
@@ -594,7 +594,7 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request
@@ -655,7 +655,7 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer conn.Close()
-	if err = conn.peer(s.chain, nil); err != nil {
+	if err = conn.Peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
 	// write request

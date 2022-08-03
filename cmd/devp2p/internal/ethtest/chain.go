@@ -39,9 +39,22 @@ type Chain struct {
 	chainConfig *params.ChainConfig
 }
 
+// Config returns the chain config.
+func (c *Chain) Config() *params.ChainConfig {
+	return c.chainConfig
+}
+
 // Len returns the length of the chain.
 func (c *Chain) Len() int {
 	return len(c.blocks)
+}
+
+// GetHeaderByNumber returns a header by number.
+func (c *Chain) GetHeaderByNumber(n uint64) *types.Header {
+	if n >= uint64(c.Len()) {
+		return nil
+	}
+	return c.blocks[n].Header()
 }
 
 // TD calculates the total difficulty of the chain at the
@@ -132,9 +145,9 @@ func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	return headers, nil
 }
 
-// loadChain takes the given chain.rlp file, and decodes and returns
+// LoadChain takes the given chain.rlp file, and decodes and returns
 // the blocks from the file.
-func loadChain(chainfile string, genesis string) (*Chain, error) {
+func LoadChain(chainfile string, genesis string) (*Chain, error) {
 	gen, err := loadGenesis(genesis)
 	if err != nil {
 		return nil, err
@@ -153,7 +166,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 func loadGenesis(genesisFile string) (core.Genesis, error) {
 	chainConfig, err := os.ReadFile(genesisFile)
 	if err != nil {
-		return core.Genesis{}, err
+		return core.Genesis{}, fmt.Errorf("unable to load %s: %s", genesisFile, err)
 	}
 	var gen core.Genesis
 	if err := json.Unmarshal(chainConfig, &gen); err != nil {
