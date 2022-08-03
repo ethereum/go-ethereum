@@ -26,12 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereumfair/go-ethereum/common"
+	"github.com/ethereumfair/go-ethereum/common/prque"
+	"github.com/ethereumfair/go-ethereum/core/types"
+	"github.com/ethereumfair/go-ethereum/log"
+	"github.com/ethereumfair/go-ethereum/metrics"
+	"github.com/ethereumfair/go-ethereum/trie"
 )
 
 const (

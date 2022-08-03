@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereumfair/go-ethereum/cmd/utils"
+	"github.com/ethereumfair/go-ethereum/console"
+	"github.com/ethereumfair/go-ethereum/internal/flags"
+	"github.com/ethereumfair/go-ethereum/node"
+	"github.com/ethereumfair/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 

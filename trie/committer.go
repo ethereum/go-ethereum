@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereumfair/go-ethereum/common"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow

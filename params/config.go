@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereumfair/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
 )
 
