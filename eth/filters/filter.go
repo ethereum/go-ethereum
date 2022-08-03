@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -32,7 +31,6 @@ import (
 type Filter struct {
 	sys *FilterSystem
 
-	db        ethdb.Database
 	addresses []common.Address
 	topics    [][]common.Hash
 
@@ -91,7 +89,6 @@ func newFilter(sys *FilterSystem, addresses []common.Address, topics [][]common.
 		sys:       sys,
 		addresses: addresses,
 		topics:    topics,
-		db:        sys.backend.ChainDb(),
 	}
 }
 
