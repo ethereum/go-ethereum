@@ -1,3 +1,5 @@
+//go:build integration
+
 package bor
 
 import (
@@ -13,11 +15,25 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/stretchr/testify/assert"
+)
+
+var (
+	key1, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addrr      = crypto.PubkeyToAddress(key1.PublicKey)
+	stack, _   = node.New(&node.DefaultConfig)
+	backend, _ = eth.New(stack, &ethconfig.Defaults)
+	db         = backend.ChainDb()
+	hash1      = common.BytesToHash([]byte("topic1"))
+	hash2      = common.BytesToHash([]byte("topic2"))
+	hash3      = common.BytesToHash([]byte("topic3"))
+	hash4      = common.BytesToHash([]byte("topic4"))
+	hash5      = common.BytesToHash([]byte("topic5"))
 )
 
 func duplicateInArray(arr []common.Hash) bool {
@@ -45,21 +61,75 @@ func areDifferentHashes(receipts []map[string]interface{}) bool {
 	return true
 }
 
-func TestGetTransactionReceiptsByBlock(t *testing.T) {
-	t.Parallel()
+// Test for GetTransactionReceiptsByBlock
+func testGetTransactionReceiptsByBlock(t *testing.T, publicBlockchainAPI *ethapi.PublicBlockChainAPI) {
+	// check 1 : zero transactions
+	receiptsOut, err := publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(1))
+	if err != nil {
+		t.Error(err)
+	}
 
-	var (
-		key1, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr       = crypto.PubkeyToAddress(key1.PublicKey)
-		stack, _   = node.New(&node.DefaultConfig)
-		backend, _ = eth.New(stack, &ethconfig.Defaults)
-		db         = backend.ChainDb()
-		hash1      = common.BytesToHash([]byte("topic1"))
-		hash2      = common.BytesToHash([]byte("topic2"))
-		hash3      = common.BytesToHash([]byte("topic3"))
-		hash4      = common.BytesToHash([]byte("topic4"))
-		hash5      = common.BytesToHash([]byte("topic5"))
-	)
+	assert.Equal(t, 0, len(receiptsOut))
+
+	// check 2 : one transactions ( normal )
+	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(2))
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, 1, len(receiptsOut))
+	assert.True(t, areDifferentHashes(receiptsOut))
+
+	// check 3 : two transactions ( both normal )
+	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(3))
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, 2, len(receiptsOut))
+	assert.True(t, areDifferentHashes(receiptsOut))
+
+	// check 4 : two transactions ( one normal + one state-sync)
+	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(4))
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, 2, len(receiptsOut))
+	assert.True(t, areDifferentHashes(receiptsOut))
+
+}
+
+// Test for GetTransactionByBlockNumberAndIndex
+func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPoolAPI *ethapi.PublicTransactionPoolAPI) {
+	// check 1 : False ( no transaction )
+	tx := publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(1), 0)
+	assert.Nil(t, tx)
+
+	// check 2 : Normal Transaction
+	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(2), 0)
+	assert.Equal(t, common.HexToAddress("0x24"), *tx.To)
+
+	// check 3 : Normal Transaction
+	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 0)
+	assert.Equal(t, common.HexToAddress("0x992"), *tx.To)
+
+	// check 4 : Normal Transaction
+	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 1)
+	assert.Equal(t, common.HexToAddress("0x993"), *tx.To)
+
+	// check 5 : Normal Transaction
+	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 0)
+	assert.Equal(t, common.HexToAddress("0x1000"), *tx.To)
+
+	// check 5 : Normal Transaction
+	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 1)
+	assert.Equal(t, common.HexToAddress("0x0"), *tx.To)
+}
+
+// This Testcase tests functions for RPC API calls.
+// NOTE : Changes to this function might affect the child testcases.
+func TestAPIs(t *testing.T) {
 
 	defer func() {
 		if err := stack.Close(); err != nil {
@@ -67,7 +137,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		}
 	}()
 
-	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
+	genesis := core.GenesisBlockForTesting(db, addrr, big.NewInt(1000000))
 	sprint := params.TestChainConfig.Bor.Sprint
 
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 6, func(i int, gen *core.BlockGen) {
@@ -77,7 +147,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash1},
 				},
 			}
@@ -88,7 +158,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash2},
 				},
 			}
@@ -98,7 +168,7 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 			receipt2 := types.NewReceipt(nil, false, 0)
 			receipt2.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash3},
 				},
 			}
@@ -109,18 +179,18 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash4},
 				},
 			}
 			gen.AddUncheckedReceipt(receipt)
-			gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x0"), big.NewInt(1000), 1000, gen.BaseFee(), nil))
+			gen.AddUncheckedTx(types.NewTransaction(1000, common.HexToAddress("0x1000"), big.NewInt(1000), 1000, gen.BaseFee(), nil))
 
 			// state-sync transaction
 			receipt2 := types.NewReceipt(nil, false, 0)
 			receipt2.Logs = []*types.Log{
 				{
-					Address: addr,
+					Address: addrr,
 					Topics:  []common.Hash{hash5},
 				},
 			}
@@ -173,40 +243,13 @@ func TestGetTransactionReceiptsByBlock(t *testing.T) {
 		}
 	}
 
+	// Testing GetTransactionReceiptsByBlock
 	publicBlockchainAPI := backend.PublicBlockChainAPI()
+	testGetTransactionReceiptsByBlock(t, publicBlockchainAPI)
 
-	// check 1 : zero transactions
-	receiptsOut, err := publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(1))
-	if err != nil {
-		t.Error(err)
-	}
+	// Testing GetTransactionByBlockNumberAndIndex
+	nonceLock := new(ethapi.AddrLocker)
+	publicTransactionPoolAPI := ethapi.NewPublicTransactionPoolAPI(backend.APIBackend, nonceLock)
+	testGetTransactionByBlockNumberAndIndex(t, publicTransactionPoolAPI)
 
-	assert.Equal(t, 0, len(receiptsOut))
-
-	// check 2 : one transactions ( normal )
-	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(2))
-	if err != nil {
-		t.Error(err)
-	}
-
-	assert.Equal(t, 1, len(receiptsOut))
-	assert.True(t, areDifferentHashes(receiptsOut))
-
-	// check 3 : two transactions ( both normal )
-	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(3))
-	if err != nil {
-		t.Error(err)
-	}
-
-	assert.Equal(t, 2, len(receiptsOut))
-	assert.True(t, areDifferentHashes(receiptsOut))
-
-	// check 4 : two transactions ( one normal + one state-sync)
-	receiptsOut, err = publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(4))
-	if err != nil {
-		t.Error(err)
-	}
-
-	assert.Equal(t, 2, len(receiptsOut))
-	assert.True(t, areDifferentHashes(receiptsOut))
 }
