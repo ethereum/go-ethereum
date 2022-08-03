@@ -495,7 +495,7 @@ var (
 	}
 	CacheLogCacheSizeFlag = &cli.IntFlag{
 		Name:     "cache.logcache",
-		Usage:    "Size of the block logs cache (for RPC filters)",
+		Usage:    "Size (in number of blocks) of the log cache for filtering",
 		Category: flags.PerfCategory,
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
 	}
