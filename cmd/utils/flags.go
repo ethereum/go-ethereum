@@ -2024,9 +2024,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
 		ethereum = CreateBorEthereum(&eth.Config{
-			Genesis:         genesis,
-			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
-			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			Genesis:             genesis,
+			HeimdallURL:         ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall:     ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			HeimdallgRPCAddress: ctx.GlobalString(HeimdallgRPCAddressFlag.Name),
 		})
 		engine = ethereum.Engine()
 	} else {

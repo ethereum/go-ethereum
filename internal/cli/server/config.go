@@ -154,6 +154,9 @@ type HeimdallConfig struct {
 
 	// Without is used to disable remote heimdall during testing
 	Without bool `hcl:"bor.without,optional" toml:"bor.without,optional"`
+
+	// GRPCAddress is the address of the heimdall grpc server
+	GRPCAddress string `hcl:"grpc-address,optional" toml:"grpc-address,optional"`
 }
 
 type TxPoolConfig struct {
@@ -410,8 +413,9 @@ func DefaultConfig() *Config {
 			},
 		},
 		Heimdall: &HeimdallConfig{
-			URL:     "http://localhost:1317",
-			Without: false,
+			URL:         "http://localhost:1317",
+			Without:     false,
+			GRPCAddress: "",
 		},
 		SyncMode: "full",
 		GcMode:   "full",
@@ -647,6 +651,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	}
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
+	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
 
 	// gas price oracle
 	{
