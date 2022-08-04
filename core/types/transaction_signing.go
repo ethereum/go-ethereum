@@ -324,7 +324,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 		// This _should_ not happen, but in case someone sends in a bad
 		// json struct via RPC, it's probably more prudent to return an
 		// empty hash instead of killing the node with a panic
-		//panic("Unsupported transaction type: %d", tx.typ)
+		// panic("Unsupported transaction type: %d", tx.typ)
 		return common.Hash{}
 	}
 }

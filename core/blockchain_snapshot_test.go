@@ -172,11 +172,11 @@ func (basic *snapshotTestBasic) dump() string {
 	}
 	fmt.Fprint(buffer, "\n")
 
-	//if crash {
-	//	fmt.Fprintf(buffer, "\nCRASH\n\n")
-	//} else {
-	//	fmt.Fprintf(buffer, "\nSetHead(%d)\n\n", basic.setHead)
-	//}
+	// if crash {
+	// 	fmt.Fprintf(buffer, "\nCRASH\n\n")
+	// } else {
+	// 	fmt.Fprintf(buffer, "\nSetHead(%d)\n\n", basic.setHead)
+	// }
 	fmt.Fprintf(buffer, "------------------------------\n\n")
 
 	fmt.Fprint(buffer, "Expected in leveldb:\n  G")

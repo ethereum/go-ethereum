@@ -220,7 +220,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 
 		// TODO (MariusVanDerWijden) following tests are currently broken,
 		// fixed in upcoming merge-kiln-v2 pr
-		//{parent.Time() + 1, false},
+		// {parent.Time() + 1, false},
 		//{uint64(time.Now().Unix()) + uint64(time.Minute), false},
 	}
 
@@ -747,12 +747,12 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 
 	var invalidChain []*beacon.ExecutableDataV1
 	// create a valid payload (P1)
-	//payload1 := getNewPayload(t, apiA, commonAncestor)
+	// payload1 := getNewPayload(t, apiA, commonAncestor)
 	//invalidChain = append(invalidChain, payload1)
 
 	// create an invalid payload2 (P2)
 	payload2 := getNewPayload(t, apiA, commonAncestor)
-	//payload2.ParentHash = payload1.BlockHash
+	// payload2.ParentHash = payload1.BlockHash
 	payload2.GasUsed += 1
 	payload2 = setBlockhash(payload2)
 	invalidChain = append(invalidChain, payload2)
@@ -815,7 +815,7 @@ func TestInvalidBloom(t *testing.T) {
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(100)
 	fmt.Println(genesis.Config.TerminalTotalDifficulty)
-	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
+	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() // .Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
 	fmt.Println(genesis.Config.TerminalTotalDifficulty)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)

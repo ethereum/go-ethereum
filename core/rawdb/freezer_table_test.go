@@ -54,13 +54,13 @@ func TestFreezerBasics(t *testing.T) {
 	// Write 15 bytes 255 times, results in 85 files
 	writeChunks(t, f, 255, 15)
 
-	//print(t, f, 0)
-	//print(t, f, 1)
-	//print(t, f, 2)
+	// print(t, f, 0)
+	// print(t, f, 1)
+	// print(t, f, 2)
 	//
-	//db[0] =  000000000000000000000000000000
-	//db[1] =  010101010101010101010101010101
-	//db[2] =  020202020202020202020202020202
+	// db[0] =  000000000000000000000000000000
+	// db[1] =  010101010101010101010101010101
+	// db[2] =  020202020202020202020202020202
 
 	for y := 0; y < 255; y++ {
 		exp := getChunk(15, y)

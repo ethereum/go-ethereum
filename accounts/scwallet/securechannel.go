@@ -94,7 +94,7 @@ func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
 	}
 
 	md := sha256.New()
-	md.Write(secretHash[:])
+	md.Write(secretHash)
 	md.Write(challenge)
 
 	expectedCryptogram := md.Sum(nil)
@@ -106,7 +106,7 @@ func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
 	}
 
 	md.Reset()
-	md.Write(secretHash[:])
+	md.Write(secretHash)
 	md.Write(cardChallenge)
 	response, err = s.pair(pairP1LastStep, md.Sum(nil))
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *SecureChannelSession) Pair(pairingPassword []byte) error {
 	}
 
 	md.Reset()
-	md.Write(secretHash[:])
+	md.Write(secretHash)
 	md.Write(response.Data[1:])
 	s.PairingKey = md.Sum(nil)
 	s.PairingIndex = response.Data[0]

@@ -267,7 +267,7 @@ func (c *Conn) ReadSnap(id uint64) (Message, error) {
 		case (TrieNodes{}).Code():
 			snpMsg = new(TrieNodes)
 		default:
-			//return nil, fmt.Errorf("invalid message code: %d", code)
+			// return nil, fmt.Errorf("invalid message code: %d", code)
 			continue
 		}
 		if err := rlp.DecodeBytes(rawData, snpMsg); err != nil {

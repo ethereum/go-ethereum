@@ -59,7 +59,7 @@ type Event struct {
 	// Msg is set if the type is EventTypeMsg
 	Msg *Msg `json:"msg,omitempty"`
 
-	//Optionally provide data (currently for simulation frontends only)
+	// Optionally provide data (currently for simulation frontends only)
 	Data interface{} `json:"data"`
 }
 

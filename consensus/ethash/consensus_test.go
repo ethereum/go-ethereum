@@ -107,7 +107,7 @@ func TestDifficultyCalculators(t *testing.T) {
 		if diffBig.Cmp(params.MinimumDifficulty) < 0 {
 			diffBig.Set(params.MinimumDifficulty)
 		}
-		//rand.Read(difficulty)
+		// rand.Read(difficulty)
 		header := &types.Header{
 			Difficulty: diffBig,
 			Number:     new(big.Int).SetUint64(rand.Uint64() % 50_000_000),

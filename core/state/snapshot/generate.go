@@ -604,7 +604,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		// when last genMarker is consisted of accountHash and storageHash
 		marker := account[:]
 		if accMarker != nil && bytes.Equal(marker, accMarker) && len(dl.genMarker) > common.HashLength {
-			marker = dl.genMarker[:]
+			marker = dl.genMarker
 		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
 		if err := dl.checkAndFlush(ctx, marker); err != nil {

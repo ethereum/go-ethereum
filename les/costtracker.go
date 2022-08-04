@@ -252,7 +252,7 @@ func (ct *costTracker) gfLoop() {
 	// Load historical cost factor statistics from the database.
 	data, _ := ct.db.Get([]byte(gfDbKey))
 	if len(data) == 8 {
-		gfLog = math.Float64frombits(binary.BigEndian.Uint64(data[:]))
+		gfLog = math.Float64frombits(binary.BigEndian.Uint64(data))
 	}
 	ct.factor = math.Exp(gfLog)
 	factor, totalRecharge = ct.factor, ct.utilTarget*ct.factor

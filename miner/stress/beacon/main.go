@@ -325,7 +325,7 @@ func (mgr *nodeManager) run() {
 			// TODO(rjl493456442) finalization doesn't work properly, FIX IT
 			_ = fcState
 			_ = node
-			//node.api.ForkchoiceUpdatedV1(fcState, nil)
+			// node.api.ForkchoiceUpdatedV1(fcState, nil)
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]

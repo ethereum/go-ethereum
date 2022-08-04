@@ -217,7 +217,7 @@ func (c *Codec) EncodeRaw(id enode.ID, head Header, msgdata []byte) ([]byte, err
 	// Apply masking.
 	masked := c.buf.Bytes()[sizeofMaskingIV:]
 	mask := head.mask(id)
-	mask.XORKeyStream(masked[:], masked[:])
+	mask.XORKeyStream(masked, masked)
 
 	// Write message data.
 	c.buf.Write(msgdata)
@@ -353,12 +353,12 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 		return nil, nil, fmt.Errorf("can't generate ephemeral key")
 	}
 	ephpubkey := EncodePubkey(&ephkey.PublicKey)
-	auth.pubkey = ephpubkey[:]
+	auth.pubkey = ephpubkey
 	auth.h.PubkeySize = byte(len(auth.pubkey))
 
 	// Add ID nonce signature to response.
 	cdata := challenge.ChallengeData
-	idsig, err := makeIDSignature(c.sha256, c.privkey, cdata, ephpubkey[:], toID)
+	idsig, err := makeIDSignature(c.sha256, c.privkey, cdata, ephpubkey, toID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't sign: %v", err)
 	}

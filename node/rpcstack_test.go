@@ -247,7 +247,7 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 // wsRequest attempts to open a WebSocket connection to the given URL.
 func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 	t.Helper()
-	//t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
+	// t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
 
 	headers := make(http.Header)
 	// Apply extra headers.

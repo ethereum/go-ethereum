@@ -168,7 +168,7 @@ func (f *fuzzer) fuzz() int {
 			break
 		}
 		ok = 1
-		//nodes, subtrie
+		// nodes, subtrie
 		hasMore, err := trie.VerifyRangeProof(tr.Hash(), first, last, keys, vals, proof)
 		if err != nil {
 			if hasMore {

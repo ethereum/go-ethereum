@@ -127,7 +127,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		//{
 		//	&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 1}, Amount: limit + 10, Reverse: true},
 		//	[]common.Hash{},
-		//},
+		// },
 		// Check that requesting more than available is handled gracefully
 		{
 			&GetBlockHeadersData{Origin: hashOrNumber{Number: bc.CurrentBlock().NumberU64() - 4}, Skip: 3, Amount: 3},
@@ -213,7 +213,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		{1, nil, nil, 1},         // A single random block should be retrievable
 		{10, nil, nil, 10},       // Multiple random blocks should be retrievable
 		{limit, nil, nil, limit}, // The maximum possible blocks should be retrievable
-		//{limit + 1, nil, nil, limit},                                  // No more than the possible block count should be returned
+		// {limit + 1, nil, nil, limit},                                  // No more than the possible block count should be returned
 		{0, []common.Hash{bc.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
 		{0, []common.Hash{bc.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
 		{0, []common.Hash{{}}, []bool{false}, 0},                      // A non existent block should not be returned
