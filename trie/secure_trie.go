@@ -43,7 +43,7 @@ type StateTrie struct {
 	secKeyCacheOwner *StateTrie // Pointer to self, replace the key cache on mismatch
 }
 
-// NewSecure creates a trie with an existing root node from a backing database
+// NewStateTrie creates a trie with an existing root node from a backing database
 // and optional intermediate in-memory node pool.
 //
 // If root is the zero hash or the sha3 hash of an empty string, the
@@ -54,7 +54,7 @@ type StateTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
+func NewStateTrie(owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
@@ -85,6 +85,23 @@ func (t *StateTrie) TryGet(key []byte) ([]byte, error) {
 func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var ret types.StateAccount
 	res, err := t.trie.TryGet(t.hashKey(key))
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		return &ret, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	err = rlp.DecodeBytes(res, &ret)
+	return &ret, err
+}
+
+// TryGetAccountWithPreHashedKey does the same thing as TryGetAccount, however
+// it expects a key that is already hashed. This constitutes an abstraction leak,
+// since the client code needs to know the key format.
+func (t *StateTrie) TryGetAccountWithPreHashedKey(key []byte) (*types.StateAccount, error) {
+	var ret types.StateAccount
+	res, err := t.trie.TryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 		return &ret, err

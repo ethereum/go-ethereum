@@ -28,7 +28,7 @@ import (
 )
 
 func newEmptySecure() *StateTrie {
-	trie, _ := NewSecure(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
+	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
 }
 
@@ -36,7 +36,7 @@ func newEmptySecure() *StateTrie {
 func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewSecure(common.Hash{}, common.Hash{}, triedb)
+	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
