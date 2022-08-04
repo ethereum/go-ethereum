@@ -104,7 +104,7 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 		"Datadir":     config.node.datadir,
 		"DBDir":       config.dbdir,
 		"EthPort":     config.node.port,
-		"EthName":     config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
+		"EthName":     getEthName(config.node.ethstats),
 		"WebPort":     config.port,
 		"Transformer": transformer,
 	})
