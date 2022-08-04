@@ -25,6 +25,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// SecureTrie is the old name of StateTrie.
+// Deprecated: use StateTrie.
+type SecureTrie = StateTrie
+
+// NewSecure creates a new StateTrie.
+// Deprecated: use NewStateTrie.
+func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
+	return NewStateTrie(owner, root, db)
+}
+
 // StateTrie wraps a trie with key hashing. In a secure trie, all
 // access operations hash the key using keccak256. This prevents
 // calling code from creating long chains of nodes that
