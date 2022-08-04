@@ -98,7 +98,7 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 
 // The probabilistic mocker func has a more probabilistic pattern
 // (the implementation could probably be improved):
-//nodes are connected in a ring, then a varying number of random nodes is selected,
+// nodes are connected in a ring, then a varying number of random nodes is selected,
 //mocker then stops and starts them in random intervals, and continues the loop
 func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 	nodes, err := connectNodesInRing(net, nodeCount)
