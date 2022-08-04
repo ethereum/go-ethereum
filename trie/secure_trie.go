@@ -160,12 +160,14 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	return t.preimages.preimage(common.BytesToHash(shaKey))
 }
 
-// Commit writes all nodes and the secure hash pre-images to the trie's database.
-// Nodes are stored with their sha3 hash as the key.
-//
-// Committing flushes nodes from memory. Subsequent Get calls will load nodes
-// from the database.
-func (t *SecureTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
+// Commit collects all dirty nodes in the trie and replace them with the
+// corresponding node hash. All collected nodes(including dirty leaves if
+// collectLeaf is true) will be encapsulated into a nodeset for return.
+// The returned nodeset can be nil if the trie is clean(nothing to commit).
+// All cached preimages will be also flushed if preimages recording is enabled.
+// Once the trie is committed, it's not usable anymore. A new trie must
+// be created with new root and updated trie database for following usage
+func (t *SecureTrie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		if t.preimages != nil {
@@ -178,7 +180,7 @@ func (t *SecureTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 		t.secKeyCache = make(map[string][]byte)
 	}
 	// Commit the trie to its intermediate node database
-	return t.trie.Commit(onleaf)
+	return t.trie.Commit(collectLeaf)
 }
 
 // Hash returns the root hash of SecureTrie. It does not write to the
