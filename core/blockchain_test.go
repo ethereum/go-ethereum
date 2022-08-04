@@ -760,7 +760,7 @@ func TestFastVsFullChains(t *testing.T) {
 			}
 		}
 		// If the block number is a multiple of 5, add a few bonus uncles to the block
-		if i%5 == 5 {
+		if i%5 == 0 {
 			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
 		}
 	})
