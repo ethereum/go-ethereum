@@ -553,8 +553,6 @@ func makeLargeTestTrie() (*Database, *SecureTrie, *loggingDb) {
 
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorLargeTrie(t *testing.T) {
-	t.SkipNow()
-
 	// Create some arbitrary test trie to iterate
 	db, trie, logDb := makeLargeTestTrie()
 	db.Cap(0) // flush everything
