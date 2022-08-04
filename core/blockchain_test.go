@@ -1941,8 +1941,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			Alloc:   GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer     = types.LatestSigner(gspec.Config)
-		genesis, _ = gspec.Commit(db)
+		signer  = types.LatestSigner(gspec.Config)
+		genesis = gspec.MustCommit(db)
 	)
 	// Generate and import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
