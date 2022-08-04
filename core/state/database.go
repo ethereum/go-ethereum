@@ -71,17 +71,17 @@ type Trie interface {
 	// trie.MissingNodeError is returned.
 	TryGet(key []byte) ([]byte, error)
 
-	// TryUpdateAccount abstract an account read from the trie.
+	// TryGetAccount abstract an account read from the trie.
 	TryGetAccount(key []byte) (*types.StateAccount, error)
-
-	// TryUpdateAccount abstract an account write to the trie.
-	TryUpdateAccount(key []byte, account *types.StateAccount) error
 
 	// TryUpdate associates key with value in the trie. If value has length zero, any
 	// existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
 	TryUpdate(key, value []byte) error
+	
+	// TryUpdateAccount abstract an account write to the trie.
+	TryUpdateAccount(key []byte, account *types.StateAccount) error
 
 	// TryDelete removes any existing value for key from the trie. If a node was not
 	// found in the database, a trie.MissingNodeError is returned.
