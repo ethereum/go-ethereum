@@ -1,46 +1,24 @@
 ---
-title: Communication APIs
+title: Clef APIs
 sort_key: E
 ---
 
-### External API
+Clef uses two separate APIs. The **external API** is an untrusted set of JSON-RPC methods that can be called by a user. The **internal API** is a set of JSON-RPC methods that can be called by a UI. The UI could be Clef's native command line interface or a custom UI.
 
-Clef listens to HTTP requests on `http.addr`:`http.port` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
-
-Some of these calls can require user interaction in the Clef terminal. Responses may be delayed significantly or may never be received if a user decides to ignore the confirmation request.
-
-The External API is **untrusted**: it does not accept credentials, nor does it expect that requests have any authority.
-
-### Internal UI API
-
-Clef has one native console-based UI, for operation without any standalone tools. However, there is also an API to communicate with an external UI. To enable that UI, the signer needs to be executed with the `--stdio-ui` option, which allocates `stdin` / `stdout` for the UI API.
-
-An example (insecure) proof-of-concept of has been implemented in `pythonsigner.py`.
-
-The model is as follows:
-
-* The user starts the UI app (`pythonsigner.py`).
-* The UI app starts `clef` with `--stdio-ui`, and listens to the
-process output for confirmation-requests.
-* `clef` opens the external HTTP API.
-* When the `signer` receives requests, it sends a JSON-RPC request via `stdout`.
-* The UI app prompts the user accordingly, and responds to `clef`.
-* `clef` signs (or not), and responds to the original request.
-
-### More resoruces
-
-
-* Changelog for [External API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md)
-* Changelog for [UI API](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/intapi_changelog.md)
-* Documentation about [Datatypes](datatypes)
-
+{:toc}
+-   this will be removed by the toc
 
 ## External API
 
-See the [external API changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md) for information about changes to this API.
+Clef listens to HTTP requests on `http.addr`:`http.port` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
 
+Some of these JSON-RPC calls require user interaction in the Clef terminal. Responses may be delayed significantly or may never be received if a user fails to respond to a confirmation request.
 
-### Encoding
+The External API is **untrusted**: it does not accept credentials, nor does it expect that requests have any authority.
+
+See the [external API changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/extapi_changelog.md) for up to date information about changes to this API.
+
+The External API encoding is as follows:
 
 - number: positive integers that are hex encoded
 - data: hex encoded data
@@ -48,21 +26,23 @@ See the [external API changelog](https://github.com/ethereum/go-ethereum/blob/ma
 
 All hex encoded values must be prefixed with `0x`.
 
-### account_new
+### Methods
 
-#### Create new password protected account
+#### account_new
+
+##### Create new password protected account
 
 The signer will generate a new private key, encrypt it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and store it in the keystore directory.  
 The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
 
-#### Arguments
+##### Arguments
 
 None
 
-#### Result
+##### Result
   - address [string]: account address that is derived from the generated key
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 0,
@@ -80,20 +60,20 @@ Response
 }
 ```
 
-### account_list
+#### account_list
 
-#### List available accounts
+##### List available accounts
    List all accounts that this signer currently manages
 
-#### Arguments
+##### Arguments
 
 None
 
-#### Result
+##### Result
   - array with account records:
      - account.address [string]: account address that is derived from the generated key
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 1,
@@ -113,12 +93,12 @@ Response
 }
 ```
 
-### account_signTransaction
+#### account_signTransaction
 
-#### Sign transactions
+##### Sign transactions
    Signs a transaction and responds with the signed transaction in RLP-encoded and JSON forms. Supports both legacy and EIP-1559-style transactions. 
 
-#### Arguments
+##### Arguments
   1. transaction object (legacy):
      - `from` [address]: account to send the transaction from
      - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
@@ -140,11 +120,11 @@ Response
      - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 
-#### Result
+##### Result
   - raw [data]: signed transaction in RLP encoded form
   - tx [json]: signed transaction in JSON form
 
-#### Sample call (legacy)
+##### Sample call (legacy)
 ```json
 {
   "id": 2,
@@ -187,7 +167,7 @@ Response
 }
 ```
 
-#### Sample call (1559)
+##### Sample call (1559)
 ```json
 {
   "id": 2,
@@ -236,7 +216,7 @@ Response
 }
 ```
 
-#### Sample call with ABI-data
+##### Sample call with ABI-data
 
 
 ```json
@@ -289,12 +269,12 @@ Bash example:
 {"jsonrpc":"2.0","id":67,"result":{"raw":"0xf88380018203339407a565b7ed7d7a678680a4c162885bedbb695fe080a44401a6e4000000000000000000000000000000000000000000000000000000000000001226a0223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20ea02aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","tx":{"nonce":"0x0","gasPrice":"0x1","gas":"0x333","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0","value":"0x0","input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012","v":"0x26","r":"0x223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20e","s":"0x2aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","hash":"0xeba2df809e7a612a0a0d444ccfa5c839624bdc00dd29e3340d46df3870f8a30e"}}}
 ```
 
-### account_signData
+#### account_signData
 
-#### Sign data
+##### Sign data
    Signs a chunk of data and returns the calculated signature.
 
-#### Arguments
+##### Arguments
   - content type [string]: type of signed data
      - `text/validator`: hex data with custom validator defined in a contract
      - `application/clique`: [clique](https://github.com/ethereum/EIPs/issues/225) headers
@@ -302,10 +282,10 @@ Bash example:
   - account [address]: account to sign with
   - data [object]: data to sign
 
-#### Result
+##### Result
   - calculated signature [data]
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 3,
@@ -328,19 +308,19 @@ Response
 }
 ```
 
-### account_signTypedData
+#### account_signTypedData
 
-#### Sign data
+##### Sign data
    Signs a chunk of structured data conformant to [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and returns the calculated signature.
 
-#### Arguments
+##### Arguments
   - account [address]: account to sign with
   - data [object]: data to sign
 
-#### Result
+##### Result
   - calculated signature [data]
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 68,
@@ -425,20 +405,20 @@ Response
 }
 ```
 
-### account_ecRecover
+#### account_ecRecover
 
-#### Recover the signing address
+##### Recover the signing address
 
 Derive the address from the account that was used to sign data with content type `text/plain` and the signature.
 
-#### Arguments
+##### Arguments
   - data [data]: data that was signed
   - signature [data]: the signature to verify
 
-#### Result
+##### Result
   - derived account [address]
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 4,
@@ -460,21 +440,21 @@ Response
 }
 ```
 
-### account_version
+#### account_version
 
-#### Get external API version
+##### Get external API version
 
 Get the version of the external API used by Clef.
 
-#### Arguments
+##### Arguments
 
 None
 
-#### Result
+##### Result
 
 * external API version [string]
 
-#### Sample call
+##### Sample call
 ```json
 {
   "id": 0,
@@ -493,28 +473,41 @@ Response
 }
 ```
 
-## UI API
 
-These methods needs to be implemented by a UI listener.
+## Internal (UI) API
 
-By starting the signer with the switch `--stdio-ui-test`, the signer will invoke all known methods, and expect the UI to respond with
-denials. This can be used during development to ensure that the API is (at least somewhat) correctly implemented.
-See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to perform the 'denial-handshake-test'.
+Clef has one native console-based UI, for operation without any standalone tools. However, there is also an API to communicate with an external UI. To enable that UI, the signer needs to be started with the `--stdio-ui` option, which allocates `stdin` / `stdout` for the UI API.
+
+The internal API methods need to be implemented by a UI listener. By starting the signer with the switch `--stdio-ui-test`, the signer will invoke all known methods, and expect the UI to respond with denials. This can be used during development to ensure that the API is (at least somewhat) correctly implemented.
 
 All methods in this API use object-based parameters, so that there can be no mixup of parameters: each piece of data is accessed by key.
 
+An example (insecure) proof-of-concept external UI has been implemented in [`pythonsigner.py`](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/pythonsigner.py).
+
+The model is as follows:
+
+* The user starts the UI app (`pythonsigner.py`).
+* The UI app starts `clef` with `--stdio-ui`, and listens to the
+process output for confirmation-requests.
+* `clef` opens the external HTTP API.
+* When the `signer` receives requests, it sends a JSON-RPC request via `stdout`.
+* The UI app prompts the user accordingly, and responds to `clef`.
+* `clef` signs (or not), and responds to the original request.
+
 See the [ui API changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/intapi_changelog.md) for information about changes to this API.
 
-OBS! A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
+**NOTE** A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
 Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
 things simpler for both parties.
 
-### ApproveTx / `ui_approveTx`
+### Methods
+
+#### ApproveTx / `ui_approveTx`
 
 Invoked when there's a transaction for approval.
 
 
-#### Sample call
+##### Sample call
 
 Here's a method invocation:
 ```bash
@@ -644,11 +637,11 @@ One which has missing `to`, but with no `data`:
 }
 ```
 
-### ApproveListing / `ui_approveListing`
+#### ApproveListing / `ui_approveListing`
 
 Invoked when a request for account listing has been made.
 
-#### Sample call
+##### Sample call
 
 ```json
 
@@ -680,9 +673,9 @@ Invoked when a request for account listing has been made.
 ```
 
 
-### ApproveSignData / `ui_approveSignData`
+#### ApproveSignData / `ui_approveSignData`
 
-#### Sample call
+##### Sample call
 
 ```json
 {
@@ -711,11 +704,11 @@ Invoked when a request for account listing has been made.
 }
 ```
 
-### ApproveNewAccount / `ui_approveNewAccount`
+#### ApproveNewAccount / `ui_approveNewAccount`
 
 Invoked when a request for creating a new account has been made.
 
-#### Sample call
+##### Sample call
 
 ```json
 {
@@ -734,11 +727,11 @@ Invoked when a request for creating a new account has been made.
 }
 ```
 
-### ShowInfo / `ui_showInfo`
+#### ShowInfo / `ui_showInfo`
 
 The UI should show the info (a single message) to the user. Does not expect response.
 
-#### Sample call
+##### Sample call
 
 ```json
 {
@@ -752,7 +745,7 @@ The UI should show the info (a single message) to the user. Does not expect resp
 
 ```
 
-### ShowError / `ui_showError`
+#### ShowError / `ui_showError`
 
 The UI should show the error (a single message) to the user. Does not expect response.
 
@@ -769,7 +762,7 @@ The UI should show the error (a single message) to the user. Does not expect res
 
 ```
 
-### OnApprovedTx / `ui_onApprovedTx`
+#### OnApprovedTx / `ui_onApprovedTx`
 
 `OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller.  The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
 
@@ -804,7 +797,7 @@ Example call:
 }
 ```
 
-### OnSignerStartup / `ui_onSignerStartup`
+#### OnSignerStartup / `ui_onSignerStartup`
 
 This method provides the UI with information about what API version the signer uses (both internal and external) as well as build-info and external API,
 in k/v-form.
@@ -830,7 +823,7 @@ Example call:
 
 ```
 
-### OnInputRequired / `ui_onInputRequired`
+#### OnInputRequired / `ui_onInputRequired`
 
 Invoked when Clef requires user input (e.g. a password).
 
