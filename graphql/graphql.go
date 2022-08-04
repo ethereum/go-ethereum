@@ -57,7 +57,7 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 		//	value, err := hexutil.DecodeUint64(input)
 		//	*b = Long(value)
 		//	return err
-		//} else {
+		// } else {
 		value, err := strconv.ParseInt(input, 10, 64)
 		*b = Long(value)
 		return err

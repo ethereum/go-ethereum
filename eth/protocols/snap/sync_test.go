@@ -155,7 +155,7 @@ func newTestPeer(id string, t *testing.T, term func()) *testPeer {
 		term:                  term,
 	}
 	// stderrHandler := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	//peer.logger.SetHandler(stderrHandler)
+	// peer.logger.SetHandler(stderrHandler)
 	return peer
 }
 
