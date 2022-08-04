@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"reflect"
 	"unicode"
@@ -157,11 +156,12 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.IsSet(utils.OverrideGrayGlacierFlag.Name) {
-		cfg.Eth.OverrideGrayGlacier = new(big.Int).SetUint64(ctx.Uint64(utils.OverrideGrayGlacierFlag.Name))
-	}
 	if ctx.IsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = flags.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
+	}
+	if ctx.IsSet(utils.OverrideTerminalTotalDifficultyPassed.Name) {
+		override := ctx.Bool(utils.OverrideTerminalTotalDifficultyPassed.Name)
+		cfg.Eth.OverrideTerminalTotalDifficultyPassed = &override
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 	// Warn users to migrate if they have a legacy freezer format.
@@ -181,7 +181,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			utils.Fatalf("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
 		}
 	}
-
 	// Configure GraphQL if requested
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
 		utils.RegisterGraphQLService(stack, backend, cfg.Node)

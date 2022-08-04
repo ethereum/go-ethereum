@@ -356,7 +356,7 @@ func (n *nodeBalance) estimatePriority(capacity uint64, addBalance int64, future
 		b = n.reducedBalance(b, now, future, capacity, avgReqCost)
 	}
 	if bias > 0 {
-		b = n.reducedBalance(b, now+mclock.AbsTime(future), bias, capacity, 0)
+		b = n.reducedBalance(b, now.Add(future), bias, capacity, 0)
 	}
 	pri := n.balanceToPriority(now, b, capacity)
 	// Ensure that biased estimates are always lower than actual priorities, even if
@@ -512,7 +512,7 @@ func (n *nodeBalance) scheduleCheck(now mclock.AbsTime) {
 			n.updateAfter(0)
 			return
 		}
-		if n.nextUpdate == 0 || n.nextUpdate > now+mclock.AbsTime(d) {
+		if n.nextUpdate == 0 || n.nextUpdate > now.Add(d) {
 			if d > time.Second {
 				// Note: if the scheduled update is not in the very near future then we
 				// schedule the update a bit earlier. This way we do need to update a few
@@ -520,7 +520,7 @@ func (n *nodeBalance) scheduleCheck(now mclock.AbsTime) {
 				// brings the expected firing time a little bit closer.
 				d = ((d - time.Second) * 7 / 8) + time.Second
 			}
-			n.nextUpdate = now + mclock.AbsTime(d)
+			n.nextUpdate = now.Add(d)
 			n.updateAfter(d)
 		}
 	} else {
@@ -629,7 +629,7 @@ func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Du
 	// since the costs are applied continuously during the dt time period we calculate
 	// the expiration offset at the middle of the period
 	var (
-		at  = start + mclock.AbsTime(dt/2)
+		at  = start.Add(dt / 2)
 		dtf = float64(dt)
 	)
 	if !b.pos.IsZero() {

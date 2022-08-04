@@ -241,7 +241,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
-		log.Info("Deep froze chain segment", context...)
+		log.Debug("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
 		if frozen-first < freezerBatchLimit {

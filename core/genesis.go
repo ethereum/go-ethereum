@@ -233,7 +233,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideGrayGlacier, overrideTerminalTotalDifficulty *big.Int) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideTerminalTotalDifficulty *big.Int, overrideTerminalTotalDifficultyPassed *bool) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -243,8 +243,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			if overrideTerminalTotalDifficulty != nil {
 				config.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 			}
-			if overrideGrayGlacier != nil {
-				config.GrayGlacierBlock = overrideGrayGlacier
+			if overrideTerminalTotalDifficultyPassed != nil {
+				config.TerminalTotalDifficultyPassed = *overrideTerminalTotalDifficultyPassed
 			}
 		}
 	}

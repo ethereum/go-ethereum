@@ -163,7 +163,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	// An alternative would be to check the local chain for exceeding the TTD and
 	// avoid triggering a sync in that case, but that could also miss sibling or
 	// other family TTD block being accepted.
-	if cs.handler.merger.TDDReached() {
+	if cs.handler.chain.Config().TerminalTotalDifficultyPassed || cs.handler.merger.TDDReached() {
 		return nil
 	}
 	// Ensure we're at minimum peer count.
