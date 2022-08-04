@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -151,11 +152,6 @@ func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 	return errNotSupported
 }
 
-// AncientDatadir returns an error as we don't have a backing chain freezer.
-func (db *nofreezedb) AncientDatadir() (string, error) {
-	return "", errNotSupported
-}
-
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
@@ -164,8 +160,25 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
-// storage.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+// storage. The passed ancient indicates the path of root ancient directory
+// where the chain freezer can be opened.
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	// Check if the chain freezer is already present in the specified
+	// sub folder, if not then two possibilities:
+	// - chain freezer is not initialized
+	// - chain freezer exists in legacy location (root ancient directory)
+	freezer := filepath.Join(ancient, ChainFreezer)
+	if !common.FileExist(freezer) {
+		if !common.FileExist(ancient) {
+			// The entire ancient store is not initialized, use the sub folder
+		} else {
+			// Ancient root is already initialized, then we hold the assumption
+			// that chain freezer is also initialized and located in root folder.
+			// In this case fallback to legacy location.
+			freezer = ancient
+			log.Info("Found legacy ancient chain segment", "location", ancient)
+		}
+	}
 	// Create the idle freezer instance
 	frdb, err := newChainFreezer(freezer, namespace, readonly, freezerTableSize, FreezerNoSnappy)
 	if err != nil {
@@ -273,13 +286,15 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 }
 
 // NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
-// freezer moving immutable chain segments into cold storage.
-func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+// freezer moving immutable chain segments into cold storage. The passed ancient
+// indicates the path of root ancient directory where the chain freezer can be
+// opened.
+func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
 	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)
+	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
 	if err != nil {
 		kvdb.Close()
 		return nil, err

@@ -140,12 +140,6 @@ type AncientWriteOp interface {
 	AppendRaw(kind string, number uint64, item []byte) error
 }
 
-// AncientStater wraps the Stat method of a backing data store.
-type AncientStater interface {
-	// AncientDatadir returns the root directory path of the ancient store.
-	AncientDatadir() (string, error)
-}
-
 // Reader contains the methods required to read data from both key-value as well as
 // immutable ancient data.
 type Reader interface {
@@ -164,7 +158,6 @@ type Writer interface {
 // immutable ancient data.
 type Stater interface {
 	KeyValueStater
-	AncientStater
 }
 
 // AncientStore contains all the methods required to allow handling different
@@ -172,7 +165,6 @@ type Stater interface {
 type AncientStore interface {
 	AncientReader
 	AncientWriter
-	AncientStater
 	io.Closer
 }
 

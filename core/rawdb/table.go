@@ -119,11 +119,6 @@ func (t *table) MigrateTable(kind string, convert convertLegacyFn) error {
 	return t.db.MigrateTable(kind, convert)
 }
 
-// AncientDatadir returns the ancient datadir of the underlying database.
-func (t *table) AncientDatadir() (string, error) {
-	return t.db.AncientDatadir()
-}
-
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {

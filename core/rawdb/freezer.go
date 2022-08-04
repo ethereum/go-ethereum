@@ -68,7 +68,7 @@ type Freezer struct {
 	frozen uint64 // Number of blocks already frozen
 	tail   uint64 // Number of the first stored item in the freezer
 
-	datadir string // Path of root directory of ancient store
+	datadir string // Path of freezer directory
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -486,11 +486,5 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err := os.Remove(migrationPath); err != nil {
 		return err
 	}
-
 	return nil
-}
-
-// AncientDatadir returns the root directory path of the ancient store.
-func (f *Freezer) AncientDatadir() (string, error) {
-	return f.datadir, nil
 }

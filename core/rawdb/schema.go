@@ -138,6 +138,11 @@ var FreezerNoSnappy = map[string]bool{
 	freezerDifficultyTable: true,
 }
 
+// The list of identifiers of ancient stores.
+var (
+	ChainFreezer = "chains" // the identifier of chain segment ancient store.
+)
+
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
