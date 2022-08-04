@@ -1658,7 +1658,7 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 		}
 		accounts++
 		if acc.Root != emptyRoot {
-			storeTrie, err := trie.NewSecure(common.BytesToHash(accIt.Key), acc.Root, triedb)
+			storeTrie, err := trie.NewStateTrie(common.BytesToHash(accIt.Key), acc.Root, triedb)
 			if err != nil {
 				t.Fatal(err)
 			}

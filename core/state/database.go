@@ -63,7 +63,7 @@ type Trie interface {
 	// GetKey returns the sha3 preimage of a hashed key that was previously used
 	// to store a value.
 	//
-	// TODO(fjl): remove this when SecureTrie is removed
+	// TODO(fjl): remove this when StateTrie is removed
 	GetKey([]byte) []byte
 
 	// TryGet returns the value for key stored in the trie. The value bytes must
@@ -71,14 +71,17 @@ type Trie interface {
 	// trie.MissingNodeError is returned.
 	TryGet(key []byte) ([]byte, error)
 
-	// TryUpdateAccount abstract an account write in the trie.
-	TryUpdateAccount(key []byte, account *types.StateAccount) error
+	// TryGetAccount abstract an account read from the trie.
+	TryGetAccount(key []byte) (*types.StateAccount, error)
 
 	// TryUpdate associates key with value in the trie. If value has length zero, any
 	// existing value is deleted from the trie. The value bytes must not be modified
 	// by the caller while they are stored in the trie. If a node was not found in the
 	// database, a trie.MissingNodeError is returned.
 	TryUpdate(key, value []byte) error
+
+	// TryUpdateAccount abstract an account write to the trie.
+	TryUpdateAccount(key []byte, account *types.StateAccount) error
 
 	// TryDelete removes any existing value for key from the trie. If a node was not
 	// found in the database, a trie.MissingNodeError is returned.
@@ -137,7 +140,7 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(common.Hash{}, root, db.db)
+	tr, err := trie.NewStateTrie(common.Hash{}, root, db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +149,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewSecure(addrHash, root, db.db)
+	tr, err := trie.NewStateTrie(addrHash, root, db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +159,7 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 // CopyTrie returns an independent copy of the given trie.
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
-	case *trie.SecureTrie:
+	case *trie.StateTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))

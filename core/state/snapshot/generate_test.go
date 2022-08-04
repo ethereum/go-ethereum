@@ -142,14 +142,14 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 type testHelper struct {
 	diskdb  ethdb.Database
 	triedb  *trie.Database
-	accTrie *trie.SecureTrie
+	accTrie *trie.StateTrie
 	nodes   *trie.MergedNodeSet
 }
 
 func newHelper() *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(diskdb)
-	accTrie, _ := trie.NewSecure(common.Hash{}, common.Hash{}, triedb)
+	accTrie, _ := trie.NewStateTrie(common.Hash{}, common.Hash{}, triedb)
 	return &testHelper{
 		diskdb:  diskdb,
 		triedb:  triedb,
@@ -182,7 +182,7 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 }
 
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
-	stTrie, _ := trie.NewSecure(owner, common.Hash{}, t.triedb)
+	stTrie, _ := trie.NewStateTrie(owner, common.Hash{}, t.triedb)
 	for i, k := range keys {
 		stTrie.Update([]byte(k), []byte(vals[i]))
 	}
