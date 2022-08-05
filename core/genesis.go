@@ -83,7 +83,7 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 // deriveHash computes the state root according to the genesis specification.
 func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
-	// all the derived states won't be leaked into disk for sure.
+	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
 	statedb, err := state.New(common.Hash{}, db, nil)
 	if err != nil {
