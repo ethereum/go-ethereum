@@ -68,8 +68,6 @@ type Freezer struct {
 	frozen uint64 // Number of blocks already frozen
 	tail   uint64 // Number of the first stored item in the freezer
 
-	datadir string // Path of freezer directory
-
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
 	writeLock  sync.RWMutex
@@ -111,7 +109,6 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
-		datadir:      datadir,
 	}
 
 	// Create the tables.
