@@ -238,7 +238,7 @@ The Solidity logo is present as an icon in the Remix side-bar. Clicking this ico
 
 ![Remix-compiler](/static/images/remix-compiler.png)
 
-Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
+Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `External Http Provider`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `External Http Provider Endpoint`. This should be set to Geth's `http://localhost:8545` or `http://127.0.0.1:8545`. Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
 
 
 ![Remix-deploy](/static/images/remix-deploy.png)
