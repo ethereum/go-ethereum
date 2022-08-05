@@ -8,7 +8,6 @@ maxpeers = 30
 
 [txpool]
 locals = []
-rejournal = "1h0m0s"
 lifetime = "1s"
 
 [miner]
@@ -17,9 +16,8 @@ gaslimit = 20000000
 gasprice = "30000000000"
 
 [gpo]
-maxprice = "100"
-ignoreprice = "2"
+ignoreprice = "4"
 
 [cache]
 cache = 1024
-rejournal = "1h0m0s"
+rejournal = "1s"

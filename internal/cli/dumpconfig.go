@@ -1,23 +1,13 @@
 package cli
 
 import (
-	"reflect"
+	"os"
 	"strings"
 
-	"github.com/naoina/toml"
+	"github.com/BurntSushi/toml"
 
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 )
-
-// These settings ensure that TOML keys use the same names as Go struct fields.
-var tomlSettings = toml.Config{
-	NormFieldName: func(rt reflect.Type, key string) string {
-		return key
-	},
-	FieldToKey: func(rt reflect.Type, field string) string {
-		return field
-	},
-}
 
 // DumpconfigCommand is for exporting user provided flags into a config file
 type DumpconfigCommand struct {
@@ -69,14 +59,10 @@ func (c *DumpconfigCommand) Run(args []string) int {
 	userConfig.Gpo.IgnorePriceRaw = userConfig.Gpo.IgnorePrice.String()
 	userConfig.Cache.RejournalRaw = userConfig.Cache.Rejournal.String()
 
-	// Currently, the configurations (userConfig) is exported into `toml` file format.
-	out, err := tomlSettings.Marshal(&userConfig)
-	if err != nil {
+	if err := toml.NewEncoder(os.Stdout).Encode(userConfig); err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
-
-	c.UI.Output(string(out))
 
 	return 0
 }
