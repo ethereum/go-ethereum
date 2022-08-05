@@ -450,12 +450,36 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 }
 
 func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
-	receipt, err := t.getReceipt(ctx)
-	if err != nil || receipt == nil {
+	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
 	}
-	ret := make([]*Log, 0, len(receipt.Logs))
-	for _, log := range receipt.Logs {
+	if t.block == nil {
+		return nil, nil
+	}
+	if _, ok := t.block.numberOrHash.Hash(); !ok {
+		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash := header.Hash()
+		t.block.numberOrHash.BlockHash = &hash
+	}
+	return t.getLogs(ctx)
+}
+
+// getLogs returns log objects for the given tx.
+// Assumes block hash is resolved.
+func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
+	var (
+		hash, _   = t.block.numberOrHash.Hash()
+		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
+		logs, err = filter.Logs(ctx)
+	)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]*Log, 0, len(logs))
+	for _, log := range logs {
 		ret = append(ret, &Log{
 			r:           t.r,
 			transaction: t,
