@@ -826,15 +826,18 @@ If the step function throws an exception or executes an illegal operation at any
 - `input` - Buffer, input transaction data
 - `gas` - Number, gas budget of the transaction
 - `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
-- `gasPrice` - Number, Gas price configured in the transaction being executed
-- `intrinsicGas` - Number, Intrinsic gas for the transaction being executed
+- `gasPrice` - Number, gas price configured in the transaction being executed
+- `intrinsicGas` - Number, intrinsic gas for the transaction being executed
 - `value` - big.Int, amount to be transferred in wei
 - `block` - Number, block number
-- `blockHash` - Byte array, block hash of the block that holds the transaction being executed
 - `output` - Buffer, value returned from EVM
 - `time` - String, execution runtime
-- `txIndex` - Number, transaction index of the transaction being executed
-- `txHash` - Byte array, transaction hash of the transaction being executed
+
+And these fields are only available for tracing mined transactions (i.e. not available when doing `debug_traceCall`):
+
+- `blockHash` - Buffer, hash of the block that holds the transaction being executed
+- `txIndex` - Number, index of the transaction being executed in the block
+- `txHash` - Buffer, hash of the transaction being executed
 
 ##### Fault
 
