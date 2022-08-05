@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -88,12 +87,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, cfg *params.ChainConfig) (commo
 	if cfg != nil {
 		trieCfg = &trie.Config{UseVerkle: cfg.IsCancun(big.NewInt(int64(0)))}
 	}
-	triedb := state.NewDatabaseWithConfig(db, trieCfg)
-	snaps, err := snapshot.New(db, triedb.TrieDB(), 1, common.Hash{}, false, true, false, true)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	statedb, err := state.New(common.Hash{}, triedb, snaps)
+	statedb, err := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, trieCfg), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}

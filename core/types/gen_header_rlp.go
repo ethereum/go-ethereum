@@ -5,10 +5,13 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/common"
-import "github.com/ethereum/go-ethereum/rlp"
-import "github.com/gballet/go-verkle"
-import "io"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gballet/go-verkle"
+)
 
 func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)

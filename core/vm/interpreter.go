@@ -158,7 +158,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		logged  bool   // deferred EVMLogger should ignore already logged steps
 		res     []byte // result of the opcode execution function
 
-		chunks     [][32]byte
+		chunks     trie.ChunkedCode
 		chunkEvals [][]byte
 	)
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,

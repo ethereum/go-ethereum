@@ -152,6 +152,15 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
 	}
+	if tr.IsVerkle() {
+		sdb.witness = types.NewAccessWitness()
+		if sdb.snaps == nil {
+			sdb.snaps, err = snapshot.New(db.TrieDB().DiskDB(), db.TrieDB(), 1, root, false, true, false, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
 			sdb.snapDestructs = make(map[common.Hash]struct{})
@@ -515,8 +524,8 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 
 			if obj.dirtyCode {
 				if chunks, err := trie.ChunkifyCode(obj.code); err == nil {
-					for i := range chunks {
-						s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i))), chunks[i][:])
+					for i := 0; i < len(chunks); i += 32 {
+						s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32)), chunks[i:i+32])
 					}
 				} else {
 					s.setError(err)
@@ -1011,8 +1020,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			if obj.code != nil && obj.dirtyCode {
 				if s.trie.IsVerkle() {
 					if chunks, err := trie.ChunkifyCode(obj.code); err == nil {
-						for i := range chunks {
-							s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i))), chunks[i][:])
+						for i := 0; i < len(chunks); i += 32 {
+							s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32)), chunks[i:32+i])
 						}
 					} else {
 						s.setError(err)

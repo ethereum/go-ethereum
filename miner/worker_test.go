@@ -195,6 +195,7 @@ func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	return blocks[0]
 }
 
+//nolint:unused
 func (b *testWorkerBackend) newRandomVerkleUncle() *types.Block {
 	var parent *types.Block
 	cur := b.chain.CurrentBlock()

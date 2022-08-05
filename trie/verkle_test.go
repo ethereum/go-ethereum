@@ -97,15 +97,16 @@ func TestChunkifyCodeTestnet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != (len(code)+30)/31 {
-		t.Fatalf("invalid length %d", len(chunks))
+	if len(chunks) != 32*(len(code)/31+1) {
+		t.Fatalf("invalid length %d != %d", len(chunks), 32*(len(code)/31+1))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
 	t.Logf("%x\n", chunks[0])
-	for i, chunk := range chunks[1:] {
-		if chunk[0] != 0 && i != 4 {
+	for i := 32; i < len(chunks); i += 32 {
+		chunk := chunks[i : 32+i]
+		if chunk[0] != 0 && i != 5*32 {
 			t.Fatalf("invalid offset in chunk #%d %d != 0", i+1, chunk[0])
 		}
 		if i == 4 && chunk[0] != 12 {
@@ -119,17 +120,19 @@ func TestChunkifyCodeTestnet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != (len(code)+30)/31 {
+	if len(chunks) != 32*((len(code)+30)/31) {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
 	t.Logf("%x\n", chunks[0])
 	expected := []byte{0, 1, 0, 13, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3}
-	for i, chunk := range chunks[1:] {
-		if chunk[0] != expected[i] {
-			t.Fatalf("invalid offset in chunk #%d %d != %d", i+1, chunk[0], expected[i])
+	for i := 32; i < len(chunks); i += 32 {
+		chunk := chunks[i : 32+i]
+		t.Log(i, i/32, chunk[0])
+		if chunk[0] != expected[i/32-1] {
+			t.Fatalf("invalid offset in chunk #%d %d != %d", i/32-1, chunk[0], expected[i/32-1])
 		}
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
@@ -139,16 +142,17 @@ func TestChunkifyCodeTestnet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != (len(code)+30)/31 {
+	if len(chunks) != 32*((len(code)+30)/31) {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
 	expected = []byte{0, 0, 0, 0, 13}
-	for i, chunk := range chunks[1:] {
-		if chunk[0] != expected[i] {
-			t.Fatalf("invalid offset in chunk #%d %d != %d", i+1, chunk[0], expected[i])
+	for i := 32; i < len(chunks); i += 32 {
+		chunk := chunks[i : 32+i]
+		if chunk[0] != expected[i/32-1] {
+			t.Fatalf("invalid offset in chunk #%d %d != %d", i/32-1, chunk[0], expected[i/32-1])
 		}
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
@@ -170,17 +174,17 @@ func TestChunkifyCodeSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 3 {
+	if len(chunks) != 96 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
-	if chunks[1][0] != 1 {
-		t.Fatalf("invalid offset in second chunk %d != 1, chunk=%x", chunks[1][0], chunks[1])
+	if chunks[32] != 1 {
+		t.Fatalf("invalid offset in second chunk %d != 1, chunk=%x", chunks[32], chunks[32:64])
 	}
-	if chunks[2][0] != 0 {
-		t.Fatalf("invalid offset in third chunk %d != 0", chunks[2][0])
+	if chunks[64] != 0 {
+		t.Fatalf("invalid offset in third chunk %d != 0", chunks[64])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 }
@@ -194,11 +198,11 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 1 {
+	if len(chunks) != 32 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
@@ -210,11 +214,11 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 1 {
+	if len(chunks) != 32 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
@@ -226,14 +230,14 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 2 {
+	if len(chunks) != 64 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
-	if chunks[1][0] != 0 {
-		t.Fatalf("invalid offset in second chunk %d != 0, chunk=%x", chunks[1][0], chunks[1])
+	if chunks[32] != 0 {
+		t.Fatalf("invalid offset in second chunk %d != 0, chunk=%x", chunks[32], chunks[32:64])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 
@@ -245,14 +249,14 @@ func TestChunkifyCodeFuzz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(chunks) != 2 {
+	if len(chunks) != 64 {
 		t.Fatalf("invalid length %d", len(chunks))
 	}
-	if chunks[0][0] != 0 {
-		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0][0])
+	if chunks[0] != 0 {
+		t.Fatalf("invalid offset in first chunk %d != 0", chunks[0])
 	}
-	if chunks[1][0] != 0 {
-		t.Fatalf("invalid offset in second chunk %d != 0, chunk=%x", chunks[1][0], chunks[1])
+	if chunks[32] != 0 {
+		t.Fatalf("invalid offset in second chunk %d != 0, chunk=%x", chunks[32], chunks[32:64])
 	}
 	t.Logf("code=%x, chunks=%x\n", code, chunks)
 }

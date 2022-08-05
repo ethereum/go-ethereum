@@ -1152,6 +1152,9 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 
 		preTrie, err := env.state.Database().OpenTrie(env.preRoot)
+		if err != nil {
+			return err
+		}
 		if vtr, ok := preTrie.(*trie.VerkleTrie); ok {
 			keys := env.state.Witness().Keys()
 			kvs := env.state.Witness().KeyVals()

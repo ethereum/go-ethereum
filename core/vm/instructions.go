@@ -390,7 +390,7 @@ func touchEachChunksOnReadAndChargeGasWithAddress(offset, size uint64, address, 
 }
 
 // touchChunkOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func touchChunkOnReadAndChargeGas(chunks [][32]byte, offset uint64, evals [][]byte, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
+func touchChunkOnReadAndChargeGas(chunks trie.ChunkedCode, offset uint64, evals [][]byte, code []byte, accesses *types.AccessWitness, deployment bool) uint64 {
 	// note that in the case where the executed code is outside the range of
 	// the contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness. The
@@ -420,7 +420,7 @@ func touchChunkOnReadAndChargeGas(chunks [][32]byte, offset uint64, evals [][]by
 		if deployment {
 			accesses.SetLeafValue(index[:], nil)
 		} else {
-			accesses.SetLeafValue(index[:], chunks[chunknr][:])
+			accesses.SetLeafValue(index[:], chunks[chunknr*32:(chunknr+1)*32])
 		}
 	}
 
@@ -467,7 +467,7 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, addrPoint *verkle.Po
 			if deployment {
 				accesses.SetLeafValue(index[:], nil)
 			} else {
-				accesses.SetLeafValue(index[:], chunks[i][:])
+				accesses.SetLeafValue(index[:], chunks[32*i:(i+1)*32])
 			}
 		}
 	}
