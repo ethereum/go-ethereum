@@ -62,12 +62,10 @@ func ethNewBlock(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to decode msg: %s", err)
 	}
-	fmt.Println("loading chain")
 	chain, err := ethtest.LoadChain(ctx.String(chainFile.Name), ctx.String(genesisFile.Name))
 	if err != nil {
 		return fmt.Errorf("error loading chain: %s", err)
 	}
-	fmt.Println("dialing")
 	conn, err := ethtest.Dial(getNodeArg(ctx))
 	if err != nil {
 		return fmt.Errorf("error dialing peer: %s", err)
@@ -81,7 +79,6 @@ func ethNewBlock(ctx *cli.Context) error {
 		Genesis:         chain.GetHeaderByNumber(0).Hash(),
 		ForkID:          chain.ForkID(),
 	}
-	fmt.Println("peering")
 	if err := conn.Peer(chain, status); err != nil {
 		return fmt.Errorf("unable to peer with node: %s", err)
 	}

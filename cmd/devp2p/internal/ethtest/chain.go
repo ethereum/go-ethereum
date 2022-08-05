@@ -39,9 +39,19 @@ type Chain struct {
 	chainConfig *params.ChainConfig
 }
 
-// Config returns the chain config.
+// Genesis returns the chain config.
+func (c *Chain) Genesis() *core.Genesis {
+	return &c.genesis
+}
+
+// Config returns the chain genesis.
 func (c *Chain) Config() *params.ChainConfig {
 	return c.chainConfig
+}
+
+// Blocks returns the length of the chain.
+func (c *Chain) Blocks() []*types.Block {
+	return c.blocks
 }
 
 // Len returns the length of the chain.

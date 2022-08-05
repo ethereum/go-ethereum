@@ -118,7 +118,7 @@ geth --datadir <datadir> --nodiscover --nat=none --networkid 19763 --verbosity 5
 ```
 
 Then, run the following command, replacing `<enode>` with the enode of the geth node:
- ```
+```
  devp2p rlpx eth-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
 ```
 
