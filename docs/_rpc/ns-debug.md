@@ -782,7 +782,7 @@ But this step function will:
 
 `log.op` has the following methods:
 
- - `isPush()` - returns true iff the opcode is a PUSHn
+ - `isPush()` - returns true if the opcode is a PUSHn
  - `toString()` - returns the string representation of the opcode
  - `toNumber()` - returns the opcode's number
 
@@ -790,6 +790,7 @@ But this step function will:
 
  - `slice(start, stop)` - returns the specified segment of memory as a byte slice
  - `getUint(offset)` - returns the 32 bytes at the given offset
+ - `length()` - returns the memory size
 
 `log.stack` has the following methods:
 
@@ -824,11 +825,19 @@ If the step function throws an exception or executes an illegal operation at any
 - `to` - Address, target of the transaction
 - `input` - Buffer, input transaction data
 - `gas` - Number, gas budget of the transaction
+- `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
+- `gasPrice` - Number, gas price configured in the transaction being executed
+- `intrinsicGas` - Number, intrinsic gas for the transaction being executed
 - `value` - big.Int, amount to be transferred in wei
 - `block` - Number, block number
 - `output` - Buffer, value returned from EVM
-- `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
 - `time` - String, execution runtime
+
+And these fields are only available for tracing mined transactions (i.e. not available when doing `debug_traceCall`):
+
+- `blockHash` - Buffer, hash of the block that holds the transaction being executed
+- `txIndex` - Number, index of the transaction being executed in the block
+- `txHash` - Buffer, hash of the transaction being executed
 
 ##### Fault
 
