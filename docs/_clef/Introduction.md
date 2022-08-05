@@ -9,7 +9,7 @@ sort_key: A
 ## What is Clef?
 
 Clef is a tool for **signing transactions and data** in a secure local environment. 
-t is intended to become a more composable and secure replacement for Geth's built-in 
+It is intended to become a more composable and secure replacement for Geth's built-in 
 account management. Clef decouples key management from Geth itself, meaning it can be 
 used as an independent, standalone key management and signing application, or it
 can be integrated into Geth. This provides a more flexible modular tool compared to 
@@ -205,4 +205,3 @@ as a backend account manager and signer for Geth or as a completely separate sta
 modular and composable it can be used as a component in decentralized applications or to sign data and
 transactions in untrusted environments. Clef is intended to eventually replace Geth's built-in account
 management tools.
- 
