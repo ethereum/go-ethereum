@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestConfigLegacy(t *testing.T) {
@@ -71,8 +72,8 @@ func TestConfigLegacy(t *testing.T) {
 			Gpo: &GpoConfig{
 				Blocks:      20,
 				Percentile:  60,
-				MaxPrice:    big.NewInt(100),
-				IgnorePrice: big.NewInt(2),
+				MaxPrice:    big.NewInt(5000 * params.GWei),
+				IgnorePrice: big.NewInt(4),
 			},
 			JsonRPC: &JsonRPCConfig{
 				IPCDisable: false,
@@ -129,7 +130,7 @@ func TestConfigLegacy(t *testing.T) {
 				PercGc:        25,
 				PercSnapshot:  10,
 				Journal:       "triecache",
-				Rejournal:     1 * time.Hour,
+				Rejournal:     1 * time.Second,
 				NoPrefetch:    false,
 				Preimages:     false,
 				TxLookupLimit: 2350000,
