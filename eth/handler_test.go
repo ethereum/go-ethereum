@@ -17,12 +17,13 @@
 package eth
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"

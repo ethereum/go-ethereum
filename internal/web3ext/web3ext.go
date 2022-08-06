@@ -138,6 +138,10 @@ web3._extend({
 			call: 'XDPoS_getSignersAtHash',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'getLatestCommittedBlockInfo',
+			call: 'XDPoS_getLatestCommittedBlockHeader'
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

@@ -1,17 +1,19 @@
-package consensus
+package engine_v1_tests
 
 import (
 	"math/big"
 	"testing"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/stretchr/testify/assert"
 )
 
 // Snapshot try to read before blockchain is written
 func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 
-	blockchain, backend, parentBlock := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)
+	blockchain, backend, parentBlock, signer, signFn := PrepareXDCTestBlockChain(t, GAP-1, params.TestXDPoSMockChainConfig)
 
 	state, err := blockchain.State()
 	if err != nil {
@@ -39,10 +41,20 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 	transferTransaction := transferTx(t, acc1Addr, 999)
 
 	merkleRoot := "ea465415b60d88429f181fec9fae67c0f19cbf5a4fa10971d96d4faa57d96ffa"
-	blockA, err := insertBlockTxs(blockchain, 450, blockCoinbaseA, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot, 1)
+
+	header := &types.Header{
+		Root:       common.HexToHash(merkleRoot),
+		Number:     big.NewInt(int64(450)),
+		ParentHash: parentBlock.Hash(),
+		Coinbase:   common.HexToAddress(blockCoinbaseA),
+	}
+
+	blockA, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx, transferTransaction}, signer, signFn, blockchain.Config())
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = blockchain.InsertBlock(blockA)
+	assert.Nil(t, err)
 	state, err = blockchain.State()
 	if err != nil {
 		t.Fatalf("Failed while trying to get blockchain state")
@@ -74,10 +86,21 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 	transferTransaction = transferTx(t, acc1Addr, 888)
 
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block450B, err := insertBlockTxs(blockchain, 450, blockCoinBase450B, parentBlock, []*types.Transaction{tx, transferTransaction}, merkleRoot, 2)
+
+	header = &types.Header{
+		Root:       common.HexToHash(merkleRoot),
+		Number:     big.NewInt(int64(450)),
+		ParentHash: parentBlock.Hash(),
+		Coinbase:   common.HexToAddress(blockCoinBase450B),
+		Difficulty: big.NewInt(2),
+	}
+
+	block450B, err := createBlockFromHeader(blockchain, header, []*types.Transaction{tx, transferTransaction}, signer, signFn, blockchain.Config())
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = blockchain.InsertBlock(block450B)
+	assert.Nil(t, err)
 	if blockchain.CurrentHeader().Hash() != block450B.Hash() {
 		t.Fatalf("the block with higher difficulty should be current header")
 	}
@@ -104,11 +127,19 @@ func TestRaceConditionOnBlockchainReadAndWrite(t *testing.T) {
 
 	blockCoinBase451B := "0xbbb0000000000000000000000000000000000451"
 	merkleRoot = "184edaddeafc2404248f896ae46be503ae68949896c8eb6b6ad43695581e5022"
-	block451B, err := insertBlock(blockchain, 451, blockCoinBase451B, block450B, merkleRoot, 3)
-
+	header = &types.Header{
+		Root:       common.HexToHash(merkleRoot),
+		Number:     big.NewInt(int64(451)),
+		ParentHash: block450B.Hash(),
+		Coinbase:   common.HexToAddress(blockCoinBase451B),
+		Difficulty: big.NewInt(3),
+	}
+	block451B, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, blockchain.Config())
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = blockchain.InsertBlock(block451B)
+	assert.Nil(t, err)
 
 	signers, err = GetSnapshotSigner(blockchain, block450B.Header())
 	if err != nil {

@@ -97,7 +97,7 @@ type Backend interface {
 	GetOrderNonce(address common.Hash) (uint64, error)
 }
 
-func GetAPIs(apiBackend Backend) []rpc.API {
+func GetAPIs(apiBackend Backend, chainReader consensus.ChainReader) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
@@ -108,7 +108,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicBlockChainAPI(apiBackend),
+			Service:   NewPublicBlockChainAPI(apiBackend, chainReader),
 			Public:    true,
 		}, {
 			Namespace: "eth",

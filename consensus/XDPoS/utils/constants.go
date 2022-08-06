@@ -15,11 +15,17 @@ var (
 	NonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new signer
 	NonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a signer.
 
-	UncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+	UncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+	InmemoryEpochs = 5 * EpochLength          // Number of mapping from block to epoch switch infos to keep in memory
 )
 
 const (
 	InmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
 	BlockSignersCacheLimit = 9000
 	M2ByteLength           = 4
+)
+
+const (
+	PeriodicJobPeriod = 60
+	PoolHygieneRound  = 10
 )

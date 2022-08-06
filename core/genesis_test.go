@@ -17,14 +17,15 @@
 package core
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"reflect"
 	"testing"
 
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/davecgh/go-spew/spew"

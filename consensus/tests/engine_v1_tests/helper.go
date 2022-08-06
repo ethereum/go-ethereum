@@ -1,4 +1,4 @@
-package consensus
+package engine_v1_tests
 
 import (
 	"bytes"
@@ -6,14 +6,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	. "github.com/XinFinOrg/XDPoSChain/core"
@@ -56,6 +59,16 @@ func debugMessage(backend *backends.SimulatedBackend, signers signersList, t *te
 			fmt.Println(signer)
 		}
 	}
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }
 
 func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.SimulatedBackend {
@@ -223,22 +236,48 @@ func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testi
 	return ms
 }
 
-func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block) {
+// V1 consensus engine
+func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
 	// Preparation
 	var err error
+	// Authorise
+	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
+
 	backend := getCommonBackend(t, chainConfig)
 	blockchain := backend.GetBlockChain()
 	blockchain.Client = backend
 
+	if err != nil {
+		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
+	}
+	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
+
 	currentBlock := blockchain.Genesis()
+
+	go func() {
+		for range core.CheckpointCh {
+			checkpointChanMsg := <-core.CheckpointCh
+			log.Info("[V1] Got a message from core CheckpointChan!", "msg", checkpointChanMsg)
+		}
+	}()
 
 	// Insert initial blocks
 	for i := 1; i <= numOfBlocks; i++ {
 		blockCoinBase := fmt.Sprintf("0x111000000000000000000000000000000%03d", i)
 		merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
-		block, err := insertBlock(blockchain, i, blockCoinBase, currentBlock, merkleRoot, 1)
+		header := &types.Header{
+			Root:       common.HexToHash(merkleRoot),
+			Number:     big.NewInt(int64(i)),
+			ParentHash: currentBlock.Hash(),
+			Coinbase:   common.HexToAddress(blockCoinBase),
+		}
+		block, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, chainConfig)
 		if err != nil {
 			t.Fatal(err)
+		}
+		err = blockchain.InsertBlock(block)
+		if err != nil {
+			panic(err)
 		}
 		currentBlock = block
 	}
@@ -248,83 +287,96 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 		t.Fatal(err)
 	}
 
-	return blockchain, backend, currentBlock
+	return blockchain, backend, currentBlock, signer, signFn
 }
 
-// insert Block without transcation attached
-func insertBlock(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, root string, difficulty int64) (*types.Block, error) {
-	block, err := createXDPoSTestBlock(
-		blockchain,
-		parentBlock.Hash().Hex(),
-		blockCoinBase, blockNum, nil,
-		"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-		common.HexToHash(root),
-		difficulty,
-	)
-	if err != nil {
-		return nil, err
+func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte) *types.Block {
+	currentBlock := startingBlock
+	merkleRoot := "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
+
+	header := &types.Header{
+		Root:       common.HexToHash(merkleRoot),
+		Number:     big.NewInt(int64(blockNumber)),
+		ParentHash: currentBlock.Hash(),
+		Coinbase:   common.HexToAddress(blockCoinBase),
 	}
 
-	err = blockchain.InsertBlock(block)
-	if err != nil {
-		return nil, err
+	// Inject the hardcoded master node list for the last v1 epoch block and all v1 epoch switch blocks (excluding genesis)
+	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 0 || blockNumber%int(chainConfig.XDPoS.Epoch) == 0 {
+		// reset extra
+		header.Extra = []byte{}
+		if len(header.Extra) < utils.ExtraVanity {
+			header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, utils.ExtraVanity-len(header.Extra))...)
+		}
+		header.Extra = header.Extra[:utils.ExtraVanity]
+		var masternodes []common.Address
+		// Place the test's signer address to the last
+		masternodes = append(masternodes, acc1Addr, acc2Addr, acc3Addr, voterAddr, signer)
+		// masternodesFromV1LastEpoch = masternodes
+		for _, masternode := range masternodes {
+			header.Extra = append(header.Extra, masternode[:]...)
+		}
+		header.Extra = append(header.Extra, make([]byte, utils.ExtraSeal)...)
+
+		// Sign all the things for v1 block use v1 sigHash function
+		sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
+		if err != nil {
+			panic(fmt.Errorf("Error when sign last v1 block hash during test block creation"))
+		}
+		copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
 	}
-	return block, nil
+	block, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, chainConfig)
+	if err != nil {
+		panic(fmt.Errorf("Fail to create block in test helper, %v", err))
+	}
+	return block
 }
 
-// insert Block with transcation attached
-func insertBlockTxs(blockchain *BlockChain, blockNum int, blockCoinBase string, parentBlock *types.Block, txs []*types.Transaction, root string, difficulty int64) (*types.Block, error) {
-	block, err := createXDPoSTestBlock(
-		blockchain,
-		parentBlock.Hash().Hex(),
-		blockCoinBase, blockNum, txs,
-		"0x9319777b782ba2c83a33c995481ff894ac96d9a92a1963091346a3e1e386705c",
-		common.HexToHash(root),
-		difficulty,
-	)
-	if err != nil {
-		return nil, err
+func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*types.Transaction, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), config *params.ChainConfig) (*types.Block, error) {
+	if customHeader.Extra == nil {
+		extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
+		customHeader.Extra, _ = hex.DecodeString(extraSubstring)
+	}
+	var difficulty *big.Int
+	if customHeader.Difficulty == nil {
+		difficulty = big.NewInt(1)
+	} else {
+		difficulty = customHeader.Difficulty
 	}
 
-	err = blockchain.InsertBlock(block)
-	if err != nil {
-		return nil, err
+	// TODO: check if this is needed
+	if len(txs) != 0 {
+		customHeader.ReceiptHash = common.HexToHash("0x9319777b782ba2c83a33c995481ff894ac96d9a92a1963091346a3e1e386705c")
+	} else {
+		customHeader.ReceiptHash = common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	}
-	return block, nil
-}
 
-func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number int, txs []*types.Transaction, receiptHash string, root common.Hash, difficulty int64) (*types.Block, error) {
-	extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
-	//ReceiptHash = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	//Root := "0xc99c095e53ff1afe3b86750affd13c7550a2d24d51fb8e41b3c3ef2ea8274bcc"
-	extraByte, _ := hex.DecodeString(extraSubstring)
 	header := types.Header{
-		ParentHash: common.HexToHash(parentHash),
-		UncleHash:  types.EmptyUncleHash,
-		TxHash:     types.EmptyRootHash,
-		// ReceiptHash: types.EmptyRootHash,
-		ReceiptHash: common.HexToHash(receiptHash),
-		Root:        root,
-		Coinbase:    common.HexToAddress(coinbase),
-		Difficulty:  big.NewInt(difficulty),
-		Number:      big.NewInt(int64(number)),
+		ParentHash:  customHeader.ParentHash,
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: customHeader.ReceiptHash,
+		Root:        customHeader.Root,
+		Coinbase:    customHeader.Coinbase,
+		Difficulty:  difficulty,
+		Number:      customHeader.Number,
 		GasLimit:    1200000000,
-		Time:        big.NewInt(int64(number * 10)),
-		Extra:       extraByte,
+		Time:        big.NewInt(time.Now().Unix()),
+		Extra:       customHeader.Extra,
+		Validator:   customHeader.Validator,
+		Validators:  customHeader.Validators,
+		Penalties:   customHeader.Penalties,
 	}
-
 	var block *types.Block
 	if len(txs) == 0 {
 		block = types.NewBlockWithHeader(&header)
 	} else {
-
 		// Prepare Receipt
-		statedb, err := bc.StateAt(bc.GetBlockByNumber(uint64(number - 1)).Root()) //Get parent root
+		statedb, err := bc.StateAt(bc.GetBlockByNumber(customHeader.Number.Uint64() - 1).Root()) //Get parent root
 		if err != nil {
 			return nil, fmt.Errorf("%v when get state", err)
 		}
 		gp := new(GasPool).AddGas(header.GasLimit)
-		// usedGas := uint64(0)
 
 		var gasUsed = new(uint64)
 		var receipts types.Receipts
@@ -338,7 +390,6 @@ func createXDPoSTestBlock(bc *BlockChain, parentHash, coinbase string, number in
 		}
 
 		header.GasUsed = *gasUsed
-
 		block = types.NewBlock(&header, txs, nil, receipts)
 	}
 

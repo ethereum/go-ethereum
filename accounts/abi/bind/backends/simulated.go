@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -29,7 +31,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
+	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -67,6 +71,28 @@ type SimulatedBackend struct {
 	events *filters.EventSystem // Event system for filtering log events live
 
 	config *params.ChainConfig
+}
+
+func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Account, hash []byte) ([]byte, error), error) {
+	veryLightScryptN := 2
+	veryLightScryptP := 1
+	dir, _ := ioutil.TempDir("", "eth-SimulateWalletAddressAndSignFn-test")
+
+	new := func(kd string) *keystore.KeyStore {
+		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)
+	}
+
+	defer os.RemoveAll(dir)
+	ks := new(dir)
+	pass := "" // not used but required by API
+	a1, err := ks.NewAccount(pass)
+	if err != nil {
+		return common.Address{}, nil, fmt.Errorf(err.Error())
+	}
+	if err := ks.Unlock(a1, ""); err != nil {
+		return a1.Address, nil, fmt.Errorf(err.Error())
+	}
+	return a1.Address, ks.SignHash, nil
 }
 
 // XDC simulated backend for testing purpose.

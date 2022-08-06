@@ -352,6 +352,13 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	bc.hc.SetCurrentHeader(currentHeader)
 
+	if engine, ok := bc.Engine().(*XDPoS.XDPoS); ok {
+		err := engine.Initial(bc, currentHeader)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
 	if head := GetHeadFastBlockHash(bc.db); head != (common.Hash{}) {
@@ -974,7 +981,20 @@ func (bc *BlockChain) procFutureBlocks() {
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			_, err := bc.InsertChain(blocks[i : i+1])
+			// let consensus engine handle the last block (e.g. for voting)
+			if i == len(blocks)-1 && err == nil {
+				engine, ok := bc.Engine().(*XDPoS.XDPoS)
+				if ok {
+					go func() {
+						header := blocks[i].Header()
+						err = engine.HandleProposedBlock(bc, header)
+						if err != nil {
+							log.Info("[procFutureBlocks] handle proposed block has error", "err", err, "block hash", header.Hash(), "number", header.Number)
+						}
+					}()
+				}
+			}
 		}
 	}
 }
@@ -1590,8 +1610,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 					bc.reportBlock(block, nil, err)
 					return i, events, coalescedLogs, err
 				}
-				if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
-					if err := tradingService.UpdateMediumPriceBeforeEpoch(block.NumberU64()/bc.chainConfig.XDPoS.Epoch, tradingState, statedb); err != nil {
+				isEpochSwithBlock, epochNumber, err := engine.IsEpochSwitch(block.Header())
+				if err != nil {
+					log.Error("[insertChain] Error while checking if the incoming block is epoch switch block", "Hash", block.Hash(), "Number", block.Number())
+					bc.reportBlock(block, nil, err)
+				}
+				if isEpochSwithBlock {
+					if err := tradingService.UpdateMediumPriceBeforeEpoch(epochNumber, tradingState, statedb); err != nil {
 						return i, events, coalescedLogs, err
 					}
 				} else {
@@ -1708,9 +1733,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.report(chain, i, dirty)
 		if bc.chainConfig.XDPoS != nil {
 			// epoch block
-			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+			isEpochSwithBlock, _, err := engine.IsEpochSwitch(chain[i].Header())
+			if err != nil {
+				log.Error("[insertChain] Error while checking and notifying channel CheckpointCh if the incoming block is epoch switch block", "Hash", block.Hash(), "Number", block.Number())
+				bc.reportBlock(block, nil, err)
+			}
+			if isEpochSwithBlock {
 				CheckpointCh <- 1
-
 			}
 		}
 	}
@@ -1855,8 +1884,15 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 				bc.reportBlock(block, nil, err)
 				return nil, err
 			}
-			if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
-				if err := tradingService.UpdateMediumPriceBeforeEpoch(block.NumberU64()/bc.chainConfig.XDPoS.Epoch, tradingState, statedb); err != nil {
+
+			isEpochSwithBlock, epochNumber, err := engine.IsEpochSwitch(block.Header())
+			if err != nil {
+				log.Error("[getResultBlock] Error while checking block is epoch switch block", "Hash", block.Hash(), "Number", block.Number())
+				bc.reportBlock(block, nil, err)
+			}
+
+			if isEpochSwithBlock {
+				if err := tradingService.UpdateMediumPriceBeforeEpoch(epochNumber, tradingState, statedb); err != nil {
 					return nil, err
 				}
 			} else {
@@ -2029,9 +2065,13 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	stats.report(types.Blocks{block}, 0, dirty)
 	if bc.chainConfig.XDPoS != nil {
 		// epoch block
-		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+		isEpochSwithBlock, _, err := bc.Engine().(*XDPoS.XDPoS).IsEpochSwitch(block.Header())
+		if err != nil {
+			log.Error("[insertBlock] Error while checking if the incoming block is epoch switch block", "Hash", block.Hash(), "Number", block.Number())
+			bc.reportBlock(block, nil, err)
+		}
+		if isEpochSwithBlock {
 			CheckpointCh <- 1
-
 		}
 	}
 	// Append a single chain head event if we've progressed the chain
@@ -2459,16 +2499,12 @@ func (bc *BlockChain) UpdateM1() error {
 	// if can't get anything, request from contracts
 	stateDB, err := bc.State()
 	if err != nil {
-
 		candidates, err = validator.GetCandidates(opts)
 		if err != nil {
-
 			return err
 		}
 	} else {
-
 		candidates = state.GetCandidates(stateDB)
-
 	}
 
 	var ms []utils.Masternode
@@ -2500,7 +2536,7 @@ func (bc *BlockChain) UpdateM1() error {
 		header := bc.CurrentHeader()
 		var maxMasternodes int
 		// check if block number is increase ms checkpoint
-		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) {
+		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) || (bc.chainConfig.XDPoS.V2.SwitchBlock != nil && header.Number.Cmp(bc.chainConfig.XDPoS.V2.SwitchBlock) == 1) {
 			// using new masterndoes
 			maxMasternodes = common.MaxMasternodesV2
 		} else {

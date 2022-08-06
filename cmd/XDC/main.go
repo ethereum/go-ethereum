@@ -119,6 +119,8 @@ var (
 		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
 		//utils.FakePoWFlag,
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
@@ -290,6 +292,11 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 		utils.Fatalf("Light clients do not support staking")
 	}
+	// Start metrics export if enabled
+	utils.SetupMetrics(ctx)
+	// Start system runtime metrics collection
+	go metrics.CollectProcessMetrics(3 * time.Second)
+
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("Ethereum service not running: %v", err)

@@ -303,7 +303,17 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	number := block.Number().Uint64()
 	engine := b.GetEngine().(*XDPoS.XDPoS)
 	foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
-	lastCheckpointNumber := number - (number % b.ChainConfig().XDPoS.Epoch) - b.ChainConfig().XDPoS.Epoch // calculate for 2 epochs ago
+
+	// calculate for 2 epochs ago
+	currentCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, block.Number())
+	if err != nil {
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for current checkpoint block", "block", block)
+	}
+	lastCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, big.NewInt(int64(currentCheckpointNumber-1)))
+	if err != nil {
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for last checkpoint block", "block", block)
+	}
+
 	lastCheckpointBlock := chain.GetBlockByNumber(lastCheckpointNumber)
 	rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 

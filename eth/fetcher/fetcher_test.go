@@ -18,12 +18,13 @@ package fetcher
 
 import (
 	"errors"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
@@ -92,7 +93,7 @@ func newTester() *fetcherTester {
 		blocks: map[common.Hash]*types.Block{genesis.Hash(): genesis},
 		drops:  make(map[string]bool),
 	}
-	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.broadcastBlock, tester.chainHeight, tester.insertBlock, tester.prepareBlock, tester.dropPeer)
+	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.handleProposedBlock, tester.broadcastBlock, tester.chainHeight, tester.insertBlock, tester.prepareBlock, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
@@ -108,6 +109,10 @@ func (f *fetcherTester) getBlock(hash common.Hash) *types.Block {
 
 // verifyHeader is a nop placeholder for the block header verification.
 func (f *fetcherTester) verifyHeader(header *types.Header) error {
+	return nil
+}
+
+func (f *fetcherTester) handleProposedBlock(header *types.Header) error {
 	return nil
 }
 
@@ -296,6 +301,14 @@ func verifyImportDone(t *testing.T, imported chan *types.Block) {
 	}
 }
 
+func verifyProposeBlockHandlerCalled(t *testing.T, proposedBlockChan chan *types.Header) {
+	select {
+	case <-proposedBlockChan:
+	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("did not call propose block handler")
+	}
+}
+
 // Tests that a fetcher accepts block announcements and initiates retrievals for
 // them, successfully importing into the local chain.
 func TestSequentialAnnouncements62(t *testing.T) { testSequentialAnnouncements(t, 62) }
@@ -317,12 +330,18 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 		imported <- block
 		return nil
 	}
+	handleProposedBlockChan := make(chan *types.Header)
+	tester.fetcher.handleProposedBlock = func(header *types.Header) error {
+		go func() { handleProposedBlockChan <- header }()
+		return nil
+	}
 
 	for i := len(hashes) - 2; i >= 0; i-- {
 		tester.fetcher.Notify("valid", hashes[i], uint64(len(hashes)-i-1), time.Now().Add(-arriveTimeout), headerFetcher, bodyFetcher)
 		verifyImportEvent(t, imported, true)
 	}
 	verifyImportDone(t, imported)
+	verifyProposeBlockHandlerCalled(t, handleProposedBlockChan)
 }
 
 // Tests that if blocks are announced by multiple peers (or even the same buggy
