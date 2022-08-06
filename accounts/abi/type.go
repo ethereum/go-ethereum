@@ -73,6 +73,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		return Type{}, fmt.Errorf("invalid arg type in abi")
 	}
 	typ.stringKind = t
+
 	// if there are brackets, get ready to go into slice/array mode and
 	// recursively create the type
 	if strings.Count(t, "[") != 0 {
