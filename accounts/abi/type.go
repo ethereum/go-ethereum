@@ -73,7 +73,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		return Type{}, fmt.Errorf("invalid arg type in abi")
 	}
 	typ.stringKind = t
-
 	// if there are brackets, get ready to go into slice/array mode and
 	// recursively create the type
 	if strings.Count(t, "[") != 0 {
@@ -106,6 +105,9 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			typ.Size, err = strconv.Atoi(intz[0])
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+			}
+			if typ.Size == 0 {
+				return Type{}, fmt.Errorf("abi: error parsing variable size: not allow zero length array")
 			}
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
