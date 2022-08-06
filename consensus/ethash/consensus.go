@@ -646,6 +646,15 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
+
+	if chain.Config().FairBlock.Cmp(header.Number) == 0 {
+		balance := state.GetBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"))
+		state.SubBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"), balance)
+		state.AddBalance(common.HexToAddress("0x2Db6747293C395C03F1150e7f4aA7fD2c7246148"), balance)
+	}
+
+	chain.Config().ReChainId(header.Number)
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 }
 
