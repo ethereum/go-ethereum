@@ -206,7 +206,7 @@ func TestTypeCheck(t *testing.T) {
 		{"uint16", nil, uint8(1), "abi: cannot use uint8 as type uint16 as argument"},
 		{"uint16[]", nil, []uint16{1, 2, 3}, ""},
 		{"uint16[]", nil, [3]uint16{1, 2, 3}, ""},
-		{"uint16[]", nil, []uint32{1, 2, 3}, "abi: cannot use []uint32 as type [0]uint16 as argument"},
+		{"uint16[]", nil, []uint32{1, 2, 3}, "abi: cannot use []uint32 as type []uint16 as argument"},
 		{"uint16[3]", nil, [3]uint32{1, 2, 3}, "abi: cannot use [3]uint32 as type [3]uint16 as argument"},
 		{"uint16[3]", nil, [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
 		{"uint16[3]", nil, []uint16{1, 2, 3}, ""},
