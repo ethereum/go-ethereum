@@ -265,6 +265,10 @@ github.com/jwasinger/mont-arith v0.0.0-20220722044121-09f6e5edd4c6 h1:FDq9CXjBhQ
 github.com/jwasinger/mont-arith v0.0.0-20220722044121-09f6e5edd4c6/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
 github.com/jwasinger/mont-arith v0.0.0-20220801063511-5d1c8f65e74a h1:pjoCctgWd0G99OXWK3ZLdlx8SmtsiGIDLaEZcwBSOjw=
 github.com/jwasinger/mont-arith v0.0.0-20220801063511-5d1c8f65e74a/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
+github.com/jwasinger/mont-arith v0.0.0-20220802053054-3a45e801b08a h1:VUR28HiOGc1LtP9kO+4Q+jJ4RKPraAFUrehGvfVpKtw=
+github.com/jwasinger/mont-arith v0.0.0-20220802053054-3a45e801b08a/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
+github.com/jwasinger/mont-arith v0.0.0-20220807224541-6c3730d4b1d9 h1:q+nOadupzhip2Lvq4w3y8J8w5TqtiREoV7AvoZkefHg=
+github.com/jwasinger/mont-arith v0.0.0-20220807224541-6c3730d4b1d9/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
 github.com/jwilder/encoding v0.0.0-20170811194829-b4e1701a28ef/go.mod h1:Ct9fl0F6iIOGgxJ5npU/IUOhOhqlVrGjyIZc8/MagT0=
 github.com/karalabe/usb v0.0.2 h1:M6QQBNxF+CQ8OFvxrT90BA0qBOXymndZnk5q235mFc4=
 github.com/karalabe/usb v0.0.2/go.mod h1:Od972xHfMJowv7NGVDiWVxk2zxnWgjLlJzE+F4F7AGU=
