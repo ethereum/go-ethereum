@@ -214,9 +214,12 @@ func doInstall(cmdline []string) {
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 
+	// Disable CLI markdown doc generation in release builds.
+	buildTags := []string{"urfave_cli_no_docs"}
+
 	// Configure the build.
-	env := build.Env()
-	gobuild := tc.Go("build", buildFlags(env, *staticlink)...)
+	env := build.Env()	
+	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
@@ -224,9 +227,6 @@ func doInstall(cmdline []string) {
 	if env.CI && runtime.GOARCH == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
-
-	// Disable CLI markdown doc generation in release builds.
-	gobuild.Args = append(gobuild.Args, "-tags", "urfave_cli_no_docs")
 
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
@@ -252,7 +252,7 @@ func doInstall(cmdline []string) {
 }
 
 // buildFlags returns the go tool flags for building.
-func buildFlags(env build.Environment, staticlink bool) (flags []string) {
+func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
@@ -263,18 +263,25 @@ func buildFlags(env build.Environment, staticlink bool) (flags []string) {
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
-	// Enforce the stacksize to 8M, which is the case on most platforms apart from
-	// alpine Linux.
 	if runtime.GOOS == "linux" {
-		staticlinkflag := ""
-		if staticlink {
-			staticlinkflag = "-static"
+		staticflag := ""
+		if staticLinking {
+			staticflag = " -static"
+			// Under static linking, use of certain glibc features must be
+			// disable to avoid shared library dependencies.
+			buildTags = append(buildTags, "osusergo", "netgo")
 		}
-		ld = append(ld, "-extldflags", fmt.Sprintf("'-Wl,-z,stack-size=0x800000 %s'", staticlinkflag))
+		// Enforce the stacksize to 8M, which is the case on most platforms apart from
+		// alpine Linux.
+		extflag := "'-Wl,-z,stack-size=0x800000" + staticflag + "'"
+		ld = append(ld, "-extldflags", extflag)
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
+	
+	// Set build tags.
+	flags = append(flags, "-tags", strings.Join(buildTags, ","))
 	return flags
 }
 
