@@ -274,3 +274,33 @@ func TestEnterExit(t *testing.T) {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
 	}
 }
+
+func TestSetup(t *testing.T) {
+	// Test empty config
+	tracer, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, new(tracers.Context), nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	cfg, err := json.Marshal(map[string]string{"foo": "bar"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test no setup func
+	tracer, err = newJsTracer(`{fault: function() {}, result: function() {}}`, new(tracers.Context), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test config value
+	tracer, err = newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", new(tracers.Context), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(have) != `"bar"` {
+		t.Errorf("tracer returned wrong result. have: %s, want: \"bar\"\n", string(have))
+	}
+}
