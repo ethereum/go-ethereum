@@ -218,7 +218,7 @@ func doInstall(cmdline []string) {
 	buildTags := []string{"urfave_cli_no_docs"}
 
 	// Configure the build.
-	env := build.Env()	
+	env := build.Env()
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
@@ -268,7 +268,7 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 		if staticLinking {
 			staticflag = " -static"
 			// Under static linking, use of certain glibc features must be
-			// disable to avoid shared library dependencies.
+			// disabled to avoid shared library dependencies.
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
@@ -279,9 +279,9 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
-	
-	// Set build tags.
-	flags = append(flags, "-tags", strings.Join(buildTags, ","))
+	if len(buildTags) > 0 {
+		flags = append(flags, "-tags", strings.Join(buildTags, ","))
+	}
 	return flags
 }
 
