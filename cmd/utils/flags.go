@@ -493,8 +493,8 @@ var (
 		Usage:    "Enable recording the SHA3/keccak preimages of trie keys",
 		Category: flags.PerfCategory,
 	}
-	CacheLogCacheSizeFlag = &cli.IntFlag{
-		Name:     "cache.logcache",
+	CacheLogSizeFlag = &cli.IntFlag{
+		Name:     "cache.blocklogs",
 		Usage:    "Size (in number of blocks) of the log cache for filtering",
 		Category: flags.PerfCategory,
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
@@ -1816,8 +1816,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
-	if ctx.IsSet(CacheLogCacheSizeFlag.Name) {
-		cfg.FilterLogCacheSize = ctx.Int(CacheLogCacheSizeFlag.Name)
+	if ctx.IsSet(CacheLogSizeFlag.Name) {
+		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		// If snap-sync is requested, this flag is also required
