@@ -186,7 +186,7 @@ func resolveChainFreezerDir(ancient string) string {
 			// that chain freezer is also initialized and located in root folder.
 			// In this case fallback to legacy location.
 			freezer = ancient
-			log.Info("Found legacy ancient chain segment", "location", ancient)
+			log.Info("Found legacy ancient chain path", "location", ancient)
 		}
 	}
 	return freezer

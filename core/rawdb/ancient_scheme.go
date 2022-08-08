@@ -48,7 +48,7 @@ var chainFreezerNoSnappy = map[string]bool{
 
 // The list of identifiers of ancient stores.
 var (
-	chainFreezerName = "chains" // the folder name of chain segment ancient store.
+	chainFreezerName = "chain" // the folder name of chain segment ancient store.
 )
 
 // freezers the collections of all builtin freezers.
@@ -67,7 +67,7 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 	case chainFreezerName:
 		path, tables = resolveChainFreezerDir(ancient), chainFreezerNoSnappy
 	default:
-		return fmt.Errorf("unknown freezer, all supported %v", freezers)
+		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 	}
 	noSnappy, exist := tables[tableName]
 	if !exist {
@@ -75,7 +75,7 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 		for name := range tables {
 			names = append(names, name)
 		}
-		return fmt.Errorf("unknown freezer, all supported %v", names)
+		return fmt.Errorf("unknown table, supported ones: %v", names)
 	}
 	table, err := newFreezerTable(path, tableName, noSnappy, true)
 	if err != nil {
