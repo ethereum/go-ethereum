@@ -277,7 +277,7 @@ func TestEnterExit(t *testing.T) {
 
 func TestSetup(t *testing.T) {
 	// Test empty config
-	tracer, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, new(tracers.Context), nil)
+	_, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, new(tracers.Context), nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -287,12 +287,12 @@ func TestSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Test no setup func
-	tracer, err = newJsTracer(`{fault: function() {}, result: function() {}}`, new(tracers.Context), cfg)
+	_, err = newJsTracer(`{fault: function() {}, result: function() {}}`, new(tracers.Context), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Test config value
-	tracer, err = newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", new(tracers.Context), cfg)
+	tracer, err := newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", new(tracers.Context), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
