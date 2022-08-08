@@ -43,7 +43,11 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 	}
 
 	if t.T == ArrayTy && val.Len() != t.Size {
-		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
+		vlen := val.Len()
+		if val.Kind() == reflect.Slice {
+			vlen = -1
+		}
+		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), vlen))
 	}
 
 	if t.Elem.T == SliceTy || t.Elem.T == ArrayTy {
