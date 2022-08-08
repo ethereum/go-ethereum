@@ -55,6 +55,12 @@ func (bc *BlockChain) CurrentFinalizedBlock() *types.Block {
 	return bc.currentFinalizedBlock.Load().(*types.Block)
 }
 
+// CurrentSafeBlock retrieves the current safe block of the canonical
+// chain. The block is retrieved from the blockchain's internal cache.
+func (bc *BlockChain) CurrentSafeBlock() *types.Block {
+	return bc.currentSafeBlock.Load().(*types.Block)
+}
+
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {

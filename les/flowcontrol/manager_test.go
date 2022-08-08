@@ -104,7 +104,6 @@ func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, random
 	if ratio < 0.98 || ratio > 1.02 {
 		t.Errorf("totalCost/totalCapacity/testLength ratio incorrect (expected: 1, got: %f)", ratio)
 	}
-
 }
 
 func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
