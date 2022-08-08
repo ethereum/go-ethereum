@@ -28,17 +28,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/state"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/internal/ethapi"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/rpc"
+	"github.com/daefrom/go-dae/trie"
 )
 
 // EthereumAPI provides an API to access Ethereum full node-related information.
@@ -157,7 +157,7 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	}
 	if _, err := os.Stat(file); err == nil {
 		// File already exists. Allowing overwrite could be a DoS vector,
-		// since the 'file' may point to arbitrary paths on the drive.
+		// since the 'file' may point to arbitrary paths on the drive
 		return false, errors.New("location would overwrite an existing file")
 	}
 	// Make sure we can create the file to export into
@@ -506,11 +506,11 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewStateTrie(common.Hash{}, startBlock.Root(), triedb)
+	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewStateTrie(common.Hash{}, endBlock.Root(), triedb)
+	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}

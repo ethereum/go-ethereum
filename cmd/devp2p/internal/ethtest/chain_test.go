@@ -21,9 +21,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/daefrom/go-dae/eth/protocols/eth"
+	"github.com/daefrom/go-dae/p2p"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -141,18 +140,18 @@ func TestChain_GetHeaders(t *testing.T) {
 
 	var tests = []struct {
 		req      GetBlockHeaders
-		expected []*types.Header
+		expected BlockHeaders
 	}{
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-					Origin:  eth.HashOrNumber{Number: uint64(2)},
-					Amount:  uint64(5),
-					Skip:    1,
-					Reverse: false,
+				Origin: eth.HashOrNumber{
+					Number: uint64(2),
 				},
+				Amount:  uint64(5),
+				Skip:    1,
+				Reverse: false,
 			},
-			expected: []*types.Header{
+			expected: BlockHeaders{
 				chain.blocks[2].Header(),
 				chain.blocks[4].Header(),
 				chain.blocks[6].Header(),
@@ -162,14 +161,14 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-					Origin:  eth.HashOrNumber{Number: uint64(chain.Len() - 1)},
-					Amount:  uint64(3),
-					Skip:    0,
-					Reverse: true,
+				Origin: eth.HashOrNumber{
+					Number: uint64(chain.Len() - 1),
 				},
+				Amount:  uint64(3),
+				Skip:    0,
+				Reverse: true,
 			},
-			expected: []*types.Header{
+			expected: BlockHeaders{
 				chain.blocks[chain.Len()-1].Header(),
 				chain.blocks[chain.Len()-2].Header(),
 				chain.blocks[chain.Len()-3].Header(),
@@ -177,14 +176,14 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
-					Origin:  eth.HashOrNumber{Hash: chain.Head().Hash()},
-					Amount:  uint64(1),
-					Skip:    0,
-					Reverse: false,
+				Origin: eth.HashOrNumber{
+					Hash: chain.Head().Hash(),
 				},
+				Amount:  uint64(1),
+				Skip:    0,
+				Reverse: false,
 			},
-			expected: []*types.Header{
+			expected: BlockHeaders{
 				chain.Head().Header(),
 			},
 		},
@@ -192,7 +191,7 @@ func TestChain_GetHeaders(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			headers, err := chain.GetHeaders(&tt.req)
+			headers, err := chain.GetHeaders(tt.req)
 			if err != nil {
 				t.Fatal(err)
 			}

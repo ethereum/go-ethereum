@@ -22,33 +22,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
-	"github.com/ethereum/go-ethereum/les/downloader"
-	"github.com/ethereum/go-ethereum/les/vflux"
-	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/daefrom/go-dae/accounts"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/common/mclock"
+	"github.com/daefrom/go-dae/consensus"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/bloombits"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/eth/ethconfig"
+	"github.com/daefrom/go-dae/eth/filters"
+	"github.com/daefrom/go-dae/eth/gasprice"
+	"github.com/daefrom/go-dae/event"
+	"github.com/daefrom/go-dae/internal/ethapi"
+	"github.com/daefrom/go-dae/internal/shutdowncheck"
+	"github.com/daefrom/go-dae/les/downloader"
+	"github.com/daefrom/go-dae/les/vflux"
+	vfc "github.com/daefrom/go-dae/les/vflux/client"
+	"github.com/daefrom/go-dae/light"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/node"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/p2p/enode"
+	"github.com/daefrom/go-dae/p2p/enr"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/rpc"
 )
 
 type LightEthereum struct {
@@ -93,7 +93,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideTerminalTotalDifficulty, config.OverrideTerminalTotalDifficultyPassed)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideGrayGlacier, config.OverrideTerminalTotalDifficulty)
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}

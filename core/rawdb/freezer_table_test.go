@@ -29,8 +29,8 @@ import (
 	"testing/quick"
 	"time"
 
+	"github.com/daefrom/go-dae/metrics"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -902,7 +902,7 @@ func TestSequentialRead(t *testing.T) {
 		}
 		// Write 15 bytes 30 times
 		writeChunks(t, f, 30, 15)
-		f.dumpIndexStdout(0, 30)
+		f.DumpIndex(0, 30)
 		f.Close()
 	}
 	{ // Open it, iterate, verify iteration

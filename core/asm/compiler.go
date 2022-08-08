@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/daefrom/go-dae/common/math"
+	"github.com/daefrom/go-dae/core/vm"
 )
 
 // Compiler contains information about the parsed source

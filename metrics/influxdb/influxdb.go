@@ -5,8 +5,8 @@ import (
 	uurl "net/url"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
 	"github.com/influxdata/influxdb/client"
 )
 

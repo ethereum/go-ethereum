@@ -24,15 +24,15 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/ethdb/memorydb"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/trie"
 )
 
 var (
@@ -367,10 +367,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, owner common.Hash, roo
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes, _ := snapTrie.Commit(false)
-		if nodes != nil {
-			snapTrieDb.Update(trie.NewWithNodeSet(nodes))
-		}
+		root, _, _ := snapTrie.Commit(nil)
 		snapTrieDb.Commit(root, false, nil)
 	}
 	// Construct the trie for state iteration, reuse the trie

@@ -22,12 +22,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/eth/downloader"
+	"github.com/daefrom/go-dae/eth/protocols/eth"
+	"github.com/daefrom/go-dae/log"
 )
 
 const (
@@ -163,7 +163,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	// An alternative would be to check the local chain for exceeding the TTD and
 	// avoid triggering a sync in that case, but that could also miss sibling or
 	// other family TTD block being accepted.
-	if cs.handler.chain.Config().TerminalTotalDifficultyPassed || cs.handler.merger.TDDReached() {
+	if cs.handler.merger.TDDReached() {
 		return nil
 	}
 	// Ensure we're at minimum peer count.

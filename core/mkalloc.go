@@ -35,8 +35,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

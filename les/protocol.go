@@ -23,12 +23,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	vfc "github.com/ethereum/go-ethereum/les/vflux/client"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	vfc "github.com/daefrom/go-dae/les/vflux/client"
+	"github.com/daefrom/go-dae/p2p/enode"
+	"github.com/daefrom/go-dae/rlp"
 )
 
 // Constants to match up protocol versions and messages
@@ -49,7 +49,7 @@ var (
 var ProtocolLengths = map[uint]uint64{lpv2: 22, lpv3: 24, lpv4: 24}
 
 const (
-	NetworkId          = 1
+	NetworkId          = 8687
 	ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 	blockSafetyMargin  = 4                // safety margin applied to block ranges specified relative to head block
 

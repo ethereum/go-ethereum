@@ -25,19 +25,19 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/consensus"
+	"github.com/daefrom/go-dae/consensus/beacon"
+	"github.com/daefrom/go-dae/consensus/clique"
+	"github.com/daefrom/go-dae/consensus/ethash"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/eth/downloader"
+	"github.com/daefrom/go-dae/eth/gasprice"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/miner"
+	"github.com/daefrom/go-dae/node"
+	"github.com/daefrom/go-dae/params"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -72,7 +72,7 @@ var Defaults = Config{
 		DatasetsOnDisk:   2,
 		DatasetsLockMmap: false,
 	},
-	NetworkId:               1,
+	NetworkId:               8687,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
 	UltraLightFraction:      75,
@@ -205,11 +205,11 @@ type Config struct {
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
+	// Gray Glacier block override (TODO: remove after the fork)
+	OverrideGrayGlacier *big.Int `toml:",omitempty"`
+
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
-
-	// OverrideTerminalTotalDifficultyPassed (TODO: remove after the fork)
-	OverrideTerminalTotalDifficultyPassed *bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

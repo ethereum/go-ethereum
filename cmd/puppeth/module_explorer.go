@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/daefrom/go-dae/log"
 )
 
 // explorerDockerfile is the Dockerfile required to run a block explorer.
@@ -104,7 +104,7 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 		"Datadir":     config.node.datadir,
 		"DBDir":       config.dbdir,
 		"EthPort":     config.node.port,
-		"EthName":     getEthName(config.node.ethstats),
+		"EthName":     config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
 		"WebPort":     config.port,
 		"Transformer": transformer,
 	})

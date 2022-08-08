@@ -25,12 +25,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/p2p/enode"
+	"github.com/daefrom/go-dae/rpc"
 )
 
 const (

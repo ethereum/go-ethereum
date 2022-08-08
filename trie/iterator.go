@@ -21,8 +21,8 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/ethdb"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.
@@ -375,7 +375,8 @@ func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 			}
 		}
 	}
-	return it.trie.resolveHash(hash, path)
+	resolved, err := it.trie.resolveHash(hash, path)
+	return resolved, err
 }
 
 func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) {

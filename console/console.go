@@ -29,12 +29,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/daefrom/go-dae/console/prompt"
+	"github.com/daefrom/go-dae/internal/jsre"
+	"github.com/daefrom/go-dae/internal/jsre/deps"
+	"github.com/daefrom/go-dae/internal/web3ext"
+	"github.com/daefrom/go-dae/rpc"
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 )

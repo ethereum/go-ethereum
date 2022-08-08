@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

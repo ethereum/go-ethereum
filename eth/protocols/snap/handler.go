@@ -21,15 +21,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/light"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/p2p/enode"
+	"github.com/daefrom/go-dae/p2p/enr"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/trie"
 )
 
 const (
@@ -413,15 +415,15 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+			accTrie, err := trie.New(common.Hash{}, req.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
-			acc, err := accTrie.TryGetAccountWithPreHashedKey(account[:])
-			if err != nil || acc == nil {
+			var acc types.StateAccount
+			if err := rlp.DecodeBytes(accTrie.Get(account[:]), &acc); err != nil {
 				return nil, nil
 			}
-			stTrie, err := trie.NewStateTrie(account, acc.Root, chain.StateCache().TrieDB())
+			stTrie, err := trie.New(account, acc.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -487,7 +489,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 	// Make sure we have the state associated with the request
 	triedb := chain.StateCache().TrieDB()
 
-	accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, triedb)
+	accTrie, err := trie.NewSecure(common.Hash{}, req.Root, triedb)
 	if err != nil {
 		// We don't have the requested state available, bail out
 		return nil, nil
@@ -529,7 +531,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if err != nil || account == nil {
 				break
 			}
-			stTrie, err := trie.NewStateTrie(common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
+			stTrie, err := trie.NewSecure(common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
 			loads++ // always account database reads, even for failures
 			if err != nil {
 				break

@@ -24,9 +24,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/params"
 	"github.com/holiman/uint256"
 )
 

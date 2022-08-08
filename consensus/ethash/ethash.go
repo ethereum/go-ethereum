@@ -33,11 +33,11 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/daefrom/go-dae/consensus"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
+	"github.com/daefrom/go-dae/rpc"
 	"github.com/edsrzf/mmap-go"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
@@ -278,11 +278,8 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 		// Iterate over all previous instances and delete old ones
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)
-			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s*", algorithmRevision, seed[:8], endian))
-			files, _ := filepath.Glob(path) // find also the temp files that are generated.
-			for _, file := range files {
-				os.Remove(file)
-			}
+			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
+			os.Remove(path)
 		}
 	})
 }

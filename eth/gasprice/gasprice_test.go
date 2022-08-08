@@ -22,16 +22,16 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/consensus/ethash"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/core/vm"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/event"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rpc"
 )
 
 const testHead = 32
@@ -44,15 +44,6 @@ type testBackend struct {
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number > testHead {
 		return nil, nil
-	}
-	if number == rpc.EarliestBlockNumber {
-		number = 0
-	}
-	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock().Header(), nil
-	}
-	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock().Header(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -70,15 +61,6 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number > testHead {
 		return nil, nil
-	}
-	if number == rpc.EarliestBlockNumber {
-		number = 0
-	}
-	if number == rpc.FinalizedBlockNumber {
-		return b.chain.CurrentFinalizedBlock(), nil
-	}
-	if number == rpc.SafeBlockNumber {
-		return b.chain.CurrentSafeBlock(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -127,7 +109,6 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
-	config.TerminalTotalDifficulty = common.Big0
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
 	genesis, err := gspec.Commit(db)
@@ -169,8 +150,6 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
 	chain.InsertChain(blocks)
-	chain.SetFinalized(chain.GetBlockByNumber(25))
-	chain.SetSafe(chain.GetBlockByNumber(25))
 	return &testBackend{chain: chain, pending: pending}
 }
 

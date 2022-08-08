@@ -21,13 +21,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/consensus/ethash"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/vm"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/params"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestInvalidCliqueConfig(t *testing.T) {

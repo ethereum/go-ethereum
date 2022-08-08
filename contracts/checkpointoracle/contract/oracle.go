@@ -7,12 +7,12 @@ import (
 	"math/big"
 	"strings"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
+	ethereum "github.com/daefrom/go-dae"
+	"github.com/daefrom/go-dae/accounts/abi"
+	"github.com/daefrom/go-dae/accounts/abi/bind"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/event"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

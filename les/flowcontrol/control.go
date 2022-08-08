@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/daefrom/go-dae/common/mclock"
+	"github.com/daefrom/go-dae/log"
 )
 
 const (
@@ -182,7 +182,7 @@ func (node *ClientNode) UpdateParams(params ServerParams) {
 				return
 			}
 		}
-		node.updateSchedule = append(node.updateSchedule, scheduledUpdate{time: now.Add(DecParamDelay), params: params})
+		node.updateSchedule = append(node.updateSchedule, scheduledUpdate{time: now + mclock.AbsTime(DecParamDelay), params: params})
 	}
 }
 

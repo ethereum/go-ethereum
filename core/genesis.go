@@ -25,18 +25,18 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/common/math"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/state"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/trie"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -233,7 +233,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	return SetupGenesisBlockWithOverride(db, genesis, nil, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideTerminalTotalDifficulty *big.Int, overrideTerminalTotalDifficultyPassed *bool) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideGrayGlacier, overrideTerminalTotalDifficulty *big.Int) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -243,8 +243,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			if overrideTerminalTotalDifficulty != nil {
 				config.TerminalTotalDifficulty = overrideTerminalTotalDifficulty
 			}
-			if overrideTerminalTotalDifficultyPassed != nil {
-				config.TerminalTotalDifficultyPassed = *overrideTerminalTotalDifficultyPassed
+			if overrideGrayGlacier != nil {
+				config.GrayGlacierBlock = overrideGrayGlacier
 			}
 		}
 	}
@@ -442,9 +442,9 @@ func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
+		ExtraData:  hexutil.MustDecode("0xd883010a16846765746888676f312e31382e31856c696e7578"),
+		GasLimit:   3141592,
+		Difficulty: big.NewInt(112100000000),
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }

@@ -33,25 +33,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/signer/core"
-	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/ethereum/go-ethereum/signer/fourbyte"
-	"github.com/ethereum/go-ethereum/signer/rules"
-	"github.com/ethereum/go-ethereum/signer/storage"
+	"github.com/daefrom/go-dae/accounts"
+	"github.com/daefrom/go-dae/accounts/keystore"
+	"github.com/daefrom/go-dae/cmd/utils"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/internal/ethapi"
+	"github.com/daefrom/go-dae/internal/flags"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/node"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/rpc"
+	"github.com/daefrom/go-dae/signer/core"
+	"github.com/daefrom/go-dae/signer/core/apitypes"
+	"github.com/daefrom/go-dae/signer/fourbyte"
+	"github.com/daefrom/go-dae/signer/rules"
+	"github.com/daefrom/go-dae/signer/storage"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
@@ -736,7 +736,7 @@ func checkFile(filename string) error {
 	}
 	// Check the unix permission bits
 	// However, on windows, we cannot use the unix perm-bits, see
-	// https://github.com/ethereum/go-ethereum/issues/20123
+	// https://github.com/daefrom/go-dae/issues/20123
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0377 != 0 {
 		return fmt.Errorf("file (%v) has insecure file permissions (%v)", filename, info.Mode().String())
 	}

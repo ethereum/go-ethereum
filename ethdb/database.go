@@ -142,9 +142,7 @@ type AncientWriteOp interface {
 
 // AncientStater wraps the Stat method of a backing data store.
 type AncientStater interface {
-	// AncientDatadir returns the path of root ancient directory. Empty string
-	// will be returned if ancient store is not enabled at all. The returned
-	// path can be used to construct the path of other freezers.
+	// AncientDatadir returns the root directory path of the ancient store.
 	AncientDatadir() (string, error)
 }
 
@@ -174,6 +172,7 @@ type Stater interface {
 type AncientStore interface {
 	AncientReader
 	AncientWriter
+	AncientStater
 	io.Closer
 }
 

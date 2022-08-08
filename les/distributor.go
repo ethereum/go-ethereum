@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/les/utils"
+	"github.com/daefrom/go-dae/common/mclock"
+	"github.com/daefrom/go-dae/les/utils"
 )
 
 // requestDistributor implements a mechanism that distributes requests to
@@ -256,7 +256,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 	if r.reqOrder == 0 {
 		d.lastReqOrder++
 		r.reqOrder = d.lastReqOrder
-		r.waitForPeers = d.clock.Now().Add(waitForPeers)
+		r.waitForPeers = d.clock.Now() + mclock.AbsTime(waitForPeers)
 	}
 	// Assign the timestamp when the request is queued no matter it's
 	// a new one or re-queued one.

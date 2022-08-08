@@ -25,24 +25,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/daefrom/go-dae/accounts"
+	"github.com/daefrom/go-dae/accounts/keystore"
+	"github.com/daefrom/go-dae/cmd/utils"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/console/prompt"
+	"github.com/daefrom/go-dae/eth"
+	"github.com/daefrom/go-dae/eth/downloader"
+	"github.com/daefrom/go-dae/ethclient"
+	"github.com/daefrom/go-dae/internal/debug"
+	"github.com/daefrom/go-dae/internal/ethapi"
+	"github.com/daefrom/go-dae/internal/flags"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
+	"github.com/daefrom/go-dae/node"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/daefrom/go-dae/eth/tracers/js"
+	_ "github.com/daefrom/go-dae/eth/tracers/native"
 
 	"github.com/urfave/cli/v2"
 )
@@ -69,8 +69,8 @@ var (
 		utils.NoUSBFlag,
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
+		utils.OverrideGrayGlacierFlag,
 		utils.OverrideTerminalTotalDifficulty,
-		utils.OverrideTerminalTotalDifficultyPassed,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,

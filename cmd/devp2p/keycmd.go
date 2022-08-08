@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/p2p/enode"
 	"github.com/urfave/cli/v2"
 )
 

@@ -21,9 +21,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/vm"
+	"github.com/daefrom/go-dae/eth/tracers"
 )
 
 func init() {

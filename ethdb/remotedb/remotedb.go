@@ -25,9 +25,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/daefrom/go-dae/common/hexutil"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/rpc"
 )
 
 // Database is a key-value lookup for a remote database via debug_dbGet.

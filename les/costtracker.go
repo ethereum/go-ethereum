@@ -23,12 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/daefrom/go-dae/common/mclock"
+	"github.com/daefrom/go-dae/eth/ethconfig"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/les/flowcontrol"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
 )
 
 const makeCostStats = false // make request cost statistics during operation

@@ -26,18 +26,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/daefrom/go-dae"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/consensus/ethash"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/eth"
+	"github.com/daefrom/go-dae/eth/ethconfig"
+	"github.com/daefrom/go-dae/node"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rpc"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -507,29 +507,6 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	}
 	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
-	}
-
-	// FeeHistory
-	history, err := ec.FeeHistory(context.Background(), 1, big.NewInt(2), []float64{95, 99})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	want := &ethereum.FeeHistory{
-		OldestBlock: big.NewInt(2),
-		Reward: [][]*big.Int{
-			{
-				big.NewInt(234375000),
-				big.NewInt(234375000),
-			},
-		},
-		BaseFee: []*big.Int{
-			big.NewInt(765625000),
-			big.NewInt(671627818),
-		},
-		GasUsedRatio: []float64{0.008912678667376286},
-	}
-	if !reflect.DeepEqual(history, want) {
-		t.Fatalf("FeeHistory result doesn't match expected: (got: %v, want: %v)", history, want)
 	}
 }
 

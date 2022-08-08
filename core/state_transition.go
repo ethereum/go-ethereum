@@ -21,12 +21,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/daefrom/go-dae/common"
+	cmath "github.com/daefrom/go-dae/common/math"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/core/vm"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/params"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)

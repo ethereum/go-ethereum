@@ -24,21 +24,21 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/fetcher"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/consensus"
+	"github.com/daefrom/go-dae/consensus/beacon"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/forkid"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/eth/downloader"
+	"github.com/daefrom/go-dae/eth/fetcher"
+	"github.com/daefrom/go-dae/eth/protocols/eth"
+	"github.com/daefrom/go-dae/eth/protocols/snap"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/event"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/params"
 )
 
 const (
@@ -191,22 +191,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			}
 		}
 	}
-	// Construct the downloader (long sync)
+	// Construct the downloader (long sync) and its backing state bloom if snap
+	// sync is requested. The downloader is responsible for deallocating the state
+	// bloom when it's done.
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
-	if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
-		if h.chain.Config().TerminalTotalDifficultyPassed {
-			log.Info("Chain post-merge, sync via beacon client")
-		} else {
-			head := h.chain.CurrentBlock()
-			if td := h.chain.GetTd(head.Hash(), head.NumberU64()); td.Cmp(ttd) >= 0 {
-				log.Info("Chain post-TTD, sync via beacon client")
-			} else {
-				log.Warn("Chain pre-merge, sync via PoW (ensure beacon client is ready)")
-			}
-		}
-	} else if h.chain.Config().TerminalTotalDifficultyPassed {
-		log.Error("Chain configured post-merge, but without TTD. Are you debugging sync?")
-	}
+
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
 		// All the block fetcher activities should be disabled

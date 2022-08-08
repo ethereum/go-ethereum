@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/state/snapshot"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/eth/protocols/eth"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/event"
+	"github.com/daefrom/go-dae/trie"
 )
 
 // Reduce some of the parameters to make the tester faster.
@@ -229,7 +229,7 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.GetBlockByHash(hash); block != nil {
-		_, err := trie.NewStateTrie(common.Hash{}, block.Root(), trie.NewDatabase(dl.stateDb))
+		_, err := trie.NewSecure(common.Hash{}, block.Root(), trie.NewDatabase(dl.stateDb))
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])

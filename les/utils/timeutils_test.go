@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/daefrom/go-dae/common/mclock"
 )
 
 func TestUpdateTimer(t *testing.T) {
@@ -37,7 +37,7 @@ func TestUpdateTimer(t *testing.T) {
 	if updated := timer.Update(func(diff time.Duration) bool { return true }); !updated {
 		t.Fatalf("Doesn't update the clock when reaching the threshold")
 	}
-	if updated := timer.UpdateAt(sim.Now().Add(time.Second), func(diff time.Duration) bool { return true }); !updated {
+	if updated := timer.UpdateAt(sim.Now()+mclock.AbsTime(time.Second), func(diff time.Duration) bool { return true }); !updated {
 		t.Fatalf("Doesn't update the clock when reaching the threshold")
 	}
 	timer = NewUpdateTimer(sim, 0)

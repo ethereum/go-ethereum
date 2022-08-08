@@ -25,12 +25,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/forkid"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/params"
+	"github.com/daefrom/go-dae/rlp"
 )
 
 type Chain struct {
@@ -96,12 +96,12 @@ func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
 }
 
-func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
+func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 	if req.Amount < 1 {
 		return nil, fmt.Errorf("no block headers requested")
 	}
 
-	headers := make([]*types.Header, req.Amount)
+	headers := make(BlockHeaders, req.Amount)
 	var blockNumber uint64
 
 	// range over blocks to check if our chain has the requested header

@@ -29,41 +29,41 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/remotedb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/graphql"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/les"
-	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/daefrom/go-dae/accounts"
+	"github.com/daefrom/go-dae/accounts/keystore"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/fdlimit"
+	"github.com/daefrom/go-dae/consensus"
+	"github.com/daefrom/go-dae/consensus/ethash"
+	"github.com/daefrom/go-dae/core"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/vm"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/eth"
+	ethcatalyst "github.com/daefrom/go-dae/eth/catalyst"
+	"github.com/daefrom/go-dae/eth/downloader"
+	"github.com/daefrom/go-dae/eth/ethconfig"
+	"github.com/daefrom/go-dae/eth/gasprice"
+	"github.com/daefrom/go-dae/eth/tracers"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/ethdb/remotedb"
+	"github.com/daefrom/go-dae/ethstats"
+	"github.com/daefrom/go-dae/graphql"
+	"github.com/daefrom/go-dae/internal/ethapi"
+	"github.com/daefrom/go-dae/internal/flags"
+	"github.com/daefrom/go-dae/les"
+	lescatalyst "github.com/daefrom/go-dae/les/catalyst"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
+	"github.com/daefrom/go-dae/metrics/exp"
+	"github.com/daefrom/go-dae/metrics/influxdb"
+	"github.com/daefrom/go-dae/miner"
+	"github.com/daefrom/go-dae/node"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/p2p/enode"
+	"github.com/daefrom/go-dae/p2p/nat"
+	"github.com/daefrom/go-dae/p2p/netutil"
+	"github.com/daefrom/go-dae/params"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/urfave/cli/v2"
@@ -91,7 +91,7 @@ var (
 	}
 	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",
-		Usage:    "Root directory for ancient data (default = inside chaindata)",
+		Usage:    "Data directory for ancient chain segments (default = inside chaindata)",
 		Category: flags.EthCategory,
 	}
 	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
@@ -262,16 +262,17 @@ var (
 		Value:    2048,
 		Category: flags.EthCategory,
 	}
+	OverrideGrayGlacierFlag = &cli.Uint64Flag{
+		Name:     "override.grayglacier",
+		Usage:    "Manually specify Gray Glacier fork-block, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	OverrideTerminalTotalDifficulty = &flags.BigFlag{
 		Name:     "override.terminaltotaldifficulty",
 		Usage:    "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
-	OverrideTerminalTotalDifficultyPassed = &cli.BoolFlag{
-		Name:     "override.terminaltotaldifficultypassed",
-		Usage:    "Manually specify TerminalTotalDifficultyPassed, overriding the bundled setting",
-		Category: flags.EthCategory,
-	}
+
 	// Light server and client settings
 	LightServeFlag = &cli.IntFlag{
 		Name:     "light.serve",

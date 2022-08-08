@@ -24,12 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/daefrom/go-dae"
+	"github.com/daefrom/go-dae/accounts/abi"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to

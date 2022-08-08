@@ -21,14 +21,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/core/state"
+	"github.com/daefrom/go-dae/core/types"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/trie"
 )
 
 var (
@@ -112,22 +112,6 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
-	key = crypto.Keccak256(key)
-	var res types.StateAccount
-	err := t.do(key, func() (err error) {
-		value, err := t.trie.TryGet(key)
-		if err != nil {
-			return err
-		}
-		if value == nil {
-			return nil
-		}
-		return rlp.DecodeBytes(value, &res)
-	})
-	return &res, err
-}
-
 func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
@@ -153,11 +137,11 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet, error) {
+func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, int, error) {
 	if t.trie == nil {
-		return t.id.Root, nil, nil
+		return t.id.Root, 0, nil
 	}
-	return t.trie.Commit(collectLeaf)
+	return t.trie.Commit(onleaf)
 }
 
 func (t *odrTrie) Hash() common.Hash {

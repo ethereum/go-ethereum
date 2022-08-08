@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/rawdb"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/rlp"
+	"github.com/daefrom/go-dae/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -142,19 +142,17 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 type testHelper struct {
 	diskdb  ethdb.Database
 	triedb  *trie.Database
-	accTrie *trie.StateTrie
-	nodes   *trie.MergedNodeSet
+	accTrie *trie.SecureTrie
 }
 
 func newHelper() *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(diskdb)
-	accTrie, _ := trie.NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	accTrie, _ := trie.NewSecure(common.Hash{}, common.Hash{}, triedb)
 	return &testHelper{
 		diskdb:  diskdb,
 		triedb:  triedb,
 		accTrie: accTrie,
-		nodes:   trie.NewMergedNodeSet(),
 	}
 }
 
@@ -182,26 +180,21 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 }
 
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
-	stTrie, _ := trie.NewStateTrie(owner, common.Hash{}, t.triedb)
+	stTrie, _ := trie.NewSecure(owner, common.Hash{}, t.triedb)
 	for i, k := range keys {
 		stTrie.Update([]byte(k), []byte(vals[i]))
 	}
+	var root common.Hash
 	if !commit {
-		return stTrie.Hash().Bytes()
-	}
-	root, nodes, _ := stTrie.Commit(false)
-	if nodes != nil {
-		t.nodes.Merge(nodes)
+		root = stTrie.Hash()
+	} else {
+		root, _, _ = stTrie.Commit(nil)
 	}
 	return root.Bytes()
 }
 
 func (t *testHelper) Commit() common.Hash {
-	root, nodes, _ := t.accTrie.Commit(true)
-	if nodes != nil {
-		t.nodes.Merge(nodes)
-	}
-	t.triedb.Update(t.nodes)
+	root, _, _ := t.accTrie.Commit(nil)
 	t.triedb.Commit(root, false, nil)
 	return root
 }
@@ -385,7 +378,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}) // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()}) // 0x19ead688e907b0fab07176120dceec244a72aff2f0aa51e8b827584e378772f4
 
-	root := helper.Commit() // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
+	root, _, _ := helper.accTrie.Commit(nil) // Root: 0xa04693ea110a31037fb5ee814308a6f1d76bdab0b11676bdf4541d2de55ba978
 
 	// Delete an account trie leaf and ensure the generator chokes
 	helper.triedb.Commit(root, false, nil)
@@ -420,8 +413,18 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})                                     // 0x65145f923027566669a1ae5ccac66f945b55ff6eaeb17d2ea8e048b7d381f2d7
 	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
+	root, _, _ := helper.accTrie.Commit(nil)
 
-	root := helper.Commit()
+	// We can only corrupt the disk database, so flush the tries out
+	helper.triedb.Reference(
+		common.BytesToHash(stRoot),
+		common.HexToHash("0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e"),
+	)
+	helper.triedb.Reference(
+		common.BytesToHash(stRoot),
+		common.HexToHash("0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2"),
+	)
+	helper.triedb.Commit(root, false, nil)
 
 	// Delete a storage trie root and ensure the generator chokes
 	helper.diskdb.Delete(stRoot)
@@ -455,7 +458,18 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 	stRoot = helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()}) // 0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2
 
-	root := helper.Commit()
+	root, _, _ := helper.accTrie.Commit(nil)
+
+	// We can only corrupt the disk database, so flush the tries out
+	helper.triedb.Reference(
+		common.BytesToHash(stRoot),
+		common.HexToHash("0x9250573b9c18c664139f3b6a7a8081b7d8f8916a8fcc5d94feec6c29f5fd4e9e"),
+	)
+	helper.triedb.Reference(
+		common.BytesToHash(stRoot),
+		common.HexToHash("0x50815097425d000edfc8b3a4a13e175fc2bdcfee8bdfbf2d1ff61041d3c235b2"),
+	)
+	helper.triedb.Commit(root, false, nil)
 
 	// Delete a storage trie leaf and ensure the generator chokes
 	helper.diskdb.Delete(common.HexToHash("0x18a0f4d79cff4459642dd7604f303886ad9d77c30cf3d7d7cedb3a693ab6d371").Bytes())
@@ -811,12 +825,10 @@ func populateDangling(disk ethdb.KeyValueStore) {
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 	var helper = newHelper()
+	stRoot := helper.makeStorageTrie(common.Hash{}, common.Hash{}, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
-	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 	helper.addAccount("acc-2", &Account{Balance: big.NewInt(1), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
-
-	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addAccount("acc-3", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 
 	helper.addSnapStorage("acc-1", []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"})
@@ -846,12 +858,10 @@ func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateBrokenSnapshotWithDanglingStorage(t *testing.T) {
 	var helper = newHelper()
+	stRoot := helper.makeStorageTrie(common.Hash{}, common.Hash{}, []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 
-	stRoot := helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-1")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-1", &Account{Balance: big.NewInt(1), Root: stRoot, CodeHash: emptyCode.Bytes()})
 	helper.addTrieAccount("acc-2", &Account{Balance: big.NewInt(2), Root: emptyRoot.Bytes(), CodeHash: emptyCode.Bytes()})
-
-	helper.makeStorageTrie(common.Hash{}, hashData([]byte("acc-3")), []string{"key-1", "key-2", "key-3"}, []string{"val-1", "val-2", "val-3"}, true)
 	helper.addTrieAccount("acc-3", &Account{Balance: big.NewInt(3), Root: stRoot, CodeHash: emptyCode.Bytes()})
 
 	populateDangling(helper.diskdb)

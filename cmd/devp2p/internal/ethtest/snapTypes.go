@@ -16,45 +16,37 @@
 
 package ethtest
 
-import "github.com/ethereum/go-ethereum/eth/protocols/snap"
+import "github.com/daefrom/go-dae/eth/protocols/snap"
 
 // GetAccountRange represents an account range query.
 type GetAccountRange snap.GetAccountRangePacket
 
-func (msg GetAccountRange) Code() int     { return 33 }
-func (msg GetAccountRange) ReqID() uint64 { return msg.ID }
+func (g GetAccountRange) Code() int { return 33 }
 
 type AccountRange snap.AccountRangePacket
 
-func (msg AccountRange) Code() int     { return 34 }
-func (msg AccountRange) ReqID() uint64 { return msg.ID }
+func (g AccountRange) Code() int { return 34 }
 
 type GetStorageRanges snap.GetStorageRangesPacket
 
-func (msg GetStorageRanges) Code() int     { return 35 }
-func (msg GetStorageRanges) ReqID() uint64 { return msg.ID }
+func (g GetStorageRanges) Code() int { return 35 }
 
 type StorageRanges snap.StorageRangesPacket
 
-func (msg StorageRanges) Code() int     { return 36 }
-func (msg StorageRanges) ReqID() uint64 { return msg.ID }
+func (g StorageRanges) Code() int { return 36 }
 
 type GetByteCodes snap.GetByteCodesPacket
 
-func (msg GetByteCodes) Code() int     { return 37 }
-func (msg GetByteCodes) ReqID() uint64 { return msg.ID }
+func (g GetByteCodes) Code() int { return 37 }
 
 type ByteCodes snap.ByteCodesPacket
 
-func (msg ByteCodes) Code() int     { return 38 }
-func (msg ByteCodes) ReqID() uint64 { return msg.ID }
+func (g ByteCodes) Code() int { return 38 }
 
 type GetTrieNodes snap.GetTrieNodesPacket
 
-func (msg GetTrieNodes) Code() int     { return 39 }
-func (msg GetTrieNodes) ReqID() uint64 { return msg.ID }
+func (g GetTrieNodes) Code() int { return 39 }
 
 type TrieNodes snap.TrieNodesPacket
 
-func (msg TrieNodes) Code() int     { return 40 }
-func (msg TrieNodes) ReqID() uint64 { return msg.ID }
+func (g TrieNodes) Code() int { return 40 }

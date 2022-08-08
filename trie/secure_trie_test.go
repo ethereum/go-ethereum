@@ -18,26 +18,25 @@ package trie
 
 import (
 	"bytes"
-	"fmt"
 	"runtime"
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/ethdb/memorydb"
 )
 
-func newEmptySecure() *StateTrie {
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
+func newEmptySecure() *SecureTrie {
+	trie, _ := NewSecure(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
 	return trie
 }
 
-// makeTestStateTrie creates a large enough secure trie for testing.
-func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
+// makeTestSecureTrie creates a large enough secure trie for testing.
+func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	trie, _ := NewSecure(common.Hash{}, common.Hash{}, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -58,15 +57,9 @@ func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 			trie.Update(key, val)
 		}
 	}
-	root, nodes, err := trie.Commit(false)
-	if err != nil {
-		panic(fmt.Errorf("failed to commit trie %v", err))
-	}
-	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
-		panic(fmt.Errorf("failed to commit db %v", err))
-	}
-	// Re-create the trie based on the new state
-	trie, _ = NewSecure(common.Hash{}, root, triedb)
+	trie.Commit(nil)
+
+	// Return the generated trie
 	return triedb, trie, content
 }
 
@@ -112,12 +105,12 @@ func TestSecureGetKey(t *testing.T) {
 	}
 }
 
-func TestStateTrieConcurrency(t *testing.T) {
+func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
-	_, trie, _ := makeTestStateTrie()
+	_, trie, _ := makeTestSecureTrie()
 
 	threads := runtime.NumCPU()
-	tries := make([]*StateTrie, threads)
+	tries := make([]*SecureTrie, threads)
 	for i := 0; i < threads; i++ {
 		tries[i] = trie.Copy()
 	}
@@ -142,7 +135,7 @@ func TestStateTrieConcurrency(t *testing.T) {
 					tries[index].Update(key, val)
 				}
 			}
-			tries[index].Commit(false)
+			tries[index].Commit(nil)
 		}(i)
 	}
 	// Wait for all threads to finish

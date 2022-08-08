@@ -25,8 +25,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -173,12 +173,9 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, nodes, err := trieA.Commit(false)
+	rootA, _, err := trieA.Commit(nil)
 	if err != nil {
 		panic(err)
-	}
-	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false, nil)

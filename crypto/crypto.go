@@ -29,9 +29,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/common/math"
+	"github.com/daefrom/go-dae/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -282,3 +282,7 @@ func zeroBytes(bytes []byte) {
 		bytes[i] = 0
 	}
 }
+
+// Deprecated: For backward compatibility as other packages depend on these
+func Sha3(data ...[]byte) []byte          { return Keccak256(data...) }
+func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }

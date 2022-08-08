@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -199,15 +199,6 @@ type TransactionSender interface {
 // optimal gas price given current fee market conditions.
 type GasPricer interface {
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
-}
-
-// FeeHistory provides recent fee market data that consumers can use to determine
-// a reasonable maxPriorityFeePerGas value.
-type FeeHistory struct {
-	OldestBlock  *big.Int     // block coresponding to first response value
-	Reward       [][]*big.Int // list every txs priority fee per block
-	BaseFee      []*big.Int   // list of each block's base fee
-	GasUsedRatio []float64    // ratio of gas used out of the total available limit
 }
 
 // A PendingStateReader provides access to the pending state, which is the result of all

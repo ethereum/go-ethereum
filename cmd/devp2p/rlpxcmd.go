@@ -20,11 +20,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/daefrom/go-dae/cmd/devp2p/internal/ethtest"
+	"github.com/daefrom/go-dae/crypto"
+	"github.com/daefrom/go-dae/internal/utesting"
+	"github.com/daefrom/go-dae/p2p"
+	"github.com/daefrom/go-dae/p2p/rlpx"
+	"github.com/daefrom/go-dae/rlp"
 	"github.com/urfave/cli/v2"
 )
 
@@ -109,7 +110,12 @@ func rlpxEthTest(ctx *cli.Context) error {
 	if err != nil {
 		exit(err)
 	}
-	return runTests(ctx, suite.EthTests())
+	// check if given node supports eth66, and if so, run eth66 protocol tests as well
+	is66Failed, _ := utesting.Run(utesting.Test{Name: "Is_66", Fn: suite.Is_66})
+	if is66Failed {
+		return runTests(ctx, suite.EthTests())
+	}
+	return runTests(ctx, suite.AllEthTests())
 }
 
 // rlpxSnapTest runs the snap protocol test suite.

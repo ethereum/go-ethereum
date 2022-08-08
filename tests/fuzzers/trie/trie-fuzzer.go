@@ -21,9 +21,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/ethdb/memorydb"
+	"github.com/daefrom/go-dae/trie"
 )
 
 // randTest performs random trie operations.
@@ -51,8 +51,9 @@ const (
 	opUpdate = iota
 	opDelete
 	opGet
-	opHash
 	opCommit
+	opHash
+	opReset
 	opItercheckhash
 	opProve
 	opMax // boundary value, not an actual op
@@ -156,17 +157,14 @@ func runRandTest(rt randTest) error {
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
+		case opCommit:
+			_, _, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
-		case opCommit:
-			hash, nodes, err := tr.Commit(false)
+		case opReset:
+			hash, _, err := tr.Commit(nil)
 			if err != nil {
 				return err
-			}
-			if nodes != nil {
-				if err := triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
-					return err
-				}
 			}
 			newtr, err := trie.New(common.Hash{}, hash, triedb)
 			if err != nil {

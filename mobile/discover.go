@@ -22,7 +22,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/daefrom/go-dae/p2p/enode"
 )
 
 // Enode represents a host on the network.

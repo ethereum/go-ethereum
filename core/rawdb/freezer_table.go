@@ -27,9 +27,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
 	"github.com/golang/snappy"
 )
 
@@ -123,8 +123,8 @@ type freezerTable struct {
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
-// newFreezerTable opens the given path as a freezer table.
-func newFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
+// NewFreezerTable opens the given path as a freezer table.
+func NewFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
 	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, readonly)
 }
 
@@ -884,7 +884,9 @@ func (t *freezerTable) Sync() error {
 	return t.head.Sync()
 }
 
-func (t *freezerTable) dumpIndexStdout(start, stop int64) {
+// DumpIndex is a debug print utility function, mainly for testing. It can also
+// be used to analyse a live freezer table index.
+func (t *freezerTable) DumpIndex(start, stop int64) {
 	t.dumpIndex(os.Stdout, start, stop)
 }
 

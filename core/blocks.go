@@ -16,10 +16,10 @@
 
 package core
 
-import "github.com/ethereum/go-ethereum/common"
+import "github.com/daefrom/go-dae/common"
 
 // BadHashes represent a set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{
-	common.HexToHash("05bef30ef572270f654746da22639a7a0c97dd97a7050b9e252391996aaeb689"): true,
-	common.HexToHash("7d05d08cbc596a2e5e4f13b80a743e53e09221b5323c3a61946b20873e58583f"): true,
+	//common.HexToHash("f6982548f4c594ae7113369a4616211236be3ad40158d981232af715928fc9a1"): true,
+	//common.HexToHash("7d05d08cbc596a2e5e4f13b80a743e53e09221b5323c3a61946b20873e58583f"): true,
 }

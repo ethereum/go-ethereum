@@ -26,10 +26,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/ethdb"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
 	"github.com/prometheus/tsdb/fileutil"
 )
 
@@ -67,6 +67,8 @@ type Freezer struct {
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	frozen uint64 // Number of blocks already frozen
 	tail   uint64 // Number of the first stored item in the freezer
+
+	datadir string // Path of root directory of ancient store
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -109,6 +111,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		datadir:      datadir,
 	}
 
 	// Create the tables.
@@ -426,7 +429,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := newFreezerTable(migrationPath, kind, table.noCompression, false)
+	newTable, err := NewFreezerTable(migrationPath, kind, table.noCompression, false)
 	if err != nil {
 		return err
 	}
@@ -483,5 +486,11 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err := os.Remove(migrationPath); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+// AncientDatadir returns the root directory path of the ancient store.
+func (f *Freezer) AncientDatadir() (string, error) {
+	return f.datadir, nil
 }

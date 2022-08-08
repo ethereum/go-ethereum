@@ -19,9 +19,9 @@ package state
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/daefrom/go-dae/common"
+	"github.com/daefrom/go-dae/log"
+	"github.com/daefrom/go-dae/metrics"
 )
 
 var (
@@ -331,11 +331,7 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						if len(task) == len(common.Address{}) {
-							sf.trie.TryGetAccount(task)
-						} else {
-							sf.trie.TryGet(task)
-						}
+						sf.trie.TryGet(task)
 						sf.seen[string(task)] = struct{}{}
 					}
 				}
