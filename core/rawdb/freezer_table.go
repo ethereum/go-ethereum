@@ -123,8 +123,8 @@ type freezerTable struct {
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
 }
 
-// NewFreezerTable opens the given path as a freezer table.
-func NewFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
+// newFreezerTable opens the given path as a freezer table.
+func newFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
 	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, readonly)
 }
 
@@ -884,9 +884,7 @@ func (t *freezerTable) Sync() error {
 	return t.head.Sync()
 }
 
-// DumpIndex is a debug print utility function, mainly for testing. It can also
-// be used to analyse a live freezer table index.
-func (t *freezerTable) DumpIndex(start, stop int64) {
+func (t *freezerTable) dumpIndexStdout(start, stop int64) {
 	t.dumpIndex(os.Stdout, start, stop)
 }
 
