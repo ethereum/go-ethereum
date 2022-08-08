@@ -659,16 +659,21 @@ func TestMVHashMapMarkEstimate(t *testing.T) {
 	assert.Equal(t, balance, b)
 
 	// Tx1 mark estimate
-	for _, v := range states[1].writeMap {
+	for _, v := range states[1].MVWriteList() {
 		mvhm.MarkEstimate(v.Path, 1)
 	}
 
-	// Tx2 read again should get default (empty) vals because its dependency Tx1 is marked as estimate
-	v = states[2].GetState(addr, key)
-	b = states[2].GetBalance(addr)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		} else {
+			t.Log("Recovered in f", r)
+		}
+	}()
 
-	assert.Equal(t, common.Hash{}, v)
-	assert.Equal(t, common.Big0, b)
+	// Tx2 read again should get default (empty) vals because its dependency Tx1 is marked as estimate
+	states[2].GetState(addr, key)
+	states[2].GetBalance(addr)
 
 	// Tx1 read again should get Tx0 vals
 	v = states[1].GetState(addr, key)

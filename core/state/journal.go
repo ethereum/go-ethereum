@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 )
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -143,7 +144,7 @@ type (
 func (ch createObjectChange) revert(s *StateDB) {
 	delete(s.stateObjects, *ch.account)
 	delete(s.stateObjectsDirty, *ch.account)
-	MVWrite(s, ch.account.Bytes())
+	MVWrite(s, blockstm.NewAddressKey(*ch.account))
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
@@ -152,7 +153,7 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
-	MVWrite(s, ch.prev.address.Bytes())
+	MVWrite(s, blockstm.NewAddressKey(ch.prev.address))
 	if !ch.prevdestruct && s.snap != nil {
 		delete(s.snapDestructs, ch.prev.addrHash)
 	}
@@ -167,8 +168,8 @@ func (ch suicideChange) revert(s *StateDB) {
 	if obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
-		MVWrite(s, subPath(ch.account.Bytes(), suicidePath))
-		MVWrite(s, subPath(ch.account.Bytes(), balancePath))
+		MVWrite(s, blockstm.NewSubpathKey(*ch.account, SuicidePath))
+		MVWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 	}
 }
 
@@ -187,7 +188,7 @@ func (ch touchChange) dirtied() *common.Address {
 
 func (ch balanceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setBalance(ch.prev)
-	MVWrite(s, subPath(ch.account.Bytes(), balancePath))
+	MVWrite(s, blockstm.NewSubpathKey(*ch.account, BalancePath))
 }
 
 func (ch balanceChange) dirtied() *common.Address {
@@ -196,7 +197,7 @@ func (ch balanceChange) dirtied() *common.Address {
 
 func (ch nonceChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
-	MVWrite(s, subPath(ch.account.Bytes(), noncePath))
+	MVWrite(s, blockstm.NewSubpathKey(*ch.account, NoncePath))
 }
 
 func (ch nonceChange) dirtied() *common.Address {
@@ -205,7 +206,7 @@ func (ch nonceChange) dirtied() *common.Address {
 
 func (ch codeChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
-	MVWrite(s, subPath(ch.account.Bytes(), codePath))
+	MVWrite(s, blockstm.NewSubpathKey(*ch.account, CodePath))
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -214,7 +215,7 @@ func (ch codeChange) dirtied() *common.Address {
 
 func (ch storageChange) revert(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
-	MVWrite(s, append(ch.account.Bytes(), ch.key.Bytes()...))
+	MVWrite(s, blockstm.NewStateKey(*ch.account, ch.key))
 }
 
 func (ch storageChange) dirtied() *common.Address {
