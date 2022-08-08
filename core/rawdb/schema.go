@@ -140,7 +140,7 @@ var FreezerNoSnappy = map[string]bool{
 
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezer = "chains" // the identifier of chain segment ancient store.
+	chainFreezerDir = "chains" // the folder name of chain segment ancient store.
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary

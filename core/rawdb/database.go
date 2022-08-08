@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"path"
 	"sync/atomic"
 	"time"
 
@@ -35,8 +35,14 @@ import (
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.
 type freezerdb struct {
+	ancientRoot string
 	ethdb.KeyValueStore
 	ethdb.AncientStore
+}
+
+// AncientDatadir returns the path of root ancient directory.
+func (frdb *freezerdb) AncientDatadir() (string, error) {
+	return frdb.ancientRoot, nil
 }
 
 // Close implements io.Closer, closing both the fast key-value store as well as
@@ -152,6 +158,11 @@ func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 	return errNotSupported
 }
 
+// AncientDatadir returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) AncientDatadir() (string, error) {
+	return "", errNotSupported
+}
+
 // NewDatabase creates a high level database on top of a given key-value data
 // store without a freezer moving immutable chain segments into cold storage.
 func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
@@ -166,11 +177,12 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// Check if the chain freezer is already present in the specified
 	// sub folder, if not then two possibilities:
 	// - chain freezer is not initialized
-	// - chain freezer exists in legacy location (root ancient directory)
-	freezer := filepath.Join(ancient, ChainFreezer)
+	// - chain freezer exists in legacy location (root ancient folder)
+	freezer := path.Join(ancient, chainFreezerDir)
 	if !common.FileExist(freezer) {
 		if !common.FileExist(ancient) {
-			// The entire ancient store is not initialized, use the sub folder
+			// The entire ancient store is not initialized, still use the sub
+			// folder for initialization.
 		} else {
 			// Ancient root is already initialized, then we hold the assumption
 			// that chain freezer is also initialized and located in root folder.

@@ -729,7 +729,7 @@ func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
 }
 
-// ResolveAncient returns the absolute path of the ancient root directory.
+// ResolveAncient returns the absolute path of the root ancient directory.
 func (n *Node) ResolveAncient(name string, ancient string) string {
 	switch {
 	case ancient == "":

@@ -133,6 +133,10 @@ func (db *Database) Stat(property string) (string, error) {
 	panic("not supported")
 }
 
+func (db *Database) AncientDatadir() (string, error) {
+	panic("not supported")
+}
+
 func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
