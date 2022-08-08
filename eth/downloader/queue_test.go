@@ -156,7 +156,7 @@ func TestBasics(t *testing.T) {
 
 		// The second peer should hit throttling
 		if !throttle {
-			t.Fatalf("should not throttle")
+			t.Fatalf("should throttle")
 		}
 		// And not get any fetches at all, since it was throttled to begin with
 		if fetchReq != nil {
@@ -251,7 +251,7 @@ func TestEmptyBlocks(t *testing.T) {
 
 		// there should be nothing to fetch, blocks are empty
 		if fetchReq != nil {
-			t.Fatal("there should be no body fetch tasks remaining")
+			t.Fatal("there should be no receipt fetch tasks remaining")
 		}
 	}
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
