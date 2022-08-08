@@ -216,10 +216,7 @@ func doInstall(cmdline []string) {
 
 	// Configure the build.
 	env := build.Env()
-	if *staticlink {
-		env.StaticLink = true
-	}
-	gobuild := tc.Go("build", buildFlags(env)...)
+	gobuild := tc.Go("build", buildFlags(env, *staticlink)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
@@ -255,7 +252,7 @@ func doInstall(cmdline []string) {
 }
 
 // buildFlags returns the go tool flags for building.
-func buildFlags(env build.Environment) (flags []string) {
+func buildFlags(env build.Environment, staticlink bool) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
@@ -270,7 +267,7 @@ func buildFlags(env build.Environment) (flags []string) {
 	// alpine Linux.
 	if runtime.GOOS == "linux" {
 		staticlinkflag := ""
-		if env.StaticLink {
+		if staticlink {
 			staticlinkflag = "-static"
 		}
 		ld = append(ld, "-extldflags", fmt.Sprintf("'-Wl,-z,stack-size=0x800000 %s'", staticlinkflag))
