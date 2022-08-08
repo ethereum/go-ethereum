@@ -67,7 +67,6 @@ func (r *rulesetUI) Init(javascriptRules string) error {
 	return nil
 }
 func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (goja.Value, error) {
-
 	// Instantiate a fresh vm engine every time
 	vm := goja.New()
 

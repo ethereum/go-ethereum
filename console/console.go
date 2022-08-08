@@ -540,11 +540,6 @@ func countIndents(input string) int {
 	return indents
 }
 
-// Execute runs the JavaScript file specified as the argument.
-func (c *Console) Execute(path string) error {
-	return c.jsre.Exec(path)
-}
-
 // Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
 	c.stopOnce.Do(func() {

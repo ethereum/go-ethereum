@@ -24,16 +24,16 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	cloudflareTokenFlag = cli.StringFlag{
-		Name:   "token",
-		Usage:  "CloudFlare API token",
-		EnvVar: "CLOUDFLARE_API_TOKEN",
+	cloudflareTokenFlag = &cli.StringFlag{
+		Name:    "token",
+		Usage:   "CloudFlare API token",
+		EnvVars: []string{"CLOUDFLARE_API_TOKEN"},
 	}
-	cloudflareZoneIDFlag = cli.StringFlag{
+	cloudflareZoneIDFlag = &cli.StringFlag{
 		Name:  "zoneid",
 		Usage: "CloudFlare Zone ID (optional)",
 	}
@@ -134,7 +134,6 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 			ttl := rootTTL
 			if path != name {
 				ttl = treeNodeTTLCloudflare // Max TTL permitted by Cloudflare
-
 			}
 			record := cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl}
 			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, record)

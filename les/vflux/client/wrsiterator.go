@@ -109,7 +109,6 @@ func (w *WrsIterator) chooseNode() *enode.Node {
 			return w.ns.GetNode(id)
 		}
 	}
-
 }
 
 // Close ends the iterator.

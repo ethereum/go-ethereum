@@ -179,7 +179,6 @@ func TestBasics(t *testing.T) {
 		if got, exp := fetchReq.Headers[0].Number.Uint64(), uint64(1); got != exp {
 			t.Fatalf("expected header %d, got %d", exp, got)
 		}
-
 	}
 	if exp, got := q.blockTaskQueue.Size(), numOfBlocks-10; exp != got {
 		t.Errorf("expected block task queue to be %d, got %d", exp, got)
@@ -227,7 +226,6 @@ func TestEmptyBlocks(t *testing.T) {
 		if fetchReq != nil {
 			t.Fatal("there should be no body fetch tasks remaining")
 		}
-
 	}
 	if q.blockTaskQueue.Size() != numOfBlocks-10 {
 		t.Errorf("expected block task queue to be %d, got %d", numOfBlocks-10, q.blockTaskQueue.Size())
@@ -268,7 +266,6 @@ func XTestDelivery(t *testing.T) {
 	world.progress(10)
 	if false {
 		log.Root().SetHandler(log.StdoutHandler)
-
 	}
 	q := newQueue(10, 10)
 	var wg sync.WaitGroup
@@ -299,7 +296,6 @@ func XTestDelivery(t *testing.T) {
 			fmt.Printf("got %d results, %d tot\n", len(res), tot)
 			// Now we can forget about these
 			world.forget(res[len(res)-1].Header.Number.Uint64())
-
 		}
 	}()
 	wg.Add(1)
@@ -362,7 +358,6 @@ func XTestDelivery(t *testing.T) {
 		}
 		for i := 0; i < 50; i++ {
 			time.Sleep(2990 * time.Millisecond)
-
 		}
 	}()
 	wg.Add(1)
@@ -413,10 +408,8 @@ func (n *network) forget(blocknum uint64) {
 	n.chain = n.chain[index:]
 	n.receipts = n.receipts[index:]
 	n.offset = int(blocknum)
-
 }
 func (n *network) progress(numBlocks int) {
-
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	//fmt.Printf("progressing...\n")
@@ -424,7 +417,6 @@ func (n *network) progress(numBlocks int) {
 	n.chain = append(n.chain, newBlocks...)
 	n.receipts = append(n.receipts, newR...)
 	n.cond.Broadcast()
-
 }
 
 func (n *network) headers(from int) []*types.Header {

@@ -85,6 +85,10 @@ var (
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
+// badBlockFn is a callback for the async beacon sync to notify the caller that
+// the origin header requested to sync to, produced a chain with a bad block.
+type badBlockFn func(invalid *types.Header, origin *types.Header)
+
 // headerTask is a set of downloaded headers to queue along with their precomputed
 // hashes to avoid constant rehashing.
 type headerTask struct {
@@ -113,6 +117,7 @@ type Downloader struct {
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
+	badBlock badBlockFn // Reports a block as rejected by the chain
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
@@ -1528,7 +1533,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		return errCancelContentProcessing
 	default:
 	}
-	// Retrieve the a batch of results to import
+	// Retrieve a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting downloaded chain", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
@@ -1544,6 +1549,16 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+
+			// In post-merge, notify the engine API of encountered bad chains
+			if d.badBlock != nil {
+				head, _, err := d.skeleton.Bounds()
+				if err != nil {
+					log.Error("Failed to retrieve beacon bounds for bad block reporting", "err", err)
+				} else {
+					d.badBlock(blocks[index].Header(), head)
+				}
+			}
 		} else {
 			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
 			// when it needs to preprocess blocks to import a sidechain.

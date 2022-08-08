@@ -118,7 +118,6 @@ func TestMatching(t *testing.T) {
 						version, vuln.Introduced, vuln.Fixed, vuln.Name, vulnIntro, current, vulnFixed)
 				}
 			}
-
 		}
 	}
 	for major := 1; major < 2; major++ {
