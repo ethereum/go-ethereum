@@ -33,18 +33,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // Register adds the engine API to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum) error {
+func Register(stack *node.Node, backend *eth.Ethereum, config *ethconfig.Config) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
-			Service:       NewConsensusAPI(backend),
+			Service:       NewConsensusAPI(backend, config.Miner.NewPayloadTimeout),
 			Authenticated: true,
 		},
 	})
@@ -86,6 +87,13 @@ type ConsensusAPI struct {
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
 
+	// newpayloadTimeout is the maximum timeout allowance for creating payload.
+	// The default value is 2 seconds but node operator can set it to arbitrary
+	// large value. A large timeout allowance may cause Geth to fail to create
+	// a non-empty payload within the specified time and eventually miss the slot
+	// in case there are some computation expensive transactions in txpool.
+	newpayloadTimeout time.Duration
+
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
 	// to track historical bad blocks as well as bad tipsets in case a chain
@@ -124,14 +132,20 @@ type ConsensusAPI struct {
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
+func NewConsensusAPI(eth *eth.Ethereum, newpayloadTimeout time.Duration) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Engine API started but chain not configured for merge yet")
+	}
+	// Sanitize the timeout config for creating payload.
+	if newpayloadTimeout < time.Millisecond*100 {
+		log.Warn("Sanitizing new payload timeout to default", "provided", newpayloadTimeout, "updated", ethconfig.Defaults.Miner.NewPayloadTimeout)
+		newpayloadTimeout = ethconfig.Defaults.Miner.NewPayloadTimeout
 	}
 	api := &ConsensusAPI{
 		eth:               eth,
 		remoteBlocks:      newHeaderQueue(),
 		localBlocks:       newPayloadQueue(),
+		newpayloadTimeout: newpayloadTimeout,
 		invalidBlocksHits: make(map[common.Hash]int),
 		invalidTipsets:    make(map[common.Hash]*types.Header),
 	}
@@ -289,7 +303,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// Send a request to generate a full block in the background.
 		// The result can be obtained via the returned channel. The
 		// timeout for building block is set to prevent some huge blocks.
-		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false, time.Second*3)
+		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false, api.newpayloadTimeout)
 		if err != nil {
 			log.Error("Failed to create async sealing payload", "err", err)
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
