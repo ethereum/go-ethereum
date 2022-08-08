@@ -111,38 +111,6 @@ var (
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
 
-const (
-	// freezerHeaderTable indicates the name of the freezer header table.
-	freezerHeaderTable = "headers"
-
-	// freezerHashTable indicates the name of the freezer canonical hash table.
-	freezerHashTable = "hashes"
-
-	// freezerBodiesTable indicates the name of the freezer block body table.
-	freezerBodiesTable = "bodies"
-
-	// freezerReceiptTable indicates the name of the freezer receipts table.
-	freezerReceiptTable = "receipts"
-
-	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
-	freezerDifficultyTable = "diffs"
-)
-
-// FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
-// Hashes and difficulties don't compress well.
-var FreezerNoSnappy = map[string]bool{
-	freezerHeaderTable:     false,
-	freezerHashTable:       true,
-	freezerBodiesTable:     false,
-	freezerReceiptTable:    false,
-	freezerDifficultyTable: true,
-}
-
-// The list of identifiers of ancient stores.
-var (
-	chainFreezerDir = "chains" // the folder name of chain segment ancient store.
-)
-
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
@@ -255,25 +223,4 @@ func configKey(hash common.Hash) []byte {
 // genesisKey = genesisPrefix + hash
 func genesisKey(hash common.Hash) []byte {
 	return append(genesisPrefix, hash.Bytes()...)
-}
-
-// FreezerTableInfo retrieves the basic information about the specified freezer table.
-func FreezerTableInfo(kind string) (bool, bool, string) {
-	if noCompression, ok := FreezerNoSnappy[kind]; ok {
-		return true, noCompression, ""
-	}
-	// The freezer table of sub-ancient store should also be
-	// registered here for checking.
-	return false, false, "" // non-existent
-}
-
-// FreezerTables returns all supported tables in the freezer.
-func FreezerTables() []string {
-	var ret []string
-	for table := range FreezerNoSnappy {
-		ret = append(ret, table)
-	}
-	// The freezer table of sub-ancient store should also be
-	// registered here for return.
-	return ret
 }

@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -160,8 +159,8 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 	dbDumpFreezerIndex = &cli.Command{
 		Action:    freezerInspect,
 		Name:      "freezer-index",
-		Usage:     "Dump out the index of a given freezer table type",
-		ArgsUsage: "<type> <start (int)> <end (int)>",
+		Usage:     "Dump out the index of a specific freezer table",
+		ArgsUsage: "<freezer-type> <table-type> <start (int)> <end (int)>",
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
@@ -536,26 +535,20 @@ func dbDumpTrie(ctx *cli.Context) error {
 }
 
 func freezerInspect(ctx *cli.Context) error {
-	var (
-		start, end int64
-		err        error
-	)
-	if ctx.NArg() < 3 {
+	if ctx.NArg() < 4 {
 		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
 	}
-	kind := ctx.Args().Get(0)
-
-	exist, disableSnappy, subdir := rawdb.FreezerTableInfo(kind)
-	if !exist {
-		tables := rawdb.FreezerTables()
-		sort.Strings(tables)
-		return fmt.Errorf("could not read freezer-type '%v'. Available options: %v", kind, tables)
-	}
-	if start, err = strconv.ParseInt(ctx.Args().Get(1), 10, 64); err != nil {
+	var (
+		freezer = ctx.Args().Get(0)
+		table   = ctx.Args().Get(1)
+	)
+	start, err := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+	if err != nil {
 		log.Info("Could not read start-param", "err", err)
 		return err
 	}
-	if end, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64); err != nil {
+	end, err := strconv.ParseInt(ctx.Args().Get(3), 10, 64)
+	if err != nil {
 		log.Info("Could not read count param", "err", err)
 		return err
 	}
@@ -565,24 +558,12 @@ func freezerInspect(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	// Construct the path of specified freezer table. The subdir is concated
-	// in case the specific table belongs to a sub-ancient.
-	path, err := db.AncientDatadir()
+	ancient, err := db.AncientDatadir()
 	if err != nil {
 		log.Info("Failed to retrieve ancient root", "err", err)
 		return err
 	}
-	if subdir != "" {
-		path = filepath.Join(path, subdir)
-	}
-	log.Info("Opening freezer", "location", path, "name", kind)
-
-	f, err := rawdb.NewFreezerTable(path, kind, disableSnappy, true)
-	if err != nil {
-		return err
-	}
-	f.DumpIndex(start, end)
-	return nil
+	return rawdb.InspectFreezerTable(ancient, freezer, table, start, end)
 }
 
 func importLDBdata(ctx *cli.Context) error {
