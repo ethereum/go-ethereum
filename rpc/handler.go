@@ -333,8 +333,20 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
+	answerCh := make(chan *jsonrpcMessage)
+	go func() {
+		answer := h.runMethod(cp.ctx, msg, callb, args)
+		answerCh <- answer
+	}()
 
+	var answer *jsonrpcMessage
+	select {
+	// Context timeout is set in node/rpcstack:ServeHTTP.
+	// Only for HTTP requests.
+	case <-cp.ctx.Done():
+		answer = msg.errorResponse(&timeoutError{})
+	case answer = <-answerCh:
+	}
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
 	if callb != h.unsubscribeCb {
