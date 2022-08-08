@@ -200,9 +200,10 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch = flag.String("arch", "", "Architecture to cross build for")
-		cc   = flag.String("cc", "", "C compiler to cross build with")
+		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch       = flag.String("arch", "", "Architecture to cross build for")
+		cc         = flag.String("cc", "", "C compiler to cross build with")
+		staticlink = flag.Bool("static", false, "Static link build with")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -215,6 +216,9 @@ func doInstall(cmdline []string) {
 
 	// Configure the build.
 	env := build.Env()
+	if *staticlink {
+		env.StaticLink = true
+	}
 	gobuild := tc.Go("build", buildFlags(env)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
@@ -265,7 +269,11 @@ func buildFlags(env build.Environment) (flags []string) {
 	// Enforce the stacksize to 8M, which is the case on most platforms apart from
 	// alpine Linux.
 	if runtime.GOOS == "linux" {
-		ld = append(ld, "-extldflags", "-Wl,-z,stack-size=0x800000")
+		staticlinkflag := ""
+		if env.StaticLink {
+			staticlinkflag = "-static"
+		}
+		ld = append(ld, "-extldflags", fmt.Sprintf("'-Wl,-z,stack-size=0x800000 %s'", staticlinkflag))
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
