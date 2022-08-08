@@ -29,7 +29,7 @@ var (
 // formatSliceString formats the reflection kind with the given slice size
 // and returns a formatted string representation.
 func formatSliceString(kind reflect.Kind, sliceSize int) string {
-	if sliceSize < 1 {
+	if sliceSize == -1 {
 		return fmt.Sprintf("[]%v", kind)
 	}
 	return fmt.Sprintf("[%d]%v", sliceSize, kind)

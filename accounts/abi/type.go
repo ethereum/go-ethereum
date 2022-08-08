@@ -98,6 +98,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			// is a slice
 			typ.T = SliceTy
 			typ.Elem = &embeddedType
+			typ.Size = -1
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else if len(intz) == 1 {
 			// is an array
@@ -106,9 +107,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			typ.Size, err = strconv.Atoi(intz[0])
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
-			}
-			if typ.Size == 0 {
-				return Type{}, fmt.Errorf("abi: error parsing variable size: not allow zero length array")
 			}
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
