@@ -45,7 +45,7 @@ func sharedSyslog(fmtr Format, sysWr *syslog.Writer, err error) (Handler, error)
 
 		s := strings.TrimSpace(string(fmtr.Format(r)))
 		return syslogFn(s)
-	})
+	}, LvlTrace)
 	return LazyHandler(&closingHandler{sysWr, h}), nil
 }
 

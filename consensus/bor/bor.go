@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -97,6 +98,9 @@ var (
 	// errOutOfRangeChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
 	errOutOfRangeChain = errors.New("out of range or non-contiguous chain")
+
+	errUncleDetected     = errors.New("uncles not allowed")
+	errUnknownValidators = errors.New("unknown validators")
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
@@ -210,9 +214,7 @@ type Bor struct {
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 
-	signer common.Address // Ethereum address of the signing key
-	signFn SignerFn       // Signer function to authorize hashes with
-	lock   sync.RWMutex   // Protects the signer fields
+	authorizedSigner atomic.Pointer[signer] // Ethereum address and sign function of the signing key
 
 	ethAPI                 api.Caller
 	spanner                Spanner
@@ -223,6 +225,11 @@ type Bor struct {
 	fakeDiff bool // Skip difficulty verifications
 
 	closeOnce sync.Once
+}
+
+type signer struct {
+	signer common.Address // Ethereum address of the signing key
+	signFn SignerFn       // Signer function to authorize hashes with
 }
 
 // New creates a Matic Bor consensus engine.
@@ -256,6 +263,14 @@ func New(
 		GenesisContractsClient: genesisContracts,
 		HeimdallClient:         heimdallClient,
 	}
+
+	c.authorizedSigner.Store(&signer{
+		common.Address{},
+		func(_ accounts.Account, _ string, i []byte) ([]byte, error) {
+			// return an error to prevent panics
+			return nil, &UnauthorizedSignerError{0, common.Address{}.Bytes()}
+		},
+	})
 
 	// make sure we can decode all the GenesisAlloc in the BorConfig.
 	for key, genesisAlloc := range c.config.BlockAlloc {
@@ -572,7 +587,7 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 // uncles as this consensus mechanism doesn't permit uncles.
 func (c *Bor) VerifyUncles(_ consensus.ChainReader, block *types.Block) error {
 	if len(block.Uncles()) > 0 {
-		return errors.New("uncles not allowed")
+		return errUncleDetected
 	}
 
 	return nil
@@ -656,8 +671,10 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 		return err
 	}
 
+	currentSigner := *c.authorizedSigner.Load()
+
 	// Set the correct difficulty
-	header.Difficulty = new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, c.signer))
+	header.Difficulty = new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, currentSigner.signer))
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -670,7 +687,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 	if IsSprintStart(number+1, c.config.Sprint) {
 		newValidators, err := c.spanner.GetCurrentValidators(context.Background(), header.ParentHash, number+1)
 		if err != nil {
-			return errors.New("unknown validators")
+			return errUnknownValidators
 		}
 
 		// sort validator by address
@@ -695,8 +712,8 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 	var succession int
 	// if signer is not empty
-	if c.signer != (common.Address{}) {
-		succession, err = snap.GetSignerSuccessionNumber(c.signer)
+	if currentSigner.signer != (common.Address{}) {
+		succession, err = snap.GetSignerSuccessionNumber(currentSigner.signer)
 		if err != nil {
 			return err
 		}
@@ -774,7 +791,7 @@ func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.State
 		if blockNumber == strconv.FormatUint(headerNumber, 10) {
 			allocs, err := decodeGenesisAlloc(genesisAlloc)
 			if err != nil {
-				return fmt.Errorf("failed to decode genesis alloc: %v", err)
+				return fmt.Errorf("failed to decode genesis alloc: %w", err)
 			}
 
 			for addr, account := range allocs {
@@ -838,12 +855,11 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (c *Bor) Authorize(signer common.Address, signFn SignerFn) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.signer = signer
-	c.signFn = signFn
+func (c *Bor) Authorize(currentSigner common.Address, signFn SignerFn) {
+	c.authorizedSigner.Store(&signer{
+		signer: currentSigner,
+		signFn: signFn,
+	})
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
@@ -860,10 +876,9 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 		log.Info("Sealing paused, waiting for transactions")
 		return nil
 	}
+
 	// Don't hold the signer fields for the entire sealing procedure
-	c.lock.RLock()
-	signer, signFn := c.signer, c.signFn
-	c.lock.RUnlock()
+	currentSigner := *c.authorizedSigner.Load()
 
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
@@ -871,12 +886,12 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 	}
 
 	// Bail out if we're unauthorized to sign a block
-	if !snap.ValidatorSet.HasAddress(signer) {
+	if !snap.ValidatorSet.HasAddress(currentSigner.signer) {
 		// Check the UnauthorizedSignerError.Error() msg to see why we pass number-1
-		return &UnauthorizedSignerError{number - 1, signer.Bytes()}
+		return &UnauthorizedSignerError{number - 1, currentSigner.signer.Bytes()}
 	}
 
-	successionNumber, err := snap.GetSignerSuccessionNumber(signer)
+	successionNumber, err := snap.GetSignerSuccessionNumber(currentSigner.signer)
 	if err != nil {
 		return err
 	}
@@ -887,7 +902,7 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 
 	// Sign all the things!
-	err = Sign(signFn, signer, header, c.config)
+	err = Sign(currentSigner.signFn, currentSigner.signer, header, c.config)
 	if err != nil {
 		return err
 	}
@@ -949,7 +964,7 @@ func (c *Bor) CalcDifficulty(chain consensus.ChainHeaderReader, _ uint64, parent
 		return nil
 	}
 
-	return new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, c.signer))
+	return new(big.Int).SetUint64(Difficulty(snap.ValidatorSet, c.authorizedSigner.Load().signer))
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

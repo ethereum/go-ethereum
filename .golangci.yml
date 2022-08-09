@@ -50,6 +50,7 @@ linters:
     - unconvert
     - unparam
     - wsl
+    - asasalint
     #- errorlint causes stack overflow. TODO: recheck after each golangci update
 
 linters-settings:

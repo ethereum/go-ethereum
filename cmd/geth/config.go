@@ -18,14 +18,12 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/BurntSushi/toml"
+	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -71,7 +69,7 @@ type gethConfig struct {
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}

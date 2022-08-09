@@ -3,10 +3,10 @@ package heimdallgrpc
 import (
 	"context"
 
+	proto "github.com/maticnetwork/polyproto/heimdall"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
-
-	proto "github.com/maticnetwork/polyproto/heimdall"
 )
 
 func (h *HeimdallGRPCClient) StateSyncEvents(ctx context.Context, fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
@@ -18,13 +18,19 @@ func (h *HeimdallGRPCClient) StateSyncEvents(ctx context.Context, fromID uint64,
 		Limit:  uint64(stateFetchLimit),
 	}
 
-	res, err := h.client.StateSyncEvents(ctx, req)
+	var (
+		res    proto.Heimdall_StateSyncEventsClient
+		events *proto.StateSyncEventsResponse
+		err    error
+	)
+
+	res, err = h.client.StateSyncEvents(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	for {
-		events, err := res.Recv()
+		events, err = res.Recv()
 		if err != nil {
 			break
 		}
@@ -45,5 +51,5 @@ func (h *HeimdallGRPCClient) StateSyncEvents(ctx context.Context, fromID uint64,
 		}
 	}
 
-	return eventRecords, nil
+	return eventRecords, err
 }
