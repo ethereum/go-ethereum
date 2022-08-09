@@ -37,7 +37,6 @@ import (
 var (
 	genesisPath   = "./internal/ethtest/testdata/genesis.json"
 	halfchainFile = "./internal/ethtest/testdata/halfchain.rlp"
-	fullchainFile = "./internal/ethtest/testdata/chain.rlp"
 )
 
 type testEth struct {
