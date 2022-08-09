@@ -105,7 +105,7 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			tracer, err := tracers.New(tracerName, new(tracers.Context))
+			tracer, err := tracers.New(tracerName, new(tracers.Context), nil)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
