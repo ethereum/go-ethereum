@@ -2,7 +2,6 @@ package native
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync/atomic"
@@ -62,9 +61,15 @@ func newtxnOpCodeTracer(ctx *tracers.Context) tracers.Tracer {
 
 // GetResult returns an empty json object.
 func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
-	if len(t.callStack) != 1 {
-		return nil, errors.New("incorrect number of top-level calls")
-	}
+
+	// This block used to trip on subtraces being discovered, for this tracer we do not need this,
+	// however we would like to keep this here in a possible future where we do care about such cases.
+
+	// if len(t.callStack) != 1 {
+	// 	return nil, errors.New("incorrect number of top-level calls")
+	// }
+
+	// Only want the top level trace, all other indexes hold subtraces to which we do not particularly need
 	res, err := json.Marshal(t.callStack[0])
 	if err != nil {
 		return nil, err
