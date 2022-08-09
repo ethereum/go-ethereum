@@ -342,6 +342,9 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsFair(next):
+		if config.FairBlock.Cmp(next) == 0 {
+			return big.NewInt(0)
+		}
 		return calcDifficultyFair(time, parent)
 	case config.IsGrayGlacier(next):
 		return calcDifficultyEip5133(time, parent)
