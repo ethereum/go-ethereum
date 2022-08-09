@@ -51,7 +51,6 @@ type accountMarshaling struct {
 type prestateTracer struct {
 	env       *vm.EVM
 	prestate  prestate
-	postState prestate
 	create    bool
 	from      common.Address
 	to        common.Address
@@ -74,7 +73,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 			return nil, err
 		}
 	}
-	return &prestateTracer{prestate: prestate{}, postState: prestate{}, config: config}, nil
+	return &prestateTracer{prestate: prestate{}, config: config}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -163,9 +162,9 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 
 	// Refund the from address with rest gas
 	refundGas := new(big.Int).Mul(t.env.TxContext.GasPrice, new(big.Int).SetUint64(restGas))
-	fromBal := hexutil.MustDecodeBig(t.postState[t.from].Balance)
+	fromBal := hexutil.MustDecodeBig(t.prestate[t.from].Post.Balance)
 	fromBal.Add(fromBal, refundGas)
-	t.postState[t.from].Balance = hexutil.EncodeBig(fromBal)
+	t.prestate[t.from].Post.Balance = hexutil.EncodeBig(fromBal)
 
 	// Refund the used gas to miner
 	miner := t.env.Context.Coinbase
@@ -174,13 +173,13 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		gasPrice.Sub(gasPrice, t.env.Context.BaseFee)
 	}
 	usedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit-restGas))
-	minerBal := hexutil.MustDecodeBig(t.postState[miner].Balance)
+	minerBal := hexutil.MustDecodeBig(t.prestate[miner].Post.Balance)
 	minerBal.Add(minerBal, usedGas)
-	t.postState[miner].Balance = hexutil.EncodeBig(minerBal)
+	t.prestate[miner].Post.Balance = hexutil.EncodeBig(minerBal)
 
 	for addr, state := range t.prestate {
 		for key := range state.Storage {
-			t.postState[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
+			t.prestate[addr].Post.Storage[key] = t.env.StateDB.GetState(addr, key)
 		}
 	}
 }
@@ -188,23 +187,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *prestateTracer) GetResult() (json.RawMessage, error) {
-	var (
-		res []byte
-		err error
-	)
-	if !t.config.CollectPost {
-		res, err = json.Marshal(t.prestate)
-	} else {
-		diffstates := make(diffstate)
-		for addr, state := range t.prestate {
-			diffstates[addr] = &diffaccount{
-				Pre:  *state,
-				Post: *t.postState[addr],
-			}
-		}
-		res, err = json.Marshal(diffstates)
-	}
-
+	res, err := json.Marshal(t.prestate)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +213,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 		Storage: make(map[common.Hash]common.Hash),
 	}
 	if t.config.CollectPost {
-		t.postState[addr] = &account{
+		t.prestate[addr].Post = &account{
 			Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
 			Nonce:   t.env.StateDB.GetNonce(addr),
 			Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
