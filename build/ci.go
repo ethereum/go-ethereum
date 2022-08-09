@@ -203,7 +203,7 @@ func doInstall(cmdline []string) {
 		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
 		arch       = flag.String("arch", "", "Architecture to cross build for")
 		cc         = flag.String("cc", "", "C compiler to cross build with")
-		staticlink = flag.Bool("static", false, "Static link build with")
+		staticlink = flag.Bool("static", false, "Create statically-linked executable")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -264,17 +264,16 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 		ld = append(ld, "-s")
 	}
 	if runtime.GOOS == "linux" {
-		staticflag := ""
+		// Enforce the stacksize to 8M, which is the case on most platforms apart from
+		// alpine Linux.
+		extld := []string{"-Wl,-z,stack-size=0x800000"}
 		if staticLinking {
-			staticflag = " -static"
+			extld = append(extld, "-static")
 			// Under static linking, use of certain glibc features must be
 			// disabled to avoid shared library dependencies.
 			buildTags = append(buildTags, "osusergo", "netgo")
 		}
-		// Enforce the stacksize to 8M, which is the case on most platforms apart from
-		// alpine Linux.
-		extflag := "'-Wl,-z,stack-size=0x800000" + staticflag + "'"
-		ld = append(ld, "-extldflags", extflag)
+		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
