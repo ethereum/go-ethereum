@@ -63,6 +63,10 @@ const (
 	defaultTracechainMemLimit = common.StorageSize(500 * 1024 * 1024)
 )
 
+// StateReleaseFunc is used to deallocate resources held by constructing a
+// historical state for tracing purposes.
+type StateReleaseFunc func()
+
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
@@ -75,8 +79,8 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 	ChainDb() ethdb.Database
-	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, func(), error)
-	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error)
+	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
+	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -198,7 +202,7 @@ type txTraceResult struct {
 type blockTraceTask struct {
 	statedb *state.StateDB   // Intermediate state prepped for tracing
 	block   *types.Block     // Block to trace the transactions from
-	release func()           // The function to release the held resource for this task
+	release StateReleaseFunc // The function to release the held resource for this task
 	results []*txTraceResult // Trace results produced by the task
 }
 
@@ -250,25 +254,25 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 // releaser is a helper tool responsible for caching the release
 // callbacks of tracing state.
 type releaser struct {
-	fns  []func()
-	lock sync.Mutex
+	releases []StateReleaseFunc
+	lock     sync.Mutex
 }
 
-func (r *releaser) add(fn func()) {
+func (r *releaser) add(release StateReleaseFunc) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.fns = append(r.fns, fn)
+	r.releases = append(r.releases, release)
 }
 
 func (r *releaser) call() {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	for _, fn := range r.fns {
-		fn()
+	for _, release := range r.releases {
+		release()
 	}
-	r.fns = r.fns[:0]
+	r.releases = r.releases[:0]
 }
 
 // traceChain configures a new tracer according to the provided configuration, and

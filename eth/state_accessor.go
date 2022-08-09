@@ -26,13 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 // noopReleaser is returned in case there is no operation expected
 // for releasing state.
-var noopReleaser = func() {}
+var noopReleaser = tracers.StateReleaseFunc(func() {})
 
 // StateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks
@@ -55,7 +56,7 @@ var noopReleaser = func() {}
 // - preferDisk: this arg can be used by the caller to signal that even though the 'base' is
 //               provided, it would be preferable to start from a fresh state, if we have it
 //               on disk.
-func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, rel func(), err error) {
+func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	var (
 		current  *types.Block
 		database state.Database
@@ -70,7 +71,9 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		// function to deref it.
 		if statedb, err = eth.blockchain.StateAt(block.Root()); err == nil {
 			statedb.Database().TrieDB().Reference(block.Root(), common.Hash{})
-			return statedb, func() { statedb.Database().TrieDB().Dereference(block.Root()) }, nil
+			return statedb, func() {
+				statedb.Database().TrieDB().Dereference(block.Root())
+			}, nil
 		}
 	}
 	// The state is both for reading and writing, or it's unavailable in disk,
@@ -179,7 +182,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
-func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, func(), error) {
+func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
 		return nil, vm.BlockContext{}, nil, nil, errors.New("no transaction in genesis")
@@ -191,12 +194,12 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 	}
 	// Lookup the statedb of parent block from the live database,
 	// otherwise regenerate it on the flight.
-	statedb, rel, err := eth.StateAtBlock(parent, reexec, nil, true, false)
+	statedb, release, err := eth.StateAtBlock(parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, err
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, vm.BlockContext{}, statedb, rel, nil
+		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number())
@@ -206,7 +209,7 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {
-			return msg, context, statedb, rel, nil
+			return msg, context, statedb, release, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
