@@ -562,7 +562,10 @@ func (w *worker) mainLoop() {
 			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
 				start := time.Now()
 				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
-					w.commit(w.current.copy(), nil, true, start)
+					err := w.commit(w.current.copy(), nil, true, start)
+					if err != nil {
+						log.Error("Commit error", "error", err)
+					}
 				}
 			}
 
@@ -597,7 +600,10 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil)
+				err := w.commitTransactions(w.current, txset, nil)
+				if err != nil {
+					log.Error("Commit transactions error", "error", err)
+				}
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
@@ -740,7 +746,10 @@ func (w *worker) resultLoop() {
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Broadcast the block and announce chain insertion event
-			w.mux.Post(core.NewMinedBlockEvent{Block: block})
+			err = w.mux.Post(core.NewMinedBlockEvent{Block: block})
+			if err != nil {
+				log.Warn("Broadcast the block and announce chain insertion event", "error", err)
+			}
 
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
@@ -1082,7 +1091,10 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	defer work.discard()
 
 	if !params.noTxs {
-		w.fillTransactions(nil, work)
+		err = w.fillTransactions(nil, work)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 }
@@ -1111,7 +1123,11 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
 	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-		w.commit(work.copy(), nil, false, start)
+		err = w.commit(work.copy(), nil, false, start)
+		if err != nil {
+			log.Error("Commit error", "error", err)
+			return
+		}
 	}
 
 	// Fill pending transactions from the txpool
@@ -1120,7 +1136,11 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		work.discard()
 		return
 	}
-	w.commit(work.copy(), w.fullTaskHook, true, start)
+	err = w.commit(work.copy(), w.fullTaskHook, true, start)
+	if err != nil {
+		log.Error("Commit error", "error", err)
+		return
+	}
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
