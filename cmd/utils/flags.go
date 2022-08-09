@@ -168,6 +168,10 @@ var (
 		Name:  "kiln",
 		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
 	}
+	Eip4844Flag = cli.BoolFlag{
+		Name:  "eip4844",
+		Usage: "EIP-4844 (proto-danksharding) network: pre-configured proof-of-authority to proof-of-stake test network",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -839,6 +843,7 @@ var (
 		GoerliFlag,
 		SepoliaFlag,
 		KilnFlag,
+		Eip4844Flag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{
@@ -883,6 +888,9 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		if ctx.GlobalBool(KilnFlag.Name) {
 			return filepath.Join(path, "kiln")
+		}
+		if ctx.GlobalBool(Eip4844Flag.Name) {
+			return filepath.Join(path, "eip4844")
 		}
 		return path
 	}
@@ -940,6 +948,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.GoerliBootnodes
 	case ctx.GlobalBool(KilnFlag.Name):
 		urls = params.KilnBootnodes
+	case ctx.GlobalBool(Eip4844Flag.Name):
+		urls = params.Eip4844Bootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1392,6 +1402,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.GlobalBool(KilnFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "kiln")
+	case ctx.GlobalBool(Eip4844Flag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "eip4844")
 	}
 }
 
@@ -1582,7 +1594,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, KilnFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, KilnFlag, Eip4844Flag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1760,6 +1772,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultKilnGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.KilnGenesisHash)
+	case ctx.GlobalBool(Eip4844Flag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 1331
+		}
+		cfg.Genesis = core.DefaultEIP4844GenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.Eip4844GenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -2002,6 +2020,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.GlobalBool(KilnFlag.Name):
 		genesis = core.DefaultKilnGenesisBlock()
+	case ctx.GlobalBool(Eip4844Flag.Name):
+		genesis = core.DefaultEIP4844GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
