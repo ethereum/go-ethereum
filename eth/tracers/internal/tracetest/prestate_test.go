@@ -34,33 +34,30 @@ import (
 	"github.com/ethereum/go-ethereum/tests"
 )
 
-// stateDiffTrace is the result of a stateDiffTrace run.
-
-type stateDiffTrace = map[common.Address]*diffaccount
-type diffaccount struct {
-	Before account `json:"before"`
-	After  account `json:"after"`
-}
+// prestateTrace is the result of a prestateTrace run.
+type prestateTrace = map[common.Address]*account
 type account struct {
 	Balance string                      `json:"balance"`
 	Nonce   uint64                      `json:"nonce"`
 	Code    string                      `json:"code"`
 	Storage map[common.Hash]common.Hash `json:"storage"`
+	Post    *account                    `json:"post,omitempty"`
 }
 
-// stateDiffTraceTest defines a single test to check the stateDiff tracer against.
-type stateDiffTraceTest struct {
-	Genesis *core.Genesis   `json:"genesis"`
-	Context *callContext    `json:"context"`
-	Input   string          `json:"input"`
-	Result  *stateDiffTrace `json:"result"`
+// prestateTraceTest defines a single test to check the stateDiff tracer against.
+type prestateTraceTest struct {
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *callContext    `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
+	Result       interface{}     `json:"result"`
 }
 
-func TestStateDiffTracer(t *testing.T) {
-	testStateDiffTracer("stateDiffTracer", "statediff_tracer", t)
+func TestPrestateTracer(t *testing.T) {
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
 }
 
-func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -74,7 +71,7 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			t.Parallel()
 
 			var (
-				test = new(stateDiffTraceTest)
+				test = new(prestateTraceTest)
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk
@@ -105,7 +102,7 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			tracer, err := tracers.New(tracerName, new(tracers.Context), nil)
+			tracer, err := tracers.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -123,17 +120,17 @@ func testStateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := new(stateDiffTrace)
+			ret := new(prestateTrace)
 			if err := json.Unmarshal(res, ret); err != nil {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !jsonEqual(ret, test.Result, new(stateDiffTrace), new(stateDiffTrace)) {
+			if !jsonEqual(ret, test.Result, new(prestateTrace), new(prestateTrace)) {
 				// uncomment this for easier debugging
-				have, _ := json.MarshalIndent(ret, "", " ")
-				want, _ := json.MarshalIndent(test.Result, "", " ")
-				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
-				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+				// have, _ := json.MarshalIndent(ret, "", " ")
+				// want, _ := json.MarshalIndent(test.Result, "", " ")
+				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
+				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
 			}
 		})
 	}
