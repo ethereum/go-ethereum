@@ -164,12 +164,12 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	if parent == nil {
 		return nil, vm.BlockContext{}, nil, nil, errBlockNotFound
 	}
-	statedb, rel, err := b.StateAtBlock(ctx, parent, reexec, nil, true, false)
+	statedb, release, err := b.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, vm.BlockContext{}, nil, nil, errStateNotFound
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, vm.BlockContext{}, statedb, rel, nil
+		return nil, vm.BlockContext{}, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(b.chainConfig, block.Number())
@@ -178,7 +178,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {
-			return msg, context, statedb, rel, nil
+			return msg, context, statedb, release, nil
 		}
 		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
