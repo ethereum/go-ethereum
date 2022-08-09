@@ -40,6 +40,8 @@
 
 - [```peers status```](./peers_status.md)
 
+- [```removedb```](./removedb.md)
+
 - [```server```](./server.md)
 
 - [```status```](./status.md)

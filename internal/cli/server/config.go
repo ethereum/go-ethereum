@@ -394,7 +394,7 @@ func DefaultConfig() *Config {
 		Identity:       Hostname(),
 		RequiredBlocks: map[string]string{},
 		LogLevel:       "INFO",
-		DataDir:        defaultDataDir(),
+		DataDir:        DefaultDataDir(),
 		P2P: &P2PConfig{
 			MaxPeers:     30,
 			MaxPendPeers: 50,
@@ -1040,7 +1040,7 @@ func parseBootnodes(urls []string) ([]*enode.Node, error) {
 	return dst, nil
 }
 
-func defaultDataDir() string {
+func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
 	home, _ := homedir.Dir()
 	if home == "" {

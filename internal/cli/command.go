@@ -184,6 +184,11 @@ func Commands() map[string]MarkDownCommandFactory {
 				UI: ui,
 			}, nil
 		},
+		"removedb": func() (MarkDownCommand, error) {
+			return &RemoveDBCommand{
+				Meta2: meta2,
+			}, nil
+		},
 	}
 }
 
