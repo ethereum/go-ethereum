@@ -744,11 +744,15 @@ specifies the options for this specific call. The possible options are:
 
 #### JavaScript-based tracing
 
-Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 3 additional methods, namely: `step`, `enter` and `exit`. You must provide either `step`, or `enter` AND `exit` (i.e. these two must be exposed together). You may expose all three if you choose to do so.
+Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
+
+##### Setup
+
+`setup` is invoked once, in the beginning when the tracer is being constructed by Geth for a given transaction. It takes in one argument `config`. `config` allows users to pass in options to the tracer. `config` is to be JSON-decoded for usage and its default value is `"{}"`.
 
 ##### Step
 
-`step`is a function that takes two arguments, log and db, and is called for each step of the EVM, or when an error occurs, as the specified transaction is traced.
+`step` is a function that takes two arguments, log and db, and is called for each step of the EVM, or when an error occurs, as the specified transaction is traced.
 
 `log` has the following fields:
 
