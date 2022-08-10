@@ -199,7 +199,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), h.timeouts.ReadTimeout-(50*time.Millisecond))
+		ctx, cancel := context.WithTimeout(r.Context(), h.timeouts.WriteTimeout-(50*time.Millisecond))
 		defer cancel()
 		r = r.WithContext(ctx)
 		// First try to route in the mux.
