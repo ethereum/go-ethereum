@@ -275,32 +275,52 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		duplicate   int64
 		underpriced int64
 		otherreject int64
+		delay       time.Time
 	)
-	errs := f.addTxs(txs)
-	for i, err := range errs {
-		// Track the transaction hash if the price is too low for us.
-		// Avoid re-request this transaction when we receive another
-		// announcement.
-		if errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced) {
-			for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
-				f.underpriced.Pop()
+	// proceed in batches
+	for i := 0; i < len(txs); i += 100 {
+		end := i + 100
+		if end > len(txs) {
+			end = len(txs)
+		}
+		batch := txs[i:end]
+		errs := f.addTxs(batch)
+		for j, err := range errs {
+			// Track the transaction hash if the price is too low for us.
+			// Avoid re-request this transaction when we receive another
+			// announcement.
+			if errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced) {
+				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
+					f.underpriced.Pop()
+				}
+				f.underpriced.Add(batch[i].Hash())
 			}
-			f.underpriced.Add(txs[i].Hash())
+			// Track a few interesting failure types
+			switch {
+			case err == nil: // Noop, but need to handle to not count these
+
+			case errors.Is(err, core.ErrAlreadyKnown):
+				duplicate++
+
+			case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
+				underpriced++
+
+			default:
+				otherreject++
+			}
+			added = append(added, batch[j].Hash())
 		}
-		// Track a few interesting failure types
-		switch {
-		case err == nil: // Noop, but need to handle to not count these
-
-		case errors.Is(err, core.ErrAlreadyKnown):
-			duplicate++
-
-		case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
-			underpriced++
-
-		default:
-			otherreject++
+		// If 'other reject' is >25% of the deliveries, abort
+		if 4*otherreject > len(added) {
+			delay = time.Millisecond * 200
+			break
 		}
-		added = append(added, txs[i].Hash())
+		// If >50% of all transactions are rejected, abort. Either we or the peer
+		// are out of sync with the chain.
+		if 2*(duplicate+underpriced+otherreject) > len(added) {
+			delay = time.Millisecond * 200
+			break
+		}
 	}
 	if direct {
 		txReplyKnownMeter.Mark(duplicate)
@@ -313,6 +333,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:
+		if delay > 0 {
+			time.Sleep(delay)
+		}
 		return nil
 	case <-f.quit:
 		return errTerminated
