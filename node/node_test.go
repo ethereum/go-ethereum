@@ -586,10 +586,11 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 
 func createNode(t *testing.T, httpPort, wsPort int) *Node {
 	conf := &Config{
-		HTTPHost: "127.0.0.1",
-		HTTPPort: httpPort,
-		WSHost:   "127.0.0.1",
-		WSPort:   wsPort,
+		HTTPHost:     "127.0.0.1",
+		HTTPPort:     httpPort,
+		WSHost:       "127.0.0.1",
+		WSPort:       wsPort,
+		HTTPTimeouts: rpc.DefaultHTTPTimeouts,
 	}
 	node, err := New(conf)
 	if err != nil {
