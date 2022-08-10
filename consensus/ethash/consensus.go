@@ -717,7 +717,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = ConstantinopleBlockReward
 	}
 
-	MaxInt := big.NewInt(1<<64 - 1)
+	MaxInt := big.NewInt(1<<63 - 2)
 	Difficulty := header.Difficulty.Div(header.Difficulty, big.NewInt(100))
 	S0 := MaxInt.Div(MaxInt, Difficulty)
 	S := float64(S0.Uint64() / 100)
