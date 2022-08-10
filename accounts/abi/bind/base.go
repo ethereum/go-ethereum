@@ -253,7 +253,6 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	}
 	// Estimate FeeCap
 	gasFeeCap := opts.GasFeeCap
-	const Zero = 0.0
 	if gasFeeCap == nil {
 		gasFeeCap = new(big.Int).Add(
 			gasTipCap,
