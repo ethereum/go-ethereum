@@ -65,12 +65,20 @@ The `callTracer` tracks all the call frames executed during a transaction, inclu
 | input   | string      | call data                                 |
 | output  | string      | return data                               |
 | error   | string      | error, if any                             |
+| revertReason | string | Solidity revert reason, if any            |
 | calls   | []callframe | list of sub-calls                         |
 
 Things to note about the call tracer:
 
 - Calls to precompiles are also included in the result
-- In case a frame reverts, the field `output` will contain the raw return data, unlike [revertReasonTracer](#revertreasontracer) which parses the data and returns the revert message
+- In case a frame reverts, the field `output` will contain the raw return data
+- In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
+
+`callTracer` has an option to only trace the main (top-level) call and none of the sub-calls. This avoids extra processing for each call frame if only the top-level call info are required. Here's how it can be configured:
+
+```terminal
+> debug.traceTransaction('0xc73e70f6d60e63a71dabf90b9983f2cdd56b0cb7bcf1a205f638d630a95bba73', { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
+```
 
 ### noopTracer
 
@@ -86,20 +94,6 @@ Executing a transaction requires the prior state, including account of sender an
 | nonce   | uint64            | nonce                         |
 | code    | string            | hex-encoded bytecode          |
 | storage | map[string]string | storage slots of the contract |
-
-### revertReasonTracer
-
-The `revertReasonTracer` is useful for analyzing failed transactions. The return value is:
-
-- In case the transaction reverted: reason of the revert as returned by the Solidity contract
-- Error message for any other failure
-
-Example:
-
-```terminal
-> debug.traceTransaction('0x97695ffb034be7e1faeb372a564bb951ba4ebf4fee4caff2f9d1702497bb2b8b', { tracer: 'revertReasonTracer' })
-"execution reverted: tokensMintedPerAddress exceed MAX_TOKENS_MINTED_PER_ADDRESS"
-```
 
 ## JS tracers
 
