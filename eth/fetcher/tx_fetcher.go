@@ -310,14 +310,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			}
 			added = append(added, batch[j].Hash())
 		}
-		// If 'other reject' is >25% of the deliveries, abort
+		// If 'other reject' is >25% of the deliveries, abort. Either we are
+		// out of sync with the chain or the peer is griefing us.
 		if 4*otherreject > len(added) {
-			delay = time.Millisecond * 200
-			break
-		}
-		// If >50% of all transactions are rejected, abort. Either we or the peer
-		// are out of sync with the chain.
-		if 2*(duplicate+underpriced+otherreject) > len(added) {
 			delay = time.Millisecond * 200
 			break
 		}
