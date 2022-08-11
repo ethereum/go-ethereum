@@ -695,7 +695,9 @@ func (s *Ethereum) handleWhitelistCheckpoint(ctx context.Context, first bool) er
 		return ErrBorConsensusWithoutHeimdall
 	}
 
-	blockNums, blockHashes, err := ethHandler.fetchWhitelistCheckpoints(ctx, bor, first)
+	// Create a new checkpoint verifier
+	verifier := newCheckpointVerifier(nil)
+	blockNums, blockHashes, err := ethHandler.fetchWhitelistCheckpoints(ctx, bor, verifier, first)
 	// If the array is empty, we're bound to receive an error. Non-nill error and non-empty array
 	// means that array has partial elements and it failed for some block. We'll add those partial
 	// elements anyway.
