@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-const elasticityMultiplier = 2 // EIP-1559 ELASTICITY_MULTIPLIER 
+const elasticityMultiplier = 2 // EIP-1559 ELASTICITY_MULTIPLIER
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
