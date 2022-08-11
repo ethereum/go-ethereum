@@ -123,10 +123,10 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testSetHead(t, client) },
 		}, {
 			"TestSubscribePendingTxHashes",
-			func(t *testing.T) { testSubscribePendingTransactionHashes(t, client) },
+			func(t *testing.T) { testSubscribePendingTransaction(t, client) },
 		}, {
 			"TestSubscribePendingTxs",
-			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
+			func(t *testing.T) { testSubscribeFullPendingTransactions(t, client) },
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
@@ -272,7 +272,7 @@ func testSetHead(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribePendingTransactionHashes(t *testing.T, client *rpc.Client) {
+func testSubscribePendingTransaction(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
@@ -306,7 +306,7 @@ func testSubscribePendingTransactionHashes(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
+func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
