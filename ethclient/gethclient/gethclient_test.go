@@ -277,7 +277,7 @@ func testSubscribePendingTransactionHashes(t *testing.T, client *rpc.Client) {
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
 	ch := make(chan common.Hash)
-	ec.SubscribePendingTransactionHashes(context.Background(), ch)
+	ec.SubscribePendingTransaction(context.Background(), ch)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
@@ -311,7 +311,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
 	ch := make(chan *types.Transaction)
-	ec.SubscribePendingTransactions(context.Background(), ch)
+	ec.SubscribeFullPendingTransactions(context.Background(), ch)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
