@@ -385,7 +385,13 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
 	}
-	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
+	var v []byte
+	if mod.Bit(0) == 0 { // modulo is even
+		v = math.FastExp(base, exp, mod).Bytes()
+	} else {
+		v = base.Exp(base, exp, mod).Bytes()
+	}
+	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,

@@ -125,5 +125,7 @@ compile_fuzzer tests/fuzzers/snap  FuzzSRange fuzz_storage_range
 compile_fuzzer tests/fuzzers/snap  FuzzByteCodes fuzz_byte_codes
 compile_fuzzer tests/fuzzers/snap  FuzzTrieNodes fuzz_trie_nodes
 
+compile_fuzzer tests/fuzzers/modexp  Fuzz fuzzModexp
+
 #TODO: move this to tests/fuzzers, if possible
 compile_fuzzer crypto/blake2b  Fuzz      fuzzBlake2b
