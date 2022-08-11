@@ -381,8 +381,13 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				logged = time.Now()
 				log.Info("Tracing chain segment", "start", start.NumberU64(), "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
 			}
-			// Retrieve the parent state to trace on top
+			// Retrieve the parent block and target block for tracing.
 			block, err := api.blockByNumber(ctx, rpc.BlockNumber(number))
+			if err != nil {
+				failed = err
+				break
+			}
+			next, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
 				break
@@ -398,11 +403,6 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				preferDisk = s1+s2 > defaultTracechainMemLimit
 			}
 			statedb, release, err = api.backend.StateAtBlock(ctx, block, reexec, statedb, false, preferDisk)
-			if err != nil {
-				failed = err
-				break
-			}
-			next, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
 				break
