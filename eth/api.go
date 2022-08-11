@@ -586,5 +586,5 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
-	return 0, fmt.Errorf("no state found")
+	return 0, errors.New("no state found")
 }

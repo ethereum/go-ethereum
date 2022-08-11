@@ -759,9 +759,9 @@ func TestFastVsFullChains(t *testing.T) {
 				block.AddTx(tx)
 			}
 		}
-		// If the block number is a multiple of 5, add a few bonus uncles to the block
-		if i%5 == 5 {
-			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
+		// If the block number is a multiple of 5, add an uncle to the block
+		if i%5 == 4 {
+			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 2).Hash(), Number: big.NewInt(int64(i))})
 		}
 	})
 	// Import the chain as an archive node for the comparison baseline
@@ -1941,8 +1941,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			Alloc:   GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer     = types.LatestSigner(gspec.Config)
-		genesis, _ = gspec.Commit(db)
+		signer  = types.LatestSigner(gspec.Config)
+		genesis = gspec.MustCommit(db)
 	)
 	// Generate and import the canonical chain
 	diskdb := rawdb.NewMemoryDatabase()
