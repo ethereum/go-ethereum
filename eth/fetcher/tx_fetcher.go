@@ -262,20 +262,28 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
-	// Keep track of all the propagated transactions
+	var (
+		inMeter, knownMeter, underpricedMeter, otherRejectMeter metrics.Meter
+	)
 	if direct {
-		txReplyInMeter.Mark(int64(len(txs)))
+		inMeter = txReplyInMeter
+		knownMeter = txReplyKnownMeter
+		underpricedMeter = txReplyUnderpricedMeter
+		otherRejectMeter = txReplyOtherRejectMeter
 	} else {
-		txBroadcastInMeter.Mark(int64(len(txs)))
+		inMeter = txBroadcastInMeter
+		knownMeter = txBroadcastKnownMeter
+		underpricedMeter = txBroadcastUnderpricedMeter
+		otherRejectMeter = txBroadcastOtherRejectMeter
 	}
+	// Keep track of all the propagated transactions
+	inMeter.Mark(int64(len(txs)))
+
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
-		added       = make([]common.Hash, 0, len(txs))
-		duplicate   int64
-		underpriced int64
-		otherreject int64
-		delay       time.Time
+		added = make([]common.Hash, 0, len(txs))
+		delay time.Duration
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += 100 {
@@ -283,6 +291,11 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		if end > len(txs) {
 			end = len(txs)
 		}
+		var (
+			duplicate   int64
+			underpriced int64
+			otherreject int64
+		)
 		batch := txs[i:end]
 		errs := f.addTxs(batch)
 		for j, err := range errs {
@@ -310,21 +323,15 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			}
 			added = append(added, batch[j].Hash())
 		}
-		// If 'other reject' is >25% of the deliveries, abort. Either we are
+		knownMeter.Mark(duplicate)
+		underpricedMeter.Mark(underpriced)
+		otherRejectMeter.Mark(otherreject)
+		// If 'other reject' is >25% of the deliveries in any batch, abort. Either we are
 		// out of sync with the chain or the peer is griefing us.
-		if 4*otherreject > len(added) {
+		if otherreject > 25 {
 			delay = time.Millisecond * 200
 			break
 		}
-	}
-	if direct {
-		txReplyKnownMeter.Mark(duplicate)
-		txReplyUnderpricedMeter.Mark(underpriced)
-		txReplyOtherRejectMeter.Mark(otherreject)
-	} else {
-		txBroadcastKnownMeter.Mark(duplicate)
-		txBroadcastUnderpricedMeter.Mark(underpriced)
-		txBroadcastOtherRejectMeter.Mark(otherreject)
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:
