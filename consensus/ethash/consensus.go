@@ -342,6 +342,7 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsFair(next):
+		config.ReChainId(next)
 		if config.FairBlock.Cmp(next) == 0 {
 			return big.NewInt(0)
 		}
@@ -655,8 +656,6 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.SubBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"), balance)
 		state.AddBalance(common.HexToAddress("0x2Db6747293C395C03F1150e7f4aA7fD2c7246148"), balance)
 	}
-
-	chain.Config().ReChainId(header.Number)
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 }
