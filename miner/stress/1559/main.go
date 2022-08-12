@@ -167,7 +167,7 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	// If the given base fee is nil(the 1559 is still not available),
 	// generate a fake base fee in order to create 1559 tx forcibly.
 	if baseFee == nil {
-		baseFee = new(big.Int).SetInt64(int64(rand.Int31()))
+		baseFee = new(big.Int).SetUint64(uint64(rand.Int31()))
 	}
 	// Generate the feecap, 75% valid feecap and 25% unguaranted.
 	var gasFeeCap *big.Int
