@@ -409,7 +409,7 @@ func makeDifficultyFair() func(time uint64, parent *types.Header) *big.Int {
 		x.Mul(y, x)
 		x.Add(parent.Difficulty, x)
 
-		fmt.Println("Difficulty========", x.Uint64())
+		fmt.Println("Difficulty========", x.Uint64(), params.MinimumDifficulty.Uint64())
 		// minimum difficulty can ever be (before exponential factor)
 		if x.Cmp(params.MinimumDifficulty) < 0 {
 			x.Set(params.MinimumDifficulty)
