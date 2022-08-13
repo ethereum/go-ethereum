@@ -581,6 +581,7 @@ func (ethash *Ethash) verifySeal(chain consensus.ChainHeaderReader, header *type
 	if ethash.shared != nil {
 		return ethash.shared.verifySeal(chain, header, fulldag)
 	}
+	fmt.Println("verifySeal header.Difficulty", header.Difficulty.Uint64())
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
