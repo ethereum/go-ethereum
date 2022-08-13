@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
@@ -131,6 +132,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainHeaderReader, block *types.Block
 // seed that results in correct final block difficulty.
 func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
 	// Extract some data from the header
+	fmt.Println("mine header.Difficulty", block.Header().Difficulty)
 	var (
 		header  = block.Header()
 		hash    = ethash.SealHash(header).Bytes()
