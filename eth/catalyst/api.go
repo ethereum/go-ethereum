@@ -152,10 +152,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// Header advertised via a past newPayload request. Start syncing to it.
 		// Before we do however, make sure any legacy sync in switched off so we
 		// don't accidentally have 2 cycles running.
-		if merger := api.eth.Merger(); !merger.TDDReached() {
-			merger.ReachTTD()
-			api.eth.Downloader().Cancel()
-		}
+		//if merger := api.eth.Merger(); !merger.TDDReached() {
+		//	merger.ReachTTD()
+		//	api.eth.Downloader().Cancel()
+		//}
 		log.Info("Forkchoice requested sync to new head", "number", header.Number, "hash", header.Hash())
 		if err := api.eth.Downloader().BeaconSync(api.eth.SyncMode(), header); err != nil {
 			return beacon.STATUS_SYNCING, err
@@ -209,9 +209,9 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// If the beacon client also advertised a finalized block, mark the local
 	// chain final and completely in PoS mode.
 	if update.FinalizedBlockHash != (common.Hash{}) {
-		if merger := api.eth.Merger(); !merger.PoSFinalized() {
-			merger.FinalizePoS()
-		}
+		//if merger := api.eth.Merger(); !merger.PoSFinalized() {
+		//	merger.FinalizePoS()
+		//}
 		// If the finalized block is not in our canonical tree, somethings wrong
 		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
@@ -371,10 +371,10 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 	// We've accepted a valid payload from the beacon client. Mark the local
 	// chain transitions to notify other subsystems (e.g. downloader) of the
 	// behavioral change.
-	if merger := api.eth.Merger(); !merger.TDDReached() {
-		merger.ReachTTD()
-		api.eth.Downloader().Cancel()
-	}
+	//if merger := api.eth.Merger(); !merger.TDDReached() {
+	//	merger.ReachTTD()
+	//	api.eth.Downloader().Cancel()
+	//}
 	hash := block.Hash()
 	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
 }

@@ -33,7 +33,6 @@ import (
 	"github.com/ethereumfair/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/common/mclock"
-	"github.com/ethereumfair/go-ethereum/consensus"
 	"github.com/ethereumfair/go-ethereum/consensus/ethash"
 	"github.com/ethereumfair/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereumfair/go-ethereum/core"
@@ -240,7 +239,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		engine:     engine,
 		blockchain: chain,
 		eventMux:   evmux,
-		merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
+		//merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 	}
 	client.handler = newClientHandler(ulcServers, ulcFraction, nil, client)
 

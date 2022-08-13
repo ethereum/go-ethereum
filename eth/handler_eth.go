@@ -87,11 +87,11 @@ func (h *ethHandler) handleBlockAnnounces(peer *eth.Peer, hashes []common.Hash, 
 	// Drop all incoming block announces from the p2p network if
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
-	if h.merger.PoSFinalized() {
-		// TODO (MariusVanDerWijden) drop non-updated peers after the merge
-		return nil
-		// return errors.New("unexpected block announces")
-	}
+	//if h.merger.PoSFinalized() {
+	//	// TODO (MariusVanDerWijden) drop non-updated peers after the merge
+	//	return nil
+	//	// return errors.New("unexpected block announces")
+	//}
 	// Schedule all the unknown hashes for retrieval
 	var (
 		unknownHashes  = make([]common.Hash, 0, len(hashes))
@@ -115,11 +115,11 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 	// Drop all incoming block announces from the p2p network if
 	// the chain already entered the pos stage and disconnect the
 	// remote peer.
-	if h.merger.PoSFinalized() {
-		// TODO (MariusVanDerWijden) drop non-updated peers after the merge
-		return nil
-		// return errors.New("unexpected block announces")
-	}
+	//if h.merger.PoSFinalized() {
+	//	// TODO (MariusVanDerWijden) drop non-updated peers after the merge
+	//	return nil
+	//	// return errors.New("unexpected block announces")
+	//}
 	// Schedule the block for import
 	h.blockFetcher.Enqueue(peer.ID(), block)
 

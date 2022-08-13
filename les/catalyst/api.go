@@ -127,9 +127,9 @@ func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beaco
 	if err = api.les.BlockChain().InsertHeader(block.Header()); err != nil {
 		return api.invalid(), err
 	}
-	if merger := api.les.Merger(); !merger.TDDReached() {
-		merger.ReachTTD()
-	}
+	//if merger := api.les.Merger(); !merger.TDDReached() {
+	//	merger.ReachTTD()
+	//}
 	hash := block.Hash()
 	return beacon.PayloadStatusV1{Status: beacon.VALID, LatestValidHash: &hash}, nil
 }
@@ -149,9 +149,9 @@ func (api *ConsensusAPI) invalid() beacon.PayloadStatusV1 {
 
 func (api *ConsensusAPI) checkTerminalTotalDifficulty(head common.Hash) error {
 	// shortcut if we entered PoS already
-	if api.les.Merger().PoSFinalized() {
-		return nil
-	}
+	//if api.les.Merger().PoSFinalized() {
+	//	return nil
+	//}
 	// make sure the parent has enough terminal total difficulty
 	header := api.les.BlockChain().GetHeaderByHash(head)
 	if header == nil {
@@ -180,8 +180,8 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 		return err
 	}
 	// Trigger the transition if it's the first `NewHead` event.
-	if merger := api.les.Merger(); !merger.PoSFinalized() {
-		merger.FinalizePoS()
-	}
+	//if merger := api.les.Merger(); !merger.PoSFinalized() {
+	//	merger.FinalizePoS()
+	//}
 	return nil
 }

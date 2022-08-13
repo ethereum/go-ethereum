@@ -27,7 +27,6 @@ import (
 
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/consensus"
-	"github.com/ethereumfair/go-ethereum/consensus/beacon"
 	"github.com/ethereumfair/go-ethereum/consensus/clique"
 	"github.com/ethereumfair/go-ethereum/consensus/ethash"
 	"github.com/ethereumfair/go-ethereum/core"
@@ -241,5 +240,5 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
-	return beacon.New(engine)
+	return engine
 }

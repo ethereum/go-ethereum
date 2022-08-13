@@ -146,9 +146,9 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 
 	// Discard all the announces after the transition
 	// Also discarding initial signal to prevent syncing during testing.
-	if !(noInitAnnounce || h.backend.merger.TDDReached()) {
-		h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
-	}
+	//if !(noInitAnnounce || h.backend.merger.TDDReached()) {
+	h.fetcher.announce(p, &announceData{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td})
+	//}
 
 	// Mark the peer starts to be served.
 	atomic.StoreUint32(&p.serving, 1)
@@ -216,9 +216,9 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 			p.updateHead(req.Hash, req.Number, req.Td)
 
 			// Discard all the announces after the transition
-			if !h.backend.merger.TDDReached() {
-				h.fetcher.announce(p, &req)
-			}
+			//if !h.backend.merger.TDDReached() {
+			h.fetcher.announce(p, &req)
+			//}
 		}
 	case msg.Code == BlockHeadersMsg:
 		p.Log().Trace("Received block header response message")
