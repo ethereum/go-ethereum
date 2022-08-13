@@ -342,8 +342,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsFair(next):
-		config.ReChainId(next)
 		if config.FairBlock.Cmp(next) == 0 {
+			config.ReChainId(next)
 			return params.MinimumDifficulty
 		}
 		return calcDifficultyFair(time, parent)
