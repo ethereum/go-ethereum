@@ -81,7 +81,7 @@ func DefaultDataDir() string {
 			// is non-empty, use it, otherwise DTRT and check %LOCALAPPDATA%.
 			fallback := filepath.Join(home, "AppData", "Roaming", "Ethereum")
 			appdata := windowsAppData()
-			if appdata == "" || isNonEmptyDir(fallback) {
+			if appdata == "" || !isEmptyDir(fallback) {
 				return fallback
 			}
 			return filepath.Join(appdata, "Ethereum")
@@ -104,14 +104,14 @@ func windowsAppData() string {
 	return v
 }
 
-func isNonEmptyDir(dir string) bool {
+func isEmptyDir(dir string) bool {
 	f, err := os.Open(dir)
 	if err != nil {
-		return false
+		return true
 	}
 	names, _ := f.Readdir(1)
 	f.Close()
-	return len(names) > 0
+	return len(names) == 0
 }
 
 func homeDir() string {
