@@ -414,6 +414,7 @@ func makeDifficultyFair() func(time uint64, parent *types.Header) *big.Int {
 		if x.Cmp(params.MinimumDifficulty) < 0 {
 			x.Set(params.MinimumDifficulty)
 		}
+		fmt.Println("Difficulty========2", x.Uint64())
 		return x
 	}
 }
