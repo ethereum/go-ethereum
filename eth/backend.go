@@ -31,7 +31,6 @@ import (
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/common/hexutil"
 	"github.com/ethereumfair/go-ethereum/consensus"
-	"github.com/ethereumfair/go-ethereum/consensus/beacon"
 	"github.com/ethereumfair/go-ethereum/consensus/clique"
 	"github.com/ethereumfair/go-ethereum/core"
 	"github.com/ethereumfair/go-ethereum/core/bloombits"
@@ -450,22 +449,16 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		var cli *clique.Clique
-		if c, ok := s.engine.(*clique.Clique); ok {
-			cli = c
-		} else if cl, ok := s.engine.(*beacon.Beacon); ok {
-			if c, ok := cl.InnerEngine().(*clique.Clique); ok {
-				cli = c
-			}
-		}
-		if cli != nil {
+
+		if clique, ok := s.engine.(*clique.Clique); ok {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
 				log.Error("Etherbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
 			}
-			cli.Authorize(eb, wallet.SignData)
+			clique.Authorize(eb, wallet.SignData)
 		}
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
