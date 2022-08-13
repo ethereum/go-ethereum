@@ -576,6 +576,7 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	// Finalize block
 	c.Finalize(chain, header, state, txs, uncles)
 
+	fmt.Println("(c *Clique) FinalizeAndAssemble")
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
 }
