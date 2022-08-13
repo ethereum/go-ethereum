@@ -406,12 +406,10 @@ func calcDifficultyFair(time uint64, parent *types.Header) *big.Int {
 	x.Mul(y, x)
 	x.Add(parent.Difficulty, x)
 
-	fmt.Println("Difficulty========", x.Uint64(), params.MinimumDifficulty.Uint64(), parent.Difficulty.Uint64())
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
 	}
-	fmt.Println("Difficulty========2", x.Uint64())
 	return x
 }
 
@@ -640,7 +638,6 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty = ethash.CalcDifficulty(chain, header.Time, parent)
-	fmt.Println("header.Difficulty --------", header.Difficulty)
 	return nil
 }
 
@@ -665,7 +662,6 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
 	ethash.Finalize(chain, header, state, txs, uncles)
-	fmt.Println("FinalizeAndAssemble", header.Difficulty)
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
