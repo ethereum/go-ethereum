@@ -91,3 +91,20 @@ func (p *Pool) SetThreshold(t int) {
 
 	p.threshold = t
 }
+
+func (p *Pool) GetObjsByKey(poolKey string) []PoolObj {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	objListKeyed, ok := p.objList[poolKey]
+	if !ok {
+		return []PoolObj{}
+	}
+	objList := make([]PoolObj, len(objListKeyed))
+	cnt := 0
+	for _, obj := range objListKeyed {
+		objList[cnt] = obj
+		cnt += 1
+	}
+	return objList
+}

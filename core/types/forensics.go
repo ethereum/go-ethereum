@@ -1,5 +1,7 @@
 package types
 
+import "github.com/XinFinOrg/XDPoSChain/common"
+
 type ForensicsInfo struct {
 	HashPath        []string   `json:"hashPath"`
 	QuorumCert      QuorumCert `json:"quorumCert"`
@@ -12,6 +14,12 @@ type ForensicsContent struct {
 	AcrossEpoch          bool           `json:"acrossEpoch"`
 	SmallerRoundInfo     *ForensicsInfo `json:"smallerRoundInfo"`
 	LargerRoundInfo      *ForensicsInfo `json:"largerRoundInfo"`
+}
+
+type VoteEquivocationContent struct {
+	SmallerRoundVote *Vote `json:"smallerRoundVote"`
+	LargerRoundVote  *Vote `json:"largerRoundVote"`
+	Signer           common.Address
 }
 
 type ForensicProof struct {

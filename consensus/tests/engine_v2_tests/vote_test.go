@@ -33,7 +33,7 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQCForFistV2Round(t *te
 	}
 	voteSigningHash := types.VoteSigHash(voteForSign)
 
-	// Set round to 5
+	// Set round to 1
 	engineV2.SetNewRoundFaker(blockchain, types.Round(1), false)
 	// Create two vote messages which will not reach vote pool threshold
 	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -379,4 +380,183 @@ func reverse(ss []string) []string {
 		ss[i], ss[last-i] = ss[last-i], ss[i]
 	}
 	return ss
+}
+
+func generateVoteEquivocationId(signer common.Address, round1, round2 types.Round) string {
+	return fmt.Sprintf("%x:%d:%d", signer, round1, round2)
+}
+
+/*
+	Entry point for processing vote equivocation.
+	Triggered once handle vote is successfully.
+	Forensics runs in a seperate go routine as its no system critical
+	Link to the flow diagram: https://hashlabs.atlassian.net/wiki/spaces/HASHLABS/pages/99516417/Vote+Equivocation+detection+specification
+*/
+func (f *Forensics) ProcessVoteEquivocation(chain consensus.ChainReader, engine *XDPoS_v2, incomingVote *types.Vote) error {
+	log.Debug("Received a vote in forensics", "vote", incomingVote)
+	// Clone the values to a temporary variable
+	highestCommittedQCs := f.HighestCommittedQCs
+	if len(highestCommittedQCs) != NUM_OF_FORENSICS_QC {
+		log.Error("[ProcessVoteEquivocation] HighestCommittedQCs value not set", "incomingVoteProposedBlockHash", incomingVote.ProposedBlockInfo.Hash, "incomingVoteProposedBlockNumber", incomingVote.ProposedBlockInfo.Number.Uint64(), "incomingVoteProposedBlockRound", incomingVote.ProposedBlockInfo.Round)
+		return fmt.Errorf("HighestCommittedQCs value not set")
+	}
+	if incomingVote.ProposedBlockInfo.Round < highestCommittedQCs[NUM_OF_FORENSICS_QC-1].ProposedBlockInfo.Round {
+		log.Debug("Received a too old vote in forensics", "vote", incomingVote)
+		return nil
+	}
+	// is vote extending committed block
+	isOnTheChain, err := f.isExtendingFromAncestor(chain, incomingVote.ProposedBlockInfo, highestCommittedQCs[0].ProposedBlockInfo)
+	if err != nil {
+		return err
+	}
+	if isOnTheChain {
+		// Passed the checking, nothing suspecious.
+		log.Debug("[ProcessVoteEquivocation] Passed forensics checking, nothing suspecious need to be reported", "incomingVoteProposedBlockHash", incomingVote.ProposedBlockInfo.Hash, "incomingVoteProposedBlockNumber", incomingVote.ProposedBlockInfo.Number.Uint64(), "incomingVoteProposedBlockRound", incomingVote.ProposedBlockInfo.Round)
+		return nil
+	}
+	// Trigger the safety Alarm if failed
+	isVoteBlamed, parentQC, err := f.isVoteBlamed(chain, highestCommittedQCs, incomingVote)
+	if err != nil {
+		log.Error("[ProcessVoteEquivocation] Error while trying to call isVoteBlamed", "error", err)
+		return err
+	}
+	if isVoteBlamed {
+		signer, err := GetVoteSignerAddresses(incomingVote)
+		if err != nil {
+			log.Error("[ProcessVoteEquivocation] GetVoteSignerAddresses", "error", err)
+		}
+		qc := highestCommittedQCs[NUM_OF_FORENSICS_QC-1]
+		for _, signature := range qc.Signatures {
+			voteFromQC := &types.Vote{ProposedBlockInfo: qc.ProposedBlockInfo, Signature: signature, GapNumber: qc.GapNumber}
+			signerFromQC, err := GetVoteSignerAddresses(voteFromQC)
+			if err != nil {
+				log.Error("[ProcessVoteEquivocation] GetVoteSignerAddresses", "error", err)
+				return err
+			}
+			if signerFromQC == signer {
+				f.SendVoteEquivocationProof(incomingVote, voteFromQC, signer)
+				break
+			}
+		}
+		// if no same-signer vote, nothing to report
+	} else {
+		// use the parent QC to do forensics
+		f.ProcessForensics(chain, engine, *parentQC)
+	}
+
+	return nil
+}
+
+func (f *Forensics) isExtendingFromAncestor(blockChainReader consensus.ChainReader, currentBlock *types.BlockInfo, ancestorBlock *types.BlockInfo) (bool, error) {
+	blockNumDiff := int(big.NewInt(0).Sub(currentBlock.Number, ancestorBlock.Number).Int64())
+
+	nextBlockHash := currentBlock.Hash
+	for i := 0; i < blockNumDiff; i++ {
+		parentBlock := blockChainReader.GetHeaderByHash(nextBlockHash)
+		if parentBlock == nil {
+			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
+		} else {
+			nextBlockHash = parentBlock.ParentHash
+		}
+		log.Debug("[isExtendingFromAncestor] Found parent block", "CurrentBlockHash", currentBlock.Hash, "ParentHash", nextBlockHash)
+	}
+
+	if nextBlockHash == ancestorBlock.Hash {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (f *Forensics) isVoteBlamed(chain consensus.ChainReader, highestCommittedQCs []types.QuorumCert, incomingVote *types.Vote) (bool, *types.QuorumCert, error) {
+	proposedBlock := chain.GetHeaderByHash(incomingVote.ProposedBlockInfo.Hash)
+	var decodedExtraField types.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(proposedBlock.Extra, &decodedExtraField)
+	if err != nil {
+		log.Error("[findAncestorVoteThroughRound] Error while trying to decode extra field", "ProposedBlockInfo.Hash", incomingVote.ProposedBlockInfo.Hash)
+		return false, nil, err
+	}
+	// Found the parent QC, if its round < hcqc3's round, return true
+	if decodedExtraField.QuorumCert.ProposedBlockInfo.Round < highestCommittedQCs[NUM_OF_FORENSICS_QC-1].ProposedBlockInfo.Round {
+		return true, decodedExtraField.QuorumCert, nil
+	}
+	return false, decodedExtraField.QuorumCert, nil
+}
+
+func (f *Forensics) DetectEquivocationInVotePool(vote *types.Vote, votePool *utils.Pool) {
+	poolKey := vote.PoolKey()
+	votePoolKeys := votePool.PoolObjKeysList()
+	signer, err := GetVoteSignerAddresses(vote)
+	if err != nil {
+		log.Error("[detectEquivocationInVotePool]", "err", err)
+	}
+
+	for _, k := range votePoolKeys {
+		if k == poolKey {
+			continue
+		}
+		keyedRound, err := strconv.ParseInt(strings.Split(k, ":")[0], 10, 64)
+		if err != nil {
+			log.Error("[detectEquivocationInVotePool] Error while trying to get keyedRound inside pool", "Error", err)
+			continue
+		}
+		if types.Round(keyedRound) == vote.ProposedBlockInfo.Round {
+			votes := votePool.GetObjsByKey(k)
+			for _, v := range votes {
+				voteTransfered, ok := v.(*types.Vote)
+				if !ok {
+					log.Warn("[detectEquivocationInVotePool] obj type is not vote, potential a bug in votePool")
+					continue
+				}
+				signer2, err := GetVoteSignerAddresses(voteTransfered)
+				if err != nil {
+					log.Warn("[detectEquivocationInVotePool]", "err", err)
+					continue
+				}
+				if signer == signer2 {
+					f.SendVoteEquivocationProof(vote, voteTransfered, signer)
+				}
+			}
+		}
+	}
+}
+
+func (f *Forensics) SendVoteEquivocationProof(vote1, vote2 *types.Vote, signer common.Address) error {
+	smallerRoundVote := vote1
+	largerRoundVote := vote2
+	if vote1.ProposedBlockInfo.Round > vote2.ProposedBlockInfo.Round {
+		smallerRoundVote = vote2
+		largerRoundVote = vote1
+	}
+	content, err := json.Marshal(&types.VoteEquivocationContent{
+		SmallerRoundVote: smallerRoundVote,
+		LargerRoundVote:  largerRoundVote,
+		Signer:           signer,
+	})
+	if err != nil {
+		log.Error("[SendVoteEquivocationProof] fail to json stringify forensics content", "err", err)
+		return err
+	}
+	forensicsProof := &types.ForensicProof{
+		Id:            generateVoteEquivocationId(signer, smallerRoundVote.ProposedBlockInfo.Round, largerRoundVote.ProposedBlockInfo.Round),
+		ForensicsType: "Vote",
+		Content:       string(content),
+	}
+	log.Info("Forensics proof report generated, sending to the stats server", "forensicsProof", forensicsProof)
+	go f.forensicsFeed.Send(types.ForensicsEvent{ForensicsProof: forensicsProof})
+	return nil
+}
+
+func GetVoteSignerAddresses(vote *types.Vote) (common.Address, error) {
+	// The QC signatures are signed by votes special struct VoteForSign
+	signHash := types.VoteSigHash(&types.VoteForSign{
+		ProposedBlockInfo: vote.ProposedBlockInfo,
+		GapNumber:         vote.GapNumber,
+	})
+	var signerAddress common.Address
+	pubkey, err := crypto.Ecrecover(signHash.Bytes(), vote.Signature)
+	if err != nil {
+		return signerAddress, fmt.Errorf("fail to Ecrecover signer from the vote: %v", vote)
+	}
+	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])
+	return signerAddress, nil
 }

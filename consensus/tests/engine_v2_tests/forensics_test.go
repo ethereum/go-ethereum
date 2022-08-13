@@ -311,3 +311,124 @@ func TestForensicsAcrossEpoch(t *testing.T) {
 		}
 	}
 }
+
+func TestVoteEquivocationSameRound(t *testing.T) {
+	var numOfForks = new(int)
+	*numOfForks = 1
+	blockchain, _, currentBlock, signer, signFn, currentForkBlock := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, &ForkedBlockOptions{numOfForkedBlocks: numOfForks})
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+	// Set up forensics events trigger
+	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	forensics.SubscribeForensicsEvent(forensicsEventCh)
+	// Set round to 5
+	engineV2.SetNewRoundFaker(blockchain, types.Round(5), false)
+
+	blockInfo := &types.BlockInfo{
+		Hash:   currentBlock.Hash(),
+		Round:  types.Round(5),
+		Number: big.NewInt(901),
+	}
+	voteForSign := &types.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash := types.VoteSigHash(voteForSign)
+	signedHash, err := signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
+	voteMsg := &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+	blockInfo = &types.BlockInfo{
+		Hash:   currentForkBlock.Hash(),
+		Round:  types.Round(5),
+		Number: big.NewInt(901),
+	}
+	voteForSign = &types.VoteForSign{
+		ProposedBlockInfo: blockInfo,
+		GapNumber:         450,
+	}
+	voteSigningHash = types.VoteSigHash(voteForSign)
+	signedHash, err = signFn(accounts.Account{Address: signer}, voteSigningHash.Bytes())
+	assert.Nil(t, err)
+	voteMsg = &types.Vote{
+		ProposedBlockInfo: blockInfo,
+		Signature:         signedHash,
+		GapNumber:         450,
+	}
+	err = engineV2.VoteHandler(blockchain, voteMsg)
+	assert.Nil(t, err)
+	for {
+		select {
+		case msg := <-forensicsEventCh:
+			assert.NotNil(t, msg.ForensicsProof)
+			assert.Equal(t, "Vote", msg.ForensicsProof.ForensicsType)
+			content := &types.VoteEquivocationContent{}
+			json.Unmarshal([]byte(msg.ForensicsProof.Content), &content)
+			assert.Equal(t, types.Round(5), content.SmallerRoundVote.ProposedBlockInfo.Round)
+			assert.Equal(t, types.Round(5), content.LargerRoundVote.ProposedBlockInfo.Round)
+			return
+		case <-time.After(5 * time.Second):
+			t.FailNow()
+		}
+	}
+}
+
+func TestVoteEquivocationDifferentRound(t *testing.T) {
+	var numOfForks = new(int)
+	*numOfForks = 10
+	var forkRoundDifference = new(int)
+	*forkRoundDifference = 1
+	var forkedChainSignersKey []*ecdsa.PrivateKey
+	forkedChainSignersKey = append(forkedChainSignersKey, acc1Key)
+	blockchain, _, _, _, _, currentForkBlock := PrepareXDCTestBlockChainForV2Engine(t, 915, params.TestXDPoSMockChainConfig, &ForkedBlockOptions{numOfForkedBlocks: numOfForks, forkedRoundDifference: forkRoundDifference, signersKey: forkedChainSignersKey})
+	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
+
+	// Now, let's try set committed blocks, where the highestedCommitted blocks are 913, 914 and 915
+	var headers []types.Header
+	var decodedBlock915ExtraField types.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(blockchain.GetHeaderByNumber(915).Extra, &decodedBlock915ExtraField)
+	assert.Nil(t, err)
+	err = forensics.SetCommittedQCs(append(headers, *blockchain.GetHeaderByNumber(913), *blockchain.GetHeaderByNumber(914)), *decodedBlock915ExtraField.QuorumCert)
+	assert.Nil(t, err)
+
+	// find fork block 913
+	forkBlock913 := blockchain.GetBlockByHash(blockchain.GetBlockByHash(currentForkBlock.ParentHash()).ParentHash())
+	var decodedExtraField types.ExtraFields_v2
+	// Decode the QC from forking chain
+	err = utils.DecodeBytesExtraFields(forkBlock913.Header().Extra, &decodedExtraField)
+	assert.Nil(t, err)
+
+	incomingQC := decodedExtraField.QuorumCert
+	// choose just one vote from it
+	voteForSign := &types.VoteForSign{ProposedBlockInfo: incomingQC.ProposedBlockInfo, GapNumber: incomingQC.GapNumber}
+	voteForSign.ProposedBlockInfo.Round = types.Round(16)
+	signature := SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
+	incomingVote := &types.Vote{ProposedBlockInfo: voteForSign.ProposedBlockInfo, Signature: signature, GapNumber: voteForSign.GapNumber}
+	// Set up forensics events trigger
+	forensicsEventCh := make(chan types.ForensicsEvent)
+	forensics.SubscribeForensicsEvent(forensicsEventCh)
+
+	err = forensics.ProcessVoteEquivocation(blockchain, blockchain.Engine().(*XDPoS.XDPoS).EngineV2, incomingVote)
+	assert.Nil(t, err)
+	// Check SendForensicProof triggered
+	for {
+		select {
+		case msg := <-forensicsEventCh:
+			assert.NotNil(t, msg.ForensicsProof)
+			assert.Equal(t, "Vote", msg.ForensicsProof.ForensicsType)
+			content := &types.VoteEquivocationContent{}
+			json.Unmarshal([]byte(msg.ForensicsProof.Content), &content)
+			assert.Equal(t, types.Round(14), content.SmallerRoundVote.ProposedBlockInfo.Round)
+			assert.Equal(t, types.Round(16), content.LargerRoundVote.ProposedBlockInfo.Round)
+			assert.Equal(t, acc1Addr, content.Signer)
+			return
+		case <-time.After(5 * time.Second):
+			t.FailNow()
+		}
+	}
+}
