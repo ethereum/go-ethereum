@@ -343,6 +343,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	effectiveTip := st.gasPrice
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		//Save gasFee To MinerDAOAddress
+		remainGas := new(big.Int).Sub(st.gasPrice, effectiveTip)
+		remainGas.Mul(remainGas, new(big.Int).SetUint64(st.gasUsed()))
+		st.state.AddBalance(params.MinerDAOAddress, remainGas)
 	}
 
 	if st.evm.Config.NoBaseFee && st.gasFeeCap.Sign() == 0 && st.gasTipCap.Sign() == 0 {

@@ -167,4 +167,5 @@ var (
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
+	ETHWStartDifficulty    = big.NewInt(1_099_511_627_776) // The ETHW start difficulty(Reset difficulty).
 )
