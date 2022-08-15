@@ -57,7 +57,7 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1),//10001
+		ChainID:             big.NewInt(1), //10001
 		HomesteadBlock:      big.NewInt(1_150_000),
 		DAOForkBlock:        big.NewInt(1_920_000),
 		DAOForkSupport:      true,
@@ -786,7 +786,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, isCancun                           bool
+	IsMerge, IsShanghai, isCancun, IsEthPoWFork             bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -810,6 +810,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(num),
 		isCancun:         c.IsCancun(num),
+		IsEthPoWFork:     c.IsEthPoWFork(num),
 	}
 }
 
