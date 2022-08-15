@@ -474,10 +474,10 @@ func (c *ChainConfig) String() string {
 	// Add a special section for the merge as it's non-obvious
 	if c.TerminalTotalDifficulty == nil {
 		banner += "The Merge is not yet available for this network!\n"
-		banner += " - Hard-fork specification: (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)"
+		banner += " - Hard-fork specification: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md"
 	} else {
 		banner += "Merge configured:\n"
-		banner += " - Hard-fork specification:    (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)\n"
+		banner += " - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md\n"
 		banner += fmt.Sprintf(" - Network known to be merged: %v\n", c.TerminalTotalDifficultyPassed)
 		banner += fmt.Sprintf(" - Total terminal difficulty:  %v\n", c.TerminalTotalDifficulty)
 		banner += fmt.Sprintf(" - Merge netsplit block:       %-8v", c.MergeNetsplitBlock)
