@@ -22,6 +22,7 @@ type BlockTrace struct {
 type TransactionTrace struct {
 	Type     uint8           `json:"type"`
 	Nonce    uint64          `json:"nonce"`
+	TxHash   string          `json:"txHash"`
 	Gas      uint64          `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
 	From     common.Address  `json:"from"`
@@ -62,6 +63,7 @@ func newTraceTransaction(tx *Transaction, blockNumber uint64, config *params.Cha
 	v, r, s := tx.RawSignatureValues()
 	result := &TransactionTrace{
 		Type:     tx.Type(),
+		TxHash:   tx.Hash().String(),
 		Nonce:    tx.Nonce(),
 		ChainId:  (*hexutil.Big)(tx.ChainId()),
 		From:     from,
