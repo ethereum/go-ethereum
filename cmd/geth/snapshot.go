@@ -693,7 +693,7 @@ func convertToVerkle(ctx *cli.Context) error {
 	}
 	treeHuggers := make([]chan *treeHugger, runtime.NumCPU())
 	subRoots := make([]*verkle.InternalNode, runtime.NumCPU())
-	rootPerCPU := 256 / runtime.NumCPU()
+	rootPerCPU := (256 + runtime.NumCPU() - 1) / runtime.NumCPU()
 	for i := range treeHuggers {
 		treeHuggers[i] = make(chan *treeHugger, 128)
 		subRoots[i] = verkle.New().(*verkle.InternalNode)
@@ -770,21 +770,18 @@ func convertToVerkle(ctx *cli.Context) error {
 		// Store the account code if present
 		if !bytes.Equal(acc.CodeHash, emptyCode) {
 			code := rawdb.ReadCode(chaindb, common.BytesToHash(acc.CodeHash))
-			chunks, err := trie.ChunkifyCode(code)
-			if err != nil {
-				panic(err)
+			chunks := trie.ChunkifyCode(code)
+
+			for i := 0; i < 128 && i < len(chunks)/32; i++ {
+				newValues[128+i] = chunks[32*i : 32*(i+1)]
 			}
 
-			for i := 0; i < 128 && i < len(chunks); i++ {
-				newValues[128+i] = chunks[i][:]
-			}
-
-			for i := 128; i < len(chunks); {
+			for i := 128; i < len(chunks)/32; {
 				values := make([][]byte, 256)
 				chunkkey := trieUtils.GetTreeKeyCodeChunk(addr, uint256.NewInt(uint64(i)))
 				j := i
-				for ; (j-i) < 256 && j < len(chunks); j++ {
-					values[(j-128)%256] = chunks[j][:]
+				for ; (j-i) < 256 && j < len(chunks)/32; j++ {
+					values[(j-128)%256] = chunks[32*j : 32*(j+1)]
 				}
 				i = j
 
@@ -848,10 +845,9 @@ func convertToVerkle(ctx *cli.Context) error {
 				log.Error("Failed to traverse storage trie", "root", acc.Root, "error", storageIt.Error())
 				return storageIt.Error()
 			}
-			// Finish with storing the complete account header group
-			// inside the tree.
 		}
-		treeHuggers[int(stem[0])/rootPerCPU] <- &treeHugger{stem: stem[:], node: verkle.NewLeafNode(stem[:], newValues)}
+		// Finish with storing the complete account header group inside the tree.
+		treeHuggers[int(stem[0])/rootPerCPU] <- &treeHugger{stem: stem[:], node: verkle.NewLeafNode(stem[:31], newValues)}
 
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Traversing state", "accounts", accounts, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -898,7 +894,7 @@ var zero [32]byte
 func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error {
 	switch node := root.(type) {
 	case *verkle.InternalNode:
-		for _, child := range node.Children() {
+		for i, child := range node.Children() {
 			childC := child.ComputeCommitment().Bytes()
 
 			childS, err := resolver(childC[:])
@@ -913,9 +909,20 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 			if err != nil {
 				return fmt.Errorf("decode error child %x in db: %w", child.ComputeCommitment().Bytes(), err)
 			}
-			checkChildren(childN, resolver)
+			if err := checkChildren(childN, resolver); err != nil {
+				return fmt.Errorf("%x%w", i, err) // write the path to the erroring node
+			}
 		}
-	case verkle.Empty, *verkle.LeafNode:
+	case *verkle.LeafNode:
+		// sanity check: ensure at least one value is non-zero
+
+		for i := 0; i < verkle.NodeWidth; i++ {
+			if len(node.Value(i)) != 0 {
+				return nil
+			}
+		}
+		return fmt.Errorf("Both balance and nonce are 0")
+	case verkle.Empty:
 		// nothing to do
 	default:
 		return fmt.Errorf("unsupported type encountered %v", root)
@@ -973,5 +980,11 @@ func verifyVerkle(ctx *cli.Context) error {
 		return err
 	}
 
-	return checkChildren(root, chaindb.Get)
+	if err := checkChildren(root, chaindb.Get); err != nil {
+		log.Error("Could not rebuild the tree from the database", "err", err)
+		return err
+	}
+
+	log.Info("Tree was rebuilt from the database")
+	return nil
 }

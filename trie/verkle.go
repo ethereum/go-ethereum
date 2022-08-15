@@ -16,6 +16,10 @@
 
 package trie
 
+// ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which
+// are actual code, and 1 byte is the pushdata offset).
+type ChunkedCode []byte
+
 // Copy the values here so as to avoid an import cycle
 const (
 	PUSH1  = byte(0x60)
@@ -27,7 +31,8 @@ const (
 	PUSH32 = byte(0x7f)
 )
 
-func ChunkifyCode(code []byte) ([][32]byte, error) {
+// ChunkifyCode generates the chunked version of an array representing EVM bytecode
+func ChunkifyCode(code []byte) ChunkedCode {
 	var (
 		chunkOffset = 0 // offset in the chunk
 		chunkCount  = len(code) / 31
@@ -36,8 +41,8 @@ func ChunkifyCode(code []byte) ([][32]byte, error) {
 	if len(code)%31 != 0 {
 		chunkCount++
 	}
-	chunks := make([][32]byte, chunkCount)
-	for i := range chunks {
+	chunks := make([]byte, chunkCount*32)
+	for i := 0; i < chunkCount; i++ {
 		// number of bytes to copy, 31 unless
 		// the end of the code has been reached.
 		end := 31 * (i + 1)
@@ -46,18 +51,18 @@ func ChunkifyCode(code []byte) ([][32]byte, error) {
 		}
 
 		// Copy the code itself
-		copy(chunks[i][1:], code[31*i:end])
+		copy(chunks[i*32+1:], code[31*i:end])
 
 		// chunk offset = taken from the
 		// last chunk.
 		if chunkOffset > 31 {
 			// skip offset calculation if push
 			// data covers the whole chunk
-			chunks[i][0] = 31
+			chunks[i*32] = 31
 			chunkOffset = 1
 			continue
 		}
-		chunks[i][0] = byte(chunkOffset)
+		chunks[32*i] = byte(chunkOffset)
 		chunkOffset = 0
 
 		// Check each instruction and update the offset
@@ -74,5 +79,5 @@ func ChunkifyCode(code []byte) ([][32]byte, error) {
 		}
 	}
 
-	return chunks, nil
+	return chunks
 }
