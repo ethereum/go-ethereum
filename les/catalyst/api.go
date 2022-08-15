@@ -36,7 +36,7 @@ import (
 
 // Register adds catalyst APIs to the light client.
 func Register(stack *node.Node, backend *les.LightEthereum) error {
-	log.Warn("Catalyst mode enabled", "protocol", "les")
+	log.Warn("Engine API enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
@@ -58,7 +58,7 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
-		log.Warn("Catalyst started without valid total difficulty")
+		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	return &ConsensusAPI{
 		les:           les,
@@ -159,7 +159,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// TODO (MariusVanDerWijden): Enable this once Finalized is implemented in LES
 		// api.les.BlockChain().SetFinalized(finalBlock)
 	}
-	// Check if the safe block hash is in our canonical tree, if not somethings wrong
+	// Check if the safe block hash is in our canonical tree, if not something is wrong
 	if update.SafeBlockHash != (common.Hash{}) {
 		safeHeader := api.les.BlockChain().GetHeaderByHash(update.SafeBlockHash)
 		if safeHeader == nil {
@@ -182,11 +182,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 // ExchangeTransitionConfigurationV1 checks the given configuration against
 // the configuration of the node.
 func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.TransitionConfigurationV1) (*beacon.TransitionConfigurationV1, error) {
+	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
 	if config.TerminalTotalDifficulty == nil {
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
-	if ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
+	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}

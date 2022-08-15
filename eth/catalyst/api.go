@@ -245,7 +245,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// Set the finalized block
 		api.eth.BlockChain().SetFinalized(finalBlock)
 	}
-	// Check if the safe block hash is in our canonical tree, if not somethings wrong
+	// Check if the safe block hash is in our canonical tree, if not something is wrong
 	if update.SafeBlockHash != (common.Hash{}) {
 		safeBlock := api.eth.BlockChain().GetBlockByHash(update.SafeBlockHash)
 		if safeBlock == nil {
