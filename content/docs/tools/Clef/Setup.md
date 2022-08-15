@@ -3,17 +3,17 @@ title: Advanced setup
 sort_key: D
 ---
 
+Clef is a signer and account management tool that is external to Geth. This means it can be run as a separate process or even on a separate machine to the one running Geth, for example on secure hardware that is not connected to any external network, or on secure virtual machines.
+This page describes how Clef can be used with Qubes OS to provide a more secure setup than a normal laptop. Using Clef with USBArmory hardware is also briefly described.
 
-This document describes how Clef can be used in a more secure manner than executing it from your everyday laptop, 
-in order to ensure that the keys remain safe in the event that your computer should get compromised. 
+{:toc}
+-   this will be removed by the toc
 
 ## Qubes OS
 
-
 ### Background 
 
-The Qubes operating system is based around virtual machines (qubes), where a set of virtual machines are configured, typically for 
-different purposes such as:
+The Qubes operating system configures a set of virtual machines for different purposes such as:
 
 - personal
    - Your personal email, browsing etc
@@ -28,13 +28,11 @@ A couple of dedicated virtual machines handle externalities:
 - sys-firewall handles firewall rules
 - sys-usb handles USB devices, and can map usb-devices to certain qubes.
 
-The goal of this document is to describe how we can set up clef to provide secure transaction
-signing from a `vault` vm, to another networked qube which runs Dapps.
+The goal of this document is to describe how we can set up Clef to provide secure transaction signing from a `vault` vm, to another networked qube which runs Dapps.
 
 ### Setup
 
 There are two ways that this can be achieved: integrated via Qubes or integrated via networking. 
-
 
 #### 1. Qubes Integrated
 
@@ -46,15 +44,13 @@ to another qube. The OS then asks the user if the call is permitted.
 A policy-file can be created to allow such interaction. On the `target` domain, a service is invoked which can read the
 `stdin` from the `client` qube. 
 
-This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented. We can set up Clef the same way:
+This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented. Clef can be set up in the same way:
 
 ##### Server
 
 ![Clef via qrexec](clef_qubes_qrexec.png)
 
 On the `target` qubes, we need to define the RPC service.
-
-[qubes.Clefsign](qubes.Clefsign):
 
 ```bash
 #!/bin/bash
@@ -80,7 +76,7 @@ It will forward the data received on `stdin` (forwarded by the OS) to Clef's HTT
 
 It would have been possible to send data directly to the `/home/user/.clef/.clef.ipc` 
 socket via e.g `nc -U /home/user/.clef/clef.ipc`, but the reason for sending the request 
-data over `HTTP` instead of `IPC` is that we want the ability to forward `HTTP` headers.
+data over `HTTP` instead of `IPC` is for the ability to forward `HTTP` headers.
 
 To enable the service:
 
@@ -94,14 +90,9 @@ with minimal requirements.
 
 ##### Client
 
-
-On the `client` qube, we need to create a listener which will receive the request from the Dapp, and proxy it. 
-
-
-[qubes-client.py](qubes-client.py):
+On the `client` qube, a listener is required to receive the request from the Dapp, and proxy it. 
 
 ```python
-
 """
 This implements a dispatcher which listens to localhost:8550, and proxies
 requests via qrexec to the service qubes.EthSign on a target domain
@@ -124,13 +115,11 @@ class Dispatcher(http.server.BaseHTTPRequestHandler):
 with socketserver.TCPServer(("",PORT), Dispatcher) as httpd:
     print("Serving at port", PORT)
     httpd.serve_forever()
-
-
 ```
 
 #### Testing
 
-To test the flow, if we have set up `debian-work` as the `target`, we can do
+To test the flow, with `debian-work` as the `target`:
  
 ```bash
 $ cat newaccnt.json 
@@ -147,7 +136,7 @@ Followed by a GTK-dialog to approve the operation:
 
 ![two](qubes_newaccount-2.png)
 
-To test the full flow, we use the client wrapper. Start it on the `client` qube:
+To test the full flow, start the client wrapper on the `client` qube:
 ```
 [user@work qubes]$ python3 qubes-client.py 
 ```
@@ -186,16 +175,14 @@ from other qubes.
 ![Clef via http](clef_qubes_http.png)
 
 
-
-
 ## USBArmory
 
 The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 MHz ARM processor. It is a pocket-size
 computer. When inserted into a laptop, it identifies itself as a USB network interface, basically adding another network
-to your computer. Over this new network interface, you can SSH into the device. 
+to your computer that can be used to SSH into the device. 
 
-Running Clef off a USB armory means that you can use the armory as a very versatile offline computer, which only
-ever connects to a local network between your computer and the device itself.
+Running Clef off a USB armory means that the armory can be used as a very versatile offline computer, which only
+ever connects to a local network between the local computer and the device itself.
 
 Needless to say, while this model should be fairly secure against remote attacks, an attacker with physical access
 to the USB Armory would trivially be able to extract the contents of the device filesystem. 
