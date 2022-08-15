@@ -163,7 +163,10 @@ func (n *cachedNode) rlp() []byte {
 // or by regenerating it from the rlp encoded blob.
 func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		return mustDecodeNode(hash[:], node)
+		// The raw-blob format nodes are loaded from either from
+		// clean cache or the database, they are all in their own
+		// copy and safe to use unsafe decoder.
+		return mustDecodeNodeUnsafe(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
 }
@@ -346,7 +349,10 @@ func (db *Database) node(hash common.Hash) node {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc)
+
+			// The returned value from cache is in its own copy,
+			// safe to use mustDecodeNodeUnsafe for decoding.
+			return mustDecodeNodeUnsafe(hash[:], enc)
 		}
 	}
 	// Retrieve the node from the dirty cache if available
@@ -371,7 +377,9 @@ func (db *Database) node(hash common.Hash) node {
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
-	return mustDecodeNode(hash[:], enc)
+	// The returned value from database is in its own copy,
+	// safe to use mustDecodeNodeUnsafe for decoding.
+	return mustDecodeNodeUnsafe(hash[:], enc)
 }
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found

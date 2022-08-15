@@ -115,8 +115,26 @@ func BenchmarkEncodeShortNode(b *testing.B) {
 // goos: darwin
 // goarch: arm64
 // pkg: github.com/ethereum/go-ethereum/trie
+// BenchmarkEncodeFullNode
+// BenchmarkEncodeFullNode-8   	 4323273	       284.4 ns/op	     576 B/op	       1 allocs/op
+func BenchmarkEncodeFullNode(b *testing.B) {
+	node := &fullNode{}
+	for i := 0; i < 16; i++ {
+		node.Children[i] = hashNode(randBytes(32))
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		nodeToBytes(node)
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/trie
 // BenchmarkDecodeShortNode
-// BenchmarkDecodeShortNode-8   	 9125304	       129.2 ns/op	     109 B/op	       3 allocs/op
+// BenchmarkDecodeShortNode-8   	 7925638	       151.0 ns/op	     157 B/op	       4 allocs/op
 func BenchmarkDecodeShortNode(b *testing.B) {
 	node := &shortNode{
 		Key: []byte{0x1, 0x2},
@@ -136,18 +154,21 @@ func BenchmarkDecodeShortNode(b *testing.B) {
 // goos: darwin
 // goarch: arm64
 // pkg: github.com/ethereum/go-ethereum/trie
-// BenchmarkEncodeFullNode
-// BenchmarkEncodeFullNode-8   	 4323273	       284.4 ns/op	     576 B/op	       1 allocs/op
-func BenchmarkEncodeFullNode(b *testing.B) {
-	node := &fullNode{}
-	for i := 0; i < 16; i++ {
-		node.Children[i] = hashNode(randBytes(32))
+// BenchmarkDecodeShortNodeUnsafe
+// BenchmarkDecodeShortNodeUnsafe-8   	 9027476	       128.6 ns/op	     109 B/op	       3 allocs/op
+func BenchmarkDecodeShortNodeUnsafe(b *testing.B) {
+	node := &shortNode{
+		Key: []byte{0x1, 0x2},
+		Val: hashNode(randBytes(32)),
 	}
+	blob := nodeToBytes(node)
+	hash := crypto.Keccak256(blob)
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		nodeToBytes(node)
+		mustDecodeNodeUnsafe(hash, blob)
 	}
 }
 
@@ -155,7 +176,7 @@ func BenchmarkEncodeFullNode(b *testing.B) {
 // goarch: arm64
 // pkg: github.com/ethereum/go-ethereum/trie
 // BenchmarkDecodeFullNode
-// BenchmarkDecodeFullNode-8   	 1789374	       671.4 ns/op	     704 B/op	      17 allocs/op
+// BenchmarkDecodeFullNode-8   	 1597462	       761.9 ns/op	    1280 B/op	      18 allocs/op
 func BenchmarkDecodeFullNode(b *testing.B) {
 	node := &fullNode{}
 	for i := 0; i < 16; i++ {
@@ -169,5 +190,26 @@ func BenchmarkDecodeFullNode(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		mustDecodeNode(hash, blob)
+	}
+}
+
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/ethereum/go-ethereum/trie
+// BenchmarkDecodeFullNodeUnsafe
+// BenchmarkDecodeFullNodeUnsafe-8   	 1789070	       687.1 ns/op	     704 B/op	      17 allocs/op
+func BenchmarkDecodeFullNodeUnsafe(b *testing.B) {
+	node := &fullNode{}
+	for i := 0; i < 16; i++ {
+		node.Children[i] = hashNode(randBytes(32))
+	}
+	blob := nodeToBytes(node)
+	hash := crypto.Keccak256(blob)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		mustDecodeNodeUnsafe(hash, blob)
 	}
 }
