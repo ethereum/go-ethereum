@@ -1,6 +1,6 @@
 ---
 title: Home
-root: ..
+description: Geth homepage
 ---
 
 ## What is Geth?

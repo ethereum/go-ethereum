@@ -1,5 +1,6 @@
 ---
 title: puppeth
+description: introduction to the private-network boot-strapping tool, Puppeth
 ---
 
 Puppeth is a tool for quickly spinning up and managing private development networks. Puppeth gives fine-grained control over the network properties including the genesis block, signers, bootnodes, dashboards, etc but abstracts away the complexity of configuring it all manually.
