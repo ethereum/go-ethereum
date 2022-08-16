@@ -32,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-const elasticityMultiplier = 2 // EIP-1559 ELASTICITY_MULTIPLIER
-
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
 type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, error)
@@ -256,7 +254,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	if gasFeeCap == nil {
 		gasFeeCap = new(big.Int).Add(
 			gasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(elasticityMultiplier)),
+			new(big.Int).Mul(head.BaseFee, big.NewInt(params.ElasticityMultiplier)),
 		)
 	}
 	if gasFeeCap.Cmp(gasTipCap) < 0 {
