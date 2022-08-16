@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 )
 
-var currentDir string = ""
+var currentDir string
 
 func TestCommand_DebugBlock(t *testing.T) {
 	t.Parallel()

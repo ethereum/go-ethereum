@@ -9,17 +9,15 @@ import (
 	"net"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/network"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 
 	"github.com/stretchr/testify/require"
 )
-
-var maxPortCheck int32 = 100
 
 // HttpHandlerFake defines the handler functions required to serve
 // requests to the mock heimdal server for specific functions. Add more handlers
@@ -34,7 +32,7 @@ func (h *HttpHandlerFake) GetCheckpointHandler() http.HandlerFunc {
 	}
 }
 
-func CreateMockHeimdallServer(wg *sync.WaitGroup, port int32, handler *HttpHandlerFake) (*http.Server, error) {
+func CreateMockHeimdallServer(wg *sync.WaitGroup, port int, listener net.Listener, handler *HttpHandlerFake) (*http.Server, error) {
 	// Create a new server mux
 	mux := http.NewServeMux()
 
@@ -49,6 +47,12 @@ func CreateMockHeimdallServer(wg *sync.WaitGroup, port int32, handler *HttpHandl
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", port),
 		Handler: mux,
+	}
+
+	// Close the listener using the port and immediately consume it below
+	err := listener.Close()
+	if err != nil {
+		return nil, err
 	}
 
 	go func() {
@@ -93,12 +97,12 @@ func TestFetchCheckpointFromMockHeimdall(t *testing.T) {
 		}
 	}
 
-	// Fetch available port starting from 50000
-	port, err := findAvailablePort(50000, 0)
+	// Fetch available port
+	port, listener, err := network.FindAvailablePort()
 	require.NoError(t, err, "expect no error in finding available port")
 
 	// Create mock heimdall server and pass handler instance for setting up the routes
-	srv, err := CreateMockHeimdallServer(wg, port, handler)
+	srv, err := CreateMockHeimdallServer(wg, port, listener, handler)
 	require.NoError(t, err, "expect no error in starting mock heimdall server")
 
 	// Create a new heimdall client and use same port for connection
@@ -150,12 +154,12 @@ func TestFetchShutdown(t *testing.T) {
 		}
 	}
 
-	// Fetch available port starting from 50000
-	port, err := findAvailablePort(50000, 0)
+	// Fetch available port
+	port, listener, err := network.FindAvailablePort()
 	require.NoError(t, err, "expect no error in finding available port")
 
 	// Create mock heimdall server and pass handler instance for setting up the routes
-	srv, err := CreateMockHeimdallServer(wg, port, handler)
+	srv, err := CreateMockHeimdallServer(wg, port, listener, handler)
 	require.NoError(t, err, "expect no error in starting mock heimdall server")
 
 	// Create a new heimdall client and use same port for connection
@@ -214,26 +218,6 @@ func TestFetchShutdown(t *testing.T) {
 
 	// Wait for `wg.Done()` to be called in the mock server's routine.
 	wg.Wait()
-}
-
-// findAvailablePort returns the next available port starting from `from`
-func findAvailablePort(from int32, count int32) (int32, error) {
-	if count == maxPortCheck {
-		return 0, fmt.Errorf("no available port found")
-	}
-
-	port := atomic.AddInt32(&from, 1)
-	addr := fmt.Sprintf("localhost:%d", port)
-
-	count++
-
-	lis, err := net.Listen("tcp", addr)
-	if err == nil {
-		lis.Close()
-		return port, nil
-	} else {
-		return findAvailablePort(from, count)
-	}
 }
 
 // TestContext includes bunch of simple tests to verify the working of timeout
