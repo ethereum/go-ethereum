@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -295,10 +296,13 @@ type codeTask struct {
 // newStateSync creates a new state trie download scheduler. This method does not
 // yet start the sync. The user needs to call run to initiate.
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
+	// Hack the node scheme here. It's a dead code is not used
+	// by light client at all. Just aim for passing tests.
+	scheme := trie.NewDatabase(rawdb.NewMemoryDatabase()).Scheme()
 	return &stateSync{
 		d:         d,
 		root:      root,
-		sched:     state.NewStateSync(root, d.stateDB, nil),
+		sched:     state.NewStateSync(root, d.stateDB, nil, scheme),
 		keccak:    sha3.NewLegacyKeccak256().(crypto.KeccakState),
 		trieTasks: make(map[string]*trieTask),
 		codeTasks: make(map[common.Hash]*codeTask),
