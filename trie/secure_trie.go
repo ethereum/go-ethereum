@@ -189,8 +189,8 @@ func (t *StateTrie) TryDelete(key []byte) error {
 	return t.trie.TryDelete(hk)
 }
 
-// DeleteACcount abstracts an account deletion from the trie.
-func (t *StateTrie) DeleteAccount(key []byte) error {
+// TryDeleteACcount abstracts an account deletion from the trie.
+func (t *StateTrie) TryDeleteAccount(key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
