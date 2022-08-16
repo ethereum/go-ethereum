@@ -1,15 +1,9 @@
 ---
 title: Abigen
-root: ..
+description: Introduction to the Go binding generator tool, Abigen
 ---
 
-Abigen is a binding-generator for easily interacting with Ethereum using Go.
-Abigen creates easy-to-use, type-safe Go packages from Ethereum smart contract definitions known
-as ABIs. This abstracts away a lot of the complexity of handling smart contract deployment
-and interaction in Go native applications such as encoding and decoding smart contracts into
-EVM bytecode. Abigen comes bundled with Geth. A full Geth installation includes the abigen binary.
-Abigen can also be built independently by navigating to `go-ethereum/cmd/abigen` and running 
-`go build`, or equivalently:
+Abigen is a binding-generator for easily interacting with Ethereum using Go. Abigen creates easy-to-use, type-safe Go packages from Ethereum smart contract definitions known as ABIs. This abstracts away a lot of the complexity of handling smart contract deployment and interaction in Go native applications such as encoding and decoding smart contracts into EVM bytecode. Abigen comes bundled with Geth. A full Geth installation includes the abigen binary. Abigen can also be built independently by navigating to `go-ethereum/cmd/abigen` and running `go build`, or equivalently:
 
 ```
 $ cd $GOPATH/src/github.com/ethereum/go-ethereum
@@ -18,20 +12,11 @@ $ go build ./cmd/abigen
 
 ## What is an ABI?
 
-Ethereum smart contracts have a schema that defines its functions and return types in the form
-of a JSON file. This JSON file is known as an *Application Binary Interface*, or ABI. The ABI
-acts as a specification for precisely how to encode data sent to a contract and how to 
-decode the data the contract sends back. The ABI is the only essential piece of information required to 
-generate Go bindings. Go developers can then use the bindings to interact with the contract 
-from their Go application without having to deal directly with data encoding and decoding. 
-An ABI is generated when a contract is compiled.
-
+Ethereum smart contracts have a schema that defines its functions and return types in the form of a JSON file. This JSON file is known as an *Application Binary Interface*, or ABI. The ABI acts as a specification for precisely how to encode data sent to a contract and how to decode the data the contract sends back. The ABI is the only essential piece of information required to generate Go bindings. Go developers can then use the bindings to interact with the contract from their Go application without having to deal directly with data encoding and decoding. An ABI is generated when a contract is compiled.
 
 ### Generating the bindings
 
-To demonstrate the binding generator a contract is required. The contract `Storage.sol` implements two 
-very simple functions: `store` updates a user-defined `uint256` to the contract's storage, and `retrieve` 
-displays the value stored in the contract to the user. The Solidity code is as follows:
+To demonstrate the binding generator a contract is required. The contract `Storage.sol` implements two very simple functions: `store` updates a user-defined `uint256` to the contract's storage, and `retrieve` displays the value stored in the contract to the user. The Solidity code is as follows:
 
 ```solidity
 // SPDX-License-Identifier: GPL-3.0
@@ -56,19 +41,13 @@ contract Storage {
 }
 ```
 
-This contract can be pasted into a text file and saved as `Storage.sol`.
-
-The following code snippet shows how an ABI can be generated for `Storage.sol` 
-using the Solidity compiler `solc`.
+This contract can be pasted into a text file and saved as `Storage.sol`. The following code snippet shows how an ABI can be generated for `Storage.sol` using the Solidity compiler `solc`.
 
 ```shell
 solc --abi Storage.sol -o build
 ```
 
-The ABI can also be generated in other ways such as using the `compile` commands in development
-frameworks such as [Truffle][truffle-link], [Hardhat][hardhat-link] and [Brownie][brownie-link] 
-or in the online IDE [Remix][remix-link]. ABIs for existing
-verified contracts can be downloaded from [Etherscan](etherscan.io).
+The ABI can also be generated in other ways such as using the `compile` commands in development frameworks such as [Truffle](https://trufflesuite.com/), [Hardhat](https://hardhat.org/) and [Brownie](https://eth-brownie.readthedocs.io/en/stable/) or in the online IDE [Remix](https://remix.ethereum.org/). ABIs for existing verified contracts can be downloaded from [Etherscan](etherscan.io).
 
 
 The ABI for `Storage.sol` (`Storage.abi`) looks as follows:
@@ -90,9 +69,7 @@ Where the flags are:
  * `--type`: Optional Go type name to assign to the binding struct
  * `--out`: Optional output path for the generated Go source file (not set = stdout)
 
-This will generate a type-safe Go binding for the Storage contract. The generated code will
-look something like the snippet below, the full version of which can be viewed 
-[here](https://gist.github.com/jmcook1186/a78e59d203bb54b06e1b81f2cda79d93).
+This will generate a type-safe Go binding for the Storage contract. The generated code will look something like the snippet below, the full version of which can be viewed [here](https://gist.github.com/jmcook1186/a78e59d203bb54b06e1b81f2cda79d93).
 
 ```go
 // Code generated - DO NOT EDIT.
@@ -146,6 +123,4 @@ type Storage struct {
 
 `Storage.go` contains all the bindings required to interact with `Storage.sol` from a Go application.
 
-For instructions on how to deploy this contract to Ethereum from a Go native application read our
-[Go bindings page](/content/docs/developers/dapp-developer/native.md). To browse the Abigen source code
-visit the Geth [Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).
+For instructions on how to deploy this contract to Ethereum from a Go native application read our [Go bindings page](/content/docs/developers/dapp-developer/native.md). To browse the Abigen source code visit the Geth [Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).

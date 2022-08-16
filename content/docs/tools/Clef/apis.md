@@ -1,12 +1,10 @@
 ---
 title: Clef APIs
-sort_key: E
+description: Reference documentation for the Clef APIs
 ---
 
 Clef uses two separate APIs. The **external API** is an untrusted set of JSON-RPC methods that can be called by a user. The **internal API** is a set of JSON-RPC methods that can be called by a UI. The UI could be Clef's native command line interface or a custom UI.
 
-{:toc}
--   this will be removed by the toc
 
 ## External API
 
@@ -32,8 +30,7 @@ All hex encoded values must be prefixed with `0x`.
 
 ##### Create new password protected account
 
-The signer will generate a new private key, encrypt it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and store it in the keystore directory.  
-The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
+The signer will generate a new private key, encrypt it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and store it in the keystore directory. The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
 
 ##### Arguments
 
