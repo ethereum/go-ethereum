@@ -1,8 +1,7 @@
 ---
 title: Metrics
-sort_key: G
+description: Introduction to reporting metrics from Geth
 ---
-
 
 Geth includes a variety of optional metrics that can be reported to the user. However, metrics are disabled by default to save on the computational overhead for the average user. Users that choose to see more detailed metrics can enable them using the `--metrics` flag when starting Geth. Some metrics are classed as especially expensive and are only enabled when the `--metrics.expensive` flag is supplied. For example, per-packet network traffic data is considered expensive.
 

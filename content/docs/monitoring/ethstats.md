@@ -1,5 +1,6 @@
 ---
 title: Monitoring with Ethstats
+description: Setting up an Ethstats server
 ---
 
 Ethstats is a service that displays real time and historical statistics about individual
