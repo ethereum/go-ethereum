@@ -331,6 +331,13 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 		},
+		TOMONTMAX: {
+			execute:    opToMontMAX,
+            dynamicGas: gasToMontMAX,
+			memorySize: memoryToMontMAX,
+			minStack:   minStack(1, 0),
+			maxStack:   maxStack(1, 0),
+		},
 		LT: {
 			execute:     opLt,
 			constantGas: GasFastestStep,

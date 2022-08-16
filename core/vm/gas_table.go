@@ -467,3 +467,7 @@ func gasMulMontMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, er
     //fmt.Println("gasMulMont")
     return 0, nil // TODO charge static cost based on configured limb-count
 }
+
+func gasToMontMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+    return 0, nil // TODO charge static cost based on configured limb-count
+}
