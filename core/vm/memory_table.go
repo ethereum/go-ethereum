@@ -133,3 +133,17 @@ func memoryEVMMAXArith(stack *Stack, scope *ScopeContext) (error, uint64, bool) 
 
     return nil, max_offset + elemSize, false
 }
+
+func memoryToMontMAX(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
+    if scope.EVMMAXField == nil {
+        return ErrOutOfGas, 0, false
+    }
+	params_offsets := scope.Stack.peek()
+    elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
+
+	out_offset := byte(params_offsets[0] >> 16)
+	input_offset := byte(params_offsets[0] >> 8)
+    max_offset := uint64(max(out_offset, input_offset)) * elemSize
+
+    return nil, max_offset + elemSize, false
+}

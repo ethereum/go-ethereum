@@ -75,7 +75,7 @@ const (
 	ADDMODMAX  OpCode = 0x22
 	SUBMODMAX  OpCode = 0x23
 	MULMONTMAX OpCode = 0x24
-    TOMONT     OpCode = 0x25
+    TOMONTMAX     OpCode = 0x25
 )
 
 // 0x30 range - closure state.

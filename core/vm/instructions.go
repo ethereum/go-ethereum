@@ -148,24 +148,38 @@ func opMulMontMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
     x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
     y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(elemSize))
 
-    /*
-    fmt.Printf("mulmont(stack): %x\n", params_offsets[0])
-    fmt.Println(byte(params_offsets[0] >> 8))
-    fmt.Println(x_offset)
-    fmt.Println(byte(params_offsets[0]))
-    fmt.Println(y_offset)
-    fmt.Printf("mulmont(offsets): %d, %d, %d\n", out_offset, x_offset, y_offset)
-    */
-    //fmt.Printf("mulmont: %x * %x=", x_bytes, y_bytes)
     if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, x_bytes, y_bytes); err != nil {
-        /*
-        fmt.Printf("%x\n", x_bytes)
-        fmt.Printf("%x\n", y_bytes)
-        fmt.Printf("%x\n", scope.EVMMAXField.Modulus)
-        */
         return nil, ErrOutOfGas
     }
-    //fmt.Printf("%x\n", out_bytes)
+	return nil, nil
+}
+
+func uint64_array_to_le_bytes(val []uint64) []byte {
+    res := make([]byte, len(val) * 8)
+    for i := 0; i < len(val); i++ {
+        res[i * 8] = byte(val[i])
+        res[i * 8 + 1] = byte(val[i] >> 8)
+        res[i * 8 + 2] = byte(val[i] >> 16)
+        res[i * 8 + 3] = byte(val[i] >> 24)
+    }
+
+    return res
+}
+
+func opToMontMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	params_offsets := scope.Stack.pop()
+    elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
+
+	out_offset := uint64(byte(params_offsets[0] >> 16)) * elemSize
+	input_offset := uint64(byte(params_offsets[0] >> 8)) * elemSize
+
+    out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
+    input_bytes := scope.Memory.GetPtr(int64(input_offset), int64(elemSize))
+    r_squared_bytes := uint64_array_to_le_bytes(scope.EVMMAXField.RSquared())
+
+    if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, input_bytes, r_squared_bytes); err != nil {
+        return nil, ErrOutOfGas
+    }
 	return nil, nil
 }
 
