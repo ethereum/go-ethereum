@@ -87,6 +87,9 @@ type Trie interface {
 	// found in the database, a trie.MissingNodeError is returned.
 	TryDelete(key []byte) error
 
+	// DeleteACcount abstracts an account deletion from the trie.
+	DeleteAccount(key []byte) error
+
 	// Hash returns the root hash of the trie. It does not write to the database and
 	// can be used even if the trie doesn't have one.
 	Hash() common.Hash
