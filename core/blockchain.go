@@ -1246,6 +1246,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
+	bc.chainConfig.ReChainId(block.Number())
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
 		return consensus.ErrUnknownAncestor
