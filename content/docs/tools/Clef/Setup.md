@@ -1,13 +1,10 @@
 ---
 title: Advanced setup
-sort_key: D
+description: More advanced ways to set up Clef for additional security
 ---
 
 Clef is a signer and account management tool that is external to Geth. This means it can be run as a separate process or even on a separate machine to the one running Geth, for example on secure hardware that is not connected to any external network, or on secure virtual machines.
 This page describes how Clef can be used with Qubes OS to provide a more secure setup than a normal laptop. Using Clef with USBArmory hardware is also briefly described.
-
-{:toc}
--   this will be removed by the toc
 
 ## Qubes OS
 
@@ -36,19 +33,17 @@ There are two ways that this can be achieved: integrated via Qubes or integrated
 
 #### 1. Qubes Integrated
 
-Qubes provides a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request 
-to another qube. The OS then asks the user if the call is permitted. 
+Qubes provides a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request to another qube. The OS then asks the user if the call is permitted. 
 
-![Example](qrexec-example.png)
+![Example](assets/qrexec-example.png)
 
-A policy-file can be created to allow such interaction. On the `target` domain, a service is invoked which can read the
-`stdin` from the `client` qube. 
+A policy-file can be created to allow such interaction. On the `target` domain, a service is invoked which can read the `stdin` from the `client` qube. 
 
 This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented. Clef can be set up in the same way:
 
 ##### Server
 
-![Clef via qrexec](clef_qubes_qrexec.png)
+![Clef via qrexec](/assets/clef_qubes_qrexec.png)
 
 On the `target` qubes, we need to define the RPC service.
 
@@ -71,12 +66,9 @@ if [ -S /home/user/.clef/clef.ipc ]; then
 fi
 
 ```
-This RPC service is not complete (see notes about HTTP headers below), but works as a proof-of-concept. 
-It will forward the data received on `stdin` (forwarded by the OS) to Clef's HTTP channel.  
+This RPC service is not complete (see notes about HTTP headers below), but works as a proof-of-concept. It will forward the data received on `stdin` (forwarded by the OS) to Clef's HTTP channel. 
 
-It would have been possible to send data directly to the `/home/user/.clef/.clef.ipc` 
-socket via e.g `nc -U /home/user/.clef/clef.ipc`, but the reason for sending the request 
-data over `HTTP` instead of `IPC` is for the ability to forward `HTTP` headers.
+It would have been possible to send data directly to the `/home/user/.clef/.clef.ipc` socket via e.g `nc -U /home/user/.clef/clef.ipc`, but the reason for sending the request data over `HTTP` instead of `IPC` is for the ability to forward `HTTP` headers.
 
 To enable the service:
 
@@ -85,8 +77,7 @@ sudo cp qubes.Clefsign /etc/qubes-rpc/
 sudo chmod +x /etc/qubes-rpc/ qubes.Clefsign
 ```
 
-This setup uses [gtksigner](https://github.com/holiman/gtksigner), which is a very minimal GTK-based UI that works well 
-with minimal requirements. 
+This setup uses [gtksigner](https://github.com/holiman/gtksigner), which is a very minimal GTK-based UI that works well with minimal requirements. 
 
 ##### Client
 
@@ -169,21 +160,19 @@ However, it comes with a couple of drawbacks:
 
 #### 2. Network integrated
 
-The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible
-from other qubes. 
+The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible from other qubes. 
 
 ![Clef via http](clef_qubes_http.png)
 
 
 ## USBArmory
 
-The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 MHz ARM processor. It is a pocket-size
-computer. When inserted into a laptop, it identifies itself as a USB network interface, basically adding another network
-to your computer that can be used to SSH into the device. 
+The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 MHz ARM processor. It is a pocket-sized computer. When inserted into a laptop, it identifies itself as a USB network interface, basically adding another network to your computer that can be used to SSH into the device. 
 
-Running Clef off a USB armory means that the armory can be used as a very versatile offline computer, which only
-ever connects to a local network between the local computer and the device itself.
+Running Clef off a USB armory means that the armory can be used as a very versatile offline computer, which only ever connects to a local network between the local computer and the device itself.
 
-Needless to say, while this model should be fairly secure against remote attacks, an attacker with physical access
-to the USB Armory would trivially be able to extract the contents of the device filesystem. 
+Needless to say, while this model should be fairly secure against remote attacks, an attacker with physical access to the USB Armory would trivially be able to extract the contents of the device filesystem. 
 
+## Summary
+
+This page introduced two ways to setup Clef that give additional security compared to running on a normal laptop.
