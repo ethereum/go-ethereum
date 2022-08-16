@@ -446,7 +446,7 @@ func gasSetModMAX(evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, err
 	mod_offset := uint64(byte(params_offsets[0])) * 8
 	mod_limb_count := uint64(byte(params_offsets[0] >> 8))
 
-    if mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || mod_limb_count > 11 {
+    if mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || uint(mod_limb_count) > params.EVMMAXMaxLimbCount {
         return 0, ErrOutOfGas
     }
 
