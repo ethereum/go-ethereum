@@ -57,12 +57,12 @@ func newTxJournal(path string) *txJournal {
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
 func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
-	// Skip the parsing if the journal file doesn't exist at all
-	if !common.FileExist(journal.path) {
-		return nil
-	}
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
+	if os.IsNotExist(err) {
+		// Skip the parsing if the journal file doesn't exist at all
+		return nil
+	}
 	if err != nil {
 		return err
 	}
