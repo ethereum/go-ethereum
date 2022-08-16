@@ -32,7 +32,7 @@ Ethstats has three components:
 
 The summary dashboard for Ethereum Mainnet can be viewed at [ethstats.net](https://ethstats.net/).
 
-![Ethstats](/ethstats-mainnet.png)
+![Ethstats](assets/ethstats-mainnet.png)
 
 Note that the Ethstats dashboard is not a reliable source of information about the entire Ethereum
 network because submitting data to the Ethstats server is voluntary and has to be configured by

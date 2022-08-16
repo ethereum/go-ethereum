@@ -1,5 +1,6 @@
 ---
-title:Clique signing
+title: Clique signing
+description: Instructions for setting up Clef to seal blocks on a Clique network
 ---
 
 Clique is a proof-of-authority system where new blocks can be created by authorized ‘signers’ only. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Signing blocks in Clique networks classically uses the "unlock" feature of Geth so that each node is always ready to sign without requiring a user to manually provide authorization.
@@ -12,12 +13,10 @@ Clef provides a way to safely circumvent `--unlock` while maintaining a enough a
 
 It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/content/docs/developers/geth-developer/private-network) and [Introduction to Clef](/content/docs/tools/Clef/introduction) pages.
 
-{:toc}
--   this will be removed by the toc
 
 ## Prepping a Clique network
 
-First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`)
+First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`):
 
 ```terminal
 $ geth account new --datadir ./ddir
@@ -186,6 +185,7 @@ And indeed, after approving with `y`, the password is not required - the signed 
 ```terminal
 INFO [06-16|11:36:46.714] Successfully sealed new block            number=1 sealhash=9589ed..662d03 hash=bd20b9..af8b87 elapsed=4.214s
 ```
+
 This mode of operation offers quite a poor UX because each block to be sealed requires manual approval. That is fixed in the following section.
 
 ## Using rules to approve blocks
@@ -334,11 +334,7 @@ DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 durat
 
 ## Refinements
 
-If an attacker find the Clef "external" interface (which would only happen if you start it with `http` enabled), they
-- cannot make it sign arbitrary transactions,
-- cannot sign arbitrary data message,
-
-However, they could still make it sign e.g. 1000 versions of a certain block height, making the chain very unstable.
+If an attacker finds the Clef "external" interface (which would only happen if you start it with `--http` enabled), they cannot sign arbitrary data or transactions. However, they could still make it sign e.g. 1000 versions of a certain block height, making the chain very unstable.
 
 It is possible for rule execution to be stateful (i.e. storing data). In this case, one could, for example, store what block heights have been sealed and reject sealing a particular block height twice. In other words, these rules could be used to build a miniature version of an execution layer slashing-db.
 
@@ -381,12 +377,13 @@ JS:>  number 46 latest 45
 INFO [06-16|22:26:44.313] Op approved 
 DEBUG[06-16|22:26:45.317] Served account_signData                  reqid=4 duration=1.010612774s
 ```
-This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
+This might be a bit over-the-top security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
 ## TLDR quick-version
 
 Creation and attestation is a one-off event:
+
 ```sh
 ## Create the rules-file
 cat << END > rules.js

@@ -1,24 +1,11 @@
 ---
 title: Introduction to Clef
-sort_key: A
+description: Introduction to the external signing tool, Clef
 ---
 
-{:toc}
--   this will be removed by the toc
-  
 ## What is Clef?
 
-Clef is a tool for **signing transactions and data** in a secure local environment. 
-t is intended to become a more composable and secure replacement for Geth's built-in 
-account management. Clef decouples key management from Geth itself, meaning it can be 
-used as an independent, standalone key management and signing application, or it
-can be integrated into Geth. This provides a more flexible modular tool compared to 
-Geth's account manager. Clef can be used safely in situations where access to Ethereum is 
-via a remote and/or untrusted node because signing happens locally, either manually or 
-automatically using custom rulesets. The separation of Clef from the node itself enables it 
-to run as a daemon on the same machine as the client software, on a secure usb-stick like 
-[USB armory](https://inversepath.com/usbarmory), or even a separate VM in a 
-[QubesOS](https://www.qubes-os.org/) type setup.
+Clef is a tool for **signing transactions and data** in a secure local environment. It is intended to become a more composable and secure replacement for Geth's built-in account management. Clef decouples key management from Geth itself, meaning it can be used as an independent, standalone key management and signing application, or it can be integrated into Geth. This provides a more flexible modular tool compared to Geth's account manager. Clef can be used safely in situations where access to Ethereum is via a remote and/or untrusted node because signing happens locally, either manually or automatically using custom rulesets. The separation of Clef from the node itself enables it to run as a daemon on the same machine as the client software, on a secure usb-stick like [USB armory](https://inversepath.com/usbarmory), or even a separate VM in a [QubesOS](https://www.qubes-os.org/) type setup.
 
 ## Installing and starting Clef
 
@@ -30,9 +17,7 @@ However, Clef is not bound to Geth and can be built on its own using:
 
 `make clef`
 
-Once built, Clef must be initialized. This includes storing some data, some of which is sensitive 
-(such as passwords, account data, signing rules etc). Initializing Clef takes that data and 
-encrypts it using a user-defined password.
+Once built, Clef must be initialized. This includes storing some data, some of which is sensitive (such as passwords, account data, signing rules etc). Initializing Clef takes that data and encrypts it using a user-defined password.
 
 `clef init`
 
@@ -71,66 +56,31 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 
 ## Security model
 
-One of the major benefits of Clef is that it is decoupled from the client software, 
-meaning it can be used by users and dapps to sign data and transactions in a secure, 
-local environment and send the signed packet to an arbitrary Ethereum entry-point, which 
-might include, for example, an untrusted remote node. Alternatively, Clef can simply be
-used as a standalone, composable signer that can be a backend component for decentralized 
-applications. This requires a secure architecture that separates cryptographic operations 
-from user interactions and internal/external communication.
+One of the major benefits of Clef is that it is decoupled from the client software, meaning it can be used by users and dapps to sign data and transactions in a secure, local environment and send the signed packet to an arbitrary Ethereum entry-point, which might include, for example, an untrusted remote node. Alternatively, Clef can simply be used as a standalone, composable signer that can be a backend component for decentralized applications. This requires a secure architecture that separates cryptographic operations from user interactions and internal/external communication.
 
 The security model of Clef is as follows:
 
-* A self-contained binary controls all cryptographic operations including encryption, 
-  decryption and storage of keystore files, and signing data and transactions.
+* A self-contained binary controls all cryptographic operations including encryption, decryption and storage of keystore files, and signing data and transactions.
 
-* A well defined, deliberately minimal "external" API is used to communicate with the 
-  Clef binary - Clef considers this external traffic to be UNTRUSTED. This means Clef 
-  does not accept any credentials and does not recognize authority of requests received 
-  over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - 
-  and expects messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). 
-  Some of the external API calls require some user interaction (manual approve/deny)- if it is 
-  not received responses can be delayed indefinitely.
+* A well defined, deliberately minimal "external" API is used to communicate with the Clef binary - Clef considers this external traffic to be UNTRUSTED. This means Clef does not accept any credentials and does not recognize authority of requests received over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - and expects messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). Some of the external API calls require some user interaction (manual approve/deny)- if it is not received responses can be delayed indefinitely.
 
-* Clef communicates with the process that invoked the binary using stin/stout. The process 
-  invoking the binary is usually the native console-based user interface (UI) but there is 
-  also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` 
-  at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between 
-  the user and Clef. 
+* Clef communicates with the process that invoked the binary using stin/stout. The process invoking the binary is usually the native console-based user interface (UI) but there is also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between the user and Clef. 
 
-* Clef does not store keys - the user is responsible for securely storing and backing up keyfiles. 
-  Clef does store account passwords in its encrypted vault if they are explicitly provided to 
-  Clef by the user to enable automatic account unlocking.
+* Clef does not store keys - the user is responsible for securely storing and backing up keyfiles. Clef does store account passwords in its encrypted vault if they are explicitly provided to Clef by the user to enable automatic account unlocking.
 
-The external API never handles any sensitive data directly, but it can be used to request Clef to
-sign some data or a transaction. It is the internal API that controls signing and triggers requests for
-manual approval (automatic approves actions that conform to attested rulesets) and passwords.
+The external API never handles any sensitive data directly, but it can be used to request Clef to sign some data or a transaction. It is the internal API that controls signing and triggers requests for manual approval (automatic approves actions that conform to attested rulesets) and passwords.
 
-The general flow for a basic transaction-signing operation using Clef and an Ethereum node such as 
-Geth is as follows:
+The general flow for a basic transaction-signing operation using Clef and an Ethereum node such as Geth is as follows:
 
-![Clef signing logic](/static/images/clef_sign_flow.png)
+![Clef signing logic](/assets/clef_sign_flow.png)
 
-In the case illustrated in the schematic above, Geth would be started with `--signer <addr>:<port>` and 
-would relay requests to `eth.sendTransaction`. Text in `mono` font positioned along arrows shows the objects
-passed between each component.
+In the case illustrated in the schematic above, Geth would be started with `--signer <addr>:<port>` and would relay requests to `eth.sendTransaction`. Text in `mono` font positioned along arrows shows the objects passed between each component.
 
-Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also
-possible to configure Clef to sign transactions without always prompting the user. This requires defining the
-precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are 
-small Javascript snippets that are *attested* by the user by injecting the snippet's hash into Clef's secure
-whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted
-rule files are automatically signed. This is covered in detail on the [Rules page](/docs/_clef/Rules.md).
-
+Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also possible to configure Clef to sign transactions without always prompting the user. This requires defining the precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are small Javascript snippets that are *attested* by the user by injecting the snippet's hash into Clef's secure whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted rule files are automatically signed. This is covered in detail on the [Rules page](/content/docs/tools/Clef/rules).
 
 ## Basic usage
 
-Clef is started on the command line using the `clef` command. Clef can be configured by providing flags and 
-commands to `clef` on startup. The full list of command line options is available [below](#command-line-options).
-Frequently used options include `--keystore` and `--chainid` which configure the path to an existing keystore
-and a network to connect to. These options default to `$HOME/.ethereum/keystore` and `1` (corresponding to
-Ethereum Mainnet) respectively. The following code snippet starts Clef, providing a custom path to an existing 
-keystore and connecting to the Goerli testnet:
+Clef is started on the command line using the `clef` command. Clef can be configured by providing flags and commands to `clef` on startup. The full list of command line options is available [below](#command-line-options). Frequently used options include `--keystore` and `--chainid` which configure the path to an existing keystore and a network to connect to. These options default to `$HOME/.ethereum/keystore` and `1` (corresponding to Ethereum Mainnet) respectively. The following code snippet starts Clef, providing a custom path to an existing keystore and connecting to the Goerli testnet:
 
 ```sh
 clef --keystore /my/keystore --chainid 5
@@ -155,12 +105,9 @@ Enter 'ok' to proceed:
 >
 ```
 
-Requests requiring account access or signing now require explicit consent in this terminal.
-Activities such as sending transactions via a local Geth node's attached Javascript console or
-RPC will now hang indefinitely, awaiting approval in this terminal.
+Requests requiring account access or signing now require explicit consent in this terminal. Activities such as sending transactions via a local Geth node's attached Javascript console or RPC will now hang indefinitely, awaiting approval in this terminal.
 
-A much more detailed Clef tutorial is available on the [Tutorial page](/docs/clef/tutorial).
-
+A much more detailed Clef tutorial is available on the [Tutorial page](/content/docs/tools/Clef/tutorial).
 
 ## Command line options
 
@@ -200,9 +147,5 @@ GLOBAL OPTIONS:
 
 ## Summary
 
-Clef is an external key management and signer tool that comes bundled with Geth but can either be used 
-as a backend account manager and signer for Geth or as a completely separate standalone application. Being 
-modular and composable it can be used as a component in decentralized applications or to sign data and
-transactions in untrusted environments. Clef is intended to eventually replace Geth's built-in account
-management tools.
+Clef is an external key management and signer tool that comes bundled with Geth but can either be used as a backend account manager and signer for Geth or as a completely separate standalone application. Being modular and composable it can be used as a component in decentralized applications or to sign data and transactions in untrusted environments. Clef is intended to eventually replace Geth's built-in account management tools.
  

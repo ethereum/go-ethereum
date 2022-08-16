@@ -1,6 +1,6 @@
 ---
 title: Communication data types
-sort_key: F
+description: The data types used by the Clef APIs
 ---
 
 ## UI Client interface

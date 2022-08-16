@@ -1,58 +1,35 @@
 ---
 title: Rules
-sort_key: C
+description: Introduction to automated rulesets in Clef
 ---
 
-This page provides a fairly low-level explanation for how rules are implemented in 
-Clef. It is a good idea to read the [Introduction to Clef](/docs/clef/introduction)
-and the [Clef tutorial](/docs/clef/tutorial) before diving in to this page.
+This page provides a fairly low-level explanation for how rules are implemented in Clef. It is a good idea to read the [Introduction to Clef](/content/docs/tools/Clef/introduction) and the [Clef tutorial](/content/docs/tools/Clef/tutorial) before diving in to this page.
 
-{:toc}
--   this will be removed by the toc
-  
 ## Introduction
 
-Rules in Clef are sets of conditions that determine whether a given action can be
-approved automatically without requiring manual intervention from the user. This can be
-useful for automatically approving transactions between a user's own accounts, or
-approving patterns that are commonly used by applications. Automatic signing also 
-requires Clef to have access to account passwords which is configured independently 
-of the ruleset. 
+Rules in Clef are sets of conditions that determine whether a given action can be approved automatically without requiring manual intervention from the user. This can be useful for automatically approving transactions between a user's own accounts, or approving patterns that are commonly used by applications. Automatic signing also requires Clef to have access to account passwords which is configured independently of the ruleset. 
 
 Rules can define arbitrary conditions such as:
 
-* Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and 
-  `1 ether` per 24h period.
+* Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and `1 ether` per 24h period.
 
-* Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if 
-  `gas < 44k` and `gasPrice < 40Gwei`.
+* Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if `gas < 44k` and `gasPrice < 40Gwei`.
 
 * Auto-approve signing if the data to be signed contains the string `"approve_me"`.
 
 * Auto-approve any requests to list accounts in keystore if the request arrives over IPC
 
-Because the rules are Javascript files they can be customized to implement any arbitrary logic on
-the available request data.
+Because the rules are Javascript files they can be customized to implement any arbitrary logic on the available request data.
 
-This page will explain how rules are implemented in Clef and how best to manage credentials
-when automatic rulesets are enabled.
+This page will explain how rules are implemented in Clef and how best to manage credentials when automatic rulesets are enabled.
 
 ## Rule Implementation
 
-
-The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves
-any requests that meet the conditions defined in a set of authenticated rule files. This
-prevents the user from having to manually approve or reject every request - instead they
-can define common patterns in a rule file and abstract that task away to the ruleset engine.
-The general architecture is as follows:
+The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves any requests that meet the conditions defined in a set of authenticated rule files. This prevents the user from having to manually approve or reject every request - instead they can define common patterns in a rule file and abstract that task away to the ruleset engine. The general architecture is as follows:
 
 ![Clef ruleset logic](/static/images/clef_ruleset.png)
 
-When Clef receives a request, the ruleset engine evaluates a Javascript file for
-each method defined in the internal [UI API docs](/docs/clef/apis). For example the code 
-snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` 
-is invoking the `ui_approveTx` [JSON_RPC API endpoint](/docs/clef/apis/#ui-api). Every time an RPC
-method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
+When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/content/docs/tools/Clef/apis). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/content/docs/tools/Clef/apis/#ui-api). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 
 ```js
 function asBig(str) {
@@ -102,43 +79,33 @@ handled in different ways:
 | Anything else             | Pass decision to UI for manual approval   |
  
  
-There are some additional noteworthy implementation details that are important 
-for defining rules correctly in `ruleset.js`:
+There are some additional noteworthy implementation details that are important for defining rules correctly in `ruleset.js`:
 
 * The code in `ruleset.js` **cannot** load external Javascript files. 
   
 * The Javascript engine can access `storage` and `console`
   
-* The only preloaded library in the Javascript environment is 
-  `bignumber.js` version `2.0.3`.
+* The only preloaded library in the Javascript environment is `bignumber.js` version `2.0.3`.
   
-* Each invocation is made in a fresh virtual machine meaning data cannot be 
-  stored in global variables between invocations.
+* Each invocation is made in a fresh virtual machine meaning data cannot be stored in global variables between invocations.
   
-* Since no global variable storage is available, disk backed `storage` must be 
-  used - rules should not rely on ephemeral data.
+* Since no global variable storage is available, disk backed `storage` must be used - rules should not rely on ephemeral data.
   
-* Javascript API parameters are always objects. This ensures parameters are 
-  accessed by _key_ to avoid misordering errors. 
+* Javascript API parameters are always objects. This ensures parameters are accessed by _key_ to avoid misordering errors. 
   
 * Otto VM uses ES5. ES6-specific features (such as Typed Arrays) are not supported.
   
-* The regular expression engine (re2/regexp) in Otto VM is not fully compatible 
-  with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
+* The regular expression engine (re2/regexp) in Otto VM is not fully compatible with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
   
-* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) 
-  is not supported. "Use strict" will parse but it does nothing.
+* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "Use strict" will parse but it does nothing.
 
 
 ## Credential management
 
-The ability to auto-approve transaction requires that the signer has
-the necessary credentials, i.e. account passwords, to decrypt keyfiles. 
+The ability to auto-approve transaction requires that the signer has the necessary credentials, i.e. account passwords, to decrypt keyfiles. 
 These are stored encrypted as follows:
 
-When the `signer` is started it generates a seed that is locked with a 
-user specified password. The seed is saved to a location that defaults to
-`$HOME/.clef/masterseed.json`. The `seed` itself is a blob of bytes.
+When the `signer` is started it generates a seed that is locked with a user specified password. The seed is saved to a location that defaults to `$HOME/.clef/masterseed.json`. The `seed` itself is a blob of bytes.
 
 The `signer` uses the `seed` to:
 
@@ -147,56 +114,28 @@ The `signer` uses the `seed` to:
   * `$HOME/.clef/790046d38025/credentials.json`
 * Generate the encryption password for the config and credentials files.
 
-`config.json` stores the hashes of any attested rulesets. `credentials.json`
-stores encrypted account passwords. The masterseed is required to decrypt
-these files. The decrypted account passwords can then be used to decrypt keyfiles.
+`config.json` stores the hashes of any attested rulesets. `credentials.json` stores encrypted account passwords. The masterseed is required to decrypt these files. The decrypted account passwords can then be used to decrypt keyfiles.
 
 ## Security
 
 ### The Javascript VM
-The downside of the very flexible rule implementation included in Clef is
-that the `signer` binary needs to contain a Javascript engine. This is an
-additional attack surface. The only viable attack is for an adversary to 
-somehow extract cryptographic keys from memory during the Javascript VM execution.
-The hash-based rule attestation condition means the actual Javascript code 
-executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler
-attack would be to surreptitiously insert an attested "always-approve" rule 
-instead of attempting to exploit the Javascript virtual machine. The Javascript
-engine is quite simple to implement and there are currently no known security
-vulnerabilities, not have there been any security problems identified for the
+The downside of the very flexible rule implementation included in Clef is that the `signer` binary needs to contain a Javascript engine. This is an additional attack surface. The only viable attack is for an adversary to somehow extract cryptographic keys from memory during the Javascript VM execution. The hash-based rule attestation condition means the actual Javascript code executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler attack would be to surreptitiously insert an attested "always-approve" rule instead of attempting to exploit the Javascript virtual machine. The Javascript engine is quite simple to implement and there are currently no known security vulnerabilities, not have there been any security problems identified for the
 similar Javascript VM implemented in Geth.
 
 ### Writing rules
 
-Since the user has complete freedom to write custom rules, it is plausible that those rules
-could create unintended security vulnerabilities. This can only really be protected by 
-coding very carefully and trying to test rulesets (e.g. on a private testnet) before 
+Since the user has complete freedom to write custom rules, it is plausible that those rules could create unintended security vulnerabilities. This can only really be protected by coding very carefully and trying to test rulesets (e.g. on a private testnet) before 
 implementing them on a public network.
 
-Javascript is very flexible but also easy to write incorrectly. For example, users
-might assume that javascript can handle large integers natively rather than explicitly
-using `bigInt`. This is an error commonly encountered in the Ethereum context when 
-users attempt to multiply `gas` by `gasCost`.
+Javascript is very flexible but also easy to write incorrectly. For example, users might assume that javascript can handle large integers natively rather than explicitly using `bigInt`. This is an error commonly encountered in the Ethereum context when users attempt to multiply `gas` by `gasCost`.
 
-It’s unclear whether any other language would be more secure - there is alwas the possibility
-of implementing an insecure rule.
-
-### File security
-
+It’s unclear whether any other language would be more secure - there is alwas the possibility of implementing an insecure rule.
 
 ### Credential security
 
-Clef implements a secure, encrypted vault for storing sensitive data. This vault is
-encrypted using a `masterseed` which the user is responsible for storing and backing
-up safely and securely. Since this `masterseed` is used to decrypt the secure vault, 
-and its security is not handled by Clef, it could represent a security vulnerability
-if the user does not implement best practise in keeping it safe.
+Clef implements a secure, encrypted vault for storing sensitive data. This vault is encrypted using a `masterseed` which the user is responsible for storing and backing up safely and securely. Since this `masterseed` is used to decrypt the secure vault, and its security is not handled by Clef, it could represent a security vulnerability if the user does not implement best practise in keeping it safe.
 
-The same is also true for keys. Keys are not stored by Clef, they are only accessed
-using account passwords that Clef does store in its vault. The keys themselves are stored
-in an external `keystore` whose security is the responsibility of the user. If the
-keys are compromised, the account is not safe irrespective of the security benefits
-derived from Clef.
+The same is also true for keys. Keys are not stored by Clef, they are only accessed using account passwords that Clef does store in its vault. The keys themselves are stored in an external `keystore` whose security is the responsibility of the user. If the keys are compromised, the account is not safe irrespective of the security benefits derived from Clef.
 
 ## Ruleset examples
 
@@ -316,9 +255,4 @@ function OnApprovedTx(resp) {
 
 ## Summary
 
-Rules are sets of conditions encoded in Javascript files that enable certain actions to 
-be auto-approved by Clef. This page outlined the implementation details and security 
-considerations that will help to build suitrable ruleset files. See the 
-[Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
-
-
+Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
