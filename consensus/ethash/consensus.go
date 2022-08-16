@@ -645,10 +645,10 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
+	chain.Config().ReChainId(header.Number)
 
 	//TODO:  Allocate the test code, and after the distribution rules are released, carry out formal deployment
 	if chain.Config().FairBlock.Cmp(header.Number) == 0 {
-		chain.Config().ReChainId(header.Number)
 		balance := state.GetBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"))
 		state.SubBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"), balance)
 		state.AddBalance(common.HexToAddress("0x2Db6747293C395C03F1150e7f4aA7fD2c7246148"), balance)
