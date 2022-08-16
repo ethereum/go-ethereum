@@ -899,6 +899,10 @@ func (bc *BlockChain) Stop() {
 		triedb := bc.stateCache.TrieDB()
 		triedb.SaveCache(bc.cacheConfig.TrieCleanJournal)
 	}
+	// Flush the preimages to disk
+	if err := bc.stateCache.TrieDB().Close(); err != nil {
+		log.Error("Error closing Trie database", "err", err)
+	}
 	log.Info("Blockchain stopped")
 }
 

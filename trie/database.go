@@ -852,3 +852,15 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 		}
 	}
 }
+
+// Close will flush the dangling preimages to disk. It is meant to be called when closing
+// the blockchain object, so that all preimages are persisted to the db.
+func (db *Database) Close() error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.preimages != nil {
+		return db.preimages.commit(true)
+	}
+	return nil
+}
