@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -59,7 +60,7 @@ func newTxJournal(path string) *txJournal {
 func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		// Skip the parsing if the journal file doesn't exist at all
 		return nil
 	}
