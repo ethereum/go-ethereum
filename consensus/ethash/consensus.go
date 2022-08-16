@@ -712,22 +712,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = ConstantinopleBlockReward
 	}
 
-	if config.IsFair(header.Number) {
-		MaxInt := big.NewInt(1<<63 - 2)
-		Difficulty := new(big.Int).Div(header.Difficulty, big.NewInt(100))
-		S0 := MaxInt.Div(MaxInt, Difficulty)
-		S := float64(S0.Uint64() / 100)
-		reward_table := [9]*big.Int{big.NewInt(10000000000000000), big.NewInt(258750000000000000), big.NewInt(507500000000000000), big.NewInt(756250000000000000), big.NewInt(1005000000000000000), big.NewInt(1253750000000000000), big.NewInt(1502500000000000000), big.NewInt(1751250000000000000), big.NewInt(2000000000000000000)}
-		if S <= 2 {
-			blockReward = big.NewInt(10000000000000000)
-		} else if S >= 10 {
-			blockReward = big.NewInt(2000000000000000000)
-		} else {
-			k := int(S - 2)
-			blockReward = reward_table[k]
-		}
-	}
-
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
 
