@@ -262,6 +262,11 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 		rawdb.WriteCanonicalHash(db, hash, n)
 		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
 
+		if n == 0 {
+			rawdb.WriteChainConfig(db, hash, params.AllEthashProtocolChanges)
+		}
+		rawdb.WriteHeadHeaderHash(db, hash)
+
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
 			rawdb.WriteBody(db, hash, n, block.Body())
