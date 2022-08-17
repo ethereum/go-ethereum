@@ -853,14 +853,15 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 	}
 }
 
-// CommitPreimages will flush the dangling preimages to disk. It is meant to be called when closing
-// the blockchain object, so that all preimages are persisted to the db.
+// CommitPreimages flushes the dangling preimages to disk. It is meant to be
+// called when closing the blockchain object, so that preimages are persisted
+// to the database.
 func (db *Database) CommitPreimages() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	if db.preimages != nil {
-		return db.preimages.commit(true)
+	if db.preimages == nil {
+		return nil
 	}
-	return nil
+	return db.preimages.commit(true)
 }
