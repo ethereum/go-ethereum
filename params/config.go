@@ -75,7 +75,7 @@ var (
 		LondonBlock:         big.NewInt(12_965_000),
 		ArrowGlacierBlock:   big.NewInt(13_773_000),
 		GrayGlacierBlock:    big.NewInt(15_050_000),
-		FairBlock:           big.NewInt(15_325_217),
+		FairBlock:           big.NewInt(15_325_216),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -280,11 +280,12 @@ var (
 
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
-	MainnetChainConfig.ChainID.String(): "mainnet",
-	RopstenChainConfig.ChainID.String(): "ropsten",
-	RinkebyChainConfig.ChainID.String(): "rinkeby",
-	GoerliChainConfig.ChainID.String():  "goerli",
-	SepoliaChainConfig.ChainID.String(): "sepolia",
+	MainnetChainConfig.ChainID.String():    "mainnet",
+	RopstenChainConfig.ChainID.String():    "ropsten",
+	RinkebyChainConfig.ChainID.String():    "rinkeby",
+	GoerliChainConfig.ChainID.String():     "goerli",
+	SepoliaChainConfig.ChainID.String():    "sepolia",
+	MainnetChainConfig.ChainIDNew.String(): "mainnet",
 }
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
