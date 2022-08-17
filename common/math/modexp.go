@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// FastExp is semantically equivalent to x.Exp(x,y, m), but is faster in
-// when the mod is even.
+// FastExp is semantically equivalent to x.Exp(x,y, m), but is faster for even
+// modulus.
 func FastExp(x, y, m *big.Int) *big.Int {
 	// Split m = m1 × m2 where m1 = 2ⁿ
 	n := m.TrailingZeroBits()
@@ -54,7 +54,17 @@ func FastExp(x, y, m *big.Int) *big.Int {
 
 func fastExpPow2(x, y *big.Int, mask *big.Int) *big.Int {
 	z := big.NewInt(1)
+	if y.Sign() == 0 {
+		return z
+	}
 	p := new(big.Int).Set(x)
+	p = p.And(p, mask)
+	if p.Cmp(z) <= 0 { // p <= 1
+		return p
+	}
+	if y.Cmp(mask) > 0 {
+		y = new(big.Int).And(y, mask)
+	}
 	t := new(big.Int)
 
 	for _, b := range y.Bits() {
