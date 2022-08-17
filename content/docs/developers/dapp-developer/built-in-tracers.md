@@ -1,12 +1,10 @@
 ---
 title: Built-in tracers
-sort_key: C
+description: Explanation of the tracers that come bundled in Geth as part of the tracing API.
 ---
 
 Geth comes bundled with a choice of tracers ready for usage through the [tracing API](/docs/rpc/ns-debug). Some of them are implemented natively in Go, and others in JS. In this page a summary of each of these will be outlined. They have to be specified by name when sending a request. The only exception is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods and cannot be specified by name.
 
-* TOC
-{:toc}
 
 ## Struct logger
 

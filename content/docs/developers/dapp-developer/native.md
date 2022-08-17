@@ -1,30 +1,17 @@
 ---
 title: Go API
-sort_key: C
+description: Introduction to the Go packages that allow Geth to be used in Go native applications.
 ---
 
-Ethereum was originally conceptualized to be the base layer for [Web3][web3-link], providing 
-the backbone for a new generation of decentralized, permissionless and censorship resistant 
-applications called [dapps][dapp-link]. The first step towards this vision was the development 
-of clients providing an RPC interface into the peer-to-peer protocols. This allowed users to 
-transact between accounts and interact with smart contracts using command line tools. 
-Geth was one of the original clients to provide this type of gateway to the Ethereum network.
+Ethereum was originally conceptualized to be the base layer for [Web3](https://ethereum.org/en/web3/), providing the backbone for a new generation of decentralized, permissionless and censorship resistant applications called [dapps](https://ethereum.org/en/glossary/#dapp). The first step towards this vision was the development of clients providing an RPC interface into the peer-to-peer protocols. This allowed users to transact between accounts and interact with smart contracts using command line tools. Geth was one of the original clients to provide this type of gateway to the Ethereum network.
 
-Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients, and
-client functions were built into websites built using the time-tested HTML/CSS/JS stack. 
-However, to support the most diverse, complex dapps, developers require programmatic access to client
-functions through an API. This opens up client technologies as re-usable, composable units that 
-can be applied in creative ways by a global community of developers.
+Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients, and client functions were built into websites built using the time-tested HTML/CSS/JS stack. However, to support the most diverse, complex dapps, developers require programmatic access to client functions through an API. This opens up client technologies as re-usable, composable units that can be applied in creative ways by a global community of developers.
 
-To support this, Geth ships official Go packages that can be embedded into third party 
-desktop and server applications. There is also a [mobile API](/docs/dapp/mobile) that can be 
-used to embed Geth into mobile applications.
+To support this, Geth ships official Go packages that can be embedded into third party desktop and server applications. There is also a [mobile API](/content/docs/developers/dapp-developer/mobile.md) that can be used to embed Geth into mobile applications.
 
 This page provides a high-level overview of the Go API.
 
-*Note, this guide will assume some familiarity with Go development. It does not cover general topics 
-about Go project layouts, import paths or any other standard methodologies. If you are new to Go, 
-consider reading [Getting Started with Go][go-guide] first.*
+*Note, this guide will assume some familiarity with Go development. It does not cover general topics about Go project layouts, import paths or any other standard methodologies. If you are new to Go, consider reading [Getting Started with Go](https://github.com/golang/go/wiki#getting-started-with-go) first.*
 
 ## Overview
 
@@ -34,25 +21,17 @@ Geth's reusable Go libraries focus on three main usage areas:
 - Remote node interfacing via different transports
 - Contract interactions through auto-generated bindings
 
-The libraries are updated synchronously with the Geth Github repository. 
-The Go libraries can be viewed in full at [Go Packages][go-pkg-link].
+The libraries are updated synchronously with the Geth Github repository. The Go libraries can be viewed in full at [Go Packages](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
 
-Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in 
-a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource
-([available here][peter-slides]) and the talk itself can be viewed by clicking
-the image below (it is also archived on [IPFS][ipfs-link]).
+Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource ([available here](https://ethereum.karalabe.com/talks/2016-devcon.html)) and the talk itself can be viewed by clicking the image below (it is also archived on [IPFS](https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR)).
 
-[![Peter's Devcon2 talk](/static/images/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
+[![Peter's Devcon2 talk](/assets/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
 ## Go packages
 
-The `go-ethereum` library is distributed as a collection of standard Go packages straight from go-ethereum's
-GitHub repository. The packages can be used directly via the official Go toolkit, without needing any 
-third party tools.
+The `go-ethereum` library is distributed as a collection of standard Go packages straight from go-ethereum's GitHub repository. The packages can be used directly via the official Go toolkit, without needing any third party tools.
 
-The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with all packages residing
-underneath. Although there are [lots of them][go-ethereum-dir] most developers will only care about 
-a limited subset.
+The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with all packages residing underneath. Although there are [lots of them](https://pkg.go.dev/github.com/ethereum/go-ethereum/#section-directories) most developers will only care about a limited subset.
 
 All the Geth packages can be downloaded using:
 
@@ -60,23 +39,18 @@ All the Geth packages can be downloaded using:
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
-More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/dapp/native-bindings)
-and [Go Account Management](/docs/dapp/native-accounts) pages.
+More Go API support for dapp developers can be found on the [Go Contract Bindings](/content/docs/developers/dapp-developer/native-bindings.md) and [Go Account Management](/docs/dapp/native-accounts) pages.
 
 
 ## Tutorial
 
-This section includes some basic usage examples for the `ethclient` and `gethclient` packages available as 
-part of the Go API. The `ethclient` package provides a client that implements the full Ethereum JSON-RPC API, 
-whereas `gethclient` offers the Geth-specific API. 
+This section includes some basic usage examples for the `ethclient` and `gethclient` packages available as part of the Go API. The `ethclient` package provides a client that implements the full Ethereum JSON-RPC API, whereas `gethclient` offers the Geth-specific API. 
 
 ### Instantiating a client
 
-The client is an instance of the `Client` struct which has associated functions that wrap requests to the Ethereum 
-or Geth RPC API endpoints.
+The client is an instance of the `Client` struct which has associated functions that wrap requests to the Ethereum or Geth RPC API endpoints.
 
-A client is instantiated by passing a raw url or path to an ipc file to the client's `Dial` function. In the following 
-code snippet the path to the ipc file for a local Geth node is provided to `ethclient.Dial()`.
+A client is instantiated by passing a raw url or path to an ipc file to the client's `Dial` function. In the following code snippet the path to the ipc file for a local Geth node is provided to `ethclient.Dial()`.
 
 ```go
 // create instance of ethclient and assign to cl
@@ -89,13 +63,9 @@ _ = cl
 
 ### Interacting with the client
 
-The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function
-`BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to
-`eth_sendTransaction`. The full list of client methods can be found [here][ethclient-pkg].
+The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function `BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to `eth_sendTransaction`. The full list of client methods can be found [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client).
 
-Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can
-be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be 
-created using `Context.Background()`. 
+Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be created using `Context.Background()`. 
 
 ### Querying client for data
 
@@ -137,12 +107,8 @@ if err != nil {
 
 ### Sending a transaction
 
-Sending a transaction is achieved using the `SendTransaction()` function. `SendTransaction` takes an instance of
-`context.Context` as its leading argument and a signed transaction as its second argument. The signed transaction
-must be generated in advance. Building the signed transaction is a multi-stage
-process that requires first generating a key pair if none exists already, retrieving some chain data and defining sender and recipient
-addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction
-can then be passed to `SendTransaction`. 
+Sending a transaction is achieved using the `SendTransaction()` function. `SendTransaction` takes an instance of `context.Context` as its leading argument and a signed transaction as its second argument. The signed transaction must be generated in advance. Building the signed transaction is a multi-stage process that requires first generating a key pair if none exists already, retrieving some chain data and defining sender and recipient
+addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction can then be passed to `SendTransaction`. 
 
 The example below assumes the following key pair has already been generated:
 
@@ -152,8 +118,7 @@ SK   = "0xaf5ead4413ff4b78bc94191a2926ae9ccbec86ce099d65aaf469e9eb1a0fa87f"
 ADDR = "0x6177843db3138ae69679A54b95cf345ED759450d"
 ```
 
-The secret key and address can be used to send a transaction. In the example below 1 ETH is sent from the
-address `ADDR` to an arbitrary recipient.
+The secret key and address can be used to send a transaction. In the example below 1 ETH is sent from the address `ADDR` to an arbitrary recipient.
 
 ```go
 import (
@@ -210,8 +175,7 @@ func sendTransaction(cl *ethclient.Client) error {
 
 ### gethclient
 
-An instance of `gethclient` can be used in exactly the same way as `ethclient`. However, `gethclient` 
-includes Geth-specific API methods. These additional methods are:
+An instance of `gethclient` can be used in exactly the same way as `ethclient`. However, `gethclient` includes Geth-specific API methods. These additional methods are:
 
 ```shell
 CallContract()
@@ -223,27 +187,13 @@ MemStats()
 SetHead()
 SubscribePendingTransactions()
 ```
-*Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that 
-the `gethclient` version includes an `overrides` argument.*
+*Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument.*
 
-Details relating to these endpoints can be found at [pkg.go.dev][go-api-docs] or the Geth [Github][ethclient-link]. 
-The code snippets in this tutorial were adapted from a more more in-depth set of examples available on 
-[Github][web3go-link]. 
+Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [Github](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [Github](https://github.com/MariusVanDerWijden/web3go). 
 
 
 ## Summary
 
-There are a wide variety of Go APIs available for dapp developers that abstract away the complexity of interacting with Ethereum
-using a set of composable, reusable functions provided by Geth.
+There are a wide variety of Go APIs available for dapp developers that abstract away the complexity of interacting with Ethereum using a set of composable, reusable functions provided by Geth.
 
-[go-guide]: https://github.com/golang/go/wiki#getting-started-with-go
-[peter-slides]: https://ethereum.karalabe.com/talks/2016-devcon.html
-[go-ethereum-dir]: https://pkg.go.dev/github.com/ethereum/go-ethereum/#section-directories
-[ethclient-pkg]:https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client
-[go-pkg-link]: https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories
-[ipfs-link]: https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR
-[dapp-link]: https://ethereum.org/en/glossary/#dapp
-[web3-link]: https://ethereum.org/en/web3/
-[ethclient-link]: https://github.com/ethereum/go-ethereum/tree/master/ethclient
-[go-api-docs]:https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient
-[web3go-link]:https://github.com/MariusVanDerWijden/web3go
+
