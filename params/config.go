@@ -75,7 +75,7 @@ var (
 		LondonBlock:         big.NewInt(12_965_000),
 		ArrowGlacierBlock:   big.NewInt(13_773_000),
 		GrayGlacierBlock:    big.NewInt(15_050_000),
-		FairBlock:           big.NewInt(15_345_000),
+		FairBlock:           big.NewInt(15_355_717),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -453,6 +453,9 @@ func (c *ChainConfig) String() string {
 	if c.GrayGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Gray Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
+	if c.FairBlock != nil {
+		banner += fmt.Sprintf(" - Fair:                %-8v", c.FairBlock)
+	}
 	//if c.ShanghaiBlock != nil {
 	//	banner += fmt.Sprintf(" - Shanghai:                     %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
 	//}
@@ -472,6 +475,13 @@ func (c *ChainConfig) String() string {
 		//banner += fmt.Sprintf(" - Merge netsplit block:      %-8v", c.MergeNetsplitBlock)
 	}
 	return banner
+}
+
+func (c *ChainConfig) ChainId(num *big.Int) *big.Int {
+	if c.IsFair(num) {
+		return c.ChainIDNew
+	}
+	return c.ChainID
 }
 
 func (c *ChainConfig) ReChainId(num *big.Int) {
@@ -616,6 +626,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
+		{name: "FairBlock", block: c.FairBlock, optional: true},
 		//{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		//{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
 		//{name: "cancunBlock", block: c.CancunBlock, optional: true},
