@@ -367,6 +367,13 @@ func LoadCliqueConfig(db ethdb.Database, genesis *Genesis) (*params.CliqueConfig
 		if genesis.Config == nil {
 			return nil, errGenesisNoConfig
 		}
+		// If the canonical genesis header is present, but the chain
+		// config is missing(initialize the empty leveldb with an
+		// external ancient chain segment), ensure the provided genesis
+		// is matched.
+		if stored != (common.Hash{}) && genesis.ToBlock().Hash() != stored {
+			return nil, &GenesisMismatchError{stored, genesis.ToBlock().Hash()}
+		}
 		return genesis.Config.Clique, nil
 	}
 	// There is no stored chain config and no new config provided,
