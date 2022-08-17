@@ -1,19 +1,19 @@
 ---
 title: Issue Handling Workflow
-sort_key: B
+description: Instructions for managing Github issues
 ---
 
-### (Draft proposal)
+### Draft proposal
 
-Keep the number of open issues under 820
+* Keep the number of open issues under 820
 
-Keep the ratio of open issues per all issues under 13%
+* Keep the ratio of open issues per all issues under 13%
 
-Have 50 issues labelled [help wanted](https://github.com/ethereum/go-ethereum/labels/help%20wanted) and 50 [good first issue](https://github.com/ethereum/go-ethereum/labels/good%20first%20issue).
+* Have 50 issues labelled [help wanted](https://github.com/ethereum/go-ethereum/labels/help%20wanted) and 50 [good first issue](https://github.com/ethereum/go-ethereum/labels/good%20first%20issue).
 
-Use structured labels of the form `<category>:<label>` or if need be `<category>:<main>/<sub>`, for example `area: plugins/foobuzzer`.
+* Use structured labels of the form `<category>:<label>` or if need be `<category>:<main>/<sub>`, for example `area: plugins/foobuzzer`.
 
-Use the following labels. Areas and statuses depend on the application and workflow.
+* Use the following labels. Areas and statuses depend on the application and workflow.
 - area
     - `area: android`
     - `area: clef`
@@ -46,12 +46,15 @@ It's ok to not set a due date for a milestone, but once you release it, close it
 Optionally, use a project board to collect issues of a larger effort that has an end state and overarches multiple releases.
 
 ## Workflow
-We have a weekly or bi-weekly triage meeting. Issues are preselected by [labelling them "status:triage" and sorted the oldest ones first](https://github.com/ethereum/go-ethereum/issues?q=is%3Aopen+is%3Aissue+label%3Astatus%3Atriage+sort%3Acreated-asc). This is when we go through the new issues and do one of the following
+
+The Geth core team hold a weekly or bi-weekly triage meeting. Issues are preselected by [labelling them "status:triage" and sorted the oldest ones first](https://github.com/ethereum/go-ethereum/issues?q=is%3Aopen+is%3Aissue+label%3Astatus%3Atriage+sort%3Acreated-asc). This is when the team goes through the new issues and do one of the following
+
 1. Close it.
-1. Assign it to "Coming soon" milestone which doesn't have an end date.
-1. Move it to the "Future" milestone.
-1. Change its status to "Need:\<what-is-needed\>".
+2. Assign it to "Coming soon" milestone which doesn't have an end date.
+3. Move it to the "Future" milestone.
+4. Change its status to "Need:\<what-is-needed\>".
 
 Optional further activities:
+
 * Label the issue with the appropriate area/component.
 * Add a section to the FAQ or add a wiki page. Link to it from the issue.

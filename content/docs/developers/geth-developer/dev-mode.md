@@ -1,6 +1,6 @@
 ---
 title: Developer mode
-sort_key: B
+description: Instructions for setting up Geth in developer mode
 ---
 
 It is often convenient for developers to work in an environment where changes to client or application software can be deployed and tested rapidly and without putting real-world users or assets at risk. For this purpose, Geth has a `--dev` flag that spins up Geth in "developer mode". This creates a single-node Ethereum test network with no connections to any external peers. It exists solely on the local machine. Starting Geth in developer mode does the following:

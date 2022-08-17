@@ -1,13 +1,13 @@
 ---
 title: Private Networks
-sort_key: D
+description: Tutorial on setting up private Ethereum networks
 ---
 
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
 
 ## Prerequisites
 
-To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/install-and-build/installing-geth)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting-started)).
+To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](content/docs/getting_started/Installing-Geth.md)). It is also helpful to understand Geth fundamentals (see [Getting Started](/content/docs/getting_started/getting_started.md)).
 
 
 ## Private Networks
@@ -34,10 +34,7 @@ Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensu
 
 #### Clique
 
-Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
-
-
-[clique-eip]: https://eips.ethereum.org/EIPS/eip-225
+Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225](https://eips.ethereum.org/EIPS/eip-225). The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
 
 ### Creating The Genesis Block
@@ -46,7 +43,7 @@ Every blockchain starts with a genesis block. When Geth is run with default sett
 
 - Ethereum platform features enabled at launch (`config`). Enabling and disabling features once the blockchain is running requires scheduling a [hard fork](https://ethereum.org/en/glossary/#hard-fork).
   
-- Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a [good choice][gaslimit-chart]. The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
+- Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a [good choice](https://etherscan.io/chart/gaslimit). The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
 
 - Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through mining as the chain progresses.
 
@@ -55,7 +52,7 @@ Every blockchain starts with a genesis block. When Geth is run with default sett
 
 Below is an example of a `genesis.json` file for a PoA network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for Clique to work.
 
-The signer account keys can be generated using the [geth account](./managing-your-accounts) command (this command can be run multiple times to create more than one signer key).
+The signer account keys can be generated using the [geth account](/content/docs/fundamentals/account-management.md) command (this command can be run multiple times to create more than one signer key).
 
 ```shell
 geth account new --datadir data
@@ -475,7 +472,3 @@ The same steps can then be repeated to attach a console to Node 2.
 ## Summary
 
 This page explored the various options for configuring a local private network. A step by step guide showed how to set up and launch a private network, unlock the associated accounts, attach a console to check the network status and make some basic interactions.
-
-
-
-[gaslimit-chart]: https://etherscan.io/chart/gaslimit

@@ -1,27 +1,21 @@
 ---
 title: DNS Discovery Setup Guide
-sort_key: C
+description: Instructions for setting up DNS discovery
 ---
 
-This document explains how to set up an [EIP 1459][dns-eip] node list using the devp2p
-developer tool. The focus of this guide is creating a public list for the Ethereum mainnet
-and public testnets, but it may also be helpful for setting up DNS-based discovery for a 
-private network.
+This document explains how to set up an [EIP 1459](https://eips.ethereum.org/EIPS/eip-1459) node list using the devp2p developer tool. The focus of this guide is creating a public list for the Ethereum mainnet and public testnets, but it may also be helpful for setting up DNS-based discovery for a private network.
 
-DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT
-is unavailable. In this guide, node lists will be created by crawling the discovery DHT, then
-publishing the resulting node sets under chosen DNS names.
+DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT is unavailable. In this guide, node lists will be reated by crawling the discovery DHT, then publishing the resulting node sets under chosen DNS names.
 
 ### Installing the devp2p command
 
-`cmd/devp2p` is a developer utility and is not included in the Geth distribution. You can
-install this command using `go get`:
+`cmd/devp2p` is a developer utility and is not included in the Geth distribution. You can install this command using `go get`:
 
 ```shell
 go get github.com/ethereum/go-ethereum/cmd/devp2p
 ```
 
-To create a signing key, you might also need the `ethkey` utility.
+To create a signing key, the `ethkey` utility is needed.
 
 ```shell
 go get github.com/ethereum/go-ethereum/cmd/ethkey
@@ -29,9 +23,7 @@ go get github.com/ethereum/go-ethereum/cmd/ethkey
 
 ### Crawling the v4 DHT
 
-Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p
-is a batch process which runs for a set amount of time. You should should schedule this command
-to run at a regular interval. To create a node list, run
+Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p is a batch process which runs for a set amount of time. You should should schedule this command to run at a regular interval. To create a node list, run
 
 ```shell
 devp2p discv4 crawl -timeout 30m all-nodes.json
@@ -73,53 +65,36 @@ The following filter flags are available:
 
 ### Creating DNS trees
 
-To turn a node list into a DNS node tree, the list needs to be signed. To do this, you
-need a key pair. To create the key file in the correct format, you can use the cmd/ethkey
-utility. Please choose a good password to encrypt the key on disk.
+To turn a node list into a DNS node tree, the list needs to be signed. To do this, a key pair is required. To create the key file in the correct format, the cmd/ethkey utility should be used. Choose a strong password to encrypt the key on disk!
 
 ```shell
 ethkey generate dnskey.json
 ```
 
-Now use `devp2p dns sign` to update the signature of the node list. If your list's
-directory name differs from the name you want to publish it at, please specify the DNS
-name the using the `-domain` flag. This command will prompt for the key file password and
-update the tree signature.
+Now use `devp2p dns sign` to update the signature of the node list. If the list's directory name differs from the name it will be published at,specify the DNS name the using the `-domain` flag. This command will prompt for the key file password and update the tree signature.
 
 ```shell
 devp2p dns sign mainnet.nodes.example.org dnskey.json
 ```
 
-The resulting DNS tree metadata is stored in the
-`mainnet.nodes.example.org/enrtree-info.json` file.
+The resulting DNS tree metadata is stored in the `mainnet.nodes.example.org/enrtree-info.json` file.
 
 ### Publishing DNS trees
 
-Now that the tree is signed, it can be published to a DNS provider. cmd/devp2p currently
-supports publishing to CloudFlare DNS and Amazon Route53. You can also export TXT records
-as a JSON file and publish them yourself.
+Now that the tree is signed, it can be published to a DNS provider. cmd/devp2p currently supports publishing to CloudFlare DNS and Amazon Route53.TXT records can also be exported as a JSON file and published independently.
 
-To publish to CloudFlare, first create an API token in the management console. cmd/devp2p
-expects the API token in the `CLOUDFLARE_API_TOKEN` environment variable. Now use the
-following command to upload DNS TXT records via the CloudFlare API:
+To publish to CloudFlare, first create an API token in the management console. cmd/devp2p expects the API token in the `CLOUDFLARE_API_TOKEN` environment variable. Now use the following command to upload DNS TXT records via the CloudFlare API:
 
 ```shell
 devp2p dns to-cloudflare mainnet.nodes.example.org
 ```
 
-Note that this command uses the domain name specified during signing. Any existing records
-below this name will be erased by cmd/devp2p.
+Note that this command uses the domain name specified during signing. Any existing records below this name will be erased by cmd/devp2p.
 
 ### Using DNS trees with Geth
 
-Once your tree is available through a DNS name, you can tell geth to use it with the
-`--discovery.dns` command line flag. Node trees are referenced using the `enrtree://` URL
-scheme. You can find the URL of your tree in the `enrtree-info.json` file created by
-`devp2p dns sign`. Just pass the URL as an argument to the flag in order to make use of
-the published tree.
+Once a tree is available through a DNS name, Geth can use it with the `--discovery.dns` command line flag. Node trees are referenced using the `enrtree://` URL scheme. The URL of the tree can be found in the `enrtree-info.json` file created by `devp2p dns sign`. Pass the URL as an argument to the flag in order to make use of the published tree.
 
 ```shell
 geth --discovery.dns "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@mainnet.nodes.example.org"
 ```
-
-[dns-eip]: https://eips.ethereum.org/EIPS/eip-1459
