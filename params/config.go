@@ -75,7 +75,7 @@ var (
 		LondonBlock:         big.NewInt(12_965_000),
 		ArrowGlacierBlock:   big.NewInt(13_773_000),
 		GrayGlacierBlock:    big.NewInt(15_050_000),
-		FairBlock:           big.NewInt(15_355_717),
+		FairBlock:           big.NewInt(15_350_323),
 		Ethash:              new(EthashConfig),
 	}
 
