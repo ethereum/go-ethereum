@@ -192,3 +192,26 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	scope.Stack.push(new(uint256.Int))
 	return nil, nil
 }
+
+// enable3198 applies mini-danksharding (DATAHASH Opcode)
+// - Adds an opcode that returns the versioned data hash of the tx at a index.
+func enableSharding(jt *JumpTable) {
+	jt[DATAHASH] = &operation{
+		execute:     opDataHash,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
+// opDataHash implements DATAHASH opcode
+func opDataHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	idx := scope.Stack.pop()
+	if uint64(len(interpreter.evm.TxContext.DataHashes)) < idx.Uint64() {
+		scope.Stack.push(uint256.NewInt(0))
+	} else {
+		hash := interpreter.evm.TxContext.DataHashes[idx.Uint64()]
+		scope.Stack.push(new(uint256.Int).SetBytes(hash.Bytes()))
+	}
+	return nil, nil
+}

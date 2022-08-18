@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/protolambda/ztyp/view"
 )
 
 // So we can deterministically seed different blockchains
@@ -3865,3 +3866,88 @@ func TestCanonicalHashMarker(t *testing.T) {
 		}
 	}
 }
+
+// TestDataBlobTxs tests the following:
+//
+// 1. Writes data hash from transaction to storage.
+func TestDataBlobTxs(t *testing.T) {
+	var (
+		one = common.Hash{1}
+		two = common.Hash{2}
+		aa  = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec   = &Genesis{
+			Config: params.AllEthashProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				// The address 0xAAAA writes dataHashes[1] to storage slot 0x0.
+				aa: {
+					Code: []byte{
+						byte(vm.PUSH1),
+						byte(0x1),
+						byte(vm.DATAHASH),
+						byte(vm.PUSH1),
+						byte(0x0),
+						byte(vm.SSTORE),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.ShardingForkBlock = common.Big0
+	genesis := gspec.MustCommit(db)
+	signer := types.LatestSigner(gspec.Config)
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		msg := types.BlobTxMessage{
+			Nonce: 0,
+			Gas:   500000,
+		}
+		msg.To.Address = (*types.AddressSSZ)(&aa)
+		msg.ChainID.SetFromBig((*big.Int)(gspec.Config.ChainID))
+		msg.Nonce = view.Uint64View(0)
+		msg.GasFeeCap.SetFromBig(newGwei(5))
+		msg.GasTipCap.SetFromBig(big.NewInt(2))
+		msg.BlobVersionedHashes = []common.Hash{one, two}
+		txdata := &types.SignedBlobTx{Message: msg}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+
+	// 1. Check that the storage slot is set to dataHashes[1].
+	actual := state.GetState(aa, common.Hash{0})
+	if actual != two {
+		t.Fatalf("incorrect data hash written to state (want: %s, got: %s)", two, actual)
+	}
+}
+

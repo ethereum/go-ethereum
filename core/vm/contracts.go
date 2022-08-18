@@ -22,13 +22,19 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/protolambda/go-kzg/bls"
+
+	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -104,11 +110,25 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
+var PrecompiledContractsDanksharding = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):  &ecrecover{},
+	common.BytesToAddress([]byte{2}):  &sha256hash{},
+	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):  &dataCopy{},
+	common.BytesToAddress([]byte{5}):  &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{20}): &pointEvaluation{},
+}
+
 var (
-	PrecompiledAddressesBerlin    []common.Address
-	PrecompiledAddressesIstanbul  []common.Address
-	PrecompiledAddressesByzantium []common.Address
-	PrecompiledAddressesHomestead []common.Address
+	PrecompiledAddressesDanksharding []common.Address
+	PrecompiledAddressesBerlin       []common.Address
+	PrecompiledAddressesIstanbul     []common.Address
+	PrecompiledAddressesByzantium    []common.Address
+	PrecompiledAddressesHomestead    []common.Address
 )
 
 func init() {
@@ -124,11 +144,16 @@ func init() {
 	for k := range PrecompiledContractsBerlin {
 		PrecompiledAddressesBerlin = append(PrecompiledAddressesBerlin, k)
 	}
+	for k := range PrecompiledContractsDanksharding {
+		PrecompiledAddressesDanksharding = append(PrecompiledAddressesDanksharding, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsSharding:
+		return PrecompiledAddressesDanksharding
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
 	case rules.IsIstanbul:
@@ -1040,4 +1065,76 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 
 	// Encode the G2 point to 256 bytes
 	return g.EncodePoint(r), nil
+}
+
+// pointEvaluation implements the EIP-4844 point evaluation precompile
+// to check if a value is part of a blob at a specific point with a KZG proof.
+type pointEvaluation struct{}
+
+var (
+	errPointEvaluationInputLength           = errors.New("invalid input length")
+	errPointEvaluationInvalidVersionedHash  = errors.New("invalid versioned hash")
+	errPointEvaluationInvalidX              = errors.New("invalid evaluation point")
+	errPointEvaluationInvalidY              = errors.New("invalid expected output")
+	errPointEvaluationInvalidKzg            = errors.New("invalid data kzg")
+	errPointEvaluationInvalidProof          = errors.New("invalid proof")
+	errPointEvaluationMismatchVersionedHash = errors.New("mismatched versioned hash")
+	errPointEvaluationBadProof              = errors.New("bad proof")
+)
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
+	return params.PointEvaluationGas
+}
+
+func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
+	if len(input) != 192 {
+		return nil, errPointEvaluationInputLength
+	}
+
+	var versionedHash common.Hash
+	copy(versionedHash[:], input[:32])
+	// XXX Should we version check the hash?
+	if versionedHash[0] != params.BlobCommitmentVersionKZG {
+		return nil, errPointEvaluationInvalidVersionedHash
+	}
+
+	var x bls.Fr
+	var data [32]byte
+	copy(data[:], input[32:64])
+	ok := bls.FrFrom32(&x, data)
+	if !ok {
+		return nil, errPointEvaluationInvalidX
+	}
+
+	var y bls.Fr
+	copy(data[:], input[64:96])
+	ok = bls.FrFrom32(&y, data)
+	if !ok {
+		return nil, errPointEvaluationInvalidY
+	}
+
+	var commitment types.KZGCommitment
+	copy(commitment[:], input[96:144])
+	if commitment.ComputeVersionedHash() != versionedHash {
+		return nil, errPointEvaluationMismatchVersionedHash
+	}
+
+	parsedCommitment, err := commitment.Point()
+	if err != nil {
+		return nil, errPointEvaluationInvalidKzg
+	}
+
+	var proof types.KZGCommitment
+	copy(proof[:], input[144:192])
+	parsedProof, err := proof.Point()
+	if err != nil {
+		return nil, errPointEvaluationInvalidProof
+	}
+
+	if !kzg.VerifyKzgProof(parsedCommitment, &x, &y, parsedProof) {
+		return nil, errPointEvaluationBadProof
+	}
+
+	return []byte{}, nil
 }

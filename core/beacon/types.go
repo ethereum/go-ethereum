@@ -17,6 +17,7 @@
 package beacon
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -38,6 +39,14 @@ type PayloadAttributesV1 struct {
 // JSON type overrides for PayloadAttributesV1.
 type payloadAttributesMarshaling struct {
 	Timestamp hexutil.Uint64
+}
+
+// BlobsBundleV1 holds the blobs of an execution payload, to be retrieved separately
+type BlobsBundleV1 struct {
+	BlockHash       common.Hash           `json:"blockHash"     gencodec:"required"`
+	KZGs            []types.KZGCommitment `json:"kzgs"      gencodec:"required"`
+	Blobs           []types.Blob          `json:"blobs"      gencodec:"required"`
+	AggregatedProof types.KZGProof        `json:"aggregatedProof" gencodec:"required"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
@@ -117,7 +126,7 @@ type ForkchoiceStateV1 struct {
 func encodeTransactions(txs []*types.Transaction) [][]byte {
 	var enc = make([][]byte, len(txs))
 	for i, tx := range txs {
-		enc[i], _ = tx.MarshalBinary()
+		enc[i], _ = tx.MarshalMinimal()
 	}
 	return enc
 }
@@ -126,7 +135,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var txs = make([]*types.Transaction, len(enc))
 	for i, encTx := range enc {
 		var tx types.Transaction
-		if err := tx.UnmarshalBinary(encTx); err != nil {
+		if err := tx.UnmarshalMinimal(encTx); err != nil {
 			return nil, fmt.Errorf("invalid transaction %d: %v", i, err)
 		}
 		txs[i] = &tx
@@ -181,6 +190,7 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 
 // BlockToExecutableData constructs the executableDataV1 structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
+// Additional blob contents are provided as well.
 func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 	return &ExecutableDataV1{
 		BlockHash:     block.Hash(),
@@ -198,4 +208,31 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
 	}
+}
+
+func BlockToBlobData(block *types.Block) (*BlobsBundleV1, error) {
+	blockHash := block.Hash()
+	blobsBundle := &BlobsBundleV1{BlockHash: blockHash}
+	for i, tx := range block.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
+			if len(versionedHashes) != len(kzgs) || len(versionedHashes) != len(blobs) {
+				return nil, fmt.Errorf("tx %d in block %s has inconsistent blobs (%d) / kzgs (%d)"+
+					" / versioned hashes (%d)", i, blockHash, len(blobs), len(kzgs), len(versionedHashes))
+			}
+			var zProof types.KZGProof
+			if zProof == aggProof {
+				return nil, errors.New("aggregated proof is not available in blobs")
+			}
+			blobsBundle.Blobs = append(blobsBundle.Blobs, blobs...)
+			blobsBundle.KZGs = append(blobsBundle.KZGs, kzgs...)
+		}
+	}
+
+	_, _, aggregatedProof, err := types.Blobs(blobsBundle.Blobs).ComputeCommitmentsAndAggregatedProof()
+	if err != nil {
+		return nil, err
+	}
+	blobsBundle.AggregatedProof = aggregatedProof
+	return blobsBundle, nil
 }

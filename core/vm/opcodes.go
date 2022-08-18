@@ -103,6 +103,7 @@ const (
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
 	BASEFEE     OpCode = 0x48
+	DATAHASH    OpCode = 0x49
 )
 
 // 0x50 range - 'storage' and execution.
@@ -285,6 +286,7 @@ var opCodeToString = map[OpCode]string{
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
 	BASEFEE:     "BASEFEE",
+	DATAHASH:    "DATAHASH",
 
 	// 0x50 range - 'storage' and execution.
 	POP: "POP",
@@ -436,6 +438,7 @@ var stringToOp = map[string]OpCode{
 	"CALLDATACOPY":   CALLDATACOPY,
 	"CHAINID":        CHAINID,
 	"BASEFEE":        BASEFEE,
+	"DATAHASH":       DATAHASH,
 	"DELEGATECALL":   DELEGATECALL,
 	"STATICCALL":     STATICCALL,
 	"CODESIZE":       CODESIZE,

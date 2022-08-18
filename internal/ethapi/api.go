@@ -1242,25 +1242,26 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash        *common.Hash      `json:"blockHash"`
-	BlockNumber      *hexutil.Big      `json:"blockNumber"`
-	From             common.Address    `json:"from"`
-	Gas              hexutil.Uint64    `json:"gas"`
-	GasPrice         *hexutil.Big      `json:"gasPrice"`
-	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	Hash             common.Hash       `json:"hash"`
-	Input            hexutil.Bytes     `json:"input"`
-	Nonce            hexutil.Uint64    `json:"nonce"`
-	To               *common.Address   `json:"to"`
-	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
-	Value            *hexutil.Big      `json:"value"`
-	Type             hexutil.Uint64    `json:"type"`
-	Accesses         *types.AccessList `json:"accessList,omitempty"`
-	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
-	V                *hexutil.Big      `json:"v"`
-	R                *hexutil.Big      `json:"r"`
-	S                *hexutil.Big      `json:"s"`
+	BlockHash           *common.Hash      `json:"blockHash"`
+	BlockNumber         *hexutil.Big      `json:"blockNumber"`
+	From                common.Address    `json:"from"`
+	Gas                 hexutil.Uint64    `json:"gas"`
+	GasPrice            *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash                common.Hash       `json:"hash"`
+	Input               hexutil.Bytes     `json:"input"`
+	Nonce               hexutil.Uint64    `json:"nonce"`
+	To                  *common.Address   `json:"to"`
+	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
+	Value               *hexutil.Big      `json:"value"`
+	Type                hexutil.Uint64    `json:"type"`
+	Accesses            *types.AccessList `json:"accessList,omitempty"`
+	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
+	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
+	V                   *hexutil.Big      `json:"v"`
+	R                   *hexutil.Big      `json:"r"`
+	S                   *hexutil.Big      `json:"s"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1270,18 +1271,19 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:     hexutil.Uint64(tx.Type()),
-		From:     from,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
+		Type:                hexutil.Uint64(tx.Type()),
+		From:                from,
+		Gas:                 hexutil.Uint64(tx.Gas()),
+		GasPrice:            (*hexutil.Big)(tx.GasPrice()),
+		Hash:                tx.Hash(),
+		Input:               hexutil.Bytes(tx.Data()),
+		Nonce:               hexutil.Uint64(tx.Nonce()),
+		To:                  tx.To(),
+		BlobVersionedHashes: tx.BlobVersionedHashes(),
+		Value:               (*hexutil.Big)(tx.Value()),
+		V:                   (*hexutil.Big)(v),
+		R:                   (*hexutil.Big)(r),
+		S:                   (*hexutil.Big)(s),
 	}
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash

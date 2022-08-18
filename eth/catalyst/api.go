@@ -316,11 +316,21 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.localBlocks.get(payloadID)
-	if data == nil {
+	block := api.localBlocks.get(payloadID)
+	if block == nil {
 		return nil, beacon.UnknownPayload
 	}
-	return data, nil
+	return beacon.BlockToExecutableData(block), nil
+}
+
+// GetBlobsBundleV1 returns a bundle of all blob and corresponding KZG commitments by payload id
+func (api *ConsensusAPI) GetBlobsBundleV1(payloadID beacon.PayloadID) (*beacon.BlobsBundleV1, error) {
+	log.Trace("Engine API request received", "method", "GetBlobsBundle")
+	block := api.localBlocks.get(payloadID)
+	if block == nil {
+		return nil, beacon.UnknownPayload
+	}
+	return beacon.BlockToBlobData(block)
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.

@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/protolambda/ztyp/view"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -52,6 +54,8 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	Blobs []types.Blob `json:"blobs,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -263,7 +267,12 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, true)
+	// The values don't matter. Only its cardinality is used for correct gas estimation
+	var fakeDataHashes []common.Hash
+	if args.Blobs != nil {
+		fakeDataHashes = make([]common.Hash, len(args.Blobs))
+	}
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, fakeDataHashes, true)
 	return msg, nil
 }
 
@@ -271,7 +280,34 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
+	var opts []types.TxOption
 	switch {
+	case args.Blobs != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		msg := types.BlobTxMessage{}
+		msg.To.Address = (*types.AddressSSZ)(args.To)
+		msg.ChainID.SetFromBig((*big.Int)(args.ChainID))
+		msg.Nonce = view.Uint64View(*args.Nonce)
+		msg.Gas = view.Uint64View(*args.Gas)
+		msg.GasFeeCap.SetFromBig((*big.Int)(args.MaxFeePerGas))
+		msg.GasTipCap.SetFromBig((*big.Int)(args.MaxPriorityFeePerGas))
+		msg.Value.SetFromBig((*big.Int)(args.Value))
+		msg.Data = args.data()
+		msg.AccessList = types.AccessListView(al)
+		commitments, versionedHashes, aggregatedProof, err := types.Blobs(args.Blobs).ComputeCommitmentsAndAggregatedProof()
+		// XXX if blobs are invalid we will omit the wrap-data (and an error will pop-up later)
+		if err == nil {
+			opts = append(opts, types.WithTxWrapData(&types.BlobTxWrapData{
+				BlobKzgs:           commitments,
+				Blobs:              args.Blobs,
+				KzgAggregatedProof: aggregatedProof,
+			}))
+			msg.BlobVersionedHashes = versionedHashes
+		}
+		data = &types.SignedBlobTx{Message: msg}
 	case args.MaxFeePerGas != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
@@ -309,7 +345,7 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			Data:     args.data(),
 		}
 	}
-	return types.NewTx(data)
+	return types.NewTx(data, opts...)
 }
 
 // ToTransaction converts the arguments to a transaction.

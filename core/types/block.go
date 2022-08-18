@@ -18,6 +18,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -178,10 +179,83 @@ type Block struct {
 	ReceivedFrom interface{}
 }
 
+// a view over a transaction to RLP encode/decode it the minimal way
+type minimalTx Transaction
+
+func (tx *minimalTx) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == rlp.List:
+		// It's a legacy transaction.
+		var inner LegacyTx
+		err := s.Decode(&inner)
+		if err == nil {
+			(*Transaction)(tx).setDecoded(&inner, int(rlp.ListSize(size)))
+		}
+		return err
+	case kind == rlp.String:
+		// It's an EIP-2718 typed TX envelope.
+		var b []byte
+		if b, err = s.Bytes(); err != nil {
+			return err
+		}
+		inner, err := (*Transaction)(tx).decodeTypedMinimal(b)
+		if err == nil {
+			(*Transaction)(tx).setDecoded(inner, len(b))
+		}
+		return err
+	default:
+		return rlp.ErrExpectedList
+	}
+}
+
+func (tx *minimalTx) EncodeRLP(w io.Writer) error {
+	if (*Transaction)(tx).Type() == LegacyTxType {
+		return rlp.Encode(w, tx.inner)
+	}
+	// It's an EIP-2718 typed TX envelope.
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	if err := (*Transaction)(tx).encodeTypedMinimal(buf); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
+}
+
+// a view over a regular transactions slice, to RLP decode/encode the transactions all the minimal way
+type extBlockTxs []*Transaction
+
+func (txs extBlockTxs) DecodeRLP(s *rlp.Stream) error {
+	// we need generics to do this nicely...
+	var out []*minimalTx
+	for i, tx := range txs {
+		out[i] = (*minimalTx)(tx)
+	}
+	if err := s.Decode(&out); err != nil {
+		return fmt.Errorf("failed to decode list of minimal txs: %v", err)
+	}
+	txs = make([]*Transaction, len(out))
+	for i, tx := range out {
+		txs[i] = (*Transaction)(tx)
+	}
+	return nil
+}
+
+func (txs extBlockTxs) EncodeRLP(w io.Writer) error {
+	out := make([]*minimalTx, len(txs))
+	for i, tx := range txs {
+		out[i] = (*minimalTx)(tx)
+	}
+	return rlp.Encode(w, &out)
+}
+
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header *Header
-	Txs    []*Transaction
+	Txs    extBlockTxs
 	Uncles []*Header
 }
 
@@ -258,7 +332,12 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, eb.Txs
+	for i, tx := range eb.Txs {
+		if tx.wrapData != nil {
+			return fmt.Errorf("transactions in blocks must not contain wrap-data, tx %d is bad", i)
+		}
+	}
+	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, []*Transaction(eb.Txs)
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
@@ -267,7 +346,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header: b.header,
-		Txs:    b.transactions,
+		Txs:    (extBlockTxs)(b.transactions),
 		Uncles: b.uncles,
 	})
 }

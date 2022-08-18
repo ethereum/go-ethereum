@@ -33,6 +33,7 @@ var (
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	KilnGenesisHash    = common.HexToHash("0x51c7fe41be669f69c45c33a56982cbde405313342d9e2b00d7c91a7b284dd4f8")
+	Eip4844GenesisHash = common.HexToHash("0x28389ca4b6b1a3e13068d70daf3dd23a6e4ded1056bb35014f0a2a2080c453a1")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -269,16 +270,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, false, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, false, new(EthashConfig), nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, false, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, nil, false, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, false, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, nil, nil, false, new(EthashConfig), nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int), false)
 )
 
@@ -371,6 +372,8 @@ type ChainConfig struct {
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
 	ShanghaiBlock       *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch block (nil = no fork, 0 = already on shanghai)
 	CancunBlock         *big.Int `json:"cancunBlock,omitempty"`         // Cancun switch block (nil = no fork, 0 = already on cancun)
+	MergeForkBlock      *big.Int `json:"mergeForkBlock,omitempty"`      // EIP-3675 (TheMerge) switch block (nil = no fork, 0 = already in merge proceedings)
+	ShardingForkBlock   *big.Int `json:"shardingForkBlock,omitempty"`   // Mini-Danksharding switch block (nil = no fork, 0 = already activated)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -464,10 +467,13 @@ func (c *ChainConfig) String() string {
 		banner += fmt.Sprintf(" - Gray Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
 	if c.ShanghaiBlock != nil {
-		banner += fmt.Sprintf(" - Shanghai:                     %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
+		banner += fmt.Sprintf(" - Shanghai:                    %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
 	}
 	if c.CancunBlock != nil {
 		banner += fmt.Sprintf(" - Cancun:                      %-8v\n", c.CancunBlock)
+	}
+	if c.ShardingForkBlock != nil {
+		banner += fmt.Sprintf(" - ShardingFork:                %-8v\n", c.ShardingForkBlock)
 	}
 	banner += "\n"
 
@@ -557,6 +563,11 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 	return isForked(c.GrayGlacierBlock, num)
 }
 
+// IsSharding returns whether num is either equal to the Mini-Danksharding fork block or greater.
+func (c *ChainConfig) IsSharding(num *big.Int) bool {
+	return isForked(c.ShardingForkBlock, num)
+}
+
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
 func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *big.Int) bool {
 	if c.TerminalTotalDifficulty == nil {
@@ -620,6 +631,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
 		{name: "cancunBlock", block: c.CancunBlock, optional: true},
+		{name: "mergeStartBlock", block: c.MergeForkBlock, optional: true},
+		{name: "shardingForkBlock", block: c.ShardingForkBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -704,6 +717,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.CancunBlock, newcfg.CancunBlock, head) {
 		return newCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
 	}
+	if isForkIncompatible(c.ShardingForkBlock, newcfg.ShardingForkBlock, head) {
+		return newCompatError("Mini-Danksharding fork block", c.ShardingForkBlock, newcfg.ShardingForkBlock)
+	}
 	return nil
 }
 
@@ -772,7 +788,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, isCancun                           bool
+	IsMerge, IsShanghai, isCancun, IsSharding               bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -796,5 +812,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(num),
 		isCancun:         c.IsCancun(num),
+		IsSharding:       c.IsSharding(num),
 	}
 }

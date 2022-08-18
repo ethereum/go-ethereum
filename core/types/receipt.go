@@ -214,7 +214,7 @@ func (r *Receipt) decodeTyped(b []byte) error {
 		return errShortTypedReceipt
 	}
 	switch b[0] {
-	case DynamicFeeTxType, AccessListTxType:
+	case BlobTxType, DynamicFeeTxType, AccessListTxType:
 		var data receiptRLP
 		err := rlp.DecodeBytes(b[1:], &data)
 		if err != nil {
@@ -288,6 +288,8 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 	w.ListEnd(outerList)
 	return w.Flush()
 }
+
+// TODO: might need additional decoding for SSZ receipt?
 
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
@@ -386,6 +388,9 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 		rlp.Encode(w, data)
 	case DynamicFeeTxType:
 		w.WriteByte(DynamicFeeTxType)
+		rlp.Encode(w, data)
+	case BlobTxType:
+		w.WriteByte(BlobTxType)
 		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for

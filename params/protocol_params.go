@@ -157,6 +157,17 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
+
+	// Fixed cost for sending a data blob.
+	BlobGas uint64 = 120000
+
+	MaxBlobsPerTx        = 2
+	MaxBlobsPerBlock     = 16
+	FieldElementsPerBlob = 4096 // each field element is 32 bytes
+
+	BlobVerificationGas      uint64 = 1800000
+	BlobCommitmentVersionKZG uint8  = 0x01
+	PointEvaluationGas       uint64 = 50000
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

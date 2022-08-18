@@ -65,6 +65,8 @@ var allPrecompiles = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{16}):   &bls12381Pairing{},
 	common.BytesToAddress([]byte{17}):   &bls12381MapG1{},
 	common.BytesToAddress([]byte{18}):   &bls12381MapG2{},
+	// TODO: this might change to 19 later. Avoiding precompile address changes / EIP collisions for now by keeping 20 (0x14).
+	common.BytesToAddress([]byte{20}): &pointEvaluation{},
 }
 
 // EIP-152 test vectors
@@ -391,3 +393,5 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 	}
 	benchmarkPrecompiled("0f", testcase, b)
 }
+
+func TestPrecompiledPointEvaluation(t *testing.T) { testJson("pointEvaluation", "14", t) }
