@@ -180,8 +180,8 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 	}
 	// Set maxFeePerGas if it is missing.
 	if args.MaxFeePerGas == nil {
-		// Set the max fee to be 2 times larger than the previous block's base fee.
-		// The additional slack allows the tx to not become invalidated if the base
+		// Set the max fee 2 times larger than the previous block's base fee.
+		// The additional slack keeps the tx validated if the base
 		// fee is rising.
 		val := new(big.Int).Add(
 			args.MaxPriorityFeePerGas.ToInt(),
@@ -189,7 +189,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 		)
 		args.MaxFeePerGas = (*hexutil.Big)(val)
 	}
-	// Both EIP-1559 fee parameters are now set; sanity check them.
+	// Both EIP-1559 fee parameters are set now; sanity check them.
 	if args.MaxFeePerGas.ToInt().Cmp(args.MaxPriorityFeePerGas.ToInt()) < 0 {
 		return fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", args.MaxFeePerGas, args.MaxPriorityFeePerGas)
 	}
@@ -225,7 +225,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		gasTipCap *big.Int
 	)
 	if baseFee == nil {
-		// If there's no basefee, then it must be a non-1559 execution
+		// If there's no basefee, it must be a non-1559 execution
 		gasPrice = new(big.Int)
 		if args.GasPrice != nil {
 			gasPrice = args.GasPrice.ToInt()
@@ -238,7 +238,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 			gasPrice = args.GasPrice.ToInt()
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
-			// User specified 1559 gas feilds (or none), use those
+			// User specified 1559 gas fields (or none), use them
 			gasFeeCap = new(big.Int)
 			if args.MaxFeePerGas != nil {
 				gasFeeCap = args.MaxFeePerGas.ToInt()
