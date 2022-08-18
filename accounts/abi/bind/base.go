@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-const basefeeWiggleMultiplier = 2; 
+const basefeeWiggleMultiplier = 2
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
