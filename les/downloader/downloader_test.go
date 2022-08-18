@@ -654,7 +654,7 @@ func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 }
 
 // Tests that synchronising against a much shorter but much heavier fork works
-// currently and is not dropped.
+// correctly and is not dropped.
 func TestHeavyForkedSync66Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FullSync) }
 func TestHeavyForkedSync66Fast(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FastSync) }
 func TestHeavyForkedSync66Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH66, LightSync) }
