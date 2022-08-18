@@ -43,11 +43,10 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 	}
 
 	if t.T == ArrayTy && val.Len() != t.Size {
-		vlen := val.Len()
 		if val.Kind() == reflect.Slice {
-			vlen = -1
+			return lengthErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), -1), val.Len())
 		}
-		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), vlen))
+		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
 	}
 
 	if t.Elem.T == SliceTy || t.Elem.T == ArrayTy {
@@ -83,4 +82,9 @@ func typeCheck(t Type, value reflect.Value) error {
 // typeErr returns a formatted type casting error.
 func typeErr(expected, got interface{}) error {
 	return fmt.Errorf("abi: cannot use %v as type %v as argument", got, expected)
+}
+
+// lengthErr returns a formatted slice length error.
+func lengthErr(expected, got interface{}, length int) error {
+	return fmt.Errorf("abi: cannot use %v of length %d as type %v", got, length, expected)
 }
