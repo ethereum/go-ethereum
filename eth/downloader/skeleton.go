@@ -338,7 +338,7 @@ func (s *skeleton) Sync(head *types.Header, force bool) error {
 // with a previously aborted run.
 func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// If we're continuing a previous merge interrupt, just access the existing
-	// old state without initing from disk.
+	// old state without initiating from disk.
 	if head == nil {
 		head = rawdb.ReadSkeletonHeader(s.db, s.progress.Subchains[0].Head)
 	} else {
