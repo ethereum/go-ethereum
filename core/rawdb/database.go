@@ -260,7 +260,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
 					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
 				}
-				// Block #1 is still in the database, we're allowed to init a new feezer
+				// Block #1 is still in the database, we're allowed to init a new freezer
 			}
 			// Otherwise, the head header is still the genesis, we're allowed to init a new
 			// freezer.

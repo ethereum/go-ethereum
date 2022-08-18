@@ -305,8 +305,8 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 	}
 	for len(nodeElements)+len(codeElements) > 0 {
 		// Sync only half of the scheduled nodes
-		var nodeProcessd int
-		var codeProcessd int
+		var nodeProcessed int
+		var codeProcessed int
 		if len(codeElements) > 0 {
 			codeResults := make([]trie.CodeSyncResult, len(codeElements)/2+1)
 			for i, element := range codeElements[:len(codeResults)] {
@@ -321,7 +321,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
-			codeProcessd = len(codeResults)
+			codeProcessed = len(codeResults)
 		}
 		if len(nodeElements) > 0 {
 			nodeResults := make([]trie.NodeSyncResult, len(nodeElements)/2+1)
@@ -337,7 +337,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 					t.Fatalf("failed to process result %v", err)
 				}
 			}
-			nodeProcessd = len(nodeResults)
+			nodeProcessed = len(nodeResults)
 		}
 		batch := dstDb.NewBatch()
 		if err := sched.Commit(batch); err != nil {
@@ -346,7 +346,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 		batch.Write()
 
 		paths, nodes, codes = sched.Missing(0)
-		nodeElements = nodeElements[nodeProcessd:]
+		nodeElements = nodeElements[nodeProcessed:]
 		for i := 0; i < len(paths); i++ {
 			nodeElements = append(nodeElements, stateElement{
 				path:     paths[i],
@@ -354,7 +354,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 				syncPath: trie.NewSyncPath([]byte(paths[i])),
 			})
 		}
-		codeElements = codeElements[codeProcessd:]
+		codeElements = codeElements[codeProcessed:]
 		for i := 0; i < len(codes); i++ {
 			codeElements = append(codeElements, stateElement{
 				code: codes[i],

@@ -771,7 +771,7 @@ func TestStateDBAccessList(t *testing.T) {
 				t.Fatalf("expected %x to be in access list", address)
 			}
 		}
-		// Check that only the expected addresses are present in the acesslist
+		// Check that only the expected addresses are present in the access list
 		for address := range state.accessList.addresses {
 			if _, exist := addressMap[address]; !exist {
 				t.Fatalf("extra address %x in access list", address)
