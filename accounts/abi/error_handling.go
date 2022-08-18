@@ -38,6 +38,10 @@ func formatSliceString(kind reflect.Kind, sliceSize int) string {
 // sliceTypeCheck checks that the given slice can by assigned to the reflection
 // type in t.
 func sliceTypeCheck(t Type, val reflect.Value) error {
+	if t.T == SliceTy {
+		t.Size = -1
+	}
+
 	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
 		return typeErr(formatSliceString(t.GetType().Kind(), t.Size), val.Type())
 	}

@@ -98,7 +98,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			// is a slice
 			typ.T = SliceTy
 			typ.Elem = &embeddedType
-			typ.Size = -1
 			typ.stringKind = embeddedType.stringKind + sliced
 		} else if len(intz) == 1 {
 			// is an array
