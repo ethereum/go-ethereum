@@ -98,6 +98,7 @@ func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, 
 		logRes.Memory = logRes.Memory[:0]
 		logRes.Storage = nil
 		logRes.ExtraData = nil
+		logRes.Error = ""
 		loggerResPool.Put(logRes)
 	})
 	return logRes
