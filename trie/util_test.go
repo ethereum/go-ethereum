@@ -26,7 +26,7 @@ import (
 // Tests if the trie diffs are tracked correctly.
 func TestTrieTracer(t *testing.T) {
 	db := NewDatabase(rawdb.NewMemoryDatabase())
-	trie, _ := New(common.Hash{}, db)
+	trie := NewEmpty(db)
 	trie.tracer = newTracer()
 
 	// Insert a batch of entries, all the nodes should be marked as inserted
@@ -67,8 +67,11 @@ func TestTrieTracer(t *testing.T) {
 		t.Fatalf("Unexpected deleted node tracked %d", len(deleted))
 	}
 
-	// Commit the changes
-	trie.Commit(nil)
+	// Commit the changes and re-create with new root
+	root, nodes, _ := trie.Commit(false)
+	db.Update(NewWithNodeSet(nodes))
+	trie, _ = New(common.Hash{}, root, db)
+	trie.tracer = newTracer()
 
 	// Delete all the elements, check deletion set
 	for _, val := range vals {
@@ -93,8 +96,7 @@ func TestTrieTracer(t *testing.T) {
 }
 
 func TestTrieTracerNoop(t *testing.T) {
-	db := NewDatabase(rawdb.NewMemoryDatabase())
-	trie, _ := New(common.Hash{}, db)
+	trie := NewEmpty(NewDatabase(rawdb.NewMemoryDatabase()))
 	trie.tracer = newTracer()
 
 	// Insert a batch of entries, all the nodes should be marked as inserted

@@ -655,8 +655,7 @@ func TestHeaderByNumber(t *testing.T) {
 	}
 	if latestBlockHeader == nil {
 		t.Errorf("received a nil block header")
-	}
-	if latestBlockHeader.Number.Uint64() != uint64(0) {
+	} else if latestBlockHeader.Number.Uint64() != uint64(0) {
 		t.Errorf("expected block header number 0, instead got %v", latestBlockHeader.Number.Uint64())
 	}
 
@@ -1334,5 +1333,44 @@ func TestForkResendTx(t *testing.T) {
 	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 2 {
 		t.Errorf("TX included in wrong block: %d", h)
+	}
+}
+
+func TestCommitReturnValue(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+
+	startBlockHeight := sim.blockchain.CurrentBlock().NumberU64()
+
+	// Test if Commit returns the correct block hash
+	h1 := sim.Commit()
+	if h1 != sim.blockchain.CurrentBlock().Hash() {
+		t.Error("Commit did not return the hash of the last block.")
+	}
+
+	// Create a block in the original chain (containing a transaction to force different block hashes)
+	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
+	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
+	sim.SendTransaction(context.Background(), tx)
+	h2 := sim.Commit()
+
+	// Create another block in the original chain
+	sim.Commit()
+
+	// Fork at the first bock
+	if err := sim.Fork(context.Background(), h1); err != nil {
+		t.Errorf("forking: %v", err)
+	}
+
+	// Test if Commit returns the correct block hash after the reorg
+	h2fork := sim.Commit()
+	if h2 == h2fork {
+		t.Error("The block in the fork and the original block are the same block!")
+	}
+	if sim.blockchain.GetHeader(h2fork, startBlockHeight+2) == nil {
+		t.Error("Could not retrieve the just created block (side-chain)")
 	}
 }

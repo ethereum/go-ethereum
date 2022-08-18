@@ -256,7 +256,7 @@ func (d *requestDistributor) queue(r *distReq) chan distPeer {
 	if r.reqOrder == 0 {
 		d.lastReqOrder++
 		r.reqOrder = d.lastReqOrder
-		r.waitForPeers = d.clock.Now() + mclock.AbsTime(waitForPeers)
+		r.waitForPeers = d.clock.Now().Add(waitForPeers)
 	}
 	// Assign the timestamp when the request is queued no matter it's
 	// a new one or re-queued one.

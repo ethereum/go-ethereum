@@ -104,6 +104,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		// Max bytes: 0. Expect to deliver one account.
 		{0, root, zero, ffHash, 1, firstKey, firstKey},
 	} {
+		tc := tc
 		if err := s.snapGetAccountRange(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\nfailed: %v", i, tc.root, tc.origin, tc.limit, tc.nBytes, err)
 		}
@@ -194,6 +195,7 @@ func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 			expSlots: 2,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetStorageRanges(t, &tc); err != nil {
 			t.Errorf("test %d \n root: %x\n range: %#x - %#x\n bytes: %d\n #accounts: %d\nfailed: %v",
 				i, tc.root, tc.origin, tc.limit, tc.nBytes, len(tc.accounts), err)
@@ -291,6 +293,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 			expHashes: 4,
 		},
 	} {
+		tc := tc
 		if err := s.snapGetByteCodes(t, &tc); err != nil {
 			t.Errorf("test %d \n bytes: %d\n #hashes: %d\nfailed: %v", i, tc.nBytes, len(tc.hashes), err)
 		}
@@ -347,7 +350,6 @@ func hexToCompact(hex []byte) []byte {
 
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-
 	key := common.FromHex("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 	// helper function to iterate the key, and generate the compact-encoded
 	// trie paths along the way.
@@ -436,6 +438,7 @@ func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
 			},
 		},
 	} {
+		tc := tc
 		if err := s.snapGetTrieNodes(t, &tc); err != nil {
 			t.Errorf("test %d \n #hashes %x\n root: %#x\n bytes: %d\nfailed: %v", i, len(tc.expHashes), tc.root, tc.nBytes, err)
 		}
@@ -492,10 +495,10 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	if len(hashes) > 0 {
 		if exp, got := tc.expFirst, res.Accounts[0].Hash; exp != got {
-			return fmt.Errorf("expected first account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected first account %#x, got %#x", exp, got)
 		}
 		if exp, got := tc.expLast, res.Accounts[len(res.Accounts)-1].Hash; exp != got {
-			return fmt.Errorf("expected last account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected last account %#x, got %#x", exp, got)
 		}
 	}
 	// Reconstruct a partial trie from the response and verify it

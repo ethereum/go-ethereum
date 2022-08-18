@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 func hexToNibbles(s string) []byte {
@@ -38,22 +37,17 @@ func hexToNibbles(s string) []byte {
 }
 
 func TestRequestSorting(t *testing.T) {
-
 	//   - Path 0x9  -> {0x19}
 	//   - Path 0x99 -> {0x0099}
 	//   - Path 0x01234567890123456789012345678901012345678901234567890123456789019  -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x19}
 	//   - Path 0x012345678901234567890123456789010123456789012345678901234567890199 -> {0x0123456789012345678901234567890101234567890123456789012345678901, 0x0099}
-	var f = func(path string) (trie.SyncPath, TrieNodePathSet, common.Hash) {
+	var f = func(path string) string {
 		data := hexToNibbles(path)
-		sp := trie.NewSyncPath(data)
-		tnps := TrieNodePathSet([][]byte(sp))
-		hash := common.Hash{}
-		return sp, tnps, hash
+		return string(data)
 	}
 	var (
-		hashes   []common.Hash
-		paths    []trie.SyncPath
-		pathsets []TrieNodePathSet
+		hashes []common.Hash
+		paths  []string
 	)
 	for _, x := range []string{
 		"0x9",
@@ -67,16 +61,14 @@ func TestRequestSorting(t *testing.T) {
 		"0x01234567890123456789012345678901012345678901234567890123456789010",
 		"0x01234567890123456789012345678901012345678901234567890123456789011",
 	} {
-		sp, tnps, hash := f(x)
-		hashes = append(hashes, hash)
-		paths = append(paths, sp)
-		pathsets = append(pathsets, tnps)
+		paths = append(paths, f(x))
+		hashes = append(hashes, common.Hash{})
 	}
-	_, paths, pathsets = sortByAccountPath(hashes, paths)
+	_, _, syncPaths, pathsets := sortByAccountPath(paths, hashes)
 	{
 		var b = new(bytes.Buffer)
-		for i := 0; i < len(paths); i++ {
-			fmt.Fprintf(b, "\n%d. paths %x", i, paths[i])
+		for i := 0; i < len(syncPaths); i++ {
+			fmt.Fprintf(b, "\n%d. paths %x", i, syncPaths[i])
 		}
 		want := `
 0. paths [0099]

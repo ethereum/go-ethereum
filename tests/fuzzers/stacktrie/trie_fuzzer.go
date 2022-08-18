@@ -25,7 +25,6 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
@@ -139,12 +138,11 @@ func Debug(data []byte) int {
 }
 
 func (f *fuzzer) fuzz() int {
-
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
 		spongeA     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		dbA         = trie.NewDatabase(spongeA)
-		trieA, _    = trie.New(common.Hash{}, dbA)
+		trieA       = trie.NewEmpty(dbA)
 		spongeB     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
 		trieB       = trie.NewStackTrie(spongeB)
 		vals        kvs
@@ -175,9 +173,12 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, _, err := trieA.Commit(nil)
+	rootA, nodes, err := trieA.Commit(false)
 	if err != nil {
 		panic(err)
+	}
+	if nodes != nil {
+		dbA.Update(trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false, nil)
@@ -186,7 +187,7 @@ func (f *fuzzer) fuzz() int {
 	sort.Sort(vals)
 	for _, kv := range vals {
 		if f.debugging {
-			fmt.Printf("{\"0x%x\" , \"0x%x\"} // stacktrie.Update\n", kv.k, kv.v)
+			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
 		trieB.Update(kv.k, kv.v)
 	}

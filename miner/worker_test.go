@@ -113,7 +113,6 @@ type testWorkerBackend struct {
 	db         ethdb.Database
 	txPool     *core.TxPool
 	chain      *core.BlockChain
-	testTxFeed event.Feed
 	genesis    *core.Genesis
 	uncleBlock *types.Block
 }

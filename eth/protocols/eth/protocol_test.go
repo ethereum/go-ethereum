@@ -115,12 +115,10 @@ func TestEth66EmptyMessages(t *testing.T) {
 			t.Errorf("test %d, type %T, have\n\t%x\nwant\n\t%x", i, msg, have, want)
 		}
 	}
-
 }
 
 // TestEth66Messages tests the encoding of all redefined eth66 messages
 func TestEth66Messages(t *testing.T) {
-
 	// Some basic structs used during testing
 	var (
 		header       *types.Header

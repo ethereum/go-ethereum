@@ -410,7 +410,6 @@ func TestFreeClientKickedOut(t *testing.T) {
 	clock.Run(5 * time.Minute)
 	for i := 0; i < 10; i++ {
 		connect(pool, newPoolTestPeer(i+10, kicked))
-
 	}
 	clock.Run(0)
 

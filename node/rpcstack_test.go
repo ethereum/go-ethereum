@@ -314,60 +314,105 @@ func TestJWT(t *testing.T) {
 		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
 		return ss
 	}
-	expOk := []string{
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 4})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
-			"iat": time.Now().Unix(),
-			"exp": time.Now().Unix() + 2,
-		})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
-			"iat": time.Now().Unix(),
-			"bar": "baz",
-		})),
-	}
-	expFail := []string{
-		// future
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 6})),
-		// stale
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 6})),
-		// wrong algo
-		fmt.Sprintf("Bearer %v", issueToken(secret, jwt.SigningMethodHS512, testClaim{"iat": time.Now().Unix() + 4})),
-		// expired
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix(), "exp": time.Now().Unix()})),
-		// missing mandatory iat
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{})),
-		// wrong secret
-		fmt.Sprintf("Bearer %v", issueToken([]byte("wrong"), nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken([]byte{}, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken(nil, nil, testClaim{"iat": time.Now().Unix()})),
-		// Various malformed syntax
-		fmt.Sprintf("%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-	}
 	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
 		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
 	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
 	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 
-	for i, token := range expOk {
+	expOk := []func() string{
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 4}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+				"iat": time.Now().Unix(),
+				"exp": time.Now().Unix() + 2,
+			}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
+				"iat": time.Now().Unix(),
+				"bar": "baz",
+			}))
+		},
+	}
+	for i, tokenFn := range expOk {
+		token := tokenFn()
 		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
 			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
 		}
+		token = tokenFn()
 		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
 			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
 		}
 	}
-	for i, token := range expFail {
+
+	expFail := []func() string{
+		// future
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 1}))
+		},
+		// stale
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - int64(jwtExpiryTimeout.Seconds()) - 1}))
+		},
+		// wrong algo
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, jwt.SigningMethodHS512, testClaim{"iat": time.Now().Unix() + 4}))
+		},
+		// expired
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix(), "exp": time.Now().Unix()}))
+		},
+		// missing mandatory iat
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{}))
+		},
+		//  wrong secret
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken([]byte("wrong"), nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken([]byte{}, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer %v", issueToken(nil, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		// Various malformed syntax
+		func() string {
+			return fmt.Sprintf("%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+		func() string {
+			return fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()}))
+		},
+	}
+	for i, tokenFn := range expFail {
+		token := tokenFn()
 		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
 			t.Errorf("tc %d-ws, token '%v': expected not to allow,  got ok", i, token)
 		}
+		token = tokenFn()
 		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 403 {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
