@@ -77,7 +77,7 @@ INFO [06-16|11:14:54.125] Persisted trie from memory database      nodes=1 size=
 INFO [06-16|11:14:54.125] Successfully wrote genesis state         database=lightchaindata hash=187412..4deb98
 ```
 
-At this point a Clique network exists with blocks that can be signed.
+At this point a Geth has been initiated with a genesis configuration.
 
 ## Prepping Clef
 
