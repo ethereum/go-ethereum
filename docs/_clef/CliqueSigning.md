@@ -81,12 +81,12 @@ At this point a Geth has been initiated with a genesis configuration.
 
 ## Prepping Clef
 
-In order to make use of Clef for signing:
+In order to make use of `clef` for signing:
 
-1. Ensure Clef knows the password for the keystore.
-2. Ensure Clef auto-approves clique signing requests.
+1. Ensure `clef` knows the password for the keystore.
+2. Ensure `clef` auto-approves clique signing requests.
 
-These two things are independent of each other. First of all, however, Clef must be initiated (for this example the password is `clefclefclef`)
+These two things are independent of each other. First of all, however, `clef` must be initiated (for this example the password is `clefclefclef`)
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn init
@@ -112,7 +112,7 @@ After this operation, `clef` has it's own vault where it can store secrets and a
 
 ## Storing passwords in `clef`
 
-With that done, Clef can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. Clef asks for the password, and it also asks for the Clef master-password, in order to update and store the new secrets inside Clef vault.
+With that done, `clef` can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. `clef` asks for the password, and it also asks for the master-password, in order to update and store the new secrets inside the vault.
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
@@ -130,7 +130,7 @@ At this point, if Clef is used as a sealer, each block would require manual appr
 
 ### Testing stored password
 
-To test that the stored password is correct and being properly handled by Clef, first start Clef:
+To test that the stored password is correct and being properly handled by Clef, first start `clef`:
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn
@@ -162,7 +162,7 @@ Approve? [y/N]:
 DEBUG[06-16|11:36:42.499] Served account_list                      reqid=2 duration=3.213768195s
 ```
 
-After this, Get will start asking Clef to sign things:
+After this, Geth will start asking `clef` to sign things:
 
 ```
 -------- Sign data request--------------
@@ -218,13 +218,13 @@ Password:
 INFO [06-16|13:49:00.298] Ruleset attestation updated              sha256=54aae496c3f0eda063a62c73ee284ca9fae3f43b401da847ef30ea30e85e35d1
 ```
 
-And Clef can be started, pointing out the `rules.js` file. 
+And `clef` can be started, pointing out the `rules.js` file. 
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
 ```
 
-Once Geth starts asking Clef to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
+Once Geth starts asking `clef` to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
 
 The actual data that gets passed to the js environment (and which the ruleset display in the terminal) looks as follows:
 ```json
@@ -273,7 +273,7 @@ To create an extremely trustless ruleset, the `raw_data` could be verified to en
   0000000000000000,
 ]
 ```
-However, `messages` could also be used. They do not come from the external caller, but are generated from the Clef internals: Clef parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
+However, `messages` could also be used. They do not come from the external caller, but are generated inernally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
 
 ```js
 function OnSignerStartup(info){}
@@ -308,7 +308,7 @@ Decrypt master seed of clef
 Password: 
 INFO [06-16|14:18:53.476] Ruleset attestation updated              sha256=7d5036d22d1cc66599e7050fb1877f4e48b89453678c38eea06e3525996c2379
 ```
-Run clef:
+Run `clef`:
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
@@ -318,7 +318,7 @@ Run Geth:
 ```sh
 $ geth  --datadir ./ddir --signer ./clef/clef.ipc --mine
 ```
-And Clef should now happily sign blocks:
+And `clef` should now happily sign blocks:
 
 ```terminal
 DEBUG[06-16|14:20:02.136] Served account_version                   reqid=1 duration="131.38µs"
@@ -415,7 +415,7 @@ clef --keystore ./ddir/keystore \
   --suppress-bootwarn --signersecret ./clefpw \
     attest  `sha256sum rules.js | cut -f1`
 ```
-The normal startup command for Clef:
+The normal startup command for `clef`:
 ```sh
 clef --keystore ./ddir/keystore \
     --configdir ./clef --chainid 15  \
