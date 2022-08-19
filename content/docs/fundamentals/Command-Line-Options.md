@@ -1,12 +1,10 @@
 ---
 title: Command-line Options
-sort_key: A
+description: A list of commands for Geth
 ---
 
-Geth is primarily controlled using the command line. Geth is started using the `geth` command. 
-Geth is stopped by pressing `ctrl-c`. There are then many combinations of commands that configure 
-precisely how geth will run. These commands are displayed below. The same information can be 
-obtained at any time from your Geth instance by running
+Geth is primarily controlled using the command line. Geth is started using the `geth` command. Geth is stopped by pressing `ctrl-c`. There are then many combinations of commands that configure precisely how geth will run. These commands are displayed below. The same information can be 
+obtained at any time from your Geth instance by running:
 
 ```sh
 geth --help

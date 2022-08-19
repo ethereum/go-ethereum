@@ -1,14 +1,11 @@
 ---
 title: Security
-root: ..
+description: A primer on Geth security best practice.
 ---
 
 ## Downloading Geth
 
-Download Geth using the links on our [Downloads](/downloads) page. The SHA256 hashes of the downloaded files 
-can be compared to ours to ensure precise consistency with our releases. This protects against malicious code being 
-inadvertently downloaded from an adversarial source. The same measures should also be taken to download trusted
-consensus client software.
+Download Geth using the links on our [Downloads](/downloads) page. The SHA256 hashes of the downloaded files can be compared to ours to ensure precise consistency with our releases. This protects against malicious code being inadvertently downloaded from an adversarial source. The same measures should also be taken to download trusted consensus client software.
 
 ## Networking security
 

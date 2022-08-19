@@ -1,30 +1,23 @@
 ---
 title: Backup & Restore
+description: How to backup and restore keyfiles and blockchain data
 ---
 
 **Keep secure backups of your keystore and password!**
 
 ## Data Directory
 
-All data relating to a specific Geth instance gets written inside a data directory.
-The default data directory locations are platform specific:
+All data relating to a specific Geth instance gets written inside a data directory. The default data directory locations are platform specific:
 
 * Mac: `~/Library/Ethereum`
 * Linux: `~/.ethereum`
 * Windows: `%LOCALAPPDATA%\Ethereum`
 
-Accounts are stored in the `keystore` subdirectory. The contents of this directories
-should be transportable between nodes, platforms, and client implementations.
+Accounts are stored in the `keystore` subdirectory. The contents of this directories should be transportable between nodes, platforms, and client implementations.
 
-To configure the location of the data directory, the `--datadir` parameter can be
-specified. See [CLI Options](../interface/command-line-options) for more details.
-There may exist multiple data directories for multiple networks (e.g. a separate directory
-for Ethereum Mainnet and the Goerli testnet). Each would have subdirectories for their
-blockchain data and keystore.
+To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](../interface/command-line-options) for more details. There may exist multiple data directories for multiple networks (e.g. a separate directory for Ethereum Mainnet and the Goerli testnet). Each would have subdirectories for their blockchain data and keystore.
 
-It is important to backup the files in the keystore securely. These files are encrypted
-using an account password. This needs to be securely backed up too. There is no way to
-decrypt the keys without the password!
+It is important to backup the files in the keystore securely. These files are encrypted using an account password. This needs to be securely backed up too. There is no way to decrypt the keys without the password!
 
 ## Cleanup
 
@@ -34,8 +27,7 @@ Geth's blockchain and state databases can be removed with:
 geth removedb
 ```
 
-This is useful for deleting an old chain and sync'ing to a new one. It only affects data
-directories that can be re-created on synchronisation and does not touch the keystore.
+This is useful for deleting an old chain and sync'ing to a new one. It only affects data directories that can be re-created on synchronisation and does not touch the keystore.
 
 ## Blockchain Import/Export
 
@@ -45,15 +37,13 @@ Export the blockchain in binary format with:
 geth export <filename>
 ```
 
-Or if you want to back up portions of the chain over time, a first and last block can be
-specified. For example, to back up the first epoch:
+Or if you want to back up portions of the chain over time, a first and last block can be specified. For example, to back up the first epoch:
 
 ```sh
 geth export <filename> 0 29999
 ```
 
-Note that when backing up a partial chain, the file will be appended rather than
-truncated.
+Note that when backing up a partial chain, the file will be appended rather than truncated.
 
 Import binary-format blockchain exports with:
 

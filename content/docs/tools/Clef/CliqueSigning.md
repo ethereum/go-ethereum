@@ -16,7 +16,7 @@ It is useful to have basic knowledge of private networks and Clef. These topics 
 
 ## Prepping a Clique network
 
-First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`):
+First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`)
 
 ```terminal
 $ geth account new --datadir ./ddir
@@ -75,16 +75,16 @@ INFO [06-16|11:14:54.125] Persisted trie from memory database      nodes=1 size=
 INFO [06-16|11:14:54.125] Successfully wrote genesis state         database=lightchaindata hash=187412..4deb98
 ```
 
-At this point a Clique network exists with blocks that can be signed.
+At this point a Geth has been initiated with a genesis configuration.
 
 ## Prepping Clef
 
-In order to make use of Clef for signing:
+In order to make use of `clef` for signing:
 
-1. Ensure Clef knows the password for the keystore.
-2. Ensure Clef auto-approves clique signing requests.
+1. Ensure `clef` knows the password for the keystore.
+2. Ensure `clef` auto-approves clique signing requests.
 
-These two things are independent of each other. First of all, however, Clef must be initiated (for this example the password is `clefclefclef`)
+These two things are independent of each other. First of all, however, `clef` must be initiated (for this example the password is `clefclefclef`)
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn init
@@ -110,7 +110,7 @@ After this operation, `clef` has it's own vault where it can store secrets and a
 
 ## Storing passwords in `clef`
 
-With that done, Clef can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. Clef asks for the password, and it also asks for the Clef master-password, in order to update and store the new secrets inside Clef vault.
+With that done, `clef` can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. `clef` asks for the password, and it also asks for the master-password, in order to update and store the new secrets inside the vault.
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
@@ -128,7 +128,7 @@ At this point, if Clef is used as a sealer, each block would require manual appr
 
 ### Testing stored password
 
-To test that the stored password is correct and being properly handled by Clef, first start Clef:
+To test that the stored password is correct and being properly handled by Clef, first start `clef`:
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn
@@ -160,13 +160,13 @@ Approve? [y/N]:
 DEBUG[06-16|11:36:42.499] Served account_list                      reqid=2 duration=3.213768195s
 ```
 
-After this, Get will start asking Clef to sign things:
+After this, Geth will start asking `clef` to sign things:
 
 ```
 -------- Sign data request--------------
 Account:  0x9CD932F670F7eDe5dE86F756A6D02548e5899f47 [chksum ok]
 messages:
-  Clique header [clique]: "clique header 1 [0x9b08fa3705e8b6e1b327d84f7936c21a3cb11810d9344dc4473f78f8da71e571]"
+  Clique header [clique]: "clique header 1 [0x9b08fa3705e8b6e1b327d84f7936c21a3cb11810d9344dc4473f78f8da71e571]"
 raw data:  
 	"\xf9\x02\x14\xa0\x18t\x12:\x91f\xa2\x90U\b\xf9\xac\xc02i\xffs\x9f\xf4\xc9⮷!\x0f\x16\xaa?#M똠\x1d\xccM\xe8\xde\xc7]z\xab\x85\xb5g\xb6\xcc\xd4\x1a\xd3\x12E\x1b\x94\x8at\x13\xf0\xa1B\xfd@ԓG\x94\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xa0]1%\n\xfc\xee'\xd0e\xce\xc7t\xcc\\?\t4v\x8f\x06\xcb\xf8\xa0P5\xfeN\xea\x0ff\xfe\x9c\xa0V\xe8\x1f\x17\x1b\xccU\xa6\xff\x83E\xe6\x92\xc0\xf8n[H\xe0\x1b\x99l\xad\xc0\x01b/\xb5\xe3c\xb4!\xa0V\xe8\x1f\x17\x1b\xccU\xa6\xff\x83E\xe6\x92\xc0\xf8n[H\xe0\x1b\x99l\xad\xc0\x01b/\xb5\xe3c\xb4!\xb9\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x01\x83z0\x83\x80\x84b\xaa\xf9\xaa\xa0\u0603\x01\n\x14\x84geth\x88go1.18.1\x85linux\x00\x00\x00\x00\x00\x00\x00\xa0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00\x00"
 data hash:  0x9589ed81e959db6330b3d70e5f8e426fb683d03512f203009f7e41fc70662d03
@@ -185,7 +185,6 @@ And indeed, after approving with `y`, the password is not required - the signed 
 ```terminal
 INFO [06-16|11:36:46.714] Successfully sealed new block            number=1 sealhash=9589ed..662d03 hash=bd20b9..af8b87 elapsed=4.214s
 ```
-
 This mode of operation offers quite a poor UX because each block to be sealed requires manual approval. That is fixed in the following section.
 
 ## Using rules to approve blocks
@@ -217,13 +216,13 @@ Password:
 INFO [06-16|13:49:00.298] Ruleset attestation updated              sha256=54aae496c3f0eda063a62c73ee284ca9fae3f43b401da847ef30ea30e85e35d1
 ```
 
-And Clef can be started, pointing out the `rules.js` file. 
+And `clef` can be started, pointing out the `rules.js` file. 
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
 ```
 
-Once Geth starts asking Clef to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
+Once Geth starts asking `clef` to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
 
 The actual data that gets passed to the js environment (and which the ruleset display in the terminal) looks as follows:
 ```json
@@ -272,7 +271,7 @@ To create an extremely trustless ruleset, the `raw_data` could be verified to en
   0000000000000000,
 ]
 ```
-However, `messages` could also be used. They do not come from the external caller, but are generated from the Clef internals: Clef parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
+However, `messages` could also be used. They do not come from the external caller, but are generated inernally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
 
 ```js
 function OnSignerStartup(info){}
@@ -307,7 +306,7 @@ Decrypt master seed of clef
 Password: 
 INFO [06-16|14:18:53.476] Ruleset attestation updated              sha256=7d5036d22d1cc66599e7050fb1877f4e48b89453678c38eea06e3525996c2379
 ```
-Run clef:
+Run `clef`:
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
@@ -317,7 +316,7 @@ Run Geth:
 ```sh
 $ geth  --datadir ./ddir --signer ./clef/clef.ipc --mine
 ```
-And Clef should now happily sign blocks:
+And `clef` should now happily sign blocks:
 
 ```terminal
 DEBUG[06-16|14:20:02.136] Served account_version                   reqid=1 duration="131.38µs"
@@ -334,7 +333,11 @@ DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 durat
 
 ## Refinements
 
-If an attacker finds the Clef "external" interface (which would only happen if you start it with `--http` enabled), they cannot sign arbitrary data or transactions. However, they could still make it sign e.g. 1000 versions of a certain block height, making the chain very unstable.
+If an attacker find the Clef "external" interface (which would only happen if you start it with `http` enabled), they
+- cannot make it sign arbitrary transactions,
+- cannot sign arbitrary data message,
+
+However, they could still make it sign e.g. 1000 versions of a certain block height, making the chain very unstable.
 
 It is possible for rule execution to be stateful (i.e. storing data). In this case, one could, for example, store what block heights have been sealed and reject sealing a particular block height twice. In other words, these rules could be used to build a miniature version of an execution layer slashing-db.
 
@@ -377,13 +380,12 @@ JS:>  number 46 latest 45
 INFO [06-16|22:26:44.313] Op approved 
 DEBUG[06-16|22:26:45.317] Served account_signData                  reqid=4 duration=1.010612774s
 ```
+This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
-This might be a bit over-the-top security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
 ## TLDR quick-version
 
 Creation and attestation is a one-off event:
-
 ```sh
 ## Create the rules-file
 cat << END > rules.js
@@ -411,7 +413,7 @@ clef --keystore ./ddir/keystore \
   --suppress-bootwarn --signersecret ./clefpw \
     attest  `sha256sum rules.js | cut -f1`
 ```
-The normal startup command for Clef:
+The normal startup command for `clef`:
 ```sh
 clef --keystore ./ddir/keystore \
     --configdir ./clef --chainid 15  \
