@@ -295,8 +295,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			otherreject int64
 		)
 		batch := txs[i:end]
-		errs := f.addTxs(batch)
-		for j, err := range errs {
+		for j, err := range f.addTxs(batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
@@ -324,18 +323,17 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		knownMeter.Mark(duplicate)
 		underpricedMeter.Mark(underpriced)
 		otherRejectMeter.Mark(otherreject)
+
 		// If 'other reject' is >25% of the deliveries in any batch, abort. Either we are
 		// out of sync with the chain or the peer is griefing us.
 		if otherreject > 128/4 {
-			delay = time.Millisecond * 200
+			delay = 200 * time.Millisecond
 			break
 		}
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:
-		if delay > 0 {
-			time.Sleep(delay)
-		}
+		time.Sleep(delay)
 		return nil
 	case <-f.quit:
 		return errTerminated
