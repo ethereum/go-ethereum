@@ -77,7 +77,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	}
 	if len(blob) != 0 {
 		if err := genesis.Alloc.UnmarshalJSON(blob); err != nil {
-			return nil, fmt.Errorf("could not unmartial genesis state json: %s", err)
+			return nil, fmt.Errorf("could not unmarshal genesis state json: %s", err)
 		}
 	}
 	genesis.Config = rawdb.ReadChainConfig(db, stored)
