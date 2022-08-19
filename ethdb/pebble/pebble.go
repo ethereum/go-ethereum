@@ -84,7 +84,7 @@ type Database struct {
 	writeDelayTime      int64     // total time spent in write stalls
 }
 
-func (d *Database) OnCompactionBegin(info pebble.CompactionInfo) {
+func (d *Database) onCompactionBegin(info pebble.CompactionInfo) {
 	if d.activeComp == 0 {
 		d.compStartTime = time.Now()
 	}
@@ -102,7 +102,7 @@ func (d *Database) OnCompactionBegin(info pebble.CompactionInfo) {
 	d.activeComp++
 }
 
-func (d *Database) OnCompactionEnd(info pebble.CompactionInfo) {
+func (d *Database) onCompactionEnd(info pebble.CompactionInfo) {
 	if d.activeComp == 1 {
 		atomic.AddInt64(&d.compTime, int64(time.Since(d.compStartTime)))
 	} else if d.activeComp == 0 {
@@ -112,15 +112,15 @@ func (d *Database) OnCompactionEnd(info pebble.CompactionInfo) {
 	d.activeComp--
 }
 
-func (d *Database) OnWriteStallBegin(b pebble.WriteStallBeginInfo) {
+func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
 }
 
-func (d *Database) OnWriteStallEnd() {
+func (d *Database) onWriteStallEnd() {
 	atomic.AddInt64(&d.writeDelayTime, int64(time.Since(d.writeDelayStartTime)))
 }
 
-// New returns a wrapped LevelDB object. The namespace is the prefix that the
+// New returns a wrapped pebble DB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
 	var pebbleDb *Database
@@ -136,16 +136,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 
 	eventListener := pebble.EventListener{
 		CompactionBegin: func(info pebble.CompactionInfo) {
-			pebbleDb.OnCompactionBegin(info)
+			pebbleDb.onCompactionBegin(info)
 		},
 		CompactionEnd: func(info pebble.CompactionInfo) {
-			pebbleDb.OnCompactionEnd(info)
+			pebbleDb.onCompactionEnd(info)
 		},
 		WriteStallBegin: func(info pebble.WriteStallBeginInfo) {
-			pebbleDb.OnWriteStallBegin(info)
+			pebbleDb.onWriteStallBegin(info)
 		},
 		WriteStallEnd: func() {
-			pebbleDb.OnWriteStallEnd()
+			pebbleDb.onWriteStallEnd()
 		},
 	}
 	// Open the db and recover any potential corruptions
@@ -161,7 +161,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		MemTableSize: cache * 1024 * 1024 / 4,
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
-		MaxConcurrentCompactions: func() int { return runtime.NumCPU()},
+		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
 		Levels: []pebble.LevelOptions{
