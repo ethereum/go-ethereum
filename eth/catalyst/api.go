@@ -539,7 +539,7 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) beacon.Pa
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
 }
 
-// heatbeat loops indefinitely, and checks if there have been beacon client updates
+// heartbeat loops indefinitely, and checks if there have been beacon client updates
 // received in the last while. If not - or if they but strange ones - it warns the
 // user that something might be off with their consensus node.
 //
@@ -649,7 +649,7 @@ func (api *ConsensusAPI) heartbeat() {
 					if eta == 0 {
 						log.Warn(message)
 					} else {
-						log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doens't handle days
+						log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doesn't handle days
 					}
 					offlineLogged = time.Now()
 				}

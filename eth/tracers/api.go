@@ -116,7 +116,7 @@ func (context *chainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
-// chainContext construts the context reader which is used by the evm for reading
+// chainContext constructs the context reader which is used by the evm for reading
 // the necessary chain context.
 func (api *API) chainContext(ctx context.Context) core.ChainContext {
 	return &chainContext{api: api, ctx: ctx}
@@ -202,10 +202,10 @@ type blockTraceTask struct {
 	statedb *state.StateDB   // Intermediate state prepped for tracing
 	block   *types.Block     // Block to trace the transactions from
 	rootref common.Hash      // Trie root reference held for this task
-	results []*txTraceResult // Trace results procudes by the task
+	results []*txTraceResult // Trace results produced by the task
 }
 
-// blockTraceResult represets the results of tracing a single block when an entire
+// blockTraceResult represents the results of tracing a single block when an entire
 // chain is being traced.
 type blockTraceResult struct {
 	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
@@ -563,7 +563,7 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
-// per transaction, dependent on the requestd tracer.
+// per transaction, dependent on the requested tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
@@ -707,7 +707,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		}
 	}
 	for i, tx := range block.Transactions() {
-		// Prepare the trasaction for un-traced execution
+		// Prepare the transaction for un-traced execution
 		var (
 			msg, _    = tx.AsMessage(signer, block.BaseFee())
 			txContext = core.NewEVMTxContext(msg)
