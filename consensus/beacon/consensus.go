@@ -114,8 +114,8 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		}
 	}
 
-	// All the headers have passed the transition point, use new rules.
 	if len(preHeaders) == 0 {
+		// All the headers are pos headers. Verify that the parent block reached total terminal difficulty.
 		if reached, _ := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
 			// TTD not reached for the first block, mark subsequent with invalid terminal block
 			results := make(chan error, len(headers))
