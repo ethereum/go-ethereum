@@ -123,7 +123,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testSetHead(t, client) },
 		}, {
 			"TestSubscribePendingTxHashes",
-			func(t *testing.T) { testSubscribePendingTransaction(t, client) },
+			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
 			"TestSubscribePendingTxs",
 			func(t *testing.T) { testSubscribeFullPendingTransactions(t, client) },
@@ -272,12 +272,12 @@ func testSetHead(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribePendingTransaction(t *testing.T, client *rpc.Client) {
+func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
 	ch := make(chan common.Hash)
-	ec.SubscribePendingTransaction(context.Background(), ch)
+	ec.SubscribePendingTransactions(context.Background(), ch)
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
