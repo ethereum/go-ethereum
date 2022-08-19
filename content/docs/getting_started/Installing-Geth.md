@@ -1,14 +1,10 @@
 ---
 title: Installing Geth
-sort_key: A
+description: Guide to installing Geth
 ---
 
-There are several ways to install Geth, including via a package manager, downloading a pre-built bundle, running as a docker container or building from downloaded source code. On this page the various installation options are explained for several major operating systems. Users prioritizing ease of installation should choose to use a package manager or prebuilt bundle. Users prioritizing customization should build from source. It is important to run the latest version of Geth because each release includes bugfixes and improvement over the previous versions. The stable releases are recommended for most users because they have been fully tested. A list of stable releases can be found [here][geth-releases]. Instructions for updating existing Geth installations are also provided in each section.
+There are several ways to install Geth, including via a package manager, downloading a pre-built bundle, running as a docker container or building from downloaded source code. On this page the various installation options are explained for several major operating systems. Users prioritizing ease of installation should choose to use a package manager or prebuilt bundle. Users prioritizing customization should build from source. It is important to run the latest version of Geth because each release includes bugfixes and improvement over the previous versions. The stable releases are recommended for most users because they have been fully tested. A list of stable releases can be found [here](https://github.com/ethereum/go-ethereum/releases). Instructions for updating existing Geth installations are also provided in each section.
 
-
-{:toc}
-
--   this will be removed by the toc
 
 ## Package managers
 
@@ -20,7 +16,7 @@ The easiest way to install go-ethereum is to use the Geth Homebrew tap. The firs
 brew -v
 ```
 
-If a version number is returned, then Homebrew is installed. If not, Homebrew can be installed by following the instructions [here][brew]. With Homebrew installed, the following commands add the Geth tap and install Geth:
+If a version number is returned, then Homebrew is installed. If not, Homebrew can be installed by following the instructions [here](https://brew.sh/). With Homebrew installed, the following commands add the Geth tap and install Geth:
 
 
 ```shell
@@ -34,7 +30,7 @@ The previous command installs the latest stable release. Developers that wish to
 brew install ethereum --devel
 ```
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
 
@@ -71,7 +67,7 @@ sudo apt-get update
 sudo apt-get install ethereum-unstable
 ```
 
-These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
@@ -87,7 +83,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### Windows
 
-The easiest way to install Geth is to download a pre-compiled binary from the [downloads][geth-dl] page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+The easiest way to install Geth is to download a pre-compiled binary from the [downloads](/content/downloads.md) page. The page provides an installer as well as a zip file containing the Geth source code. The install wizard offers the user the option to install Geth, or Geth and the developer tools. The installer adds `geth` to the system's `PATH` automatically. The zip file contains the command `.exe` files that can be run from the command prompt. The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation can be achieved by stopping the node, downloading and installing the latest version following the instructions above. When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
@@ -101,7 +97,7 @@ pkg install go-ethereum
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. 
 
-The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 
 Updating an existing Geth installation to the latest version can be achieved by stopping the node and running the following commands:
@@ -124,7 +120,7 @@ make install
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/local/bin/`. 
 
-The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 
 Updating an existing Geth installation can be achieved by stopping the node and running the following command:
@@ -137,7 +133,7 @@ When the node is started again, Geth will automatically use all the data from th
 
 ### Arch Linux via pacman
 
-The Geth package is available from the [community repo][geth-archlinux]. It can be installed by running:
+The Geth package is available from the [community repo](https://www.archlinux.org/packages/community/x86_64/geth/). It can be installed by running:
 
 ```shell
 pacman -S geth
@@ -145,7 +141,7 @@ pacman -S geth
 
 These commands install the core Geth software and the following developer tools: `clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`. The binaries for each of these tools are saved in `/usr/bin/`. 
 
-The full list of command line options can be viewed [here][geth-cl-options] or in the terminal by running `geth --help`.
+The full list of command line options can be viewed [here](/content/docs/fundamentals/Command-Line-Options.md) or in the terminal by running `geth --help`.
 
 Updating an existing Geth installation can be achieved by stopping the node and running the following command:
 
@@ -166,9 +162,9 @@ The following standalone bundles are available:
 -   32bit and 64bit archives (`.zip`) and installers (`.exe`) on Windows
 
 
-Some archives contain only Geth, while other archives containing Geth and the various developer tools (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`). More information about these executables is available at the [`README`][geth-readme-exe].
+Some archives contain only Geth, while other archives containing Geth and the various developer tools (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`). More information about these executables is available at the [`README`](https://github.com/ethereum/go-ethereum#executables).
 
-The standalone bundles can be downloaded from the [Geth Downloads][geth-dl] page. To update an existing installation, download and manually install the latest version.
+The standalone bundles can be downloaded from the [Geth Downloads](content/downloads.md) page. To update an existing installation, download and manually install the latest version.
 
 ## Docker container
 
@@ -216,7 +212,7 @@ docker run -it -p 30303:30303 ethereum/client-go
 
 ### Most Linux systems and macOS
 
-Geth is written in [Go][go], so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page][go-install] and necessary bundles can be downloaded from the [Go download page][go-dl].
+Geth is written in [Go](https://golang.org/), so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page](https://golang.org/doc/install) and necessary bundles can be downloaded from the [Go download page](https://golang.org/dl/).
 
 With Go installed, Geth can be downloaded into a `GOPATH` workspace via:
 
@@ -258,7 +254,7 @@ go get -u github.com/ethereum/go-ethereum
 
 ### Windows
 
-The Chocolatey package manager provides an easy way to install the required build tools. Chocolatey can be installed by following these [instructions][chocolatey]. Then, to install the build tool the following commands can be run in an Administrator command prompt:
+The Chocolatey package manager provides an easy way to install the required build tools. Chocolatey can be installed by following these [instructions](https://chocolatey.org). Then, to install the build tool the following commands can be run in an Administrator command prompt:
 
 
 ```
@@ -334,23 +330,9 @@ git pull
 make geth
 ```
 
-Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`) can be compiled by running `make all`. More information about these tools can be found [here][geth-readme-exe].
-
-Instructions for cross-compiling to another architecture are available in the [cross-compilation guide](./cross-compile).
+Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`) can be compiled by running `make all`. More information about these tools can be found [here](https://github.com/ethereum/go-ethereum#executables).
 
 To build a stable release, e.g. v1.9.21, the command `git checkout v1.9.21` retrieves that specific version. Executing that command before running `make geth` switches Geth to a stable branch.
 
-
-
-[brew]: https://brew.sh/
-[go]: https://golang.org/
-[go-dl]: https://golang.org/dl/
-[go-install]: https://golang.org/doc/install
-[chocolatey]: https://chocolatey.org
-[geth-releases]: https://github.com/ethereum/go-ethereum/releases
-[geth-readme-exe]: https://github.com/ethereum/go-ethereum#executables
-[geth-cl-options]: https://geth.ethereum.org/docs/interface/command-line-options
-[geth-archlinux]: https://www.archlinux.org/packages/community/x86_64/geth/
-[geth-dl]: ../../downloads/
 
 

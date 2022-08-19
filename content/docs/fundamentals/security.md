@@ -21,7 +21,7 @@ Account security comes down to keeping private keys and account passwords backed
 
 Geth has built-in account management tools that are sufficiently secure for most purposes. However, Clef is recommended as an external account management and signing tool. It can be run decoupled from Geth and can even be run on dedicated secure external hardware such as a VM or a secure USB drive. This is considered best practise because the user is required to manually review all actions that touch sensitive data, except where specific predefined rules are implemented. Signing is done locally to Clef rather than giving key access to a node.
 
-Geth allows account unlocking by passing account passwords at startup. This unlocks the account all the while that Geth is running. This is not allowed when `http` traffic is enabled, even with appropriate firewall setings. The combination of `http` and `-unlock` poses too much of a security risk because an attacker able to access the node over the exposed HTTP port would be able to make JSON-RPC requests to the node from the unlocked account, including sending funds to other addresses.
+Geth allows account unlocking by passing account passwords at startup. This unlocks the account all the while that Geth is running. This is not allowed when `http` traffic is enabled, even with appropriate firewall settings. The combination of `http` and `-unlock` poses too much of a security risk because an attacker able to access the node over the exposed HTTP port would be able to make JSON-RPC requests to the node from the unlocked account, including sending funds to other addresses.
 
 **back up your keystore and passwords safely and securely!**
 
