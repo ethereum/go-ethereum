@@ -609,7 +609,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 			// User specified the legacy gas field, convert to 1559 gas typing
 			call.GasFeeCap, call.GasTipCap = call.GasPrice, call.GasPrice
 		} else {
-			// User specified 1559 gas feilds (or none), use those
+			// User specified 1559 gas fields (or none), use those
 			if call.GasFeeCap == nil {
 				call.GasFeeCap = new(big.Int)
 			}
