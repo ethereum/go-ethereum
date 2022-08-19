@@ -20,10 +20,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -61,6 +64,10 @@ const (
 	// For non-archive nodes, this limit _will_ be overblown, as disk-backed tries
 	// will only be found every ~15K blocks or so.
 	defaultTracechainMemLimit = common.StorageSize(500 * 1024 * 1024)
+
+	defaultPath = string(".")
+
+	defaultIOFlag = false
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -170,6 +177,8 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+	Path    *string
+	IOFlag  *bool
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
@@ -567,18 +576,37 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
+
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
+
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
+
+	path := defaultPath
+	if config != nil && config.Path != nil {
+		path = *config.Path
+	}
+
+	ioflag := defaultIOFlag
+	if config != nil && config.IOFlag != nil {
+		ioflag = *config.IOFlag
+	}
+
 	statedb, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
+
+	// create and add empty mvHashMap in statedb as StateAtBlock does not have mvHashmap in it.
+	if ioflag {
+		statedb.AddEmptyMVHashMap()
+	}
+
 	// Execute all the transaction contained within the block concurrently
 	var (
 		signer  = types.MakeSigner(api.backend.ChainConfig(), block.Number())
@@ -615,10 +643,31 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			}
 		}()
 	}
+
+	var IOdump string
+
+	var RWstruct []state.DumpStruct
+
+	var london bool
+
+	if ioflag {
+		IOdump = "TransactionIndex, Incarnation, VersionTxIdx, VersionInc, Path, Operation\n"
+		RWstruct = []state.DumpStruct{}
+	}
 	// Feed the transactions into the tracers and return
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+
+	if ioflag {
+		london = api.backend.ChainConfig().IsLondon(block.Number())
+	}
+
 	for i, tx := range txs {
+		if ioflag {
+			// copy of statedb
+			statedb = statedb.Copy()
+		}
+
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
 
@@ -626,14 +675,73 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		statedb.Prepare(tx.Hash(), i)
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
-			failed = err
-			break
+
+		if !ioflag {
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
+				failed = err
+				break
+			}
+			// Finalize the state so any modifications are written to the trie
+			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+			statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+		} else {
+			coinbaseBalance := statedb.GetBalance(blockCtx.Coinbase)
+
+			result, err := core.ApplyMessageNoFeeBurnOrTip(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+
+			if err != nil {
+				failed = err
+				break
+			}
+
+			if london {
+				statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
+			}
+
+			statedb.AddBalance(blockCtx.Coinbase, result.FeeTipped)
+			output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
+			output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
+
+			// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
+			// add transfer log
+			core.AddFeeTransferLog(
+				statedb,
+
+				msg.From(),
+				blockCtx.Coinbase,
+
+				result.FeeTipped,
+				result.SenderInitBalance,
+				coinbaseBalance,
+				output1.Sub(output1, result.FeeTipped),
+				output2.Add(output2, result.FeeTipped),
+			)
+
+			// Finalize the state so any modifications are written to the trie
+			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+			statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+			statedb.FlushMVWriteSet()
+
+			structRead := statedb.GetReadMapDump()
+			structWrite := statedb.GetWriteMapDump()
+
+			RWstruct = append(RWstruct, structRead...)
+			RWstruct = append(RWstruct, structWrite...)
 		}
-		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
+	if ioflag {
+		for _, val := range RWstruct {
+			IOdump += fmt.Sprintf("%v , %v, %v , %v, ", val.TxIdx, val.TxInc, val.VerIdx, val.VerInc) + hex.EncodeToString(val.Path) + ", " + val.Op
+		}
+
+		// make sure that the file exists and write IOdump
+		err = ioutil.WriteFile(filepath.Join(path, "data.csv"), []byte(fmt.Sprint(IOdump)), 0600)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	close(jobs)
 	pend.Wait()
 

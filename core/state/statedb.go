@@ -353,6 +353,61 @@ func (sw *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 	}
 }
 
+type DumpStruct struct {
+	TxIdx  int
+	TxInc  int
+	VerIdx int
+	VerInc int
+	Path   []byte
+	Op     string
+}
+
+// get readMap Dump of format: "TxIdx, Inc, Path, Read"
+func (s *StateDB) GetReadMapDump() []DumpStruct {
+	readList := s.MVReadList()
+	res := make([]DumpStruct, 0, len(readList))
+
+	for _, val := range readList {
+		temp := &DumpStruct{
+			TxIdx:  s.txIndex,
+			TxInc:  s.incarnation,
+			VerIdx: val.V.TxnIndex,
+			VerInc: val.V.Incarnation,
+			Path:   val.Path,
+			Op:     "Read\n",
+		}
+		res = append(res, *temp)
+	}
+
+	return res
+}
+
+// get writeMap Dump of format: "TxIdx, Inc, Path, Write"
+func (s *StateDB) GetWriteMapDump() []DumpStruct {
+	writeList := s.MVReadList()
+	res := make([]DumpStruct, 0, len(writeList))
+
+	for _, val := range writeList {
+		temp := &DumpStruct{
+			TxIdx:  s.txIndex,
+			TxInc:  s.incarnation,
+			VerIdx: val.V.TxnIndex,
+			VerInc: val.V.Incarnation,
+			Path:   val.Path,
+			Op:     "Write\n",
+		}
+		res = append(res, *temp)
+	}
+
+	return res
+}
+
+// add empty MVHashMap to StateDB
+func (s *StateDB) AddEmptyMVHashMap() {
+	mvh := blockstm.MakeMVHashMap()
+	s.mvHashmap = mvh
+}
+
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.

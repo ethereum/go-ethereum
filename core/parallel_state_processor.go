@@ -230,7 +230,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 			}
 
 			statedb.AddBalance(task.blockContext.Coinbase, task.result.FeeTipped)
-			output1 := new(big.Int).SetBytes(task.result.senderInitBalance.Bytes())
+			output1 := new(big.Int).SetBytes(task.result.SenderInitBalance.Bytes())
 			output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
 			// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
@@ -242,7 +242,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				task.blockContext.Coinbase,
 
 				task.result.FeeTipped,
-				task.result.senderInitBalance,
+				task.result.SenderInitBalance,
 				coinbaseBalance,
 				output1.Sub(output1, task.result.FeeTipped),
 				output2.Add(output2, task.result.FeeTipped),
