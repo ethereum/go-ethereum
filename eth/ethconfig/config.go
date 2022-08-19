@@ -83,6 +83,7 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
+	FilterLogCacheSize:      32,
 	Miner: miner.Config{
 		GasCeil:  30000000,
 		GasPrice: big.NewInt(params.GWei),
@@ -170,6 +171,9 @@ type Config struct {
 	TrieTimeout             time.Duration
 	SnapshotCache           int
 	Preimages               bool
+
+	// This is the number of blocks for which logs will be cached in the filter system.
+	FilterLogCacheSize int
 
 	// Mining options
 	Miner miner.Config
