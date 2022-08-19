@@ -329,7 +329,7 @@ const (
 
 func hasPreexistingDb(path string) dbType {
 	_, err := os.Stat(path + "/CURRENT")
-	if os.IsNotExist(err) || err != nil {
+	if err != nil {
 		return Nonexistent
 	}
 	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
@@ -342,46 +342,18 @@ func hasPreexistingDb(path string) dbType {
 }
 
 func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	var (
-		db  ethdb.Database
-		err error
-	)
-
 	preexistingDb := hasPreexistingDb(file)
 
-	if backingdb == "pebble" {
-		if preexistingDb == LevelDb {
-			return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
-		} else {
-			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else if backingdb == "leveldb" {
-		if preexistingDb == Pebble {
-			return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
-		} else {
-			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		if preexistingDb == Pebble {
-			db, err = NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			db, err = NewLevelDBDatabase(file, cache, handles, namespace, readonly)
-			if err != nil {
-				return nil, err
-			}
-		}
+	if backingdb == "pebble" && preexistingDb == LevelDb {
+		return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
 	}
-
-	return db, nil
+	if backingdb == "leveldb" && preexistingDb == Pebble {
+		return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
+	}
+	if backingdb == "pebble" || preexistingDb == Pebble {
+		return NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+	}
+	return NewLevelDBDatabase(file, cache, handles, namespace, readonly)
 }
 
 func NewPebbleOrLevelDBDatabaseWithFreezer(backingdb string, file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
