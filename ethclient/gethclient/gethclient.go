@@ -171,8 +171,8 @@ func (ec *Client) SubscribeFullPendingTransactions(ctx context.Context, ch chan<
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions", true)
 }
 
-// SubscribePendingTransaction subscribes to new pending transaction hashes.
-func (ec *Client) SubscribePendingTransaction(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
+// SubscribePendingTransactions subscribes to new pending transaction hashes.
+func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
 }
 
