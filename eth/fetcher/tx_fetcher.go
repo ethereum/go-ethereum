@@ -328,7 +328,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		// out of sync with the chain or the peer is griefing us.
 		if otherreject > 128/4 {
 			delay = 200 * time.Millisecond
-			log.Warn("Peer delivering useless transactions, sleeping", "ignored", len(txs)-i)
+			log.Warn("Peer delivering useless transactions", "ignored", len(txs)-end, "peer", peer)
 			break
 		}
 	}
