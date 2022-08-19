@@ -116,6 +116,16 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 
 	// All the headers have passed the transition point, use new rules.
 	if len(preHeaders) == 0 {
+		if reached, _ := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
+			// TTD not reached for the first block, mark subsequent with invalid terminal block
+			results := make(chan error, len(headers))
+			go func() {
+				for i := 0; i < len(headers); i++ {
+					results <- consensus.ErrInvalidTerminalBlock
+				}
+			}()
+			return make(chan struct{}), results
+		}
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
 
