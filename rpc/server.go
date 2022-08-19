@@ -160,7 +160,7 @@ type PeerInfo struct {
 	// Address of client. This will usually contain the IP address and port.
 	RemoteAddr string
 
-	// Addditional information for HTTP and WebSocket connections.
+	// Additional information for HTTP and WebSocket connections.
 	HTTP struct {
 		// Protocol version, i.e. "HTTP/1.1". This is not set for WebSocket.
 		Version string

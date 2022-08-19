@@ -504,7 +504,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 	var (
 		nodes [][]byte
 		bytes uint64
-		loads int // Trie hash expansions to cound database reads
+		loads int // Trie hash expansions to count database reads
 	)
 	for _, pathset := range req.Paths {
 		switch len(pathset) {

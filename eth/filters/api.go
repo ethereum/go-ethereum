@@ -36,7 +36,7 @@ import (
 // and associated subscription in the event system.
 type filter struct {
 	typ      Type
-	deadline *time.Timer // filter is inactiv when deadline triggers
+	deadline *time.Timer // filter is inactive when deadline triggers
 	hashes   []common.Hash
 	crit     FilterCriteria
 	logs     []*types.Log
