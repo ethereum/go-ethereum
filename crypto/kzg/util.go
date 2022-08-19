@@ -51,6 +51,13 @@ func EvaluatePolyInEvaluationForm(yFr *bls.Fr, poly []bls.Fr, x *bls.Fr) {
 	var inverseWidth big.Int
 	blsModInv(&inverseWidth, width)
 
+	// Precomputing the mod inverses as a batch is alot faster
+	invDenom := make([]bls.Fr, params.FieldElementsPerBlob)
+	for i := range invDenom {
+		bls.SubModFr(&invDenom[i], x, &DomainFr[i])
+	}
+	bls.BatchInvModFr(invDenom)
+
 	var y bls.Fr
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
 		var num bls.Fr
@@ -60,7 +67,7 @@ func EvaluatePolyInEvaluationForm(yFr *bls.Fr, poly []bls.Fr, x *bls.Fr) {
 		bls.SubModFr(&denom, x, &DomainFr[i])
 
 		var div bls.Fr
-		bls.DivModFr(&div, &num, &denom)
+		bls.MulModFr(&div, &num, &invDenom[i])
 
 		var tmp bls.Fr
 		bls.AddModFr(&tmp, &y, &div)

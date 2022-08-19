@@ -135,7 +135,7 @@ func BenchmarkVerifyMultiple(b *testing.B) {
 			var blobsSet [][]types.Blob
 			var commitmentsSet [][]types.KZGCommitment
 			var hashesSet [][]common.Hash
-			for i := 0; i < 10; i++ {
+			for i := 0; i < siz; i++ {
 				var blobs []types.Blob
 				var commitments []types.KZGCommitment
 				var hashes []common.Hash
@@ -200,7 +200,7 @@ func BenchmarkVerifyMultiple(b *testing.B) {
 	//runBenchmark(2)
 	//runBenchmark(4)
 	runBenchmark(8)
-	//runBenchmark(16)
+	runBenchmark(16)
 }
 
 func BenchmarkBatchVerifyWithoutKZGProofs(b *testing.B) {
@@ -235,8 +235,8 @@ func BenchmarkBatchVerifyWithoutKZGProofs(b *testing.B) {
 		})
 	}
 
-	runBenchmark(2)
-	runBenchmark(4)
+	//runBenchmark(2)
+	//runBenchmark(4)
 	runBenchmark(8)
 	runBenchmark(16)
 }
