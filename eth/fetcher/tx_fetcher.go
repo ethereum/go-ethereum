@@ -303,7 +303,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
 					f.underpriced.Pop()
 				}
-				f.underpriced.Add(batch[i].Hash())
+				f.underpriced.Add(batch[j].Hash())
 			}
 			// Track a few interesting failure types
 			switch {
@@ -328,6 +328,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		// out of sync with the chain or the peer is griefing us.
 		if otherreject > 128/4 {
 			delay = 200 * time.Millisecond
+			log.Warn("Peer delivering useless transactions, sleeping", "ignored", len(txs)-i)
 			break
 		}
 	}
