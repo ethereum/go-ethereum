@@ -263,14 +263,12 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
 	var (
-		inMeter, knownMeter, underpricedMeter, otherRejectMeter metrics.Meter
-	)
-	if direct {
-		inMeter = txReplyInMeter
-		knownMeter = txReplyKnownMeter
+		inMeter          = txReplyInMeter
+		knownMeter       = txReplyKnownMeter
 		underpricedMeter = txReplyUnderpricedMeter
 		otherRejectMeter = txReplyOtherRejectMeter
-	} else {
+	)
+	if !direct {
 		inMeter = txBroadcastInMeter
 		knownMeter = txBroadcastKnownMeter
 		underpricedMeter = txBroadcastUnderpricedMeter
@@ -286,8 +284,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		delay time.Duration
 	)
 	// proceed in batches
-	for i := 0; i < len(txs); i += 100 {
-		end := i + 100
+	for i := 0; i < len(txs); i += 128 {
+		end := i + 128
 		if end > len(txs) {
 			end = len(txs)
 		}
@@ -328,7 +326,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		otherRejectMeter.Mark(otherreject)
 		// If 'other reject' is >25% of the deliveries in any batch, abort. Either we are
 		// out of sync with the chain or the peer is griefing us.
-		if otherreject > 25 {
+		if otherreject > 128/4 {
 			delay = time.Millisecond * 200
 			break
 		}
