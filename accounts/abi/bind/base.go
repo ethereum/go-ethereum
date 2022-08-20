@@ -49,7 +49,7 @@ type CallOpts struct {
 type TransactOpts struct {
 	From   common.Address // Ethereum account to send the transaction from
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
-	Signer SignerFn       // Method to use for signing the transaction (mandatory)
+	Signer SignerFn       // Method to use for signing the transaction (mandatory if not NoSign)
 
 	Value     *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
 	GasPrice  *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
@@ -59,6 +59,7 @@ type TransactOpts struct {
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
+	NoSign bool // Do all transact steps but do not sign & send the transaction
 	NoSend bool // Do all transact steps but do not send the transaction
 }
 
@@ -384,6 +385,9 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	if err != nil {
 		return nil, err
+	}
+	if opts.NoSign {
+		return rawTx, nil
 	}
 	// Sign the transaction and schedule it for execution
 	if opts.Signer == nil {
