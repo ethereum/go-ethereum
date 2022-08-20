@@ -326,7 +326,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 
 		// If 'other reject' is >25% of the deliveries in any batch, abort. Either we are
 		// out of sync with the chain or the peer is griefing us.
-		if otherreject > 128/4 {
+		if otherreject > 32 {
 			delay = 200 * time.Millisecond
 			log.Warn("Peer delivering useless transactions", "peer", peer, "ignored", len(txs)-end)
 			break
