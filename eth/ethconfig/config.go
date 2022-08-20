@@ -160,7 +160,7 @@ type Config struct {
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
-	DatabaseHandles    int  `toml:"-"`
+	DatabaseHandles    int
 	DatabaseCache      int
 	DatabaseFreezer    string
 

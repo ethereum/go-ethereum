@@ -38,7 +38,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		UltraLightFraction                    int                    `toml:",omitempty"`
 		UltraLightOnlyAnnounce                bool                   `toml:",omitempty"`
 		SkipBcVersionCheck                    bool                   `toml:"-"`
-		DatabaseHandles                       int                    `toml:"-"`
+		DatabaseHandles                       int
 		DatabaseCache                         int
 		DatabaseFreezer                       string
 		TrieCleanCache                        int
@@ -134,7 +134,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		UltraLightFraction                    *int                   `toml:",omitempty"`
 		UltraLightOnlyAnnounce                *bool                  `toml:",omitempty"`
 		SkipBcVersionCheck                    *bool                  `toml:"-"`
-		DatabaseHandles                       *int                   `toml:"-"`
+		DatabaseHandles                       *int
 		DatabaseCache                         *int
 		DatabaseFreezer                       *string
 		TrieCleanCache                        *int
