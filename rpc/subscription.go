@@ -63,10 +63,10 @@ func randomIDGenerator() func() ID {
 		rng = rand.New(rand.NewSource(seed))
 	)
 	return func() ID {
-		mu.Lock()
-		defer mu.Unlock()
 		id := make([]byte, 16)
+		mu.Lock()
 		rng.Read(id)
+		mu.Unlock()
 		return encodeID(id)
 	}
 }
