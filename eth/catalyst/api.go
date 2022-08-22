@@ -64,7 +64,7 @@ const (
 	// beaconUpdateTimeout is the max time allowed for a beacon client to signal
 	// use (from the last heartbeat) before it's consifered offline and the user
 	// is warned.
-	beaconUpdateTimeout = 30 * time.Second
+	beaconUpdateTimeout = time.Minute
 )
 
 type ConsensusAPI struct {
