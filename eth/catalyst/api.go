@@ -64,7 +64,8 @@ const (
 	// beaconUpdateTimeout is the max time allowed for a beacon client to signal
 	// use (from the last heartbeat) before it's consifered offline and the user
 	// is warned.
-	beaconUpdateTimeout = 30 * time.Second
+	beaconUpdateTimeout     = 30 * time.Second
+	transitionConfigTimeout = 120 * time.Second
 )
 
 type ConsensusAPI struct {
@@ -577,7 +578,7 @@ func (api *ConsensusAPI) heartbeat() {
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
 			if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
-				if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
+				if time.Since(lastTransitionUpdate) > transitionConfigTimeout {
 					if time.Since(offlineLogged) > beaconUpdateTimeout {
 						if lastTransitionUpdate.IsZero() {
 							log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
@@ -599,7 +600,7 @@ func (api *ConsensusAPI) heartbeat() {
 				continue
 			}
 		} else {
-			if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
+			if time.Since(lastTransitionUpdate) > transitionConfigTimeout {
 				if time.Since(offlineLogged) > beaconUpdateTimeout {
 					// Retrieve the last few blocks and make a rough estimate as
 					// to when the merge transition should happen
