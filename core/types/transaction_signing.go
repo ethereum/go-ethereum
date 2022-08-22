@@ -40,6 +40,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsEthPoWFork(blockNumber):
+		signer = NewEthPowSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
 	case config.IsBerlin(blockNumber):
@@ -168,6 +170,39 @@ type Signer interface {
 
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
+}
+
+type ethPoWSigner struct{ londonSigner }
+
+// NewEthPowSigner returns a signer that accepts
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+
+func NewEthPowSigner(chainId *big.Int) Signer {
+	return ethPoWSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
+}
+func (s ethPoWSigner) Sender(tx *Transaction) (common.Address, error) {
+	if !tx.Protected() {
+		return common.Address{}, ErrUnexpectedProtection
+	}
+	return s.londonSigner.Sender(tx)
+}
+
+func (s ethPoWSigner) Equal(s2 Signer) bool {
+	x, ok := s2.(ethPoWSigner)
+	return ok && x.chainId.Cmp(s.chainId) == 0
+}
+
+func (s ethPoWSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	return s.londonSigner.SignatureValues(tx, sig)
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s ethPoWSigner) Hash(tx *Transaction) common.Hash {
+	return s.londonSigner.Hash(tx)
 }
 
 type londonSigner struct{ eip2930Signer }
