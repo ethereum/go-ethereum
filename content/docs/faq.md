@@ -1,11 +1,12 @@
 ---
 title: FAQ
-permalink: docs/faq
-sort_key: C
+description: Frequently asked questions related to Geth
 ---
 
-* TOC
-{:toc}
+This page contains answers to common questions about Geth. The Geth team have also started to run AMA's on Reddit:
+
+[Aug 2022 AMA](https://www.reddit.com/r/ethereum/comments/wpqmo1/ama_we_are_the_go_ethereum_geth_team_18_august/)
+
 
 #### I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
 
@@ -15,9 +16,9 @@ Check and sync your clock with ntp. For example, you can [force a clock update u
 sudo ntpdate -s time.nist.gov
 ```
 
-#### I would like to run multiple geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable".
+#### I would like to run multiple Geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable".
 
-Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](getting-started/private-net) instructions.
+Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/content/docs/developers/geth-developer/Private-Network.md) instructions.
 
 #### When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear?
 
@@ -35,7 +36,7 @@ The current default syncing mode used by Geth is called [snap sync](https://gith
 
 Many people falsely assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods.
 
-#### So, what's the state trie?
+#### What's the state trie?
 
 In the Ethereum mainnet, there are a ton of accounts already, which track the balance, nonce, etc of each user/contract. The accounts themselves are however insufficient to run a node, they need to be cryptographically linked to each block so that nodes can actually verify that the accounts are not tampered with.
 
@@ -72,3 +73,7 @@ The state trie in Ethereum contains hundreds of millions of nodes, most of which
 #### Wait, so I can't use fast sync on an HDD?
 
 Doing a "fast" sync on an HDD will take more time than you're willing to wait, because the data structures used are not optimized for HDDs. Even if you do wait it out, an HDD will not be able to keep up with the read/write requirements of transaction processing on mainnet. You however should be able to run a light client on an HDD with minimal impact on system resources.
+
+#### What is wrong with my light client?
+
+Light sync relies on full nodes that serve data to light clients. Historically, this has been hampered by the fact that serving light clients was turned off by default in geth full nodes and few nodes chose to turn it on. Therefore, light nodes often struggled to find peers. Since Ethereum switched to proof-of-stake, Geth light clients have stopped working altogether. Light clients for proof-of-stake Ethereum are expected to be implemented soon!
