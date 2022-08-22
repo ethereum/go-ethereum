@@ -1,25 +1,17 @@
 ---
 title: txpool Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "txpool" namespace
 ---
 
-The `txpool` API gives access to several non-standard RPC methods to inspect the contents of the
-transaction pool containing all the currently pending transactions as well as the ones queued for
-future processing.
+The `txpool` API gives access to several non-standard RPC methods to inspect the contents of the transaction pool containing all the currently pending transactions as well as the ones queued for future processing.
 
 ### txpool_content
 
-The `content` inspection property can be queried to list the exact details of all the transactions
-currently pending for inclusion in the next block(s), as well as the ones that are being scheduled
-for future execution only.
+The `content` inspection property can be queried to list the exact details of all the transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only.
 
-The result is an object with two fields `pending` and `queued`. Each of these fields are associative
-arrays, in which each entry maps an origin-address to a batch of scheduled transactions. These batches
-themselves are maps associating nonces with actual transactions.
+The result is an object with two fields `pending` and `queued`. Each of these fields are associative arrays, in which each entry maps an origin-address to a batch of scheduled transactions. These batches themselves are maps associating nonces with actual transactions.
 
-Please note, there may be multiple transactions associated with the same account and nonce. This can
-happen if the user broadcast mutliple ones with varying gas allowances (or even completely different
-transactions).
+Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast mutliple ones with varying gas allowances (or even completely different transactions).
 
 | Client  | Method invocation                                                     |
 |:-------:|-----------------------------------------------------------------------|
@@ -114,8 +106,7 @@ transactions).
 
 ### txpool_contentFrom
 
-Retrieves the transactions contained within the txpool,
-returning pending as well as queued transactions of this address, grouped by nonce.
+Retrieves the transactions contained within the txpool, returning pending as well as queued transactions of this address, grouped by nonce.
 
 | Client  | Method invocation                                      |
 |:-------:|--------------------------------------------------------|
@@ -124,18 +115,11 @@ returning pending as well as queued transactions of this address, grouped by non
 
 ### txpool_inspect
 
-The `inspect` inspection property can be queried to list a textual summary of all the transactions
-currently pending for inclusion in the next block(s), as well as the ones that are being scheduled
-for future execution only. This is a method specifically tailored to developers to quickly see the
-transactions in the pool and find any potential issues.
+The `inspect` inspection property can be queried to list a textual summary of all the transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only. This is a method specifically tailored to developers to quickly see the transactions in the pool and find any potential issues.
 
-The result is an object with two fields `pending` and `queued`. Each of these fields are associative
-arrays, in which each entry maps an origin-address to a batch of scheduled transactions. These batches
-themselves are maps associating nonces with transactions summary strings.
+The result is an object with two fields `pending` and `queued`. Each of these fields are associative arrays, in which each entry maps an origin-address to a batch of scheduled transactions. These batches themselves are maps associating nonces with transactions summary strings.
 
-Please note, there may be multiple transactions associated with the same account and nonce. This can
-happen if the user broadcast mutliple ones with varying gas allowances (or even completely different
-transactions).
+Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast mutliple ones with varying gas allowances (or even completely different transactions).
 
 | Client  | Method invocation                                            |
 |:-------:|--------------------------------------------------------------|
@@ -200,11 +184,9 @@ transactions).
 
 ### txpool_status
 
-The `status` inspection property can be queried for the number of transactions currently pending for
-inclusion in the next block(s), as well as the ones that are being scheduled for future execution only.
+The `status` inspection property can be queried for the number of transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only. 
 
-The result is an object with two fields `pending` and `queued`, each of which is a counter representing
-the number of transactions in that particular state.
+The result is an object with two fields `pending` and `queued`, each of which is a counter representing the number of transactions in that particular state.
 
 | Client  | Method invocation                             |
 |:--------|-----------------------------------------------|

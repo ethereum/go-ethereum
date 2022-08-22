@@ -1,6 +1,6 @@
 ---
 title: debug Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "clique" namespace
 ---
 
 The `debug` API gives access to several non-standard RPC methods, which allow inspection, debugging and setting certain debugging flags during runtime.
@@ -19,9 +19,7 @@ If `incompletes` is false, then accounts for which the key preimage (i.e: the `a
 
 ### debug_backtraceAt
 
-Sets the logging backtrace location. When a backtrace location
-is set and a log message is emitted at that location, the stack
-of the goroutine executing the log statement will be printed to stderr.
+Sets the logging backtrace location. When a backtrace location is set and a log message is emitted at that location, the stack of the goroutine executing the log statement will be printed to stderr.
 
 The location is specified as `<filename>:<line>`.
 
@@ -38,11 +36,7 @@ Example:
 
 ### debug_blockProfile
 
-Turns on block profiling for the given duration and writes
-profile data to disk. It uses a profile rate of 1 for most
-accurate information. If a different rate is desired, set
-the rate and write the profile manually using
-`debug_writeBlockProfile`.
+Turns on block profiling for the given duration and writes profile data to disk. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually using `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                              |
 |:--------|----------------------------------------------------------------|
@@ -72,8 +66,7 @@ Returns leveldb properties of the key-value database.
 
 ### debug_cpuProfile
 
-Turns on CPU profiling for the given duration and writes
-profile data to disk.
+Turns on CPU profiling for the given duration and writes profile data to disk.
 
 | Client  | Method invocation                                            |
 |:--------|--------------------------------------------------------------|
@@ -83,8 +76,7 @@ profile data to disk.
 
 ### debug_dbAncient
 
-Retrieves an ancient binary blob from the freezer. The freezer is a collection of append-only immutable files.
-The first argument `kind` specifies which table to look up data from. The list of all table kinds are as follows:
+Retrieves an ancient binary blob from the freezer. The freezer is a collection of append-only immutable files. The first argument `kind` specifies which table to look up data from. The list of all table kinds are as follows:
 
 - `headers`: block headers
 - `hashes`: canonical hash table (block number -> block hash)
@@ -119,8 +111,7 @@ Returns the raw value of a key stored in the database.
 
 ### debug_dumpBlock
 
-Retrieves the state that corresponds to the block number and returns a list of accounts (including
-storage and code).
+Retrieves the state that corresponds to the block number and returns a list of accounts (including storage and code).
 
 | Client  | Method invocation                                     |
 |:--------|-------------------------------------------------------|
@@ -168,8 +159,7 @@ Forces garbage collection
 
 ### debug_freezeClient
 
-Forces a temporary client freeze, normally when the server is overloaded.
-Available as part of LES light server.
+Forces a temporary client freeze, normally when the server is overloaded. Available as part of LES light server.
 
 | Client  | Method invocation                                    |
 |:--------|------------------------------------------------------|
@@ -182,8 +172,7 @@ Available as part of LES light server.
 
 Returns garbage collection statistics.
 
-See https://golang.org/pkg/runtime/debug/#GCStats for information about
-the fields of the returned object.
+See https://golang.org/pkg/runtime/debug/#GCStats for information about the fields of the returned object.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -193,10 +182,7 @@ the fields of the returned object.
 
 ### debug_getAccessibleState
 
-Returns the first number where the node has accessible state on disk. 
-This is the post-state of that block and the pre-state of the next 
-block. The (from, to) parameters are the sequence of blocks 
-to search, which can go either forwards or backwards.
+Returns the first number where the node has accessible state on disk. This is the post-state of that block and the pre-state of the next block. The (from, to) parameters are the sequence of blocks to search, which can go either forwards or backwards.
 
 | Client  | Method invocation                                                     |
 |:--------|-----------------------------------------------------------------------|
@@ -206,8 +192,7 @@ to search, which can go either forwards or backwards.
 
 ### debug_getBadBlocks
 
-Returns a list of the last 'bad blocks' that the client has seen on
-the network and returns them as a JSON list of block-hashes.
+Returns a list of the last 'bad blocks' that the client has seen on the network and returns them as a JSON list of block-hashes.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -247,9 +232,7 @@ Returns all accounts that have changed between the two blocks specified. A chang
 
 ### debug_getModifiedAccountsByNumber
 
-Returns all accounts that have changed between the two blocks specified.
-A change is defined as a difference in nonce, balance, code hash or 
-storage hash.
+Returns all accounts that have changed between the two blocks specified. A change is defined as a difference in nonce, balance, code hash or storage hash.
 
 | Client  | Method invocation                                                               |
 |:--------|---------------------------------------------------------------------------------|
@@ -267,8 +250,7 @@ Returns the consensus-encoding of all receipts in a single block.
 
 ### debug_goTrace
 
-Turns on Go runtime tracing for the given duration and writes
-trace data to disk.
+Turns on Go runtime tracing for the given duration and writes trace data to disk.
 
 | Client  | Method invocation                                         |
 |:--------|-----------------------------------------------------------|
@@ -288,8 +270,7 @@ Executes a block (bad- or canon- or side-), and returns a list of intermediate r
 
 Returns detailed runtime memory statistics.
 
-See https://golang.org/pkg/runtime/#MemStats for information about
-the fields of the returned object.
+See https://golang.org/pkg/runtime/#MemStats for information about the fields of the returned object.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -337,10 +318,7 @@ Fetches and retrieves the seed hash of the block by number
 
 ### debug_setBlockProfileRate
 
-Sets the rate (in samples/sec) of goroutine block profile
-data collection. A non-zero rate enables block profiling,
-setting it to zero stops the profile. Collected profile data
-can be written using `debug_writeBlockProfile`.
+Sets the rate (in samples/sec) of goroutine block profile data collection. A non-zero rate enables block profiling, setting it to zero stops the profile. Collected profile data can be written using `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                             |
 |:--------|---------------------------------------------------------------|
@@ -349,8 +327,7 @@ can be written using `debug_writeBlockProfile`.
 
 ### debug_setGCPercent
 
-Sets the garbage collection target percentage. A negative value disables garbage
-collection.
+Sets the garbage collection target percentage. A negative value disables garbage collection.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -361,8 +338,7 @@ collection.
 
 ### debug_setHead
 
-Sets the current head of the local chain by block number. **Note**, this is a
-destructive action and may severely damage the chain. Use with *extreme* caution.
+Sets the current head of the local chain by block number. **Note**, this is a destructive action and may severely damage the chain. Use with *extreme* caution.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -384,9 +360,7 @@ Sets the rate of mutex profiling.
 
 ### debug_stacks
 
-Returns a printed representation of the stacks of all goroutines.
-Note that the web3 wrapper for this method takes care of the printing
-and does not return the string.
+Returns a printed representation of the stacks of all goroutines. Note that the web3 wrapper for this method takes care of the printing and does not return the string.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -396,8 +370,7 @@ and does not return the string.
 
 ### debug_standardTraceBlockToFile
 
-When JS-based tracing (see below) was first implemented, the intended usecase was to enable long-running tracers that could stream results back via a subscription channel.
-This method works a bit differently. (For full details, see [PR](https://github.com/ethereum/go-ethereum/pull/17914))
+When JS-based tracing (see below) was first implemented, the intended usecase was to enable long-running tracers that could stream results back via a subscription channel. This method works a bit differently. (For full details, see [PR](https://github.com/ethereum/go-ethereum/pull/17914))
 
 - It streams output to disk during the execution, to not blow up the memory usage on the node
 - It uses `jsonl` as output format (to allow streaming)
@@ -409,12 +382,13 @@ This method works a bit differently. (For full details, see [PR](https://github.
 This means that this method is only 'useful' for callers who control the node -- at least sufficiently to be able to read the artefacts from the filesystem after the fact.
 
 The method can be used to dump a certain transaction out of a given block:
-```
+
+```sh
 > debug.standardTraceBlockToFile("0x0bbe9f1484668a2bf159c63f0cf556ed8c8282f99e3ffdb03ad2175a863bca63", {txHash:"0x4049f61ffbb0747bb88dc1c85dd6686ebf225a3c10c282c45a8e0c644739f7e9", disableMemory:true})
 ["/tmp/block_0x0bbe9f14-14-0x4049f61f-099048234"]
 ```
 Or all txs from a block:
-```
+```sh
 > debug.standardTraceBlockToFile("0x0bbe9f1484668a2bf159c63f0cf556ed8c8282f99e3ffdb03ad2175a863bca63", {disableMemory:true})
 ["/tmp/block_0x0bbe9f14-0-0xb4502ea7-409046657", "/tmp/block_0x0bbe9f14-1-0xe839be8f-954614764", "/tmp/block_0x0bbe9f14-2-0xc6e2052f-542255195", "/tmp/block_0x0bbe9f14-3-0x01b7f3fe-209673214", "/tmp/block_0x0bbe9f14-4-0x0f290422-320999749", "/tmp/block_0x0bbe9f14-5-0x2dc0fb80-844117472", "/tmp/block_0x0bbe9f14-6-0x35542da1-256306111", "/tmp/block_0x0bbe9f14-7-0x3e199a08-086370834", "/tmp/block_0x0bbe9f14-8-0x87778b88-194603593", "/tmp/block_0x0bbe9f14-9-0xbcb081ba-629580052", "/tmp/block_0x0bbe9f14-10-0xc254381a-578605923", "/tmp/block_0x0bbe9f14-11-0xcc434d58-405931366", "/tmp/block_0x0bbe9f14-12-0xce61967d-874423181", "/tmp/block_0x0bbe9f14-13-0x05a20b35-267153288", "/tmp/block_0x0bbe9f14-14-0x4049f61f-606653767", "/tmp/block_0x0bbe9f14-15-0x46d473d2-614457338", "/tmp/block_0x0bbe9f14-16-0x35cf5500-411906321", "/tmp/block_0x0bbe9f14-17-0x79222961-278569788", "/tmp/block_0x0bbe9f14-18-0xad84e7b1-095032683", "/tmp/block_0x0bbe9f14-19-0x4bd48260-019097038", "/tmp/block_0x0bbe9f14-20-0x1517411d-292624085", "/tmp/block_0x0bbe9f14-21-0x6857e350-971385904", "/tmp/block_0x0bbe9f14-22-0xbe3ae2ca-236639695"]
 
@@ -433,7 +407,8 @@ INFO [10-15|13:48:34.421] Wrote trace file=/tmp/block_0x14490c57-2-0x3f4263fe-05
 ```
 
 The `options` is as follows:
-```
+
+```sh
 type StdTraceConfig struct {
   *vm.LogConfig
   Reexec *uint64
@@ -502,9 +477,7 @@ Returns the structured logs created during the execution of EVM against a block 
 
 ### debug_traceBlock
 
-The `traceBlock` method will return a full stack trace of all invoked opcodes of all transaction
-that were included in this block. **Note**, the parent of this block must be present or it will
-fail.
+The `traceBlock` method will return a full stack trace of all invoked opcodes of all transaction that were included in this block. **Note**, the parent of this block must be present or it will fail.
 
 | Client  | Method invocation                                                        |
 |:--------|--------------------------------------------------------------------------|
@@ -553,8 +526,7 @@ References:
 
 ### debug_traceBlockByNumber
 
-Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the
-block that is already present in the database.
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the block that is already present in the database.
 
 | Client  | Method invocation                                                              |
 |:--------|--------------------------------------------------------------------------------|
@@ -567,8 +539,7 @@ References:
 
 ### debug_traceBlockByHash
 
-Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the
-block that is already present in the database.
+Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the block that is already present in the database.
 
 | Client  | Method invocation                                                               |
 |:--------|---------------------------------------------------------------------------------|
@@ -606,7 +577,8 @@ The `debug_traceCall` method enables running an `eth_call` within the context of
 #### Example
 
 No specific call options:
-```
+
+```sh
 > debug.traceCall(null, "0x0")
 {
   failed: false,
@@ -616,7 +588,8 @@ No specific call options:
 }
 ```
 Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
-```
+
+```sh
 debug.traceCall({
 	"from": "0xdeadbeef29292929192939494959594933929292",
 	"to": "0xde929f939d939d393f939393f93939f393929023",
@@ -626,9 +599,9 @@ debug.traceCall({
 	"latest", {"disableStorage": true, "disableMemory": true})
 ```
 
-It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, 
-a call which executes `NUMBER` is performed, and the overridden number is placed on the stack: 
-```
+It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack: 
+
+```sh
 > debug.traceCall({
 	from: eth.accounts[0], 
 	value:"0x1",
@@ -662,15 +635,14 @@ a call which executes `NUMBER` is performed, and the overridden number is placed
 ```
 
 Curl example: 
-```
+```sh
 > curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
 {"jsonrpc":"2.0","id":1,"result":{"gas":53000,"failed":false,"returnValue":"","structLogs":[]}}
 ```
 
 ### debug_traceChain
 
-Returns the structured logs created during the execution of EVM between two blocks (excluding start) as a JSON object.
-This endpoint must be invoked via `debug_subscribe` as follows:
+Returns the structured logs created during the execution of EVM between two blocks (excluding start) as a JSON object. This endpoint must be invoked via `debug_subscribe` as follows:
 
 `const res = provider.send('debug_subscribe', ['traceChain', '0x3f3a2a', '0x3f3a2b'])`
 
@@ -681,13 +653,10 @@ please refer to the [subscription page](https://geth.ethereum.org/docs/rpc/pubsu
 
 **OBS** In most scenarios, `debug.standardTraceBlockToFile` is better suited for tracing!
 
-The `traceTransaction` debugging method will attempt to run the transaction in the exact same manner
-as it was executed on the network. It will replay any transaction that may have been executed prior
-to this one before it will finally attempt to execute the transaction that corresponds to the given
+The `traceTransaction` debugging method will attempt to run the transaction in the exact same manner as it was executed on the network. It will replay any transaction that may have been executed prior to this one before it will finally attempt to execute the transaction that corresponds to the given
 hash.
 
-In addition to the hash of the transaction it can take a secondary *optional* argument, which
-specifies the options for this specific call. The possible options are:
+In addition to the hash of the transaction it can take a secondary *optional* argument, which specifies the options for this specific call. The possible options are:
 
 * `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
 * `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
@@ -856,16 +825,15 @@ Note that several values are Golang big.Int objects, not JavaScript numbers or J
 
 Usage example, returns the top element of the stack at each CALL opcode only:
 
-    debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
-
+```sh
+debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
+```
 
 ### debug_verbosity
 
-Sets the logging verbosity ceiling. Log messages with level
-up to and including the given level will be printed.
+Sets the logging verbosity ceiling. Log messages with level up to and including the given level will be printed.
 
-The verbosity of individual packages and source files
-can be raised using `debug_vmodule`.
+The verbosity of individual packages and source files can be raised using `debug_vmodule`.
 
 | Client  | Method invocation                                 |
 |:--------|---------------------------------------------------|
@@ -884,8 +852,7 @@ Sets the logging verbosity pattern.
 
 #### Examples
 
-To see messages from a particular Go package (directory)
-and all subdirectories, use:
+To see messages from a particular Go package (directory) and all subdirectories, use:
 
 ``` javascript
 > debug.vmodule("eth/*=6")
@@ -921,10 +888,7 @@ Writes a goroutine blocking profile to the given file.
 
 ### debug_writeMemProfile
 
-Writes an allocation profile to the given file.
-Note that the profiling rate cannot be set through the API,
-it must be set on the command line using the `--pprof.memprofilerate`
-flag.
+Writes an allocation profile to the given file. Note that the profiling rate cannot be set through the API, it must be set on the command line using the `--pprof.memprofilerate` flag.
 
 | Client  | Method invocation                                           |
 |:--------|-------------------------------------------------------------|

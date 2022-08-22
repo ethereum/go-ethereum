@@ -1,12 +1,10 @@
 ---
 title: les Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "les" namespace
 ---
 
 The `les` API is for managing LES server settings, including client parameters and payment settings for prioritized clients. It also provides functions to query checkpoint information in both server and client mode.
 
-* TOC
-{:toc}
 
 ### les_serverInfo
 

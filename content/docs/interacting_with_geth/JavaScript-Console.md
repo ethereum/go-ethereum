@@ -1,6 +1,6 @@
 ---
 title: JavaScript Console
-sort_key: D
+description: How to interact with Geth using Javascript
 ---
 
 Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed. 

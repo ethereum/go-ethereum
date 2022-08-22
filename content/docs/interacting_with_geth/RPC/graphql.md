@@ -1,9 +1,9 @@
 ---
 title: GraphQL Server
-sort_key: C
+description: Documentation for Geth's GraphQL API
 ---
 
-In addition to the [JSON-RPC APIs](../rpc/server), Geth supports the GraphQL API as specified by [EIP-1767](eip-1767). GraphQL lets you specify which fields of an objects you need as part of the query, eliminating the extra load on the client for filling in fields which are not needed. It also allows for combining several traditional JSON-RPC requests into one query which translates into less overhead and more performance.
+In addition to the [JSON-RPC APIs](/content/docs/interacting_with_geth/RPC/server.md), Geth supports the GraphQL API as specified by [EIP-1767](https://eips.ethereum.org/EIPS/eip-1767). GraphQL lets you specify which fields of an objects you need as part of the query, eliminating the extra load on the client for filling in fields which are not needed. It also allows for combining several traditional JSON-RPC requests into one query which translates into less overhead and more performance.
 
 The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence the relevant `--http` flags and the `--graphql` flag  should be passed to Geth:
 
@@ -31,7 +31,7 @@ GraphiQL also provides a way to explore the schema Geth provides to help you for
 
 ### Query
 
-Reading out data from Geth is the biggest use-case for GraphQL. In addition to using the UI queries can also be sent programmatically. The official GraphQL[docs](graphql-code) explain how to find bindings for many languages, or send http requests from the terminal using tools such as Curl.
+Reading out data from Geth is the biggest use-case for GraphQL. In addition to using the UI queries can also be sent programmatically. The official GraphQL[docs](https://graphql.org/code/) explain how to find bindings for many languages, or send http requests from the terminal using tools such as Curl.
 
 For example, the code snippet below shows how to obtain the latest block number using Curl. Note the use of a JSON object for the data section:
 
@@ -61,5 +61,3 @@ request('http://localhost:8545/graphql', query, { number: '6004067' })
     .catch((err) => { console.log(err) })
 ```
 
-[eip-1767]: https://eips.ethereum.org/EIPS/eip-1767
-[graphql-code]: https://graphql.org/code/

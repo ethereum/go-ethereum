@@ -1,6 +1,6 @@
 ---
 title: net Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "net" namespace
 ---
 
 The `net` API provides insight about the networking aspect of the client.

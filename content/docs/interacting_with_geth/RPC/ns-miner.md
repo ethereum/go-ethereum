@@ -1,6 +1,6 @@
 ---
 title: miner Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "miner" namespace
 ---
 
 The `miner` API is **now deprecated** because mining was switched off at the transition to proof-of-stake. It existed to provide remote control the node's mining operation and set various mining specific settings. It is provided here for historical interest!
@@ -16,8 +16,7 @@ Get hashrate in H/s (Hash operations per second).
 
 ### miner_setExtra
 
-Sets the extra data a miner can include when miner blocks. This is capped at
-32 bytes.
+Sets the extra data a miner can include when miner blocks. This is capped at 32 bytes.
 
 | Client  | Method invocation                                  |
 |:--------|----------------------------------------------------|
@@ -27,8 +26,7 @@ Sets the extra data a miner can include when miner blocks. This is capped at
 
 ### miner_setGasPrice
 
-Sets the minimal accepted gas price when mining transactions. Any transactions that are
-below this limit are excluded from the mining process.
+Sets the minimal accepted gas price when mining transactions. Any transactions that are below this limit are excluded from the mining process.
 
 | Client  | Method invocation                                     |
 |:--------|-------------------------------------------------------|
@@ -47,8 +45,7 @@ Updates the interval for recomitting the miner sealing work.
 
 ### miner_start
 
-Start the CPU mining process with the given number of threads and generate a new DAG
-if need be.
+Start the CPU mining process with the given number of threads and generate a new DAG if need be.
 
 | Client  | Method invocation                                   |
 |:--------|-----------------------------------------------------|

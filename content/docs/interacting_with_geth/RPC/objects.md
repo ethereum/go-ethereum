@@ -1,6 +1,6 @@
 ---
 title: Objects
-sort_key: D
+description: Data structures used for RPC methods
 ---
 
 The following are data structures which are used for various RPC methods.

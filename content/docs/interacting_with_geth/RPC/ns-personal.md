@@ -1,6 +1,6 @@
 ---
 title: personal Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
 The personal API manages private keys in the key store.
@@ -16,8 +16,7 @@ Requests a HD wallet to derive a new account, optionally pinning it for later re
 
 ### personal_importRawKey
 
-Imports the given unencrypted private key (hex string) into the key store,
-encrypting it with the passphrase.
+Imports the given unencrypted private key (hex string) into the key store, encrypting it with the passphrase.
 
 Returns the address of the new account.
  
@@ -37,8 +36,7 @@ Initializes a new wallet at the provided URL by generating and returning a new p
 
 ### personal_listAccounts
 
-Returns all the Ethereum account addresses of all keys
-in the key store.
+Returns all the Ethereum account addresses of all keys in the key store.
 
 | Client   | Method invocation                                   |
 | :--------| --------------------------------------------------- |
@@ -77,8 +75,7 @@ Returns a list of wallets this node manages.
 
 ### personal_lockAccount
 
-Removes the private key with given address from memory.
-The account can no longer be used to send transactions.
+Removes the private key with given address from memory. The account can no longer be used to send transactions.
  
 | Client   | Method invocation                                        |
 | :--------| -------------------------------------------------------- |
@@ -87,12 +84,8 @@ The account can no longer be used to send transactions.
 
 ### personal_newAccount
 
-Generates a new private key and stores it in the key store directory.
-The key file is encrypted with the given passphrase.
-Returns the address of the new account.
-
-At the geth console, `newAccount` will prompt for a passphrase when 
-it is not supplied as the argument.
+Generates a new private key and stores it in the key store directory. The key file is encrypted with the given passphrase.
+Returns the address of the new account. At the geth console, `newAccount` will prompt for a passphrase when it is not supplied as the argument.
 
 | Client   | Method invocation                                       |
 | :--------| ---------------------------------------------------     |
@@ -117,10 +110,8 @@ The passphrase can also be supplied as a string.
 
 ### personal_openWallet
 
-Initiates a hardware wallet opening procedure by establishing a USB
-connection and then attempting to authenticate via the provided passphrase. Note,
-the method may return an extra challenge requiring a second open (e.g. the
-Trezor PIN matrix challenge).
+Initiates a hardware wallet opening procedure by establishing a USB connection and then attempting to authenticate via the provided passphrase. Note,
+the method may return an extra challenge requiring a second open (e.g. the Trezor PIN matrix challenge).
 
 | Client   | Method invocation                                               |
 | :--------| -----------------------------------------------------------     |
@@ -131,13 +122,8 @@ Trezor PIN matrix challenge).
 
 Decrypts the key with the given address from the key store.
 
-Both passphrase and unlock duration are optional when using the JavaScript console.
-If the passphrase is not supplied as an argument, the console will prompt for
-the passphrase interactively.
-
-The unencrypted key will be held in memory until the unlock duration expires.
-If the unlock duration defaults to 300 seconds. An explicit duration
-of zero seconds unlocks the key until geth exits.
+Both passphrase and unlock duration are optional when using the JavaScript console. If the passphrase is not supplied as an argument, the console will prompt for
+the passphrase interactively. The unencrypted key will be held in memory until the unlock duration expires. If the unlock duration defaults to 300 seconds. An explicit duration of zero seconds unlocks the key until geth exits.
 
 The account can be used with `eth_sign` and `eth_sendTransaction` while it is unlocked.
  
@@ -162,8 +148,7 @@ Supplying the passphrase and unlock duration as arguments:
 true
 ```
 
-To type in the passphrase and still override the default unlock duration,
-pass `null` as the passphrase.
+To type in the passphrase and still override the default unlock duration, pass `null` as the passphrase.
 
 ```
 > personal.unlockAccount("0x5e97870f263700f46aa00d967821199b9bc5a120", null, 30)
@@ -225,7 +210,7 @@ See ecRecover to verify the signature.
 
 ### personal_signTransaction
 
-SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/rpc/objects#transaction-call-object) and the second argument is the password, similar to `personal_sendTransaction`.
+SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/content/docs/interacting_with_geth/RPC/objects.md) and the second argument is the password, similar to `personal_sendTransaction`.
 
 | Client   | Method invocation                                                |
 | :--------| -----------------------------------------------------------------|
@@ -250,4 +235,3 @@ SignTransaction will create a transaction from the given arguments and tries to 
 > personal.ecRecover("0xdeadbeaf", "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b")
 "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83"
 ```
-

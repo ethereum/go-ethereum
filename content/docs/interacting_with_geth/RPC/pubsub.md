@@ -1,6 +1,6 @@
 ---
 title: Real-time Events
-sort_key: B
+description: How to subscribe to events using JSON-RPC notifications.
 ---
 
 Geth v1.4 and later support publish / subscribe using JSON-RPC notifications. This allows clients to wait for events instead of polling for them.
@@ -54,9 +54,7 @@ Subscriptions are created with a regular RPC call with `eth_subscribe` as method
 
 ## Cancel subscription
 
-Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as method and
-the subscription id as first parameter. It returns a bool indicating if the subscription
-was cancelled successful.
+Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as method and the subscription id as first parameter. It returns a bool indicating if the subscription was cancelled successful.
 
 ### Parameters
 1. subscription id
@@ -74,8 +72,7 @@ was cancelled successful.
 
 Fires a notification each time a new header is appended to the chain, including chain reorganizations. Users can use the bloom filter to determine if the block contains logs that are interested to them. Note that if geth receives multiple blocks simultaneously, e.g. catching up after being out of sync, only the last block is emitted.
 
-In case of a chain reorganization the subscription will emit the last header in the new
-chain. Therefore the subscription can emit multiple headers on the same height.
+In case of a chain reorganization the subscription will emit the last header in the new chain. Therefore the subscription can emit multiple headers on the same height.
 
 #### Example
 
@@ -169,9 +166,7 @@ returns
 
 ### syncing
 
-Indicates when the node starts or stops synchronizing. The result can either be a boolean
-indicating that the synchronization has started (true), finished (false) or an object with
-various progress indicators.
+Indicates when the node starts or stops synchronizing. The result can either be a boolean indicating that the synchronization has started (true), finished (false) or an object with various progress indicators.
 
 #### Parameters
 

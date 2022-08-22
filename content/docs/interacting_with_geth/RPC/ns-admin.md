@@ -1,6 +1,6 @@
 ---
 title: admin Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "admin" namespace
 ---
 
 The `admin` API gives access to several non-standard RPC methods, which allows fine grained control over a Geth instance, including but not limited to network peer and RPC endpoint management.
@@ -8,13 +8,9 @@ The `admin` API gives access to several non-standard RPC methods, which allows f
 
 ### admin_addPeer
 
-The `addPeer` administrative method requests adding a new remote node to the list of tracked static
-nodes. The node will try to maintain connectivity to these nodes at all times, reconnecting every
-once in a while if the remote connection goes down.
+The `addPeer` administrative method requests adding a new remote node to the list of tracked static nodes. The node will try to maintain connectivity to these nodes at all times, reconnecting every once in a while if the remote connection goes down.
 
-The method accepts a single argument, the [`enode`](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode)
-URL of the remote peer to start tracking and returns a `BOOL` indicating whether the peer was accepted
-for tracking or some error occurred.
+The method accepts a single argument, the [`enode`](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) URL of the remote peer to start tracking and returns a `BOOL` indicating whether the peer was accepted for tracking or some error occurred.
 
 | Client  | Method invocation                              |
 |:--------|------------------------------------------------|
@@ -31,10 +27,7 @@ true
 
 ### admin_addTrustedPeer
 
-Adds the given node to a reserved trusted list which allows the
-node to always connect, even if the slots are full.
-
-It returns a `BOOL` to indicate whether the peer was successfully added to the list.
+Adds the given node to a reserved trusted list which allows the node to always connect, even if the slots are full. It returns a `BOOL` to indicate whether the peer was successfully added to the list.
 
 | Client  | Method invocation                              |
 |:--------|------------------------------------------------|
@@ -43,8 +36,7 @@ It returns a `BOOL` to indicate whether the peer was successfully added to the l
 
 ### admin_datadir
 
-The `datadir` administrative property can be queried for the absolute path the running Geth node
-currently uses to store all its databases.
+The `datadir` administrative property can be queried for the absolute path the running Geth node currently uses to store all its databases.
 
 | Client  | Method invocation                 |
 |:--------|-----------------------------------|
@@ -61,10 +53,7 @@ currently uses to store all its databases.
 
 ### admin_exportChain
 
-Exports the current blockchain into a local file.
-It optionally takes a first and last block number, in which case it exports only that range of blocks.
-
-It returns a boolean indicating whether the operation succeeded.
+Exports the current blockchain into a local file. It optionally takes a first and last block number, in which case it exports only that range of blocks. It returns a boolean indicating whether the operation succeeded.
 
 | Client  | Method invocation                                                     |
 |:--------|---------------------------------------------------------------------- |
@@ -73,10 +62,7 @@ It returns a boolean indicating whether the operation succeeded.
 
 ### admin_importChain
 
-Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them
-into the canonical chain. The state from the parent block of this range is required.
-
-It returns a boolean indicating whether the operation succeeded.
+Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them into the canonical chain. The state from the parent block of this range is required. It returns a boolean indicating whether the operation succeeded.
 
 | Client  | Method invocation                                     |
 |:--------|-------------------------------------------------------|
@@ -85,11 +71,7 @@ It returns a boolean indicating whether the operation succeeded.
 
 ### admin_nodeInfo
 
-The `nodeInfo` administrative property can be queried for all the information known about the running
-Geth node at the networking granularity. These include general information about the node itself as a
-participant of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P
-overlay protocol, as well as specialized information added by each of the running application protocols
-(e.g. `eth`, `les`, `shh`, `bzz`).
+The `nodeInfo` administrative property can be queried for all the information known about the running Geth node at the networking granularity. These include general information about the node itself as a participant of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                         |
 |:--------|-------------------------------------------|
@@ -124,9 +106,7 @@ overlay protocol, as well as specialized information added by each of the runnin
 
 ### admin_peerEvents
 
-PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer events from the node's p2p server.
-
-The type of events emitted by the server are as follows:
+PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer events from the node's p2p server. The type of events emitted by the server are as follows:
 
 - `add`: emitted when a peer is added
 - `drop`: emitted when a peer is dropped
@@ -135,11 +115,7 @@ The type of events emitted by the server are as follows:
 
 ### admin_peers
 
-The `peers` administrative property can be queried for all the information known about the connected
-remote nodes at the networking granularity. These include general information about the nodes themselves
-as participants of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md)
-P2P overlay protocol, as well as specialized information added by each of the running application
-protocols (e.g. `eth`, `les`, `shh`, `bzz`).
+The `peers` administrative property can be queried for all the information known about the connected remote nodes at the networking granularity. These include general information about the nodes themselves as participants of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                        |
 |:--------|------------------------------------------|
@@ -186,10 +162,7 @@ protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 ### admin_removePeer
 
-Disconnects from a remote node if the connection exists.
-
-It returns a boolean indicating validations succeeded. Note a `true` value doesn't necessarily mean
-that there was a connection which was disconnected.
+Disconnects from a remote node if the connection exists. It returns a boolean indicating validations succeeded. Note a `true` value doesn't necessarily mean that there was a connection which was disconnected.
 
 | Client  | Method invocation                                    |
 |:--------|----------------------------------------------------- |
@@ -198,9 +171,7 @@ that there was a connection which was disconnected.
 
 ### admin_removeTrustedPeer
 
-Removes a remote node from the trusted peer set, but it does not disconnect it automatically.
-
-It returns a boolean indicating validations succeeded.
+Removes a remote node from the trusted peer set, but it does not disconnect it automatically. It returns a boolean indicating validations succeeded.
 
 | Client  | Method invocation                                    |
 |:--------|----------------------------------------------------- |
@@ -209,8 +180,7 @@ It returns a boolean indicating validations succeeded.
 
 ### admin_startHTTP
 
-The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/rpc/server)
-webserver to handle client requests. All the parameters are optional:
+The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/rpc/server) webserver to handle client requests. All the parameters are optional:
 
 * `host`: network interface to open the listener socket on (defaults to `"localhost"`)
 * `port`: network port to open the listener socket on (defaults to `8545`)
@@ -234,8 +204,7 @@ true
 
 ### admin_startWS
 
-The `startWS` administrative method starts an WebSocket based [JSON RPC](https://www.jsonrpc.org/specification)
-API webserver to handle client requests. All the parameters are optional:
+The `startWS` administrative method starts an WebSocket based [JSON RPC](https://www.jsonrpc.org/specification) API webserver to handle client requests. All the parameters are optional:
 
 * `host`: network interface to open the listener socket on (defaults to `"localhost"`)
 * `port`: network port to open the listener socket on (defaults to `8546`)

@@ -1,6 +1,6 @@
 ---
 title: clique Namespace
-sort_key: C
+description: Documentation for the JSON-RPC API "clique" namespace
 ---
 
 The `clique` API provides access to the state of the clique consensus engine. This API cna be used to manage signer votes and to check the health of a private network.
@@ -52,8 +52,7 @@ Retrieves the state snapshot at a given block.
 
 ### clique_getSigner
 
-Returns the signer for a specific clique block. Can be called with either a blocknumber, blockhash or an rlp encoded blob.
-The RLP encoded blob can either be a block or a header.
+Returns the signer for a specific clique block. Can be called with either a blocknumber, blockhash or an rlp encoded blob. The RLP encoded blob can either be a block or a header.
 
 | Client  | Method invocation                                    |
 |:--------|------------------------------------------------------|
@@ -89,10 +88,7 @@ Returns the current proposals the node is voting on.
 
 ### clique_propose
 
-Adds a new authorization proposal that the signer will attempt to push through. If the
-`auth` parameter is true, the local signer votes for the given address to be included in
-the set of authorized signers. With `auth` set to `false`, the vote is against the
-address.
+Adds a new authorization proposal that the signer will attempt to push through. If the `auth` parameter is true, the local signer votes for the given address to be included in the set of authorized signers. With `auth` set to `false`, the vote is against the address.
 
 | Client  | Method invocation                                         |
 |:--------|-----------------------------------------------------------|
@@ -101,8 +97,7 @@ address.
 
 ### clique_discard
 
-This method drops a currently running proposal. The signer will not cast
-further votes (either for or against) the address.
+This method drops a currently running proposal. The signer will not cast further votes (either for or against) the address.
 
 | Client  | Method invocation                                   |
 |:--------|-----------------------------------------------------|
@@ -111,8 +106,7 @@ further votes (either for or against) the address.
 
 ### clique_status
 
-This is a debugging method which returns statistics about signer activity
-for the last 64 blocks. The returned object contains the following fields:
+This is a debugging method which returns statistics about signer activity for the last 64 blocks. The returned object contains the following fields:
 
 - `inturnPercent`: percentage of blocks signed in-turn
 - `sealerActivity`: object containing signer addresses and the number
