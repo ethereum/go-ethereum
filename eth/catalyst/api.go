@@ -61,10 +61,23 @@ const (
 	// have lead to some bad ancestor block. It's just an OOM protection.
 	invalidTipsetsCap = 512
 
-	// beaconUpdateTimeout is the max time allowed for a beacon client to signal
-	// use (from the last heartbeat) before it's consifered offline and the user
+	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
+	// attached before starting to issue warnings.
+	beaconUpdateStartupTimeout = 30 * time.Second
+
+	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
+	// do a transition config exchange before it's considered offline and the user
 	// is warned.
-	beaconUpdateTimeout = 30 * time.Second
+	beaconUpdateExchangeTimeout = 2 * time.Minute
+
+	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
+	// to send a consensus update before it's considered offline and the user is
+	// warned.
+	beaconUpdateConsensusTimeout = 30 * time.Second
+
+	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
+	// the beacon client is offline.
+	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
 type ConsensusAPI struct {
@@ -545,9 +558,9 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) beacon.Pa
 //
 // TODO(karalabe): Spin this goroutine down somehow
 func (api *ConsensusAPI) heartbeat() {
-	// Sleep a bit more on startup since there's obviously no beacon client yet
+	// Sleep a bit on startup since there's obviously no beacon client yet
 	// attached, so no need to print scary warnings to the user.
-	time.Sleep(beaconUpdateTimeout)
+	time.Sleep(beaconUpdateStartupTimeout)
 
 	var (
 		offlineLogged time.Time
@@ -576,9 +589,9 @@ func (api *ConsensusAPI) heartbeat() {
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
-				if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
-					if time.Since(offlineLogged) > beaconUpdateTimeout {
+			if time.Since(lastForkchoiceUpdate) > beaconUpdateConsensusTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateConsensusTimeout {
+				if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
+					if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 						if lastTransitionUpdate.IsZero() {
 							log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
 						} else {
@@ -588,7 +601,7 @@ func (api *ConsensusAPI) heartbeat() {
 					}
 					continue
 				}
-				if time.Since(offlineLogged) > beaconUpdateTimeout {
+				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 					if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
 						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
 					} else {
@@ -597,10 +610,12 @@ func (api *ConsensusAPI) heartbeat() {
 					offlineLogged = time.Now()
 				}
 				continue
+			} else {
+				offlineLogged = time.Time{}
 			}
 		} else {
-			if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
-				if time.Since(offlineLogged) > beaconUpdateTimeout {
+			if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
+				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 					// Retrieve the last few blocks and make a rough estimate as
 					// to when the merge transition should happen
 					var (
@@ -654,6 +669,8 @@ func (api *ConsensusAPI) heartbeat() {
 					offlineLogged = time.Now()
 				}
 				continue
+			} else {
+				offlineLogged = time.Time{}
 			}
 		}
 	}
