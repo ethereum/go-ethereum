@@ -1021,13 +1021,8 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryReturn,
 			halts:      true,
 		},
-		SELFDESTRUCT: {
-			execute:    opSuicide,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
-			halts:      true,
-			writes:     true,
-		},
+		// SELFDESTRUCT is disabled in Scroll.
+		// SELFDESTRUCT has the same behavior as INVALID.
+		SELFDESTRUCT: nil,
 	}
 }

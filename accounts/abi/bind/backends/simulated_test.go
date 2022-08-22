@@ -415,16 +415,17 @@ func TestTransactionByHash(t *testing.T) {
 
 func TestEstimateGas(t *testing.T) {
 	/*
-		pragma solidity ^0.6.4;
+		pragma solidity =0.6.12;
 		contract GasEstimation {
 		    function PureRevert() public { revert(); }
 		    function Revert() public { revert("revert reason");}
 		    function OOG() public { for (uint i = 0; ; i++) {}}
 		    function Assert() public { assert(false);}
+		    function SelfDestruct() public { selfdestruct(msg.sender); }
 		    function Valid() public {}
 		}*/
-	const contractAbi = "[{\"inputs\":[],\"name\":\"Assert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"OOG\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"PureRevert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Revert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Valid\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
-	const contractBin = "0x60806040523480156100115760006000fd5b50610017565b61016e806100266000396000f3fe60806040523480156100115760006000fd5b506004361061005c5760003560e01c806350f6fe3414610062578063aa8b1d301461006c578063b9b046f914610076578063d8b9839114610080578063e09fface1461008a5761005c565b60006000fd5b61006a610094565b005b6100746100ad565b005b61007e6100b5565b005b6100886100c2565b005b610092610135565b005b6000600090505b5b808060010191505061009b565b505b565b60006000fd5b565b600015156100bf57fe5b5b565b6040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252600d8152602001807f72657665727420726561736f6e0000000000000000000000000000000000000081526020015060200191505060405180910390fd5b565b5b56fea2646970667358221220345bbcbb1a5ecf22b53a78eaebf95f8ee0eceff6d10d4b9643495084d2ec934a64736f6c63430006040033"
+	const contractAbi = "[{\"inputs\":[],\"name\":\"Assert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"OOG\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"PureRevert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Revert\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"SelfDestruct\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"Valid\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
+	const contractBin = "0x608060405234801561001057600080fd5b50610181806100206000396000f3fe608060405234801561001057600080fd5b50600436106100625760003560e01c806350f6fe3414610067578063aa8b1d3014610071578063b9b046f91461007b578063d8b9839114610085578063dba5e9171461008f578063e09fface14610099575b600080fd5b61006f6100a3565b005b6100796100b3565b005b6100836100b8565b005b61008d6100c2565b005b610097610130565b005b6100a1610149565b005b60005b80806001019150506100a6565b600080fd5b60006100c057fe5b565b6040517f08c379a000000000000000000000000000000000000000000000000000000000815260040180806020018281038252600d8152602001807f72657665727420726561736f6e0000000000000000000000000000000000000081525060200191505060405180910390fd5b3373ffffffffffffffffffffffffffffffffffffffff16ff5b56fea2646970667358221220381c1672ed4be389ed2337c96f8e2fccf83479ec05cb9dd10362e8819e7ca38f64736f6c634300060c0033"
 
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -498,6 +499,15 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("b9b046f9"),
 		}, 0, errors.New("invalid opcode: INVALID"), nil},
 
+		{"SelfDestruct", ethereum.CallMsg{
+			From:     addr,
+			To:       &contractAddr,
+			Gas:      100000,
+			GasPrice: big.NewInt(0),
+			Value:    nil,
+			Data:     common.Hex2Bytes("dba5e917"),
+		}, 0, errors.New("invalid opcode: SELFDESTRUCT"), nil},
+
 		{"Valid", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
@@ -505,7 +515,7 @@ func TestEstimateGas(t *testing.T) {
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("e09fface"),
-		}, 21275, nil, nil},
+		}, 21296, nil, nil},
 	}
 	for _, c := range cases {
 		got, err := sim.EstimateGas(context.Background(), c.message)
