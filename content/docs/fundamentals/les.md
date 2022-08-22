@@ -7,6 +7,9 @@ Running a full node is the most trustless, private, decentralized and censorship
 
 Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/en/run-a-node/).
 
+{% include note.html content=" Geth light clients **do not currently work** on proof-of-stake Ethereum. New light clients that work with the proof-of-stake consensus engine are expected to ship soon!" %}
+
+
 ## Light node vs full node
 
 Running Geth in light mode has the following advantages for users:
