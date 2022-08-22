@@ -70,10 +70,10 @@ const (
 	// is warned.
 	beaconUpdateExchangeTimeout = 2 * time.Minute
 
-	// beaconUpdateTimeout is the max time allowed for a beacon client to signal
-	// use (from the last heartbeat) before it's consifered offline and the user
-	// is warned.
-	beaconUpdateTimeout = 30 * time.Second
+	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
+	// to send a consensus update before it's consifered offline and the user is
+	// warned.
+	beaconUpdateConsensusTimeout = 30 * time.Second
 
 	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
 	// the beacon client is offline.
@@ -589,7 +589,7 @@ func (api *ConsensusAPI) heartbeat() {
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
+			if time.Since(lastForkchoiceUpdate) > beaconUpdateConsensusTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateConsensusTimeout {
 				if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
 					if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 						if lastTransitionUpdate.IsZero() {
