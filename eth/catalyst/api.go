@@ -66,12 +66,12 @@ const (
 	beaconUpdateStartupTimeout = 30 * time.Second
 
 	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
-	// do a transition config exchange before it's consifered offline and the user
+	// do a transition config exchange before it's considered offline and the user
 	// is warned.
 	beaconUpdateExchangeTimeout = 2 * time.Minute
 
 	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
-	// to send a consensus update before it's consifered offline and the user is
+	// to send a consensus update before it's considered offline and the user is
 	// warned.
 	beaconUpdateConsensusTimeout = 30 * time.Second
 
