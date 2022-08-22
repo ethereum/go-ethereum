@@ -3,16 +3,24 @@ title: Clique-signing with Clef
 sort_key: C
 ---
 
-The 'classic' way to sign PoA blocks is to use the "unlock"-feature of `geth`. This is a highly dangerous thing to do, because "unlock" is totally un-discriminatory. Meaning: if an account is unlocked and an attacker obtains access to the RPC api, the attacker can have anything signed by that account, without supplying a password.
+Clique is a proof-of-authority system where new blocks can be created by authorized ‘signers’ only. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Signing blocks in Clique networks classically uses the "unlock" feature of Geth so that each node is always ready to sign without requiring a user to manually provide authorization.
 
-The idea with `clef` was to remove the `unlock` capability, yet still provide sufficient usability to make it possible to automate some things while maintaining a high level of security. This post will show how to integrate `clef` as a sealer of clique-blocks.
+However, using the `--unlock` flag is generally a highly dangerous thing to do because it is indiscriminate, i.e. if an account is unlocked and an attacker obtains access to the RPC api, the attacker can sign anything without supplying a password.
 
-## Part 0: Prepping a Clique network
+Clef provides a way to safely circumvent `--unlock` while maintaining a enough automation for the network to be useable.
 
-Feel free to skip this section if you already have a Clique-network.
+## Prerequisites
 
-First of all, we'll set up a rudimentary testnet to have something to sign on. We create a new keystore (password `testtesttest`)
-```
+It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/content/docs/developers/geth-developer/private-network) and [Introduction to Clef](/content/docs/tools/Clef/introduction) pages.
+
+{:toc}
+-   this will be removed by the toc
+
+## Prepping a Clique network
+
+First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`)
+
+```terminal
 $ geth account new --datadir ./ddir
 INFO [06-16|11:10:39.600] Maximum peer count                       ETH=50 LES=0 total=50
 Your new account is locked with a password. Please give a password. Do not forget this password.
@@ -30,7 +38,8 @@ Path of the secret key file: ddir/keystore/UTC--2022-06-16T09-10-48.578523828Z--
 - You must REMEMBER your password! Without the password, it's impossible to decrypt the key!
 ```
 
-And create a genesis with that account as a sealer:
+Create a genesis with that account as a sealer:
+
 ```json
 {
   "config": {
@@ -57,7 +66,9 @@ And create a genesis with that account as a sealer:
   }
 }
 ```
-And init `geth`
+
+Initiate Geth:
+
 ```
 $ geth  --datadir ./ddir init genesis.json
 ...
@@ -66,16 +77,16 @@ INFO [06-16|11:14:54.125] Persisted trie from memory database      nodes=1 size=
 INFO [06-16|11:14:54.125] Successfully wrote genesis state         database=lightchaindata hash=187412..4deb98
 ```
 
-At this point, we have a Clique network which we can start sealing on.
+At this point a Geth has been initiated with a genesis configuration.
 
-## Part 1: Prepping Clef
+## Prepping Clef
 
-In order to make use of `clef` for signing, we need to do a couple of things.
+In order to make use of `clef` for signing:
 
-1. Make sure that `clef` knows the password for the keystore.
-2. Make sure that `clef` auto-approves clique signing requests.
+1. Ensure `clef` knows the password for the keystore.
+2. Ensure `clef` auto-approves clique signing requests.
 
-These two things are independent of each other. First of all, however, we need to `init` clef (for this test I use the password `clefclefclef`)
+These two things are independent of each other. First of all, however, `clef` must be initiated (for this example the password is `clefclefclef`)
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn init
@@ -97,11 +108,11 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 * The master seed does not contain your accounts, those need to be backed up separately!
 ```
 
-After this operation, `clef` has it's own vault where it can store secrets and attestations, which we will utilize going forward.
+After this operation, `clef` has it's own vault where it can store secrets and attestations.
 
-### Storing passwords in `clef`
+## Storing passwords in `clef`
 
-With that done, we can now make `clef` aware of the password. We invoke `setpw <address>` to store a password for a given address. `clef` asks for the password, and it also asks for the clef master-password, in order to update and store the new secrets inside clef vault.
+With that done, `clef` can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. `clef` asks for the password, and it also asks for the master-password, in order to update and store the new secrets inside the vault.
 
 ```
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
@@ -113,25 +124,27 @@ Repeat password:
 Decrypt master seed of clef
 Password: 
 INFO [06-16|11:27:09.153] Credential store updated                 set=0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
-
 ```
 
-At this point, if we were to use clef as a sealer, we would be forced to manually click Approve for each block, but we would not be required to provide the password.
+At this point, if Clef is used as a sealer, each block would require manual approval, but without needing to provide the password.
 
-#### Testing stored password
+### Testing stored password
 
-Let's test using the stored password when sealing Clique-blocks. Start `clef` with
-```
+To test that the stored password is correct and being properly handled by Clef, first start `clef`:
+
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn
 ```
-And start `geth` with
-```
+
+then start Geth:
+
+```sh
 $ geth  --datadir ./ddir --signer ./clef/clef.ipc --mine
 ```
 
-Geth will ask what accounts are present, to which we need to manually enter `y` to approve:
+Geth will ask what accounts are present - enter `y` to approve:
 
-```
+```terminal
 -------- List Account request--------------
 A request has been made to list all accounts. 
 You can select which accounts the caller can see
@@ -139,7 +152,7 @@ You can select which accounts the caller can see
     URL: keystore:///home/user/tmp/clique_clef/ddir/keystore/UTC--2022-06-16T09-10-48.578523828Z--9cd932f670f7ede5de86f756a6d02548e5899f47
 -------------------------------------------
 Request context:
-	NA -> ipc -> NA
+	NA - ipc - NA
 
 Additional HTTP header data, provided by the external caller:
 	User-Agent: ""
@@ -149,7 +162,7 @@ Approve? [y/N]:
 DEBUG[06-16|11:36:42.499] Served account_list                      reqid=2 duration=3.213768195s
 ```
 
-After this, `geth` will start asking `clef` to sign things:
+After this, Geth will start asking `clef` to sign things:
 
 ```
 -------- Sign data request--------------
@@ -169,17 +182,18 @@ Additional HTTP header data, provided by the external caller:
 Approve? [y/N]:
 > y
 ```
-And indeed, after approving with `y`, we are not required to provide the password -- the signed block is returned to geth:
-```
+And indeed, after approving with `y`, the password is not required - the signed block is returned to Geth:
+
+```terminal
 INFO [06-16|11:36:46.714] Successfully sealed new block            number=1 sealhash=9589ed..662d03 hash=bd20b9..af8b87 elapsed=4.214s
 ```
-This mode of operation is somewhat unusable, since we'd need to keep "Approving" each block to be sealed. So let's fix that too.
+This mode of operation offers quite a poor UX because each block to be sealed requires manual approval. That is fixed in the following section.
 
-### Using rules to approve blocks
+## Using rules to approve blocks
 
-The basic idea with clef rules, is to let a piece of javascript take over the Approve/Deny decision. The javascript snippet has access to the same information as the manual operator.
+Clef rules allow a piece of Javascript take over the Approve/Deny decision. The Javascript snippet has access to the same information as the manual operator.
 
-Let's try with a simplistic first approach, which approves listing, and spits out the request data for `ApproveListing`
+The first approach, which approves listing, and returns the request data for `ApproveListing`, is demonstrated below:
 
 ```js
 function ApproveListing(){
@@ -191,21 +205,28 @@ function ApproveSignData(r){
     console.log(JSON.stringify(r))
 }
 ```
-In order to use a certain rule-file, we must first `attest` it. This is to prevent someone from modifying a ruleset-file on disk after creation.
-```
+In order to use a certain ruleset, it must first be 'attested'. This is to prevent someone from modifying a ruleset-file on disk after creation.
+
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn  attest  `sha256sum rules.js | cut -f1`
+```
+which returns:
+
+```terminal
 Decrypt master seed of clef
 Password: 
 INFO [06-16|13:49:00.298] Ruleset attestation updated              sha256=54aae496c3f0eda063a62c73ee284ca9fae3f43b401da847ef30ea30e85e35d1
 ```
-And then we can start clef, pointing out the `rules.js` file. OBS: if you later modify this file, you need to redo the `attest`-step.
-```
+
+And `clef` can be started, pointing out the `rules.js` file. 
+
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
 ```
 
-Once `geth` starts asking it to seal blocks, we will now see the data. And from that, we can decide on how to make a rule which allows signing clique headers but nothing else.
+Once Geth starts asking `clef` to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
 
-The actual data that gets passed to the js environment (and which our ruleset spit out to the console) looks like this:
+The actual data that gets passed to the js environment (and which the ruleset display in the terminal) looks as follows:
 ```json
 {
   "content_type": "application/x-clique-header",
@@ -230,9 +251,9 @@ The actual data that gets passed to the js environment (and which our ruleset sp
 }
 ```
 
-If we wanted our js to be extremely trustless/paranoid, we could (inside the javascript) take the `raw_data` and verify that it's the rlp structure for a clique header:
+To create an extremely trustless ruleset, the `raw_data` could be verified to ensure it has the right rlp structure for a Clique header:
 
-```
+```sh
  echo "+QIUoL0guY+66jZpzZh1wDX4Si/ycX4zD8FQqF/1Apy/r4uHoB3MTejex116q4W1Z7bM1BrTEkUblIp0E/ChQv1A1JNHlAAAAAAAAAAAAAAAAAAAAAAAAAAAoF0xJQr87ifQZc7HdMxcPwk0do8Gy/igUDX+TuoPZv6coFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhoFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhuQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICg3pPDoCEYqsY1qDYgwEKFIRnZXRoiGdvMS4xOC4xhWxpbnV4AAAAAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIgAAAAAAAAAAA==" | base64 -d | rlpdump 
 [
   bd20b98fbaea3669cd9875c035f84a2ff2717e330fc150a85ff5029cbfaf8b87,
@@ -252,7 +273,7 @@ If we wanted our js to be extremely trustless/paranoid, we could (inside the jav
   0000000000000000,
 ]
 ```
-However, we can also use the `messages`. They do not come from the external caller, but are generated from the `clef` internals: `clef` parsed the incoming request and verified the Clique wellformedness of the content. So we let's just check for such a message:
+However, `messages` could also be used. They do not come from the external caller, but are generated inernally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
 
 ```js
 function OnSignerStartup(info){}
@@ -273,24 +294,33 @@ function ApproveSignData(r){
 	return "Reject"
 }
 ```
-Attest
-```
+
+Attest the ruleset:
+
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn  attest  `sha256sum rules.js | cut -f1`
+```
+
+returning
+
+```terminal
 Decrypt master seed of clef
 Password: 
 INFO [06-16|14:18:53.476] Ruleset attestation updated              sha256=7d5036d22d1cc66599e7050fb1877f4e48b89453678c38eea06e3525996c2379
 ```
-Run clef
-```
-$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
+Run `clef`:
 
+```sh
+$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
 ```
-Run geth
-```
+Run Geth:
+
+```sh
 $ geth  --datadir ./ddir --signer ./clef/clef.ipc --mine
 ```
-And you should now see `clef` happily signing blocks:
-```
+And `clef` should now happily sign blocks:
+
+```terminal
 DEBUG[06-16|14:20:02.136] Served account_version                   reqid=1 duration="131.38µs"
 INFO [06-16|14:20:02.289] Op approved 
 DEBUG[06-16|14:20:02.289] Served account_list                      reqid=2 duration=4.672441ms
@@ -302,18 +332,18 @@ INFO [06-16|14:20:32.823] Op approved
 DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 duration=766.840681ms
 
 ```
-### Further refinements
 
+## Refinements
 
-If an attacker find the clef "external" interface (which would only happen if you start it with `http` enabled) , he
+If an attacker find the Clef "external" interface (which would only happen if you start it with `http` enabled), they
 - cannot make it sign arbitrary transactions,
 - cannot sign arbitrary data message,
 
-However, he could still make it sign e.g.  1000 versions of a certain block height, making the chain very unstable.
+However, they could still make it sign e.g. 1000 versions of a certain block height, making the chain very unstable.
 
-It is possible for rule execution to be stateful -- storing data. In this case, one could for example store what block heights have been sealed, and thus reject sealing a particular block height twice. In other words, we can use these rules to build our own version of an Execution-Layer slashing-db.
+It is possible for rule execution to be stateful (i.e. storing data). In this case, one could, for example, store what block heights have been sealed and reject sealing a particular block height twice. In other words, these rules could be used to build a miniature version of an execution layer slashing-db.
 
-We simply split the `clique header 2 [0xae525b65bc7f711bc136f502650039cd6959c3abc28fdf0ebfe2a5f85c92f3b6]` line, and store/check the number, using `storage.get` and `storage.put`:
+The `clique header 2 [0xae525b65bc7f711bc136f502650039cd6959c3abc28fdf0ebfe2a5f85c92f3b6]` line is split, and the number stored using `storage.get` and `storage.put`:
 
 ```js
 function OnSignerStartup(info){}
@@ -343,7 +373,8 @@ function ApproveSignData(r){
 }
 ```
 Running with this ruleset:
-```
+
+```terminal
 JS:>  number 45 latest 44
 INFO [06-16|22:26:43.023] Op approved 
 DEBUG[06-16|22:26:44.305] Served account_signData                  reqid=3 duration=1.287465394s
@@ -351,13 +382,13 @@ JS:>  number 46 latest 45
 INFO [06-16|22:26:44.313] Op approved 
 DEBUG[06-16|22:26:45.317] Served account_signData                  reqid=4 duration=1.010612774s
 ```
-This might be a bit over-the-top, security-wise, and may cause problems, if for some reason a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use javascript and statefulness to construct very intricate signing logic.
+This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
 
-### TLDR quick-version
+## TLDR quick-version
 
 Creation and attestation is a one-off event:
-```bash
+```sh
 ## Create the rules-file
 cat << END > rules.js
 function OnSignerStartup(info){}
@@ -385,9 +416,14 @@ clef --keystore ./ddir/keystore \
     attest  `sha256sum rules.js | cut -f1`
 ```
 The normal startup command for `clef`:
-```bash
+```sh
 clef --keystore ./ddir/keystore \
     --configdir ./clef --chainid 15  \
     --suppress-bootwarn --signersecret ./clefpw --rules ./rules.js
 ```
-For `geth`, the only change is to provide `--signer <path to clef ipc>`.  
+
+For Geth, the only change is to provide `--signer <path to clef ipc>`.  
+
+## Summary
+
+Clef can be used as a signer that automatically seals Clique blocks. This is a much more secure option than unlocking accounts using Geth's built-in account manager.
