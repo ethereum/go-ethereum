@@ -54,7 +54,7 @@ func TestConfigLegacy(t *testing.T) {
 				NoLocals:     false,
 				Journal:      "",
 				Rejournal:    1 * time.Hour,
-				PriceLimit:   30000000000,
+				PriceLimit:   1,
 				PriceBump:    10,
 				AccountSlots: 16,
 				GlobalSlots:  32768,
