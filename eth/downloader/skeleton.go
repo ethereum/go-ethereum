@@ -358,6 +358,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// If the sync is already done, resume the backfiller. When the loop stops,
 	// terminate the backfiller too.
 	linked := len(s.progress.Subchains) == 1 &&
+		rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
 	if linked {
@@ -946,12 +947,12 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// In the case of full sync it would be enough to check for the body,
 				// but even a full syncing node will generate a receipt once block
 				// processing is done, so it's just one more "needless" check.
-				var (
-					hasBody    = rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1)
-					hasReceipt = rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
-				)
-				if hasBody && hasReceipt {
-					linked = true
+				//
+				// The weird cascading checks are done to minimize the database reads.
+				linked = rawdb.HasHeader(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
+				if linked {
 					break
 				}
 			}
