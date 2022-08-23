@@ -776,9 +776,22 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 
 	// Insert dirty nodes into the database. In the same tree, it must be
 	// ensured that children are inserted first, then parent so that children
-	// can be linked with their parent correctly. The order of writing between
-	// different tries(account trie, storage tries) is not required.
-	for owner, subset := range nodes.sets {
+	// can be linked with their parent correctly.
+	//
+	// Note, the storage tries must be flushed before the account trie to
+	// retain the invariant that children go into the dirty cache first.
+	var order []common.Hash
+	for owner := range nodes.sets {
+		if owner == (common.Hash{}) {
+			continue
+		}
+		order = append(order, owner)
+	}
+	if _, ok := nodes.sets[common.Hash{}]; ok {
+		order = append(order, common.Hash{})
+	}
+	for _, owner := range order {
+		subset := nodes.sets[owner]
 		for _, path := range subset.paths {
 			n, ok := subset.nodes[path]
 			if !ok {
