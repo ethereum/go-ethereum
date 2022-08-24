@@ -90,11 +90,11 @@ var (
 		Usage:    "URL for remote database",
 		Category: flags.LoggingCategory,
 	}
-    BackingDBFlag = &cli.StringFlag{
-        Name:  "backingdb",
-        Usage: "Backing database implementation to use",
-        Value: ethconfig.Defaults.BackingDB,
-    }
+	BackingDBFlag = &cli.StringFlag{
+		Name:  "backingdb",
+		Usage: "Backing database implementation to use",
+		Value: ethconfig.Defaults.BackingDB,
+	}
 	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",
 		Usage:    "Root directory for ancient data (default = inside chaindata)",

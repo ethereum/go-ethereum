@@ -119,4 +119,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/cockroachdb/pebble => github.com/jwasinger/pebble v0.0.0-20220816202818-d02a56d8d2b9
+replace github.com/cockroachdb/pebble => github.com/holiman/pebble v0.0.0-20220902101014-5275b37a3670
