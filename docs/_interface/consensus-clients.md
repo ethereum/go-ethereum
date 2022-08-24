@@ -52,7 +52,7 @@ There are currently four consensus clients that can be run alongside Geth. These
  
 [Nimbus](https://nimbus.team/): written in Nim
  
-[Prysm](https://docs.prylabs.network/docs/getting-started/): written in Go
+[Prysm](https://docs.prylabs.network/docs/install/install-with-script): written in Go
  
 [Teku](https://pegasys.tech/teku): written in Java
  
