@@ -92,7 +92,7 @@ When a request is made via the external API, the logic flow is as follows:
 * Assuming the call returns "Approve", request is signed.
 
 
-There are five possible outcomes from the ruleset engine that are 
+There are three possible outcomes from the ruleset engine that are 
 handled in different ways:
  
 | Return value      |    Action                                 |
