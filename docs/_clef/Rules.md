@@ -127,7 +127,7 @@ for defining rules correctly in `ruleset.js`:
   with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
   
 * [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) 
-  is not supported. "Use strict" will parse but it does nothing.
+  is not supported. "use strict" will parse but it does nothing.
 
 
 ## Credential management
