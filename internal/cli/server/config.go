@@ -437,7 +437,7 @@ func DefaultConfig() *Config {
 			Enabled:   false,
 			Etherbase: "",
 			GasCeil:   20000000,
-			GasPrice:  big.NewInt(30 * params.GWei),
+			GasPrice:  big.NewInt(1),
 			ExtraData: "",
 		},
 		Gpo: &GpoConfig{
