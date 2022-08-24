@@ -960,7 +960,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Account range request timed out", "reqid", reqid)
-			s.rates.Update(idle, AccountRangeMsg, 0, 0)
+			s.rates.Update(idle, AccountRangeMsg, 2*time.Since(req.time), 0)
 			s.scheduleRevertAccountRequest(req)
 		})
 		s.accountReqs[reqid] = req
@@ -1071,7 +1071,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Bytecode request timed out", "reqid", reqid)
-			s.rates.Update(idle, ByteCodesMsg, 0, 0)
+			s.rates.Update(idle, ByteCodesMsg, 2*time.Since(req.time), 0)
 			s.scheduleRevertBytecodeRequest(req)
 		})
 		s.bytecodeReqs[reqid] = req
@@ -1218,7 +1218,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Storage request timed out", "reqid", reqid)
-			s.rates.Update(idle, StorageRangesMsg, 0, 0)
+			s.rates.Update(idle, StorageRangesMsg, 2*time.Since(req.time), 0)
 			s.scheduleRevertStorageRequest(req)
 		})
 		s.storageReqs[reqid] = req
@@ -1351,7 +1351,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Trienode heal request timed out", "reqid", reqid)
-			s.rates.Update(idle, TrieNodesMsg, 0, 0)
+			s.rates.Update(idle, TrieNodesMsg, 2*time.Since(req.time), 0)
 			s.scheduleRevertTrienodeHealRequest(req)
 		})
 		s.trienodeHealReqs[reqid] = req
@@ -1467,7 +1467,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 		}
 		req.timeout = time.AfterFunc(s.rates.TargetTimeout(), func() {
 			peer.Log().Debug("Bytecode heal request timed out", "reqid", reqid)
-			s.rates.Update(idle, ByteCodesMsg, 0, 0)
+			s.rates.Update(idle, ByteCodesMsg, 2*time.Since(req.time), 0)
 			s.scheduleRevertBytecodeHealRequest(req)
 		})
 		s.bytecodeHealReqs[reqid] = req

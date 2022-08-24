@@ -194,6 +194,9 @@ func (t *Tracker) Update(kind uint64, elapsed time.Duration, items int) {
 	// to minimum
 	if items == 0 {
 		t.capacity[kind] = 0
+		if elapsed > 0 {
+			t.roundtrip = time.Duration((1-measurementImpact)*float64(t.roundtrip) + measurementImpact*float64(elapsed))
+		}
 		return
 	}
 	// Otherwise update the throughput with a new measurement
