@@ -21,22 +21,26 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	lru "github.com/hashicorp/golang-lru"
 )
 
-// txNoncer is a tiny virtual state database to manage the executable nonces of
+const nonceCacheSize = 1024 * 50
+
+// txNoncer is a LRU cache to manage the executable nonces of
 // accounts in the pool, falling back to reading from a real state database if
 // an account is unknown.
 type txNoncer struct {
 	fallback *state.StateDB
-	nonces   map[common.Address]uint64
+	nonces   *lru.Cache
 	lock     sync.Mutex
 }
 
-// newTxNoncer creates a new virtual state database to track the pool nonces.
+// newTxNoncer creates a new LRU cache to track the pool nonces.
 func newTxNoncer(statedb *state.StateDB) *txNoncer {
+	cache, _ := lru.New(nonceCacheSize)
 	return &txNoncer{
 		fallback: statedb.Copy(),
-		nonces:   make(map[common.Address]uint64),
+		nonces:   cache,
 	}
 }
 
@@ -45,43 +49,40 @@ func newTxNoncer(statedb *state.StateDB) *txNoncer {
 func (txn *txNoncer) get(addr common.Address) uint64 {
 	// We use mutex for get operation is the underlying
 	// state will mutate db even for read access.
-	txn.lock.Lock()
-	defer txn.lock.Unlock()
-
-	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	if _, ok := txn.nonces.Get(addr); !ok {
+		txn.lock.Lock()
+		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
+		txn.lock.Unlock()
 	}
-	return txn.nonces[addr]
+	nonce, _ := txn.nonces.Get(addr)
+	return nonce.(uint64)
 }
 
-// set inserts a new virtual nonce into the virtual state database to be returned
+// set inserts a new virtual nonce into the LRU cache to be returned
 // whenever the pool requests it instead of reaching into the real state database.
 func (txn *txNoncer) set(addr common.Address, nonce uint64) {
-	txn.lock.Lock()
-	defer txn.lock.Unlock()
-
-	txn.nonces[addr] = nonce
+	txn.nonces.Add(addr, nonce)
 }
 
-// setIfLower updates a new virtual nonce into the virtual state database if the
+// setIfLower updates a new virtual nonce into the LRU cache if the
 // the new one is lower.
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
-	txn.lock.Lock()
-	defer txn.lock.Unlock()
-
-	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+	if _, ok := txn.nonces.Get(addr); !ok {
+		txn.lock.Lock()
+		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
+		txn.lock.Unlock()
 	}
-	if txn.nonces[addr] <= nonce {
+
+	cachedNonce, _ := txn.nonces.Get(addr)
+	if cachedNonce.(uint64) <= nonce {
 		return
 	}
-	txn.nonces[addr] = nonce
+	txn.nonces.Add(addr, nonce)
 }
 
 // setAll sets the nonces for all accounts to the given map.
 func (txn *txNoncer) setAll(all map[common.Address]uint64) {
-	txn.lock.Lock()
-	defer txn.lock.Unlock()
-
-	txn.nonces = all
+	for addr, nonce := range all {
+		txn.nonces.Add(addr, nonce)
+	}
 }
