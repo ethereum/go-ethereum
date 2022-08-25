@@ -29,7 +29,7 @@ will swap the existing PoW for a [proof-of-stake (PoS)](https://ethereum.org/en/
 
 Participating in Ethereum's PoW mining requires running an algorithm called 
 ["Ethash"](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash). Geth includes
-a CPU miner which runs Ethash within the Geth process. This might be useful for mining on some testnets. However, this is CPU mining is not viable on Ethereum Mainnet because CPU miners are easily out-competed by more efficient GPU miners. GPU mining is the recommended method for mining real ether on Ethereum Mainnet, but it is not part of the standard Geth installation. To mine using GPUs an additional piece of third-paty software is required. The recommended GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
+a CPU miner which runs Ethash within the Geth process. This might be useful for mining on some testnets. However, this is CPU mining is not viable on Ethereum Mainnet because CPU miners are easily out-competed by more efficient GPU miners. GPU mining is the recommended method for mining real ether on Ethereum Mainnet, but it is not part of the standard Geth installation. To mine using GPUs an additional piece of third-party software is required. The recommended GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
 
 Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain, meaning block rewards will not be recognized by the main network. 
 
