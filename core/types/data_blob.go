@@ -377,9 +377,12 @@ func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGComm
 		for i := range aggregatePoly {
 			aggregateBlob[i] = bls.FrTo32(&aggregatePoly[i])
 		}
-		root := tree.GetHashFn().HashTreeRoot(&aggregateBlob, &aggregateCommitment)
+		sum, err := sszHash(&PolynomialAndCommitment{aggregateBlob, aggregateCommitment})
+		if err != nil {
+			return nil, nil, KZGProof{}, err
+		}
 		var z bls.Fr
-		hashToFr(&z, root)
+		hashToFr(&z, sum)
 
 		var y bls.Fr
 		kzg.EvaluatePolyInEvaluationForm(&y, aggregatePoly[:], &z)
@@ -399,8 +402,20 @@ type BlobsAndCommitments struct {
 	BlobKzgs BlobKzgs
 }
 
-func (h *BlobsAndCommitments) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.HashTreeRoot(&h.Blobs, &h.BlobKzgs)
+func (b *BlobsAndCommitments) HashTreeRoot(hFn tree.HashFn) tree.Root {
+	return hFn.HashTreeRoot(&b.Blobs, &b.BlobKzgs)
+}
+
+func (b *BlobsAndCommitments) Serialize(w *codec.EncodingWriter) error {
+	return w.Container(&b.Blobs, &b.BlobKzgs)
+}
+
+func (b *BlobsAndCommitments) ByteLength() uint64 {
+	return codec.ContainerLength(&b.Blobs, &b.BlobKzgs)
+}
+
+func (b *BlobsAndCommitments) FixedLength() uint64 {
+	return 0
 }
 
 type PolynomialAndCommitment struct {
@@ -410,6 +425,18 @@ type PolynomialAndCommitment struct {
 
 func (p *PolynomialAndCommitment) HashTreeRoot(hFn tree.HashFn) tree.Root {
 	return hFn.HashTreeRoot(&p.b, &p.c)
+}
+
+func (p *PolynomialAndCommitment) Serialize(w *codec.EncodingWriter) error {
+	return w.Container(&p.b, &p.c)
+}
+
+func (p *PolynomialAndCommitment) ByteLength() uint64 {
+	return codec.ContainerLength(&p.b, &p.c)
+}
+
+func (p *PolynomialAndCommitment) FixedLength() uint64 {
+	return 0
 }
 
 type BlobTxWrapper struct {
@@ -487,10 +514,12 @@ func (b *BlobTxWrapData) verifyBlobs(inner TxData) error {
 	}
 	var aggregateCommitment KZGCommitment
 	copy(aggregateCommitment[:], bls.ToCompressedG1(aggregateCommitmentG1))
-	hasher := PolynomialAndCommitment{aggregateBlob, aggregateCommitment}
-	root := hasher.HashTreeRoot(tree.GetHashFn())
+	sum, err := sszHash(&PolynomialAndCommitment{aggregateBlob, aggregateCommitment})
+	if err != nil {
+		return err
+	}
 	var z bls.Fr
-	hashToFr(&z, root)
+	hashToFr(&z, sum)
 
 	var y bls.Fr
 	kzg.EvaluatePolyInEvaluationForm(&y, aggregatePoly[:], &z)
@@ -555,10 +584,12 @@ func computePowers(r *bls.Fr, n int) []bls.Fr {
 
 func computeAggregateKzgCommitment(blobs Blobs, commitments []KZGCommitment) ([]bls.Fr, *bls.G1Point, error) {
 	// create challenges
-	hasher := BlobsAndCommitments{blobs, commitments}
-	root := hasher.HashTreeRoot(tree.GetHashFn())
+	sum, err := sszHash(&BlobsAndCommitments{blobs, commitments})
+	if err != nil {
+		return nil, nil, err
+	}
 	var r bls.Fr
-	hashToFr(&r, root)
+	hashToFr(&r, sum)
 
 	powers := computePowers(&r, len(blobs))
 
@@ -579,9 +610,9 @@ func computeAggregateKzgCommitment(blobs Blobs, commitments []KZGCommitment) ([]
 	return aggregatePoly, aggregateCommitmentG1, nil
 }
 
-func hashToFr(out *bls.Fr, root tree.Root) {
+func hashToFr(out *bls.Fr, h [32]byte) {
 	// re-interpret as little-endian
-	var b [32]byte = root
+	var b [32]byte = h
 	for i := 0; i < 16; i++ {
 		b[31-i], b[i] = b[i], b[31-i]
 	}
