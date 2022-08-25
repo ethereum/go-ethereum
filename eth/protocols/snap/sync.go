@@ -1251,7 +1251,11 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
+	// We don't want to have too many pending trienode requests out.
+	// Hard cap at 10.
+	len(s.trienodeHealReqs) > 10{
+		break
+	}
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.trienodeHealIdlers)),
