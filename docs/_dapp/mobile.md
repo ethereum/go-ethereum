@@ -164,7 +164,7 @@ custom numbers. The *light* version is recommended.
 
 ### Account lifecycle
 
-The encyrpted keystore can be used for the entire account lifecycle requirements of a mobile
+The encrypted keystore can be used for the entire account lifecycle requirements of a mobile
 application. This includes the basic functionality of creating new accounts and deleting 
 existing ones as well as more advanced functions like updating access credentials and account
 import/export.
