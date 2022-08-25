@@ -17,9 +17,9 @@ type ForensicsContent struct {
 }
 
 type VoteEquivocationContent struct {
-	SmallerRoundVote *Vote `json:"smallerRoundVote"`
-	LargerRoundVote  *Vote `json:"largerRoundVote"`
-	Signer           common.Address
+	SmallerRoundVote *Vote          `json:"smallerRoundVote"`
+	LargerRoundVote  *Vote          `json:"largerRoundVote"`
+	Signer           common.Address `json:"signer"`
 }
 
 type ForensicProof struct {
