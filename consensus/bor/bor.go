@@ -552,8 +552,6 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 		number, hash = number-1, header.ParentHash
 	}
 
-	log.Info("Snapshot has been found in", "headers depth", len(headers))
-
 	// check if snapshot is nil
 	if snap == nil {
 		return nil, fmt.Errorf("unknown error while retrieving snapshot at block number %v", number)
