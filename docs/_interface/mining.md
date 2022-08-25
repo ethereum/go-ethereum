@@ -117,7 +117,7 @@ The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions
 
 ## CPU Mining with Geth
 
-When Geth is started is is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can
+When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can
 be used to set the number parallel mining threads (defaulting to the total number of processor cores).
 
 ```shell
