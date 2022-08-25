@@ -24,7 +24,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-const nonceCacheSize = 1024 * 50
+const nonceCacheLimit = 1024 * 50
 
 // txNoncer is a LRU cache to manage the executable nonces of
 // accounts in the pool, falling back to reading from a real state database if
@@ -37,7 +37,7 @@ type txNoncer struct {
 
 // newTxNoncer creates a new LRU cache to track the pool nonces.
 func newTxNoncer(statedb *state.StateDB) *txNoncer {
-	cache, _ := lru.New(nonceCacheSize)
+	cache, _ := lru.New(nonceCacheLimit)
 	return &txNoncer{
 		fallback: statedb.Copy(),
 		nonces:   cache,
