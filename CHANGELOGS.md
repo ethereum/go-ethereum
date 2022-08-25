@@ -56,3 +56,108 @@ Related commits:
 Related commits:
 
 + [c180aa2e75d80dda90719b58690111b0d5b69f21](https://github.com/scroll-tech/go-ethereum/commit/c180aa2e75d80dda90719b58690111b0d5b69f21) (PR [#76](https://github.com/scroll-tech/go-ethereum/pull/76))
+
+## 2022-06-27
+
+Tag: None.
+
+Current rev: c516a9e47739bee96e70aced01fad255c0311897.
+
+Based on https://github.com/ethereum/go-ethereum v1.10.13.
+
+**Notable changes:**
+
+### 1. Add zktrie, allow switch trie type by config.
+
+Related commits:
+
++ [c516a9e47739bee96e70aced01fad255c0311897](https://github.com/scroll-tech/go-ethereum/commit/c516a9e47739bee96e70aced01fad255c0311897) (PR [#113](https://github.com/scroll-tech/go-ethereum/pull/113))
+
+### 2. Add more detailed execution trace for zkevm-circuits proving.
+
+Related commits:
+
++ [d3bc8322dc503fa1b927a60b518f0b195641ffdf](https://github.com/scroll-tech/go-ethereum/commit/d3bc8322dc503fa1b927a60b518f0b195641ffdf) (PR [#102](https://github.com/scroll-tech/go-ethereum/pull/102))
+
+(
+
+Fields change:
+
++ [571dcad4be512225bb1209f8008a8577eab29ded](https://github.com/scroll-tech/go-ethereum/commit/571dcad4be512225bb1209f8008a8577eab29ded) (PR [#98](https://github.com/scroll-tech/go-ethereum/pull/98))
++ [e15d0d35cba2aa6aab932df2691e7544e4ffda78](https://github.com/scroll-tech/go-ethereum/commit/e15d0d35cba2aa6aab932df2691e7544e4ffda78) (PR [#117](https://github.com/scroll-tech/go-ethereum/pull/117))
+
+Bug fix:
+
++ [f73142728206ddc4b89d3b3e9b5549933eba94fe](https://github.com/scroll-tech/go-ethereum/commit/f73142728206ddc4b89d3b3e9b5549933eba94fe) (PR [#119](https://github.com/scroll-tech/go-ethereum/pull/119))
+
+)
+
+
+### 3. Increase tps or reduce GC pressure
+
+Related commits:
+
++ [9199413d21c6c08f14ff968c472206e5ebff0518](https://github.com/scroll-tech/go-ethereum/commit/9199413d21c6c08f14ff968c472206e5ebff0518) (PR [#92](https://github.com/scroll-tech/go-ethereum/pull/92))
++ [9b99f2e17425fa16d1835cbfe47f9015321faae1](https://github.com/scroll-tech/go-ethereum/commit/9b99f2e17425fa16d1835cbfe47f9015321faae1) (PR [#104](https://github.com/scroll-tech/go-ethereum/pull/104))
+
+### 4. Misc
+
+4.1 opcode operation
+
+Related commits:
+
++ [21b65f4944667e574c29f37db6da7185b7dfa444](https://github.com/scroll-tech/go-ethereum/commit/21b65f4944667e574c29f37db6da7185b7dfa444) (PR [#118](https://github.com/scroll-tech/go-ethereum/pull/118))
+
+4.2 The changes of module import
+
+Related commits:
+
++ [9199413d21c6c08f14ff968c472206e5ebff0518](https://github.com/scroll-tech/go-ethereum/commit/9199413d21c6c08f14ff968c472206e5ebff0518) (PR [#92](https://github.com/scroll-tech/go-ethereum/pull/92))
+
+4.3 The changes of ci、jenkins、docker、makefile and readme
+
+Related commits:
+
++ [35f6a91cd5d5bd2ecfc865f6c0c0b239727f55ee](https://github.com/scroll-tech/go-ethereum/commit/35f6a91cd5d5bd2ecfc865f6c0c0b239727f55ee) (PR [#111](https://github.com/scroll-tech/go-ethereum/pull/111))
++ [3410a56d866735f6a81eb8e5bae3976751ab0691](https://github.com/scroll-tech/go-ethereum/commit/3410a56d866735f6a81eb8e5bae3976751ab0691) (PR [#121](https://github.com/scroll-tech/go-ethereum/pull/121))
+
+## 2022-07-30
+
+Tag: None.
+
+Current rev: d421337df58074bdee8d8cb8fa592ece5a2300e8.
+
+Based on https://github.com/ethereum/go-ethereum v1.10.13.
+
+**Notable changes:**
+
+### 1. Disable memory trace
+
+Related commits:
+
++ [d421337df58074bdee8d8cb8fa592ece5a2300e8](https://github.com/scroll-tech/go-ethereum/commit/d421337df58074bdee8d8cb8fa592ece5a2300e8) (PR [#134](https://github.com/scroll-tech/go-ethereum/pull/134))
+
+### 2. Add more opcode handlings
+
+Related commits:
+
++ [eb11a84c56b30bf7e2345db9b7532542336a5581](https://github.com/scroll-tech/go-ethereum/commit/eb11a84c56b30bf7e2345db9b7532542336a5581) (PR [#128](https://github.com/scroll-tech/go-ethereum/pull/128))
+
+### 3. Include zktrie witness in block trace; add demo for generating witness data for mpt circuit
+
+Related commits:
+
++ [3682e05f3f2495af437234e2036412e9f7ed51b7](https://github.com/scroll-tech/go-ethereum/commit/3682e05f3f2495af437234e2036412e9f7ed51b7) (PR [#123](https://github.com/scroll-tech/go-ethereum/pull/123))
+
+(
+
+Fields change:
+
++ [f9952a396fb558fe1a3f5804f66a8a1683cd44d6](https://github.com/scroll-tech/go-ethereum/commit/f9952a396fb558fe1a3f5804f66a8a1683cd44d6) (PR [#133](https://github.com/scroll-tech/go-ethereum/pull/133))
+
+Bug fix:
+
++ [fefa8b99c7b3dea8f15e8350245f71c3bbafa046](https://github.com/scroll-tech/go-ethereum/commit/fefa8b99c7b3dea8f15e8350245f71c3bbafa046) (PR [#132](https://github.com/scroll-tech/go-ethereum/pull/132))
++ [37dbb86aa615ba1ab583946f084b0ce190975478](https://github.com/scroll-tech/go-ethereum/commit/37dbb86aa615ba1ab583946f084b0ce190975478) (PR [#126](https://github.com/scroll-tech/go-ethereum/pull/126))
+
+)
