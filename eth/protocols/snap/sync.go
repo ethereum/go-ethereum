@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -453,6 +454,12 @@ type Syncer struct {
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, root)
 }
 
+var (
+	snapUnexpectedMeter = metrics.NewRegisteredCounter("eth/snap/unexpected", nil)
+	snapExpectedMeter   = metrics.NewRegisteredCounter("eth/snap/expected", nil)
+	maxPendingRequests  = 500 // a.k.a unlimited
+)
+
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
 func NewSyncer(db ethdb.KeyValueStore) *Syncer {
@@ -628,14 +635,14 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			return nil
 		}
 		// Assign all the data retrieval tasks to any free peers
-		s.assignAccountTasks(accountResps, accountReqFails, cancel)
-		s.assignBytecodeTasks(bytecodeResps, bytecodeReqFails, cancel)
-		s.assignStorageTasks(storageResps, storageReqFails, cancel)
+		s.assignAccountTasks(maxPendingRequests, accountResps, accountReqFails, cancel)
+		s.assignBytecodeTasks(maxPendingRequests, bytecodeResps, bytecodeReqFails, cancel)
+		s.assignStorageTasks(maxPendingRequests, storageResps, storageReqFails, cancel)
 
 		if len(s.tasks) == 0 {
 			// Sync phase done, run heal phase
-			s.assignTrienodeHealTasks(trienodeHealResps, trienodeHealReqFails, cancel)
-			s.assignBytecodeHealTasks(bytecodeHealResps, bytecodeHealReqFails, cancel)
+			s.assignTrienodeHealTasks(maxPendingRequests, trienodeHealResps, trienodeHealReqFails, cancel)
+			s.assignBytecodeHealTasks(maxPendingRequests, bytecodeHealResps, bytecodeHealReqFails, cancel)
 		}
 		// Update sync progress
 		s.lock.Lock()
@@ -892,7 +899,7 @@ func (s *Syncer) cleanStorageTasks() {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
-func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *accountRequest, cancel chan struct{}) {
+func (s *Syncer) assignAccountTasks(maxPending int, success chan *accountResponse, fail chan *accountRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -919,6 +926,10 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		// Skip any tasks already filling
 		if task.req != nil || task.res != nil {
 			continue
+		}
+		if len(s.accountReqs) >= maxPending {
+			// We don't want to have too many pending requests out.
+			break
 		}
 		// Task pending retrieval, try to find an idle peer. If no such peer
 		// exists, we probably assigned tasks for all (or they are stateless).
@@ -989,7 +1000,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
-func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *bytecodeRequest, cancel chan struct{}) {
+func (s *Syncer) assignBytecodeTasks(maxPending int, success chan *bytecodeResponse, fail chan *bytecodeRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1013,6 +1024,10 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
+		if len(s.bytecodeReqs) >= maxPending {
+			// We don't want to have too many pending requests out.
+			break
+		}
 		// Skip any tasks not in the bytecode retrieval phase
 		if task.res == nil {
 			continue
@@ -1092,7 +1107,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
-func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *storageRequest, cancel chan struct{}) {
+func (s *Syncer) assignStorageTasks(maxPending int, success chan *storageResponse, fail chan *storageRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1116,6 +1131,10 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 
 	// Iterate over all the tasks and try to find a pending one
 	for _, task := range s.tasks {
+		if len(s.storageReqs) >= maxPending {
+			// We don't want to have too many pending requests out.
+			break
+		}
 		// Skip any tasks not in the storage retrieval phase
 		if task.res == nil {
 			continue
@@ -1248,14 +1267,9 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 
 // assignTrienodeHealTasks attempts to match idle peers to trie node requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
+func (s *Syncer) assignTrienodeHealTasks(maxPending int, success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	// We don't want to have too many pending trienode requests out.
-	// Hard cap at 10.
-	if len(s.trienodeHealReqs) > 10 {
-		return
-	}
 	// Sort the peers by download capacity to use faster ones if many available
 	idlers := &capacitySort{
 		ids:  make([]string, 0, len(s.trienodeHealIdlers)),
@@ -1276,7 +1290,8 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.trieTasks) > 0 || s.healer.scheduler.Pending() > 0 {
-		if len(s.trienodeHealReqs) > 15 {
+		if len(s.trienodeHealReqs) >= maxPending {
+			// We don't want to have too many pending requests out.
 			break
 		}
 		// If there are not enough trie tasks queued to fully assign, fill the
@@ -1379,7 +1394,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 // assignBytecodeHealTasks attempts to match idle peers to bytecode requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
-func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fail chan *bytecodeHealRequest, cancel chan struct{}) {
+func (s *Syncer) assignBytecodeHealTasks(maxPending int, success chan *bytecodeHealResponse, fail chan *bytecodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -1403,6 +1418,10 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 
 	// Iterate over pending tasks and try to find a peer to retrieve with
 	for len(s.healer.codeTasks) > 0 || s.healer.scheduler.Pending() > 0 {
+		if len(s.bytecodeHealReqs) >= maxPending {
+			// We don't want to have too many pending requests out.
+			break
+		}
 		// If there are not enough trie tasks queued to fully assign, fill the
 		// queue from the state sync scheduler. The trie synced schedules these
 		// together with trie nodes, so we need to queue them combined.
@@ -2268,9 +2287,11 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
 		logger.Warn("Unexpected account range packet")
+		snapUnexpectedMeter.Inc(1)
 		s.lock.Unlock()
 		return nil
 	}
+	snapExpectedMeter.Inc(1)
 	delete(s.accountReqs, id)
 	s.rates.Update(peer.ID(), AccountRangeMsg, time.Since(req.time), int(size))
 
@@ -2380,9 +2401,11 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
 		logger.Warn("Unexpected bytecode packet")
+		snapUnexpectedMeter.Inc(1)
 		s.lock.Unlock()
 		return nil
 	}
+	snapExpectedMeter.Inc(1)
 	delete(s.bytecodeReqs, id)
 	s.rates.Update(peer.ID(), ByteCodesMsg, time.Since(req.time), len(bytecodes))
 
@@ -2489,9 +2512,11 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
 		logger.Warn("Unexpected storage ranges packet")
+		snapUnexpectedMeter.Inc(1)
 		s.lock.Unlock()
 		return nil
 	}
+	snapExpectedMeter.Inc(1)
 	delete(s.storageReqs, id)
 	s.rates.Update(peer.ID(), StorageRangesMsg, time.Since(req.time), int(size))
 
@@ -2616,9 +2641,11 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
 		logger.Warn("Unexpected trienode heal packet")
+		snapUnexpectedMeter.Inc(1)
 		s.lock.Unlock()
 		return nil
 	}
+	snapExpectedMeter.Inc(1)
 	delete(s.trienodeHealReqs, id)
 	s.rates.Update(peer.ID(), TrieNodesMsg, time.Since(req.time), len(trienodes))
 
@@ -2711,9 +2738,11 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
 		logger.Warn("Unexpected bytecode heal packet")
+		snapUnexpectedMeter.Inc(1)
 		s.lock.Unlock()
 		return nil
 	}
+	snapExpectedMeter.Inc(1)
 	delete(s.bytecodeHealReqs, id)
 	s.rates.Update(peer.ID(), ByteCodesMsg, time.Since(req.time), len(bytecodes))
 
