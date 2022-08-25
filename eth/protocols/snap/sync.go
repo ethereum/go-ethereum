@@ -457,7 +457,7 @@ type Syncer struct {
 var (
 	snapUnexpectedMeter = metrics.NewRegisteredCounter("eth/snap/unexpected", nil)
 	snapExpectedMeter   = metrics.NewRegisteredCounter("eth/snap/expected", nil)
-	maxPendingRequests  = 500 // a.k.a unlimited
+	maxPendingRequests  = 15
 )
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
