@@ -3,10 +3,6 @@ title: Rules
 description: Introduction to automated rulesets in Clef
 ---
 
-This page provides a fairly low-level explanation for how rules are implemented in Clef. It is a good idea to read the [Introduction to Clef](/content/docs/tools/Clef/introduction) and the [Clef tutorial](/content/docs/tools/Clef/tutorial) before diving in to this page.
-
-## Introduction
-
 Rules in Clef are sets of conditions that determine whether a given action can be approved automatically without requiring manual intervention from the user. This can be useful for automatically approving transactions between a user's own accounts, or approving patterns that are commonly used by applications. Automatic signing also requires Clef to have access to account passwords which is configured independently of the ruleset. 
 
 Rules can define arbitrary conditions such as:
@@ -29,7 +25,7 @@ The ruleset engine acts as a gatekeeper to the command line interface - it auto-
 
 ![Clef ruleset logic](/static/images/clef_ruleset.png)
 
-When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/content/docs/tools/Clef/apis). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/content/docs/tools/Clef/apis/#ui-api). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
+When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/content/docs/tools/Clef/apis.md). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/content/docs/tools/Clef/apis.md). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 
 ```js
 function asBig(str) {
@@ -69,14 +65,13 @@ When a request is made via the external API, the logic flow is as follows:
 * Assuming the call returns "Approve", request is signed.
 
 
-There are five possible outcomes from the ruleset engine that are 
-handled in different ways:
+There are three possible outcomes from the ruleset engine that are handled in different ways:
  
 | Return value      |    Action                                 |
 | ------------------| ----------------------------------------- |
-| "Approve"           | Auto-approve request       			    |
-| "Reject"            | Auto-reject request        				|
-| Anything else             | Pass decision to UI for manual approval   |
+| "Approve"         | Auto-approve request       			    |
+| "Reject"          | Auto-reject request        				|
+| Anything else     | Pass decision to UI for manual approval   |
  
  
 There are some additional noteworthy implementation details that are important for defining rules correctly in `ruleset.js`:
@@ -97,13 +92,12 @@ There are some additional noteworthy implementation details that are important f
   
 * The regular expression engine (re2/regexp) in Otto VM is not fully compatible with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
   
-* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "Use strict" will parse but it does nothing.
+* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "use strict" will parse but it does nothing.
 
 
 ## Credential management
 
-The ability to auto-approve transaction requires that the signer has the necessary credentials, i.e. account passwords, to decrypt keyfiles. 
-These are stored encrypted as follows:
+The ability to auto-approve transaction requires that the signer has the necessary credentials, i.e. account passwords, to decrypt keyfiles. These are stored encrypted as follows:
 
 When the `signer` is started it generates a seed that is locked with a user specified password. The seed is saved to a location that defaults to `$HOME/.clef/masterseed.json`. The `seed` itself is a blob of bytes.
 
@@ -119,13 +113,11 @@ The `signer` uses the `seed` to:
 ## Security
 
 ### The Javascript VM
-The downside of the very flexible rule implementation included in Clef is that the `signer` binary needs to contain a Javascript engine. This is an additional attack surface. The only viable attack is for an adversary to somehow extract cryptographic keys from memory during the Javascript VM execution. The hash-based rule attestation condition means the actual Javascript code executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler attack would be to surreptitiously insert an attested "always-approve" rule instead of attempting to exploit the Javascript virtual machine. The Javascript engine is quite simple to implement and there are currently no known security vulnerabilities, not have there been any security problems identified for the
-similar Javascript VM implemented in Geth.
+The downside of the very flexible rule implementation included in Clef is that the `signer` binary needs to contain a Javascript engine. This is an additional attack surface. The only viable attack is for an adversary to somehow extract cryptographic keys from memory during the Javascript VM execution. The hash-based rule attestation condition means the actual Javascript code executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler attack would be to surreptitiously insert an attested "always-approve" rule instead of attempting to exploit the Javascript virtual machine. The Javascript engine is quite simple to implement and there are currently no known security vulnerabilities, not have there been any security problems identified for the similar Javascript VM implemented in Geth.
 
 ### Writing rules
 
-Since the user has complete freedom to write custom rules, it is plausible that those rules could create unintended security vulnerabilities. This can only really be protected by coding very carefully and trying to test rulesets (e.g. on a private testnet) before 
-implementing them on a public network.
+Since the user has complete freedom to write custom rules, it is plausible that those rules could create unintended security vulnerabilities. This can only really be protected by coding very carefully and trying to test rulesets (e.g. on a private testnet) before implementing them on a public network.
 
 Javascript is very flexible but also easy to write incorrectly. For example, users might assume that javascript can handle large integers natively rather than explicitly using `bigInt`. This is an error commonly encountered in the Ethereum context when users attempt to multiply `gas` by `gasCost`.
 
@@ -256,3 +248,4 @@ function OnApprovedTx(resp) {
 ## Summary
 
 Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
+
