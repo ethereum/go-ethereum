@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"sync/atomic"
@@ -99,7 +100,7 @@ type Client struct {
 	reqTimeout  chan *requestOp  // removes response IDs when call timeout expires
 }
 
-type reconnectFunc func(ctx context.Context) (ServerCodec, error)
+type reconnectFunc func(context.Context) (ServerCodec, error)
 
 type clientContextKey struct{}
 
@@ -160,7 +161,7 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 //
 // The client reconnects automatically if the connection is lost.
 func Dial(rawurl string) (*Client, error) {
-	return DialContext(context.Background(), rawurl)
+	return DialOptions(context.Background(), rawurl)
 }
 
 // DialContext creates a new RPC client, just like Dial.
@@ -168,41 +169,40 @@ func Dial(rawurl string) (*Client, error) {
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		return nil, err
-	}
-	switch u.Scheme {
-	case "http", "https":
-		return DialHTTP(rawurl)
-	case "ws", "wss":
-		return DialWebsocket(ctx, rawurl, "")
-	case "stdio":
-		return DialStdIO(ctx)
-	case "":
-		return DialIPC(ctx, rawurl)
-	default:
-		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
-	}
+	return DialOptions(ctx, rawurl)
 }
 
-func DialWithAuth(ctx context.Context, rawurl string, auth HeaderAuthProvider) (*Client, error) {
+// DialContext creates a new RPC client.
+func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
 	}
+
+	cfg := new(clientConfig)
+	for _, opt := range options {
+		opt.applyOption(cfg)
+	}
+
+	var reconnect reconnectFunc
 	switch u.Scheme {
 	case "http", "https":
-		return DialHTTPWithAuth(rawurl, auth)
+		reconnect = newClientTransportHTTP(rawurl, cfg)
 	case "ws", "wss":
-		return DialWebsocketWithAuth(ctx, rawurl, "", auth)
+		rc, err := newClientTransportWS(rawurl, cfg)
+		if err != nil {
+			return nil, err
+		}
+		reconnect = rc
 	case "stdio":
-		return DialStdIO(ctx)
+		reconnect = newClientTransportIO(os.Stdin, os.Stdout)
 	case "":
-		return DialIPC(ctx, rawurl)
+		reconnect = newClientTransportIPC(rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
+
+	return newClient(ctx, reconnect)
 }
 
 // ClientFromContext retrieves the client from the context, if any. This can be used to perform
