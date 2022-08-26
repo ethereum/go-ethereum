@@ -14,10 +14,10 @@ import (
 func TestConfigLegacy(t *testing.T) {
 
 	readFile := func(path string) {
-		config, err := readLegacyConfig(path)
+		expectedConfig, err := readLegacyConfig(path)
 		assert.NoError(t, err)
 
-		assert.Equal(t, config, &Config{
+		testConfig := &Config{
 			Chain:    "mainnet",
 			Identity: Hostname(),
 			RequiredBlocks: map[string]string{
@@ -52,7 +52,7 @@ func TestConfigLegacy(t *testing.T) {
 			TxPool: &TxPoolConfig{
 				Locals:       []string{},
 				NoLocals:     false,
-				Journal:      "",
+				Journal:      "transactions.rlp",
 				Rejournal:    1 * time.Hour,
 				PriceLimit:   1,
 				PriceBump:    10,
@@ -65,8 +65,8 @@ func TestConfigLegacy(t *testing.T) {
 			Sealer: &SealerConfig{
 				Enabled:   false,
 				Etherbase: "",
-				GasCeil:   20000000,
-				GasPrice:  big.NewInt(30000000000),
+				GasCeil:   30000000,
+				GasPrice:  big.NewInt(1 * params.GWei),
 				ExtraData: "",
 			},
 			Gpo: &GpoConfig{
@@ -86,22 +86,22 @@ func TestConfigLegacy(t *testing.T) {
 					Prefix:  "",
 					Host:    "localhost",
 					API:     []string{"eth", "net", "web3", "txpool", "bor"},
-					Cors:    []string{"*"},
-					VHost:   []string{"*"},
+					Cors:    []string{"localhost"},
+					VHost:   []string{"localhost"},
 				},
 				Ws: &APIConfig{
 					Enabled: false,
 					Port:    8546,
 					Prefix:  "",
 					Host:    "localhost",
-					API:     []string{"web3", "net"},
-					Cors:    []string{"*"},
-					VHost:   []string{"*"},
+					API:     []string{"net", "web3"},
+					Cors:    []string{"localhost"},
+					VHost:   []string{"localhost"},
 				},
 				Graphql: &APIConfig{
 					Enabled: false,
-					Cors:    []string{"*"},
-					VHost:   []string{"*"},
+					Cors:    []string{"localhost"},
+					VHost:   []string{"localhost"},
 				},
 			},
 			Ethstats: "",
@@ -149,7 +149,9 @@ func TestConfigLegacy(t *testing.T) {
 				Enabled: false,
 				Period:  0,
 			},
-		})
+		}
+
+		assert.Equal(t, expectedConfig, testConfig)
 	}
 
 	// read file in hcl format
