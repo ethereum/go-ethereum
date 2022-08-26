@@ -723,7 +723,7 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 
 	// whitelist
 	{
-		n.PeerRequiredBlocks = map[uint64]common.Hash{}
+		n.RequiredBlocks = map[uint64]common.Hash{}
 		for k, v := range c.Whitelist {
 			number, err := strconv.ParseUint(k, 0, 64)
 			if err != nil {
@@ -733,7 +733,7 @@ func (c *Config) buildEth(stack *node.Node) (*ethconfig.Config, error) {
 			if err = hash.UnmarshalText([]byte(v)); err != nil {
 				return nil, fmt.Errorf("invalid whitelist hash %s: %v", v, err)
 			}
-			n.PeerRequiredBlocks[number] = hash
+			n.RequiredBlocks[number] = hash
 		}
 	}
 
