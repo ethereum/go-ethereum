@@ -216,16 +216,24 @@ func toOverrideMap(overrides *map[common.Address]OverrideAccount) interface{} {
 	}
 	type overrideAccount struct {
 		Nonce     hexutil.Uint64              `json:"nonce"`
-		Code      hexutil.Bytes               `json:"code"`
+		Code      []byte                      `json:"code"`
 		Balance   *hexutil.Big                `json:"balance"`
 		State     map[common.Hash]common.Hash `json:"state"`
 		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
 	}
 	result := make(map[common.Address]overrideAccount)
+
 	for addr, override := range *overrides {
+		var code []byte
+
+		if len(override.Code) > 0 {
+			// convert to hexutil.Bytes explicitly in order to marshal/unmarshal as a JSON string with 0x prefix.
+			code = hexutil.Bytes(override.Code)
+		}
+
 		result[addr] = overrideAccount{
 			Nonce:     hexutil.Uint64(override.Nonce),
-			Code:      override.Code,
+			Code:      code,
 			Balance:   (*hexutil.Big)(override.Balance),
 			State:     override.State,
 			StateDiff: override.StateDiff,

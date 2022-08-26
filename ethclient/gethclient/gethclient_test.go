@@ -19,11 +19,13 @@ package gethclient
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -135,6 +137,12 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
+		}, {
+			"testCodeOverride",
+			func(t *testing.T) { testCodeOverride(t) },
+		}, {
+			"testNoCodeOverride",
+			func(t *testing.T) { testNoCodeOverride(t) },
 		},
 	}
 	t.Parallel()
@@ -325,5 +333,80 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	mapAcc[testAddr] = override
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func testNoCodeOverride(t *testing.T) {
+	override := OverrideAccount{}
+
+	mapAcc := make(map[common.Address]OverrideAccount)
+	mapAcc[testAddr] = override
+
+	encoded := toOverrideMap(&mapAcc)
+
+	type overrideAccount struct {
+		Nonce     hexutil.Uint64              `json:"nonce"`
+		Code      []byte                      `json:"code"`
+		Balance   *hexutil.Big                `json:"balance"`
+		State     map[common.Hash]common.Hash `json:"state"`
+		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
+	}
+
+	var accounts map[common.Address]*overrideAccount
+	marshalled, err := json.Marshal(encoded)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = json.Unmarshal(marshalled, &accounts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	account := accounts[testAddr]
+	if account == nil {
+		t.Fatal("unexpected error")
+	}
+
+	if account.Code != nil {
+		t.Fatal("unexpected error")
+	}
+}
+
+func testCodeOverride(t *testing.T) {
+	override := OverrideAccount{}
+	override.Code = []byte{1}
+
+	mapAcc := make(map[common.Address]OverrideAccount)
+	mapAcc[testAddr] = override
+
+	encoded := toOverrideMap(&mapAcc)
+
+	type overrideAccount struct {
+		Nonce     hexutil.Uint64              `json:"nonce"`
+		Code      []byte                      `json:"code"`
+		Balance   *hexutil.Big                `json:"balance"`
+		State     map[common.Hash]common.Hash `json:"state"`
+		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
+	}
+
+	var accounts map[common.Address]*overrideAccount
+	marshalled, err := json.Marshal(encoded)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = json.Unmarshal(marshalled, &accounts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	account := accounts[testAddr]
+	if account == nil {
+		t.Fatal("unexpected error")
+	}
+
+	if account.Code == nil {
+		t.Fatal("unexpected error")
 	}
 }
