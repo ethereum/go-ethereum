@@ -140,7 +140,7 @@ func TestConfigLegacy(t *testing.T) {
 				PasswordFile:        "",
 				AllowInsecureUnlock: false,
 				UseLightweightKDF:   false,
-				DisableBorWallet:    false,
+				DisableBorWallet:    true,
 			},
 			GRPC: &GRPCConfig{
 				Addr: ":3131",
