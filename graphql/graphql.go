@@ -478,13 +478,15 @@ func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]*Log, 0, len(logs))
+	ret := make([]*Log, 0)
 	for _, log := range logs {
-		ret = append(ret, &Log{
-			r:           t.r,
-			transaction: t,
-			log:         log,
-		})
+		if uint64(log.TxIndex) == t.index {
+			ret = append(ret, &Log{
+				r:           t.r,
+				transaction: t,
+				log:         log,
+			})
+		}
 	}
 	return &ret, nil
 }
