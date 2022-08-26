@@ -134,7 +134,7 @@ This will create `config.toml` in the `datadir`. The enode addresses for static 
 StaticNodes = ["enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303"]
 ```
 
-Ensure the other lines in `config.toml` are also set correctly before starting Geth, as passing `--config` instructs Geth to get its configuration values from this file.
+Ensure the other lines in `config.toml` are also set correctly before starting Geth, as passing `--config` instructs Geth to get its configuration values from this file. An example of a complete `config.toml` file can be found [here](https://gist.github.com/jmcook1186/16db2f0feddb4bd0581ebb9ba867a47a).
 
 Static nodes can also be added at runtime in the Javascript console by passing an enode address to `admin.addPeer()`:
 
