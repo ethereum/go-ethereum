@@ -2,8 +2,7 @@
 title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
-
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/content/docs/developers/geth-developer/Private-Network.md) and [local testnets](/docs/getting-started/dev-mode). Command line flags are provided for connecting to the popular public testnets:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). Command line flags are provided for connecting to the popular public testnets:
 
 - `--ropsten`, Ropsten proof-of-work test network
 - `--rinkeby`, Rinkeby proof-of-authority test network
@@ -15,11 +14,13 @@ Providing these flags at startup instructs Geth to connect to the specific publi
 **Note:** network selection is not persisted in the config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
 ```shell 
+
 # Generate desired config file. You must specify testnet here.
 geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
 
 # Start geth with given config file. Here too the testnet must be specified.
 geth --goerli --config goerli.toml
+
 ```
 
 ## Finding peers
@@ -29,7 +30,9 @@ Geth continuously attempts to connect to other nodes on the network until it has
 A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnode` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
 
 ```shell
+
 geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pubkey3@ip3:port3
+
 ```
 
 There are scenarios where disabling the discovery process is useful, for example for running a local test node or an experimental test network with known, fixed nodes. This can be achieved by passing the `--nodiscover` flag to Geth at startup.
@@ -43,22 +46,24 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - Some firewall configurations can prohibit UDP traffic. The static nodes feature or `admin.addPeer()` on the console can be used to configure connections manually.
 
-- Running Geth in [light mode](/content/docs/fundamentals/les.md) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode.
+- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode.
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
 
 ## Checking Connectivity
 
-The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/content/docs/interacting_with_geth/JavaScript-Console.md). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
+The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
 
 ```javascript
+
 > net.listening
 true
 
 > net.peerCount
 4
+
 ```
 
 Functions in the `admin` module provide more information about the connected peers, including their IP address, port number, supported protocols etc. Calling `admin.peers` returns this information for all connected peers.
@@ -111,19 +116,26 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks
 
-It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](content/docs/developers/geth-developer/Private-Network.md).
+It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
 
 
 ## Static nodes
 
-Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by saving their enode addresses to a json file which must be stored in `datadir/geth/static-nodes.json`. The content of `static-nodes.json` should be formatted as follows:
+Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
 
-```javascript
-[
-  "enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303",
-  "enode://pubkey@ip:port"
-]
 ```
+geth --datadir <datadir> dumpconfig > datadir/config.toml
+```
+
+Remember also that for public testnets (`goerli`, `sepolia` etc) the network name must be passed explicitly as a command line flag.
+
+This will create `config.toml` in the `datadir`. The enode addresses for static nodes can then be added in square brackets to the `StaticNodes` field in the `Node.P2P` section in `config.toml`. When Geth is started, pass `--config datadir/config.toml`. The relevant line in `config.toml` looks as follows:
+
+```toml
+StaticNodes = ["enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303"]
+```
+
+Ensure the other lines in `config.toml` are also set correctly before starting Geth, as passing `--config` instructs Geth to get its configuration values from this file. An example of a complete `config.toml` file can be found [here](https://gist.github.com/jmcook1186/16db2f0feddb4bd0581ebb9ba867a47a).
 
 Static nodes can also be added at runtime in the Javascript console by passing an enode address to `admin.addPeer()`:
 
@@ -143,13 +155,14 @@ geth <otherflags> --maxpeers 15
 
 ## Trusted nodes
 
-Geth supports trusted nodes that are always allowed to reconnect, even if the peer limit is reached. They can be added persistently via a config file `<datadir>/geth/trusted-nodes.json` or temporarily using the Javascript console. The format for the config file is identical to the one used for static nodes.
+Trusted nodes can be added to `config.toml` in the same way as for static nodes. Add the trusted node's enode address to the `TrustedNodes` field in `config.toml` before starting Geth with `--config datadir/config.toml`.
 
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
 ```javascript
 admin.addTrustedPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
 ```
+
 
 ## Summary
 
