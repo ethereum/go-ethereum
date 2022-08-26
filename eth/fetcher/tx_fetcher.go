@@ -324,17 +324,14 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		underpricedMeter.Mark(underpriced)
 		otherRejectMeter.Mark(otherreject)
 
-		// If 'other reject' is >25% of the deliveries in any batch, abort. Either we are
-		// out of sync with the chain or the peer is griefing us.
+		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
 		if otherreject > 128/4 {
-			delay = 200 * time.Millisecond
-			log.Warn("Peer delivering useless transactions", "peer", peer, "ignored", len(txs)-end)
-			break
+			time.Sleep(200 * time.Millisecond)
+			log.Warn("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:
-		time.Sleep(delay)
 		return nil
 	case <-f.quit:
 		return errTerminated
