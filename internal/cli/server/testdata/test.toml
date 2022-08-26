@@ -12,8 +12,8 @@ lifetime = "1s"
 
 [miner]
 mine = false
-gaslimit = 20000000
-gasprice = "30000000000"
+gaslimit = 30000000
+gasprice = "1000000000"
 
 [gpo]
 ignoreprice = "4"
