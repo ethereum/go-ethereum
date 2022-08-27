@@ -848,11 +848,11 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		}
 	}
 	// Assemble each of the results with their headers and retrieved data parts
+	hashes := make([]common.Hash, 0, len(request.Headers))
 	var (
 		accepted int
 		failure  error
 		i        int
-		hashes   []common.Hash
 	)
 	for _, header := range request.Headers {
 		// Short circuit assembly if no more fetch results are found

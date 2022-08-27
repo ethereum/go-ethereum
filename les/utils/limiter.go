@@ -364,10 +364,9 @@ func (l dropList) Swap(i, j int) {
 // weight ratio and drops their queued request. The empty node queues stay in the
 // selectors with a low selection weight in order to penalize these nodes.
 func (l *Limiter) dropRequests() {
-	var (
-		sumValue float64
-		list     dropList
-	)
+	var sumValue float64
+	list := make(dropList, 0, len(l.nodes))
+
 	for _, nq := range l.nodes {
 		sumValue += nq.value
 	}

@@ -529,7 +529,7 @@ func (pool *TxPool) RemoveTransactions(txs types.Transactions) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	var hashes []common.Hash
+	hashes := make([]common.Hash, 0, len(txs))
 	batch := pool.chainDb.NewBatch()
 	for _, tx := range txs {
 		hash := tx.Hash()

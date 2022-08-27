@@ -234,7 +234,7 @@ var Forks = map[string]*params.ChainConfig{
 
 // Returns the set of defined fork names
 func AvailableForks() []string {
-	var availableForks []string
+	availableForks := make([]string, 0, len(Forks))
 	for k := range Forks {
 		availableForks = append(availableForks, k)
 	}

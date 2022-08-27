@@ -331,7 +331,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 			return nil, nil
 		}
 	}
-	var proofs [][]byte
+	proofs := make([][]byte, 0, len(proof.NodeList()))
 	for _, blob := range proof.NodeList() {
 		proofs = append(proofs, blob)
 	}

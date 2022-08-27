@@ -548,7 +548,7 @@ func TestGetNodesByID(t *testing.T) {
 
 	numSubsetNodes := 2
 	subsetNodes := nodes[0:numSubsetNodes]
-	var subsetNodeIDs []enode.ID
+	subsetNodeIDs := make([]enode.ID, 0, len(subsetNodes))
 	for _, node := range subsetNodes {
 		subsetNodeIDs = append(subsetNodeIDs, node.ID())
 	}

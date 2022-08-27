@@ -109,8 +109,8 @@ func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var gotHashes []common.Hash
-	var expHashes []common.Hash
+	var gotHashes []common.Hash // nolint: prealloc
+	var expHashes []common.Hash // nolint: prealloc
 	for txIt.Next() {
 		gotHashes = append(gotHashes, crypto.Keccak256Hash(txIt.Value()))
 	}

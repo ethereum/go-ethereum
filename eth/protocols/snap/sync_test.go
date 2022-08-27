@@ -291,7 +291,7 @@ func defaultStorageRequestHandler(t *testPeer, requestId uint64, root common.Has
 }
 
 func defaultCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
-	var bytecodes [][]byte
+	bytecodes := make([][]byte, 0, len(hashes))
 	for _, h := range hashes {
 		bytecodes = append(bytecodes, getCodeByHash(h))
 	}
@@ -485,7 +485,7 @@ func corruptCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max
 }
 
 func cappedCodeRequestHandler(t *testPeer, id uint64, hashes []common.Hash, max uint64) error {
-	var bytecodes [][]byte
+	bytecodes := make([][]byte, 0, len(hashes[:1]))
 	for _, h := range hashes[:1] {
 		bytecodes = append(bytecodes, getCodeByHash(h))
 	}

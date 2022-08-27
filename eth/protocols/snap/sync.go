@@ -2978,7 +2978,7 @@ func (t *healRequestSort) Merge() []TrieNodePathSet {
 // sortByAccountPath takes hashes and paths, and sorts them. After that, it generates
 // the TrieNodePaths and merges paths which belongs to the same account path.
 func sortByAccountPath(paths []string, hashes []common.Hash) ([]string, []common.Hash, []trie.SyncPath, []TrieNodePathSet) {
-	var syncPaths []trie.SyncPath
+	syncPaths := make([]trie.SyncPath, 0, len(paths))
 	for _, path := range paths {
 		syncPaths = append(syncPaths, trie.NewSyncPath([]byte(path)))
 	}

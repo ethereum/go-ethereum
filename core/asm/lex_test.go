@@ -24,7 +24,7 @@ import (
 func lexAll(src string) []token {
 	ch := Lex([]byte(src), false)
 
-	var tokens []token
+	var tokens []token // nolint:prealloc
 	for i := range ch {
 		tokens = append(tokens, i)
 	}

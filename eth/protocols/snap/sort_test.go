@@ -45,11 +45,8 @@ func TestRequestSorting(t *testing.T) {
 		data := hexToNibbles(path)
 		return string(data)
 	}
-	var (
-		hashes []common.Hash
-		paths  []string
-	)
-	for _, x := range []string{
+
+	hexes := []string{
 		"0x9",
 		"0x012345678901234567890123456789010123456789012345678901234567890195",
 		"0x012345678901234567890123456789010123456789012345678901234567890197",
@@ -60,9 +57,11 @@ func TestRequestSorting(t *testing.T) {
 		"0x0123456789012345678901234567890101234567890123456789012345678901",
 		"0x01234567890123456789012345678901012345678901234567890123456789010",
 		"0x01234567890123456789012345678901012345678901234567890123456789011",
-	} {
+	}
+	paths := make([]string, 0, len(hexes))
+	hashes := make([]common.Hash, len(hexes))
+	for _, x := range hexes {
 		paths = append(paths, f(x))
-		hashes = append(hashes, common.Hash{})
 	}
 	_, _, syncPaths, pathsets := sortByAccountPath(paths, hashes)
 	{

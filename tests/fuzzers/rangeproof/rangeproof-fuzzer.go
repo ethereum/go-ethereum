@@ -97,7 +97,7 @@ func (f *fuzzer) fuzz() int {
 	if f.exhausted {
 		return 0 // input too short
 	}
-	var entries entrySlice
+	entries := make(entrySlice, 0, len(vals))
 	for _, kv := range vals {
 		entries = append(entries, kv)
 	}

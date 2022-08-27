@@ -141,10 +141,8 @@ func (ks *KeyStore) refreshWallets() {
 	accs := ks.cache.accounts()
 
 	// Transform the current list of wallets into the new one
-	var (
-		wallets = make([]accounts.Wallet, 0, len(accs))
-		events  []accounts.WalletEvent
-	)
+	wallets := make([]accounts.Wallet, 0, len(accs))
+	var events []accounts.WalletEvent
 
 	for _, account := range accs {
 		// Drop wallets while they were in front of the next account

@@ -773,8 +773,8 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	if err != nil {
 		return nil, nil, err
 	}
+	sizes := make([]int, 0, len(indices)-1) // The sizes for each element
 	var (
-		sizes      []int               // The sizes for each element
 		totalSize  = 0                 // The total size of all data read so far
 		readStart  = indices[0].offset // Where, in the file, to start reading
 		unreadSize = 0                 // The size of the as-yet-unread data

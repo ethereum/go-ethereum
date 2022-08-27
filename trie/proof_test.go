@@ -194,7 +194,7 @@ func TestRangeProof(t *testing.T) {
 // The test cases are generated randomly.
 func TestRangeProofWithNonExistentProof(t *testing.T) {
 	trie, vals := randomTrie(4096)
-	var entries entrySlice
+	entries := make(entrySlice, 0, len(vals))
 	for _, kv := range vals {
 		entries = append(entries, kv)
 	}
@@ -926,7 +926,7 @@ func decreaseKey(key []byte) []byte {
 
 func BenchmarkProve(b *testing.B) {
 	trie, vals := randomTrie(100)
-	var keys []string
+	keys := make([]string, 0, len(vals))
 	for k := range vals {
 		keys = append(keys, k)
 	}
@@ -944,7 +944,7 @@ func BenchmarkProve(b *testing.B) {
 func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
-	var keys []string
+	keys := make([]string, 0, len(vals))
 	var proofs []*memorydb.Database
 	for k := range vals {
 		keys = append(keys, k)
@@ -1012,8 +1012,9 @@ func benchmarkVerifyRangeNoProof(b *testing.B, size int) {
 	}
 	sort.Sort(entries)
 
-	var keys [][]byte
-	var values [][]byte
+	keys := make([][]byte, 0, len(entries))
+	values := make([][]byte, 0, len(entries))
+
 	for _, entry := range entries {
 		keys = append(keys, entry.k)
 		values = append(values, entry.v)

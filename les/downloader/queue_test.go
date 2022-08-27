@@ -415,8 +415,8 @@ func (n *network) progress(numBlocks int) {
 
 func (n *network) headers(from int) []*types.Header {
 	numHeaders := 128
-	var hdrs []*types.Header
 	index := from - n.offset
+	hdrs := make([]*types.Header, 0, len(n.chain[index:]))
 
 	for index >= len(n.chain) {
 		// wait for progress

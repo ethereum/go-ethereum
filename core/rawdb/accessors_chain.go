@@ -900,7 +900,7 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	if err := rlp.DecodeBytes(blob, &badBlocks); err != nil {
 		return nil
 	}
-	var blocks []*types.Block
+	blocks := make([]*types.Block, 0, len(badBlocks))
 	for _, bad := range badBlocks {
 		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles))
 	}

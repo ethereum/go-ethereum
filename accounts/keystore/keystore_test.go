@@ -279,7 +279,7 @@ func TestWalletNotifications(t *testing.T) {
 
 	// Subscribe to the wallet feed and collect events.
 	var (
-		events  []walletEvent
+		events  []walletEvent // nolint:prealloc
 		updates = make(chan accounts.WalletEvent)
 		sub     = ks.Subscribe(updates)
 	)
@@ -297,10 +297,8 @@ func TestWalletNotifications(t *testing.T) {
 	}()
 
 	// Randomly add and remove accounts.
-	var (
-		live       = make(map[common.Address]accounts.Account)
-		wantEvents []walletEvent
-	)
+	wantEvents := make([]walletEvent, 0, 1024)
+	var live = make(map[common.Address]accounts.Account)
 	for i := 0; i < 1024; i++ {
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives

@@ -105,8 +105,8 @@ func ProcessFields(allFields []Field) ([]Field, []Tags, error) {
 	lastPublic := lastPublicField(allFields)
 
 	// Gather all exported fields and their tags.
-	var fields []Field
-	var tags []Tags
+	fields := make([]Field, 0, len(allFields))
+	tags := make([]Tags, 0, len(allFields))
 	for _, field := range allFields {
 		if !field.Exported {
 			continue

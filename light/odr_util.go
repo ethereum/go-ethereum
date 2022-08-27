@@ -225,12 +225,10 @@ func GetUntrustedBlockLogs(ctx context.Context, odr OdrBackend, header *types.He
 // GetBloomBits retrieves a batch of compressed bloomBits vectors belonging to
 // the given bit index and section indexes.
 func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint64) ([][]byte, error) {
-	var (
-		reqIndex    []int
-		reqSections []uint64
-		db          = odr.Database()
-		result      = make([][]byte, len(sections))
-	)
+	reqIndex := make([]int, 0, len(sections))
+	reqSections := make([]uint64, 0, len(sections))
+	result := make([][]byte, len(sections))
+	var db = odr.Database()
 	blooms, _, sectionHead := odr.BloomTrieIndexer().Sections()
 	for i, section := range sections {
 		sectionHead := rawdb.ReadCanonicalHash(db, (section+1)*odr.IndexerConfig().BloomSize-1)

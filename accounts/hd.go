@@ -66,10 +66,11 @@ type DerivationPath []uint32
 // paths (which will get appended to the default root path) must not have prefixes
 // in front of the first element. Whitespace is ignored.
 func ParseDerivationPath(path string) (DerivationPath, error) {
-	var result DerivationPath
-
 	// Handle absolute or relative paths
 	components := strings.Split(path, "/")
+
+	result := make(DerivationPath, 0, len(components))
+
 	switch {
 	case len(components) == 0:
 		return nil, errors.New("empty derivation path")

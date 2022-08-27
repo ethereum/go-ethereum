@@ -219,10 +219,8 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	}
 
 	// Verify the blocks with pre-merge blocks and post-merge blocks
-	var (
-		headers []*types.Header
-		seals   []bool
-	)
+	headers := make([]*types.Header, 0, len(preBlocks)+len(postBlocks))
+	seals := make([]bool, 0, len(preBlocks)+len(postBlocks))
 	for _, block := range preBlocks {
 		headers = append(headers, block.Header())
 		seals = append(seals, true)

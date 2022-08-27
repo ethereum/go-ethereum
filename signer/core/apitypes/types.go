@@ -601,7 +601,7 @@ func (typedData *TypedData) Format() ([]*NameValueType, error) {
 }
 
 func (typedData *TypedData) formatData(primaryType string, data map[string]interface{}) ([]*NameValueType, error) {
-	var output []*NameValueType
+	output := make([]*NameValueType, 0, len(typedData.Types[primaryType]))
 
 	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {

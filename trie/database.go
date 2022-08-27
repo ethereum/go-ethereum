@@ -780,7 +780,7 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	//
 	// Note, the storage tries must be flushed before the account trie to
 	// retain the invariant that children go into the dirty cache first.
-	var order []common.Hash
+	order := make([]common.Hash, 0, len(nodes.sets))
 	for owner := range nodes.sets {
 		if owner == (common.Hash{}) {
 			continue

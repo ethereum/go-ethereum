@@ -106,12 +106,12 @@ func (api *ExternalSigner) Close() error {
 }
 
 func (api *ExternalSigner) Accounts() []accounts.Account {
-	var accnts []accounts.Account
 	res, err := api.listAccounts()
 	if err != nil {
 		log.Error("account listing failed", "error", err)
-		return accnts
+		return []accounts.Account{}
 	}
+	accnts := make([]accounts.Account, 0, len(res))
 	for _, addr := range res {
 		accnts = append(accnts, accounts.Account{
 			URL: accounts.URL{

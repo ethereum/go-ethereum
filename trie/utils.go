@@ -97,7 +97,7 @@ func (t *tracer) insertList() [][]byte {
 	if t == nil {
 		return nil
 	}
-	var ret [][]byte
+	ret := make([][]byte, 0, len(t.insert))
 	for key := range t.insert {
 		ret = append(ret, []byte(key))
 	}
@@ -110,7 +110,7 @@ func (t *tracer) deleteList() [][]byte {
 	if t == nil {
 		return nil
 	}
-	var ret [][]byte
+	ret := make([][]byte, 0, len(t.delete))
 	for key := range t.delete {
 		ret = append(ret, []byte(key))
 	}
