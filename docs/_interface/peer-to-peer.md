@@ -128,7 +128,7 @@ Geth also supports static nodes. Static nodes are specific peers that are always
 geth --datadir <datadir> dumpconfig > config.toml
 ```
 
-This will create `config.toml` in the `datadir`. The enode addresses for static nodes can then be added in square brackets to the `StaticNodes` field in `config.toml`. When Geth is started, pass `--config datadir/config.toml`. The relevant line in `config.toml` looks as follows:
+This will create `config.toml` in the current directory. The enode addresses for static nodes can then be added as a list to the `StaticNodes` field of the `Node.P2P` section in `config.toml`. When Geth is started, pass `--config config.toml`. The relevant line in `config.toml` looks as follows:
 
 ```toml
 StaticNodes = ["enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303"]
