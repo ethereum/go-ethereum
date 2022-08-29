@@ -14,14 +14,16 @@ package filters
 import (
 	"context"
 
+	"math/big"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 	"sync"
@@ -38,6 +40,159 @@ var (
 type peerInfo struct {
 	Enode string `json:"enode"`
 	ID string `json:"id"`
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// RPCMarshalHeader converts the given header to the RPC output .
+func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	result := map[string]interface{}{
+		"number":           (*hexutil.Big)(head.Number),
+		"hash":             head.Hash(),
+		"parentHash":       head.ParentHash,
+		"nonce":            head.Nonce,
+		"mixHash":          head.MixDigest,
+		"sha3Uncles":       head.UncleHash,
+		"logsBloom":        head.Bloom,
+		"stateRoot":        head.Root,
+		"miner":            head.Coinbase,
+		"difficulty":       (*hexutil.Big)(head.Difficulty),
+		"extraData":        hexutil.Bytes(head.Extra),
+		"size":             hexutil.Uint64(head.Size()),
+		"gasLimit":         hexutil.Uint64(head.GasLimit),
+		"gasUsed":          hexutil.Uint64(head.GasUsed),
+		"timestamp":        hexutil.Uint64(head.Time),
+		"transactionsRoot": head.TxHash,
+		"receiptsRoot":     head.ReceiptHash,
+	}
+
+	if head.BaseFee != nil {
+		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+
+	return result
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// RPCMarshalBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
+// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
+// transaction hashes.
+func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *params.ChainConfig) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(block.Header())
+	fields["size"] = hexutil.Uint64(block.Size())
+
+	if inclTx {
+		formatTx := func(tx *types.Transaction) (interface{}, error) {
+			return tx.Hash(), nil
+		}
+		if fullTx {
+			formatTx = func(tx *types.Transaction) (interface{}, error) {
+				return newRPCTransactionFromBlockHash(block, tx.Hash(), config), nil
+			}
+		}
+		txs := block.Transactions()
+		transactions := make([]interface{}, len(txs))
+		var err error
+		for i, tx := range txs {
+			if transactions[i], err = formatTx(tx); err != nil {
+				return nil, err
+			}
+		}
+		fields["transactions"] = transactions
+	}
+	uncles := block.Uncles()
+	uncleHashes := make([]common.Hash, len(uncles))
+	for i, uncle := range uncles {
+		uncleHashes[i] = uncle.Hash()
+	}
+	fields["uncles"] = uncleHashes
+
+	return fields, nil
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
+func newRPCRawTransactionFromBlockIndex(b *types.Block, index uint64) hexutil.Bytes {
+	txs := b.Transactions()
+	if index >= uint64(len(txs)) {
+		return nil
+	}
+	blob, _ := txs[index].MarshalBinary()
+	return blob
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
+func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, config *params.ChainConfig) *RPCTransaction {
+	txs := b.Transactions()
+	if index >= uint64(len(txs)) {
+		return nil
+	}
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee(), config)
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// newRPCTransactionFromBlockHash returns a transaction that will serialize to the RPC representation.
+func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash, config *params.ChainConfig) *RPCTransaction {
+	for idx, tx := range b.Transactions() {
+		if tx.Hash() == hash {
+			return newRPCTransactionFromBlockIndex(b, uint64(idx), config)
+		}
+	}
+	return nil
+}
+
+// Note: Copied from internal/ethapi to avoid import loops
+// newRPCTransaction returns a transaction that will serialize to the RPC
+// representation, with the given location metadata set (if available).
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int, config *params.ChainConfig) *RPCTransaction {
+	signer := types.MakeSigner(config, new(big.Int).SetUint64(blockNumber))
+	from, _ := types.Sender(signer, tx)
+	v, r, s := tx.RawSignatureValues()
+	result := &RPCTransaction{
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    hexutil.Bytes(tx.Data()),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		To:       tx.To(),
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+	}
+	if blockHash != (common.Hash{}) {
+		result.BlockHash = &blockHash
+		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		result.TransactionIndex = (*hexutil.Uint64)(&index)
+	}
+	switch tx.Type() {
+	case types.LegacyTxType:
+		// if a legacy transaction has an EIP-155 chain id, include it explicitly
+		if id := tx.ChainId(); id.Sign() != 0 {
+			result.ChainID = (*hexutil.Big)(id)
+		}
+	case types.AccessListTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+	}
+	return result
 }
 
 
@@ -202,13 +357,13 @@ func (api *FilterAPI) NewFullBlocksWithPeers(ctx context.Context) (*rpc.Subscrip
 			for _, hash := range hashes {
 				peerid, _ := blockPeerMap.Get(hash)
 
-				block, err := api.backend.BlockByHash(ctx, hash)
+				block, err := api.sys.backend.BlockByHash(ctx, hash)
 				if err != nil { continue }
-				marshalBlock, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig())
+				marshalBlock, err := RPCMarshalBlock(block, true, true, api.sys.backend.ChainConfig())
 				if err != nil { continue }
 
 				marshalReceipts := make(map[common.Hash]map[string]interface{})
-				receipts, err := api.backend.GetReceipts(ctx, hash)
+				receipts, err := api.sys.backend.GetReceipts(ctx, hash)
 				if err != nil {
 					continue
 				}
@@ -273,7 +428,7 @@ func (api *FilterAPI) NewPendingTransactionsWithPeers(ctx context.Context) (*rpc
 					peerid, _ := txPeerMap.Get(h)
 					p2pts, _ := tsMap.Get(h)
 					peer, _ := peerIDMap.Load(peerid)
-					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts})
+					notifier.Notify(rpcSub.ID, withPeer{Value: newRPCPendingTransaction(api.sys.backend.GetPoolTransaction(h)), Peer: peer, Time: time.Now().UnixNano(), P2PTime: p2pts})
 				}
 			case <-rpcSub.Err():
 				pendingTxSub.Unsubscribe()
@@ -308,7 +463,7 @@ func (api *FilterAPI) NewTransactionReceipts(ctx context.Context) (*rpc.Subscrip
 		for {
 			select {
 			case h := <-headers:
-				receipts, _ := api.backend.GetReceipts(ctx, h.Hash())
+				receipts, _ := api.sys.backend.GetReceipts(ctx, h.Hash())
 				for _, receipt := range receipts {
 					notifier.Notify(rpcSub.ID, receipt )
 				}

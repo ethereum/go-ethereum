@@ -305,7 +305,7 @@ func TestClique(t *testing.T) {
 		}, {
 			// Ensure that pending votes don't survive authorization status changes. This
 			// corner case can only appear if a signer is quickly added, removed and then
-			// readded (or the inverse), while one of the original voters dropped. If a
+			// re-added (or the inverse), while one of the original voters dropped. If a
 			// past vote is left cached in the system somewhere, this will interfere with
 			// the final signer outcome.
 			signers: []string{"A", "B", "C", "D", "E"},
@@ -344,7 +344,7 @@ func TestClique(t *testing.T) {
 			},
 			failure: errUnauthorizedSigner,
 		}, {
-			// An authorized signer that signed recenty should not be able to sign again
+			// An authorized signer that signed recently should not be able to sign again
 			signers: []string{"A", "B"},
 			votes: []testerVote{
 				{signer: "A"},
@@ -403,7 +403,7 @@ func TestClique(t *testing.T) {
 		}
 		// Create a pristine blockchain with the genesis injected
 		db := rawdb.NewMemoryDatabase()
-		genesis.Commit(db)
+		genesisBlock := genesis.MustCommit(db)
 
 		// Assemble a chain of headers from the cast votes
 		config := *params.TestChainConfig
@@ -414,7 +414,7 @@ func TestClique(t *testing.T) {
 		engine := New(config.Clique, db)
 		engine.fakeDiff = true
 
-		blocks, _ := core.GenerateChain(&config, genesis.ToBlock(db), engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
+		blocks, _ := core.GenerateChain(&config, genesisBlock, engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
 			// Cast the vote contained in this block
 			gen.SetCoinbase(accounts.address(tt.votes[j].voted))
 			if tt.votes[j].auth {

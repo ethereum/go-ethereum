@@ -12,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-func (b *EthAPIBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription {
+	func (b *EthAPIBackend) SubscribeDropTxsEvent(ch chan<- core.DropTxsEvent) event.Subscription {
 	return b.eth.TxPool().SubscribeDropTxsEvent(ch)
 }
 
-func (b *EthAPIBackend) SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription {
+	func (b *EthAPIBackend) SubscribeRejectedTxEvent(ch chan<- core.RejectedTxEvent) event.Subscription {
 	return b.eth.TxPool().SubscribeRejectedTxEvent(ch)
 }

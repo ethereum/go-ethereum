@@ -32,7 +32,7 @@ import (
 //var faucetAddr = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 var faucetKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
-func (s *Suite) sendSuccessfulTxs(t *utesting.T, isEth66 bool) error {
+func (s *Suite) sendSuccessfulTxs(t *utesting.T) error {
 	tests := []*types.Transaction{
 		getNextTxFromChain(s),
 		unknownTx(s),
@@ -48,15 +48,15 @@ func (s *Suite) sendSuccessfulTxs(t *utesting.T, isEth66 bool) error {
 			prevTx = tests[i-1]
 		}
 		// write tx to connection
-		if err := sendSuccessfulTx(s, tx, prevTx, isEth66); err != nil {
+		if err := sendSuccessfulTx(s, tx, prevTx); err != nil {
 			return fmt.Errorf("send successful tx test failed: %v", err)
 		}
 	}
 	return nil
 }
 
-func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction, isEth66 bool) error {
-	sendConn, recvConn, err := s.createSendAndRecvConns(isEth66)
+func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction) error {
+	sendConn, recvConn, err := s.createSendAndRecvConns()
 	if err != nil {
 		return err
 	}
@@ -73,8 +73,10 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 	if err = recvConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	// update last nonce seen
 	nonce = tx.Nonce()
+
 	// Wait for the transaction announcement
 	for {
 		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
@@ -114,7 +116,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 	}
 }
 
-func (s *Suite) sendMaliciousTxs(t *utesting.T, isEth66 bool) error {
+func (s *Suite) sendMaliciousTxs(t *utesting.T) error {
 	badTxs := []*types.Transaction{
 		getOldTxFromChain(s),
 		invalidNonceTx(s),
@@ -122,16 +124,9 @@ func (s *Suite) sendMaliciousTxs(t *utesting.T, isEth66 bool) error {
 		hugeGasPrice(s),
 		hugeData(s),
 	}
+
 	// setup receiving connection before sending malicious txs
-	var (
-		recvConn *Conn
-		err      error
-	)
-	if isEth66 {
-		recvConn, err = s.dial66()
-	} else {
-		recvConn, err = s.dial()
-	}
+	recvConn, err := s.dial()
 	if err != nil {
 		return fmt.Errorf("dial failed: %v", err)
 	}
@@ -139,9 +134,10 @@ func (s *Suite) sendMaliciousTxs(t *utesting.T, isEth66 bool) error {
 	if err = recvConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	for i, tx := range badTxs {
 		t.Logf("Testing malicious tx propagation: %v\n", i)
-		if err = sendMaliciousTx(s, tx, isEth66); err != nil {
+		if err = sendMaliciousTx(s, tx); err != nil {
 			return fmt.Errorf("malicious tx test failed:\ntx: %v\nerror: %v", tx, err)
 		}
 	}
@@ -149,17 +145,8 @@ func (s *Suite) sendMaliciousTxs(t *utesting.T, isEth66 bool) error {
 	return checkMaliciousTxPropagation(s, badTxs, recvConn)
 }
 
-func sendMaliciousTx(s *Suite, tx *types.Transaction, isEth66 bool) error {
-	// setup connection
-	var (
-		conn *Conn
-		err  error
-	)
-	if isEth66 {
-		conn, err = s.dial66()
-	} else {
-		conn, err = s.dial()
-	}
+func sendMaliciousTx(s *Suite, tx *types.Transaction) error {
+	conn, err := s.dial()
 	if err != nil {
 		return fmt.Errorf("dial failed: %v", err)
 	}
@@ -167,6 +154,7 @@ func sendMaliciousTx(s *Suite, tx *types.Transaction, isEth66 bool) error {
 	if err = conn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	// write malicious tx
 	if err = conn.Write(&Transactions{tx}); err != nil {
 		return fmt.Errorf("failed to write to connection: %v", err)
@@ -182,7 +170,7 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	txMsg := Transactions(txs)
 	t.Logf("sending %d txs\n", len(txs))
 
-	sendConn, recvConn, err := s.createSendAndRecvConns(true)
+	sendConn, recvConn, err := s.createSendAndRecvConns()
 	if err != nil {
 		return err
 	}
@@ -194,15 +182,19 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 	if err = recvConn.peer(s.chain, nil); err != nil {
 		return fmt.Errorf("peering failed: %v", err)
 	}
+
 	// Send the transactions
 	if err = sendConn.Write(&txMsg); err != nil {
 		return fmt.Errorf("failed to write message to connection: %v", err)
 	}
+
 	// update nonce
 	nonce = txs[len(txs)-1].Nonce()
-	// Wait for the transaction announcement(s) and make sure all sent txs are being propagated
+
+	// Wait for the transaction announcement(s) and make sure all sent txs are being propagated.
+	// all txs should be announced within 3 announcements.
 	recvHashes := make([]common.Hash, 0)
-	// all txs should be announced within 3 announcements
+
 	for i := 0; i < 3; i++ {
 		switch msg := recvConn.readAndServe(s.chain, timeout).(type) {
 		case *Transactions:

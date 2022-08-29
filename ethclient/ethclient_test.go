@@ -248,7 +248,7 @@ func generateTestChain() []*types.Block {
 			g.AddTx(testTx2)
 		}
 	}
-	gblock := genesis.ToBlock(db)
+	gblock := genesis.MustCommit(db)
 	engine := ethash.NewFaker()
 	blocks, _ := core.GenerateChain(genesis.Config, gblock, engine, db, 2, generate)
 	blocks = append([]*types.Block{gblock}, blocks...)
@@ -508,6 +508,29 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
 	}
+
+	// FeeHistory
+	history, err := ec.FeeHistory(context.Background(), 1, big.NewInt(2), []float64{95, 99})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := &ethereum.FeeHistory{
+		OldestBlock: big.NewInt(2),
+		Reward: [][]*big.Int{
+			{
+				big.NewInt(234375000),
+				big.NewInt(234375000),
+			},
+		},
+		BaseFee: []*big.Int{
+			big.NewInt(765625000),
+			big.NewInt(671627818),
+		},
+		GasUsedRatio: []float64{0.008912678667376286},
+	}
+	if !reflect.DeepEqual(history, want) {
+		t.Fatalf("FeeHistory result doesn't match expected: (got: %v, want: %v)", history, want)
+	}
 }
 
 func testCallContractAtHash(t *testing.T, client *rpc.Client) {
@@ -558,7 +581,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// PendingCallCOntract
+	// PendingCallContract
 	if _, err := ec.PendingCallContract(context.Background(), msg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
