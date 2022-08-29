@@ -125,7 +125,7 @@ It is often useful for developers to connect to private test networks rather tha
 Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
 
 ```
-geth --network id <networkid> --datadir <datadir> dumpconfig > datadir/config.toml
+geth --datadir <datadir> dumpconfig > config.toml
 ```
 
 This will create `config.toml` in the `datadir`. The enode addresses for static nodes can then be added in square brackets to the `StaticNodes` field in `config.toml`. When Geth is started, pass `--config datadir/config.toml`. The relevant line in `config.toml` looks as follows:
