@@ -154,7 +154,7 @@ geth <otherflags> --maxpeers 15
 
 ## Trusted nodes
 
-Trusted nodes can be added to `config.toml` in the same way as for static nodes. Add the trusted node's enode address to the `TrustedNodes` field in `config.toml` before starting Geth with `--config datadir/config.toml`.
+Trusted nodes can be added to `config.toml` in the same way as for static nodes. Add the trusted node's enode address to the `TrustedNodes` field in `config.toml` before starting Geth with `--config config.toml`.
 
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
