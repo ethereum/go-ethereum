@@ -18,10 +18,10 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
 		Type       vm.OpCode      `json:"-"`
 		From       common.Address `json:"from"`
+		To         common.Address `json:"to,omitempty" rlp:"optional"`
 		Gas        hexutil.Uint64 `json:"gas"`
 		GasUsed    hexutil.Uint64 `json:"gasUsed"`
-		To         common.Address `json:"to,omitempty" rlp:"optional"`
-		Input      hexutil.Bytes  `json:"input,omitempty" rlp:"optional"`
+		Input      hexutil.Bytes  `json:"input" rlp:"optional"`
 		Output     hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
 		Error      string         `json:"error,omitempty" rlp:"optional"`
 		Calls      []callFrame    `json:"calls,omitempty" rlp:"optional"`
@@ -31,9 +31,9 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	var enc callFrame0
 	enc.Type = c.Type
 	enc.From = c.From
+	enc.To = c.To
 	enc.Gas = hexutil.Uint64(c.Gas)
 	enc.GasUsed = hexutil.Uint64(c.GasUsed)
-	enc.To = c.To
 	enc.Input = c.Input
 	enc.Output = c.Output
 	enc.Error = c.Error
@@ -48,10 +48,10 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
 		Type    *vm.OpCode      `json:"-"`
 		From    *common.Address `json:"from"`
+		To      *common.Address `json:"to,omitempty" rlp:"optional"`
 		Gas     *hexutil.Uint64 `json:"gas"`
 		GasUsed *hexutil.Uint64 `json:"gasUsed"`
-		To      *common.Address `json:"to,omitempty" rlp:"optional"`
-		Input   *hexutil.Bytes  `json:"input,omitempty" rlp:"optional"`
+		Input   *hexutil.Bytes  `json:"input" rlp:"optional"`
 		Output  *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
 		Error   *string         `json:"error,omitempty" rlp:"optional"`
 		Calls   []callFrame     `json:"calls,omitempty" rlp:"optional"`
@@ -67,14 +67,14 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	if dec.From != nil {
 		c.From = *dec.From
 	}
+	if dec.To != nil {
+		c.To = *dec.To
+	}
 	if dec.Gas != nil {
 		c.Gas = uint64(*dec.Gas)
 	}
 	if dec.GasUsed != nil {
 		c.GasUsed = uint64(*dec.GasUsed)
-	}
-	if dec.To != nil {
-		c.To = *dec.To
 	}
 	if dec.Input != nil {
 		c.Input = *dec.Input

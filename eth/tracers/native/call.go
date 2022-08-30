@@ -38,14 +38,14 @@ func init() {
 type callFrame struct {
 	Type    vm.OpCode      `json:"-"`
 	From    common.Address `json:"from"`
+	To      common.Address `json:"to,omitempty" rlp:"optional"`
 	Gas     uint64         `json:"gas"`
 	GasUsed uint64         `json:"gasUsed"`
-	To      common.Address `json:"to,omitempty" rlp:"optional"`
-	Input   []byte         `json:"input,omitempty" rlp:"optional"`
+	Input   []byte         `json:"input" rlp:"optional"`
 	Output  []byte         `json:"output,omitempty" rlp:"optional"`
 	Error   string         `json:"error,omitempty" rlp:"optional"`
 	Calls   []callFrame    `json:"calls,omitempty" rlp:"optional"`
-	// Placed at end on purpose. It will be decoded to 0 instead of
+	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value *big.Int `json:"value,omitempty" rlp:"optional"`
 }

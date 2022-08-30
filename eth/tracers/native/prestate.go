@@ -45,7 +45,6 @@ type account struct {
 
 type accountMarshaling struct {
 	Balance *hexutil.Big
-	Nonce   hexutil.Uint64
 	Code    hexutil.Bytes
 }
 

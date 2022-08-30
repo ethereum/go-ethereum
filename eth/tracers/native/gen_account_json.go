@@ -16,13 +16,13 @@ var _ = (*accountMarshaling)(nil)
 func (a account) MarshalJSON() ([]byte, error) {
 	type account struct {
 		Balance *hexutil.Big                `json:"balance"`
-		Nonce   hexutil.Uint64              `json:"nonce"`
+		Nonce   uint64                      `json:"nonce"`
 		Code    hexutil.Bytes               `json:"code"`
 		Storage map[common.Hash]common.Hash `json:"storage"`
 	}
 	var enc account
 	enc.Balance = (*hexutil.Big)(a.Balance)
-	enc.Nonce = hexutil.Uint64(a.Nonce)
+	enc.Nonce = a.Nonce
 	enc.Code = a.Code
 	enc.Storage = a.Storage
 	return json.Marshal(&enc)
@@ -32,7 +32,7 @@ func (a account) MarshalJSON() ([]byte, error) {
 func (a *account) UnmarshalJSON(input []byte) error {
 	type account struct {
 		Balance *hexutil.Big                `json:"balance"`
-		Nonce   *hexutil.Uint64             `json:"nonce"`
+		Nonce   *uint64                     `json:"nonce"`
 		Code    *hexutil.Bytes              `json:"code"`
 		Storage map[common.Hash]common.Hash `json:"storage"`
 	}
@@ -44,7 +44,7 @@ func (a *account) UnmarshalJSON(input []byte) error {
 		a.Balance = (*big.Int)(dec.Balance)
 	}
 	if dec.Nonce != nil {
-		a.Nonce = uint64(*dec.Nonce)
+		a.Nonce = *dec.Nonce
 	}
 	if dec.Code != nil {
 		a.Code = *dec.Code
