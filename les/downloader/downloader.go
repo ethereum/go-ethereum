@@ -106,6 +106,7 @@ type Downloader struct {
 
 	lightchain LightChain
 	blockchain BlockChain
+	skeleton   *skeleton
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
@@ -149,6 +150,13 @@ type Downloader struct {
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+}
+
+// headerTask is a set of downloaded headers to queue along with their precomputed
+// hashes to avoid constant rehashing.
+type headerTask struct {
+	headers []*types.Header
+	hashes  []common.Hash
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -233,6 +241,8 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		//},
 		trackStateReq: make(chan *stateReq),
 	}
+	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, nil))
+
 	go dl.stateFetcher()
 	return dl
 }
@@ -1989,4 +1999,26 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	case <-cancel:
 		return errNoSyncActive
 	}
+}
+
+// readHeaderRange returns a list of headers, using the given last header as the base,
+// and going backwards towards genesis. This method assumes that the caller already has
+// placed a reasonable cap on count.
+func (d *Downloader) readHeaderRange(last *types.Header, count int) []*types.Header {
+	var (
+		current = last
+		headers []*types.Header
+	)
+	for {
+		parent := d.lightchain.GetHeaderByHash(current.ParentHash)
+		if parent == nil {
+			break // The chain is not continuous, or the chain is exhausted
+		}
+		headers = append(headers, parent)
+		if len(headers) >= count {
+			break
+		}
+		current = parent
+	}
+	return headers
 }

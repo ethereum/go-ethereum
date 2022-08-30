@@ -123,7 +123,7 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 	// times over a 5 second period.
 	var err error
 	for i := 0; i < 10; i++ {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 		if g.rpc, err = rpc.Dial(ipcpath); err == nil {
 			return g
 		}
