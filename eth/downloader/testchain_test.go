@@ -39,6 +39,7 @@ var (
 	testDB      = rawdb.NewMemoryDatabase()
 
 	testGspec = core.Genesis{
+		Config:  params.TestChainConfig,
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
@@ -219,7 +220,7 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		db := rawdb.NewMemoryDatabase()
 		testGspec.MustCommit(db)
 
-		chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(db, nil, &testGspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		if err != nil {
 			panic(err)
 		}

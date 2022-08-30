@@ -68,13 +68,14 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	gspec := core.Genesis{
+	gspec := &core.Genesis{
+		Config:  params.TestChainConfig,
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 	gspec.MustCommit(db)
 
-	chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		panic(err)
 	}

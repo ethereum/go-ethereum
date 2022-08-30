@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -2166,20 +2165,20 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
-	var err error
-	chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
-	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
+func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Database) {
+	var (
+		gspec   = MakeGenesis(ctx)
+		chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
+	)
+	cliqueConfig, err := core.LoadCliqueConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}
-
-	var engine consensus.Engine
-	ethashConf := ethconfig.Defaults.Ethash
+	ethashConfig := ethconfig.Defaults.Ethash
 	if ctx.Bool(FakePoWFlag.Name) {
-		ethashConf.PowMode = ethash.ModeFake
+		ethashConfig.PowMode = ethash.ModeFake
 	}
-	engine = ethconfig.CreateConsensusEngine(stack, config, &ethashConf, nil, false, chainDb)
+	engine := ethconfig.CreateConsensusEngine(stack, &ethashConfig, cliqueConfig, nil, false, chainDb)
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -2209,7 +2208,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

@@ -92,7 +92,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
 		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
@@ -233,7 +233,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -273,7 +273,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis       = gspec.MustCommit(db)
-			blockchain, _ = NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {

@@ -62,7 +62,7 @@ func getChain() *core.BlockChain {
 		}
 		ga[common.BytesToAddress(a)] = acc
 	}
-	gspec := core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  ga,
 	}
@@ -79,7 +79,7 @@ func getChain() *core.BlockChain {
 		SnapshotWait:        true,
 	}
 	trieRoot = blocks[len(blocks)-1].Root()
-	bc, _ := core.NewBlockChain(db, cacheConf, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	bc, _ := core.NewBlockChain(db, cacheConf, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if _, err := bc.InsertChain(blocks); err != nil {
 		panic(err)
 	}
