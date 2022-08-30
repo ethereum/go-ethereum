@@ -3,6 +3,8 @@ title: Light client
 description: Introduction to Geth's light sync mode
 ---
 
+{% include note.html content="Light nodes do not currently work on proof-of-stake Ethereum, but new proof-of-stake light clients are expected to ship soon!" %}
+
 Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. In a full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources. 
 
 Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/en/run-a-node/).
