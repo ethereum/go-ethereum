@@ -394,10 +394,15 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	}()
 
 	// Start tracking idle peers for task assignments
-	peering := make(chan *peerConnection, 64) // arbitrary buffer, just some burst protection
+	joining := make(chan *peerConnection, 64) // arbitrary buffer, just some burst protection
 
-	peeringSub := s.peers.SubscribeNewPeers(peering)
-	defer peeringSub.Unsubscribe()
+	joiningSub := s.peers.SubscribeNewPeers(joining)
+	defer joiningSub.Unsubscribe()
+
+	leaving := make(chan *peerConnection, 64) // arbitrary buffer, just some burst protection
+
+	leavingSub := s.peers.SubscribePeerDrops(leaving)
+	defer leavingSub.Unsubscribe()
 
 	s.idles = make(map[string]*peerConnection)
 	for _, peer := range s.peers.AllPeers() {
@@ -414,22 +419,14 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		}
 		// Wait for something to happen
 		select {
-		case event := <-peering:
-			// A peer joined or left, the tasks queue and allocations need to be
-			// checked for potential assignment or reassignment
+		case event := <-joining:
+			log.Debug("Joining skeleton peer", "id", event.id)
+			s.idles[event.id] = event
 
-			// TODO fix this
-			_ = event
-			/*
-				peerid := event.peer.id
-				if event.join {
-					log.Debug("Joining skeleton peer", "id", peerid)
-					s.idles[peerid] = event.peer
-				} else {
-					log.Debug("Leaving skeleton peer", "id", peerid)
-					s.revertRequests(peerid)
-					delete(s.idles, peerid)
-				}*/
+		case event := <-leaving:
+			log.Debug("Leaving skeleton peer", "id", event.id)
+			s.revertRequests(event.id)
+			delete(s.idles, event.id)
 
 		case errc := <-s.terminate:
 			errc <- nil
