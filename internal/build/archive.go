@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Archive interface {
@@ -159,6 +160,7 @@ func (a *TarballArchive) Directory(name string) error {
 		Name:     a.dir,
 		Mode:     0755,
 		Typeflag: tar.TypeDir,
+		ModTime:  time.Now(),
 	})
 }
 

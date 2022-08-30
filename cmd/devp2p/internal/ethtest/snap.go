@@ -350,7 +350,6 @@ func hexToCompact(hex []byte) []byte {
 
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-
 	key := common.FromHex("0x00bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a")
 	// helper function to iterate the key, and generate the compact-encoded
 	// trie paths along the way.
@@ -496,10 +495,10 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	if len(hashes) > 0 {
 		if exp, got := tc.expFirst, res.Accounts[0].Hash; exp != got {
-			return fmt.Errorf("expected first account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected first account %#x, got %#x", exp, got)
 		}
 		if exp, got := tc.expLast, res.Accounts[len(res.Accounts)-1].Hash; exp != got {
-			return fmt.Errorf("expected last account 0x%x, got 0x%x", exp, got)
+			return fmt.Errorf("expected last account %#x, got %#x", exp, got)
 		}
 	}
 	// Reconstruct a partial trie from the response and verify it

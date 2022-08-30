@@ -138,7 +138,7 @@ func runCmd(ctx *cli.Context) error {
 		gen := readGenesis(ctx.String(GenesisFlag.Name))
 		genesisConfig = gen
 		db := rawdb.NewMemoryDatabase()
-		genesis := gen.ToBlock(db)
+		genesis := gen.MustCommit(db)
 		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), nil)
 		chainConfig = gen.Config
 	} else {
@@ -309,7 +309,7 @@ allocated bytes: %d
 `, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
 	}
 	if tracer == nil {
-		fmt.Printf("0x%x\n", output)
+		fmt.Printf("%#x\n", output)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
