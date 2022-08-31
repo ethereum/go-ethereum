@@ -612,11 +612,17 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 			Typ:  field.Type,
 		}
 		if field.isArray() {
-			arrayValue, _ := encValue.([]interface{})
+			arrayValue, ok := encValue.([]interface{})
+			if !ok {
+				return nil, fmt.Errorf("could not format value %v as array", encValue)
+			}
 			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
-					mapValue, _ := v.(map[string]interface{})
+					mapValue, ok := v.(map[string]interface{})
+					if !ok {
+						return nil, fmt.Errorf("could not format value %v as map", v)
+					}
 					mapOutput, err := typedData.formatData(parsedType, mapValue)
 					if err != nil {
 						return nil, err
