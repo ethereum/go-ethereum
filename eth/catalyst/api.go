@@ -636,23 +636,25 @@ func (api *ConsensusAPI) heartbeat() {
 				continue
 			}
 			var eta time.Duration
-			if head.Number.Uint64() > 0 && htd.Cmp(ttd) < 0 {
+			if head.Number.Uint64() > 0 {
 				// Accumulate the last 64 difficulties to estimate the growth
-				var deltaDifficulty uint64
-				var deltaTime uint64
-				hdr := head
+				var (
+					deltaDiff uint64
+					deltaTime uint64
+					current   = head
+				)
 				for i := 0; i < 64; i++ {
-					parent := chain.GetHeader(hdr.ParentHash, hdr.Number.Uint64()-1)
+					parent := chain.GetHeader(current.ParentHash, current.Number.Uint64()-1)
 					if parent == nil {
 						break
 					}
-					deltaDifficulty += hdr.Difficulty.Uint64()
-					deltaTime += hdr.Time - parent.Time
-					hdr = parent
+					deltaDiff += current.Difficulty.Uint64()
+					deltaTime += current.Time - parent.Time
+					current = parent
 				}
 				// Estimate an ETA based on the block times and the difficulty growth
 				if deltaTime > 0 {
-					growth := deltaDifficulty / deltaTime
+					growth := deltaDiff / deltaTime
 					left := new(big.Int).Sub(ttd, htd)
 					eta = time.Duration(new(big.Int).Div(left, new(big.Int).SetUint64(growth)).Uint64()) * time.Second
 				}
