@@ -335,8 +335,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 	start := time.Now()
 	answerCh := make(chan *jsonrpcMessage)
 	go func() {
-		answer := h.runMethod(cp.ctx, msg, callb, args)
-		answerCh <- answer
+		answerCh <- h.runMethod(cp.ctx, msg, callb, args)
 	}()
 
 	var answer *jsonrpcMessage
