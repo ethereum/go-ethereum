@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -80,7 +78,7 @@ func NewStateTrie(owner common.Hash, root common.Hash, db *Database) (*StateTrie
 func (t *StateTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StateTrie.Get", "err", err)
 	}
 	return res
 }
@@ -96,7 +94,7 @@ func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var ret types.StateAccount
 	res, err := t.trie.TryGet(t.hashKey(key))
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StateTrie.TGA", "err", err)
 		return &ret, err
 	}
 	if res == nil {
@@ -113,7 +111,7 @@ func (t *StateTrie) TryGetAccountWithPreHashedKey(key []byte) (*types.StateAccou
 	var ret types.StateAccount
 	res, err := t.trie.TryGet(key)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StateTrie.TGAWPHK", "err", err)
 		return &ret, err
 	}
 	if res == nil {
@@ -152,7 +150,7 @@ func (t *StateTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error 
 // stored in the trie.
 func (t *StateTrie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StateTrie.Update", "err", err)
 	}
 }
 
@@ -177,7 +175,7 @@ func (t *StateTrie) TryUpdate(key, value []byte) error {
 // Delete removes any existing value for key from the trie.
 func (t *StateTrie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StateTrie.Delete", "err", err)
 	}
 }
 
