@@ -287,8 +287,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		// Send a request to generate a full block in the background.
-		// The result can be obtained via the returned channel. The
-		// timeout for building block is set to prevent some huge blocks.
+		// The result can be obtained via the returned channel.
 		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
 		if err != nil {
 			log.Error("Failed to create async sealing payload", "err", err)
