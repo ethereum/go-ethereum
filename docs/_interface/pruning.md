@@ -39,7 +39,6 @@ data that isn't part of the target state trie or genesis state.
 Geth prunes the database in three stages:
 
 1) Iterating state snapshot: Geth iterates the bottom-most snapshot layer and constructs a bloom filter set for identifying the target trie nodes.
-   to identify stale trie nodes.
 2) Pruning state data: Geth deletes stale trie nodes from the database which are not in the bloom filter set.
 3) Compacting database: Geth tidies up the new database to reclaim free space.
 
