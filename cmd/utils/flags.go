@@ -561,8 +561,8 @@ var (
 		Category: flags.MinerCategory,
 	}
 	MinerNewPayloadTimeout = &cli.DurationFlag{
-		Name:     "miner.newpayload_timeout",
-		Usage:    "Specify the maximum time allowance for creating a new payload(pending block)",
+		Name:     "miner.newpayload-timeout",
+		Usage:    "Specify the maximum time allowance for creating a new payload",
 		Value:    ethconfig.Defaults.Miner.NewPayloadTimeout,
 		Category: flags.MinerCategory,
 	}
@@ -2017,7 +2017,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
-	if err := ethcatalyst.Register(stack, backend, cfg); err != nil {
+	if err := ethcatalyst.Register(stack, backend); err != nil {
 		Fatalf("Failed to register the Engine API service: %v", err)
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))

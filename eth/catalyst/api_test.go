@@ -81,7 +81,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 	signer := types.NewEIP155Signer(ethservice.BlockChain().Config().ChainID)
 	tx, err := types.SignTx(types.NewTransaction(uint64(10), blocks[9].Coinbase(), big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, testKey)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
 
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.eth.TxPool().AddRemotesSync(blocks[9].Transactions())
@@ -126,7 +126,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 	fcState := beacon.ForkchoiceStateV1{
 		HeadBlockHash:      blocks[5].Hash(),
 		SafeBlockHash:      common.Hash{},
@@ -146,7 +146,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
 
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 
 	// Put the 10th block's tx in the pool and produce a new block
 	ethservice.TxPool().AddLocals(blocks[9].Transactions())
@@ -203,7 +203,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 	var (
-		api    = NewConsensusAPI(ethservice, 0)
+		api    = NewConsensusAPI(ethservice)
 		parent = ethservice.BlockChain().CurrentBlock()
 	)
 	tests := []struct {
@@ -248,7 +248,7 @@ func TestEth2NewBlock(t *testing.T) {
 	defer n.Close()
 
 	var (
-		api    = NewConsensusAPI(ethservice, 0)
+		api    = NewConsensusAPI(ethservice)
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 
 		// This EVM code generates a log when the contract is created.
@@ -439,7 +439,7 @@ func TestFullAPI(t *testing.T) {
 }
 
 func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Block, callback func(parent *types.Block)) {
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 	for i := 0; i < n; i++ {
 		callback(parent)
 
@@ -474,10 +474,9 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
-	var (
-		api = NewConsensusAPI(ethservice, 0)
-	)
+
 	// invalid ttd
+	api := NewConsensusAPI(ethservice)
 	config := beacon.TransitionConfigurationV1{
 		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
 		TerminalBlockHash:       common.Hash{},
@@ -538,7 +537,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 	defer n.Close()
 
 	var (
-		api    = NewConsensusAPI(ethservice, 0)
+		api    = NewConsensusAPI(ethservice)
 		parent = ethservice.BlockChain().CurrentBlock()
 		// This EVM code generates a log when the contract is created.
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
@@ -599,7 +598,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 }
 
 func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	block, err := api.eth.Miner().GetSealingBlockSync(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random, false, 0)
+	block, err := api.eth.Miner().GetSealingBlockSync(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random, false)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +611,7 @@ func TestEmptyBlocks(t *testing.T) {
 	defer n.Close()
 
 	commonAncestor := ethservice.BlockChain().CurrentBlock()
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
 	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
@@ -732,8 +731,8 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	}
 	nodeA.Server().AddPeer(nodeB.Server().Self())
 	nodeB.Server().AddPeer(nodeA.Server().Self())
-	apiA := NewConsensusAPI(ethserviceA, 0)
-	apiB := NewConsensusAPI(ethserviceB, 0)
+	apiA := NewConsensusAPI(ethserviceA)
+	apiB := NewConsensusAPI(ethserviceB)
 
 	commonAncestor := ethserviceA.BlockChain().CurrentBlock()
 
@@ -791,7 +790,7 @@ func TestInvalidBloom(t *testing.T) {
 	defer n.Close()
 
 	commonAncestor := ethservice.BlockChain().CurrentBlock()
-	api := NewConsensusAPI(ethservice, 0)
+	api := NewConsensusAPI(ethservice)
 
 	// Setup 10 blocks on the canonical chain
 	setupBlocks(t, ethservice, 10, commonAncestor, func(parent *types.Block) {})
@@ -818,7 +817,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	defer n.Close()
 
 	var (
-		api    = NewConsensusAPI(ethservice, 0)
+		api    = NewConsensusAPI(ethservice)
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 	)
 
@@ -842,7 +841,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
 		SuggestedFeeRecipient: parent.Coinbase(),
 	}
-	empty, err := api.eth.Miner().GetSealingBlockSync(parent.Hash(), params.Timestamp, params.SuggestedFeeRecipient, params.Random, true, 0)
+	empty, err := api.eth.Miner().GetSealingBlockSync(parent.Hash(), params.Timestamp, params.SuggestedFeeRecipient, params.Random, true)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}

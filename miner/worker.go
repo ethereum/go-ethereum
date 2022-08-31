@@ -243,6 +243,13 @@ type worker struct {
 	// non-stop and no real transaction will be included.
 	noempty uint32
 
+	// newpayloadTimeout is the maximum timeout allowance for creating payload.
+	// The default value is 2 seconds but node operator can set it to arbitrary
+	// large value. A large timeout allowance may cause Geth to fail creating
+	// a non-empty payload within the specified time and eventually miss the slot
+	// in case there are some computation expensive transactions in txpool.
+	newpayloadTimeout time.Duration
+
 	// External functions
 	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
@@ -290,6 +297,16 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+	// Sanitize the timeout config for creating payload.
+	newpayloadTimeout := worker.config.NewPayloadTimeout
+	if newpayloadTimeout == 0 {
+		log.Warn("Sanitizing new payload timeout to default", "provided", newpayloadTimeout, "updated", DefaultConfig.NewPayloadTimeout)
+		newpayloadTimeout = DefaultConfig.NewPayloadTimeout
+	}
+	if newpayloadTimeout < time.Millisecond*100 {
+		log.Warn("Low payload timeout may cause high amount of non-full blocks", "provided", newpayloadTimeout, "default", DefaultConfig.NewPayloadTimeout)
+	}
+	worker.newpayloadTimeout = newpayloadTimeout
 
 	worker.wg.Add(4)
 	go worker.mainLoop()
@@ -940,7 +957,6 @@ type generateParams struct {
 	noUncle    bool           // Flag whether the uncle block inclusion is allowed
 	noExtra    bool           // Flag whether the extra field assignment is allowed
 	noTxs      bool           // Flag whether an empty block without any transaction is expected
-	timeout    time.Duration  // The time allowance for building block, 0 means no limit
 }
 
 // prepareWork constructs the sealing task according to the given parameters,
@@ -1063,17 +1079,15 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	defer work.discard()
 
 	if !params.noTxs {
-		var interrupt *int32
-		if params.timeout != 0 {
-			interrupt = new(int32)
-			timer := time.AfterFunc(params.timeout, func() {
-				atomic.StoreInt32(interrupt, commitInterruptTimeout)
-			})
-			defer timer.Stop()
-		}
+		interrupt := new(int32)
+		timer := time.AfterFunc(w.newpayloadTimeout, func() {
+			atomic.StoreInt32(interrupt, commitInterruptTimeout)
+		})
+		defer timer.Stop()
+
 		err := w.fillTransactions(interrupt, work)
 		if errors.Is(err, errBlockInterruptedByTimeout) {
-			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(params.timeout))
+			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
 	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
@@ -1185,7 +1199,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool, timeout time.Duration) (chan *types.Block, chan error, error) {
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
 	var (
 		resCh = make(chan *types.Block, 1)
 		errCh = make(chan error, 1)
@@ -1200,7 +1214,6 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			noUncle:    true,
 			noExtra:    true,
 			noTxs:      noTxs,
-			timeout:    timeout,
 		},
 		result: resCh,
 		err:    errCh,
