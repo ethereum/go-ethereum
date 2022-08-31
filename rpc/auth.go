@@ -93,6 +93,9 @@ func WithHTTPClient(c *http.Client) ClientOption {
 // whenever a request is made. Note that only one authentication provider can be active at
 // any time.
 func WithHTTPAuth(a HeaderAuthProvider) ClientOption {
+	if a == nil {
+		panic("nil auth")
+	}
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.httpAuth = a
 	})
