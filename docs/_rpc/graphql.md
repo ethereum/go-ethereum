@@ -14,7 +14,7 @@ geth --http --graphql
 Now you can start querying against `http://localhost:8545/graphql`. To change the port, you'll need to provide `--http.port`, e.g.:
 
 ```bash
-geth --http --http.port 9545 --graphql
+geth --http --http.port 8545 --graphql
 ```
 
 ### GraphiQL
