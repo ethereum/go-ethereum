@@ -92,15 +92,12 @@ func (t *StateTrie) TryGet(key []byte) ([]byte, error) {
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	res, err := t.trie.TryGet(t.hashKey(key))
-	if err != nil {
+	if res == nil || err != nil {
 		return nil, err
 	}
-	if res == nil {
-		return nil, nil
-	}
-	var ret types.StateAccount
-	err = rlp.DecodeBytes(res, &ret)
-	return &ret, err
+	ret := new(types.StateAccount)
+	err = rlp.DecodeBytes(res, ret)
+	return ret, err
 }
 
 // TryGetAccountWithPreHashedKey does the same thing as TryGetAccount, however
@@ -108,15 +105,12 @@ func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 // since the client code needs to know the key format.
 func (t *StateTrie) TryGetAccountWithPreHashedKey(key []byte) (*types.StateAccount, error) {
 	res, err := t.trie.TryGet(key)
-	if err != nil {
+	if res == nil || err != nil {
 		return nil, err
 	}
-	if res == nil {
-		return nil, nil
-	}
-	var ret types.StateAccount
-	err = rlp.DecodeBytes(res, &ret)
-	return &ret, err
+	ret := new(types.StateAccount)
+	err = rlp.DecodeBytes(res, ret)
+	return ret, err
 }
 
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
