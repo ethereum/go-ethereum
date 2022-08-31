@@ -37,16 +37,10 @@ func (ta helloRPC) HelloWorld() (string, error) {
 	return string(ta), nil
 }
 
-type TestAuthProvider func(header *http.Header) error
-
-func (fn TestAuthProvider) AddAuthHeader(header *http.Header) error {
-	return fn(header)
-}
-
 type authTest struct {
 	name            string
 	endpoint        string
-	prov            rpc.HeaderAuthProvider
+	prov            rpc.HTTPAuth
 	expectDialFail  bool
 	expectCall1Fail bool
 	expectCall2Fail bool
@@ -155,12 +149,12 @@ func TestAuthEndpoints(t *testing.T) {
 		t.Fatalf("expected http and auth-http endpoints to be different, got: %q and %q", a, b)
 	}
 
-	goodAuth := rpc.NewJWTAuthProvider(secret)
+	goodAuth := NewJWTAuthProvider(secret)
 	var otherSecret [32]byte
 	if _, err := crand.Read(otherSecret[:]); err != nil {
 		t.Fatalf("failed to create jwt secret: %v", err)
 	}
-	badAuth := rpc.NewJWTAuthProvider(otherSecret)
+	badAuth := NewJWTAuthProvider(otherSecret)
 
 	notTooLong := time.Second * 57
 	tooLong := time.Second * 60
@@ -203,8 +197,8 @@ func TestAuthEndpoints(t *testing.T) {
 	}
 }
 
-func noneAuth(secret [32]byte) TestAuthProvider {
-	return func(header *http.Header) error {
+func noneAuth(secret [32]byte) rpc.HTTPAuth {
+	return func(header http.Header) error {
 		token := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now()},
 		})
@@ -212,24 +206,24 @@ func noneAuth(secret [32]byte) TestAuthProvider {
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
-		header.Add("Authorization", "Bearer "+s)
+		header.Set("Authorization", "Bearer "+s)
 		return nil
 	}
 }
 
-func changingAuth(provs ...rpc.HeaderAuthProvider) TestAuthProvider {
+func changingAuth(provs ...rpc.HTTPAuth) rpc.HTTPAuth {
 	i := 0
-	return func(header *http.Header) error {
+	return func(header http.Header) error {
 		i += 1
 		if i > len(provs) {
 			i = len(provs)
 		}
-		return provs[i-1].AddAuthHeader(header)
+		return provs[i-1](header)
 	}
 }
 
-func offsetTimeAuth(secret [32]byte, offset time.Duration) TestAuthProvider {
-	return func(header *http.Header) error {
+func offsetTimeAuth(secret [32]byte, offset time.Duration) rpc.HTTPAuth {
+	return func(header http.Header) error {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"iat": &jwt.NumericDate{Time: time.Now().Add(offset)},
 		})
@@ -237,7 +231,7 @@ func offsetTimeAuth(secret [32]byte, offset time.Duration) TestAuthProvider {
 		if err != nil {
 			return fmt.Errorf("failed to create JWT token: %w", err)
 		}
-		header.Add("Authorization", "Bearer "+s)
+		header.Set("Authorization", "Bearer "+s)
 		return nil
 	}
 }
