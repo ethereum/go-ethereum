@@ -54,7 +54,7 @@ type authTest struct {
 
 func (at *authTest) Run(t *testing.T) {
 	ctx := context.Background()
-	cl, err := rpc.DialWithAuth(ctx, at.endpoint, at.prov)
+	cl, err := rpc.DialOptions(ctx, at.endpoint, rpc.WithHTTPAuth(at.prov))
 	if at.expectDialFail {
 		if err == nil {
 			t.Fatal("expected initial dial to fail")
@@ -65,6 +65,7 @@ func (at *authTest) Run(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial rpc endpoint: %v", err)
 	}
+
 	var x string
 	err = cl.CallContext(ctx, &x, "engine_helloWorld")
 	if at.expectCall1Fail {
@@ -80,6 +81,7 @@ func (at *authTest) Run(t *testing.T) {
 	if x != "hello engine" {
 		t.Fatalf("method was silent but did not return expected value: %q", x)
 	}
+
 	err = cl.CallContext(ctx, &x, "eth_helloWorld")
 	if at.expectCall2Fail {
 		if err == nil {
@@ -202,10 +204,6 @@ func TestAuthEndpoints(t *testing.T) {
 		// Auth works
 		{name: "ws good", endpoint: node.WSAuthEndpoint(), prov: goodAuth, expectCall1Fail: false},
 		{name: "http good", endpoint: node.HTTPAuthEndpoint(), prov: goodAuth, expectCall1Fail: false},
-
-		// Try nil auth
-		{name: "ws nil auth provider", endpoint: node.WSAuthEndpoint(), prov: nil, expectDialFail: true},
-		{name: "http nil auth provider", endpoint: node.HTTPAuthEndpoint(), prov: nil, expectDialFail: true},
 
 		// Try a bad auth
 		{name: "ws bad", endpoint: node.WSAuthEndpoint(), prov: badAuth, expectDialFail: true},      // ws auth is immediate
