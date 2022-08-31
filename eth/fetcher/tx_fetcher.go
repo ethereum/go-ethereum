@@ -281,7 +281,6 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
 		added = make([]common.Hash, 0, len(txs))
-		delay time.Duration
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += 128 {
