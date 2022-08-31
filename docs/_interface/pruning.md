@@ -31,16 +31,16 @@ With these rules satisfied, Geth's database can be pruned.
 
 ## How pruning works
 
-Pruning uses snapshots of the state database as an acceleration structure to determine which 
+Pruning uses snapshots of the state database as an indicator to determine which 
 nodes in the state trie can be kept and which ones are stale and can be discarded. Geth 
-rebuilds the state trie from a stored snapshot that is older than 128 blocks, discarding any 
-data that isn't part of the snapshot window (the sequence of blocks between the snapshot and head). 
+identifies the target state trie based on a stored snapshot layer which has at least 128 block confirmations on top(for surviving reorgs)
+data that isn't part of the target state trie or genesis state. 
 
 Geth prunes the database in three stages:
 
-1) Iterating state snapshot: Geth iterates through states, starting at the most recent snapshot, 
+1) Iterating state snapshot: Geth iterates the bottom-most snapshot layer and constructs a bloom filter set for identifying the target trie nodes.
    to identify stale trie nodes.
-2) Pruning state data: Geth deletes stale trie nodes from the database.
+2) Pruning state data: Geth deletes stale trie nodes from the database which are not in the bloom filter set.
 3) Compacting database: Geth tidies up the new database to reclaim free space.
 
 There may be a period of >1 hour during the Compacting Database stage with no log messages at all. 
@@ -71,7 +71,7 @@ The pruning could take 4-5 hours to complete. Once finished, restart Geth.
 
 ## Troubleshooting
 
-Messages about "state snapshot generation" indicate that a snapshot does not actually exist. 
+Messages about "state snapshot generation" indicate that a snapshot is not fully generated. 
 This suggests either the `--datadir` is not correct or Geth ran out of time to complete the 
 snapshot generation and the pruning began before the snapshot was completed. In either case, 
 the best course of action is to stop Geth, run it normally again (no pruning) until the snapshot 
