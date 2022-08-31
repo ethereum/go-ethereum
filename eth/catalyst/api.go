@@ -656,7 +656,7 @@ func (api *ConsensusAPI) heartbeat() {
 				if deltaTime > 0 {
 					growth := deltaDiff / deltaTime
 					left := new(big.Int).Sub(ttd, htd)
-					eta = time.Duration(new(big.Int).Div(left, new(big.Int).SetUint64(growth)).Uint64()) * time.Second
+					eta = time.Duration(new(big.Int).Div(left, new(big.Int).SetUint64(growth+1)).Uint64()) * time.Second
 				}
 			}
 			message := "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transition arrives!"
