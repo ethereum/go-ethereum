@@ -493,14 +493,8 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 		// We don't have the requested state available, bail out
 		return nil, nil
 	}
+	// The 'snap' might be nil, in which case we cannot serve storage slots.
 	snap := chain.Snapshots().Snapshot(req.Root)
-	if snap == nil {
-		// We don't have the requested state snapshotted yet, bail out.
-		// In reality we could still serve using the account and storage
-		// tries only, but let's protect the node a bit while it's doing
-		// snapshot generation.
-		return nil, nil
-	}
 	// Retrieve trie nodes until the packet size limit is reached
 	var (
 		nodes [][]byte
@@ -525,6 +519,10 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 
 		default:
 			// Storage slots requested, open the storage trie and retrieve from there
+			if snap == nil {
+				// We don't have the requested state snapshotted yet (or it is stale), bail out.
+				break
+			}
 			account, err := snap.Account(common.BytesToHash(pathset[0]))
 			loads++ // always account database reads, even for failures
 			if err != nil || account == nil {
