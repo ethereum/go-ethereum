@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -341,7 +340,7 @@ func (c *Config) ResolvePath(path string) string {
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
 			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+				c.warnOnce(&c.oldGethResourceWarning, false, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
 			}
 			return oldpath
 		}
@@ -394,48 +393,23 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	return key
 }
 
-// StaticNodes returns a list of node enode URLs configured as static nodes.
-func (c *Config) StaticNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
+// CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
+// and trusted-nodes files. If they exist it raises an error.
+func (c *Config) CheckLegacyFiles() {
+	c.checkLegacyFile(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
+	c.checkLegacyFile(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
 }
 
-// TrustedNodes returns a list of node enode URLs configured as trusted nodes.
-func (c *Config) TrustedNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
-}
-
-// parsePersistentNodes parses a list of discovery node URLs loaded from a .json
-// file from within the data directory.
-func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
+// checkLegacyFile will only raise an error if a file at the given path exists.
+func (c *Config) checkLegacyFile(w *bool, path string) {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
-		return nil
+		return
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil
+		return
 	}
-	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
-
-	// Load the nodes from the config file.
-	var nodelist []string
-	if err := common.LoadJSON(path, &nodelist); err != nil {
-		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
-		return nil
-	}
-	// Interpret the list as a discovery node array
-	var nodes []*enode.Node
-	for _, url := range nodelist {
-		if url == "" {
-			continue
-		}
-		node, err := enode.Parse(enode.ValidSchemes, url)
-		if err != nil {
-			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	return nodes
+	c.warnOnce(w, true, "Ignoring deprecated node list file %s. Please use the TOML config file instead.", path)
 }
 
 // KeyDirConfig determines the settings for keydirectory
@@ -485,7 +459,7 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 
 var warnLock sync.Mutex
 
-func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
+func (c *Config) warnOnce(w *bool, err bool, format string, args ...interface{}) {
 	warnLock.Lock()
 	defer warnLock.Unlock()
 
@@ -496,6 +470,10 @@ func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
 	if l == nil {
 		l = log.Root()
 	}
-	l.Warn(fmt.Sprintf(format, args...))
+	if err {
+		l.Error(fmt.Sprintf(format, args...))
+	} else {
+		l.Warn(fmt.Sprintf(format, args...))
+	}
 	*w = true
 }
