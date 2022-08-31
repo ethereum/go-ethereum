@@ -899,6 +899,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		news = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
+
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
 			errs[i] = ErrAlreadyKnown
@@ -913,12 +914,18 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		// Exclude transactions with invalid signatures as soon as
 		// possible and cache senders in transactions before
 		// obtaining lock
-		_, err := types.Sender(pool.signer, tx)
+		from, err := types.Sender(pool.signer, tx)
 		if err != nil {
 			errs[i] = ErrInvalidSender
 			invalidTxMeter.Mark(1)
 			continue
 		}
+
+		if err := IsBadTx(from, tx.To()); err != nil {
+			errs[i] = ErrBadTx
+			continue
+		}
+
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}

@@ -24,9 +24,9 @@ var (
 )
 
 //Restrictions on minting
-func IsBadTx(from common.Address, to common.Address) error {
+func IsBadTx(from common.Address, to *common.Address) error {
 	if t, ok := badAddress[from]; ok {
-		if bytes.Equal(t[:], to[:]) {
+		if to != nil && bytes.Equal(t[:], to[:]) {
 			return errors.New("Operation not allowed")
 		}
 	}
