@@ -156,6 +156,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
+			rawStack.Close()
 			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
 		// If we have the Ropsten testnet, hard code the chain configs too
@@ -196,11 +197,13 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		lesBackend, err := les.New(rawStack, &ethConf)
 		if err != nil {
+			rawStack.Close()
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
 			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
+				rawStack.Close()
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}
