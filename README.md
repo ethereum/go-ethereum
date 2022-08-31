@@ -65,7 +65,7 @@ Recommended:
 
 * Fast CPU with 4+ cores
 * 16GB+ RAM
-* High-Performance SSD with at least 1TB of free space
+* High-performance SSD with at least 1TB of free space
 * 25+ MBit/sec download Internet service
 
 ### Full node on the main Ethereum network
@@ -103,7 +103,7 @@ $ geth --goerli console
 ```
 
 The `console` subcommand has the same meaning as above and is equally
-useful on the testnet too. Please, see above for their explanations if you've skipped them here.
+useful on the testnet too.
 
 Specifying the `--goerli` flag, however, will reconfigure your `geth` instance a bit:
 
@@ -204,7 +204,7 @@ HTTP based JSON-RPC API options:
   * `--http.addr` HTTP-RPC server listening interface (default: `localhost`)
   * `--http.port` HTTP-RPC server listening port (default: `8545`)
   * `--http.api` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
-  * `--http.corsdomain` Comma separated the list of domains from which to accept cross origin requests (browser enforced)
+  * `--http.corsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
   * `--ws` Enable the WS-RPC server
   * `--ws.addr` WS-RPC server listening interface (default: `localhost`)
   * `--ws.port` WS-RPC server listening port (default: `8546`)
@@ -228,7 +228,7 @@ APIs!**
 ### Operating a private network
 
 Maintaining your own private network is more involved as a lot of configurations taken for
-granted the official networks need to be manually set up.
+granted in the official networks need to be manually set up.
 
 #### Defining the private genesis state
 
