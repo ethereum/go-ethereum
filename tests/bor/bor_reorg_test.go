@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"os/signal"
 	"testing"
 	"time"
 
@@ -133,10 +132,6 @@ func TestValidatorWentOffline(t *testing.T) {
 	// Create an Ethash network based off of the Ropsten config
 	genesis := initGenesis(t, faucets)
 
-	// Handle interrupts.
-	interruptCh := make(chan os.Signal, 5)
-	signal.Notify(interruptCh, os.Interrupt)
-
 	var (
 		stacks []*node.Node
 		nodes  []*eth.Ethereum
@@ -171,20 +166,6 @@ func TestValidatorWentOffline(t *testing.T) {
 		}
 	}
 
-	go func() {
-		for {
-			// Stop when interrupted.
-			select {
-			case <-interruptCh:
-				for _, node := range stacks {
-					node.Close()
-				}
-				return
-			default:
-			}
-		}
-	}()
-
 	for {
 
 		// for block 1 to 8, the primary validator is node0
@@ -211,8 +192,6 @@ func TestValidatorWentOffline(t *testing.T) {
 
 			break
 		}
-
-		time.Sleep(1 * time.Second)
 
 	}
 
