@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum"
@@ -478,13 +479,16 @@ func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]*Log, 0, len(logs))
-	for _, log := range logs {
+	var ret []*Log
+	// Select tx logs from all block logs
+	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) == t.index })
+	for ix < len(logs) && uint64(logs[ix].TxIndex) == t.index {
 		ret = append(ret, &Log{
 			r:           t.r,
 			transaction: t,
-			log:         log,
+			log:         logs[ix],
 		})
+		ix++
 	}
 	return &ret, nil
 }

@@ -163,7 +163,7 @@ func (n *cachedNode) rlp() []byte {
 // or by regenerating it from the rlp encoded blob.
 func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		// The raw-blob format nodes are loaded from either from
+		// The raw-blob format nodes are loaded either from the
 		// clean cache or the database, they are all in their own
 		// copy and safe to use unsafe decoder.
 		return mustDecodeNodeUnsafe(hash[:], node)
