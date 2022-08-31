@@ -79,5 +79,7 @@ is definitely complete and at least 128 blocks exist on top of it, then try prun
 ## Further Reading
 
 [Ethereum Foundation blog post for Geth v1.10.0](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/)
+ 
 [Pruning Geth guide (@yorickdowne)](https://gist.github.com/yorickdowne/3323759b4cbf2022e191ab058a4276b2)
+ 
 [Pruning Geth in a RocketPool node](https://docs.rocketpool.net/guides/node/geth-pruning.html)
