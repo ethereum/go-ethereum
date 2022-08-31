@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -200,6 +201,8 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			rawStack.Close()
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
+		// Configure log filter RPC API.
+		utils.RegisterFilterAPI(rawStack, lesBackend.ApiBackend, &ethConf)
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
 			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
