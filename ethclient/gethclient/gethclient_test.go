@@ -365,11 +365,11 @@ func testNoCodeOverride(t *testing.T) {
 
 	account := accounts[testAddr]
 	if account == nil {
-		t.Fatal("unexpected error")
+		t.Fatal("Empty account retrieved")
 	}
 
 	if account.Code != nil {
-		t.Fatal("unexpected error")
+		t.Fatal("Code should be empty")
 	}
 }
 
@@ -403,10 +403,10 @@ func testCodeOverride(t *testing.T) {
 
 	account := accounts[testAddr]
 	if account == nil {
-		t.Fatal("unexpected error")
+		t.Fatal("Empty account retrieved")
 	}
 
 	if account.Code == nil {
-		t.Fatal("unexpected error")
+		t.Fatal("Code should not be empty")
 	}
 }
