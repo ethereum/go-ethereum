@@ -3,6 +3,10 @@ title: Pruning
 sort key: F
 ---
 
+
+{% include note.html content="Offline pruning is only for the hash-based state scheme. Soon, we will have a path-based state scheme which enables the pruning by default.Once the hash-based state scheme is no longer supported, offline pruning will be deprecated." %}
+
+
 A snap-sync'd Geth node currently requires more than 650 GB of disk space to store the 
 historic blockchain data. With default cache size the database grows by about 14 GB/week. 
 This means that Geth users will rapidly run out of space on 1TB hard drives. To solve this 
