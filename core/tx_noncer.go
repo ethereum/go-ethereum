@@ -64,7 +64,7 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 }
 
 // setIfLower updates a new virtual nonce into the virtual state database if the
-// the new one is lower.
+// new one is lower.
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	txn.lock.Lock()
 	defer txn.lock.Unlock()
