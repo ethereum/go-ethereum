@@ -238,7 +238,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 	connect := func(ctx context.Context) (ServerCodec, error) {
 		header := header.Clone()
 		if cfg.httpAuth != nil {
-			if err := cfg.httpAuth.AddAuthHeader(&header); err != nil {
+			if err := cfg.httpAuth(header); err != nil {
 				return nil, err
 			}
 		}

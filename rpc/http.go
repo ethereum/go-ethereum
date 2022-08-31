@@ -45,7 +45,7 @@ type httpConn struct {
 	closeCh   chan interface{}
 	mu        sync.Mutex // protects headers
 	headers   http.Header
-	auth      HeaderAuthProvider // authorization provider. Must be called on each request as token claims the current time
+	auth      HTTPAuth
 }
 
 // httpConn implements ServerCodec, but it is treated specially by Client
@@ -206,7 +206,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
 	if hc.auth != nil {
-		if err := hc.auth.AddAuthHeader(&req.Header); err != nil {
+		if err := hc.auth(req.Header); err != nil {
 			return nil, err
 		}
 	}

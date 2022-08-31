@@ -17,11 +17,8 @@
 package rpc
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/websocket"
 )
 
@@ -33,7 +30,7 @@ type ClientOption interface {
 type clientConfig struct {
 	httpClient  *http.Client
 	httpHeaders http.Header
-	httpAuth    HeaderAuthProvider
+	httpAuth    HTTPAuth
 
 	wsDialer *websocket.Dialer
 }
@@ -92,7 +89,7 @@ func WithHTTPClient(c *http.Client) ClientOption {
 // WithHTTPAuth configures HTTP request authentication. The given provider will be called
 // whenever a request is made. Note that only one authentication provider can be active at
 // any time.
-func WithHTTPAuth(a HeaderAuthProvider) ClientOption {
+func WithHTTPAuth(a HTTPAuth) ClientOption {
 	if a == nil {
 		panic("nil auth")
 	}
@@ -101,34 +98,4 @@ func WithHTTPAuth(a HeaderAuthProvider) ClientOption {
 	})
 }
 
-// HeaderAuthProvider is an interface for adding JWT Bearer Tokens to HTTP/WS (on the initial upgrade)
-// requests to authenticated APIs.
-// See https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md for details
-// about the authentication scheme.
-type HeaderAuthProvider interface {
-	// AddAuthHeader adds an up to date Authorization Bearer token field to the header
-	AddAuthHeader(header *http.Header) error
-}
-
-type JWTAuthProvider struct {
-	secret [32]byte
-}
-
-// NewJWTAuthProvider creates a new JWT Auth Provider.
-// The secret MUST be 32 bytes (256 bits) as defined by the Engine-API authentication spec.
-func NewJWTAuthProvider(jwtsecret [32]byte) *JWTAuthProvider {
-	return &JWTAuthProvider{secret: jwtsecret}
-}
-
-// AddAuthHeader adds a JWT Authorization token to the header
-func (p *JWTAuthProvider) AddAuthHeader(header *http.Header) error {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"iat": &jwt.NumericDate{Time: time.Now()},
-	})
-	s, err := token.SignedString(p.secret[:])
-	if err != nil {
-		return fmt.Errorf("failed to create JWT token: %w", err)
-	}
-	header.Add("Authorization", "Bearer "+s)
-	return nil
-}
+type HTTPAuth func(h http.Header) error
