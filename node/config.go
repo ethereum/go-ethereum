@@ -395,7 +395,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 
 // CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
 // and trusted-nodes files. If they exist it raises an error.
-func (c *Config) CheckLegacyFiles() {
+func (c *Config) checkLegacyFiles() {
 	c.checkLegacyFile(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
 	c.checkLegacyFile(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
 }
