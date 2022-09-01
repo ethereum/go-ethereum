@@ -126,6 +126,9 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
 		for root, fetch := range p.fetches {
+			if fetch == nil {
+				continue
+			}
 			copy.fetches[root] = p.db.CopyTrie(fetch)
 		}
 		return copy
