@@ -134,6 +134,7 @@ func (h *httpServer) start() error {
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
+		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
 		h.server.WriteTimeout = h.timeouts.WriteTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
@@ -438,7 +439,6 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
 		return
-
 	}
 	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {

@@ -1330,7 +1330,6 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	expire func() map[string]int, pending func() int, inFlight func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, bool),
 	fetchHook func([]*types.Header), fetch func(*peerConnection, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peerConnection) int,
 	idle func() ([]*peerConnection, int), setIdle func(*peerConnection, int, time.Time), kind string) error {
-
 	// Create a ticker to detect expired retrieval tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -1626,7 +1625,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 						log.Warn("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "parent", chunk[n].ParentHash, "err", err)
 						return fmt.Errorf("%w: %v", errInvalidChain, err)
 					}
-					// All verifications passed, track all headers within the alloted limits
+					// All verifications passed, track all headers within the allotted limits
 					if mode == FastSync {
 						head := chunk[len(chunk)-1].Number.Uint64()
 						if head-rollback > uint64(fsHeaderSafetyNet) {
@@ -1664,7 +1663,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			}
 			d.syncStatsLock.Unlock()
 
-			// Signal the content downloaders of the availablility of new tasks
+			// Signal the content downloaders of the availability of new tasks
 			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
 				select {
 				case ch <- true:

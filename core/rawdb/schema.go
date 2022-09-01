@@ -111,33 +111,6 @@ var (
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
 
-const (
-	// freezerHeaderTable indicates the name of the freezer header table.
-	freezerHeaderTable = "headers"
-
-	// freezerHashTable indicates the name of the freezer canonical hash table.
-	freezerHashTable = "hashes"
-
-	// freezerBodiesTable indicates the name of the freezer block body table.
-	freezerBodiesTable = "bodies"
-
-	// freezerReceiptTable indicates the name of the freezer receipts table.
-	freezerReceiptTable = "receipts"
-
-	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
-	freezerDifficultyTable = "diffs"
-)
-
-// FreezerNoSnappy configures whether compression is disabled for the ancient-tables.
-// Hashes and difficulties don't compress well.
-var FreezerNoSnappy = map[string]bool{
-	freezerHeaderTable:     false,
-	freezerHashTable:       true,
-	freezerBodiesTable:     false,
-	freezerReceiptTable:    false,
-	freezerDifficultyTable: true,
-}
-
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
 // fields.
 type LegacyTxLookupEntry struct {
@@ -247,7 +220,7 @@ func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
 }
 
-// genesisKey = genesisPrefix + hash
-func genesisKey(hash common.Hash) []byte {
+// genesisStateSpecKey = genesisPrefix + hash
+func genesisStateSpecKey(hash common.Hash) []byte {
 	return append(genesisPrefix, hash.Bytes()...)
 }

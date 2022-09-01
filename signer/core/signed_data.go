@@ -233,23 +233,17 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 // - the signature preimage (hash)
 func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAddress,
 	typedData apitypes.TypedData, validationMessages *apitypes.ValidationMessages) (hexutil.Bytes, hexutil.Bytes, error) {
-	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	sighash, rawData, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return nil, nil, err
 	}
-	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	if err != nil {
-		return nil, nil, err
-	}
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
-	sighash := crypto.Keccak256(rawData)
 	messages, err := typedData.Format()
 	if err != nil {
 		return nil, nil, err
 	}
 	req := &SignDataRequest{
 		ContentType: apitypes.DataTyped.Mime,
-		Rawdata:     rawData,
+		Rawdata:     []byte(rawData),
 		Messages:    messages,
 		Hash:        sighash,
 		Address:     addr}

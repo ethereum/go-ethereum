@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"reflect"
 	"unicode"
@@ -49,7 +48,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
+		Flags:       flags.Merge(nodeFlags, rpcFlags),
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
@@ -157,13 +156,16 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.IsSet(utils.OverrideGrayGlacierFlag.Name) {
-		cfg.Eth.OverrideGrayGlacier = new(big.Int).SetUint64(ctx.Uint64(utils.OverrideGrayGlacierFlag.Name))
-	}
 	if ctx.IsSet(utils.OverrideTerminalTotalDifficulty.Name) {
 		cfg.Eth.OverrideTerminalTotalDifficulty = flags.GlobalBig(ctx, utils.OverrideTerminalTotalDifficulty.Name)
 	}
+	if ctx.IsSet(utils.OverrideTerminalTotalDifficultyPassed.Name) {
+		override := ctx.Bool(utils.OverrideTerminalTotalDifficultyPassed.Name)
+		cfg.Eth.OverrideTerminalTotalDifficultyPassed = &override
+	}
+
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
+
 	// Warn users to migrate if they have a legacy freezer format.
 	if eth != nil && !ctx.IsSet(utils.IgnoreLegacyReceiptsFlag.Name) {
 		firstIdx := uint64(0)
@@ -173,19 +175,24 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
 			firstIdx = 46147
 		}
-		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
+		isLegacy, firstLegacy, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
 		if err != nil {
 			log.Error("Failed to check db for legacy receipts", "err", err)
 		} else if isLegacy {
 			stack.Close()
-			utils.Fatalf("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+			log.Error("Database has receipts with a legacy format", "firstLegacy", firstLegacy)
+			utils.Fatalf("Aborting. Please run `geth db freezer-migrate`.")
 		}
 	}
 
-	// Configure GraphQL if requested
+	// Configure log filter RPC API.
+	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
+
+	// Configure GraphQL if requested.
 	if ctx.IsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, cfg.Node)
+		utils.RegisterGraphQLService(stack, backend, filterSystem, &cfg.Node)
 	}
+
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)

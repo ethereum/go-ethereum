@@ -86,6 +86,7 @@ type feeHistoryResult struct {
 	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
+// FeeHistory returns the fee market history.
 func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
 	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
@@ -987,7 +988,7 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 	}
 }
 
-// revertError is an API error that encompassas an EVM revertal with JSON error
+// revertError is an API error that encompasses an EVM revertal with JSON error
 // code and a binary data blob.
 type revertError struct {
 	error
@@ -1456,9 +1457,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if db == nil || err != nil {
 		return nil, 0, nil, err
 	}
-	// If the gas amount is not set, extract this as it will depend on access
-	// lists and we'll need to reestimate every time
-	nogas := args.Gas == nil
+	// If the gas amount is not set, default to RPC gas cap.
+	if args.Gas == nil {
+		tmp := hexutil.Uint64(b.RPCGasCap())
+		args.Gas = &tmp
+	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
 	if err := args.setDefaults(ctx, b); err != nil {
@@ -1484,15 +1487,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)
 
-		// If no gas amount was specified, each unique access list needs it's own
-		// gas calculation. This is quite expensive, but we need to be accurate
-		// and it's convered by the sender only anyway.
-		if nogas {
-			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
-				return nil, 0, nil, err // shouldn't happen, just in case
-			}
-		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
 		// Set the accesslist to the last al
@@ -1959,25 +1953,45 @@ func NewDebugAPI(b Backend) *DebugAPI {
 	return &DebugAPI{b: b}
 }
 
-// GetHeaderRlp retrieves the RLP encoded for of a single header.
-func (api *DebugAPI) GetHeaderRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
-	header, _ := api.b.HeaderByNumber(ctx, rpc.BlockNumber(number))
+// GetRawHeader retrieves the RLP encoding for a single header.
+func (api *DebugAPI) GetRawHeader(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	var hash common.Hash
+	if h, ok := blockNrOrHash.Hash(); ok {
+		hash = h
+	} else {
+		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash = block.Hash()
+	}
+	header, _ := api.b.HeaderByHash(ctx, hash)
 	if header == nil {
-		return nil, fmt.Errorf("header #%d not found", number)
+		return nil, fmt.Errorf("header #%d not found", hash)
 	}
 	return rlp.EncodeToBytes(header)
 }
 
-// GetBlockRlp retrieves the RLP encoded for of a single block.
-func (api *DebugAPI) GetBlockRlp(ctx context.Context, number uint64) (hexutil.Bytes, error) {
-	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
+// GetRawBlock retrieves the RLP encoded for a single block.
+func (api *DebugAPI) GetRawBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+	var hash common.Hash
+	if h, ok := blockNrOrHash.Hash(); ok {
+		hash = h
+	} else {
+		block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash = block.Hash()
+	}
+	block, _ := api.b.BlockByHash(ctx, hash)
 	if block == nil {
-		return nil, fmt.Errorf("block #%d not found", number)
+		return nil, fmt.Errorf("block #%d not found", hash)
 	}
 	return rlp.EncodeToBytes(block)
 }
 
-// GetRawReceipts retrieves the binary-encoded raw receipts of a single block.
+// GetRawReceipts retrieves the binary-encoded receipts of a single block.
 func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]hexutil.Bytes, error) {
 	var hash common.Hash
 	if h, ok := blockNrOrHash.Hash(); ok {
@@ -2002,6 +2016,22 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 		result[i] = b
 	}
 	return result, nil
+}
+
+// GetRawTransaction returns the bytes of the transaction for the given hash.
+func (s *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	// Retrieve a finalized transaction, or a pooled otherwise
+	tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	if tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			// Transaction not found anywhere, abort
+			return nil, nil
+		}
+	}
+	return tx.MarshalBinary()
 }
 
 // PrintBlock retrieves a block and returns its pretty printed form.

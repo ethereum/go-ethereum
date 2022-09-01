@@ -224,18 +224,23 @@ web3._extend({
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
-			name: 'getHeaderRlp',
-			call: 'debug_getHeaderRlp',
+			name: 'getRawHeader',
+			call: 'debug_getRawHeader',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getBlockRlp',
-			call: 'debug_getBlockRlp',
+			name: 'getRawBlock',
+			call: 'debug_getRawBlock',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getRawReceipts',
 			call: 'debug_getRawReceipts',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getRawTransaction',
+			call: 'debug_getRawTransaction',
 			params: 1
 		}),
 		new web3._extend.Method({

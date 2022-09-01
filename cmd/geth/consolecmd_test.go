@@ -41,7 +41,7 @@ func runMinimalGeth(t *testing.T, args ...string) *testgeth {
 	// --ropsten to make the 'writing genesis to disk' faster (no accounts)
 	// --networkid=1337 to avoid cache bump
 	// --syncmode=full to avoid allocating fast sync bloom
-	allArgs := []string{"--ropsten", "--networkid", "1337", "--syncmode=full", "--port", "0",
+	allArgs := []string{"--ropsten", "--networkid", "1337", "--authrpc.port", "0", "--syncmode=full", "--port", "0",
 		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--cache", "64",
 		"--datadir.minfreedisk", "0"}
 	return runGeth(t, append(allArgs, args...)...)
@@ -155,7 +155,7 @@ To exit, press ctrl-d or type exit
 }
 
 // trulyRandInt generates a crypto random integer used by the console tests to
-// not clash network ports with other tests running cocurrently.
+// not clash network ports with other tests running concurrently.
 func trulyRandInt(lo, hi int) int {
 	num, _ := rand.Int(rand.Reader, big.NewInt(int64(hi-lo)))
 	return int(num.Int64()) + lo

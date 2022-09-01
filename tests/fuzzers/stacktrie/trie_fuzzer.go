@@ -138,7 +138,6 @@ func Debug(data []byte) int {
 }
 
 func (f *fuzzer) fuzz() int {
-
 	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
 		spongeA     = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
@@ -174,9 +173,12 @@ func (f *fuzzer) fuzz() int {
 		return 0
 	}
 	// Flush trie -> database
-	rootA, _, err := trieA.Commit(nil)
+	rootA, nodes, err := trieA.Commit(false)
 	if err != nil {
 		panic(err)
+	}
+	if nodes != nil {
+		dbA.Update(trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
 	dbA.Commit(rootA, false, nil)

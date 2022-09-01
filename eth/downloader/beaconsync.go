@@ -137,6 +137,13 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	b.resume()
 }
 
+// SetBadBlockCallback sets the callback to run when a bad block is hit by the
+// block processor. This method is not thread safe and should be set only once
+// on startup before system events are fired.
+func (d *Downloader) SetBadBlockCallback(onBadBlock badBlockFn) {
+	d.badBlock = onBadBlock
+}
+
 // BeaconSync is the post-merge version of the chain synchronization, where the
 // chain is not downloaded from genesis onward, rather from trusted head announces
 // backwards.
@@ -229,7 +236,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	// Binary search to find the ancestor
 	start, end := beaconTail.Number.Uint64()-1, number
 	if number := beaconHead.Number.Uint64(); end > number {
-		// This shouldn't really happen in a healty network, but if the consensus
+		// This shouldn't really happen in a healthy network, but if the consensus
 		// clients feeds us a shorter chain as the canonical, we should not attempt
 		// to access non-existent skeleton items.
 		log.Warn("Beacon head lower than local chain", "beacon", number, "local", end)

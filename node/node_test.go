@@ -581,7 +581,6 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 		if err == nil {
 			t.Errorf("Error: %s: WebSocket connection succeeded for path in wantNoWS", path)
 		}
-
 	}
 }
 
@@ -614,7 +613,6 @@ func doHTTPRequest(t *testing.T, req *http.Request) *http.Response {
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("could not issue a GET request to the given endpoint: %v", err)
-
 	}
 	return resp
 }

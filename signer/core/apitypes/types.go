@@ -251,6 +251,25 @@ type TypedDataDomain struct {
 	Salt              string                `json:"salt"`
 }
 
+// TypedDataAndHash is a helper function that calculates a hash for typed data conforming to EIP-712.
+// This hash can then be safely used to calculate a signature.
+//
+// See https://eips.ethereum.org/EIPS/eip-712 for the full specification.
+//
+// This gives context to the signed typed data and prevents signing of transactions.
+func TypedDataAndHash(typedData TypedData) ([]byte, string, error) {
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err != nil {
+		return nil, "", err
+	}
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	if err != nil {
+		return nil, "", err
+	}
+	rawData := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
+	return crypto.Keccak256([]byte(rawData)), rawData, nil
+}
+
 // HashStruct generates a keccak256 hash of the encoding of the provided data
 func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage) (hexutil.Bytes, error) {
 	encodedData, err := typedData.EncodeData(primaryType, data, 1)
@@ -526,7 +545,6 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		return math.U256Bytes(b), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
-
 }
 
 // dataMismatchError generates an error for a mismatch between
@@ -653,7 +671,6 @@ func formatPrimitiveValue(encType string, encValue interface{}) (string, error) 
 	}
 	if strings.HasPrefix(encType, "bytes") {
 		return fmt.Sprintf("%s", encValue), nil
-
 	}
 	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 		if b, err := parseInteger(encType, encValue); err != nil {

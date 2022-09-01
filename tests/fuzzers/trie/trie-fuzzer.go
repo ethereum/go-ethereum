@@ -51,9 +51,8 @@ const (
 	opUpdate = iota
 	opDelete
 	opGet
-	opCommit
 	opHash
-	opReset
+	opCommit
 	opItercheckhash
 	opProve
 	opMax // boundary value, not an actual op
@@ -84,11 +83,9 @@ func (ds *dataSource) Ended() bool {
 }
 
 func Generate(input []byte) randTest {
-
 	var allKeys [][]byte
 	r := newDataSource(input)
 	genKey := func() []byte {
-
 		if len(allKeys) < 2 || r.readByte() < 0x0f {
 			// new key
 			key := make([]byte, r.readByte()%50)
@@ -103,7 +100,6 @@ func Generate(input []byte) randTest {
 	var steps randTest
 
 	for i := 0; !r.Ended(); i++ {
-
 		step := randTestStep{op: int(r.readByte()) % opMax}
 		switch step.op {
 		case opUpdate:
@@ -141,7 +137,6 @@ func Fuzz(input []byte) int {
 }
 
 func runRandTest(rt randTest) error {
-
 	triedb := trie.NewDatabase(memorydb.New())
 
 	tr := trie.NewEmpty(triedb)
@@ -161,14 +156,17 @@ func runRandTest(rt randTest) error {
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
-		case opCommit:
-			_, _, rt[i].err = tr.Commit(nil)
 		case opHash:
 			tr.Hash()
-		case opReset:
-			hash, _, err := tr.Commit(nil)
+		case opCommit:
+			hash, nodes, err := tr.Commit(false)
 			if err != nil {
 				return err
+			}
+			if nodes != nil {
+				if err := triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
+					return err
+				}
 			}
 			newtr, err := trie.New(common.Hash{}, hash, triedb)
 			if err != nil {

@@ -126,6 +126,9 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
 		for root, fetch := range p.fetches {
+			if fetch == nil {
+				continue
+			}
 			copy.fetches[root] = p.db.CopyTrie(fetch)
 		}
 		return copy
@@ -212,7 +215,7 @@ type subfetcher struct {
 
 	wake chan struct{}  // Wake channel if a new task is scheduled
 	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal iterruption
+	term chan struct{}  // Channel to signal interruption
 	copy chan chan Trie // Channel to request a copy of the current trie
 
 	seen map[string]struct{} // Tracks the entries already loaded
@@ -331,7 +334,11 @@ func (sf *subfetcher) loop() {
 					if _, ok := sf.seen[string(task)]; ok {
 						sf.dups++
 					} else {
-						sf.trie.TryGet(task)
+						if len(task) == len(common.Address{}) {
+							sf.trie.TryGetAccount(task)
+						} else {
+							sf.trie.TryGet(task)
+						}
 						sf.seen[string(task)] = struct{}{}
 					}
 				}

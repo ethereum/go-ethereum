@@ -50,7 +50,7 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	if les.BlockChain().Config().TerminalTotalDifficulty == nil {
-		panic("Catalyst started without valid total difficulty")
+		log.Warn("Catalyst started without valid total difficulty")
 	}
 	return &ConsensusAPI{les: les}
 }

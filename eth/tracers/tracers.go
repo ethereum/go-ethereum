@@ -42,7 +42,7 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type lookupFunc func(string, *Context) (Tracer, error)
+type lookupFunc func(string, *Context, json.RawMessage) (Tracer, error)
 
 var (
 	lookups []lookupFunc
@@ -62,9 +62,9 @@ func RegisterLookup(wildcard bool, lookup lookupFunc) {
 
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups.
-func New(code string, ctx *Context) (Tracer, error) {
+func New(code string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
 	for _, lookup := range lookups {
-		if tracer, err := lookup(code, ctx); err == nil {
+		if tracer, err := lookup(code, ctx, cfg); err == nil {
 			return tracer, nil
 		}
 	}

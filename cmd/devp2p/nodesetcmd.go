@@ -181,7 +181,7 @@ func parseFilterLimit(args []string) (int, error) {
 	return limit, nil
 }
 
-// andFilter parses node filters in args and and returns a single filter that requires all
+// andFilter parses node filters in args and returns a single filter that requires all
 // of them to match.
 func andFilter(args []string) (nodeFilter, error) {
 	checks, err := parseFilters(args)
