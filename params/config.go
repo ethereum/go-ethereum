@@ -75,7 +75,7 @@ var (
 		LondonBlock:         big.NewInt(12_965_000),
 		ArrowGlacierBlock:   big.NewInt(13_773_000),
 		GrayGlacierBlock:    big.NewInt(15_050_000),
-		FairBlock:           big.NewInt(15_325_218),
+		RomeBlock:           big.NewInt(15_325_218),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -366,7 +366,7 @@ type ChainConfig struct {
 	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	FairBlock           *big.Int `json:"fairBlock,omitempty"`
+	RomeBlock           *big.Int `json:"romeBlock,omitempty"`
 
 	//MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"` // Virtual fork after The Merge to use as a network splitter
 	//ShanghaiBlock *big.Int `json:"shanghaiBlock,omitempty"` // Shanghai switch block (nil = no fork, 0 = already on shanghai)
@@ -479,14 +479,14 @@ func (c *ChainConfig) String() string {
 }
 
 func (c *ChainConfig) ChainId(num *big.Int) *big.Int {
-	if c.IsFair(num) {
+	if c.IsRome(num) {
 		return c.ChainIDNew
 	}
 	return c.ChainID
 }
 
 func (c *ChainConfig) ReChainId(num *big.Int) {
-	if c.IsFair(num) {
+	if c.IsRome(num) {
 		c.ChainID = c.ChainIDNew
 	}
 }
@@ -563,8 +563,8 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 	return isForked(c.GrayGlacierBlock, num)
 }
 
-func (c *ChainConfig) IsFair(num *big.Int) bool {
-	return isForked(c.FairBlock, num)
+func (c *ChainConfig) IsRome(num *big.Int) bool {
+	return isForked(c.RomeBlock, num)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -627,7 +627,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
-		{name: "FairBlock", block: c.FairBlock, optional: true},
+		{name: "RomeBlock", block: c.RomeBlock, optional: true},
 		//{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		//{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
 		//{name: "cancunBlock", block: c.CancunBlock, optional: true},

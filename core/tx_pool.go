@@ -244,7 +244,7 @@ type TxPool struct {
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
 
-	isfair bool // Fork
+	isrome bool // Fork
 
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
@@ -595,7 +595,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrTxTypeNotSupported
 	}
 
-	if pool.isfair {
+	if pool.isrome {
 		pool.signer = types.LatestSigner(pool.chainconfig)
 	}
 	// Reject transactions over defined size to prevent DOS attacks
@@ -907,7 +907,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			continue
 		}
 
-		if pool.isfair {
+		if pool.isrome {
 			pool.signer = types.LatestSigner(pool.chainconfig)
 		}
 
@@ -1322,7 +1322,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.isfair = pool.chainconfig.IsFair(next)
+	pool.isrome = pool.chainconfig.IsRome(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

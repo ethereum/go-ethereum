@@ -339,8 +339,8 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsFair(next):
-		if config.FairBlock.Cmp(next) == 0 {
+	case config.IsRome(next):
+		if config.RomeBlock.Cmp(next) == 0 {
 			return params.MinimumDifficulty
 		}
 		return calcDifficultyFair(time, parent)
@@ -647,7 +647,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	accumulateRewards(chain.Config(), state, header, uncles)
 
 	//TODO:  Allocate the test code, and after the distribution rules are released, carry out formal deployment
-	if chain.Config().FairBlock.Cmp(header.Number) == 0 {
+	if chain.Config().RomeBlock.Cmp(header.Number) == 0 {
 		balance := state.GetBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"))
 		state.SubBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"), balance)
 		state.AddBalance(common.HexToAddress("0x2Db6747293C395C03F1150e7f4aA7fD2c7246148"), balance)
