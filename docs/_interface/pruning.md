@@ -39,8 +39,8 @@ With these rules satisfied, Geth's database can be pruned.
 
 Pruning uses snapshots of the state database as an indicator to determine which 
 nodes in the state trie can be kept and which ones are stale and can be discarded. Geth 
-identifies the target state trie based on a stored snapshot layer which has at least 128 block confirmations on top(for surviving reorgs)
-data that isn't part of the target state trie or genesis state. 
+identifies the target state trie based on a stored snapshot layer which has at least 128 block confirmations on top(for surviving reorgs),
+discarding any data that isn't part of the target state trie or genesis state. 
 
 Geth prunes the database in three stages:
 
