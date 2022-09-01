@@ -259,6 +259,7 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	log.pc = uint(pc)
 	log.gas = uint(gas)
 	log.cost = uint(cost)
+	log.refund = uint(t.env.StateDB.GetRefund())
 	log.depth = uint(depth)
 	log.err = err
 	if _, err := t.step(t.obj, t.logValue, t.dbValue); err != nil {
