@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
@@ -207,7 +206,7 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 
 func (st *StackTrie) Update(key, value []byte) {
 	if err := st.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StackTrie.Update", "err", err)
 	}
 }
 
