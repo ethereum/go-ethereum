@@ -112,7 +112,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		copy(gspec.ExtraData[32:], addr[:])
 
 		td := 0
-		gendb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
 		for i, block := range blocks {
 			header := block.Header()
 			if i > 0 {
@@ -130,21 +130,21 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, gendb, 8, nil)
+		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, nil)
 	} else {
 		config := *params.TestChainConfig
 		gspec = &Genesis{Config: &config}
 		engine = beacon.New(ethash.NewFaker())
 
 		td := 0
-		gendb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
 		for _, block := range preBlocks {
 			// calculate td
 			td += int(block.Difficulty().Uint64())
 		}
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, gendb, 8, nil)
+		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, nil)
 	}
 	// Assemble header batch
 	preHeaders := make([]*types.Header, len(preBlocks))

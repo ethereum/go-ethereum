@@ -139,14 +139,14 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	// Generate a small n-block chain and an uncle block for it
 	var uncle *types.Block
 	if n > 0 {
-		gendb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, func(i int, gen *core.BlockGen) {
+		genDb, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, func(i int, gen *core.BlockGen) {
 			gen.SetCoinbase(testBankAddress)
 		})
 		if _, err := chain.InsertChain(blocks); err != nil {
 			t.Fatalf("failed to insert origin chain: %v", err)
 		}
 		parent := chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
-		blocks, _ = core.GenerateChain(chainConfig, parent, engine, gendb, 1, func(i int, gen *core.BlockGen) {
+		blocks, _ = core.GenerateChain(chainConfig, parent, engine, genDb, 1, func(i int, gen *core.BlockGen) {
 			gen.SetCoinbase(testUserAddress)
 		})
 		uncle = blocks[0]
