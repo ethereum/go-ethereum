@@ -98,4 +98,9 @@ func WithHTTPAuth(a HTTPAuth) ClientOption {
 	})
 }
 
+// A HTTPAuth function is called by the client whenever a HTTP request is sent.
+// The function must be safe for concurrent use.
+//
+// Usually, HTTPAuth functions will call h.Set("authorization", "...") to add
+// auth information to the request.
 type HTTPAuth func(h http.Header) error
