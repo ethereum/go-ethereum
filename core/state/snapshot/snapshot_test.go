@@ -265,7 +265,7 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	snaps.Update(common.HexToHash("0xa3"), common.HexToHash("0xa2"), nil, setAccount("0xa3"), nil)
 	snaps.Update(common.HexToHash("0xb3"), common.HexToHash("0xb2"), nil, setAccount("0xb3"), nil)
 
-	// checkExist verifies if an account exiss in a snapshot
+	// checkExist verifies if an account exists in a snapshot
 	checkExist := func(layer *diffLayer, key string) error {
 		if data, _ := layer.Account(common.HexToHash(key)); data == nil {
 			return fmt.Errorf("expected %x to exist, got nil", common.HexToHash(key))

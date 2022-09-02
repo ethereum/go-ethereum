@@ -53,10 +53,10 @@ type txnOpCodeTracer struct {
 }
 
 // newtxnOpCodeTracer returns a new txnOpCodeTracer tracer.
-func newtxnOpCodeTracer(ctx *tracers.Context) tracers.Tracer {
+func newtxnOpCodeTracer(ctx *tracers.Context, ctor json.RawMessage) (tracers.Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &txnOpCodeTracer{callStack: make([]callFrameBN, 1)}
+	return &txnOpCodeTracer{callStack: make([]callFrameBN, 1)}, nil
 }
 
 // GetResult returns an empty json object.

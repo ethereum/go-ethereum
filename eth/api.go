@@ -157,7 +157,7 @@ func (api *AdminAPI) ExportChain(file string, first *uint64, last *uint64) (bool
 	}
 	if _, err := os.Stat(file); err == nil {
 		// File already exists. Allowing overwrite could be a DoS vector,
-		// since the 'file' may point to arbitrary paths on the drive
+		// since the 'file' may point to arbitrary paths on the drive.
 		return false, errors.New("location would overwrite an existing file")
 	}
 	// Make sure we can create the file to export into
@@ -506,11 +506,11 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(common.Hash{}, startBlock.Root(), triedb)
+	oldTrie, err := trie.NewStateTrie(common.Hash{}, startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(common.Hash{}, endBlock.Root(), triedb)
+	newTrie, err := trie.NewStateTrie(common.Hash{}, endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
@@ -586,5 +586,5 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 			return uint64(i), nil
 		}
 	}
-	return 0, fmt.Errorf("no state found")
+	return 0, errors.New("no state found")
 }

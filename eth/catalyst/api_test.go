@@ -69,7 +69,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 		g.AddTx(tx)
 		testNonce++
 	}
-	gblock := genesis.ToBlock(db)
+	gblock := genesis.MustCommit(db)
 	engine := ethash.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
 	totalDifficulty := big.NewInt(0)
@@ -662,8 +662,8 @@ func TestEmptyBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Status != beacon.ACCEPTED {
-		t.Errorf("invalid status: expected ACCEPTED got: %v", status.Status)
+	if status.Status != beacon.SYNCING {
+		t.Errorf("invalid status: expected SYNCING got: %v", status.Status)
 	}
 	if status.LatestValidHash != nil {
 		t.Fatalf("invalid LVH: got %v wanted nil", status.LatestValidHash)

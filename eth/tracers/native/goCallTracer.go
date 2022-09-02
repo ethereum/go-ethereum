@@ -57,11 +57,11 @@ type CallTracer struct {
 }
 
 // newGoCallTracer returns a new goCallTracer Tracer, originally written by AusIV.
-func newGoCallTracer(ctx *tracers.Context) tracers.Tracer {
+func newGoCallTracer(ctx *tracers.Context, ctor json.RawMessage) (tracers.Tracer, error) {
 	return &CallTracer{
 		callStack: []*call{},
 		descended: false,
-	}
+	}, nil
 }
 
 func (tracer *CallTracer) i() int {

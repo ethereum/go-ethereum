@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
 	"sync"
@@ -15,23 +14,48 @@ import (
 
 type dropNotification struct {
 	// TxHash common.Hash `json:"txhash"`
-	Tx          *ethapi.RPCTransaction `json:"tx"`
+	Tx          *RPCTransaction `json:"tx"`
 	Reason      string                 `json:"reason"`
-	Replacement *ethapi.RPCTransaction `json:"replacedby,omitempty"`
+	Replacement *RPCTransaction `json:"replacedby,omitempty"`
 	Peer interface{}                   `json:"peer,omitempty"`
 	Time        int64                  `json:"ts"`
 }
 
 type rejectNotification struct {
-	Tx     *ethapi.RPCTransaction `json:"tx"`
+	Tx     *RPCTransaction `json:"tx"`
 	Reason string                 `json:"reason"`
 	Peer   interface{} `json:"peer,omitempty"`
 	Time   int64                  `json:"ts"`
 }
 
+
+// Note: Copied from internal/ethapi to avoid import loops
+// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
+type RPCTransaction struct {
+	BlockHash        *common.Hash      `json:"blockHash"`
+	BlockNumber      *hexutil.Big      `json:"blockNumber"`
+	From             common.Address    `json:"from"`
+	Gas              hexutil.Uint64    `json:"gas"`
+	GasPrice         *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
+	Hash             common.Hash       `json:"hash"`
+	Input            hexutil.Bytes     `json:"input"`
+	Nonce            hexutil.Uint64    `json:"nonce"`
+	To               *common.Address   `json:"to"`
+	TransactionIndex *hexutil.Uint64   `json:"transactionIndex"`
+	Value            *hexutil.Big      `json:"value"`
+	Type             hexutil.Uint64    `json:"type"`
+	Accesses         *types.AccessList `json:"accessList,omitempty"`
+	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
+	V                *hexutil.Big      `json:"v"`
+	R                *hexutil.Big      `json:"r"`
+	S                *hexutil.Big      `json:"s"`
+}
+
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
+func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 	if tx == nil {
 		return nil
 	}
@@ -43,7 +67,7 @@ func newRPCPendingTransaction(tx *types.Transaction) *ethapi.RPCTransaction {
 	}
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
-	result := &ethapi.RPCTransaction{
+	result := &RPCTransaction{
 		Type:     hexutil.Uint64(tx.Type()),
 		From:     from,
 		Gas:      hexutil.Uint64(tx.Gas()),
@@ -94,7 +118,7 @@ func (api *FilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscriptio
 
 	go func() {
 		dropped := make(chan core.DropTxsEvent)
-		droppedSub := api.backend.SubscribeDropTxsEvent(dropped)
+		droppedSub := api.sys.backend.SubscribeDropTxsEvent(dropped)
 
 		for {
 			select {
@@ -127,7 +151,7 @@ func (api *FilterAPI) DroppedTransactions(ctx context.Context) (*rpc.Subscriptio
 
 func (api *FilterAPI) dropLoop() {
 	dropped := make(chan core.DropTxsEvent)
-	droppedSub := api.backend.SubscribeDropTxsEvent(dropped)
+	droppedSub := api.sys.backend.SubscribeDropTxsEvent(dropped)
 	defer droppedSub.Unsubscribe()
 	for d := range dropped {
 		for _, tx := range d.Txs {
@@ -151,7 +175,7 @@ func (api *FilterAPI) RejectedTransactions(ctx context.Context) (*rpc.Subscripti
 
 	go func() {
 		rejected := make(chan core.RejectedTxEvent)
-		rejectedSub := api.backend.SubscribeRejectedTxEvent(rejected)
+		rejectedSub := api.sys.backend.SubscribeRejectedTxEvent(rejected)
 
 		for {
 			select {
