@@ -69,7 +69,9 @@ func TestTrieTracer(t *testing.T) {
 
 	// Commit the changes and re-create with new root
 	root, nodes, _ := trie.Commit(false)
-	db.Update(NewWithNodeSet(nodes))
+	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
+		t.Fatal(err)
+	}
 	trie, _ = New(common.Hash{}, root, db)
 	trie.tracer = newTracer()
 
