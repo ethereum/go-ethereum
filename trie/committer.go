@@ -137,7 +137,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
-// is enabled, key/value pairs are collected to the modified nodeset as well.
+// is enabled, leaf nodes will be tracked in the modified nodeset as well.
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
