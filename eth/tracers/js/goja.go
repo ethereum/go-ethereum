@@ -256,11 +256,11 @@ func (t *jsTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope
 	log.memory.memory = scope.Memory
 	log.stack.stack = scope.Stack
 	log.contract.contract = scope.Contract
-	log.pc = uint(pc)
-	log.gas = uint(gas)
-	log.cost = uint(cost)
-	log.refund = uint(t.env.StateDB.GetRefund())
-	log.depth = uint(depth)
+	log.pc = pc
+	log.gas = gas
+	log.cost = cost
+	log.refund = t.env.StateDB.GetRefund()
+	log.depth = depth
 	log.err = err
 	if _, err := t.step(t.obj, t.logValue, t.dbValue); err != nil {
 		t.onError("step", err)
@@ -908,33 +908,19 @@ type steplog struct {
 	stack    *stackObj
 	contract *contractObj
 
-	pc     uint
-	gas    uint
-	cost   uint
-	depth  uint
-	refund uint
+	pc     uint64
+	gas    uint64
+	cost   uint64
+	depth  int
+	refund uint64
 	err    error
 }
 
-func (l *steplog) GetPC() uint {
-	return l.pc
-}
-
-func (l *steplog) GetGas() uint {
-	return l.gas
-}
-
-func (l *steplog) GetCost() uint {
-	return l.cost
-}
-
-func (l *steplog) GetDepth() uint {
-	return l.depth
-}
-
-func (l *steplog) GetRefund() uint {
-	return l.refund
-}
+func (l *steplog) GetPC() uint64     { return l.pc }
+func (l *steplog) GetGas() uint64    { return l.gas }
+func (l *steplog) GetCost() uint64   { return l.cost }
+func (l *steplog) GetDepth() int     { return l.depth }
+func (l *steplog) GetRefund() uint64 { return l.refund }
 
 func (l *steplog) GetError() goja.Value {
 	if l.err != nil {
