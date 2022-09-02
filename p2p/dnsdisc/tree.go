@@ -117,21 +117,21 @@ func (t *Tree) Nodes() []*enode.Node {
 We want to keep the UDP size below 512 bytes. The UDP size is roughly:
 UDP length = 8 + UDP payload length ( 229 )
 UPD Payload length:
- - dns.id 2
- - dns.flags 2
- - dns.count.queries 2
- - dns.count.answers 2
- - dns.count.auth_rr 2
- - dns.count.add_rr 2
- - queries (query-size + 6)
- - answers :
- 	- dns.resp.name 2
- 	- dns.resp.type 2
- 	- dns.resp.class 2
- 	- dns.resp.ttl 4
- 	- dns.resp.len 2
- 	- dns.txt.length 1
- 	- dns.txt resp_data_size
+  - dns.id 2
+  - dns.flags 2
+  - dns.count.queries 2
+  - dns.count.answers 2
+  - dns.count.auth_rr 2
+  - dns.count.add_rr 2
+  - queries (query-size + 6)
+  - answers :
+  - dns.resp.name 2
+  - dns.resp.type 2
+  - dns.resp.class 2
+  - dns.resp.ttl 4
+  - dns.resp.len 2
+  - dns.txt.length 1
+  - dns.txt resp_data_size
 
 So the total size is roughly a fixed overhead of `39`, and the size of the
 query (domain name) and response.
