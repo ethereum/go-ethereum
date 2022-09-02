@@ -132,6 +132,7 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
+	SnapshotRewindLimit uint64        // Rollback up to this much gas to restore snapshot (otherwise snapshot recalculated from nothing)
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -316,17 +317,20 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		if diskRoot != (common.Hash{}) {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash(), "snaproot", diskRoot)
 
-			snapDisk, err := bc.setHeadBeyondRoot(head.NumberU64(), diskRoot, true)
+			snapDisk, diskRootFound, err := bc.setHeadBeyondRoot(head.NumberU64(), diskRoot, true, bc.cacheConfig.SnapshotRewindLimit)
 			if err != nil {
 				return nil, err
 			}
 			// Chain rewound, persist old snapshot number to indicate recovery procedure
-			if snapDisk != 0 {
+			if diskRootFound {
 				rawdb.WriteSnapshotRecoveryNumber(bc.db, snapDisk)
+			} else {
+				log.Warn("Snapshot root not found or too far back. Recreating snapshot from scratch.")
+				rawdb.DeleteSnapshotRecoveryNumber(bc.db)
 			}
 		} else {
 			log.Warn("Head state missing, repairing", "number", head.Number(), "hash", head.Hash())
-			if _, err := bc.setHeadBeyondRoot(head.NumberU64(), common.Hash{}, true); err != nil {
+			if _, _, err := bc.setHeadBeyondRoot(head.NumberU64(), common.Hash{}, true, 0); err != nil {
 				return nil, err
 			}
 		}
@@ -526,7 +530,7 @@ func (bc *BlockChain) loadLastState() error {
 // was fast synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
 func (bc *BlockChain) SetHead(head uint64) error {
-	_, err := bc.setHeadBeyondRoot(head, common.Hash{}, false)
+	_, _, err := bc.setHeadBeyondRoot(head, common.Hash{}, false, 0)
 	return err
 }
 
@@ -553,21 +557,24 @@ func (bc *BlockChain) SetSafe(block *types.Block) {
 }
 
 // setHeadBeyondRoot rewinds the local chain to a new head with the extra condition
-// that the rewind must pass the specified state root. This method is meant to be
+// that the rewind must pass the specified state root. The extra condition is
+// ignored if it causes rolling back more than rewindLimit Gas (0 meaning infinte).
+// If the limit was hit, rewind to last block with state. This method is meant to be
 // used when rewinding with snapshots enabled to ensure that we go back further than
 // persistent disk layer. Depending on whether the node was fast synced or full, and
 // in which state, the method will try to delete minimal data from disk whilst
 // retaining chain consistency.
 //
 // The method returns the block number where the requested root cap was found.
-func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bool) (uint64, error) {
+func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bool, rewindLimit uint64) (uint64, bool, error) {
 	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
+		return 0, false, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
 	// Track the block number of the requested root hash
-	var rootNumber uint64 // (no root == always 0)
+	var blockNumber uint64 // (no root == always 0)
+	var rootFound bool
 
 	// Retrieve the last pivot block to short circuit rollbacks beyond it and the
 	// current freezer limit to start nuking id underflown
@@ -587,12 +594,15 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 				// Block exists, keep rewinding until we find one with state,
 				// keeping rewinding until we exceed the optional threshold
 				// root hash
-				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
+				rootFound = (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
+				lastFullBlock := uint64(0)
+				lastFullBlockHash := common.Hash{}
+				gasRolledBack := uint64(0)
 
 				for {
 					// If a root threshold was requested but not yet crossed, check
-					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
-						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
+					if root != (common.Hash{}) && !rootFound && newHeadBlock.Root() == root {
+						rootFound, blockNumber = true, newHeadBlock.NumberU64()
 					}
 					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
@@ -608,8 +618,11 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 							log.Trace("Rewind passed pivot, aiming genesis", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "pivot", *pivot)
 							newHeadBlock = bc.genesisBlock
 						}
+					} else if lastFullBlock == 0 {
+						lastFullBlock = newHeadBlock.NumberU64()
+						lastFullBlockHash = newHeadBlock.Hash()
 					}
-					if beyondRoot || newHeadBlock.NumberU64() == 0 {
+					if rootFound || newHeadBlock.NumberU64() == 0 {
 						if newHeadBlock.NumberU64() == 0 {
 							// Recommit the genesis state into disk in case the rewinding destination
 							// is genesis block and the relevant state is gone. In the future this
@@ -625,6 +638,14 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						}
 						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						break
+					}
+					if lastFullBlock != 0 && rewindLimit > 0 {
+						gasRolledBack += newHeadBlock.GasUsed()
+						if rewindLimit > 0 && gasRolledBack >= rewindLimit {
+							blockNumber = lastFullBlock
+							newHeadBlock = bc.GetBlock(lastFullBlockHash, lastFullBlock)
+							break
+						}
 					}
 					log.Debug("Skipping block with threshold state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
 					newHeadBlock = bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1) // Keep rewinding
@@ -717,7 +738,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 		bc.SetFinalized(nil)
 	}
 
-	return rootNumber, bc.loadLastState()
+	return blockNumber, rootFound, bc.loadLastState()
 }
 
 // SnapSyncCommitHead sets the current head block to the one defined by the hash
