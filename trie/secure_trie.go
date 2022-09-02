@@ -58,7 +58,7 @@ type StateTrie struct {
 // and returns MissingNodeError if the root node cannot be found.
 func NewStateTrie(owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
 	if db == nil {
-		panic("trie.NewSecure called without a database")
+		panic("trie.NewStateTrie called without a database")
 	}
 	trie, err := New(owner, root, db)
 	if err != nil {
