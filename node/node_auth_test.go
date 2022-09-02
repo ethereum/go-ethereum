@@ -149,12 +149,12 @@ func TestAuthEndpoints(t *testing.T) {
 		t.Fatalf("expected http and auth-http endpoints to be different, got: %q and %q", a, b)
 	}
 
-	goodAuth := NewJWTAuthProvider(secret)
+	goodAuth := NewJWTAuth(secret)
 	var otherSecret [32]byte
 	if _, err := crand.Read(otherSecret[:]); err != nil {
 		t.Fatalf("failed to create jwt secret: %v", err)
 	}
-	badAuth := NewJWTAuthProvider(otherSecret)
+	badAuth := NewJWTAuth(otherSecret)
 
 	notTooLong := time.Second * 57
 	tooLong := time.Second * 60
