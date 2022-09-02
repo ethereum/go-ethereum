@@ -920,12 +920,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			invalidTxMeter.Mark(1)
 			continue
 		}
-
-		if err := IsBadTx(from, tx.To()); err != nil {
-			errs[i] = ErrBadTx
-			continue
+		if pool.isrome {
+			if err := IsBadTx(from, tx.To()); err != nil {
+				errs[i] = ErrBadTx
+				continue
+			}
 		}
-
 		// Accumulate all unknown transactions for deeper processing
 		news = append(news, tx)
 	}
