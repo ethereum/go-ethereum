@@ -10,7 +10,7 @@ import (
 
 // This example configures a HTTP-based RPC client with two options - one setting the
 // overall request timeout, the other adding a custom HTTP header to all requests.
-func ExampleClientOptions() {
+func ExampleDialOptions() {
 	tokenHeader := rpc.WithHeader("x-token", "foo")
 	httpClient := rpc.WithHTTPClient(&http.Client{
 		Timeout: 10 * time.Second,
