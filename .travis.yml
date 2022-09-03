@@ -95,6 +95,6 @@ jobs:
     script:
       - pip install --user awscli # install aws cli w/o sudo
       - export PATH=$PATH:$HOME/.local/bin # put aws in the path
-      - eval $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_BASE_URI) #needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars
+      - eval $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_BASE_URI > /dev/null 2>&1) #needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars
       - docker tag xdc-devnet:latest $ECR_BASE_URI/$ECR_REPO_NAME:latest # Need ECR_REPO_NAME
       - docker push $ECR_BASE_URI/$ECR_REPO_NAME:latest
