@@ -20,11 +20,17 @@ import (
 	"errors"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
+)
+
+const (
+	// snapWaitTimeout is the amount of time to wait for the snap protocol to be started.
+	snapWaitTimeout = 5 * time.Second
 )
 
 var (
@@ -43,6 +49,10 @@ var (
 	// errSnapWithoutEth is returned if a peer attempts to connect only on the
 	// snap protocol without advertising the eth main protocol.
 	errSnapWithoutEth = errors.New("peer connected on snap without compatible eth support")
+
+	// errSnapTimeout is returned if the peer takes too long to start the snap
+	// protocol.
+	errSnapTimeout = errors.New("peer timeout starting snap protococol")
 )
 
 // peerSet represents the collection of active peers currently participating in
@@ -128,7 +138,18 @@ func (ps *peerSet) waitSnapExtension(peer *eth.Peer) (*snap.Peer, error) {
 	ps.snapWait[id] = wait
 	ps.lock.Unlock()
 
-	return <-wait, nil
+	t := time.NewTimer(snapWaitTimeout)
+	select {
+	case p := <-wait:
+		return p, nil
+	case <-t.C:
+		ps.lock.Lock()
+		if _, ok := ps.snapWait[id]; ok {
+			delete(ps.snapWait, id)
+		}
+		ps.lock.Unlock()
+		return nil, errSnapTimeout
+	}
 }
 
 // registerPeer injects a new `eth` peer into the working set, or returns an error
