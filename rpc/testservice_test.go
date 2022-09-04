@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -218,7 +217,6 @@ type MarshalErrObj struct {
 type invalidMarshalService struct{}
 
 func (x invalidMarshalService) InvalidObj() *MarshalErrObj {
-	fmt.Printf("[invalidobj ] called\n")
 	return &MarshalErrObj{}
 }
 
