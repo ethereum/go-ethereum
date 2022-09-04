@@ -54,6 +54,7 @@ var (
 	_ Error = new(invalidRequestError)
 	_ Error = new(invalidMessageError)
 	_ Error = new(invalidParamsError)
+	_ Error = new(internalServerError)
 )
 
 const defaultErrorCode = -32000
@@ -101,3 +102,11 @@ type invalidParamsError struct{ message string }
 func (e *invalidParamsError) ErrorCode() int { return -32602 }
 
 func (e *invalidParamsError) Error() string { return e.message }
+
+type internalServerError struct{ cause error }
+
+func (e *internalServerError) ErrorCode() int { return -32605 }
+
+func (e *internalServerError) Error() string {
+	return fmt.Sprintf("internal server error caused by %s", e.cause.Error())
+}

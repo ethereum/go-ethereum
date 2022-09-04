@@ -25,6 +25,7 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -224,6 +225,36 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	}
 	if len(r) != respLength {
 		t.Fatalf("response has wrong length %d, want %d", len(r), respLength)
+	}
+}
+
+func TestClientWebsocketInternalMarshalError(t *testing.T) {
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	srv.RegisterName("test", invalidMarshalService{})
+
+	c, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r string
+	err = c.Call(&r, "test_invalidObj")
+	if err == nil {
+		t.Fatal("test_invalidObj call should return error")
+	}
+	jsonerror, ok := err.(*jsonError)
+	if !ok {
+		t.Fatalf("test_invalidObj should reutrn jsonError, but %v found", reflect.TypeOf(err))
+	}
+	if jsonerror.Code != -32605 {
+		t.Errorf("wrong error code %d, -32605 expected", jsonerror.Code)
 	}
 }
 
