@@ -155,11 +155,13 @@ func randomAddress(exclude ...common.Address) common.Address {
 		excl[addr] = struct{}{}
 	}
 
-	for {
-		bytes := make([]byte, 32)
-		rand.Read(bytes)
+	bytes := make([]byte, 32)
 
-		addr := common.BytesToAddress(bytes)
+	var addr common.Address
+
+	for {
+		rand.Read(bytes)
+		addr = common.BytesToAddress(bytes)
 
 		if _, ok := excl[addr]; ok {
 			continue
