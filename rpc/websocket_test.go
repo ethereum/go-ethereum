@@ -251,8 +251,8 @@ func TestClientWebsocketInternalMarshalError(t *testing.T) {
 	if !ok {
 		t.Fatalf("test_marshalError should reutrn jsonError, but %v found", reflect.TypeOf(err))
 	}
-	if jsonerror.Code != -32603 {
-		t.Errorf("wrong error code %d, -32603 expected", jsonerror.Code)
+	if jsonerror.Code != internalServerErrorCode {
+		t.Errorf("wrong error code %d, %d expected", jsonerror.Code, internalServerErrorCode)
 	}
 }
 
@@ -279,8 +279,8 @@ func TestClientWebsocketInternalRPCPanic(t *testing.T) {
 	if !ok {
 		t.Fatalf("test_panic should reutrn jsonError, but %v found", reflect.TypeOf(err))
 	}
-	if jsonerror.Code != -32603 {
-		t.Errorf("wrong error code %d, -32603 expected", jsonerror.Code)
+	if jsonerror.Code != internalServerErrorCode {
+		t.Errorf("wrong error code %d, %d expected", jsonerror.Code, internalServerErrorCode)
 	}
 }
 
