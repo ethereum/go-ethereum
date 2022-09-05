@@ -219,7 +219,7 @@ func (x internalErrorService) MarshalError() *MarshalErrObj {
 	return &MarshalErrObj{}
 }
 
-func (x internalErrorService) Panic() error {
+func (x internalErrorService) Panic() string {
 	panic("service panic")
 }
 

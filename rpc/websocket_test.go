@@ -244,8 +244,8 @@ func TestClientWebsocketInternalMarshalError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var r string
-	err = c.Call(&r, "test_marshalError")
+	var obj MarshalErrObj
+	err = c.Call(&obj, "test_marshalError")
 	if err == nil {
 		t.Fatal("test_marshalError call should return error")
 	}

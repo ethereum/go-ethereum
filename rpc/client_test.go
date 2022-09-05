@@ -81,11 +81,13 @@ func TestClientErrorData(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
+	fmt.Printf("got error %v\n", err)
+
 	// Check code.
 	if e, ok := err.(Error); !ok {
 		t.Fatalf("client did not return rpc.Error, got %#v", e)
-	} else if e.ErrorCode() != (testError{}.ErrorCode()) {
-		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), testError{}.ErrorCode())
+	} else if e.ErrorCode() != internalServerErrorCode {
+		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), internalServerErrorCode)
 	}
 	// Check data.
 	if e, ok := err.(DataError); !ok {

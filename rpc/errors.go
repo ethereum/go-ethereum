@@ -60,7 +60,11 @@ var (
 	_ Error = new(internalServerError)
 )
 
-const defaultErrorCode = -32000
+const (
+	defaultErrorCode = -32000
+	internalServerErrorCode = -32603
+)
+
 
 type methodNotFoundError struct{ method string }
 
@@ -108,8 +112,15 @@ func (e *invalidParamsError) Error() string { return e.message }
 
 type internalServerError struct{ cause error }
 
-func (e *internalServerError) ErrorCode() int { return -32603 }
+func (e *internalServerError) ErrorCode() int { return internalServerErrorCode }
 
 func (e *internalServerError) Error() string {
 	return fmt.Sprintf("internal server error caused by %s", e.cause.Error())
+}
+
+func (e *internalServerError) ErrorData() interface{} {
+	if dataErr, ok := e.cause.(DataError); ok {
+		return dataErr.ErrorData()
+	}
+	return nil
 }
