@@ -13,8 +13,8 @@ environment:
       GETH_MINGW: 'C:\msys64\mingw32'
 
 install:
-  - git submodule update --init --depth 1 --recursive
-  - go version
+#  - git submodule update --init --depth 1 --recursive
+#  - go version
 
 for:
   # Linux has its own script without -arch and -cc.
@@ -25,6 +25,7 @@ for:
     environment:
       GOPATH: /usr/go/
     build_script:
+      - go version
       - go run build/ci.go lint
       - go run build/ci.go install -dlgo
     test_script:
@@ -47,6 +48,7 @@ for:
       GETH_CC: '%GETH_MINGW%\bin\gcc.exe'
       PATH: '%GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%'
     build_script:
+      - go version
       - 'echo %GETH_ARCH%'
       - 'echo %GETH_CC%'
       - '%GETH_CC% --version'
