@@ -5,7 +5,7 @@ image:
   - Ubuntu
   - Visual Studio 2019
 
-stack: go 1.18.5
+#stack: go 1.18.5
 
 environment:
   matrix:
