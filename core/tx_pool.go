@@ -1108,6 +1108,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 		if curDone == nil && launchNextRun {
 			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", n, time.Since(now))
 			n++
+
 			now = time.Now()
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)

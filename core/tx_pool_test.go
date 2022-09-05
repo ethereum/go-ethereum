@@ -2713,6 +2713,8 @@ func defaultTxPoolRapidConfig() txPoolRapidConfig {
 }
 
 func TestSmallTxPool(t *testing.T) {
+	t.Parallel()
+
 	t.Skip("a red test to be fixed")
 
 	cfg := defaultTxPoolRapidConfig()
@@ -2730,6 +2732,8 @@ func TestSmallTxPool(t *testing.T) {
 }
 
 func TestBigTxPool(t *testing.T) {
+	t.Parallel()
+
 	t.Skip("a red test to be fixed")
 
 	cfg := defaultTxPoolRapidConfig()
@@ -2739,6 +2743,8 @@ func TestBigTxPool(t *testing.T) {
 
 //nolint:gocognit
 func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
+	t.Helper()
+
 	t.Parallel()
 
 	const debug = false
