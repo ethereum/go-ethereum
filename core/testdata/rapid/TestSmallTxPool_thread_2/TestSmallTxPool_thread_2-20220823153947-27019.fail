@@ -1,0 +1,31 @@
+# TestSmallTxPool/thread_2 2022/08/23 15:39:47 [rapid] draw totalAccs: 2
+# TestSmallTxPool/thread_2 2022/08/23 15:39:47 [rapid] draw batches: &core.transactionBatches{txs:[]*core.testTx{(*core.testTx)(0x140000a61c8), (*core.testTx)(0x140000a61f8)}, totalTxs:2}
+# TestSmallTxPool/thread_2 2022/08/23 15:39:47 current_total2in_batch0removed1428emptyBlocks0blockGasLeft10572pending0locals1locals+pending80.792µs
+# TestSmallTxPool/thread_2 2022/08/23 15:39:47 block0pending2queued0elapsed80.792µs
+# TestSmallTxPool/thread_2 2022/08/23 15:39:48 current_total2in_batch0removed0emptyBlocks1blockGasLeft30000000pending0locals1locals+pending917ns
+# TestSmallTxPool/thread_2 2022/08/23 15:39:48 block1pending0queued1elapsed917ns
+# TestSmallTxPool/thread_2 2022/08/23 15:39:59 got 2s block timeout (expected less then 10s): total accounts 2. Pending 0, queued 1)
+# TestSmallTxPool/thread_2 2022/08/23 15:39:59 Case params: totalAccs = 2; totalTxs = 2; mean 21000, stdev 0, 21000-21001);	queued mean 21000, stdev 0, 21000-21000);
+# 
+# 
+v0.4.8#4217277659807219721
+0x0
+0x105ef490e35b8e
+0x1
+0xc33ade00e9874
+0xd4ad3b40ffcda
+0x1
+0x18b77fe8a754ff
+0x18ac9abaf2ca9c
+0x0
+0x1fb1183885214a
+0xffffffffffffffff
+0x270aabd5c356c
+0x1
+0x8e021f090beac
+0x3e2a92f7702db
+0x0
+0x11256749c75edc
+0x2a
+0x702f0326217b5
+0x0
