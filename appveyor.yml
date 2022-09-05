@@ -5,7 +5,7 @@ image:
   - Ubuntu
   - Visual Studio 2019
 
-stack: go 1.18
+stack: go 1.18.5
 
 environment:
   matrix:
@@ -24,8 +24,8 @@ for:
   - matrix:
       only:
         - image: Ubuntu
-    environment:
-      GOPATH: /usr/go/
+#    environment:
+#      GOPATH: /usr/go/
     build_script:
       - go version
       - go run build/ci.go lint
