@@ -1082,6 +1082,12 @@ type NodeInfo struct {
 	Protocols  map[string]interface{} `json:"protocols"`
 }
 
+func (srv *Server) IsRunning() bool {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	return srv.running
+}
+
 // NodeInfo gathers and returns a collection of metadata known about the host.
 func (srv *Server) NodeInfo() *NodeInfo {
 	// Gather and assemble the generic node infos

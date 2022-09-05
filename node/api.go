@@ -57,7 +57,7 @@ type adminAPI struct {
 func (api *adminAPI) AddPeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return false, ErrNodeStopped
 	}
 	// Try to add the url as a static peer and return
@@ -73,7 +73,7 @@ func (api *adminAPI) AddPeer(url string) (bool, error) {
 func (api *adminAPI) RemovePeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return false, ErrNodeStopped
 	}
 	// Try to remove the url as a static peer and return
@@ -89,7 +89,7 @@ func (api *adminAPI) RemovePeer(url string) (bool, error) {
 func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return false, ErrNodeStopped
 	}
 	node, err := enode.Parse(enode.ValidSchemes, url)
@@ -105,7 +105,7 @@ func (api *adminAPI) AddTrustedPeer(url string) (bool, error) {
 func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return false, ErrNodeStopped
 	}
 	node, err := enode.Parse(enode.ValidSchemes, url)
@@ -121,7 +121,7 @@ func (api *adminAPI) RemoveTrustedPeer(url string) (bool, error) {
 func (api *adminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return nil, ErrNodeStopped
 	}
 
@@ -291,7 +291,7 @@ func (api *adminAPI) StopWS() (bool, error) {
 // protocol granularity.
 func (api *adminAPI) Peers() ([]*p2p.PeerInfo, error) {
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return nil, ErrNodeStopped
 	}
 	return server.PeersInfo(), nil
@@ -301,7 +301,7 @@ func (api *adminAPI) Peers() ([]*p2p.PeerInfo, error) {
 // protocol granularity.
 func (api *adminAPI) NodeInfo() (*p2p.NodeInfo, error) {
 	server := api.node.Server()
-	if server == nil {
+	if server == nil || !server.IsRunning() {
 		return nil, ErrNodeStopped
 	}
 	return server.NodeInfo(), nil
@@ -318,8 +318,12 @@ type web3API struct {
 }
 
 // ClientVersion returns the node name
-func (s *web3API) ClientVersion() string {
-	return s.stack.Server().Name
+func (s *web3API) ClientVersion() (string, error) {
+	server := s.stack.Server()
+	if server == nil || !server.IsRunning() {
+		return "", ErrNodeStopped
+	}
+	return s.stack.Server().Name, nil
 }
 
 // Sha3 applies the ethereum sha3 implementation on the input.
