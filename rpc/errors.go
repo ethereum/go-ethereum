@@ -35,8 +35,11 @@ func (err HTTPError) Error() string {
 
 // Error wraps RPC errors, which contain an error code in addition to the message.
 type Error interface {
-	Error() string  // returns the message
-	ErrorCode() int // returns the code
+	Error() string // returns the message
+
+	// returns the code following JSON-RPC 2.0 spec
+	// https://www.jsonrpc.org/specification
+	ErrorCode() int
 }
 
 // A DataError contains some data in addition to the error message.
@@ -105,7 +108,7 @@ func (e *invalidParamsError) Error() string { return e.message }
 
 type internalServerError struct{ cause error }
 
-func (e *internalServerError) ErrorCode() int { return -32605 }
+func (e *internalServerError) ErrorCode() int { return -32603 }
 
 func (e *internalServerError) Error() string {
 	return fmt.Sprintf("internal server error caused by %s", e.cause.Error())

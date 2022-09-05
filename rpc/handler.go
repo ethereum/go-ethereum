@@ -353,7 +353,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 // handleSubscribe processes *_subscribe method calls.
 func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage {
 	if !h.allowSubscribe {
-		return msg.errorResponse(ErrNotificationsUnsupported)
+		return msg.errorResponse(&internalServerError{cause: ErrNotificationsUnsupported})
 	}
 
 	// Subscription method name is first argument.
@@ -387,7 +387,7 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
-		return msg.errorResponse(err)
+		return msg.errorResponse(&internalServerError{cause: err})
 	}
 	return msg.response(result)
 }

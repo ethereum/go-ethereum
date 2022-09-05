@@ -237,7 +237,7 @@ func TestClientWebsocketInternalMarshalError(t *testing.T) {
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	srv.RegisterName("test", invalidMarshalService{})
+	srv.RegisterName("test", internalErrorService{})
 
 	c, err := DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
@@ -245,16 +245,46 @@ func TestClientWebsocketInternalMarshalError(t *testing.T) {
 	}
 
 	var r string
-	err = c.Call(&r, "test_invalidObj")
+	err = c.Call(&r, "test_marshalError")
 	if err == nil {
-		t.Fatal("test_invalidObj call should return error")
+		t.Fatal("test_marshalError call should return error")
 	}
 	jsonerror, ok := err.(*jsonError)
 	if !ok {
-		t.Fatalf("test_invalidObj should reutrn jsonError, but %v found", reflect.TypeOf(err))
+		t.Fatalf("test_marshalError should reutrn jsonError, but %v found", reflect.TypeOf(err))
 	}
-	if jsonerror.Code != -32605 {
-		t.Errorf("wrong error code %d, -32605 expected", jsonerror.Code)
+	if jsonerror.Code != -32603 {
+		t.Errorf("wrong error code %d, -32603 expected", jsonerror.Code)
+	}
+}
+
+func TestClientWebsocketInternalRPCPanic(t *testing.T) {
+	var (
+		srv     = NewServer()
+		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
+		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
+	)
+	defer srv.Stop()
+	defer httpsrv.Close()
+
+	srv.RegisterName("test", internalErrorService{})
+
+	c, err := DialWebsocket(context.Background(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r string
+	err = c.Call(&r, "test_panic")
+	if err == nil {
+		t.Fatal("test_panic call should return error")
+	}
+	jsonerror, ok := err.(*jsonError)
+	if !ok {
+		t.Fatalf("test_panic should reutrn jsonError, but %v found", reflect.TypeOf(err))
+	}
+	if jsonerror.Code != -32603 {
+		t.Errorf("wrong error code %d, -32603 expected", jsonerror.Code)
 	}
 }
 

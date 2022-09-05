@@ -212,12 +212,15 @@ func (x largeRespService) LargeResp() string {
 type MarshalErrObj struct {
 }
 
-// invalidMarshalService simulutes services returning invalid object
-// for json marshal.
-type invalidMarshalService struct{}
+// internalErrorService simulutes JSON-RPC internal server errors
+type internalErrorService struct{}
 
-func (x invalidMarshalService) InvalidObj() *MarshalErrObj {
+func (x internalErrorService) MarshalError() *MarshalErrObj {
 	return &MarshalErrObj{}
+}
+
+func (x internalErrorService) Panic() error {
+	panic("service panic")
 }
 
 func (o *MarshalErrObj) MarshalText() ([]byte, error) {
