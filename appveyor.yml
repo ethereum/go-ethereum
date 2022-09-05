@@ -16,7 +16,8 @@ environment:
 
 install:
 #  - git submodule update --init --depth 1 --recursive
-#  - go version
+  - gvm install go1.18.5
+  - go version
 
 for:
   # Linux has its own script without -arch and -cc.
