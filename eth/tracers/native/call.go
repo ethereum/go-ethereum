@@ -38,9 +38,9 @@ func init() {
 type callFrame struct {
 	Type    vm.OpCode      `json:"-"`
 	From    common.Address `json:"from"`
-	To      common.Address `json:"to,omitempty" rlp:"optional"`
 	Gas     uint64         `json:"gas"`
 	GasUsed uint64         `json:"gasUsed"`
+	To      common.Address `json:"to,omitempty" rlp:"optional"`
 	Input   []byte         `json:"input" rlp:"optional"`
 	Output  []byte         `json:"output,omitempty" rlp:"optional"`
 	Error   string         `json:"error,omitempty" rlp:"optional"`
