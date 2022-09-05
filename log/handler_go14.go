@@ -1,5 +1,4 @@
-//go:build go1.4
-// +build go1.4
+//go:build !go1.19
 
 package log
 

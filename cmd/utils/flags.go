@@ -1621,6 +1621,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+
+		// To be extra preventive, we won't allow the node to start
+		// in snap sync mode until we have it working
+		// TODO(snap): Comment when we have snap sync working
+		if cfg.SyncMode == downloader.SnapSync {
+			cfg.SyncMode = downloader.FullSync
+		}
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
@@ -2024,9 +2031,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
 		ethereum = CreateBorEthereum(&eth.Config{
-			Genesis:         genesis,
-			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
-			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			Genesis:             genesis,
+			HeimdallURL:         ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall:     ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			HeimdallgRPCAddress: ctx.GlobalString(HeimdallgRPCAddressFlag.Name),
 		})
 		engine = ethereum.Engine()
 	} else {

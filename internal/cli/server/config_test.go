@@ -115,7 +115,7 @@ func TestConfigLoadFile(t *testing.T) {
 				MaxPeers: 30,
 			},
 			TxPool: &TxPoolConfig{
-				LifeTime: time.Duration(1 * time.Second),
+				LifeTime: 1 * time.Second,
 			},
 			Gpo: &GpoConfig{
 				MaxPrice: big.NewInt(100),
@@ -127,12 +127,12 @@ func TestConfigLoadFile(t *testing.T) {
 
 	// read file in hcl format
 	t.Run("hcl", func(t *testing.T) {
-		readFile("./testdata/simple.hcl")
+		readFile("./testdata/test.hcl")
 	})
 
 	// read file in json format
 	t.Run("json", func(t *testing.T) {
-		readFile("./testdata/simple.json")
+		readFile("./testdata/test.json")
 	})
 }
 

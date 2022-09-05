@@ -28,13 +28,16 @@ GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1
 bor:
 	mkdir -p $(GOPATH)/bin/
 	go build -o $(GOBIN)/bor ./cmd/cli/main.go
+	cp $(GOBIN)/bor $(GOPATH)/bin/
+	@echo "Done building."
 
 protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
 generate-mocks:
 	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
-
+	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
+	
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
@@ -72,7 +75,7 @@ lint:
 
 lintci-deps:
 	rm -f ./build/bin/golangci-lint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.48.0
 
 goimports:
 	goimports -local "$(PACKAGE)" -w .

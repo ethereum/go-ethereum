@@ -382,6 +382,10 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
+func (s *Ethereum) PublicBlockChainAPI() *ethapi.PublicBlockChainAPI {
+	return s.handler.ethAPI
+}
+
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	s.lock.RLock()
 	etherbase := s.etherbase
@@ -691,7 +695,9 @@ func (s *Ethereum) handleWhitelistCheckpoint(ctx context.Context, first bool) er
 		return ErrBorConsensusWithoutHeimdall
 	}
 
-	blockNums, blockHashes, err := ethHandler.fetchWhitelistCheckpoints(ctx, bor, first)
+	// Create a new checkpoint verifier
+	verifier := newCheckpointVerifier(nil)
+	blockNums, blockHashes, err := ethHandler.fetchWhitelistCheckpoints(ctx, bor, verifier, first)
 	// If the array is empty, we're bound to receive an error. Non-nill error and non-empty array
 	// means that array has partial elements and it failed for some block. We'll add those partial
 	// elements anyway.

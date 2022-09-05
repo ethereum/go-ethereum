@@ -111,7 +111,7 @@ func (f *BorBlockLogsFilter) Logs(ctx context.Context) ([]*types.Log, error) {
 func (f *BorBlockLogsFilter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
 	var logs []*types.Log
 
-	for ; f.begin <= int64(end); f.begin = f.begin + 64 {
+	for ; f.begin <= int64(end); f.begin = f.begin + int64(f.sprint) {
 		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
 			return logs, err

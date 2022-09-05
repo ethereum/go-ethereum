@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -268,6 +269,8 @@ type TxPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	promoteTxCh chan struct{} // should be used only for tests
 }
 
 type txpoolResetRequest struct {
@@ -276,7 +279,7 @@ type txpoolResetRequest struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, options ...func(pool *TxPool)) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -299,6 +302,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		initDoneCh:      make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 	}
+
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		log.Info("Setting new local account", "address", addr)
@@ -306,6 +310,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 	pool.priced = newTxPricedList(pool.all)
 	pool.reset(nil, chain.CurrentBlock().Header())
+
+	// apply options
+	for _, fn := range options {
+		fn(pool)
+	}
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -809,6 +818,17 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 //
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
+	defer func() {
+		if pool.promoteTxCh == nil {
+			return
+		}
+
+		select {
+		case pool.promoteTxCh <- struct{}{}:
+		default:
+		}
+	}()
+
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
@@ -1080,9 +1100,15 @@ func (pool *TxPool) scheduleReorgLoop() {
 		dirtyAccounts *accountSet
 		queuedEvents  = make(map[common.Address]*txSortedMap)
 	)
+
+	n := 0
+	now := time.Now()
 	for {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", n, time.Since(now))
+			n++
+			now = time.Now()
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
 
@@ -1096,6 +1122,8 @@ func (pool *TxPool) scheduleReorgLoop() {
 
 		select {
 		case req := <-pool.reqResetCh:
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!-reset", n)
+
 			// Reset request: update head if request is already pending.
 			if reset == nil {
 				reset = req
@@ -1106,6 +1134,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			pool.reorgDoneCh <- nextDone
 
 		case req := <-pool.reqPromoteCh:
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!-promote", n, len(req.accounts))
 			// Promote request: update address set if request is already pending.
 			if dirtyAccounts == nil {
 				dirtyAccounts = req
@@ -1116,6 +1145,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 			pool.reorgDoneCh <- nextDone
 
 		case tx := <-pool.queueTxEventCh:
+			fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!-queue", n)
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
 			addr, _ := types.Sender(pool.signer, tx)

@@ -26,6 +26,8 @@
 
 - [```debug pprof```](./debug_pprof.md)
 
+- [```dumpconfig```](./dumpconfig.md)
+
 - [```fingerprint```](./fingerprint.md)
 
 - [```peers```](./peers.md)
@@ -37,6 +39,8 @@
 - [```peers remove```](./peers_remove.md)
 
 - [```peers status```](./peers_status.md)
+
+- [```removedb```](./removedb.md)
 
 - [```server```](./server.md)
 

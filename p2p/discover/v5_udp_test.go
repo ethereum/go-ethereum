@@ -83,7 +83,7 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 	cfg.Log.SetHandler(log.FuncHandler(func(r *log.Record) error {
 		t.Logf("%s %s", lprefix, lfmt.Format(r))
 		return nil
-	}))
+	}, log.LvlTrace))
 
 	// Listen.
 	socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}})

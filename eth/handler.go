@@ -162,8 +162,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// In these cases however it's safe to reenable snap sync.
 		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
 		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
-			h.snapSync = uint32(1)
-			log.Warn("Switch sync mode from full sync to snap sync")
+			// Note: Ideally this should never happen with bor, but to be extra
+			// preventive we won't allow it to roll over to snap sync until
+			// we have it working
+
+			// TODO(snap): Uncomment when we have snap sync working
+			// h.snapSync = uint32(1)
+			// log.Warn("Switch sync mode from full sync to snap sync")
+
+			log.Warn("Preventing switching sync mode from full sync to snap sync")
 		}
 	} else {
 		if h.chain.CurrentBlock().NumberU64() > 0 {
@@ -433,7 +440,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		}()
 	}
 	// If we have any explicit peer required block hashes, request them
-	for number := range h.peerRequiredBlocks {
+	for number, hash := range h.peerRequiredBlocks {
 		resCh := make(chan *eth.Response)
 		if _, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh); err != nil {
 			return err

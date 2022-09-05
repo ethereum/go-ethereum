@@ -59,6 +59,8 @@ func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Dat
 		return nil, err
 	}
 
+	snap.ValidatorSet.UpdateValidatorMap()
+
 	snap.config = config
 	snap.sigcache = sigcache
 
