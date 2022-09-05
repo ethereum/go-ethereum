@@ -39,10 +39,11 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 	CheckTimeouts(&timeouts)
 	// Bundle and start the HTTP server
 	httpSrv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  timeouts.ReadTimeout,
-		WriteTimeout: timeouts.WriteTimeout,
-		IdleTimeout:  timeouts.IdleTimeout,
+		Handler:           handler,
+		ReadTimeout:       timeouts.ReadTimeout,
+		ReadHeaderTimeout: timeouts.ReadHeaderTimeout,
+		WriteTimeout:      timeouts.WriteTimeout,
+		IdleTimeout:       timeouts.IdleTimeout,
 	}
 	go httpSrv.Serve(listener)
 	return httpSrv, listener.Addr(), err
@@ -74,6 +75,10 @@ func CheckTimeouts(timeouts *rpc.HTTPTimeouts) {
 	if timeouts.ReadTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadTimeout)
 		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.ReadHeaderTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read header timeout", "provided", timeouts.ReadHeaderTimeout, "updated", rpc.DefaultHTTPTimeouts.ReadHeaderTimeout)
+		timeouts.ReadHeaderTimeout = rpc.DefaultHTTPTimeouts.ReadHeaderTimeout
 	}
 	if timeouts.WriteTimeout < time.Second {
 		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", rpc.DefaultHTTPTimeouts.WriteTimeout)

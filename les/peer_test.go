@@ -28,7 +28,6 @@ import (
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/core"
 	"github.com/ethereumfair/go-ethereum/core/forkid"
-	"github.com/ethereumfair/go-ethereum/core/rawdb"
 	"github.com/ethereumfair/go-ethereum/core/types"
 	"github.com/ethereumfair/go-ethereum/p2p"
 	"github.com/ethereumfair/go-ethereum/p2p/enode"
@@ -100,7 +99,7 @@ type fakeChain struct{}
 
 func (f *fakeChain) Config() *params.ChainConfig { return params.MainnetChainConfig }
 func (f *fakeChain) Genesis() *types.Block {
-	return core.DefaultGenesisBlock().ToBlock(rawdb.NewMemoryDatabase())
+	return core.DefaultGenesisBlock().ToBlock()
 }
 func (f *fakeChain) CurrentHeader() *types.Header { return &types.Header{Number: big.NewInt(10000000)} }
 

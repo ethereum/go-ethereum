@@ -319,7 +319,7 @@ func (fi *fastIterator) Slot() []byte {
 }
 
 // Release iterates over all the remaining live layer iterators and releases each
-// of thme individually.
+// of them individually.
 func (fi *fastIterator) Release() {
 	for _, it := range fi.iterators {
 		it.it.Release()
@@ -327,7 +327,7 @@ func (fi *fastIterator) Release() {
 	fi.iterators = nil
 }
 
-// Debug is a convencience helper during testing
+// Debug is a convenience helper during testing
 func (fi *fastIterator) Debug() {
 	for _, it := range fi.iterators {
 		fmt.Printf("[p=%v v=%v] ", it.priority, it.it.Hash()[0])

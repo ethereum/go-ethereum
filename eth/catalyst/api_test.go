@@ -69,7 +69,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 		g.AddTx(tx)
 		testNonce++
 	}
-	gblock := genesis.ToBlock(db)
+	gblock := genesis.MustCommit(db)
 	engine := ethash.NewFaker()
 	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, generate)
 	totalDifficulty := big.NewInt(0)
@@ -791,7 +791,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 func TestInvalidBloom(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
-	//ethservice.Merger().ReachTTD()
+	ethservice.Merger().ReachTTD()
 	defer n.Close()
 
 	commonAncestor := ethservice.BlockChain().CurrentBlock()

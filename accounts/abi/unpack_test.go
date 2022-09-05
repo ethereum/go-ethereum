@@ -353,6 +353,11 @@ func TestMethodMultiReturn(t *testing.T) {
 		"",
 		"Can unpack into a slice",
 	}, {
+		&[]interface{}{&bigint, ""},
+		&[]interface{}{&expected.Int, expected.String},
+		"",
+		"Can unpack into a slice without indirection",
+	}, {
 		&[2]interface{}{&bigint, new(string)},
 		&[2]interface{}{&expected.Int, &expected.String},
 		"",

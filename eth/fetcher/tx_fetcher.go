@@ -120,7 +120,7 @@ type txDelivery struct {
 	direct bool          // Whether this is a direct reply or a broadcast
 }
 
-// txDrop is the notiication that a peer has disconnected.
+// txDrop is the notification that a peer has disconnected.
 type txDrop struct {
 	peer string
 }
@@ -260,7 +260,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // Enqueue imports a batch of received transaction into the transaction pool
 // and the fetcher. This method may be called by both transaction broadcasts and
 // direct request replies. The differentiation is important so the fetcher can
-// re-shedule missing transactions as soon as possible.
+// re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
 	// Keep track of all the propagated transactions
 	if direct {
@@ -558,7 +558,7 @@ func (f *TxFetcher) loop() {
 			// In case of a direct delivery, also reschedule anything missing
 			// from the original query
 			if delivery.direct {
-				// Mark the reqesting successful (independent of individual status)
+				// Mark the requesting successful (independent of individual status)
 				txRequestDoneMeter.Mark(int64(len(delivery.hashes)))
 
 				// Make sure something was pending, nuke it
@@ -607,7 +607,7 @@ func (f *TxFetcher) loop() {
 					delete(f.alternates, hash)
 					delete(f.fetching, hash)
 				}
-				// Something was delivered, try to rechedule requests
+				// Something was delivered, try to reschedule requests
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil) // Partial delivery may enable others to deliver too
 			}
 
@@ -719,7 +719,7 @@ func (f *TxFetcher) rescheduleWait(timer *mclock.Timer, trigger chan struct{}) {
 // should be rescheduled if some request is pending. In practice, a timeout will
 // cause the timer to be rescheduled every 5 secs (until the peer comes through or
 // disconnects). This is a limitation of the fetcher code because we don't trac
-// pending requests and timed out requests separatey. Without double tracking, if
+// pending requests and timed out requests separately. Without double tracking, if
 // we simply didn't reschedule the timer on all-timeout then the timer would never
 // be set again since len(request) > 0 => something's running.
 func (f *TxFetcher) rescheduleTimeout(timer *mclock.Timer, trigger chan struct{}) {

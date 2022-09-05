@@ -28,6 +28,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/core/rawdb"
+	"github.com/ethereumfair/go-ethereum/core/types"
 	"github.com/ethereumfair/go-ethereum/ethdb"
 	"github.com/ethereumfair/go-ethereum/log"
 	"github.com/ethereumfair/go-ethereum/metrics"
@@ -162,7 +163,10 @@ func (n *cachedNode) rlp() []byte {
 // or by regenerating it from the rlp encoded blob.
 func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		return mustDecodeNode(hash[:], node)
+		// The raw-blob format nodes are loaded from either from
+		// clean cache or the database, they are all in their own
+		// copy and safe to use unsafe decoder.
+		return mustDecodeNodeUnsafe(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
 }
@@ -305,14 +309,10 @@ func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
 }
 
-// insert inserts a collapsed trie node into the memory database.
-// The blob size must be specified to allow proper size tracking.
+// insert inserts a simplified trie node into the memory database.
 // All nodes inserted by this function will be reference tracked
 // and in theory should only used for **trie nodes** insertion.
 func (db *Database) insert(hash common.Hash, size int, node node) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
 	// If the node's already cached, skip
 	if _, ok := db.dirties[hash]; ok {
 		return
@@ -321,7 +321,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 
 	// Create the cached entry for this node
 	entry := &cachedNode{
-		node:      simplifyNode(node),
+		node:      node,
 		size:      uint16(size),
 		flushPrev: db.newest,
 	}
@@ -349,7 +349,10 @@ func (db *Database) node(hash common.Hash) node {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc)
+
+			// The returned value from cache is in its own copy,
+			// safe to use mustDecodeNodeUnsafe for decoding.
+			return mustDecodeNodeUnsafe(hash[:], enc)
 		}
 	}
 	// Retrieve the node from the dirty cache if available
@@ -374,7 +377,9 @@ func (db *Database) node(hash common.Hash) node {
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
-	return mustDecodeNode(hash[:], enc)
+	// The returned value from database is in its own copy,
+	// safe to use mustDecodeNodeUnsafe for decoding.
+	return mustDecodeNodeUnsafe(hash[:], enc)
 }
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
@@ -763,6 +768,54 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
+// Update inserts the dirty nodes in provided nodeset into database and
+// link the account trie with multiple storage tries if necessary.
+func (db *Database) Update(nodes *MergedNodeSet) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Insert dirty nodes into the database. In the same tree, it must be
+	// ensured that children are inserted first, then parent so that children
+	// can be linked with their parent correctly.
+	//
+	// Note, the storage tries must be flushed before the account trie to
+	// retain the invariant that children go into the dirty cache first.
+	var order []common.Hash
+	for owner := range nodes.sets {
+		if owner == (common.Hash{}) {
+			continue
+		}
+		order = append(order, owner)
+	}
+	if _, ok := nodes.sets[common.Hash{}]; ok {
+		order = append(order, common.Hash{})
+	}
+	for _, owner := range order {
+		subset := nodes.sets[owner]
+		for _, path := range subset.paths {
+			n, ok := subset.nodes[path]
+			if !ok {
+				return fmt.Errorf("missing node %x %v", owner, path)
+			}
+			db.insert(n.hash, int(n.size), n.node)
+		}
+	}
+	// Link up the account trie and storage trie if the node points
+	// to an account trie leaf.
+	if set, present := nodes.sets[common.Hash{}]; present {
+		for _, n := range set.leaves {
+			var account types.StateAccount
+			if err := rlp.DecodeBytes(n.blob, &account); err != nil {
+				return err
+			}
+			if account.Root != emptyRoot {
+				db.reference(account.Root, n.parent)
+			}
+		}
+	}
+	return nil
+}
+
 // Size returns the current storage size of the memory cache in front of the
 // persistent database layer.
 func (db *Database) Size() (common.StorageSize, common.StorageSize) {
@@ -819,4 +872,17 @@ func (db *Database) SaveCachePeriodically(dir string, interval time.Duration, st
 			return
 		}
 	}
+}
+
+// CommitPreimages flushes the dangling preimages to disk. It is meant to be
+// called when closing the blockchain object, so that preimages are persisted
+// to the database.
+func (db *Database) CommitPreimages() error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if db.preimages == nil {
+		return nil
+	}
+	return db.preimages.commit(true)
 }

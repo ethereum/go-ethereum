@@ -27,10 +27,10 @@ import (
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/consensus"
 	"github.com/ethereumfair/go-ethereum/core"
-	"github.com/ethereumfair/go-ethereum/core/bloombits"
 	"github.com/ethereumfair/go-ethereum/core/state"
 	"github.com/ethereumfair/go-ethereum/core/types"
 	"github.com/ethereumfair/go-ethereum/core/vm"
+	"github.com/ethereumfair/go-ethereum/eth/filters"
 	"github.com/ethereumfair/go-ethereum/ethdb"
 	"github.com/ethereumfair/go-ethereum/event"
 	"github.com/ethereumfair/go-ethereum/params"
@@ -84,16 +84,12 @@ type Backend interface {
 	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
-	// Filter API
-	BloomStatus() (uint64, uint64)
-	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
-	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
-	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
-
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
+
+	// eth/filters needs to be initialized from this backend type, so methods needed by
+	// it must also be included here.
+	filters.Backend
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

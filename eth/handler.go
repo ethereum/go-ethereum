@@ -190,7 +190,20 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
-
+	//if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
+	//	if h.chain.Config().TerminalTotalDifficultyPassed {
+	//		log.Info("Chain post-merge, sync via beacon client")
+	//	} else {
+	//		head := h.chain.CurrentBlock()
+	//		if td := h.chain.GetTd(head.Hash(), head.NumberU64()); td.Cmp(ttd) >= 0 {
+	//			log.Info("Chain post-TTD, sync via beacon client")
+	//		} else {
+	//			log.Warn("Chain pre-merge, sync via PoW (ensure beacon client is ready)")
+	//		}
+	//	}
+	//} else if h.chain.Config().TerminalTotalDifficultyPassed {
+	//	log.Error("Chain configured post-merge, but without TTD. Are you debugging sync?")
+	//}
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
 		// All the block fetcher activities should be disabled
@@ -203,7 +216,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// the chain has finished the transition or not, the PoS headers
 		// should only come from the trusted consensus layer instead of
 		// p2p network.
-
+		//if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
+		//	if beacon.IsPoSHeader(header) {
+		//		return errors.New("unexpected post-merge header")
+		//	}
+		//}
 		return h.chain.Engine().VerifyHeader(h.chain, header, true)
 	}
 	heighter := func() uint64 {
@@ -244,12 +261,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			return 0, nil
 		}
 		//if h.merger.TDDReached() {
-		//	// The blocks from the p2p network is regarded as untrusted
-		//	// after the transition. In theory block gossip should be disabled
-		//	// entirely whenever the transition is started. But in order to
-		//	// handle the transition boundary reorg in the consensus-layer,
-		//	// the legacy blocks are still accepted, but only for the terminal
-		//	// pow blocks. Spec: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md#halt-the-importing-of-pow-blocks
+		// The blocks from the p2p network is regarded as untrusted
+		// after the transition. In theory block gossip should be disabled
+		// entirely whenever the transition is started. But in order to
+		// handle the transition boundary reorg in the consensus-layer,
+		// the legacy blocks are still accepted, but only for the terminal
+		// pow blocks. Spec: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3675.md#halt-the-importing-of-pow-blocks
 		//	for i, block := range blocks {
 		//		ptd := h.chain.GetTd(block.ParentHash(), block.NumberU64()-1)
 		//		if ptd == nil {

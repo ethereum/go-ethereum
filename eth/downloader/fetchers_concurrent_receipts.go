@@ -28,7 +28,7 @@ import (
 // concurrent fetcher and the downloader.
 type receiptQueue Downloader
 
-// waker returns a notification channel that gets pinged in case more reecipt
+// waker returns a notification channel that gets pinged in case more receipt
 // fetches have been queued up, so the fetcher might assign it to idle peers.
 func (q *receiptQueue) waker() chan bool {
 	return q.queue.receiptWakeCh
@@ -41,7 +41,7 @@ func (q *receiptQueue) pending() int {
 }
 
 // capacity is responsible for calculating how many receipts a particular peer is
-// estimated to be able to retrieve within the alloted round trip time.
+// estimated to be able to retrieve within the allotted round trip time.
 func (q *receiptQueue) capacity(peer *peerConnection, rtt time.Duration) int {
 	return peer.ReceiptCapacity(rtt)
 }
@@ -58,7 +58,7 @@ func (q *receiptQueue) reserve(peer *peerConnection, items int) (*fetchRequest, 
 	return q.queue.ReserveReceipts(peer, items)
 }
 
-// unreserve is resposible for removing the current receipt retrieval allocation
+// unreserve is responsible for removing the current receipt retrieval allocation
 // assigned to a specific peer and placing it back into the pool to allow
 // reassigning to some other peer.
 func (q *receiptQueue) unreserve(peer string) int {

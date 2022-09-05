@@ -44,7 +44,7 @@ import (
 //        perform Commit or other 'save-to-disk' changes, this should be set to false to avoid
 //        storing trash persistently
 // - preferDisk: this arg can be used by the caller to signal that even though the 'base' is provided,
-//        it would be preferrable to start from a fresh state, if we have it on disk.
+//        it would be preferable to start from a fresh state, if we have it on disk.
 func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
 	var (
 		current  *types.Block

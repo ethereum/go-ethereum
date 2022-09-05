@@ -125,7 +125,7 @@ type SyncingResult struct {
 	Status  ethereum.SyncProgress `json:"status"`
 }
 
-// uninstallSyncSubscriptionRequest uninstalles a syncing subscription in the API event loop.
+// uninstallSyncSubscriptionRequest uninstalls a syncing subscription in the API event loop.
 type uninstallSyncSubscriptionRequest struct {
 	c           chan interface{}
 	uninstalled chan interface{}

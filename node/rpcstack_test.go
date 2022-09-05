@@ -100,7 +100,7 @@ func TestWebsocketOrigins(t *testing.T) {
 			expFail: []string{
 				"test",                                // no scheme, required by spec
 				"http://test",                         // wrong scheme
-				"http://test.foo", "https://a.test.x", // subdomain variatoins
+				"http://test.foo", "https://a.test.x", // subdomain variations
 				"http://testx:8540", "https://xtest:8540"},
 		},
 		// ip tests

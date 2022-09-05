@@ -71,7 +71,7 @@ type TxPool struct {
 	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
 
-// TxRelayBackend provides an interface to the mechanism that forwards transacions
+// TxRelayBackend provides an interface to the mechanism that forwards transactions
 // to the ETH network. The implementations of the functions should be non-blocking.
 //
 // Send instructs backend to forward new transactions

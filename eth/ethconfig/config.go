@@ -82,6 +82,7 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
+	FilterLogCacheSize:      32,
 	Miner: miner.Config{
 		GasCeil:  30000000,
 		GasPrice: big.NewInt(params.GWei),
@@ -170,6 +171,9 @@ type Config struct {
 	SnapshotCache           int
 	Preimages               bool
 
+	// This is the number of blocks for which logs will be cached in the filter system.
+	FilterLogCacheSize int
+
 	// Mining options
 	Miner miner.Config
 
@@ -195,7 +199,7 @@ type Config struct {
 	RPCEVMTimeout time.Duration
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
+	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
@@ -209,6 +213,9 @@ type Config struct {
 
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
+
+	// OverrideTerminalTotalDifficultyPassed (TODO: remove after the fork)
+	OverrideTerminalTotalDifficultyPassed *bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

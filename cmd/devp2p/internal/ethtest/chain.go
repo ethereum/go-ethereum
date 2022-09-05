@@ -96,12 +96,12 @@ func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
 }
 
-func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
+func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
 		return nil, fmt.Errorf("no block headers requested")
 	}
 
-	headers := make(BlockHeaders, req.Amount)
+	headers := make([]*types.Header, req.Amount)
 	var blockNumber uint64
 
 	// range over blocks to check if our chain has the requested header
@@ -139,7 +139,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock := gen.ToBlock(nil)
+	gblock := gen.ToBlock()
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {

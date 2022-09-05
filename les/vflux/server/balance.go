@@ -623,7 +623,7 @@ func (n *nodeBalance) priorityToBalance(priority int64, capacity uint64) (uint64
 	return 0, uint64(-priority)
 }
 
-// reducedBalance estimates the reduced balance at a given time in the fututre based
+// reducedBalance estimates the reduced balance at a given time in the future based
 // on the given balance, the time factor and an estimated average request cost per time ratio
 func (n *nodeBalance) reducedBalance(b balance, start mclock.AbsTime, dt time.Duration, capacity uint64, avgReqCost float64) balance {
 	// since the costs are applied continuously during the dt time period we calculate

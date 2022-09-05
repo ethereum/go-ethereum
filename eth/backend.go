@@ -20,13 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"runtime"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/ethereumfair/go-ethereum/accounts"
 	"github.com/ethereumfair/go-ethereum/common"
 	"github.com/ethereumfair/go-ethereum/common/hexutil"
@@ -40,7 +33,6 @@ import (
 	"github.com/ethereumfair/go-ethereum/core/vm"
 	"github.com/ethereumfair/go-ethereum/eth/downloader"
 	"github.com/ethereumfair/go-ethereum/eth/ethconfig"
-	"github.com/ethereumfair/go-ethereum/eth/filters"
 	"github.com/ethereumfair/go-ethereum/eth/gasprice"
 	"github.com/ethereumfair/go-ethereum/eth/protocols/eth"
 	"github.com/ethereumfair/go-ethereum/eth/protocols/snap"
@@ -57,6 +49,11 @@ import (
 	"github.com/ethereumfair/go-ethereum/params"
 	"github.com/ethereumfair/go-ethereum/rlp"
 	"github.com/ethereumfair/go-ethereum/rpc"
+	"math/big"
+	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -135,7 +132,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideGrayGlacier, config.OverrideTerminalTotalDifficulty)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideTerminalTotalDifficulty, config.OverrideTerminalTotalDifficultyPassed)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -150,8 +147,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
 		log.Error("Failed to recover state", "error", err)
 	}
+	//merger := consensus.NewMerger(chainDb)
 	eth := &Ethereum{
-		config:            config,
+		config: config,
+		//merger:            merger,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
 		accountManager:    stack.AccountManager(),
@@ -223,9 +222,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:       chainDb,
-		Chain:          eth.blockchain,
-		TxPool:         eth.txPool,
+		Database: chainDb,
+		Chain:    eth.blockchain,
+		TxPool:   eth.txPool,
+		//Merger:         merger,
 		Network:        config.NetworkId,
 		Sync:           config.SyncMode,
 		BloomCache:     uint64(cacheLimit),
@@ -310,9 +310,6 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
-		}, {
-			Namespace: "eth",
-			Service:   filters.NewFilterAPI(s.APIBackend, false, 5*time.Minute),
 		}, {
 			Namespace: "admin",
 			Service:   NewAdminAPI(s),
@@ -454,7 +451,6 @@ func (s *Ethereum) StartMining(threads int) error {
 			}
 			clique.Authorize(eb, wallet.SignData)
 		}
-
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
@@ -493,6 +489,8 @@ func (s *Ethereum) Synced() bool                       { return atomic.LoadUint3
 func (s *Ethereum) SetSynced()                         { atomic.StoreUint32(&s.handler.acceptTxs, 1) }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
+
+//func (s *Ethereum) Merger() *consensus.Merger          { return s.merger }
 func (s *Ethereum) SyncMode() downloader.SyncMode {
 	mode, _ := s.handler.chainSync.modeAndLocalHead()
 	return mode

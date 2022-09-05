@@ -55,11 +55,11 @@ type fourByteTracer struct {
 
 // newFourByteTracer returns a native go tracer which collects
 // 4 byte-identifiers of a tx, and implements vm.EVMLogger.
-func newFourByteTracer(ctx *tracers.Context) tracers.Tracer {
+func newFourByteTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	t := &fourByteTracer{
 		ids: make(map[string]int),
 	}
-	return t
+	return t, nil
 }
 
 // isPrecompiled returns whether the addr is a precompile. Logic borrowed from newJsTracer in eth/tracers/js/tracer.go
