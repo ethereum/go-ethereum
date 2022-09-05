@@ -138,7 +138,7 @@ func TestAPIs(t *testing.T) {
 	}()
 
 	genesis := core.GenesisBlockForTesting(db, addrr, big.NewInt(1000000))
-	sprint := params.TestChainConfig.Bor.Sprint
+	testBorConfig := params.TestChainConfig.Bor
 
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 6, func(i int, gen *core.BlockGen) {
 		switch i {
@@ -208,7 +208,7 @@ func TestAPIs(t *testing.T) {
 
 		blockBatch := db.NewBatch()
 
-		if i%int(sprint-1) != 0 {
+		if i%int(testBorConfig.CalculateSprint(block.NumberU64())-1) != 0 {
 			// if it is not sprint start write all the transactions as normal transactions.
 			rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 		} else {
