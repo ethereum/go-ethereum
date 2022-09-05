@@ -133,7 +133,7 @@ func buildRandomValidatorSet(numVals int) []*valset.Validator {
 	valAddrs := randomAddresses(numVals)
 
 	for i := 0; i < numVals; i++ {
-		power, _ := rand.Int(nil, big.NewInt(99))
+		power, _ := rand.Int(rand.Reader, big.NewInt(99))
 		powerN := power.Int64() + 1
 
 		validators[i] = &valset.Validator{

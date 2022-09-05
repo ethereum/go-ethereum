@@ -2712,6 +2712,8 @@ func defaultTxPoolRapidConfig() txPoolRapidConfig {
 	}
 }
 
+// TestSmallTxPool is not something to run in parallel as far it uses all CPUs
+// nolint:paralleltest
 func TestSmallTxPool(t *testing.T) {
 	t.Parallel()
 
@@ -2731,6 +2733,8 @@ func TestSmallTxPool(t *testing.T) {
 	testPoolBatchInsert(t, cfg)
 }
 
+// This test is not something to run in parallel as far it uses all CPUs
+// nolint:paralleltest
 func TestBigTxPool(t *testing.T) {
 	t.Parallel()
 
@@ -2741,7 +2745,7 @@ func TestBigTxPool(t *testing.T) {
 	testPoolBatchInsert(t, cfg)
 }
 
-//nolint:gocognit
+//nolint:gocognit,thelper
 func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
 	t.Helper()
 

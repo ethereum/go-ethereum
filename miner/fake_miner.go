@@ -139,7 +139,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 		"0": 1,
 	}
 	chainConfig.Bor.Sprint = map[string]uint64{
-		"0": 1,
+		"0": 64,
 	}
 
 	return chainDB, genesis, chainConfig
