@@ -5,6 +5,8 @@ image:
   - Ubuntu
   - Visual Studio 2019
 
+stack: go 1.18
+
 environment:
   matrix:
     - GETH_ARCH: amd64
