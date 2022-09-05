@@ -70,6 +70,12 @@ func (testError) Error() string          { return "testError" }
 func (testError) ErrorCode() int         { return 444 }
 func (testError) ErrorData() interface{} { return "testError data" }
 
+type MarshalErrObj struct {}
+
+func (o *MarshalErrObj) MarshalText() ([]byte, error) {
+	return nil, errors.New("marshal error")
+}
+
 func (s *testService) NoArgsRets() {}
 
 func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
@@ -112,6 +118,14 @@ func (s *testService) InvalidRets3() (string, string, error) {
 
 func (s *testService) ReturnError() error {
 	return testError{}
+}
+
+func (s *testService) MarshalError() *MarshalErrObj {
+	return &MarshalErrObj{}
+}
+
+func (s *testService) Panic() string {
+	panic("service panic")
 }
 
 func (s *testService) CallMeBack(ctx context.Context, method string, args []interface{}) (interface{}, error) {
@@ -207,22 +221,4 @@ type largeRespService struct {
 
 func (x largeRespService) LargeResp() string {
 	return strings.Repeat("x", x.length)
-}
-
-type MarshalErrObj struct {
-}
-
-// internalErrorService simulutes JSON-RPC internal server errors
-type internalErrorService struct{}
-
-func (x internalErrorService) MarshalError() *MarshalErrObj {
-	return &MarshalErrObj{}
-}
-
-func (x internalErrorService) Panic() string {
-	panic("service panic")
-}
-
-func (o *MarshalErrObj) MarshalText() ([]byte, error) {
-	return nil, errors.New("marshal error")
 }

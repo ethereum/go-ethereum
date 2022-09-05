@@ -230,14 +230,12 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 
 func TestClientWebsocketInternalMarshalError(t *testing.T) {
 	var (
-		srv     = NewServer()
+		srv     = newTestServer()
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
 	defer srv.Stop()
 	defer httpsrv.Close()
-
-	srv.RegisterName("test", internalErrorService{})
 
 	c, err := DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
@@ -260,14 +258,12 @@ func TestClientWebsocketInternalMarshalError(t *testing.T) {
 
 func TestClientWebsocketInternalRPCPanic(t *testing.T) {
 	var (
-		srv     = NewServer()
+		srv     = newTestServer()
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)
 	defer srv.Stop()
 	defer httpsrv.Close()
-
-	srv.RegisterName("test", internalErrorService{})
 
 	c, err := DialWebsocket(context.Background(), wsURL, "")
 	if err != nil {
