@@ -22,6 +22,8 @@ for:
   - matrix:
       only:
         - image: Ubuntu
+    environment:
+      GOPATH: /usr/go/
     build_script:
       - go run build/ci.go lint
       - go run build/ci.go install -dlgo
