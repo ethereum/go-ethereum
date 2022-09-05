@@ -95,7 +95,7 @@ func TestGetSignerSuccessionNumber_ProposerNotFound(t *testing.T) {
 
 	require.Len(t, snap.ValidatorSet.Validators, numVals)
 
-	dummyProposerAddress := randomAddress()
+	dummyProposerAddress := randomAddress(toAddresses(validators)...)
 	snap.ValidatorSet.Proposer = &valset.Validator{Address: dummyProposerAddress}
 
 	// choose any signer
@@ -116,11 +116,14 @@ func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
 	snap := Snapshot{
 		ValidatorSet: valset.NewValidatorSet(validators),
 	}
-	dummySignerAddress := randomAddress()
+
+	dummySignerAddress := randomAddress(toAddresses(validators)...)
 	_, err := snap.GetSignerSuccessionNumber(dummySignerAddress)
 	require.NotNil(t, err)
+
 	e, ok := err.(*UnauthorizedSignerError)
 	require.True(t, ok)
+
 	require.Equal(t, dummySignerAddress.Bytes(), e.Signer)
 }
 
@@ -145,11 +148,25 @@ func buildRandomValidatorSet(numVals int) []*valset.Validator {
 	return validators
 }
 
-func randomAddress() common.Address {
-	bytes := make([]byte, 32)
-	rand.Read(bytes)
+func randomAddress(exclude ...common.Address) common.Address {
+	excl := make(map[common.Address]struct{}, len(exclude))
 
-	return common.BytesToAddress(bytes)
+	for _, addr := range exclude {
+		excl[addr] = struct{}{}
+	}
+
+	for {
+		bytes := make([]byte, 32)
+		rand.Read(bytes)
+
+		addr := common.BytesToAddress(bytes)
+
+		if _, ok := excl[addr]; ok {
+			continue
+		}
+
+		return addr
+	}
 }
 
 func randomAddresses(n int) []common.Address {
@@ -198,4 +215,14 @@ func TestRandomAddresses(t *testing.T) {
 			t.Fatalf("length of unique addresses %d, expected %d", len(addressSet), len(addrs))
 		}
 	})
+}
+
+func toAddresses(vals []*valset.Validator) []common.Address {
+	addrs := make([]common.Address, len(vals))
+
+	for i, val := range vals {
+		addrs[i] = val.Address
+	}
+
+	return addrs
 }
