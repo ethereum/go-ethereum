@@ -1,10 +1,10 @@
 package bor
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
@@ -129,16 +129,17 @@ func TestGetSignerSuccessionNumber_SignerNotFound(t *testing.T) {
 
 // nolint: unparam
 func buildRandomValidatorSet(numVals int) []*valset.Validator {
-	rand.Seed(time.Now().Unix())
-
 	validators := make([]*valset.Validator, numVals)
 	valAddrs := randomAddresses(numVals)
 
 	for i := 0; i < numVals; i++ {
+		power, _ := rand.Int(nil, big.NewInt(99))
+		powerN := power.Int64() + 1
+
 		validators[i] = &valset.Validator{
 			Address: valAddrs[i],
 			// cannot process validators with voting power 0, hence +1
-			VotingPower: int64(rand.Intn(99) + 1),
+			VotingPower: powerN,
 		}
 	}
 
@@ -160,7 +161,7 @@ func randomAddress(exclude ...common.Address) common.Address {
 	var addr common.Address
 
 	for {
-		rand.Read(bytes)
+		_, _ = rand.Read(bytes)
 		addr = common.BytesToAddress(bytes)
 
 		if _, ok := excl[addr]; ok {
@@ -187,7 +188,7 @@ func randomAddresses(n int) []common.Address {
 	bytes := make([]byte, 32)
 
 	for {
-		rand.Read(bytes)
+		_, _ = rand.Read(bytes)
 
 		addr = common.BytesToAddress(bytes)
 
@@ -208,7 +209,7 @@ func TestRandomAddresses(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(t *rapid.T) {
-		length := rapid.IntMax(100).Draw(t, "length").(int)
+		length := rapid.IntMax(300).Draw(t, "length").(int)
 
 		addrs := randomAddresses(length)
 		addressSet := unique.New(addrs)
