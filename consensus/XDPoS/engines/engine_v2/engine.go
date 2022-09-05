@@ -27,6 +27,7 @@ type XDPoS_v2 struct {
 	config       *params.XDPoSConfig // Consensus engine configuration parameters
 	db           ethdb.Database      // Database to store and retrieve snapshot checkpoints
 	isInitilised bool                // status of v2 variables
+	whosTurn     common.Address      // Record waiting for who to mine
 
 	snapshots       *lru.ARCCache // Snapshots for gap block
 	signatures      *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -525,12 +526,12 @@ func (x *XDPoS_v2) VerifySyncInfoMessage(chain consensus.ChainReader, syncInfo *
 
 	err := x.verifyQC(chain, syncInfo.HighestQuorumCert, nil)
 	if err != nil {
-		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to QC", "error", err)
+		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to QC", "blockNum", syncInfo.HighestQuorumCert.ProposedBlockInfo.Number, "round", syncInfo.HighestQuorumCert.ProposedBlockInfo.Round, "error", err)
 		return false, err
 	}
 	err = x.verifyTC(chain, syncInfo.HighestTimeoutCert)
 	if err != nil {
-		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to TC", "error", err)
+		log.Warn("[VerifySyncInfoMessage] SyncInfo message verification failed due to TC", "gapNum", syncInfo.HighestTimeoutCert.GapNumber, "round", syncInfo.HighestTimeoutCert.Round, "error", err)
 		return false, err
 	}
 	return true, nil
@@ -564,13 +565,13 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 			4. Broadcast(Not part of consensus)
 	*/
 	if vote.ProposedBlockInfo.Round < x.currentRound {
-		log.Debug("[VerifyVoteMessage] Disqualified vote message as the proposed round does not match currentRound", "vote.ProposedBlockInfo.Round", vote.ProposedBlockInfo.Round, "currentRound", x.currentRound)
+		log.Debug("[VerifyVoteMessage] Disqualified vote message as the proposed round does not match currentRound", "voteHash", vote.Hash(), "voteProposedBlockInfoRound", vote.ProposedBlockInfo.Round, "currentRound", x.currentRound)
 		return false, nil
 	}
 
 	snapshot, err := x.getSnapshot(chain, vote.GapNumber, true)
 	if err != nil {
-		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "BlockNum", vote.ProposedBlockInfo.Number, "Hash", vote.ProposedBlockInfo.Hash, "Error", err.Error())
+		log.Error("[VerifyVoteMessage] fail to get snapshot for a vote message", "blockNum", vote.ProposedBlockInfo.Number, "blockHash", vote.ProposedBlockInfo.Hash, "voteHash", vote.Hash(), "error", err.Error())
 		return false, err
 	}
 	verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
@@ -581,7 +582,7 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 		for i, mn := range snapshot.NextEpochMasterNodes {
 			log.Warn("[VerifyVoteMessage] Master node list item", "index", i, "Master node", mn.Hex())
 		}
-		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "Error", err.Error())
+		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "voteHash", vote.Hash(), "error", err.Error())
 	}
 	return verified, err
 }
@@ -875,7 +876,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		return false, err
 	}
 	if *proposedBlockRound-1 != round {
-		log.Info("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+		log.Info("[commitBlocks] Rounds not continuous(parent) found when committing block", "proposedBlockRound", *proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 
@@ -887,7 +888,7 @@ func (x *XDPoS_v2) commitBlocks(blockChainReader consensus.ChainReader, proposed
 		return false, err
 	}
 	if *proposedBlockRound-2 != round {
-		log.Info("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
+		log.Info("[commitBlocks] Rounds not continuous(grand parent) found when committing block", "proposedBlockRound", *proposedBlockRound, "decodedExtraField.Round", round, "proposedBlockHeaderHash", proposedBlockHeader.Hash())
 		return false, nil
 	}
 

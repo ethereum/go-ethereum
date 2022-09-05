@@ -2430,6 +2430,11 @@ func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return bc.hc.GetHeaderByNumber(number)
 }
 
+// Set config for testing purpose function
+func (bc *BlockChain) SetConfig(config *params.ChainConfig) {
+	bc.chainConfig = config
+}
+
 // Config retrieves the blockchain's chain configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 

@@ -51,8 +51,9 @@ func (x *XDPoS_v2) yourturn(chain consensus.ChainReader, round types.Round, pare
 	}
 
 	leaderIndex := uint64(round) % x.config.Epoch % uint64(len(masterNodes))
-	if masterNodes[leaderIndex] != signer {
-		log.Info("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "masterNodes[leaderIndex]", masterNodes[leaderIndex], "signer", signer)
+	x.whosTurn = masterNodes[leaderIndex]
+	if x.whosTurn != signer {
+		log.Info("[yourturn] Not my turn", "curIndex", curIndex, "leaderIndex", leaderIndex, "Hash", parent.Hash().Hex(), "whosTurn", x.whosTurn, "myaddr", signer)
 		return false, nil
 	}
 

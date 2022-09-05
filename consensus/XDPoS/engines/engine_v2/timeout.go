@@ -189,7 +189,7 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 		Signature: signedHash,
 		GapNumber: gapNumber,
 	}
-	log.Info("[sendTimeout] Timeout message generated, ready to send!", "timeoutMsgRound", timeoutMsg.Round, "timeoutMsgGapNumber", timeoutMsg.GapNumber)
+	log.Warn("[sendTimeout] Timeout message generated, ready to send!", "timeoutMsgRound", timeoutMsg.Round, "timeoutMsgGapNumber", timeoutMsg.GapNumber, "whosTurn", x.whosTurn)
 	err = x.timeoutHandler(chain, timeoutMsg)
 	if err != nil {
 		log.Error("TimeoutHandler error", "TimeoutRound", timeoutMsg.Round, "Error", err)
@@ -221,7 +221,7 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 
 	x.timeoutCount++
 	if x.timeoutCount%x.config.V2.TimeoutSyncThreshold == 0 {
-		log.Info("[OnCountdownTimeout] timeout sync threadhold reached, send syncInfo message")
+		log.Warn("[OnCountdownTimeout] timeout sync threadhold reached, send syncInfo message")
 		syncInfo := x.getSyncInfo()
 		x.broadcastToBftChannel(syncInfo)
 	}

@@ -9,17 +9,25 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
+const maxBlockDist = 7 // Maximum allowed backward distance from the chain head, 7 is just a magic number indicate very close block
+
 //Define Boradcast Group functions
 type broadcastVoteFn func(*types.Vote)
 type broadcastTimeoutFn func(*types.Timeout)
 type broadcastSyncInfoFn func(*types.SyncInfo)
 
+// chainHeightFn is a callback type to retrieve the current chain height.
+type chainHeightFn func() uint64
+
 type Bfter struct {
+	gapNumber uint64
+
 	blockChainReader consensus.ChainReader
 	broadcastCh      chan interface{}
 	quit             chan struct{}
 	consensus        ConsensusFns
 	broadcast        BroadcastFns
+	chainHeight      chainHeightFn // Retrieves the current chain's height
 }
 
 type ConsensusFns struct {
@@ -39,14 +47,20 @@ type BroadcastFns struct {
 	SyncInfo broadcastSyncInfoFn
 }
 
-func New(broadcasts BroadcastFns, blockChainReader *core.BlockChain) *Bfter {
-
+func New(broadcasts BroadcastFns, blockChainReader *core.BlockChain, chainHeight chainHeightFn) *Bfter {
 	return &Bfter{
-		quit:             make(chan struct{}),
-		broadcastCh:      make(chan interface{}),
 		broadcast:        broadcasts,
 		blockChainReader: blockChainReader,
+		chainHeight:      chainHeight,
+
+		quit:        make(chan struct{}),
+		broadcastCh: make(chan interface{}),
 	}
+}
+
+// Create this function to avoid massive test change
+func (b *Bfter) InitGapNumber() {
+	b.gapNumber = b.blockChainReader.Config().XDPoS.Gap
 }
 
 func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
@@ -63,8 +77,14 @@ func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
 	}
 }
 
-func (b *Bfter) Vote(vote *types.Vote) error {
+func (b *Bfter) Vote(peer string, vote *types.Vote) error {
 	log.Trace("Receive Vote", "hash", vote.Hash().Hex(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
+
+	voteBlockNum := vote.ProposedBlockInfo.Number.Int64()
+	if dist := voteBlockNum - int64(b.chainHeight()); dist < -maxBlockDist || dist > maxBlockDist {
+		log.Debug("Discarded propagated vote, too far away", "peer", peer, "number", voteBlockNum, "hash", vote.ProposedBlockInfo.Hash, "distance", dist)
+		return nil
+	}
 
 	verified, err := b.consensus.verifyVote(b.blockChainReader, vote)
 
@@ -89,12 +109,18 @@ func (b *Bfter) Vote(vote *types.Vote) error {
 
 	return nil
 }
-func (b *Bfter) Timeout(timeout *types.Timeout) error {
+func (b *Bfter) Timeout(peer string, timeout *types.Timeout) error {
 	log.Debug("Receive Timeout", "timeout", timeout)
+
+	gapNum := timeout.GapNumber
+	if dist := int64(gapNum) - int64(b.chainHeight()); dist < -int64(b.gapNumber)*2 || dist > int64(b.gapNumber)*2 { // times 2 is to avoid miscalculation on cross epoch case
+		log.Debug("Discarded propagated timeout, too far away", "peer", peer, "gapNumber", gapNum, "hash", timeout.Hash, "distance", dist)
+		return nil
+	}
 
 	verified, err := b.consensus.verifyTimeout(b.blockChainReader, timeout)
 	if err != nil {
-		log.Error("Verify BFT Timeout", "timeoutRound", timeout.Round, "timeoutGapNum", timeout.GapNumber, "error", err)
+		log.Error("Verify BFT Timeout", "timeoutRound", timeout.Round, "timeoutGapNum", gapNum, "error", err)
 		return err
 	}
 
@@ -113,8 +139,14 @@ func (b *Bfter) Timeout(timeout *types.Timeout) error {
 
 	return nil
 }
-func (b *Bfter) SyncInfo(syncInfo *types.SyncInfo) error {
+func (b *Bfter) SyncInfo(peer string, syncInfo *types.SyncInfo) error {
 	log.Debug("Receive SyncInfo", "syncInfo", syncInfo)
+
+	qcBlockNum := syncInfo.HighestQuorumCert.ProposedBlockInfo.Number.Int64()
+	if dist := qcBlockNum - int64(b.chainHeight()); dist < -maxBlockDist || dist > maxBlockDist {
+		log.Debug("Discarded propagated syncInfo, too far away", "peer", peer, "blockNum", qcBlockNum, "hash", syncInfo.Hash, "distance", dist)
+		return nil
+	}
 
 	verified, err := b.consensus.verifySyncInfo(b.blockChainReader, syncInfo)
 	if err != nil {

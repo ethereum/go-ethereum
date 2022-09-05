@@ -227,6 +227,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
+
 	inserter := func(block *types.Block) error {
 		// If fast sync is running, deny importing weird blocks
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
@@ -253,8 +254,9 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		Timeout:  manager.BroadcastTimeout,
 		SyncInfo: manager.BroadcastSyncInfo,
 	}
-	manager.bft = bft.New(broadcasts, blockchain)
+	manager.bft = bft.New(broadcasts, blockchain, heighter)
 	if blockchain.Config().XDPoS != nil {
+		manager.bft.InitGapNumber()
 		manager.bft.SetConsensusFuns(engine)
 	}
 
@@ -860,7 +862,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		exist, _ := pm.knownVotes.ContainsOrAdd(vote.Hash(), true)
 		if !exist {
-			go pm.bft.Vote(&vote)
+			go pm.bft.Vote(p.id, &vote)
 		} else {
 			log.Debug("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
 		}
@@ -880,7 +882,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		exist, _ := pm.knownTimeouts.ContainsOrAdd(timeout.Hash(), true)
 
 		if !exist {
-			go pm.bft.Timeout(&timeout)
+			go pm.bft.Timeout(p.id, &timeout)
 		} else {
 			log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
 		}
@@ -899,7 +901,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		exist, _ := pm.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true)
 		if !exist {
-			go pm.bft.SyncInfo(&syncInfo)
+			go pm.bft.SyncInfo(p.id, &syncInfo)
 		} else {
 			log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
 		}
