@@ -5,3 +5,6 @@
 
 --> {"jsonrpc":"2.0","id":2,"method":"test_panic","params": []}
 <-- {"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"method handler crashed"}}
+
+--> {"jsonrpc":"2.0","id":2,"method":"test_returnInternalError","params": []}
+<-- {"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"service internal error"}}

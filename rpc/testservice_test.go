@@ -120,6 +120,10 @@ func (s *testService) ReturnError() error {
 	return testError{}
 }
 
+func (s *testService) ReturnInternalError() error {
+	return errors.New("service internal error")
+}
+
 func (s *testService) MarshalError() *MarshalErrObj {
 	return &MarshalErrObj{}
 }

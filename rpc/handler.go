@@ -390,7 +390,14 @@ func (h *handler) handleSubscribe(cp *callProc, msg *jsonrpcMessage) *jsonrpcMes
 func (h *handler) runMethod(ctx context.Context, msg *jsonrpcMessage, callb *callback, args []reflect.Value) *jsonrpcMessage {
 	result, err := callb.call(ctx, msg.Method, args)
 	if err != nil {
-		return msg.errorResponse(err)
+		if ec, ok := err.(Error); ok {
+			return msg.errorResponse(ec)
+		} else {
+			return msg.errorResponse(&internalServerError{
+				code: errorcodeInternalServerError,
+				message: err.Error(),
+			})
+		}
 	}
 	return msg.response(result)
 }
