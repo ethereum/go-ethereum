@@ -16,8 +16,8 @@ environment:
 
 install:
 #  - git submodule update --init --depth 1 --recursive
-  - gvm install go1.18.5
-  - go version
+#  - gvm install go1.18.5
+#  - go version
 
 for:
   # Linux has its own script without -arch and -cc.
@@ -25,9 +25,12 @@ for:
   - matrix:
       only:
         - image: Ubuntu
-#    environment:
-#      GOPATH: /usr/go/
+    environment:
+      GOPATH: /usr/go/
     build_script:
+      - echo $PATH
+      - ls -l /usr/go
+      - /usr/go version
       - go version
       - go run build/ci.go lint
       - go run build/ci.go install -dlgo
