@@ -27,31 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func NewInvalidChainIdError(id *big.Int) error {
-	return &ErrInvalidChainID{id}
-}
-
-type ErrInvalidChainID struct {
-	id *big.Int
-}
-
-func (e ErrInvalidChainID) Error() string {
-	if e.id == nil {
-		return "invalid chain id for signer"
-	}
-	return fmt.Sprintf("invalid chain id for signer: %v", e.id)
-}
-
-func (e ErrInvalidChainID) Is(target error) bool {
-	t, ok := target.(*ErrInvalidChainID)
-	if !ok {
-		return false
-	}
-	if e.id == nil || t.id == nil {
-		return e.id == t.id
-	}
-	return e.id.Cmp(t.id) == 0
-}
+var ErrInvalidChainId = errors.New("invalid chain id for signer")
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -214,7 +190,7 @@ func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, NewInvalidChainIdError(V)
+		return common.Address{}, fmt.Errorf("%w: %d", ErrInvalidChainId, V)
 	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
@@ -232,7 +208,7 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
 	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-		return nil, nil, nil, NewInvalidChainIdError(txdata.ChainID)
+		return nil, nil, nil, fmt.Errorf("%w: %d", ErrInvalidChainId, txdata.chainID())
 	}
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
@@ -294,7 +270,7 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, NewInvalidChainIdError(tx.ChainId())
+		return common.Address{}, fmt.Errorf("%w: %d", ErrInvalidChainId, tx.ChainId())
 	}
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
@@ -307,7 +283,7 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
 		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, NewInvalidChainIdError(txdata.ChainID)
+			return nil, nil, nil, fmt.Errorf("%w: %d", ErrInvalidChainId, txdata.chainID())
 		}
 		R, S, _ = decodeSignature(sig)
 		V = big.NewInt(int64(sig[64]))
@@ -388,7 +364,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return HomesteadSigner{}.Sender(tx)
 	}
 	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, NewInvalidChainIdError(tx.ChainId())
+		return common.Address{}, fmt.Errorf("%w: %d", ErrInvalidChainId, tx.ChainId())
 	}
 	V, R, S := tx.RawSignatureValues()
 	V = new(big.Int).Sub(V, s.chainIdMul)

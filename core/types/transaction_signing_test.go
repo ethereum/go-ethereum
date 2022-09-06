@@ -128,8 +128,8 @@ func TestChainId(t *testing.T) {
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(2)), tx)
-	if !errors.Is(err, NewInvalidChainIdError(big.NewInt(1))) {
-		t.Error("expected error:", NewInvalidChainIdError(big.NewInt(1)), err)
+	if !errors.Is(err, ErrInvalidChainId) {
+		t.Error("expected error:", ErrInvalidChainId, err)
 	}
 
 	_, err = Sender(NewEIP155Signer(big.NewInt(1)), tx)
