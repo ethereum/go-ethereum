@@ -188,6 +188,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieDirtyLimit:      config.TrieDirtyCache,
 			TrieDirtyDisabled:   config.NoPruning,
 			TrieTimeLimit:       config.TrieTimeout,
+			SnapshotRewindLimit: config.SnapshotRewindLimit,
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
 		}

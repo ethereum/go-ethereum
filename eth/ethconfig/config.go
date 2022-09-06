@@ -82,6 +82,7 @@ var Defaults = Config{
 	TrieCleanCacheRejournal: 60 * time.Minute,
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
+	SnapshotRewindLimit:     300_000_000_000,
 	SnapshotCache:           102,
 	FilterLogCacheSize:      32,
 	Miner: miner.Config{
@@ -170,6 +171,7 @@ type Config struct {
 	TrieDirtyCache          int
 	TrieTimeout             time.Duration
 	SnapshotCache           int
+	SnapshotRewindLimit     uint64 `toml:",omitempty"` // Limit (in gas) of chain rewind looking for a snapshot
 	Preimages               bool
 
 	// This is the number of blocks for which logs will be cached in the filter system.
