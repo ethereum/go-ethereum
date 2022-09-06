@@ -111,10 +111,9 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 
 func errorMessage(err Error) *jsonrpcMessage {
 	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
-		Code:    errcodeDefault,
+		Code:    err.ErrorCode(),
 		Message: err.Error(),
 	}}
-	msg.Error.Code = err.ErrorCode()
 	de, ok := err.(DataError)
 	if ok {
 		msg.Error.Data = de.ErrorData()

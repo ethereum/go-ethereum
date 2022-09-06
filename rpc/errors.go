@@ -62,7 +62,7 @@ const (
 	errcodeNotificationsUnsupported = -32001
 	errcodePanic                    = -32603
 	errcodeMarshalError             = -32603
-	errorcodeInternalServerError    = -32603
+	errcodeInternalServerError      = -32603
 )
 
 type methodNotFoundError struct{ method string }
