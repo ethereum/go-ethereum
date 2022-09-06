@@ -185,8 +185,6 @@ func (s *StateDB) MVWriteList() []blockstm.WriteDescriptor {
 	for _, v := range s.writeMap {
 		if !v.Path.IsAddress() {
 			writes = append(writes, v)
-		} else if _, ok := s.newStateObjects[common.BytesToAddress(v.Path[:common.AddressLength])]; ok {
-			writes = append(writes, v)
 		}
 	}
 

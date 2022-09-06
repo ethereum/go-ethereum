@@ -885,7 +885,7 @@ func TestApplyMVWriteSet(t *testing.T) {
 	states[0].SetBalance(addr1, balance1)
 	states[0].SetState(addr2, key2, val2)
 	states[0].GetOrNewStateObject(addr3)
-	states[0].Finalise(false)
+	states[0].Finalise(true)
 	states[0].FlushMVWriteSet()
 
 	sSingleProcess.GetOrNewStateObject(addr1)
@@ -896,13 +896,13 @@ func TestApplyMVWriteSet(t *testing.T) {
 
 	sClean.ApplyMVWriteSet(states[0].MVWriteList())
 
-	assert.Equal(t, sSingleProcess.IntermediateRoot(false), sClean.IntermediateRoot(false))
+	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 
 	// Tx1 write
 	states[1].SetState(addr1, key2, val2)
 	states[1].SetBalance(addr1, balance2)
 	states[1].SetNonce(addr1, 1)
-	states[1].Finalise(false)
+	states[1].Finalise(true)
 	states[1].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key2, val2)
@@ -911,13 +911,13 @@ func TestApplyMVWriteSet(t *testing.T) {
 
 	sClean.ApplyMVWriteSet(states[1].MVWriteList())
 
-	assert.Equal(t, sSingleProcess.IntermediateRoot(false), sClean.IntermediateRoot(false))
+	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 
 	// Tx2 write
 	states[2].SetState(addr1, key1, val2)
 	states[2].SetBalance(addr1, balance2)
 	states[2].SetNonce(addr1, 2)
-	states[2].Finalise(false)
+	states[2].Finalise(true)
 	states[2].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key1, val2)
@@ -926,12 +926,12 @@ func TestApplyMVWriteSet(t *testing.T) {
 
 	sClean.ApplyMVWriteSet(states[2].MVWriteList())
 
-	assert.Equal(t, sSingleProcess.IntermediateRoot(false), sClean.IntermediateRoot(false))
+	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 
 	// Tx3 write
 	states[3].Suicide(addr2)
 	states[3].SetCode(addr1, code)
-	states[3].Finalise(false)
+	states[3].Finalise(true)
 	states[3].FlushMVWriteSet()
 
 	sSingleProcess.Suicide(addr2)
@@ -939,7 +939,7 @@ func TestApplyMVWriteSet(t *testing.T) {
 
 	sClean.ApplyMVWriteSet(states[3].MVWriteList())
 
-	assert.Equal(t, sSingleProcess.IntermediateRoot(false), sClean.IntermediateRoot(false))
+	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 }
 
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
