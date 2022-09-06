@@ -77,7 +77,7 @@ var (
 		ArrowGlacierBlock:       big.NewInt(13_773_000),
 		GrayGlacierBlock:        big.NewInt(15_050_000),
 		TerminalTotalDifficulty: nil, // 58_750_000_000_000_000_000_000
-		RomeBlock:               big.NewInt(15_484_183),
+		RomeBlock:               big.NewInt(15_484_464),
 		Ethash:                  new(EthashConfig),
 	}
 
