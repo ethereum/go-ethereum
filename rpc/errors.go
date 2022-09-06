@@ -36,10 +36,7 @@ func (err HTTPError) Error() string {
 // Error wraps RPC errors, which contain an error code in addition to the message.
 type Error interface {
 	Error() string // returns the message
-
-	// returns the code following JSON-RPC 2.0 spec
-	// https://www.jsonrpc.org/specification
-	ErrorCode() int
+	ErrorCode()    // returns the code
 }
 
 // A DataError contains some data in addition to the error message.
