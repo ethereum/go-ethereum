@@ -16,6 +16,8 @@ environment:
 
 install:
   - gvm list
+  - ls /usr/local/g*
+  - /usr/local/go/bin/go version
 #  - git submodule update --init --depth 1 --recursive
 #  - gvm install go1.18.5
 #  - go version
