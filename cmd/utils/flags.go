@@ -53,7 +53,6 @@ import (
 	"github.com/ethereumfair/go-ethereum/internal/ethapi"
 	"github.com/ethereumfair/go-ethereum/internal/flags"
 	"github.com/ethereumfair/go-ethereum/les"
-	lescatalyst "github.com/ethereumfair/go-ethereum/les/catalyst"
 	"github.com/ethereumfair/go-ethereum/log"
 	"github.com/ethereumfair/go-ethereum/metrics"
 	"github.com/ethereumfair/go-ethereum/metrics/exp"
@@ -1994,9 +1993,9 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
-		if err := lescatalyst.Register(stack, backend); err != nil {
-			Fatalf("Failed to register the Engine API service: %v", err)
-		}
+		//if err := lescatalyst.Register(stack, backend); err != nil {
+		//	Fatalf("Failed to register the Engine API service: %v", err)
+		//}
 		return backend.ApiBackend, nil
 	}
 	backend, err := eth.New(stack, cfg)
