@@ -3715,6 +3715,24 @@ var inputBlockNumberFormatter = function (blockNumber) {
     return utils.toHex(blockNumber);
 };
 
+var inputTraceFormatter = function (config) {
+    if (config !== undefined && Object.keys(config).length > 0) {
+        var validParams = [
+            "tracer", "timeout", "reexec", "traceconfig", // struct type at `eth/tracers/api.go`
+            "enablememory", "disablestack", "disablestorage", "debug", "limit", "overrides", // struct type at `eth/tracers/logger/logger.go`
+        ];
+        var copied = {};
+        for (var field in config) copied[field.toLowerCase()] = config[field];
+        for (var i=0; i<validParams.length; i++) if (copied[validParams[i]] !== undefined) delete copied[validParams[i]];
+        if (Object.keys(copied).length != 0) {
+            var unknownFields = [];
+            for (var field in copied) unknownFields.push('"' + field + '"');
+            throw new Error("Unknown field: " + unknownFields.join(", "))
+        }
+    }
+    return config;
+} 
+
 /**
  * Formats the input of a transaction and converts all values to HEX
  *
@@ -3972,6 +3990,7 @@ module.exports = {
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
     inputPostFormatter: inputPostFormatter,
+    inputTraceFormatter: inputTraceFormatter,
     outputBigNumberFormatter: outputBigNumberFormatter,
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
