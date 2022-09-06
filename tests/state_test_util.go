@@ -231,7 +231,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	if _, err := core.ApplyMessage(evm, msg, gaspool); err != nil {
+	_, err = core.ApplyMessage(evm, msg, gaspool)
+	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
@@ -244,7 +245,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	statedb.Commit(config.IsEIP158(block.Number()))
 	// And _now_ get the state root
 	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
-	return snaps, statedb, root, nil
+	return snaps, statedb, root, err
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
