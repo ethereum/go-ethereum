@@ -290,7 +290,7 @@ var NetworkNames = map[string]string{
 	RinkebyChainConfig.ChainID.String():    "rinkeby",
 	GoerliChainConfig.ChainID.String():     "goerli",
 	SepoliaChainConfig.ChainID.String():    "sepolia",
-	MainnetChainConfig.ChainIDNew.String(): "mainnet",
+	MainnetChainConfig.ChainIDEtf.String(): "mainnet",
 }
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -348,7 +348,7 @@ type CheckpointOracleConfig struct {
 // set of configuration options.
 type ChainConfig struct {
 	ChainID    *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
-	ChainIDNew *big.Int `json:"chainIDNew"`
+	ChainIDEtf *big.Int `json:"chainIdEtf"`
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -490,14 +490,14 @@ func (c *ChainConfig) String() string {
 
 func (c *ChainConfig) ChainId(num *big.Int) *big.Int {
 	if c.IsRome(num) {
-		return c.ChainIDNew
+		return c.ChainIDEtf
 	}
 	return c.ChainID
 }
 
 func (c *ChainConfig) ReChainId(num *big.Int) {
 	if c.IsRome(num) {
-		c.ChainID = c.ChainIDNew
+		c.ChainID = c.ChainIDEtf
 	}
 }
 

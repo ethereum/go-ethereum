@@ -227,7 +227,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		SnapSyncer:     snap.NewSyncer(stateDb),
 		stateSyncStart: make(chan *stateSync),
 	}
-	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
+	//dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
 
 	go dl.stateFetcher()
 	return dl
@@ -477,10 +477,10 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		}
 	} else {
 		// In beacon mode, user the skeleton chain to retrieve the headers from
-		latest, _, err = d.skeleton.Bounds()
-		if err != nil {
-			return err
-		}
+		//latest, _, err = d.skeleton.Bounds()
+		//if err != nil {
+		//	return err
+		//}
 		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
 			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
 
@@ -516,19 +516,19 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	height := latest.Number.Uint64()
 
 	var origin uint64
-	if !beaconMode {
-		// In legacy mode, reach out to the network and find the ancestor
-		origin, err = d.findAncestor(p, latest)
-		if err != nil {
-			return err
-		}
-	} else {
-		// In beacon mode, use the skeleton chain for the ancestor lookup
-		origin, err = d.findBeaconAncestor()
-		if err != nil {
-			return err
-		}
+	//if !beaconMode {
+	// In legacy mode, reach out to the network and find the ancestor
+	origin, err = d.findAncestor(p, latest)
+	if err != nil {
+		return err
 	}
+	//} else {
+	//	// In beacon mode, use the skeleton chain for the ancestor lookup
+	//	origin, err = d.findBeaconAncestor()
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 	d.syncStatsLock.Lock()
 	if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
 		d.syncStatsChainOrigin = origin
@@ -599,13 +599,13 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		d.syncInitHook(origin, height)
 	}
 	var headerFetcher func() error
-	if !beaconMode {
-		// In legacy mode, headers are retrieved from the network
-		headerFetcher = func() error { return d.fetchHeaders(p, origin+1, latest.Number.Uint64()) }
-	} else {
-		// In beacon mode, headers are served by the skeleton syncer
-		headerFetcher = func() error { return d.fetchBeaconHeaders(origin + 1) }
-	}
+	//if !beaconMode {
+	// In legacy mode, headers are retrieved from the network
+	headerFetcher = func() error { return d.fetchHeaders(p, origin+1, latest.Number.Uint64()) }
+	//} else {
+	//	// In beacon mode, headers are served by the skeleton syncer
+	//	headerFetcher = func() error { return d.fetchBeaconHeaders(origin + 1) }
+	//}
 	fetchers := []func() error{
 		headerFetcher, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin+1, beaconMode) },   // Bodies are retrieved during normal and snap sync
