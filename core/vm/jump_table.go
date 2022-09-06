@@ -24,7 +24,7 @@ import (
 
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
-	gasFunc       func(*EVM, *ScopeContext, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	gasFunc       func(uint64, *EVM, *ScopeContext, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	// memorySizeFunc returns whether an error occured that should end this execution frame, the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack, *ScopeContext) (err error, size uint64, overflow bool)
 )
@@ -312,28 +312,28 @@ func newFrontierInstructionSet() JumpTable {
 		},
 		ADDMODMAX: {
 			execute:    opAddModMAX,
-            dynamicGas: gasAddModMAX,
-			memorySize:  memoryEVMMAXArith,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
+			dynamicGas: gasAddModMAX,
+			memorySize: memoryEVMMAXArith,
+			minStack:   minStack(0, 0),
+			maxStack:   maxStack(0, 0),
 		},
 		SUBMODMAX: {
 			execute:    opSubModMAX,
-            dynamicGas: gasSubModMAX,
-			memorySize:  memoryEVMMAXArith,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
+			dynamicGas: gasSubModMAX,
+			memorySize: memoryEVMMAXArith,
+			minStack:   minStack(0, 0),
+			maxStack:   maxStack(0, 0),
 		},
 		MULMONTMAX: {
 			execute:    opMulMontMAX,
-            dynamicGas: gasMulMontMAX,
+			dynamicGas: gasMulMontMAX,
 			memorySize: memoryEVMMAXArith,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
+			minStack:   minStack(0, 0),
+			maxStack:   maxStack(0, 0),
 		},
 		TOMONTMAX: {
 			execute:    opToMontMAX,
-            dynamicGas: gasToMontMAX,
+			dynamicGas: gasToMontMAX,
 			memorySize: memoryToMontMAX,
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),

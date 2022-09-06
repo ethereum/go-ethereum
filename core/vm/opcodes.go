@@ -46,7 +46,6 @@ const (
 	MULMOD     OpCode = 0x9
 	EXP        OpCode = 0xa
 	SIGNEXTEND OpCode = 0xb
-
 )
 
 // 0x10 range - comparison ops.
@@ -70,12 +69,12 @@ const (
 // 0x20 range - crypto.
 const (
 	KECCAK256 OpCode = 0x20
-    // these really should be arithmetic ops but I ran out of free opcodes
+	// these really should be arithmetic ops but I ran out of free opcodes
 	SETMODMAX  OpCode = 0x21
 	ADDMODMAX  OpCode = 0x22
 	SUBMODMAX  OpCode = 0x23
 	MULMONTMAX OpCode = 0x24
-    TOMONTMAX     OpCode = 0x25
+	TOMONTMAX  OpCode = 0x25
 )
 
 // 0x30 range - closure state.
@@ -249,9 +248,9 @@ var opCodeToString = map[OpCode]string{
 	EQ:         "EQ",
 	ISZERO:     "ISZERO",
 	SIGNEXTEND: "SIGNEXTEND",
-    SETMODMAX: "SETMODMAX",
-    ADDMODMAX: "ADDMODMAX",
-    MULMONTMAX: "MULMONTMAX",
+	SETMODMAX:  "SETMODMAX",
+	ADDMODMAX:  "ADDMODMAX",
+	MULMONTMAX: "MULMONTMAX",
 
 	// 0x10 range - bit ops.
 	AND:    "AND",

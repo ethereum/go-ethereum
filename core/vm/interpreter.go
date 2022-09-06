@@ -207,9 +207,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// to detect calculation overflows
 			if operation.memorySize != nil {
 				err, memSize, overflow := operation.memorySize(stack, callContext)
-                if err != nil {
-                    return nil, ErrOutOfGas
-                }
+				if err != nil {
+					return nil, ErrOutOfGas
+				}
 				if overflow {
 					return nil, ErrGasUintOverflow
 				}
@@ -222,7 +222,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
-			dynamicCost, err = operation.dynamicGas(in.evm, callContext, memorySize)
+			dynamicCost, err = operation.dynamicGas(pc, in.evm, callContext, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
