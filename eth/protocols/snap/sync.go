@@ -615,6 +615,8 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		}
 	}()
 	defer s.report(true)
+	// commit any trie- and bytecode-healing data.
+	defer s.commitHealer(true)
 
 	// Whether sync completed or not, disregard any future packets
 	defer func() {
@@ -651,7 +653,6 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		trienodeHealResps    = make(chan *trienodeHealResponse)
 		bytecodeHealResps    = make(chan *bytecodeHealResponse)
 	)
-	defer s.commit(true)
 	for {
 		// Remove all completed tasks and terminate sync if everything's done
 		s.cleanStorageTasks()
@@ -2155,7 +2156,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 			log.Error("Invalid trienode processed", "hash", hash, "err", err)
 		}
 	}
-	s.commit(false)
+	s.commitHealer(false)
 
 	// Calculate the processing rate of one filled trie node
 	rate := float64(fills) / (float64(time.Since(start)) / float64(time.Second))
@@ -2202,7 +2203,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	}
 }
 
-func (s *Syncer) commit(force bool) {
+func (s *Syncer) commitHealer(force bool) {
 	if !force && s.healer.scheduler.MemSize() < ethdb.IdealBatchSize {
 		return
 	}
@@ -2242,7 +2243,7 @@ func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 			log.Error("Invalid bytecode processed", "hash", hash, "err", err)
 		}
 	}
-	s.commit(false)
+	s.commitHealer(false)
 }
 
 // forwardAccountTask takes a filled account task and persists anything available

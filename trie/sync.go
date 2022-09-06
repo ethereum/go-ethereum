@@ -111,7 +111,7 @@ type syncMemBatch struct {
 	nodes  map[string][]byte      // In-memory membatch of recently completed nodes
 	hashes map[string]common.Hash // Hashes of recently completed nodes
 	codes  map[common.Hash][]byte // In-memory membatch of recently completed codes
-	size   uint64
+	size   uint64                 // Estimated batch-size of in-memory data.
 }
 
 // newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
@@ -339,6 +339,7 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	return nil
 }
 
+// MemSize returns an estimated size (in bytes) of the data held in the membatch.
 func (s *Sync) MemSize() uint64 {
 	return s.membatch.size
 }
@@ -484,7 +485,10 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	// Write the node content to the membatch
 	s.membatch.nodes[string(req.path)] = req.data
 	s.membatch.hashes[string(req.path)] = req.hash
-	s.membatch.size += 2*uint64(len(req.path)) + 32 + uint64(len(req.data))
+	// The size tracking refers to the db-batch, not the in-memory data.
+	// Therefore, we ignore the req.path, and account only for the hash+data
+	// which eventually is written to db.
+	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.nodeReqs, string(req.path))
 	s.fetches[len(req.path)]--
 
@@ -506,7 +510,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 func (s *Sync) commitCodeRequest(req *codeRequest) error {
 	// Write the node content to the membatch
 	s.membatch.codes[req.hash] = req.data
-	s.membatch.size += uint64(32 + len(req.data))
+	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.codeReqs, req.hash)
 	s.fetches[len(req.path)]--
 
