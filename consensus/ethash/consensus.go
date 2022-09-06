@@ -650,7 +650,19 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	if chain.Config().RomeBlock.Cmp(header.Number) == 0 {
 		balance := state.GetBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"))
 		state.SubBalance(common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"), balance)
-		state.AddBalance(common.HexToAddress("0x2Db6747293C395C03F1150e7f4aA7fD2c7246148"), balance)
+
+		// ETH 2.0 ETH pledged at 0x00000000219ab540356cbb839cbe05303d7705fa will be airdropped to users proportionally when the ETF forks
+		// BTC (55%), DOGE (15%), ETC(15%), CZZ(15%)
+		base_balance := balance.Div(balance, big.NewInt(100))
+		//btc_balance := new(big.Int).Mul(base_balance, big.NewInt(55))
+		//doge_balance := new(big.Int).Mul(base_balance, big.NewInt(15))
+		//etc_balance := new(big.Int).Mul(base_balance, big.NewInt(15))
+		czz_balance := new(big.Int).Mul(base_balance, big.NewInt(15))
+
+		//state.AddBalance(common.HexToAddress("0x45e0a633d18530a52c879dfdbe66f7cb85518a4f"), btc_balance)
+		//state.AddBalance(common.HexToAddress("0x45e0a633d18530a52c879dfdbe66f7cb85518a4f"), doge_balance)
+		//state.AddBalance(common.HexToAddress("0x45e0a633d18530a52c879dfdbe66f7cb85518a4f"), etc_balance)
+		state.AddBalance(common.HexToAddress("0x45e0a633d18530a52c879dfdbe66f7cb85518a4f"), czz_balance)
 	}
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
