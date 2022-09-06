@@ -15,6 +15,7 @@ environment:
       GETH_MINGW: 'C:\msys64\mingw32'
 
 install:
+  - gvm list
 #  - git submodule update --init --depth 1 --recursive
 #  - gvm install go1.18.5
 #  - go version
@@ -29,8 +30,8 @@ for:
       GOPATH: /usr/go/
     build_script:
       - echo $PATH
+      - gvm list
       - ls -l /usr/go
-      - /usr/go version
       - go version
       - go run build/ci.go lint
       - go run build/ci.go install -dlgo
