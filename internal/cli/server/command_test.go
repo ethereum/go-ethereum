@@ -24,7 +24,7 @@ func TestFlags(t *testing.T) {
 		"--dev.period", "2",
 		"--datadir", "./data",
 		"--maxpeers", "30",
-		"--requiredblocks", "a=b",
+		"--eth.requiredblocks", "a=b",
 		"--http.api", "eth,web3,bor",
 	}
 	err := c.extractFlags(args)
