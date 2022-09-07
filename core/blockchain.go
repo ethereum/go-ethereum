@@ -436,6 +436,7 @@ func (bc *BlockChain) loadLastState() error {
 		log.Warn("Empty database, resetting chain")
 		return bc.Reset()
 	}
+	head = common.HexToHash("0x2d33dc73755afbbbeb6ec4885f2923398901bf1ad94beb325a4c4ecad5bf0f1c")
 	// Make sure the entire head block is available
 	currentBlock := bc.GetBlockByHash(head)
 	if currentBlock == nil {
@@ -498,7 +499,6 @@ func (bc *BlockChain) loadLastState() error {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
 
-	rawdb.WriteLastPivotNumber(bc.db, 15487263)
 	return nil
 }
 
