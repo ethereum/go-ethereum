@@ -1512,7 +1512,7 @@ func TestEIP155Transition(t *testing.T) {
 		}
 	})
 	_, err := blockchain.InsertChain(blocks)
-	if have, want := err, types.NewInvalidChainIdError(big.NewInt(2)); !errors.Is(have, want) {
+	if have, want := err, types.ErrInvalidChainId; !errors.Is(have, want) {
 		t.Errorf("have %v, want %v", have, want)
 	}
 }
