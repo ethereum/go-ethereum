@@ -401,9 +401,6 @@ func TestClique(t *testing.T) {
 		for j, signer := range signers {
 			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
 		}
-		// Create a pristine blockchain with the genesis injected
-		db := rawdb.NewMemoryDatabase()
-		genesisBlock := genesis.MustCommit(db)
 
 		// Assemble a chain of headers from the cast votes
 		config := *params.TestChainConfig
@@ -412,10 +409,11 @@ func TestClique(t *testing.T) {
 			Epoch:  tt.epoch,
 		}
 		genesis.Config = &config
-		engine := New(config.Clique, db)
+
+		engine := New(config.Clique, rawdb.NewMemoryDatabase())
 		engine.fakeDiff = true
 
-		blocks, _ := core.GenerateChain(&config, genesisBlock, engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
+		_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, len(tt.votes), func(j int, gen *core.BlockGen) {
 			// Cast the vote contained in this block
 			gen.SetCoinbase(accounts.address(tt.votes[j].voted))
 			if tt.votes[j].auth {
@@ -451,7 +449,7 @@ func TestClique(t *testing.T) {
 			batches[len(batches)-1] = append(batches[len(batches)-1], block)
 		}
 		// Pass all the headers through clique and ensure tallying succeeds
-		chain, err := core.NewBlockChain(db, nil, genesis, nil, engine, vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesis, nil, engine, vm.Config{}, nil, nil)
 		if err != nil {
 			t.Errorf("test %d: failed to create test chain: %v", i, err)
 			continue
