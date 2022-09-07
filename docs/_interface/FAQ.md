@@ -59,7 +59,7 @@ The current default syncing mode used by Geth is called [snap sync](https://gith
 
 Many people assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods. Geth downloads the leaves of the trie without the intermediate nodes that connect the leaves to the root. The full trie is regenerated locally. However, while this is happening, the blockchain is progressing, meaning some of the regenerated state trie becomes invalid. Therefor, there is also a healing phase that corrects any errors in the state trie. The state sync has to progress faster than the chain growth otherwise it will never finish.
 
-Geth can also be sync'd with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, only 128 blocks are stored in memory.
+Geth can also be sync'd with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, the state of 128 blocks only are stored in memory.
 
 ### What's the state trie?
 
