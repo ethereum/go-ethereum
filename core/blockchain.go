@@ -466,7 +466,6 @@ func (bc *BlockChain) loadLastState() error {
 			headFastBlockGauge.Update(int64(block.NumberU64()))
 		}
 	}
-	headFastBlockGauge.Update(int64(15487263))
 
 	// Restore the last known finalized block and safe block
 	// Note: the safe block is not stored on disk and it is set to the last
@@ -498,6 +497,8 @@ func (bc *BlockChain) loadLastState() error {
 	if pivot := rawdb.ReadLastPivotNumber(bc.db); pivot != nil {
 		log.Info("Loaded last fast-sync pivot marker", "number", *pivot)
 	}
+
+	rawdb.WriteLastPivotNumber(bc.db, 15487263)
 	return nil
 }
 
