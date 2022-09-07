@@ -17,8 +17,6 @@
 package core
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	lru "github.com/hashicorp/golang-lru"
@@ -32,7 +30,6 @@ const nonceCacheLimit = 1024 * 50
 type txNoncer struct {
 	fallback *state.StateDB
 	nonces   *lru.Cache
-	lock     sync.Mutex
 }
 
 // newTxNoncer creates a new LRU cache to track the pool nonces.
@@ -50,9 +47,7 @@ func (txn *txNoncer) get(addr common.Address) uint64 {
 	// We use mutex for get operation is the underlying
 	// state will mutate db even for read access.
 	if _, ok := txn.nonces.Get(addr); !ok {
-		txn.lock.Lock()
 		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
-		txn.lock.Unlock()
 	}
 	nonce, _ := txn.nonces.Get(addr)
 	return nonce.(uint64)
@@ -67,14 +62,7 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64) {
 // setIfLower updates a new virtual nonce into the LRU cache if the
 // the new one is lower.
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
-	if _, ok := txn.nonces.Get(addr); !ok {
-		txn.lock.Lock()
-		txn.nonces.Add(addr, txn.fallback.GetNonce(addr))
-		txn.lock.Unlock()
-	}
-
-	cachedNonce, _ := txn.nonces.Get(addr)
-	if cachedNonce.(uint64) <= nonce {
+	if txn.get(addr) <= nonce {
 		return
 	}
 	txn.nonces.Add(addr, nonce)
