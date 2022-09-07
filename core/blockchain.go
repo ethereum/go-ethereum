@@ -2030,7 +2030,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		addedTxs   []common.Hash
 
 		deletedLogs [][]*types.Log
-		rebirthLogs [][]*types.Log
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
@@ -2151,20 +2150,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
 
-	// Collect the logs
-	var numLogs int
-	for i := len(newChain) - 1; i >= 1; i-- {
-		// Collect reborn logs due to chain reorg
-		logs := bc.collectLogs(newChain[i].Hash(), false)
-		if len(logs) > 0 {
-			rebirthLogs = append(rebirthLogs, logs)
-			numLogs += len(logs)
-		}
-		// to avoid overconsuming memory, we need to have a cap on reorg logs.
-		if numLogs > 2_000 {
-			break
-		}
-	}
 	// If any logs need to be fired, do it now. In theory we could avoid creating
 	// this goroutine if there are no events to fire, but realistcally that only
 	// ever happens if we're reorging empty blocks, which will only happen on idle
@@ -2172,8 +2157,20 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
 	}
+	// Collect the logs
+	var rebirthLogs []*types.Log
+	for i := len(newChain) - 1; i >= 1; i-- {
+		// Collect reborn logs due to chain reorg
+		if logs := bc.collectLogs(newChain[i].Hash(), false); len(logs) > 0 {
+			rebirthLogs = append(rebirthLogs, logs...)
+		}
+		if len(rebirthLogs) > 1000 {
+			bc.logsFeed.Send(rebirthLogs)
+			rebirthLogs = make([]*types.Log, 0)
+		}
+	}
 	if len(rebirthLogs) > 0 {
-		bc.logsFeed.Send(mergeLogs(rebirthLogs, false))
+		bc.logsFeed.Send(rebirthLogs)
 	}
 	if len(oldChain) > 0 {
 		for i := len(oldChain) - 1; i >= 0; i-- {
