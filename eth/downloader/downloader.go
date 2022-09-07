@@ -130,7 +130,7 @@ type Downloader struct {
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
 
 	// Skeleton sync
-	skeleton *skeleton // Header skeleton to backfill the chain with (eth2 mode)
+	//skeleton *skeleton // Header skeleton to backfill the chain with (eth2 mode)
 
 	// State sync
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
@@ -469,43 +469,43 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 
 	// Look up the sync boundaries: the common ancestor and the target block
 	var latest, pivot *types.Header
-	if !beaconMode {
-		// In legacy mode, use the master peer to retrieve the headers from
-		latest, pivot, err = d.fetchHead(p)
-		if err != nil {
-			return err
-		}
-	} else {
-		// In beacon mode, user the skeleton chain to retrieve the headers from
-		//latest, _, err = d.skeleton.Bounds()
-		//if err != nil {
-		//	return err
-		//}
-		if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
-			number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
-
-			// Retrieve the pivot header from the skeleton chain segment but
-			// fallback to local chain if it's not found in skeleton space.
-			if pivot = d.skeleton.Header(number); pivot == nil {
-				_, oldest, _ := d.skeleton.Bounds() // error is already checked
-				if number < oldest.Number.Uint64() {
-					count := int(oldest.Number.Uint64() - number) // it's capped by fsMinFullBlocks
-					headers := d.readHeaderRange(oldest, count)
-					if len(headers) == count {
-						pivot = headers[len(headers)-1]
-						log.Warn("Retrieved pivot header from local", "number", pivot.Number, "hash", pivot.Hash(), "latest", latest.Number, "oldest", oldest.Number)
-					}
-				}
-			}
-			// Print an error log and return directly in case the pivot header
-			// is still not found. It means the skeleton chain is not linked
-			// correctly with local chain.
-			if pivot == nil {
-				log.Error("Pivot header is not found", "number", number)
-				return errNoPivotHeader
-			}
-		}
+	//if !beaconMode {
+	// In legacy mode, use the master peer to retrieve the headers from
+	latest, pivot, err = d.fetchHead(p)
+	if err != nil {
+		return err
 	}
+	//} else {
+	//	// In beacon mode, user the skeleton chain to retrieve the headers from
+	//	//latest, _, err = d.skeleton.Bounds()
+	//	//if err != nil {
+	//	//	return err
+	//	//}
+	//	if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
+	//		number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
+	//
+	//		// Retrieve the pivot header from the skeleton chain segment but
+	//		// fallback to local chain if it's not found in skeleton space.
+	//		if pivot = d.skeleton.Header(number); pivot == nil {
+	//			_, oldest, _ := d.skeleton.Bounds() // error is already checked
+	//			if number < oldest.Number.Uint64() {
+	//				count := int(oldest.Number.Uint64() - number) // it's capped by fsMinFullBlocks
+	//				headers := d.readHeaderRange(oldest, count)
+	//				if len(headers) == count {
+	//					pivot = headers[len(headers)-1]
+	//					log.Warn("Retrieved pivot header from local", "number", pivot.Number, "hash", pivot.Hash(), "latest", latest.Number, "oldest", oldest.Number)
+	//				}
+	//			}
+	//		}
+	//		// Print an error log and return directly in case the pivot header
+	//		// is still not found. It means the skeleton chain is not linked
+	//		// correctly with local chain.
+	//		if pivot == nil {
+	//			log.Error("Pivot header is not found", "number", number)
+	//			return errNoPivotHeader
+	//		}
+	//	}
+	//}
 	// If no pivot block was returned, the head is below the min full block
 	// threshold (i.e. new chain). In that case we won't really snap sync
 	// anyway, but still need a valid pivot block to avoid some code hitting
@@ -687,7 +687,7 @@ func (d *Downloader) Terminate() {
 		close(d.quitCh)
 
 		// Terminate the internal beacon syncer
-		d.skeleton.Terminate()
+		//d.skeleton.Terminate()
 	}
 	d.quitLock.Unlock()
 
@@ -1552,12 +1552,13 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 
 			// In post-merge, notify the engine API of encountered bad chains
 			if d.badBlock != nil {
-				head, _, err := d.skeleton.Bounds()
+				//head, _, err := d.skeleton.Bounds()
 				if err != nil {
 					log.Error("Failed to retrieve beacon bounds for bad block reporting", "err", err)
-				} else {
-					d.badBlock(blocks[index].Header(), head)
 				}
+				//else {
+				//	d.badBlock(blocks[index].Header(), head)
+				//}
 			}
 		} else {
 			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
