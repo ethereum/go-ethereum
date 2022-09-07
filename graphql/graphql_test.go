@@ -345,6 +345,7 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 		TrieDirtyCache:          5,
 		TrieTimeout:             60 * time.Minute,
 		SnapshotCache:           5,
+		RPCGasCap:               50000000,
 	}
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {

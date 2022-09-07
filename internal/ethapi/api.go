@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
@@ -946,6 +947,38 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	}
 }
 
+// ChainContextBackend provides methods required to implement ChainContext.
+type ChainContextBackend interface {
+	Engine() consensus.Engine
+	HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error)
+}
+
+// ChainContext is an implementation of core.ChainContext. It's main use-case
+// is instantiating a vm.BlockContext without having access to the BlockChain object.
+type ChainContext struct {
+	b   ChainContextBackend
+	ctx context.Context
+}
+
+// NewChainContext creates a new ChainContext object.
+func NewChainContext(ctx context.Context, backend ChainContextBackend) *ChainContext {
+	return &ChainContext{ctx: ctx, b: backend}
+}
+
+func (context *ChainContext) Engine() consensus.Engine {
+	return context.b.Engine()
+}
+
+func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
+	// This method is called to get the hash for a block number when executing the BLOCKHASH
+	// opcode. Hence no need to search for non-canonical blocks.
+	header, err := context.b.HeaderByNumber(context.ctx, rpc.BlockNumber(number))
+	if err != nil || header.Hash() != hash {
+		return nil
+	}
+	return header
+}
+
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
@@ -967,13 +1000,16 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
+	return doCall(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), nil)
+}
 
+func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext) (*core.ExecutionResult, error) {
 	// Get a new instance of the EVM.
-	msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+	msg, err := args.ToMessage(gp.Gas(), header.BaseFee)
 	if err != nil {
 		return nil, err
 	}
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}, blockContext)
 	if err != nil {
 		return nil, err
 	}
@@ -985,7 +1021,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}()
 
 	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, err
@@ -1047,6 +1082,80 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 		return nil, newRevertError(result)
 	}
 	return result.Return(), result.Err
+}
+
+// BatchCallConfig is the config object to be passed to eth_batchCall.
+type BatchCallConfig struct {
+	Block          rpc.BlockNumberOrHash
+	StateOverrides *StateOverride
+	Calls          []BatchCallArgs
+}
+
+// BatchCallArgs is the object specifying each call within eth_batchCall. It
+// extends TransactionArgs with the list of block metadata overrides.
+type BatchCallArgs struct {
+	TransactionArgs
+	BlockOverrides *BlockOverrides
+}
+
+// CallResult is the result of one call.
+type CallResult struct {
+	Return hexutil.Bytes
+	Error  error
+}
+
+// BatchCall executes a series of transactions on the state of a given block as base.
+// The base state can be overridden once before transactions are executed.
+//
+// Additionally, each call can override block context fields such as number.
+//
+// Note, this function doesn't make any changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (s *BlockChainAPI) BatchCall(ctx context.Context, config BatchCallConfig) ([]CallResult, error) {
+	state, header, err := s.b.StateAndHeaderByNumberOrHash(ctx, config.Block)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	// State overrides are applied once before all calls
+	if err := config.StateOverrides.Apply(state); err != nil {
+		return nil, err
+	}
+	// Setup context so it may be cancelled before the calls completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	var (
+		cancel  context.CancelFunc
+		timeout = s.b.RPCEVMTimeout()
+	)
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer cancel()
+	var (
+		results []CallResult
+		// Each tx and all the series of txes shouldn't consume more gas than cap
+		globalGasCap = s.b.RPCGasCap()
+		gp           = new(core.GasPool).AddGas(globalGasCap)
+	)
+	for _, call := range config.Calls {
+		blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, s.b), nil)
+		if call.BlockOverrides != nil {
+			call.BlockOverrides.Apply(&blockContext)
+		}
+		result, err := doCall(ctx, s.b, call.TransactionArgs, state, header, timeout, gp, &blockContext)
+		if err != nil {
+			return nil, err
+		}
+		// If the result contains a revert reason, try to unpack and return it.
+		if len(result.Revert()) > 0 {
+			return nil, newRevertError(result)
+		}
+		results = append(results, CallResult{Return: result.Return(), Error: result.Err})
+	}
+	return results, nil
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
@@ -1459,7 +1568,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
-		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
+		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config, nil)
 		if err != nil {
 			return nil, 0, nil, err
 		}
