@@ -96,6 +96,10 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
+func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
+	panic("not implemented")
+}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
