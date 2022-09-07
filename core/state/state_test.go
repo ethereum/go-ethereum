@@ -23,7 +23,7 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
-	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 )
 
@@ -47,7 +47,7 @@ func TestDump(t *testing.T) {
 	obj1 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
-	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode(codehash.CodeHash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(common.BytesToAddress([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -59,7 +59,7 @@ func TestDump(t *testing.T) {
 	// check that DumpToCollector contains the state objects that are in trie
 	got := string(s.state.Dump(nil))
 	want := `{
-    "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
+    "root": "bfd17853c56ac63be7327da432ef90a9b04376d71efede2a60765d2c94704cfe",
     "accounts": {
         "0x0000000000000000000000000000000000000001": {
             "balance": "22",
@@ -79,7 +79,7 @@ func TestDump(t *testing.T) {
             "balance": "0",
             "nonce": 0,
             "root": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "0x87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
+            "codeHash": "0x2263940ad476ca23bf01a9b033d65cd6b8bf9b7224a7ef2a4f10b61a2c039083",
             "code": "0x03030303030303",
             "key": "0xa17eacbc25cda025e81db9c5c62868822c73ce097cee2a63e33a2e41268358a1"
         }
@@ -165,7 +165,7 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.getStateObject(stateobjaddr0)
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
-	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.SetCode(codehash.CodeHash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
 	so0.suicided = false
 	so0.deleted = false
 	state.setStateObject(so0)
@@ -177,7 +177,7 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.getStateObject(stateobjaddr1)
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
-	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetCode(codehash.CodeHash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
 	so1.suicided = true
 	so1.deleted = true
 	state.setStateObject(so1)

@@ -42,6 +42,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/p2p"
 	"github.com/scroll-tech/go-ethereum/params"
@@ -672,7 +673,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		storageHash = storageTrie.Hash()
 	} else {
 		// no storageTrie means the account does not exist, so the codeHash is the hash of an empty bytearray.
-		codeHash = crypto.Keccak256Hash(nil)
+		codeHash = codehash.EmptyCodeHash
 	}
 
 	// create the proof for the storageKeys

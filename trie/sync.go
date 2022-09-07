@@ -23,6 +23,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/prque"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 )
 
@@ -189,7 +190,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, cal
 // as is.
 func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash) {
 	// Short circuit if the entry is empty or already known
-	if hash == emptyState {
+	if hash == codehash.EmptyCodeHash {
 		return
 	}
 	if s.membatch.hasCode(hash) {

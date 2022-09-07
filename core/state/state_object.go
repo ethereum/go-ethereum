@@ -26,11 +26,12 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/rlp"
 )
 
-var emptyCodeHash = crypto.Keccak256(nil)
+var emptyCodeHash = codehash.EmptyCodeHash.Bytes()
 
 type Code []byte
 

@@ -3,7 +3,7 @@ package zktrie
 import (
 	"math/big"
 
-	"github.com/iden3/go-iden3-crypto/poseidon"
+	"github.com/scroll-tech/go-ethereum/crypto/poseidon"
 )
 
 // HashElems performs a recursive poseidon hash over the array of ElemBytes, each hash
@@ -11,7 +11,7 @@ import (
 func HashElems(fst, snd *big.Int, elems ...*big.Int) (*Hash, error) {
 
 	l := len(elems)
-	baseH, err := poseidon.Hash([]*big.Int{fst, snd})
+	baseH, err := poseidon.HashFixed([]*big.Int{fst, snd})
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func HashElems(fst, snd *big.Int, elems ...*big.Int) (*Hash, error) {
 		if (i+1)*2 > l {
 			tmp[i] = elems[i*2+1]
 		} else {
-			h, err := poseidon.Hash(elems[i*2 : (i+1)*2])
+			h, err := poseidon.HashFixed(elems[i*2 : (i+1)*2])
 			if err != nil {
 				return nil, err
 			}

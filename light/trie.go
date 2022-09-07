@@ -26,13 +26,10 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
-)
-
-var (
-	sha3Nil = crypto.Keccak256Hash(nil)
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
@@ -73,7 +70,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 }
 
 func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if codeHash == sha3Nil {
+	if codeHash == codehash.EmptyCodeHash {
 		return nil, nil
 	}
 	code := rawdb.ReadCode(db.backend.Database(), codeHash)

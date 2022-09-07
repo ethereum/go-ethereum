@@ -25,11 +25,11 @@ import (
 	cmath "github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
-	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/params"
 )
 
-var emptyCodeHash = crypto.Keccak256Hash(nil)
+var emptyCodeHash = codehash.EmptyCodeHash
 
 /*
 The State Transitioning Model

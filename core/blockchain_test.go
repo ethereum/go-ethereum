@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
@@ -2985,4 +2987,109 @@ func TestEIP1559Transition(t *testing.T) {
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
+}
+
+// TestPoseidonCodeHash makes sure that, after switching
+// to Poseidon, code hashes change but addresses do not.
+func TestPoseidonCodeHash(t *testing.T) {
+	// pragma solidity =0.8.7;
+	//
+	// contract Factory {
+	// 	event Deployed(address addr);
+	//
+	// 	function create(bytes memory code) public {
+	// 		address addr;
+	//
+	// 		assembly {
+	// 			addr := create(0, add(code, 0x20), mload(code))
+	// 			if iszero(extcodesize(addr)) {
+	// 				revert(0, 0)
+	// 			}
+	// 		}
+	//
+	// 		emit Deployed(addr);
+	// 	}
+	//
+	// 	function create2(bytes memory code) public {
+	// 		address addr;
+	//
+	// 		assembly {
+	// 			addr := create2(0, add(code, 0x20), mload(code), 0)
+	// 			if iszero(extcodesize(addr)) {
+	// 				revert(0, 0)
+	// 			}
+	// 		}
+	//
+	// 		emit Deployed(addr);
+	// 	}
+	// }
+	var deployCode = common.Hex2Bytes("608060405234801561001057600080fd5b506101d1806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c8063cf5ba53f1461003b578063f4754f6614610050575b600080fd5b61004e6100493660046100d4565b610063565b005b61004e61005e3660046100d4565b6100bb565b60008151602083016000f09050803b61007b57600080fd5b6040516001600160a01b03821681527ff40fcec21964ffb566044d083b4073f29f7f7929110ea19e1b3ebe375d89055e9060200160405180910390a15050565b6000808251602084016000f59050803b61007b57600080fd5b6000602082840312156100e657600080fd5b813567ffffffffffffffff808211156100fe57600080fd5b818401915084601f83011261011257600080fd5b81358181111561012457610124610185565b604051601f8201601f19908116603f0116810190838211818310171561014c5761014c610185565b8160405282815287602084870101111561016557600080fd5b826020860160208301376000928101602001929092525095945050505050565b634e487b7160e01b600052604160045260246000fdfea2646970667358221220c9bd2005b8669d44bf0254309308e422e7bdf086ac7a507990a0690a22b1eccd64736f6c63430008070033")
+
+	var callCreateCode = common.Hex2Bytes("cf5ba53f0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000005c6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220707985753fcb6578098bb16f3709cf6d012993cba6dd3712661cf8f57bbc0d4d64736f6c6343000807003300000000")
+	var callCreate2Code = common.Hex2Bytes("f4754f660000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000005c6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220707985753fcb6578098bb16f3709cf6d012993cba6dd3712661cf8f57bbc0d4d64736f6c6343000807003300000000")
+
+	var (
+		key1, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1         = crypto.PubkeyToAddress(key1.PublicKey)
+		db            = rawdb.NewMemoryDatabase()
+		gspec         = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}}}
+		genesis       = gspec.MustCommit(db)
+		signer        = types.LatestSigner(gspec.Config)
+		engine        = ethash.NewFaker()
+		blockchain, _ = NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	)
+
+	defer blockchain.Stop()
+
+	// check empty code hash
+	state, _ := blockchain.State()
+	codeHash := state.GetCodeHash(addr1)
+	assert.Equal(t, codeHash, common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"), "code hash mismatch")
+
+	// deploy contract through transaction
+	chain, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, gen *BlockGen) {
+		tx, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), 1000000, gen.header.BaseFee, deployCode), signer, key1)
+		gen.AddTx(tx)
+	})
+
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// make sure that the address did not change
+	contractAddress := receipts[0][0].ContractAddress
+	assert.Equal(t, common.HexToAddress("0x3A220f351252089D385b29beca14e27F204c296A"), contractAddress, "address mismatch")
+
+	state, _ = blockchain.State()
+	codeHash = state.GetCodeHash(contractAddress)
+
+	// keccak: 0x089bfd332dfa6117cbc20756f31801ce4f5a175eb258e46bf8123317da54cd96
+	assert.Equal(t, codeHash, common.HexToHash("0x28ec09723b285e17caabc4a8d52dbd097feddf408aee115cbb57c3c9c814d2b2"), "code hash mismatch")
+
+	// deploy contract through another contract (CREATE and CREATE2)
+	chain, receipts = GenerateChain(params.TestChainConfig, blockchain.CurrentBlock(), engine, db, 1, func(i int, gen *BlockGen) {
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddress, new(big.Int), 1000000, gen.header.BaseFee, callCreateCode), signer, key1)
+		gen.AddTx(tx)
+
+		tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddress, new(big.Int), 1000000, gen.header.BaseFee, callCreate2Code), signer, key1)
+		gen.AddTx(tx2)
+	})
+
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	address1 := common.BytesToAddress(receipts[0][0].Logs[0].Data)
+	address2 := common.BytesToAddress(receipts[0][1].Logs[0].Data)
+
+	assert.Equal(t, common.HexToAddress("0x733f1083Fe476698001FA20D651376b7b3F1CA79"), address1, "address mismatch")
+	assert.Equal(t, common.HexToAddress("0x4099734c88B7D091E744da0E849df0e818e7E208"), address2, "address mismatch")
+
+	state, _ = blockchain.State()
+	codeHash1 := state.GetCodeHash(address1)
+	codeHash2 := state.GetCodeHash(address2)
+
+	// keccak: 0xfb5cd93a70ce47f91d33fac3afdb7b54680a6b0683506646a108ef4dfc047583
+	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash1, "code hash mismatch")
+	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash2, "code hash mismatch")
 }

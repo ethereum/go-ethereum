@@ -32,7 +32,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/state/pruner"
 	"github.com/scroll-tech/go-ethereum/core/state/snapshot"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	"github.com/scroll-tech/go-ethereum/crypto"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
@@ -43,7 +43,7 @@ var (
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode = crypto.Keccak256(nil)
+	emptyCode = codehash.EmptyCodeHash.Bytes()
 )
 
 var (
