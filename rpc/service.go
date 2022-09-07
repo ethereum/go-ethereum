@@ -180,7 +180,7 @@ func (c *callback) makeArgTypes() {
 }
 
 // call invokes the callback.
-func (c *callback) call(ctx context.Context, method string, args []reflect.Value) (res interface{}, errRes Error) {
+func (c *callback) call(ctx context.Context, method string, args []reflect.Value) (res interface{}, errRes error) {
 	// Create the argument slice.
 	fullargs := make([]reflect.Value, 0, 2+len(args))
 	if c.rcvr.IsValid() {
@@ -209,12 +209,7 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 	if c.errPos >= 0 && !results[c.errPos].IsNil() {
 		// Method has returned non-nil error value.
 		err := results[c.errPos].Interface().(error)
-		var ok bool
-		if errRes, ok = err.(Error); !ok {
-			log.Warn("RPC method " + method + " returns interanal error: " + err.Error())
-			errRes = &internalServerError{errcodeInternalServerError, err.Error()}
-		} 
-		return reflect.Value{}, errRes 
+		return reflect.Value{}, err
 	}
 	return results[0].Interface(), nil
 }

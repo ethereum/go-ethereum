@@ -95,7 +95,7 @@ func (msg *jsonrpcMessage) String() string {
 	return string(b)
 }
 
-func (msg *jsonrpcMessage) errorResponse(err Error) *jsonrpcMessage {
+func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	resp := errorMessage(err)
 	resp.ID = msg.ID
 	return resp
@@ -109,11 +109,15 @@ func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 	return &jsonrpcMessage{Version: vsn, ID: msg.ID, Result: enc}
 }
 
-func errorMessage(err Error) *jsonrpcMessage {
+func errorMessage(err error) *jsonrpcMessage {
 	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
-		Code:    err.ErrorCode(),
+		Code:    errcodeDefault,
 		Message: err.Error(),
 	}}
+	ec, ok := err.(Error)
+	if ok {
+		msg.Error.Code = ec.ErrorCode()
+	}
 	de, ok := err.(DataError)
 	if ok {
 		msg.Error.Data = de.ErrorData()
