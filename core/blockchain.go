@@ -2152,11 +2152,17 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 
 	// Collect the logs
+	var numLogs int
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Collect reborn logs due to chain reorg
 		logs := bc.collectLogs(newChain[i].Hash(), false)
 		if len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs)
+			numLogs += len(logs)
+		}
+		// to avoid overconsuming memory, we need to have a cap on reorg logs.
+		if numLogs > 2_000 {
+			break
 		}
 	}
 	// If any logs need to be fired, do it now. In theory we could avoid creating
