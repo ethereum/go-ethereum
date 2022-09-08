@@ -239,31 +239,31 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
 				nil, 0)
 
+			var gasUsed uint64
+			start := time.Now()
+
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				// Execute the message.
 				snapshot := statedb.Snapshot()
-				start := time.Now()
-
 				b.StartTimer()
+				// Execute the message.
 				_, leftOverGas, err := evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
 				if err != nil {
 					b.Error(err)
 					return
 				}
 				b.StopTimer()
-
 				statedb.RevertToSnapshot(snapshot)
-
-				elapsed := uint64(time.Since(start))
-				if elapsed < 1 {
-					elapsed = 1
-				}
-				gasUsed := msg.Gas() - leftOverGas
-				// Keep it as uint64, multiply 100 to get two digit float later
-				mgasps := (100 * 1000 * gasUsed) / elapsed
-				b.ReportMetric(float64(mgasps)/100, "mgas/s")
+				gasUsed += msg.Gas() - leftOverGas
 			}
+
+			elapsed := uint64(time.Since(start))
+			if elapsed < 1 {
+				elapsed = 1
+			}
+			// Keep it as uint64, multiply 100 to get two digit float later
+			mgasps := (100 * 1000 * gasUsed) / elapsed
+			b.ReportMetric(float64(mgasps)/100, "mgas/s")
 		})
 	}
 }
