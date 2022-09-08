@@ -93,9 +93,7 @@
     "fixed": "v1.9.20",
     "summary": "A consensus-vulnerability in Geth could cause a chain split, where vulnerable versions refuse to accept the canonical chain.",
     "description": "A flaw was repoted at 2020-08-11 by John Youngseok Yang (Software Platform Lab), where a particular sequence of transactions could cause a consensus failure.\n\n- Tx 1:\n - `sender` invokes `caller`.\n - `caller` invokes `0xaa`. `0xaa` has 3 wei, does a self-destruct-to-self\n - `caller` does a  `1 wei` -call to `0xaa`, who thereby has 1 wei (the code in `0xaa` still executed, since the tx is still ongoing, but doesn't redo the selfdestruct, it takes a different path if callvalue is non-zero)\n\n-Tx 2:\n - `sender` does a 5-wei call to 0xaa. No exec (since no code). \n\nIn geth, the result would be that `0xaa` had `6 wei`, whereas OE reported (correctly) `5` wei. Furthermore, in geth, if the second tx was not executed, the `0xaa` would be destructed, resulting in `0 wei`. Thus obviously wrong. \n\nIt was determined that the root cause was this [commit](https://github.com/ethereum/go-ethereum/commit/223b950944f494a5b4e0957fd9f92c48b09037ad) from [this PR](https://github.com/ethereum/go-ethereum/pull/19953). The semantics of `createObject` was subtly changd, into returning a non-nil object (with `deleted=true`) where it previously did not if the account had been destructed. This return value caused the new object to inherit the old `balance`.\n",
-    "links": [
-      "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-xw37-57qp-9mm4"
-    ],
+    "links": ["https://github.com/ethereum/go-ethereum/security/advisories/GHSA-xw37-57qp-9mm4"],
     "published": "2020-12-10",
     "severity": "High",
     "CVE": "CVE-2020-26265",

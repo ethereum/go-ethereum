@@ -13,15 +13,15 @@ Vulnerabilies typically take two forms:
 
 1. Vulnerabilies that, if exploited, would harm the software operator. In the case of
    go-ethereum, examples would be:
-    - A bug that would allow remote reading or writing of OS files, or
-    - Remote command execution, or
-    - Bugs that would leak cryptographic keys
+   - A bug that would allow remote reading or writing of OS files, or
+   - Remote command execution, or
+   - Bugs that would leak cryptographic keys
 2. Vulnerabilies that, if exploited, would harm the Ethereum mainnet. In the case of
    go-ethereum, examples would be:
-    - Consensus vulnerabilities, which would cause a chain split,
-    - Denial-of-service during block processing, whereby a malicious transaction could cause the geth-portion of the network to crash.
-    - Denial-of-service via p2p networking, whereby portions of the network could be made
-      inaccessible due to crashes or resource consumption.
+   - Consensus vulnerabilities, which would cause a chain split,
+   - Denial-of-service during block processing, whereby a malicious transaction could cause the geth-portion of the network to crash.
+   - Denial-of-service via p2p networking, whereby portions of the network could be made
+     inaccessible due to crashes or resource consumption.
 
 In most cases so far, vulnerabilities in `geth` have been of the second type, where the
 health of the network is a concern, rather than individual node operators. For such

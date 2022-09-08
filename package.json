@@ -6,9 +6,10 @@
   "author": "Nicolás Quiroz <nicolas.quiroz@ethereum.org>",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run lint && next build && npm run format:fix",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format:fix": "prettier . --write --config .prettierrc --ignore-path .prettierignore --loglevel warn"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.3.2",
@@ -25,6 +26,8 @@
     "@types/react-dom": "18.0.6",
     "eslint": "8.23.0",
     "eslint-config-next": "12.2.5",
+    "eslint-config-prettier": "^8.5.0",
+    "prettier": "^2.7.1",
     "typescript": "4.8.2"
   }
 }
