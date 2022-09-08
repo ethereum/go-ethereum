@@ -129,7 +129,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		data[35] = byte(i)
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			statedb, err := state.New(header.Root, state.NewDatabase(db), nil)
+			statedb, err := state.New(header.Root, bc.StateCache(), nil)
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(bankAddr)

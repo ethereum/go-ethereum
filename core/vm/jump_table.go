@@ -80,7 +80,7 @@ func validate(jt JumpTable) JumpTable {
 
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[RANDOM] = &operation{
+	instructionSet[PREVRANDAO] = &operation{
 		execute:     opRandom,
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 1),
