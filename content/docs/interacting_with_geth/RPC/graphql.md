@@ -5,7 +5,7 @@ description: Documentation for Geth's GraphQL API
 
 In addition to the [JSON-RPC APIs](/content/docs/interacting_with_geth/RPC/server.md), Geth supports the GraphQL API as specified by [EIP-1767](https://eips.ethereum.org/EIPS/eip-1767). GraphQL lets you specify which fields of an objects you need as part of the query, eliminating the extra load on the client for filling in fields which are not needed. It also allows for combining several traditional JSON-RPC requests into one query which translates into less overhead and more performance.
 
-The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence the relevant `--http` flags and the `--graphql` flag  should be passed to Geth:
+The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence the relevant `--http` flags and the `--graphql` flag should be passed to Geth:
 
 ```bash
 geth --http --graphql
@@ -23,7 +23,18 @@ An easy way to try out queries is the GraphiQL interface shipped with Geth. To o
 
 ```graphql
 query txInfo {
-    block (number: 6000000) { transactions { hash from { address } to { address } value } }
+  block(number: 6000000) {
+    transactions {
+      hash
+      from {
+        address
+      }
+      to {
+        address
+      }
+      value
+    }
+  }
 }
 ```
 
@@ -49,15 +60,21 @@ Alternatively store the JSON-ified query in a file (let's call it `block-num.que
 Executing a simple query in JS looks as follows. Here the lightweight library `graphql-request` is used to perform the request. Note the use of variables instead of hardcoding the block number in the query:
 
 ```javascript
-const { request, gql } = require('graphql-request')
+const { request, gql } = require('graphql-request');
 
 const query = gql`
-    query blockInfo($number: Long) {
-        block (number: $number) { hash stateRoot }
+  query blockInfo($number: Long) {
+    block(number: $number) {
+      hash
+      stateRoot
     }
-`
+  }
+`;
 request('http://localhost:8545/graphql', query, { number: '6004067' })
-    .then((res) => { console.log(res) })
-    .catch((err) => { console.log(err) })
+  .then(res => {
+    console.log(res);
+  })
+  .catch(err => {
+    console.log(err);
+  });
 ```
-

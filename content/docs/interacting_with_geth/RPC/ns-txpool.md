@@ -14,10 +14,10 @@ The result is an object with two fields `pending` and `queued`. Each of these fi
 Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast mutliple ones with varying gas allowances (or even completely different transactions).
 
 | Client  | Method invocation                                                     |
-|:-------:|-----------------------------------------------------------------------|
-| Go      | `txpool.Content() (map[string]map[string]map[string]*RPCTransaction)` |
+| :-----: | --------------------------------------------------------------------- |
+|   Go    | `txpool.Content() (map[string]map[string]map[string]*RPCTransaction)` |
 | Console | `txpool.content`                                                      |
-| RPC     | `{"method": "txpool_content"}`                                        |
+|   RPC   | `{"method": "txpool_content"}`                                        |
 
 #### Example
 
@@ -109,9 +109,9 @@ Please note, there may be multiple transactions associated with the same account
 Retrieves the transactions contained within the txpool, returning pending as well as queued transactions of this address, grouped by nonce.
 
 | Client  | Method invocation                                      |
-|:-------:|--------------------------------------------------------|
+| :-----: | ------------------------------------------------------ |
 | Console | `txpool.contentFrom(address)`                          |
-| RPC     | `{"method": "txpool_contentFrom, "params": [string]"}` |
+|   RPC   | `{"method": "txpool_contentFrom, "params": [string]"}` |
 
 ### txpool_inspect
 
@@ -122,10 +122,10 @@ The result is an object with two fields `pending` and `queued`. Each of these fi
 Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast mutliple ones with varying gas allowances (or even completely different transactions).
 
 | Client  | Method invocation                                            |
-|:-------:|--------------------------------------------------------------|
-| Go      | `txpool.Inspect() (map[string]map[string]map[string]string)` |
+| :-----: | ------------------------------------------------------------ |
+|   Go    | `txpool.Inspect() (map[string]map[string]map[string]string)` |
 | Console | `txpool.inspect`                                             |
-| RPC     | `{"method": "txpool_inspect"}`                               |
+|   RPC   | `{"method": "txpool_inspect"}`                               |
 
 #### Example
 
@@ -184,12 +184,12 @@ Please note, there may be multiple transactions associated with the same account
 
 ### txpool_status
 
-The `status` inspection property can be queried for the number of transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only. 
+The `status` inspection property can be queried for the number of transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only.
 
 The result is an object with two fields `pending` and `queued`, each of which is a counter representing the number of transactions in that particular state.
 
 | Client  | Method invocation                             |
-|:--------|-----------------------------------------------|
+| :------ | --------------------------------------------- |
 | Go      | `txpool.Status() (map[string]*rpc.HexNumber)` |
 | Console | `txpool.status`                               |
 | RPC     | `{"method": "txpool_status"}`                 |

@@ -57,10 +57,10 @@ devp2p nodeset filter all-nodes.json -eth-network mainnet > mainnet.nodes.exampl
 
 The following filter flags are available:
 
-* `-eth-network ( mainnet | ropsten | rinkeby | goerli )` selects an Ethereum network.
-* `-les-server` selects LES server nodes.
-* `-ip <mask>` restricts nodes to the given IP range.
-* `-min-age <duration>` restricts the result to nodes which have been live for the
+- `-eth-network ( mainnet | ropsten | rinkeby | goerli )` selects an Ethereum network.
+- `-les-server` selects LES server nodes.
+- `-ip <mask>` restricts nodes to the given IP range.
+- `-min-age <duration>` restricts the result to nodes which have been live for the
   given duration.
 
 ### Creating DNS trees

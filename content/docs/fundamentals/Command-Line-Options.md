@@ -3,7 +3,7 @@ title: Command-line Options
 description: A list of commands for Geth
 ---
 
-Geth is primarily controlled using the command line. Geth is started using the `geth` command. Geth is stopped by pressing `ctrl-c`. There are then many combinations of commands that configure precisely how geth will run. These commands are displayed below. The same information can be 
+Geth is primarily controlled using the command line. Geth is started using the `geth` command. Geth is stopped by pressing `ctrl-c`. There are then many combinations of commands that configure precisely how geth will run. These commands are displayed below. The same information can be
 obtained at any time from your Geth instance by running:
 
 ```sh
@@ -84,7 +84,7 @@ LIGHT CLIENT OPTIONS:
   --ulc.onlyannounce                  Ultra light server sends announcements only
   --light.nopruning                   Disable ancient light chain data pruning
   --light.nosyncserve                 Enables serving light clients before syncing
-  
+
 DEVELOPER CHAIN OPTIONS:
   --dev                               Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled
   --dev.period value                  Block period to use in developer mode (0 = mine only if transaction pending) (default: 0)
@@ -174,7 +174,7 @@ NETWORKING OPTIONS:
   --netrestrict value                 Restricts network communication to the given IP networks (CIDR masks)
   --nodekey value                     P2P node key file
   --nodekeyhex value                  P2P node key as hex (for testing)
-  
+
 MINER OPTIONS:
   --mine                              Enable mining
   --miner.threads value               Number of CPU threads to use for mining (default: 0)

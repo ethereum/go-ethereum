@@ -5,12 +5,11 @@ description: Introduction to Geth's light sync mode
 
 {% include note.html content="Light nodes do not currently work on proof-of-stake Ethereum, but new proof-of-stake light clients are expected to ship soon!" %}
 
-Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. In a full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources. 
+Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. In a full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources.
 
 Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/en/run-a-node/).
 
 {% include note.html content=" Geth light clients **do not currently work** on proof-of-stake Ethereum. New light clients that work with the proof-of-stake consensus engine are expected to ship soon!" %}
-
 
 ## Light node vs full node
 
@@ -49,7 +48,6 @@ geth --syncmode light --http --http.api "eth,debug"
 Data can be requested from this light Geth instance in the same way as for a full node (i.e. using the [JSON-RPC-API](/docs/rpc/server) using tools such as [Curl](https://curl.se/) or Geth's [Javascript console](/docs/interface/javascript-console)). Instead of fetching the data from a local database as in a full node, the light Geth instance requests the data from full-node peers.
 
 It's also possible to send transactions. However, light clients are not connected directly to Ethereum Mainnet but to a network of light servers that connect to Ethereum Mainnet. This means a transaction submitted by a light client is received first by a light server that then propagates it to full-node peers on the light-client's behalf. This reliance on honest light-servers is one of the trust compromises that comes along with running a light node instead of a full node.
-
 
 ### Ultra light clients
 

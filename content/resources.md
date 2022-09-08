@@ -3,12 +3,10 @@ title: resources
 description: read, watch and listen more about Geth and Ethereum
 ---
 
-
 ## Read
 
 [Geth team AMA: August 2022](https://www.reddit.com/r/cryptoall/comments/wpr6dk/ama_we_are_the_go_ethereum_geth_team_18_august/)
 [Ethereum stack exchange](https://ethereum.stackexchange.com/)
-
 
 ## Watch
 
@@ -27,7 +25,6 @@ description: read, watch and listen more about Geth and Ethereum
 [Péter at DevCon 4: Plugging metadata leaks in Ethereum](https://www.youtube.com/watch?v=J1JenTo7oLE)
 [Péter at DevCon 2: Import Geth in Go](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 [Péter at dotGo 2016: Immutability in Go](https://www.youtube.com/watch?v=fNUx4jHTaIc)
-
 
 ## Listen
 

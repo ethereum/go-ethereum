@@ -13,7 +13,6 @@ Clef provides a way to safely circumvent `--unlock` while maintaining a enough a
 
 It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/content/docs/developers/geth-developer/private-network) and [Introduction to Clef](/content/docs/tools/Clef/introduction) pages.
 
-
 ## Prepping a Clique network
 
 First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`)
@@ -22,8 +21,8 @@ First of all, set up a rudimentary testnet to have something to sign. Create a n
 $ geth account new --datadir ./ddir
 INFO [06-16|11:10:39.600] Maximum peer count                       ETH=50 LES=0 total=50
 Your new account is locked with a password. Please give a password. Do not forget this password.
-Password: 
-Repeat password: 
+Password:
+Repeat password:
 
 Your new key was generated
 
@@ -70,7 +69,7 @@ Initiate Geth:
 ```
 $ geth  --datadir ./ddir init genesis.json
 ...
-INFO [06-16|11:14:54.123] Writing custom genesis block 
+INFO [06-16|11:14:54.123] Writing custom genesis block
 INFO [06-16|11:14:54.125] Persisted trie from memory database      nodes=1 size=153.00B time="64.715µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [06-16|11:14:54.125] Successfully wrote genesis state         database=lightchaindata hash=187412..4deb98
 ```
@@ -91,8 +90,8 @@ $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-boo
 
 The master seed of clef will be locked with a password.
 Please specify a password. Do not forget this password!
-Password: 
-Repeat password: 
+Password:
+Repeat password:
 
 A master seed has been generated into clef/masterseed.json
 
@@ -116,11 +115,11 @@ With that done, `clef` can be made aware of the password. To do this `setpw <add
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
 
 Please enter a password to store for this address:
-Password: 
-Repeat password: 
+Password:
+Repeat password:
 
 Decrypt master seed of clef
-Password: 
+Password:
 INFO [06-16|11:27:09.153] Credential store updated                 set=0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
 ```
 
@@ -144,7 +143,7 @@ Geth will ask what accounts are present - enter `y` to approve:
 
 ```terminal
 -------- List Account request--------------
-A request has been made to list all accounts. 
+A request has been made to list all accounts.
 You can select which accounts the caller can see
   [x] 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
     URL: keystore:///home/user/tmp/clique_clef/ddir/keystore/UTC--2022-06-16T09-10-48.578523828Z--9cd932f670f7ede5de86f756a6d02548e5899f47
@@ -167,7 +166,7 @@ After this, Geth will start asking `clef` to sign things:
 Account:  0x9CD932F670F7eDe5dE86F756A6D02548e5899f47 [chksum ok]
 messages:
   Clique header [clique]: "clique header 1 [0x9b08fa3705e8b6e1b327d84f7936c21a3cb11810d9344dc4473f78f8da71e571]"
-raw data:  
+raw data:
 	"\xf9\x02\x14\xa0\x18t\x12:\x91f\xa2\x90U\b\xf9\xac\xc02i\xffs\x9f\xf4\xc9⮷!\x0f\x16\xaa?#M똠\x1d\xccM\xe8\xde\xc7]z\xab\x85\xb5g\xb6\xcc\xd4\x1a\xd3\x12E\x1b\x94\x8at\x13\xf0\xa1B\xfd@ԓG\x94\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xa0]1%\n\xfc\xee'\xd0e\xce\xc7t\xcc\\?\t4v\x8f\x06\xcb\xf8\xa0P5\xfeN\xea\x0ff\xfe\x9c\xa0V\xe8\x1f\x17\x1b\xccU\xa6\xff\x83E\xe6\x92\xc0\xf8n[H\xe0\x1b\x99l\xad\xc0\x01b/\xb5\xe3c\xb4!\xa0V\xe8\x1f\x17\x1b\xccU\xa6\xff\x83E\xe6\x92\xc0\xf8n[H\xe0\x1b\x99l\xad\xc0\x01b/\xb5\xe3c\xb4!\xb9\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x01\x83z0\x83\x80\x84b\xaa\xf9\xaa\xa0\u0603\x01\n\x14\x84geth\x88go1.18.1\x85linux\x00\x00\x00\x00\x00\x00\x00\xa0\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x88\x00\x00\x00\x00\x00\x00\x00\x00"
 data hash:  0x9589ed81e959db6330b3d70e5f8e426fb683d03512f203009f7e41fc70662d03
 -------------------------------------------
@@ -180,11 +179,13 @@ Additional HTTP header data, provided by the external caller:
 Approve? [y/N]:
 > y
 ```
+
 And indeed, after approving with `y`, the password is not required - the signed block is returned to Geth:
 
 ```terminal
 INFO [06-16|11:36:46.714] Successfully sealed new block            number=1 sealhash=9589ed..662d03 hash=bd20b9..af8b87 elapsed=4.214s
 ```
+
 This mode of operation offers quite a poor UX because each block to be sealed requires manual approval. That is fixed in the following section.
 
 ## Using rules to approve blocks
@@ -194,37 +195,40 @@ Clef rules allow a piece of Javascript take over the Approve/Deny decision. The 
 The first approach, which approves listing, and returns the request data for `ApproveListing`, is demonstrated below:
 
 ```js
-function ApproveListing(){
-    return "Approve"
+function ApproveListing() {
+  return 'Approve';
 }
 
-function ApproveSignData(r){
-    console.log("In Approve Sign data")
-    console.log(JSON.stringify(r))
+function ApproveSignData(r) {
+  console.log('In Approve Sign data');
+  console.log(JSON.stringify(r));
 }
 ```
+
 In order to use a certain ruleset, it must first be 'attested'. This is to prevent someone from modifying a ruleset-file on disk after creation.
 
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn  attest  `sha256sum rules.js | cut -f1`
 ```
+
 which returns:
 
 ```terminal
 Decrypt master seed of clef
-Password: 
+Password:
 INFO [06-16|13:49:00.298] Ruleset attestation updated              sha256=54aae496c3f0eda063a62c73ee284ca9fae3f43b401da847ef30ea30e85e35d1
 ```
 
-And `clef` can be started, pointing out the `rules.js` file. 
+And `clef` can be started, pointing out the `rules.js` file.
 
 ```sh
-$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
+$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js
 ```
 
 Once Geth starts asking `clef` to seal blocks, the data will be displayed. From that data, rules can be defined that allow signing clique headers but nothing else.
 
 The actual data that gets passed to the js environment (and which the ruleset display in the terminal) looks as follows:
+
 ```json
 {
   "content_type": "application/x-clique-header",
@@ -252,7 +256,7 @@ The actual data that gets passed to the js environment (and which the ruleset di
 To create an extremely trustless ruleset, the `raw_data` could be verified to ensure it has the right rlp structure for a Clique header:
 
 ```sh
- echo "+QIUoL0guY+66jZpzZh1wDX4Si/ycX4zD8FQqF/1Apy/r4uHoB3MTejex116q4W1Z7bM1BrTEkUblIp0E/ChQv1A1JNHlAAAAAAAAAAAAAAAAAAAAAAAAAAAoF0xJQr87ifQZc7HdMxcPwk0do8Gy/igUDX+TuoPZv6coFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhoFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhuQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICg3pPDoCEYqsY1qDYgwEKFIRnZXRoiGdvMS4xOC4xhWxpbnV4AAAAAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIgAAAAAAAAAAA==" | base64 -d | rlpdump 
+ echo "+QIUoL0guY+66jZpzZh1wDX4Si/ycX4zD8FQqF/1Apy/r4uHoB3MTejex116q4W1Z7bM1BrTEkUblIp0E/ChQv1A1JNHlAAAAAAAAAAAAAAAAAAAAAAAAAAAoF0xJQr87ifQZc7HdMxcPwk0do8Gy/igUDX+TuoPZv6coFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhoFboHxcbzFWm/4NF5pLA+G5bSOAbmWytwAFiL7XjY7QhuQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICg3pPDoCEYqsY1qDYgwEKFIRnZXRoiGdvMS4xOC4xhWxpbnV4AAAAAAAAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIgAAAAAAAAAAA==" | base64 -d | rlpdump
 [
   bd20b98fbaea3669cd9875c035f84a2ff2717e330fc150a85ff5029cbfaf8b87,
   1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347,
@@ -271,25 +275,26 @@ To create an extremely trustless ruleset, the `raw_data` could be verified to en
   0000000000000000,
 ]
 ```
+
 However, `messages` could also be used. They do not come from the external caller, but are generated inernally: `clef` parsed the incoming request and verified the Clique wellformedness of the content. The following simply checks for such a message:
 
 ```js
-function OnSignerStartup(info){}
+function OnSignerStartup(info) {}
 
-function ApproveListing(){
-	return "Approve"
+function ApproveListing() {
+  return 'Approve';
 }
 
-function ApproveSignData(r){
-	if (r.content_type == "application/x-clique-header"){
-		for(var i = 0; i < r.messages.length; i++){
-			var msg = r.messages[i]
-			if (msg.name=="Clique header" && msg.type == "clique"){
-				return "Approve"
-			}
-		}
-	}
-	return "Reject"
+function ApproveSignData(r) {
+  if (r.content_type == 'application/x-clique-header') {
+    for (var i = 0; i < r.messages.length; i++) {
+      var msg = r.messages[i];
+      if (msg.name == 'Clique header' && msg.type == 'clique') {
+        return 'Approve';
+      }
+    }
+  }
+  return 'Reject';
 }
 ```
 
@@ -303,30 +308,33 @@ returning
 
 ```terminal
 Decrypt master seed of clef
-Password: 
+Password:
 INFO [06-16|14:18:53.476] Ruleset attestation updated              sha256=7d5036d22d1cc66599e7050fb1877f4e48b89453678c38eea06e3525996c2379
 ```
+
 Run `clef`:
 
 ```sh
-$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js 
+$ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15  --suppress-bootwarn  --rules ./rules.js
 ```
+
 Run Geth:
 
 ```sh
 $ geth  --datadir ./ddir --signer ./clef/clef.ipc --mine
 ```
+
 And `clef` should now happily sign blocks:
 
 ```terminal
 DEBUG[06-16|14:20:02.136] Served account_version                   reqid=1 duration="131.38µs"
-INFO [06-16|14:20:02.289] Op approved 
+INFO [06-16|14:20:02.289] Op approved
 DEBUG[06-16|14:20:02.289] Served account_list                      reqid=2 duration=4.672441ms
-INFO [06-16|14:20:02.303] Op approved 
+INFO [06-16|14:20:02.303] Op approved
 DEBUG[06-16|14:20:03.450] Served account_signData                  reqid=3 duration=1.152074109s
-INFO [06-16|14:20:03.456] Op approved 
+INFO [06-16|14:20:03.456] Op approved
 DEBUG[06-16|14:20:04.267] Served account_signData                  reqid=4 duration=815.874746ms
-INFO [06-16|14:20:32.823] Op approved 
+INFO [06-16|14:20:32.823] Op approved
 DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 duration=766.840681ms
 
 ```
@@ -334,6 +342,7 @@ DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 durat
 ## Refinements
 
 If an attacker find the Clef "external" interface (which would only happen if you start it with `http` enabled), they
+
 - cannot make it sign arbitrary transactions,
 - cannot sign arbitrary data message,
 
@@ -344,48 +353,49 @@ It is possible for rule execution to be stateful (i.e. storing data). In this ca
 The `clique header 2 [0xae525b65bc7f711bc136f502650039cd6959c3abc28fdf0ebfe2a5f85c92f3b6]` line is split, and the number stored using `storage.get` and `storage.put`:
 
 ```js
-function OnSignerStartup(info){}
+function OnSignerStartup(info) {}
 
-function ApproveListing(){
-  return "Approve"
+function ApproveListing() {
+  return 'Approve';
 }
 
-function ApproveSignData(r){
-
-  if (r.content_type != "application/x-clique-header"){
-    return "Reject"
+function ApproveSignData(r) {
+  if (r.content_type != 'application/x-clique-header') {
+    return 'Reject';
   }
-  for(var i = 0; i < r.messages.length; i++){
-    var msg = r.messages[i]
-    if (msg.name=="Clique header" && msg.type == "clique"){
-      var number = parseInt(msg.value.split(" ")[2])
-      var latest = storage.get("lastblock") || 0
-      console.log("number", number, "latest", latest)
-      if ( number > latest ){
-        storage.put("lastblock", number)
-        return "Approve"
+  for (var i = 0; i < r.messages.length; i++) {
+    var msg = r.messages[i];
+    if (msg.name == 'Clique header' && msg.type == 'clique') {
+      var number = parseInt(msg.value.split(' ')[2]);
+      var latest = storage.get('lastblock') || 0;
+      console.log('number', number, 'latest', latest);
+      if (number > latest) {
+        storage.put('lastblock', number);
+        return 'Approve';
       }
     }
   }
-  return "Reject"
+  return 'Reject';
 }
 ```
+
 Running with this ruleset:
 
 ```terminal
 JS:>  number 45 latest 44
-INFO [06-16|22:26:43.023] Op approved 
+INFO [06-16|22:26:43.023] Op approved
 DEBUG[06-16|22:26:44.305] Served account_signData                  reqid=3 duration=1.287465394s
 JS:>  number 46 latest 45
-INFO [06-16|22:26:44.313] Op approved 
+INFO [06-16|22:26:44.313] Op approved
 DEBUG[06-16|22:26:45.317] Served account_signData                  reqid=4 duration=1.010612774s
 ```
-This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
+This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
 ## TLDR quick-version
 
 Creation and attestation is a one-off event:
+
 ```sh
 ## Create the rules-file
 cat << END > rules.js
@@ -413,14 +423,16 @@ clef --keystore ./ddir/keystore \
   --suppress-bootwarn --signersecret ./clefpw \
     attest  `sha256sum rules.js | cut -f1`
 ```
+
 The normal startup command for `clef`:
+
 ```sh
 clef --keystore ./ddir/keystore \
     --configdir ./clef --chainid 15  \
     --suppress-bootwarn --signersecret ./clefpw --rules ./rules.js
 ```
 
-For Geth, the only change is to provide `--signer <path to clef ipc>`.  
+For Geth, the only change is to provide `--signer <path to clef ipc>`.
 
 ## Summary
 

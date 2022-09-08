@@ -5,7 +5,6 @@ description: Documentation for the JSON-RPC API "clique" namespace
 
 The `debug` API gives access to several non-standard RPC methods, which allow inspection, debugging and setting certain debugging flags during runtime.
 
-
 ### debug_accountRange
 
 Enumerates all accounts at a given block with paging capability. `maxResults` are returned in the page and the items have keys that come after the `start` key (hashed address).
@@ -13,7 +12,7 @@ Enumerates all accounts at a given block with paging capability. `maxResults` ar
 If `incompletes` is false, then accounts for which the key preimage (i.e: the `address`) doesn't exist in db are skipped. NB: geth by default does not store preimages.
 
 | Client  | Method invocation                                                                                                |
-|:--------|------------------------------------------------------------------------------------------------------------------|
+| :------ | ---------------------------------------------------------------------------------------------------------------- |
 | Console | `debug.accountRange(blockNrOrHash, start, maxResults, nocode, nostorage, incompletes)`                           |
 | RPC     | `{"method": "debug_getHeaderRlp", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
 
@@ -24,13 +23,13 @@ Sets the logging backtrace location. When a backtrace location is set and a log 
 The location is specified as `<filename>:<line>`.
 
 | Client  | Method invocation                                     |
-|:--------|-------------------------------------------------------|
+| :------ | ----------------------------------------------------- |
 | Console | `debug.backtraceAt(string)`                           |
 | RPC     | `{"method": "debug_backtraceAt", "params": [string]}` |
 
 Example:
 
-``` javascript
+```javascript
 > debug.backtraceAt("server.go:443")
 ```
 
@@ -39,40 +38,36 @@ Example:
 Turns on block profiling for the given duration and writes profile data to disk. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually using `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                              |
-|:--------|----------------------------------------------------------------|
+| :------ | -------------------------------------------------------------- |
 | Console | `debug.blockProfile(file, seconds)`                            |
 | RPC     | `{"method": "debug_blockProfile", "params": [string, number]}` |
-
 
 ### debug_chaindbCompact
 
 Flattens the entire key-value database into a single level, removing all unused slots and merging all keys.
 
 | Client  | Method invocation                                  |
-|:--------|----------------------------------------------------|
+| :------ | -------------------------------------------------- |
 | Console | `debug.chaindbCompact()`                           |
 | RPC     | `{"method": "debug_chaindbCompact", "params": []}` |
-
 
 ### debug_chaindbProperty
 
 Returns leveldb properties of the key-value database.
 
-| Client  | Method invocation                                              |
-|:--------|----------------------------------------------------------------|
-| Console | `debug.chaindbProperty(property string)`                       |
-| RPC     | `{"method": "debug_chaindbProperty", "params": [property]}`    |
-
+| Client  | Method invocation                                           |
+| :------ | ----------------------------------------------------------- |
+| Console | `debug.chaindbProperty(property string)`                    |
+| RPC     | `{"method": "debug_chaindbProperty", "params": [property]}` |
 
 ### debug_cpuProfile
 
 Turns on CPU profiling for the given duration and writes profile data to disk.
 
 | Client  | Method invocation                                            |
-|:--------|--------------------------------------------------------------|
+| :------ | ------------------------------------------------------------ |
 | Console | `debug.cpuProfile(file, seconds)`                            |
 | RPC     | `{"method": "debug_cpuProfile", "params": [string, number]}` |
-
 
 ### debug_dbAncient
 
@@ -85,7 +80,7 @@ Retrieves an ancient binary blob from the freezer. The freezer is a collection o
 - `diffs`: total difficulty table (block number -> td)
 
 | Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
+| :------ | ----------------------------------------------------------- |
 | Console | `debug.dbAncient(kind string, number uint64)`               |
 | RPC     | `{"method": "debug_dbAncient", "params": [string, number]}` |
 
@@ -94,7 +89,7 @@ Retrieves an ancient binary blob from the freezer. The freezer is a collection o
 Returns the number of ancient items in the ancient store.
 
 | Client  | Method invocation                |
-|:--------|----------------------------------|
+| :------ | -------------------------------- |
 | Console | `debug.dbAncients()`             |
 | RPC     | `{"method": "debug_dbAncients"}` |
 
@@ -102,19 +97,17 @@ Returns the number of ancient items in the ancient store.
 
 Returns the raw value of a key stored in the database.
 
-| Client  | Method invocation                                              |
-|:--------|----------------------------------------------------------------|
-| Console | `debug.dbGet(key string)`                                      |
-| RPC     | `{"method": "debug_dbGet", "params": [key]}`                   |
-
-
+| Client  | Method invocation                            |
+| :------ | -------------------------------------------- |
+| Console | `debug.dbGet(key string)`                    |
+| RPC     | `{"method": "debug_dbGet", "params": [key]}` |
 
 ### debug_dumpBlock
 
 Retrieves the state that corresponds to the block number and returns a list of accounts (including storage and code).
 
 | Client  | Method invocation                                     |
-|:--------|-------------------------------------------------------|
+| :------ | ----------------------------------------------------- |
 | Go      | `debug.DumpBlock(number uint64) (state.World, error)` |
 | Console | `debug.traceBlockByHash(number, [options])`           |
 | RPC     | `{"method": "debug_dumpBlock", "params": [number]}`   |
@@ -149,24 +142,20 @@ Retrieves the state that corresponds to the block number and returns a list of a
 
 Forces garbage collection
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Go      | `debug.FreeOSMemory()`                            |
-| Console | `debug.freeOSMemory()`                            |
-| RPC     | `{"method": "debug_freeOSMemory", "params": []}`  |
-
-
+| Client  | Method invocation                                |
+| :------ | ------------------------------------------------ |
+| Go      | `debug.FreeOSMemory()`                           |
+| Console | `debug.freeOSMemory()`                           |
+| RPC     | `{"method": "debug_freeOSMemory", "params": []}` |
 
 ### debug_freezeClient
 
 Forces a temporary client freeze, normally when the server is overloaded. Available as part of LES light server.
 
 | Client  | Method invocation                                    |
-|:--------|------------------------------------------------------|
+| :------ | ---------------------------------------------------- |
 | Console | `debug.freezeClient(node string)`                    |
 | RPC     | `{"method": "debug_freezeClient", "params": [node]}` |
-
-
 
 ### debug_gcStats
 
@@ -174,38 +163,35 @@ Returns garbage collection statistics.
 
 See https://golang.org/pkg/runtime/debug/#GCStats for information about the fields of the returned object.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.gcStats()`                                 |
-| RPC     | `{"method": "debug_gcStats", "params": []}`       |
-
+| Client  | Method invocation                           |
+| :------ | ------------------------------------------- |
+| Console | `debug.gcStats()`                           |
+| RPC     | `{"method": "debug_gcStats", "params": []}` |
 
 ### debug_getAccessibleState
 
 Returns the first number where the node has accessible state on disk. This is the post-state of that block and the pre-state of the next block. The (from, to) parameters are the sequence of blocks to search, which can go either forwards or backwards.
 
-| Client  | Method invocation                                                     |
-|:--------|-----------------------------------------------------------------------|
-| Console | `debug.getAccessibleState(from, to rpc.BlockNumber)`      |
-| RPC     | `{"method": "debug_getAccessibleState", "params": [from, to]}`  |
-
+| Client  | Method invocation                                              |
+| :------ | -------------------------------------------------------------- |
+| Console | `debug.getAccessibleState(from, to rpc.BlockNumber)`           |
+| RPC     | `{"method": "debug_getAccessibleState", "params": [from, to]}` |
 
 ### debug_getBadBlocks
 
 Returns a list of the last 'bad blocks' that the client has seen on the network and returns them as a JSON list of block-hashes.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.getBadBlocks()`                      |
-| RPC     | `{"method": "debug_getBadBlocks", "params": []}`  |
-
+| Client  | Method invocation                                |
+| :------ | ------------------------------------------------ |
+| Console | `debug.getBadBlocks()`                           |
+| RPC     | `{"method": "debug_getBadBlocks", "params": []}` |
 
 ### debug_getBlockRlp
 
 Retrieves and returns the RLP encoded block by number.
 
 | Client  | Method invocation                                     |
-|:--------|-------------------------------------------------------|
+| :------ | ----------------------------------------------------- |
 | Go      | `debug.GetBlockRlp(number uint64) (string, error)`    |
 | Console | `debug.getBlockRlp(number, [options])`                |
 | RPC     | `{"method": "debug_getBlockRlp", "params": [number]}` |
@@ -217,7 +203,7 @@ References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-en
 Returns an RLP-encoded header.
 
 | Client  | Method invocation                                   |
-|:--------|-----------------------------------------------------|
+| :------ | --------------------------------------------------- |
 | Console | `debug.getHeaderRlp(blockNum)`                      |
 | RPC     | `{"method": "debug_getHeaderRlp", "params": [num]}` |
 
@@ -226,7 +212,7 @@ Returns an RLP-encoded header.
 Returns all accounts that have changed between the two blocks specified. A change is defined as a difference in nonce, balance, code hash, or storage hash. With one parameter, returns the list of accounts modified in the specified block.
 
 | Client  | Method invocation                                                               |
-|:--------|---------------------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------------------- |
 | Console | `debug.getModifiedAccountsByHash(startHash, endHash)`                           |
 | RPC     | `{"method": "debug_getModifiedAccountsByHash", "params": [startHash, endHash]}` |
 
@@ -235,7 +221,7 @@ Returns all accounts that have changed between the two blocks specified. A chang
 Returns all accounts that have changed between the two blocks specified. A change is defined as a difference in nonce, balance, code hash or storage hash.
 
 | Client  | Method invocation                                                               |
-|:--------|---------------------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------------------- |
 | Console | `debug.getModifiedAccountsByNumber(startNum uint64, endNum uint64)`             |
 | RPC     | `{"method": "debug_getModifiedAccountsByNumber", "params": [startNum, endNum]}` |
 
@@ -244,7 +230,7 @@ Returns all accounts that have changed between the two blocks specified. A chang
 Returns the consensus-encoding of all receipts in a single block.
 
 | Client  | Method invocation                                               |
-|:--------|-----------------------------------------------------------------|
+| :------ | --------------------------------------------------------------- |
 | Console | `debug.getRawReceipts(blockNrOrHash)`                           |
 | RPC     | `{"method": "debug_getRawReceipts", "params": [blockNrOrHash]}` |
 
@@ -253,7 +239,7 @@ Returns the consensus-encoding of all receipts in a single block.
 Turns on Go runtime tracing for the given duration and writes trace data to disk.
 
 | Client  | Method invocation                                         |
-|:--------|-----------------------------------------------------------|
+| :------ | --------------------------------------------------------- |
 | Console | `debug.goTrace(file, seconds)`                            |
 | RPC     | `{"method": "debug_goTrace", "params": [string, number]}` |
 
@@ -262,7 +248,7 @@ Turns on Go runtime tracing for the given duration and writes trace data to disk
 Executes a block (bad- or canon- or side-), and returns a list of intermediate roots: the stateroot after each transaction.
 
 | Client  | Method invocation                                                  |
-|:--------|--------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------ |
 | Console | `debug.intermediateRoots(blockHash, [options])`                    |
 | RPC     | `{"method": "debug_intermediateRoots", "params": [blockHash, {}]}` |
 
@@ -272,17 +258,17 @@ Returns detailed runtime memory statistics.
 
 See https://golang.org/pkg/runtime/#MemStats for information about the fields of the returned object.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.memStats()`                                |
-| RPC     | `{"method": "debug_memStats", "params": []}`      |
+| Client  | Method invocation                            |
+| :------ | -------------------------------------------- |
+| Console | `debug.memStats()`                           |
+| RPC     | `{"method": "debug_memStats", "params": []}` |
 
 ### debug_mutexProfile
 
 Turns on mutex profiling for nsec seconds and writes profile data to file. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually.
 
 | Client  | Method invocation                                          |
-|:--------|------------------------------------------------------------|
+| :------ | ---------------------------------------------------------- |
 | Console | `debug.mutexProfile(file, nsec)`                           |
 | RPC     | `{"method": "debug_mutexProfile", "params": [file, nsec]}` |
 
@@ -291,27 +277,25 @@ Turns on mutex profiling for nsec seconds and writes profile data to file. It us
 Returns the preimage for a sha3 hash, if known.
 
 | Client  | Method invocation                                |
-|:--------|--------------------------------------------------|
+| :------ | ------------------------------------------------ |
 | Console | `debug.preimage(hash)`                           |
 | RPC     | `{"method": "debug_preimage", "params": [hash]}` |
-
 
 ### debug_printBlock
 
 Retrieves a block and returns its pretty printed form.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.printBlock(number uint64)`                                |
-| RPC     | `{"method": "debug_printBlock", "params": [number]}`      |
-
+| Client  | Method invocation                                    |
+| :------ | ---------------------------------------------------- |
+| Console | `debug.printBlock(number uint64)`                    |
+| RPC     | `{"method": "debug_printBlock", "params": [number]}` |
 
 ### debug_seedHash
 
 Fetches and retrieves the seed hash of the block by number
 
 | Client  | Method invocation                                  |
-|:--------|----------------------------------------------------|
+| :------ | -------------------------------------------------- |
 | Go      | `debug.SeedHash(number uint64) (string, error)`    |
 | Console | `debug.seedHash(number, [options])`                |
 | RPC     | `{"method": "debug_seedHash", "params": [number]}` |
@@ -321,7 +305,7 @@ Fetches and retrieves the seed hash of the block by number
 Sets the rate (in samples/sec) of goroutine block profile data collection. A non-zero rate enables block profiling, setting it to zero stops the profile. Collected profile data can be written using `debug_writeBlockProfile`.
 
 | Client  | Method invocation                                             |
-|:--------|---------------------------------------------------------------|
+| :------ | ------------------------------------------------------------- |
 | Console | `debug.setBlockProfileRate(rate)`                             |
 | RPC     | `{"method": "debug_setBlockProfileRate", "params": [number]}` |
 
@@ -330,18 +314,17 @@ Sets the rate (in samples/sec) of goroutine block profile data collection. A non
 Sets the garbage collection target percentage. A negative value disables garbage collection.
 
 | Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Go      | `debug.SetGCPercent(v int)`                    |
+| :------ | ------------------------------------------------- |
+| Go      | `debug.SetGCPercent(v int)`                       |
 | Console | `debug.setGCPercent(v)`                           |
 | RPC     | `{"method": "debug_setGCPercent", "params": [v]}` |
 
-
 ### debug_setHead
 
-Sets the current head of the local chain by block number. **Note**, this is a destructive action and may severely damage the chain. Use with *extreme* caution.
+Sets the current head of the local chain by block number. **Note**, this is a destructive action and may severely damage the chain. Use with _extreme_ caution.
 
 | Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
+| :------ | ------------------------------------------------- |
 | Go      | `debug.SetHead(number uint64)`                    |
 | Console | `debug.setHead(number)`                           |
 | RPC     | `{"method": "debug_setHead", "params": [number]}` |
@@ -354,7 +337,7 @@ References:
 Sets the rate of mutex profiling.
 
 | Client  | Method invocation                                               |
-|:--------|-----------------------------------------------------------------|
+| :------ | --------------------------------------------------------------- |
 | Console | `debug.setMutexProfileFraction(rate int)`                       |
 | RPC     | `{"method": "debug_setMutexProfileFraction", "params": [rate]}` |
 
@@ -362,11 +345,10 @@ Sets the rate of mutex profiling.
 
 Returns a printed representation of the stacks of all goroutines. Note that the web3 wrapper for this method takes care of the printing and does not return the string.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.stacks()`                                  |
-| RPC     | `{"method": "debug_stacks", "params": []}`        |
-
+| Client  | Method invocation                          |
+| :------ | ------------------------------------------ |
+| Console | `debug.stacks()`                           |
+| RPC     | `{"method": "debug_stacks", "params": []}` |
 
 ### debug_standardTraceBlockToFile
 
@@ -375,9 +357,9 @@ When JS-based tracing (see below) was first implemented, the intended usecase wa
 - It streams output to disk during the execution, to not blow up the memory usage on the node
 - It uses `jsonl` as output format (to allow streaming)
 - Uses a cross-client standardized output, so called 'standard json'
-  * Uses `op` for string-representation of opcode, instead of `op`/`opName` for numeric/string, and other simlar small differences.
-  * has `refund`
-  * Represents memory as a contiguous chunk of data, as opposed to a list of `32`-byte segments like `debug_traceTransaction`
+  - Uses `op` for string-representation of opcode, instead of `op`/`opName` for numeric/string, and other simlar small differences.
+  - has `refund`
+  - Represents memory as a contiguous chunk of data, as opposed to a list of `32`-byte segments like `debug_traceTransaction`
 
 This means that this method is only 'useful' for callers who control the node -- at least sufficiently to be able to read the artefacts from the filesystem after the fact.
 
@@ -387,12 +369,15 @@ The method can be used to dump a certain transaction out of a given block:
 > debug.standardTraceBlockToFile("0x0bbe9f1484668a2bf159c63f0cf556ed8c8282f99e3ffdb03ad2175a863bca63", {txHash:"0x4049f61ffbb0747bb88dc1c85dd6686ebf225a3c10c282c45a8e0c644739f7e9", disableMemory:true})
 ["/tmp/block_0x0bbe9f14-14-0x4049f61f-099048234"]
 ```
+
 Or all txs from a block:
+
 ```sh
 > debug.standardTraceBlockToFile("0x0bbe9f1484668a2bf159c63f0cf556ed8c8282f99e3ffdb03ad2175a863bca63", {disableMemory:true})
 ["/tmp/block_0x0bbe9f14-0-0xb4502ea7-409046657", "/tmp/block_0x0bbe9f14-1-0xe839be8f-954614764", "/tmp/block_0x0bbe9f14-2-0xc6e2052f-542255195", "/tmp/block_0x0bbe9f14-3-0x01b7f3fe-209673214", "/tmp/block_0x0bbe9f14-4-0x0f290422-320999749", "/tmp/block_0x0bbe9f14-5-0x2dc0fb80-844117472", "/tmp/block_0x0bbe9f14-6-0x35542da1-256306111", "/tmp/block_0x0bbe9f14-7-0x3e199a08-086370834", "/tmp/block_0x0bbe9f14-8-0x87778b88-194603593", "/tmp/block_0x0bbe9f14-9-0xbcb081ba-629580052", "/tmp/block_0x0bbe9f14-10-0xc254381a-578605923", "/tmp/block_0x0bbe9f14-11-0xcc434d58-405931366", "/tmp/block_0x0bbe9f14-12-0xce61967d-874423181", "/tmp/block_0x0bbe9f14-13-0x05a20b35-267153288", "/tmp/block_0x0bbe9f14-14-0x4049f61f-606653767", "/tmp/block_0x0bbe9f14-15-0x46d473d2-614457338", "/tmp/block_0x0bbe9f14-16-0x35cf5500-411906321", "/tmp/block_0x0bbe9f14-17-0x79222961-278569788", "/tmp/block_0x0bbe9f14-18-0xad84e7b1-095032683", "/tmp/block_0x0bbe9f14-19-0x4bd48260-019097038", "/tmp/block_0x0bbe9f14-20-0x1517411d-292624085", "/tmp/block_0x0bbe9f14-21-0x6857e350-971385904", "/tmp/block_0x0bbe9f14-22-0xbe3ae2ca-236639695"]
 
 ```
+
 Files are created in a temp-location, with the naming standard `block_<blockhash:4>-<txindex>-<txhash:4>-<random suffix>`. Each opcode immediately streams to file, with no in-geth buffering aside from whatever buffering the os normally does.
 
 On the server side, it also adds some more info when regenerating historical state, namely, the reexec-number if `required historical state is not avaiable` is encountered, so a user can experiment with increasing that setting. It also prints out the remaining block until it reaches target:
@@ -420,13 +405,12 @@ type StdTraceConfig struct {
 
 This method is similar to `debug_standardTraceBlockToFile`, but can be used to obtain info about a block which has been _rejected_ as invalid (for some reason).
 
-
 ### debug_startCPUProfile
 
 Turns on CPU profiling indefinitely, writing to the given file.
 
 | Client  | Method invocation                                         |
-|:--------|-----------------------------------------------------------|
+| :------ | --------------------------------------------------------- |
 | Console | `debug.startCPUProfile(file)`                             |
 | RPC     | `{"method": "debug_startCPUProfile", "params": [string]}` |
 
@@ -435,7 +419,7 @@ Turns on CPU profiling indefinitely, writing to the given file.
 Starts writing a Go runtime trace to the given file.
 
 | Client  | Method invocation                                      |
-|:--------|--------------------------------------------------------|
+| :------ | ------------------------------------------------------ |
 | Console | `debug.startGoTrace(file)`                             |
 | RPC     | `{"method": "debug_startGoTrace", "params": [string]}` |
 
@@ -444,7 +428,7 @@ Starts writing a Go runtime trace to the given file.
 Stops an ongoing CPU profile.
 
 | Client  | Method invocation                                  |
-|:--------|----------------------------------------------------|
+| :------ | -------------------------------------------------- |
 | Console | `debug.stopCPUProfile()`                           |
 | RPC     | `{"method": "debug_stopCPUProfile", "params": []}` |
 
@@ -452,17 +436,17 @@ Stops an ongoing CPU profile.
 
 Stops writing the Go runtime trace.
 
-| Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
-| Console | `debug.startGoTrace(file)`                        |
-| RPC     | `{"method": "debug_stopGoTrace", "params": []}`   |
+| Client  | Method invocation                               |
+| :------ | ----------------------------------------------- |
+| Console | `debug.startGoTrace(file)`                      |
+| RPC     | `{"method": "debug_stopGoTrace", "params": []}` |
 
 ### debug_storageRangeAt
 
 Returns the storage at the given block height and transaction index. The result can be paged by providing a `maxResult` to cap the number of storage slots returned as well as specifying the offset via `keyStart` (hash of storage key).
 
 | Client  | Method invocation                                                                                        |
-|:--------|----------------------------------------------------------------------------------------------------------|
+| :------ | -------------------------------------------------------------------------------------------------------- |
 | Console | `debug.storageRangeAt(blockHash, txIdx, contractAddress, keyStart, maxResult)`                           |
 | RPC     | `{"method": "debug_storageRangeAt", "params": [blockHash, txIdx, contractAddress, keyStart, maxResult]}` |
 
@@ -471,7 +455,7 @@ Returns the storage at the given block height and transaction index. The result 
 Returns the structured logs created during the execution of EVM against a block pulled from the pool of bad ones and returns them as a JSON object.
 
 | Client  | Method invocation                                              |
-|:--------|----------------------------------------------------------------|
+| :------ | -------------------------------------------------------------- |
 | Console | `debug.traceBadBlock(blockHash, [options])`                    |
 | RPC     | `{"method": "debug_traceBadBlock", "params": [blockHash, {}]}` |
 
@@ -480,7 +464,7 @@ Returns the structured logs created during the execution of EVM against a block 
 The `traceBlock` method will return a full stack trace of all invoked opcodes of all transaction that were included in this block. **Note**, the parent of this block must be present or it will fail.
 
 | Client  | Method invocation                                                        |
-|:--------|--------------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------------ |
 | Go      | `debug.TraceBlock(blockRlp []byte, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlock(tblockRlp, [options])`                                 |
 | RPC     | `{"method": "debug_traceBlock", "params": [blockRlp, {}]}`               |
@@ -529,7 +513,7 @@ References:
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the block that is already present in the database.
 
 | Client  | Method invocation                                                              |
-|:--------|--------------------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------------------ |
 | Go      | `debug.TraceBlockByNumber(number uint64, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockByNumber(number, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockByNumber", "params": [number, {}]}`               |
@@ -542,7 +526,7 @@ References:
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the block that is already present in the database.
 
 | Client  | Method invocation                                                               |
-|:--------|---------------------------------------------------------------------------------|
+| :------ | ------------------------------------------------------------------------------- |
 | Go      | `debug.TraceBlockByHash(hash common.Hash, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockByHash(hash, [options])`                                       |
 | RPC     | `{"method": "debug_traceBlockByHash", "params": [hash {}]}`                     |
@@ -550,13 +534,12 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a b
 References:
 [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)
 
-
 ### debug_traceBlockFromFile
 
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a file containing the RLP of the block.
 
 | Client  | Method invocation                                                                |
-|:--------|----------------------------------------------------------------------------------|
+| :------ | -------------------------------------------------------------------------------- |
 | Go      | `debug.TraceBlockFromFile(fileName string, config. *vm.Config) BlockTraceResult` |
 | Console | `debug.traceBlockFromFile(fileName, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockFromFile", "params": [fileName, {}]}`               |
@@ -568,11 +551,11 @@ References:
 
 The `debug_traceCall` method enables running an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. A tracer can be specified as a third argument, similar to `debug_traceTransaction`. It returns the same output as `debug_traceTransaction`.
 
-| Client  | Method invocation                 |
-|:-------:|-----------------------------------|
-| Go      | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
-| Console | `debug.traceCall(object, blockNrOrHash, [options])`                   |
-| RPC     | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`     |
+| Client  | Method invocation                                                                                                           |
+| :-----: | --------------------------------------------------------------------------------------------------------------------------- |
+|   Go    | `debug.TraceCall(args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceCall(object, blockNrOrHash, [options])`                                                                         |
+|   RPC   | `{"method": "debug_traceCall", "params": [object, blockNrOrHash, {}]}`                                                      |
 
 #### Example
 
@@ -587,6 +570,7 @@ No specific call options:
   structLogs: []
 }
 ```
+
 Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
 
 ```sh
@@ -599,16 +583,16 @@ debug.traceCall({
 	"latest", {"disableStorage": true, "disableMemory": true})
 ```
 
-It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack: 
+It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack:
 
 ```sh
 > debug.traceCall({
-	from: eth.accounts[0], 
+	from: eth.accounts[0],
 	value:"0x1",
-	gasPrice: "0xffffffff", 
-	gas: "0xffff", 
+	gasPrice: "0xffffffff",
+	gas: "0xffff",
 	input: "0x43"},
-	"latest", 
+	"latest",
 	{"blockoverrides":
 		{"number": "0x50"}
 	})
@@ -634,7 +618,8 @@ It is possible to supply 'overrides' for both state-data (accounts/storage) and 
 }
 ```
 
-Curl example: 
+Curl example:
+
 ```sh
 > curl -H "Content-Type: application/json" -X POST  localhost:8545 --data '{"jsonrpc":"2.0","method":"debug_traceCall","params":[null, "pending"],"id":1}'
 {"jsonrpc":"2.0","id":1,"result":{"gas":53000,"failed":false,"returnValue":"","structLogs":[]}}
@@ -648,7 +633,6 @@ Returns the structured logs created during the execution of EVM between two bloc
 
 please refer to the [subscription page](https://geth.ethereum.org/docs/rpc/pubsub) for more details.
 
-
 ### debug_traceTransaction
 
 **OBS** In most scenarios, `debug.standardTraceBlockToFile` is better suited for tracing!
@@ -656,17 +640,17 @@ please refer to the [subscription page](https://geth.ethereum.org/docs/rpc/pubsu
 The `traceTransaction` debugging method will attempt to run the transaction in the exact same manner as it was executed on the network. It will replay any transaction that may have been executed prior to this one before it will finally attempt to execute the transaction that corresponds to the given
 hash.
 
-In addition to the hash of the transaction it can take a secondary *optional* argument, which specifies the options for this specific call. The possible options are:
+In addition to the hash of the transaction it can take a secondary _optional_ argument, which specifies the options for this specific call. The possible options are:
 
-* `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
-* `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
-* `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
-* `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
-* `tracer`: `STRING`. Setting this will enable JavaScript-based transaction tracing, described below. If set, the previous four arguments will be ignored.
-* `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
+- `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
+- `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
+- `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
+- `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
+- `tracer`: `STRING`. Setting this will enable JavaScript-based transaction tracing, described below. If set, the previous four arguments will be ignored.
+- `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 
 | Client  | Method invocation                                                                            |
-|:--------|----------------------------------------------------------------------------------------------|
+| :------ | -------------------------------------------------------------------------------------------- |
 | Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResult, error)` |
 | Console | `debug.traceTransaction(txHash, [options])`                                                  |
 | RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
@@ -707,7 +691,6 @@ In addition to the hash of the transaction it can take a secondary *optional* ar
   }]
 ```
 
-
 #### JavaScript-based tracing
 
 Specifying the `tracer` option in the second argument enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 3 additional methods, namely: `step`, `enter` and `exit`. One of either `step`, or `enter` AND `exit` must be provided(i.e. `enter` and `exit` must be exposed together). All three can be provided together.
@@ -718,19 +701,19 @@ Specifying the `tracer` option in the second argument enables JavaScript-based t
 
 `log` has the following fields:
 
- - `op`: Object, an OpCode object representing the current opcode
- - `stack`: Object, a structure representing the EVM execution stack
- - `memory`: Object, a structure representing the contract's memory space
- - `contract`: Object, an object representing the account executing the current operation
+- `op`: Object, an OpCode object representing the current opcode
+- `stack`: Object, a structure representing the EVM execution stack
+- `memory`: Object, a structure representing the contract's memory space
+- `contract`: Object, an object representing the account executing the current operation
 
 and the following methods:
 
- - `getPC()` - returns a Number with the current program counter
- - `getGas()` - returns a Number with the amount of gas remaining
- - `getCost()` - returns the cost of the opcode as a Number
- - `getDepth()` - returns the execution depth as a Number
- - `getRefund()` - returns the amount to be refunded as a Number
- - `getError()` - returns information about the error if one occured, otherwise returns `undefined`
+- `getPC()` - returns a Number with the current program counter
+- `getGas()` - returns a Number with the amount of gas remaining
+- `getCost()` - returns the cost of the opcode as a Number
+- `getDepth()` - returns the execution depth as a Number
+- `getRefund()` - returns the amount to be refunded as a Number
+- `getError()` - returns information about the error if one occured, otherwise returns `undefined`
 
 If error is non-empty, all other fields should be ignored.
 
@@ -748,19 +731,19 @@ But this step function will:
 
 `log.op` has the following methods:
 
- - `isPush()` - returns true iff the opcode is a PUSHn
- - `toString()` - returns the string representation of the opcode
- - `toNumber()` - returns the opcode's number
+- `isPush()` - returns true iff the opcode is a PUSHn
+- `toString()` - returns the string representation of the opcode
+- `toNumber()` - returns the opcode's number
 
 `log.memory` has the following methods:
 
- - `slice(start, stop)` - returns the specified segment of memory as a byte slice
- - `getUint(offset)` - returns the 32 bytes at the given offset
+- `slice(start, stop)` - returns the specified segment of memory as a byte slice
+- `getUint(offset)` - returns the 32 bytes at the given offset
 
 `log.stack` has the following methods:
 
- - `peek(idx)` - returns the idx-th element from the top of the stack (0 is the topmost element) as a big.Int
- - `length()` - returns the number of elements in the stack
+- `peek(idx)` - returns the idx-th element from the top of the stack (0 is the topmost element) as a big.Int
+- `length()` - returns the number of elements in the stack
 
 `log.contract` has the following methods:
 
@@ -771,11 +754,11 @@ But this step function will:
 
 `db` has the following methods:
 
- - `getBalance(address)` - returns a `big.Int` with the specified account's balance
- - `getNonce(address)` - returns a Number with the specified account's nonce
- - `getCode(address)` - returns a byte slice with the code for the specified account
- - `getState(address, hash)` - returns the state value for the specified account and the specified hash
- - `exists(address)` - returns true if the specified address exists
+- `getBalance(address)` - returns a `big.Int` with the specified account's balance
+- `getNonce(address)` - returns a Number with the specified account's nonce
+- `getCode(address)` - returns a byte slice with the code for the specified account
+- `getState(address, hash)` - returns the state value for the specified account and the specified hash
+- `exists(address)` - returns true if the specified address exists
 
 If the step function throws an exception or executes an illegal operation at any point, it will not be called on any further VM steps, and the error will be returned to the caller.
 
@@ -817,7 +800,7 @@ If the step function throws an exception or executes an illegal operation at any
 
 - `getGasUsed()` - returns amount of gas used throughout the frame as a Number
 - `getOutput()` - returns the output as a buffer
-` -getError()` - returns an error if one occured during execution and `undefined` otherwise 
+  ` -getError()` - returns an error if one occured during execution and `undefined` otherwise
 
 ##### Usage
 
@@ -836,7 +819,7 @@ Sets the logging verbosity ceiling. Log messages with level up to and including 
 The verbosity of individual packages and source files can be raised using `debug_vmodule`.
 
 | Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
+| :------ | ------------------------------------------------- |
 | Console | `debug.verbosity(level)`                          |
 | RPC     | `{"method": "debug_vmodule", "params": [number]}` |
 
@@ -845,36 +828,35 @@ The verbosity of individual packages and source files can be raised using `debug
 Sets the logging verbosity pattern.
 
 | Client  | Method invocation                                 |
-|:--------|---------------------------------------------------|
+| :------ | ------------------------------------------------- |
 | Console | `debug.vmodule(string)`                           |
 | RPC     | `{"method": "debug_vmodule", "params": [string]}` |
-
 
 #### Examples
 
 To see messages from a particular Go package (directory) and all subdirectories, use:
 
-``` javascript
+```javascript
 > debug.vmodule("eth/*=6")
 ```
 
 To restrict messages to a particular package (e.g. p2p)
 but exclude subdirectories, use:
 
-``` javascript
+```javascript
 > debug.vmodule("p2p=6")
 ```
 
 To see log messages from a particular source file, use
 
-``` javascript
+```javascript
 > debug.vmodule("server.go=6")
 ```
 
 To see all output from peer.go in a package below eth (eth/peer.go, eth/downloader/peer.go) as well as output from package p2p at level <= 5, use:
 
-``` javascript
-debug.vmodule("eth/*/peer.go=6,p2p=5")
+```javascript
+debug.vmodule('eth/*/peer.go=6,p2p=5');
 ```
 
 ### debug_writeBlockProfile
@@ -882,7 +864,7 @@ debug.vmodule("eth/*/peer.go=6,p2p=5")
 Writes a goroutine blocking profile to the given file.
 
 | Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
+| :------ | ----------------------------------------------------------- |
 | Console | `debug.writeBlockProfile(file)`                             |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |
 
@@ -891,7 +873,7 @@ Writes a goroutine blocking profile to the given file.
 Writes an allocation profile to the given file. Note that the profiling rate cannot be set through the API, it must be set on the command line using the `--pprof.memprofilerate` flag.
 
 | Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
+| :------ | ----------------------------------------------------------- |
 | Console | `debug.writeMemProfile(file string)`                        |
 | RPC     | `{"method": "debug_writeBlockProfile", "params": [string]}` |
 
@@ -900,7 +882,6 @@ Writes an allocation profile to the given file. Note that the profiling rate can
 Writes a goroutine blocking profile to the given file.
 
 | Client  | Method invocation                                         |
-|:--------|-----------------------------------------------------------|
+| :------ | --------------------------------------------------------- |
 | Console | `debug.writeMutexProfile(file)`                           |
 | RPC     | `{"method": "debug_writeMutexProfile", "params": [file]}` |
-

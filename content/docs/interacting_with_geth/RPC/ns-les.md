@@ -5,16 +5,15 @@ description: Documentation for the JSON-RPC API "les" namespace
 
 The `les` API is for managing LES server settings, including client parameters and payment settings for prioritized clients. It also provides functions to query checkpoint information in both server and client mode.
 
-
 ### les_serverInfo
 
 Get information about currently connected and total/individual allowed connection capacity.
 
-| Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
-| Go      | `les.ServerInfo() map[string]interface{}`                   |
-| Console | `les.serverInfo()`                                          |
-| RPC     | `{"method": "les_serverInfo", "params": []}`                |
+| Client  | Method invocation                            |
+| :------ | -------------------------------------------- |
+| Go      | `les.ServerInfo() map[string]interface{}`    |
+| Console | `les.serverInfo()`                           |
+| RPC     | `{"method": "les_serverInfo", "params": []}` |
 
 #### Example
 
@@ -34,11 +33,11 @@ Get information about currently connected and total/individual allowed connectio
 
 Get individual client information (connection, balance, pricing) on the specified list of clients or for all connected clients if the ID list is empty.
 
-| Client  | Method invocation                                                         |
-|:--------|---------------------------------------------------------------------------|
-| Go      | `les.ClientInfo(ids []enode.ID) map[enode.ID]map[string]interface{}`      |
-| Console | `les.clientInfo([id, ...])`                                               |
-| RPC     | `{"method": "les_clientInfo", "params": [[id, ...]]}`                     |
+| Client  | Method invocation                                                    |
+| :------ | -------------------------------------------------------------------- |
+| Go      | `les.ClientInfo(ids []enode.ID) map[enode.ID]map[string]interface{}` |
+| Console | `les.clientInfo([id, ...])`                                          |
+| RPC     | `{"method": "les_clientInfo", "params": [[id, ...]]}`                |
 
 #### Example
 
@@ -106,11 +105,11 @@ Get individual client information (connection, balance, pricing) on the specifie
 
 Get individual client information on clients with a positive balance in the specified ID range, `start` included, `stop` excluded. If `stop` is zero then results are returned until the last existing balance entry. `maxCount` limits the number of returned results. If the count limit is reached but there are more IDs in the range then the first missing ID is included in the result with an empty value assigned to it.
 
-| Client  | Method invocation                                                                                  |
-|:--------|----------------------------------------------------------------------------------------------------|
-| Go      | `les.PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{}`   |
-| Console | `les.priorityClientInfo(id, id, number)`                                                           |
-| RPC     | `{"method": "les_priorityClientInfo", "params": [id, id, number]}`                                 |
+| Client  | Method invocation                                                                                |
+| :------ | ------------------------------------------------------------------------------------------------ |
+| Go      | `les.PriorityClientInfo(start, stop enode.ID, maxCount int) map[enode.ID]map[string]interface{}` |
+| Console | `les.priorityClientInfo(id, id, number)`                                                         |
+| RPC     | `{"method": "les_priorityClientInfo", "params": [id, id, number]}`                               |
 
 #### Example
 
@@ -201,11 +200,11 @@ Get individual client information on clients with a positive balance in the spec
 
 Add signed value to the token balance of the specified client and update its `meta` tag. The balance cannot go below zero or over `2^^63-1`. The balance values before and after the update are returned. The `meta` tag can be used to store a sequence number or reference to the last processed incoming payment, token expiration info, balance in other currencies or any application-specific additional information.
 
-| Client  | Method invocation                                                                 |
-|:--------|-----------------------------------------------------------------------------------|
-| Go      | `les.AddBalance(id enode.ID, value int64, meta string) ([2]uint64, error)}`       |
-| Console | `les.addBalance(id, number, string)`                                              |
-| RPC     | `{"method": "les_addBalance", "params": [id, number, string]}`                    |
+| Client  | Method invocation                                                           |
+| :------ | --------------------------------------------------------------------------- |
+| Go      | `les.AddBalance(id enode.ID, value int64, meta string) ([2]uint64, error)}` |
+| Console | `les.addBalance(id, number, string)`                                        |
+| RPC     | `{"method": "les_addBalance", "params": [id, number, string]}`              |
 
 #### Example
 
@@ -218,11 +217,11 @@ Add signed value to the token balance of the specified client and update its `me
 
 Set capacity and pricing factors for the specified list of connected clients or for all connected clients if the ID list is empty.
 
-| Client  | Method invocation                                                                 |
-|:--------|-----------------------------------------------------------------------------------|
-| Go      | `les.SetClientParams(ids []enode.ID, params map[string]interface{}) error`        |
-| Console | `les.setClientParams([id, ...], {string: value, ...})`                            |
-| RPC     | `{"method": "les_setClientParams", "params": [[id, ...], {string: value, ...}]}`  |
+| Client  | Method invocation                                                                |
+| :------ | -------------------------------------------------------------------------------- |
+| Go      | `les.SetClientParams(ids []enode.ID, params map[string]interface{}) error`       |
+| Console | `les.setClientParams([id, ...], {string: value, ...})`                           |
+| RPC     | `{"method": "les_setClientParams", "params": [[id, ...], {string: value, ...}]}` |
 
 #### Example
 
@@ -243,11 +242,11 @@ null
 
 Set default pricing factors for subsequently connected clients.
 
-| Client  | Method invocation                                                                 |
-|:--------|-----------------------------------------------------------------------------------|
-| Go      | `les.SetDefaultParams(params map[string]interface{}) error`                       |
-| Console | `les.setDefaultParams({string: value, ...})`                                      |
-| RPC     | `{"method": "les_setDefaultParams", "params": [{string: value, ...}]}`            |
+| Client  | Method invocation                                                      |
+| :------ | ---------------------------------------------------------------------- |
+| Go      | `les.SetDefaultParams(params map[string]interface{}) error`            |
+| Console | `les.setDefaultParams({string: value, ...})`                           |
+| RPC     | `{"method": "les_setDefaultParams", "params": [{string: value, ...}]}` |
 
 #### Example
 
@@ -267,11 +266,11 @@ null
 
 Get the index and hashes of the latest known checkpoint.
 
-| Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
-| Go      | `les.LatestCheckpoint() ([4]string, error)`                 |
-| Console | `les.latestCheckpoint()`                                    |
-| RPC     | `{"method": "les_latestCheckpoint", "params": []}`          |
+| Client  | Method invocation                                  |
+| :------ | -------------------------------------------------- |
+| Go      | `les.LatestCheckpoint() ([4]string, error)`        |
+| Console | `les.latestCheckpoint()`                           |
+| RPC     | `{"method": "les_latestCheckpoint", "params": []}` |
 
 #### Example
 
@@ -284,11 +283,11 @@ Get the index and hashes of the latest known checkpoint.
 
 Get checkpoint hashes by index.
 
-| Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
-| Go      | `les.GetCheckpoint(index uint64) ([3]string, error)`        |
-| Console | `les.getCheckpoint(number)`                                 |
-| RPC     | `{"method": "les_getCheckpoint", "params": [number]}`       |
+| Client  | Method invocation                                     |
+| :------ | ----------------------------------------------------- |
+| Go      | `les.GetCheckpoint(index uint64) ([3]string, error)`  |
+| Console | `les.getCheckpoint(number)`                           |
+| RPC     | `{"method": "les_getCheckpoint", "params": [number]}` |
 
 #### Example
 
@@ -301,11 +300,11 @@ Get checkpoint hashes by index.
 
 Get the address of the checkpoint oracle contract.
 
-| Client  | Method invocation                                                 |
-|:--------|-------------------------------------------------------------------|
-| Go      | `les.GetCheckpointContractAddress() (string, error)`              |
-| Console | `les.checkpointContractAddress()`                                 |
-| RPC     | `{"method": "les_getCheckpointContractAddress", "params": []}`    |
+| Client  | Method invocation                                              |
+| :------ | -------------------------------------------------------------- |
+| Go      | `les.GetCheckpointContractAddress() (string, error)`           |
+| Console | `les.checkpointContractAddress()`                              |
+| RPC     | `{"method": "les_getCheckpointContractAddress", "params": []}` |
 
 #### Example
 
@@ -313,4 +312,3 @@ Get the address of the checkpoint oracle contract.
 > les.checkpointContractAddress
 "0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"
 ```
-

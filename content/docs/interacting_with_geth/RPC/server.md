@@ -6,11 +6,10 @@ sort_key: Introduction to the JSON-RPC server
 Interacting with Geth requires sending requests to specific JSON-RPC API methods. Geth supports all standard [JSON-RPC API](https://github.com/ethereum/execution-apis) endpoints.
 The RPC requests must be sent to the node and the response returned to the client using some transport protocol. This page outlines the available transport protocols in Geth, providing the information users require to choose a transport protocol for a specific user scenario.
 
-
 ## Introduction
 
 JSON-RPC is provided on multiple transports. Geth supports JSON-RPC over HTTP, WebSocket and Unix Domain Sockets. Transports must be enabled through
-command-line flags. 
+command-line flags.
 
 Ethereum JSON-RPC APIs use a name-space system. RPC methods are grouped into several categories depending on their purpose. All method names are composed of
 the namespace, an underscore, and the actual method name within the namespace. For example, the `eth_call` method resides in the `eth` namespace.
@@ -45,7 +44,7 @@ The default whitelist allows access to the `eth`, `net` and `web3` namespaces. T
 geth --http --http.api personal,eth,net,web3
 ```
 
-Since the HTTP server is reachable from any local application, additional protection is built into the server to prevent misuse of the API from web pages. To enable access to the API from a web page (for example to use the online IDE, [Remix](https://remix.ethereum.org)), the server needs to be configured to accept Cross-Origin requests. This is achieved using the `--http.corsdomain` flag. 
+Since the HTTP server is reachable from any local application, additional protection is built into the server to prevent misuse of the API from web pages. To enable access to the API from a web page (for example to use the online IDE, [Remix](https://remix.ethereum.org)), the server needs to be configured to accept Cross-Origin requests. This is achieved using the `--http.corsdomain` flag.
 
 ```sh
 geth --http --http.corsdomain https://remix.ethereum.org
@@ -81,7 +80,6 @@ As with `--http.corsdomain`, using the wildcard `--ws.origins '*'` allows access
 
 {% include note.html content=" By default, **account unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
 
-
 ### IPC Server
 
 IPC is normally available for use in local environments where the node and the console exist on the same machine. Geth creates a pipe in the computers local file system (at `ipcpath`) that configures a connection between node and console. The `geth.ipc` file can also be used by other processes on the same machine to interact with Geth.
@@ -107,15 +105,14 @@ using the `--ipcdisable` flag.
 
 The following table summarizes the relative strengths and weaknesses of each transport protocol so that users can make informed decisions about which to use.
 
-|                                     |     HTTP    |     WS   |   IPC   |
-| :----------------------------------:|:-----------:|:--------:|:-------:|
-| Event subscription                  |      N      |   **Y**  |   **Y** |
-| Remote connection                   |    **Y**    |   **Y**  |     N   |
-| Per-message metadata overhead       |     high    |    low   |    low  |
+|                               | HTTP  |  WS   |  IPC  |
+| :---------------------------: | :---: | :---: | :---: |
+|      Event subscription       |   N   | **Y** | **Y** |
+|       Remote connection       | **Y** | **Y** |   N   |
+| Per-message metadata overhead | high  |  low  |  low  |
 
 As a general rule IPC is most secure because it is limited to interactions on the local machine and cannot be exposed to external traffic. It can also be used
 to subscribe to events. HTTP is a familiar and idempotent transport that closes connections between requests and can therefore have lower overall overheads if the number of requests is fairly low. Websockets provides a continuous open channel that can enable event subscriptions and streaming and handle large volumes of requests with smaller per-message overheads.
-
 
 ## Summary
 

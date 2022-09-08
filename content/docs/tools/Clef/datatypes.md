@@ -12,6 +12,7 @@ These data types are defined in the channel between Clef and the UI
 SignDataRequest contains information about a pending request to sign some data. The data to be signed can be of various types, defined by content-type. Clef has done most of the work in canonicalizing and making sense of the data, and it's up to the UI to present the user with the contents of the `message`
 
 Example:
+
 ```json
 {
   "content_type": "text/plain",
@@ -34,26 +35,31 @@ Example:
   }
 }
 ```
+
 ### SignDataResponse - approve
 
 Response to SignDataRequest
 
 Example:
+
 ```json
 {
   "approved": true
 }
 ```
+
 ### SignDataResponse - deny
 
 Response to SignDataRequest
 
 Example:
+
 ```json
 {
   "approved": false
 }
 ```
+
 ### SignTxRequest
 
 SignTxRequest contains information about a pending request to sign a transaction. Aside from the transaction itself, there is also a `call_info`-struct. That struct contains messages of various types, that the user should be informed of.
@@ -63,6 +69,7 @@ As in any request, it's important to consider that the `meta` info also contains
 The `transaction` (on input into clef) can have either `data` or `input` -- if both are set, they must be identical, otherwise an error is generated. However, Clef will always use `data` when passing this struct on (if Clef does otherwise, please file a ticket)
 
 Example:
+
 ```json
 {
   "transaction": {
@@ -93,11 +100,13 @@ Example:
   }
 }
 ```
+
 ### SignTxResponse - approve
 
 Response to request to sign a transaction. This response needs to contain the `transaction`, because the UI is free to make modifications to the transaction.
 
 Example:
+
 ```json
 {
   "transaction": {
@@ -112,11 +121,13 @@ Example:
   "approved": true
 }
 ```
+
 ### SignTxResponse - deny
 
 Response to SignTxRequest. When denying a request, there's no need to provide the transaction in return
 
 Example:
+
 ```json
 {
   "transaction": {
@@ -131,6 +142,7 @@ Example:
   "approved": false
 }
 ```
+
 ### OnApproved - SignTransactionResult
 
 SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`
@@ -144,6 +156,7 @@ A ruleset that implements a rate limitation needs to know what transactions are 
 The `OnApproved` method cannot be responded to, it's purely informative
 
 Example:
+
 ```json
 {
   "raw": "0xf85d640101948a8eafb1cf62bfbeb1741769dae1a9dd47996192018026a0716bd90515acb1e68e5ac5867aa11a1e65399c3349d479f5fb698554ebc6f293a04e8a4ebfff434e971e0ef12c5bf3a881b06fd04fc3f8b8a7291fb67a26a1d4ed",
@@ -161,11 +174,13 @@ Example:
   }
 }
 ```
+
 ### UserInputRequest
 
 Sent when clef needs the user to provide data. If 'password' is true, the input field should be treated accordingly (echo-free)
 
 Example:
+
 ```json
 {
   "prompt": "The question to ask the user",
@@ -173,21 +188,25 @@ Example:
   "isPassword": true
 }
 ```
+
 ### UserInputResponse
 
 Response to UserInputRequest
 
 Example:
+
 ```json
 {
   "text": "The textual response from user"
 }
 ```
+
 ### ListRequest
 
 Sent when a request has been made to list addresses. The UI is provided with the full `account`s, including local directory names. Note: this information is not passed back to the external caller, who only sees the `address`es.
 
 Example:
+
 ```json
 {
   "accounts": [
@@ -209,11 +228,13 @@ Example:
   }
 }
 ```
+
 ### ListResponse
 
 Response to list request. The response contains a list of all addresses to show to the caller. Note: the UI is free to respond with any address the caller, regardless of whether it exists or not
 
 Example:
+
 ```json
 {
   "accounts": [

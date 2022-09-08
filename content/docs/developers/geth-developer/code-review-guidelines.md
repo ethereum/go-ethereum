@@ -7,13 +7,11 @@ The only way to get code into Geth is to submit a pull request (PR). Those pull 
 
 ## Terminology
 
-* The **author** of a pull request is the entity who wrote the diff and submitted it to GitHub.
+- The **author** of a pull request is the entity who wrote the diff and submitted it to GitHub.
 
-* The **team** consists of people with commit rights on the go-ethereum repository.
-  
-* The **reviewer** is the person assigned to review the diff. The reviewer must be a team member.
-  
-* The **code owner** is the person responsible for the subsystem being modified by the PR.
+- The **team** consists of people with commit rights on the go-ethereum repository.
+- The **reviewer** is the person assigned to review the diff. The reviewer must be a team member.
+- The **code owner** is the person responsible for the subsystem being modified by the PR.
 
 ## The Process
 
@@ -49,13 +47,13 @@ Commit messages on the master branch should follow the rule below. PR authors ar
 
 The commit message style we use is similar to the style used by the Go project:
 
-The first line of the change description is conventionally a one-line summary of the change, prefixed by the primary affected Go package. It should complete the sentence "This change modifies go-ethereum to _____." The rest of the description elaborates and should provide context for the change and explain what it does.
+The first line of the change description is conventionally a one-line summary of the change, prefixed by the primary affected Go package. It should complete the sentence "This change modifies go-ethereum to **\_**." The rest of the description elaborates and should provide context for the change and explain what it does.
 
 Template:
 
 ```text
 package/path: change XYZ
- 
+
 Longer explanation of the change in the commit. You can use multiple sentences here. It's usually best to include content from the PR description in the final commit message.
 
 issue notices, e.g. "Fixes #42353".
@@ -65,8 +63,8 @@ issue notices, e.g. "Fixes #42353".
 
 Reviewers may find themselves in one of the sitations below. Here's how to deal with them:
 
-* The author doesn't follow up: ping them after a while (i.e. after a few days). If there is no further response, close the PR or complete the work yourself.
+- The author doesn't follow up: ping them after a while (i.e. after a few days). If there is no further response, close the PR or complete the work yourself.
 
-* Author insists on including refactoring changes alongside bug fix: We can tolerate small refactorings alongside any change. If you feel lost in the diff, ask the author to submit the refactoring as an independent PR, or at least as an independent commit in the same PR.
+- Author insists on including refactoring changes alongside bug fix: We can tolerate small refactorings alongside any change. If you feel lost in the diff, ask the author to submit the refactoring as an independent PR, or at least as an independent commit in the same PR.
 
-* Author keeps rejecting feedback: reviewers have authority to reject any change for technical reasons. If you're unsure, ask the team for a second opinion. The PR can be closed if no consensus can be reached. 
+- Author keeps rejecting feedback: reviewers have authority to reject any change for technical reasons. If you're unsure, ask the team for a second opinion. The PR can be closed if no consensus can be reached.

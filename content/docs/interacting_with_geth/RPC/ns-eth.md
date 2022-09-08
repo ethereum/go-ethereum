@@ -19,29 +19,29 @@ The method takes 3 parameters: an unsigned transaction object to execute in read
 
 ##### 1. `Object` - Transaction call object
 
-The *transaction call object* is mandatory. Please see [here](/content/docs/interacting_with_geth/RPC/objects.md) for details.
+The _transaction call object_ is mandatory. Please see [here](/content/docs/interacting_with_geth/RPC/objects.md) for details.
 
 ##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 
-The *block number* is mandatory and defines the context (state) against which the specified transaction should be executed. It is not possible to execute calls against reorged blocks; or blocks older than 128 (unless the node is an archive node).
+The _block number_ is mandatory and defines the context (state) against which the specified transaction should be executed. It is not possible to execute calls against reorged blocks; or blocks older than 128 (unless the node is an archive node).
 
 ##### 3. `Object` - State override set
 
-The *state override set* is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Each address maps to an object containing:
+The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Each address maps to an object containing:
 
-| Field       | Type       | Bytes | Optional | Description |
-|:------------|:-----------|:------|:---------|:------------|
-| `balance`   | `Quantity` | <32   | Yes      | Fake balance to set for the account before executing the call. |
-| `nonce`     | `Quantity` | <8    | Yes      | Fake nonce to set for the account before executing the call. |
-| `code`      | `Binary`   | any   | Yes      | Fake EVM bytecode to inject into the account before executing the call. |
-| `state`     | `Object`   | any   | Yes      | Fake key-value mapping to override **all** slots in the account storage before executing the call. |
+| Field       | Type       | Bytes | Optional | Description                                                                                               |
+| :---------- | :--------- | :---- | :------- | :-------------------------------------------------------------------------------------------------------- |
+| `balance`   | `Quantity` | <32   | Yes      | Fake balance to set for the account before executing the call.                                            |
+| `nonce`     | `Quantity` | <8    | Yes      | Fake nonce to set for the account before executing the call.                                              |
+| `code`      | `Binary`   | any   | Yes      | Fake EVM bytecode to inject into the account before executing the call.                                   |
+| `state`     | `Object`   | any   | Yes      | Fake key-value mapping to override **all** slots in the account storage before executing the call.        |
 | `stateDiff` | `Object`   | any   | Yes      | Fake key-value mapping to override **individual** slots in the account storage before executing the call. |
 
-The goal of the *state override set* is manyfold:
+The goal of the _state override set_ is manyfold:
 
- * It can be used by DApps to reduce the amount of contract code needed to be deployed on chain. Code that simply returns internal state or does pre-defined validations can be kept off chain and fed to the node on-demand.
- * It can be used for smart contract analysis by extending the code deployed on chain with custom methods and invoking them. This avoids having to download and reconstruct the entire state in a sandbox to run custom code against.
- * It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
+- It can be used by DApps to reduce the amount of contract code needed to be deployed on chain. Code that simply returns internal state or does pre-defined validations can be kept off chain and fed to the node on-demand.
+- It can be used for smart contract analysis by extending the code deployed on chain with custom methods and invoking them. This avoids having to download and reconstruct the entire state in a sandbox to run custom code against.
+- It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
 
 Example:
 
@@ -75,9 +75,9 @@ And the result is an Ethereum ABI encoded list of accounts:
 
 ```json
 {
-  "id":      1,
+  "id": 1,
   "jsonrpc": "2.0",
-  "result":  "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000004000000000000000000000000d9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f300000000000000000000000078d1ad571a1a09d60d9bbf25894b44e4c8859595000000000000000000000000286834935f4a8cfb4ff4c77d5770c2775ae2b0e7000000000000000000000000b86e2b0ab5a4b1373e40c51a7c712c70ba2f9f8e"
+  "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000004000000000000000000000000d9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f300000000000000000000000078d1ad571a1a09d60d9bbf25894b44e4c8859595000000000000000000000000286834935f4a8cfb4ff4c77d5770c2775ae2b0e7000000000000000000000000b86e2b0ab5a4b1373e40c51a7c712c70ba2f9f8e"
 }
 ```
 
@@ -92,7 +92,7 @@ Just for the sake of completeness, decoded the response is:
 
 #### Override example
 
-The above *simple example* showed how to call a method already exposed by an on-chain smart contract. What if we want to access some data not exposed by it?
+The above _simple example_ showed how to call a method already exposed by an on-chain smart contract. What if we want to access some data not exposed by it?
 
 We can gut out the [original](https://github.com/ethereum/go-ethereum/blob/master/contracts/checkpointoracle/contract/oracle.sol) checkpoint oracle contract with one that retains the same fields (to retain the same storage layout), but one that includes a different method set:
 
@@ -126,9 +126,9 @@ And the result is the Ethereum ABI encoded threshold number:
 
 ```json
 {
-  "id":      1,
+  "id": 1,
   "jsonrpc": "2.0",
-  "result":  "0x0000000000000000000000000000000000000000000000000000000000000002"
+  "result": "0x0000000000000000000000000000000000000000000000000000000000000002"
 }
 ```
 
@@ -140,10 +140,10 @@ This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `
 
 #### Parameters
 
-| Field              | Type       | Description          |
-|:-------------------|:-----------|:---------------------|
-| `transaction`      | `Object`   | `TransactionCall` object |
-| `blockNumberOrTag` | `Object`   | Optional, blocknumber or `latest` or `pending` |
+| Field              | Type     | Description                                    |
+| :----------------- | :------- | :--------------------------------------------- |
+| `transaction`      | `Object` | `TransactionCall` object                       |
+| `blockNumberOrTag` | `Object` | Optional, blocknumber or `latest` or `pending` |
 
 #### Usage
 
@@ -158,6 +158,7 @@ The method `eth_createAccessList` returns list of addresses and storage keys use
 That is, it gives the list of addresses and storage keys that will be used by that transaction, plus the gas consumed if the access list is included. Like `eth_estimateGas`, this is an estimation; the list could change when the transaction is actually mined. Adding an `accessList` to a transaction does not necessary result in lower gas usage compared to a transaction without an access list.
 
 Example:
+
 ```json
 {
   "accessList": [

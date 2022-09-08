@@ -60,13 +60,13 @@ One of the major benefits of Clef is that it is decoupled from the client softwa
 
 The security model of Clef is as follows:
 
-* A self-contained binary controls all cryptographic operations including encryption, decryption and storage of keystore files, and signing data and transactions.
+- A self-contained binary controls all cryptographic operations including encryption, decryption and storage of keystore files, and signing data and transactions.
 
-* A well defined, deliberately minimal "external" API is used to communicate with the Clef binary - Clef considers this external traffic to be UNTRUSTED. This means Clef does not accept any credentials and does not recognize authority of requests received over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - and expects messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). Some of the external API calls require some user interaction (manual approve/deny)- if it is not received responses can be delayed indefinitely.
+- A well defined, deliberately minimal "external" API is used to communicate with the Clef binary - Clef considers this external traffic to be UNTRUSTED. This means Clef does not accept any credentials and does not recognize authority of requests received over this channel. Clef listens on `http.addr:http.port` or `ipcpath` - the same as Geth - and expects messages to be formatted using the [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification). Some of the external API calls require some user interaction (manual approve/deny)- if it is not received responses can be delayed indefinitely.
 
-* Clef communicates with the process that invoked the binary using stin/stout. The process invoking the binary is usually the native console-based user interface (UI) but there is also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between the user and Clef. 
+- Clef communicates with the process that invoked the binary using stin/stout. The process invoking the binary is usually the native console-based user interface (UI) but there is also an API that enables communication with an external UI. This has to be enabled using `--stdio-ui` at startup. This channel is considered TRUSTED and is used to pass approvals and passwords between the user and Clef.
 
-* Clef does not store keys - the user is responsible for securely storing and backing up keyfiles. Clef does store account passwords in its encrypted vault if they are explicitly provided to Clef by the user to enable automatic account unlocking.
+- Clef does not store keys - the user is responsible for securely storing and backing up keyfiles. Clef does store account passwords in its encrypted vault if they are explicitly provided to Clef by the user to enable automatic account unlocking.
 
 The external API never handles any sensitive data directly, but it can be used to request Clef to sign some data or a transaction. It is the internal API that controls signing and triggers requests for manual approval (automatic approves actions that conform to attested rulesets) and passwords.
 
@@ -76,7 +76,7 @@ The general flow for a basic transaction-signing operation using Clef and an Eth
 
 In the case illustrated in the schematic above, Geth would be started with `--signer <addr>:<port>` and would relay requests to `eth.sendTransaction`. Text in `mono` font positioned along arrows shows the objects passed between each component.
 
-Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also possible to configure Clef to sign transactions without always prompting the user. This requires defining the precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are small Javascript snippets that are *attested* by the user by injecting the snippet's hash into Clef's secure whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted rule files are automatically signed. This is covered in detail on the [Rules page](/content/docs/tools/Clef/rules).
+Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also possible to configure Clef to sign transactions without always prompting the user. This requires defining the precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are small Javascript snippets that are _attested_ by the user by injecting the snippet's hash into Clef's secure whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted rule files are automatically signed. This is covered in detail on the [Rules page](/content/docs/tools/Clef/rules).
 
 ## Basic usage
 
@@ -148,4 +148,3 @@ GLOBAL OPTIONS:
 ## Summary
 
 Clef is an external key management and signer tool that comes bundled with Geth but can either be used as a backend account manager and signer for Geth or as a completely separate standalone application. Being modular and composable it can be used as a component in decentralized applications or to sign data and transactions in untrusted environments. Clef is intended to eventually replace Geth's built-in account management tools.
- 

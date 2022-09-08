@@ -9,17 +9,16 @@ This page contains answers to common questions about Geth. The Geth team have al
 
 It is also recommended to search for 'Geth' and 'go-ethereum' on [ethereum.stackexchange](ethereum.stackexchange.com).
 
-
 #### What are RPC and IPC?
 
-IPC stands for Inter-Process Communications. Geth creates a `geth.ipc` file on startup that other processes on the same computer can use to communicate with Geth. 
+IPC stands for Inter-Process Communications. Geth creates a `geth.ipc` file on startup that other processes on the same computer can use to communicate with Geth.
 RPC stands for Remote Procedure Call. RPC is a mode of communication between processes that may be running on different machines. Geth accepts RPC traffic over HTTP or Websockets. Geth functions are invoked by sending requests that are formatted according to the RPC-API to the node via either IPC or RPC.
 
 #### What is `jwtsecret`?
 
 The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key, proving each party's identity. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
 
-#### I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
+#### I noticed my peercount slowly decreasing, and now it is at 0. Restarting doesn't get any peers.
 
 This may be because your clock has fallen out of sync with other nodes. You can [force a clock update using ntp](https://askubuntu.com/questions/254826/how-to-force-a-clock-update-using-ntp) like so:
 

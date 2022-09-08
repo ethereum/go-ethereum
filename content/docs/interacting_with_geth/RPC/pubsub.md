@@ -22,6 +22,7 @@ returns
 {"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0xcd0c3e8af590364c09d0fa6a1210faf5","result":{"difficulty":"0xd9263f42a87",<...>, "uncles":[]}}}
 {"jsonrpc":"2.0","method":"eth_subscription","params":{"subscription":"0xcd0c3e8af590364c09d0fa6a1210faf5","result":{"difficulty":"0xd90b1a7ad02", <...>, "uncles":["0x80aacd1ea4c9da32efd8c2cc9ab38f8f70578fcd46a1a4ed73f82f3e0957f936"]}}}
 ```
+
 to cancel the subscription:
 
 ```sh
@@ -29,6 +30,7 @@ to cancel the subscription:
 {"id": 1, "method": "eth_unsubscribe", "params": ["0xcd0c3e8af590364c09d0fa6a1210faf5"]}
 {"jsonrpc":"2.0","id":1,"result":true}
 ```
+
 ### Considerations
 
 1. Notifications are sent for current events and not for past events. For use cases that depend on not to miss any notifications subscriptions are probably not the best option.
@@ -57,6 +59,7 @@ Subscriptions are created with a regular RPC call with `eth_subscribe` as method
 Subscriptions are cancelled with a regular RPC call with `eth_unsubscribe` as method and the subscription id as first parameter. It returns a bool indicating if the subscription was cancelled successful.
 
 ### Parameters
+
 1. subscription id
 
 ### Example
@@ -119,15 +122,17 @@ In case of a chain reorganization previous sent logs that are on the old chain w
 #### Parameters
 
 1. `object` with the following (optional) fields
-    - **address**, either an address or an array of addresses. Only logs that are created from these addresses are returned (optional)
-    - **topics**, only logs which match the specified topics (optional)
-
+   - **address**, either an address or an array of addresses. Only logs that are created from these addresses are returned (optional)
+   - **topics**, only logs which match the specified topics (optional)
 
 #### Example
+
 ```sh
 {"id": 1, "method": "eth_subscribe", "params": ["logs", {"address": "0x8320fe7702b96808f7bbc0d4a888ed1468216cfd", "topics": ["0xd78a0cb8bb633d06981248b816e7bd33c2a35a6089241d099fa519e361cab902"]}]}
 ```
+
 returns
+
 ```sh
 {"jsonrpc":"2.0","id":2,"result":"0x4a8a4c0517381924f9838102c5a4dcb7"}
 

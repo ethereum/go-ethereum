@@ -3,7 +3,7 @@ title: Monitoring Geth with InfluxDB and Grafana
 description: introduction to monitoring Geth nodes with Grafana
 ---
 
-There are several ways to monitor the performance of a Geth node. Insights into a node's performance are useful for debugging, tuning and understanding what is really happening when Geth is running. 
+There are several ways to monitor the performance of a Geth node. Insights into a node's performance are useful for debugging, tuning and understanding what is really happening when Geth is running.
 
 ## Prerequisites {#prerequisites}
 

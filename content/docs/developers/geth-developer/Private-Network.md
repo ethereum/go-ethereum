@@ -3,17 +3,15 @@ title: Private Networks
 description: Tutorial on setting up private Ethereum networks
 ---
 
-This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios. 
+This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios.
 
 ## Prerequisites
 
 To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](content/docs/getting_started/Installing-Geth.md)). It is also helpful to understand Geth fundamentals (see [Getting Started](/content/docs/getting_started/getting_started.md)).
 
-
 ## Private Networks
 
 A private network is composed of multiple Ethereum nodes that can only connect to each other. In order to run multiple nodes locally, each one requires a separate data directory (`--datadir`). The nodes must also know about each other and be able to exchange information, share an initial state and a common consensus algorithm. The remainder of this page will explain how to configure Geth so that these basic requirements are met, enabling a private network to be started.
-
 
 ### Choosing A Network ID
 
@@ -22,7 +20,6 @@ Ethereum Mainnet has Network ID = 1. There are also many other networks that Get
 ```shell
 geth --networkid 12345
 ```
-
 
 ### Choosing A Consensus Algorithm
 
@@ -36,17 +33,14 @@ Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensu
 
 Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225](https://eips.ethereum.org/EIPS/eip-225). The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
-
 ### Creating The Genesis Block
 
 Every blockchain starts with a genesis block. When Geth is run with default settings for the first time, it commits the Mainnet genesis to the database. For a private network, it is generally preferable to use a different genesis block. The genesis block is configured using a _genesis.json_ file whose path must be provided to Geth on start-up. When creating a genesis block, a few initial parameters for the private blockchain must be defined:
 
 - Ethereum platform features enabled at launch (`config`). Enabling and disabling features once the blockchain is running requires scheduling a [hard fork](https://ethereum.org/en/glossary/#hard-fork).
-  
 - Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a [good choice](https://etherscan.io/chart/gaslimit). The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
 
 - Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through mining as the chain progresses.
-
 
 #### Clique Example
 
@@ -128,7 +122,6 @@ geth init --datadir data genesis.json
 
 When Geth is started using `--datadir data` the genesis block defined in `genesis.json` will be used. For example:
 
-
 ```shell
 geth --datadir data --networkid 12345
 ```
@@ -142,11 +135,8 @@ The modification to `genesis.json` is as follows:
 ```json
 {
   "config": {
-  
-    "londonBlock": 40000,
-    
-  },
-  
+    "londonBlock": 40000
+  }
 }
 ```
 
@@ -155,7 +145,6 @@ The upgrade command is:
 ```shell
 geth init --datadir data genesis.json
 ```
-
 
 ### Setting Up Networking
 
@@ -226,7 +215,6 @@ geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0xf41c74c9ae680c1a
 
 This will start mining bocks and transactions on a single CPU thread, crediting all block rewards to the account specified by `--miner.etherbase`.
 
-
 ## End-to-end example {#end-to-end-example}
 
 This section will run through the commands for setting up a simple private network of two nodes. Both nodes will run on the local machine using the same genesis block and network ID. The data directories for each node will be named `node1` and `node2`.
@@ -263,7 +251,6 @@ The keyfile and account password should be backed up securely. These steps can t
 
 In each data directory save a copy of the following `genesis.json` to the top level project directory. The account addresses in the `alloc` field should be replaced with those created for each node in the previous step (without the leading `0x`).
 
-
 ```json
 {
   "config": {
@@ -294,7 +281,6 @@ In each data directory save a copy of the following `genesis.json` to the top le
     "c94d95a5106270775351eecfe43f97e8e75e59e8": { "balance": "500000" }
   }
 }
-
 ```
 
 The nodes can now be set up using `geth init` as follows:
@@ -310,11 +296,11 @@ INFO [05-13|15:41:47.520] Maximum peer count                       ETH=50 LES=0 
 INFO [05-13|15:41:47.520] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
 INFO [05-13|15:41:47.520] Set global gas cap                       cap=50,000,000
 INFO [05-13|15:41:47.520] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/chaindata cache=16.00MiB handles=16
-INFO [05-13|15:41:47.542] Writing custom genesis block 
+INFO [05-13|15:41:47.542] Writing custom genesis block
 INFO [05-13|15:41:47.542] Persisted trie from memory database      nodes=3 size=397.00B time="41.246µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-13|15:41:47.543] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
 INFO [05-13|15:41:47.543] Allocated cache and file handles         database=/home/go-ethereum/node2/geth/chaindata cache=16.00MiB handles=16
-INFO [05-13|15:41:47.556] Writing custom genesis block 
+INFO [05-13|15:41:47.556] Writing custom genesis block
 INFO [05-13|15:41:47.557] Persisted trie from memory database      nodes=3 size=397.00B time="81.801µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=chaindata hash=c9a158..d415a0
 ```
@@ -322,7 +308,7 @@ INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=chai
 The next step is to configure a bootnode. This can be any node, but for this tutorial the developer tool `bootnode` will be used to quickly and easily configure a dedicated bootnode. First the bootnode requires a key, which can be created with the following command, which will save a key to `boot.key`:
 
 ```shell
-bootnode -genkey boot.key 
+bootnode -genkey boot.key
 ```
 
 This key can then be used to generate a bootnode as follows:
@@ -401,7 +387,6 @@ TRACE[05-13|16:15:57.767]  PING/v4                               id=f1364e6d060c
 
 It is now possible to attach a Javascript console to either node to query the network properties:
 
-
 ```shell
 geth attach node1/geth.ipc
 ```
@@ -454,20 +439,22 @@ eth.getBalance(eth.accounts[0])
 
 This account can then be unlocked and some ether sent to Node 2, using the following commands:
 
-
 ```javascript
 // unlock account
-personal.unlock(eth.accounts[0])
+personal.unlock(eth.accounts[0]);
 
 // send some Wei
-eth.sendTransaction({to: "0xc94d95a5106270775351eecfe43f97e8e75e59e8", from: eth.accounts[0], value: 25000})
+eth.sendTransaction({
+  to: '0xc94d95a5106270775351eecfe43f97e8e75e59e8',
+  from: eth.accounts[0],
+  value: 25000
+});
 
 //check the transaction was successful by querying Node 2's account balance
-eth.getBalance("0xc94d95a5106270775351eecfe43f97e8e75e59e8")
+eth.getBalance('0xc94d95a5106270775351eecfe43f97e8e75e59e8');
 ```
 
 The same steps can then be repeated to attach a console to Node 2.
-
 
 ## Summary
 

@@ -5,7 +5,6 @@ description: Reference documentation for the Clef APIs
 
 Clef uses two separate APIs. The **external API** is an untrusted set of JSON-RPC methods that can be called by a user. The **internal API** is a set of JSON-RPC methods that can be called by a UI. The UI could be Clef's native command line interface or a custom UI.
 
-
 ## External API
 
 Clef listens to HTTP requests on `http.addr`:`http.port` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
@@ -37,9 +36,11 @@ The signer will generate a new private key, encrypt it according to [web3 keysto
 None
 
 ##### Result
-  - address [string]: account address that is derived from the generated key
+
+- address [string]: account address that is derived from the generated key
 
 ##### Sample call
+
 ```json
 {
   "id": 0,
@@ -48,7 +49,9 @@ None
   "params": []
 }
 ```
+
 Response
+
 ```json
 {
   "id": 0,
@@ -60,17 +63,20 @@ Response
 #### account_list
 
 ##### List available accounts
-   List all accounts that this signer currently manages
+
+List all accounts that this signer currently manages
 
 ##### Arguments
 
 None
 
 ##### Result
-  - array with account records:
-     - account.address [string]: account address that is derived from the generated key
+
+- array with account records:
+  - account.address [string]: account address that is derived from the generated key
 
 ##### Sample call
+
 ```json
 {
   "id": 1,
@@ -78,7 +84,9 @@ None
   "method": "account_list"
 }
 ```
+
 Response
+
 ```json
 {
   "id": 1,
@@ -93,35 +101,38 @@ Response
 #### account_signTransaction
 
 ##### Sign transactions
-   Signs a transaction and responds with the signed transaction in RLP-encoded and JSON forms. Supports both legacy and EIP-1559-style transactions. 
+
+Signs a transaction and responds with the signed transaction in RLP-encoded and JSON forms. Supports both legacy and EIP-1559-style transactions.
 
 ##### Arguments
-  1. transaction object (legacy):
-     - `from` [address]: account to send the transaction from
-     - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
-     - `gas` [number]: maximum amount of gas to burn
-     - `gasPrice` [number]: gas price
-     - `value` [number:optional]: amount of Wei to send with the transaction
-     - `data` [data:optional]:  input data
-     - `nonce` [number]: account nonce
-  1. transaction object (1559):
-     - `from` [address]: account to send the transaction from
-     - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
-     - `gas` [number]: maximum amount of gas to burn
-     - `maxPriorityFeePerGas` [number]: maximum priority fee per unit of gas for the transaction
-     - `maxFeePerGas` [number]: maximum fee per unit of gas for the transaction
-     - `value` [number:optional]: amount of Wei to send with the transaction
-     - `data` [data:optional]:  input data
-     - `nonce` [number]: account nonce
-  3. method signature [string:optional]
-     - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
+1. transaction object (legacy):
+   - `from` [address]: account to send the transaction from
+   - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
+   - `gas` [number]: maximum amount of gas to burn
+   - `gasPrice` [number]: gas price
+   - `value` [number:optional]: amount of Wei to send with the transaction
+   - `data` [data:optional]: input data
+   - `nonce` [number]: account nonce
+1. transaction object (1559):
+   - `from` [address]: account to send the transaction from
+   - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
+   - `gas` [number]: maximum amount of gas to burn
+   - `maxPriorityFeePerGas` [number]: maximum priority fee per unit of gas for the transaction
+   - `maxFeePerGas` [number]: maximum fee per unit of gas for the transaction
+   - `value` [number:optional]: amount of Wei to send with the transaction
+   - `data` [data:optional]: input data
+   - `nonce` [number]: account nonce
+1. method signature [string:optional]
+   - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 ##### Result
-  - raw [data]: signed transaction in RLP encoded form
-  - tx [json]: signed transaction in JSON form
+
+- raw [data]: signed transaction in RLP encoded form
+- tx [json]: signed transaction in JSON form
 
 ##### Sample call (legacy)
+
 ```json
 {
   "id": 2,
@@ -140,6 +151,7 @@ Response
   ]
 }
 ```
+
 Response
 
 ```json
@@ -165,6 +177,7 @@ Response
 ```
 
 ##### Sample call (1559)
+
 ```json
 {
   "id": 2,
@@ -184,6 +197,7 @@ Response
   ]
 }
 ```
+
 Response
 
 ```json
@@ -192,9 +206,9 @@ Response
   "id": 2,
   "result": {
     "raw": "0x02f891018085174876e80085174876e80083033333948a8eafb1cf62bfbeb1741769dae1a9dd4799619210a44401a6e40000000000000000000000000000000000000000000000000000000000000012c080a0c8b59180c6e0c154284402b52d772f1afcf8ec2d245cf75bfb3212ebe676135ba02c660aaebf92d5e314fc2ba4c70f018915d174c3c1fc6e4e38d00ebf1a5bb69f",
-    "tx": { 
-      "type": "0x2", 
-      "nonce": "0x0", 
+    "tx": {
+      "type": "0x2",
+      "nonce": "0x0",
       "gasPrice": null,
       "maxPriorityFeePerGas": "0x174876e800",
       "maxFeePerGas": "0x174876e800",
@@ -215,7 +229,6 @@ Response
 
 ##### Sample call with ABI-data
 
-
 ```json
 {
   "id": 67,
@@ -235,6 +248,7 @@ Response
   ]
 }
 ```
+
 Response
 
 ```json
@@ -260,6 +274,7 @@ Response
 ```
 
 Bash example:
+
 ```bash
 > curl -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
 
@@ -269,32 +284,33 @@ Bash example:
 #### account_signData
 
 ##### Sign data
-   Signs a chunk of data and returns the calculated signature.
+
+Signs a chunk of data and returns the calculated signature.
 
 ##### Arguments
-  - content type [string]: type of signed data
-     - `text/validator`: hex data with custom validator defined in a contract
-     - `application/clique`: [clique](https://github.com/ethereum/EIPs/issues/225) headers
-     - `text/plain`: simple hex data validated by `account_ecRecover`
-  - account [address]: account to sign with
-  - data [object]: data to sign
+
+- content type [string]: type of signed data
+  - `text/validator`: hex data with custom validator defined in a contract
+  - `application/clique`: [clique](https://github.com/ethereum/EIPs/issues/225) headers
+  - `text/plain`: simple hex data validated by `account_ecRecover`
+- account [address]: account to sign with
+- data [object]: data to sign
 
 ##### Result
-  - calculated signature [data]
+
+- calculated signature [data]
 
 ##### Sample call
+
 ```json
 {
   "id": 3,
   "jsonrpc": "2.0",
   "method": "account_signData",
-  "params": [
-    "data/plain",
-    "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
-    "0xaabbccdd"
-  ]
+  "params": ["data/plain", "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db", "0xaabbccdd"]
 }
 ```
+
 Response
 
 ```json
@@ -308,16 +324,20 @@ Response
 #### account_signTypedData
 
 ##### Sign data
-   Signs a chunk of structured data conformant to [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and returns the calculated signature.
+
+Signs a chunk of structured data conformant to [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and returns the calculated signature.
 
 ##### Arguments
-  - account [address]: account to sign with
-  - data [object]: data to sign
+
+- account [address]: account to sign with
+- data [object]: data to sign
 
 ##### Result
-  - calculated signature [data]
+
+- calculated signature [data]
 
 ##### Sample call
+
 ```json
 {
   "id": 68,
@@ -392,13 +412,14 @@ Response
   ]
 }
 ```
+
 Response
 
 ```json
 {
-    "id": 1,
-    "jsonrpc": "2.0",
-    "result": "0x4355c47d63924e8a72e509b65029052eb6c299d53a04e167c5775fd466751c9d07299936d304c153f6443dfa05f40ff007d72911b6f72307f996231605b915621c"
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": "0x4355c47d63924e8a72e509b65029052eb6c299d53a04e167c5775fd466751c9d07299936d304c153f6443dfa05f40ff007d72911b6f72307f996231605b915621c"
 }
 ```
 
@@ -409,13 +430,16 @@ Response
 Derive the address from the account that was used to sign data with content type `text/plain` and the signature.
 
 ##### Arguments
-  - data [data]: data that was signed
-  - signature [data]: the signature to verify
+
+- data [data]: data that was signed
+- signature [data]: the signature to verify
 
 ##### Result
-  - derived account [address]
+
+- derived account [address]
 
 ##### Sample call
+
 ```json
 {
   "id": 4,
@@ -427,6 +451,7 @@ Derive the address from the account that was used to sign data with content type
   ]
 }
 ```
+
 Response
 
 ```json
@@ -449,9 +474,10 @@ None
 
 ##### Result
 
-* external API version [string]
+- external API version [string]
 
 ##### Sample call
+
 ```json
 {
   "id": 0,
@@ -462,14 +488,14 @@ None
 ```
 
 Response
+
 ```json
 {
-    "id": 0,
-    "jsonrpc": "2.0",
-    "result": "6.0.0"
+  "id": 0,
+  "jsonrpc": "2.0",
+  "result": "6.0.0"
 }
 ```
-
 
 ## Internal (UI) API
 
@@ -483,18 +509,18 @@ An example (insecure) proof-of-concept external UI has been implemented in [`pyt
 
 The model is as follows:
 
-* The user starts the UI app (`pythonsigner.py`).
-* The UI app starts `clef` with `--stdio-ui`, and listens to the
-process output for confirmation-requests.
-* `clef` opens the external HTTP API.
-* When the `signer` receives requests, it sends a JSON-RPC request via `stdout`.
-* The UI app prompts the user accordingly, and responds to `clef`.
-* `clef` signs (or not), and responds to the original request.
+- The user starts the UI app (`pythonsigner.py`).
+- The UI app starts `clef` with `--stdio-ui`, and listens to the
+  process output for confirmation-requests.
+- `clef` opens the external HTTP API.
+- When the `signer` receives requests, it sends a JSON-RPC request via `stdout`.
+- The UI app prompts the user accordingly, and responds to `clef`.
+- `clef` signs (or not), and responds to the original request.
 
 See the [ui API changelog](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/intapi_changelog.md) for information about changes to this API.
 
 **NOTE** A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
-Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
+Whereas the `json` specification allows for linebreaks, linebreaks **should not** be used in this communication channel, to make
 things simpler for both parties.
 
 ### Methods
@@ -503,17 +529,18 @@ things simpler for both parties.
 
 Invoked when there's a transaction for approval.
 
-
 ##### Sample call
 
 Here's a method invocation:
+
 ```bash
 
 curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
 ```
-Results in the following invocation on the UI:
-```json
 
+Results in the following invocation on the UI:
+
+```json
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -531,15 +558,15 @@ Results in the following invocation on the UI:
         "input": null
       },
       "call_info": [
-          {
-            "type": "WARNING",
-            "message": "Invalid checksum on to-address"
-          },
-          {
-            "type": "Info",
-            "message": "safeSend(address: 0x0000000000000000000000000000000000000012)"
-          }
-        ],
+        {
+          "type": "WARNING",
+          "message": "Invalid checksum on to-address"
+        },
+        {
+          "type": "Info",
+          "message": "safeSend(address: 0x0000000000000000000000000000000000000012)"
+        }
+      ],
       "meta": {
         "remote": "127.0.0.1:48486",
         "local": "localhost:8550",
@@ -548,17 +575,16 @@ Results in the following invocation on the UI:
     }
   ]
 }
-
 ```
 
 The same method invocation, but with invalid data:
+
 ```bash
 
 curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000002000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
 ```
 
 ```json
-
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -576,15 +602,15 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
         "input": null
       },
       "call_info": [
-          {
-            "type": "WARNING",
-            "message": "Invalid checksum on to-address"
-          },
-          {
-            "type": "WARNING",
-            "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000002000000000000000000000000000000000000000000000012\nHave 0000000000000000000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
-          }
-        ],
+        {
+          "type": "WARNING",
+          "message": "Invalid checksum on to-address"
+        },
+        {
+          "type": "WARNING",
+          "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000002000000000000000000000000000000000000000000000012\nHave 0000000000000000000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
+        }
+      ],
       "meta": {
         "remote": "127.0.0.1:48492",
         "local": "localhost:8550",
@@ -593,15 +619,11 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
     }
   ]
 }
-
-
 ```
 
 One which has missing `to`, but with no `data`:
 
-
 ```json
-
 {
   "jsonrpc": "2.0",
   "id": 3,
@@ -619,11 +641,11 @@ One which has missing `to`, but with no `data`:
         "input": null
       },
       "call_info": [
-          {
-            "type": "CRITICAL",
-            "message": "Tx will create contract with empty code!"
-          }
-        ],
+        {
+          "type": "CRITICAL",
+          "message": "Tx will create contract with empty code!"
+        }
+      ],
       "meta": {
         "remote": "signer binary",
         "local": "main",
@@ -641,7 +663,6 @@ Invoked when a request for account listing has been made.
 ##### Sample call
 
 ```json
-
 {
   "jsonrpc": "2.0",
   "id": 5,
@@ -666,9 +687,7 @@ Invoked when a request for account listing has been made.
     }
   ]
 }
-
 ```
-
 
 #### ApproveSignData / `ui_approveSignData`
 
@@ -735,11 +754,8 @@ The UI should show the info (a single message) to the user. Does not expect resp
   "jsonrpc": "2.0",
   "id": 9,
   "method": "ui_showInfo",
-  "params": [
-    "Tests completed"
-  ]
+  "params": ["Tests completed"]
 }
-
 ```
 
 #### ShowError / `ui_showError`
@@ -747,29 +763,25 @@ The UI should show the info (a single message) to the user. Does not expect resp
 The UI should show the error (a single message) to the user. Does not expect response.
 
 ```json
-
 {
   "jsonrpc": "2.0",
   "id": 2,
   "method": "ui_showError",
-  "params": [
-    "Something bad happened!"
-  ]
+  "params": ["Something bad happened!"]
 }
-
 ```
 
 #### OnApprovedTx / `ui_onApprovedTx`
 
-`OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller.  The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
+`OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller. The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
 
 When implementing rate-limited rules, this callback should be used.
 
 TLDR; Use this method to keep track of signed transactions, instead of using the data in `ApproveTx`.
 
 Example call:
-```json
 
+```json
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -800,8 +812,8 @@ This method provides the UI with information about what API version the signer u
 in k/v-form.
 
 Example call:
-```json
 
+```json
 {
   "jsonrpc": "2.0",
   "id": 1,
@@ -817,7 +829,6 @@ Example call:
     }
   ]
 }
-
 ```
 
 #### OnInputRequired / `ui_onInputRequired`
@@ -825,8 +836,8 @@ Example call:
 Invoked when Clef requires user input (e.g. a password).
 
 Example call:
-```json
 
+```json
 {
   "jsonrpc": "2.0",
   "id": 1,

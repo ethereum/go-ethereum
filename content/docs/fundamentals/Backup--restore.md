@@ -9,9 +9,9 @@ description: How to backup and restore keyfiles and blockchain data
 
 All data relating to a specific Geth instance gets written inside a data directory. The default data directory locations are platform specific:
 
-* Mac: `~/Library/Ethereum`
-* Linux: `~/.ethereum`
-* Windows: `%LOCALAPPDATA%\Ethereum`
+- Mac: `~/Library/Ethereum`
+- Linux: `~/.ethereum`
+- Windows: `%LOCALAPPDATA%\Ethereum`
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories should be transportable between nodes, platforms, and client implementations.
 

@@ -11,9 +11,9 @@ Download Geth using the links on our [Downloads](/downloads) page. The SHA256 ha
 
 The local machine's firewall settings should:
 
-* Block all traffic to `8545`, or whatever custom port has been defined for JSON-RPC requests to the node, except for traffic from explicitly defined trusted machines. 
-* Allow traffic on `TCP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows the node to connect to peers.
-* Allow traffic on `UDP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows node discovery.
+- Block all traffic to `8545`, or whatever custom port has been defined for JSON-RPC requests to the node, except for traffic from explicitly defined trusted machines.
+- Allow traffic on `TCP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows the node to connect to peers.
+- Allow traffic on `UDP 30303` or whichever custom port has been defined for peer-to-peer communications. This allows node discovery.
 
 ## Account security
 
@@ -24,7 +24,6 @@ Geth has built-in account management tools that are sufficiently secure for most
 Geth allows account unlocking by passing account passwords at startup. This unlocks the account all the while that Geth is running. This is not allowed when `http` traffic is enabled, even with appropriate firewall settings. The combination of `http` and `-unlock` poses too much of a security risk because an attacker able to access the node over the exposed HTTP port would be able to make JSON-RPC requests to the node from the unlocked account, including sending funds to other addresses.
 
 **back up your keystore and passwords safely and securely!**
-
 
 ## Other security considerations
 

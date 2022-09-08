@@ -72,8 +72,6 @@ killall -QUIT geth
 
 This will dump stack traces for each instance to their respective log file.
 
-
 ## Where to go next
 
 Read the remaning pages in the Geth developer section, and get building!
-

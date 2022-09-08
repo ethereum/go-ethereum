@@ -5,12 +5,12 @@ description: Instructions for setting up Geth in developer mode
 
 It is often convenient for developers to work in an environment where changes to client or application software can be deployed and tested rapidly and without putting real-world users or assets at risk. For this purpose, Geth has a `--dev` flag that spins up Geth in "developer mode". This creates a single-node Ethereum test network with no connections to any external peers. It exists solely on the local machine. Starting Geth in developer mode does the following:
 
--   Initializes the data directory with a testing genesis block
--   Sets max peers to 0 (meaning Geth does not search for peers)
--   Turns off discovery by other nodes (meaning the node is invisible to other nodes)
--   Sets the gas price to 0 (no cost to send transactions)
--   Uses the Clique proof-of-authority consensus engine which allows blocks to be mined as-needed without excessive CPU and memory consumption
--   Uses on-demand block generation, producing blocks when transactions are waiting to be mined
+- Initializes the data directory with a testing genesis block
+- Sets max peers to 0 (meaning Geth does not search for peers)
+- Turns off discovery by other nodes (meaning the node is invisible to other nodes)
+- Sets the gas price to 0 (no cost to send transactions)
+- Uses the Clique proof-of-authority consensus engine which allows blocks to be mined as-needed without excessive CPU and memory consumption
+- Uses on-demand block generation, producing blocks when transactions are waiting to be mined
 
 This configuration enables developers to experiment with Geth's source code or develop new applications without having to sync to a pre-existing public network. Blocks are only mined when there are pending transactions. Developers can break things on this network without affecting other users. This page will demonstrate how to spin up a local Geth testnet and a simple smart contract will be deployed to it using the Remix online integrated development environment (IDE).
 
@@ -22,7 +22,7 @@ Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart co
 
 ## Start Geth in Dev Mode
 
-Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial. 
+Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial.
 
 Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, enable `http` and the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. For this tutorial some other namespaces will also be enabled. The full command is as follows:
 
@@ -33,13 +33,13 @@ geth --dev --http --http.api eth,web3,personal,net --http.corsdomain "http://rem
 The terminal will display the following logs, confirming Geth has started successfully in developer mode:
 
 ```terminal
-INFO [05-09|10:49:02.951] Starting Geth in ephemeral dev mode... 
+INFO [05-09|10:49:02.951] Starting Geth in ephemeral dev mode...
 INFO [05-09|10:49:02.952] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [05-09|10:49:02.952] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
 INFO [05-09|10:49:02.953] Set global gas cap                       cap=50,000,000
 INFO [05-09|10:49:03.133] Using developer account                  address=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62
 INFO [05-09|10:49:03.196] Allocated trie memory caches             clean=154.00MiB dirty=256.00MiB
-INFO [05-09|10:49:03.285] Writing custom genesis block 
+INFO [05-09|10:49:03.285] Writing custom genesis block
 INFO [05-09|10:49:03.286] Persisted trie from memory database      nodes=13 size=1.90KiB time="180.524µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 INFO [05-09|10:49:03.287] Initialised chain configuration          config="{ ChainID: 1337 Homestead: 0 DAO: nil DAOSupport: false EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 0, Muir Glacier: 0, Berlin: 0, London: 0, Arrow Glacier: nil, MergeFork: nil, Terminal TD: nil, Engine: clique}"
 INFO [05-09|10:49:03.288] Initialising Ethereum protocol           network=1337 dbversion= nil
@@ -47,14 +47,14 @@ INFO [05-09|10:49:03.289] Loaded most recent local header          number=0 hash
 INFO [05-09|10:49:03.289] Loaded most recent local full block      number=0 hash=c9c3de..579bb8 td=1 age=53y1mo1w
 INFO [05-09|10:49:03.289] Loaded most recent local fast block      number=0 hash=c9c3de..579bb8 td=1 age=53y1mo1w
 WARN [05-09|10:49:03.289] Failed to load snapshot, regenerating    err="missing or corrupted snapshot"
-INFO [05-09|10:49:03.289] Rebuilding state snapshot 
+INFO [05-09|10:49:03.289] Rebuilding state snapshot
 INFO [05-09|10:49:03.290] Resuming state snapshot generation       root=ceb850..0662cb accounts=0 slots=0 storage=0.00B elapsed="778.089µs"
 INFO [05-09|10:49:03.290] Regenerated local transaction journal    transactions=0 accounts=0
 INFO [05-09|10:49:03.292] Gasprice oracle is ignoring threshold set threshold=2
 INFO [05-09|10:49:03.292] Generated state snapshot                 accounts=10 slots=0 storage=412.00B elapsed=2.418ms
 WARN [05-09|10:49:03.292] Error reading unclean shutdown markers   error="leveldb: not found"
 INFO [05-09|10:49:03.292] Starting peer-to-peer node               instance=Geth/v1.10.18-unstable-8d84a701-20220503/linux-amd64/go1.18.1
-WARN [05-09|10:49:03.292] P2P server will be useless, neither dialing nor listening 
+WARN [05-09|10:49:03.292] P2P server will be useless, neither dialing nor listening
 INFO [05-09|10:49:03.292] Stored checkpoint snapshot to disk       number=0 hash=c9c3de..579bb8
 INFO [05-09|10:49:03.312] New local node record                    seq=1,652,089,743,311 id=bfedca74bea20733 ip=127.0.0.1 udp=0 tcp=0
 INFO [05-09|10:49:03.313] Started P2P networking                   self=enode://0544de6446dd5831daa5a391de8d0375d93ac602a95d6a182d499de31f22f75b6645c3f562932cac8328d51321b676c683471e2cf7b3c338bb6930faf6ead389@127.0.0.1:0
@@ -166,7 +166,6 @@ The transaction details are displayed as follows:
 
 Now that the user account is funded with ether, a contract can be created ready to deploy to the Geth node.
 
-
 ## A simple smart contract
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
@@ -186,13 +185,12 @@ contract Storage{
 
     function retrieve() public view returns (uint256){
         return number;
-    
+
     }
 }
 ```
 
 Solidity is a high-level language that makes code executable by the Ethereum virtual machine (EVM) readable to humans. This means that there is an intermediate step between writing code in Solidity and deploying it to Ethereum. This step is called "compilation" and it converts human-readable code into EVM-executable byte-code. This byte-code is then included in a transaction sent from the Geth node during contract deployment. This can all be done directly from the Geth Javascript console; however this tutorial uses an online IDE called Remix to handle the compilation and deployment of the contract to the local Geth node.
-
 
 ## Compile and deploy using Remix
 
@@ -206,14 +204,11 @@ The Solidity logo is present as an icon in the Remix side-bar. Clicking this ico
 
 Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
 
-
 ![Remix-deploy](assets/remix-deploy.png)
-
 
 To deploy `Storage.sol`, click `DEPLOY`.
 
 The following logs in the Geth terminal confirm that the contract was successfully deployed.
-
 
 ```terminal
 INFO [05-09|12:27:09.680] Setting new local account                address=0x7Aa16266Ba3d309e3cb278B452b1A6307E52Fb62
@@ -225,7 +220,7 @@ INFO [05-09|12:27:09.681] 🔨 mined potential block                  number=2 h
 
 ## Interact with contract using Remix
 
-The contract is now deployed on a local testnet version of the Etheruem blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console. 
+The contract is now deployed on a local testnet version of the Etheruem blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
 
 After deploying the contract in Remix, the `Deployed Contracts` tab in the sidebar automatically populates with the public functions exposed by `Storage.sol`. To send a value to the contract storage, type a number in the field adjacent to the `store` button, then click the button.
 
@@ -282,7 +277,7 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 
 ## Reusing --datadir
 
-This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode. 
+This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode.
 
 ```shell
 geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org"
@@ -297,9 +292,8 @@ Geth will fail to start in dev-mode if keys have been manually created or import
 geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
 
 ```
+
 **Note** that this is an edge-case that applies when both the `--datadir` and `--dev` flags are used and a key has been manually created or imported into the keystore.
-
-
 
 ## Summary
 

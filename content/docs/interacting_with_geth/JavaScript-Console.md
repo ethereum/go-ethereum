@@ -3,7 +3,7 @@ title: JavaScript Console
 description: How to interact with Geth using Javascript
 ---
 
-Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed. 
+Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed.
 
 ```
 curl --data '{"jsonrpc":"2.0","method":"eth_getBalance", "params": ["0x9b1d35635cc34752ca54713bb99d38614f63c955", "latest"], "id":2}' -H "Content-Type: application/json" localhost:8545
@@ -18,7 +18,6 @@ This returns a result which is also a JSON object, with values expressed as hexa
 While this approach is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). This is a collection of Javascript libraries for interacting with an Ethereum node at a higher level than sending raw JSON objects to the node. The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
 {% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.js documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/rpc/server)." %}
-
 
 ## Starting the console
 
@@ -76,32 +75,33 @@ To exit, press ctrl-d or type exit
 >
 ```
 
-
 ## Interactive use
 
 Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/rpc/server). For example, to create an account:
 
 ```js
-personal.newAccount()
+personal.newAccount();
 ```
 
 To check the balance of the first account already existing in the keystore:
 
 ```js
-eth.getBalance(personal.listAccounts[0])
+eth.getBalance(personal.listAccounts[0]);
 ```
-
 
 To make a transaction (without global account unlocking):
 
 ```js
-personal.sendTransaction({to: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.5, "ether")})
+personal.sendTransaction({
+  to: eth.accounts[0],
+  to: eth.accounts[1],
+  value: web3.toWei(0.5, 'ether')
+});
 ```
 
 It is also possible to load pre-written Javascript files into the console by passing the `--preload` flag
 when starting the console. This is useful for setting up complex contract objects or loading frequently-used
 functions.
-
 
 ```shell
 geth console --preload "/my/scripts/folder/utils.js"
@@ -111,7 +111,7 @@ Once the interactive session is over, the console can be closed down by typing `
 
 ## Non-interactive Use: Script Mode
 
-It is also possible to execute JavaScript code non-interactively by passing the `--exec` and a JSON-RPC-API endpoint 
+It is also possible to execute JavaScript code non-interactively by passing the `--exec` and a JSON-RPC-API endpoint
 to `geth attach` or `geth console`. The result is displayed directly in the terminal rather than in an interactive Javascript console.
 
 For example, to display the accounts in the keystore:
@@ -119,7 +119,6 @@ For example, to display the accounts in the keystore:
 ```shell
 geth attach --exec eth.accounts
 ```
-
 
 ```shell
 geth attach --exec eth.blockNumber
@@ -136,11 +135,9 @@ geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("che
 The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()`
 that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
 
-
 ## Timers
 
 In addition to the full functionality of JS (as per ECMA5), the Ethereum Javascript Runtime Environment (JSRE) is augmented with various timers. It implements `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout` which some users will be familiar with from browser windows. It also provides implementation for `admin.sleep(seconds)` and a block based timer, `admin.sleepBlocks(n)` which sleeps till the number of new blocks added is equal to or greater than `n`.
-
 
 ## Caveats
 

@@ -9,9 +9,9 @@ The `clique` API provides access to the state of the clique consensus engine. Th
 
 Retrieves a snapshot of all clique state at a given block.
 
-| Client  | Method invocation                                          |
-|:--------|------------------------------------------------------------|
-| Console | `clique.getSnapshot(blockNumber)`                          |
+| Client  | Method invocation                                           |
+| :------ | ----------------------------------------------------------- |
+| Console | `clique.getSnapshot(blockNumber)`                           |
 | RPC     | `{"method": "clique_getSnapshot", "params": [blockNumber]}` |
 
 Example:
@@ -45,9 +45,9 @@ Example:
 
 Retrieves the state snapshot at a given block.
 
-| Client  | Method invocation                                        |
-|:--------|----------------------------------------------------------|
-| Console | `clique.getSnapshotAtHash(blockHash)`                    |
+| Client  | Method invocation                                               |
+| :------ | --------------------------------------------------------------- |
+| Console | `clique.getSnapshotAtHash(blockHash)`                           |
 | RPC     | `{"method": "clique_getSnapshotAtHash", "params": [blockHash]}` |
 
 ### clique_getSigner
@@ -55,7 +55,7 @@ Retrieves the state snapshot at a given block.
 Returns the signer for a specific clique block. Can be called with either a blocknumber, blockhash or an rlp encoded blob. The RLP encoded blob can either be a block or a header.
 
 | Client  | Method invocation                                    |
-|:--------|------------------------------------------------------|
+| :------ | ---------------------------------------------------- |
 | Console | `clique.getSigner(blockNrOrHashOrRlp)`               |
 | RPC     | `{"method": "clique_getSigner", "params": [string]}` |
 
@@ -64,7 +64,7 @@ Returns the signer for a specific clique block. Can be called with either a bloc
 Retrieves the list of authorized signers at the specified block number.
 
 | Client  | Method invocation                                          |
-|:--------|------------------------------------------------------------|
+| :------ | ---------------------------------------------------------- |
 | Console | `clique.getSigners(blockNumber)`                           |
 | RPC     | `{"method": "clique_getSigners", "params": [blockNumber]}` |
 
@@ -73,7 +73,7 @@ Retrieves the list of authorized signers at the specified block number.
 Retrieves the list of authorized signers at the specified block hash.
 
 | Client  | Method invocation                                           |
-|:--------|-------------------------------------------------------------|
+| :------ | ----------------------------------------------------------- |
 | Console | `clique.getSignersAtHash(blockHash)`                        |
 | RPC     | `{"method": "clique_getSignersAtHash", "params": [string]}` |
 
@@ -82,7 +82,7 @@ Retrieves the list of authorized signers at the specified block hash.
 Returns the current proposals the node is voting on.
 
 | Client  | Method invocation                              |
-|:--------|------------------------------------------------|
+| :------ | ---------------------------------------------- |
 | Console | `clique.proposals()`                           |
 | RPC     | `{"method": "clique_proposals", "params": []}` |
 
@@ -91,7 +91,7 @@ Returns the current proposals the node is voting on.
 Adds a new authorization proposal that the signer will attempt to push through. If the `auth` parameter is true, the local signer votes for the given address to be included in the set of authorized signers. With `auth` set to `false`, the vote is against the address.
 
 | Client  | Method invocation                                         |
-|:--------|-----------------------------------------------------------|
+| :------ | --------------------------------------------------------- |
 | Console | `clique.propose(address, auth)`                           |
 | RPC     | `{"method": "clique_propose", "params": [address, auth]}` |
 
@@ -100,7 +100,7 @@ Adds a new authorization proposal that the signer will attempt to push through. 
 This method drops a currently running proposal. The signer will not cast further votes (either for or against) the address.
 
 | Client  | Method invocation                                   |
-|:--------|-----------------------------------------------------|
+| :------ | --------------------------------------------------- |
 | Console | `clique.discard(address)`                           |
 | RPC     | `{"method": "clique_discard", "params": [address]}` |
 
@@ -113,9 +113,9 @@ This is a debugging method which returns statistics about signer activity for th
   of blocks signed by them
 - `numBlocks`: number of blocks analyzed
 
-| Client  | Method invocation                                   |
-|:--------|-----------------------------------------------------|
-| Console | `clique.status()`                                   |
+| Client  | Method invocation                           |
+| :------ | ------------------------------------------- |
+| Console | `clique.status()`                           |
 | RPC     | `{"method": "clique_status", "params": []}` |
 
 Example:

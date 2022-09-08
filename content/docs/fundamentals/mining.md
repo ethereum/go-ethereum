@@ -7,15 +7,13 @@ description: Introduction to proof-of-work mining with Geth
 
 Blockchains grow when nodes add blocks and distribute them to their peers. Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomyl selects a node to produce each block. Under proof-of-work, however, block producers are selected by competition. The node that computes a certain value that can only be found using repeated random guesses wins the right to propose the next block. Only if a node can demonstrate that they have calculated this value, and therefore expended energy, will their block be accepted by other nodes. This secures the network. This process of creating blocks and securing them using proof-of-work is known as "mining".
 
-Much more information about mining, including details about the specific algorithm ("Ethash") used by Ethereum nodes is available on [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining). 
-
+Much more information about mining, including details about the specific algorithm ("Ethash") used by Ethereum nodes is available on [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining).
 
 ## CPU vs GPU
 
 Participating in Ethereum's PoW mining requires running an algorithm called ["Ethash"](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash). Geth includes a CPU miner which runs Ethash within the Geth process. This might be useful for mining on testnets or private networks where competition for producing new blocks is small. When minign was used to secure Ethereum Mainnet, CPU mining was not viable because CPU miners were easily outcompeted by more efficient GPU miners. To mine using GPUs an additional piece of third-party software is required. The recommended GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
 
-Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain, meaning block rewards will not be recognized by the main network. 
-
+Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain, meaning block rewards will not be recognized by the main network.
 
 ## GPU Mining
 
@@ -93,7 +91,6 @@ Note that the Geth command `miner.hashrate` only works for CPU mining - it alway
 
 The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions/84002/memory-hard-vs-memory-bound-functions) and requires a large dataset to be loaded into memory. Each GPU requires 4-5 GB of RAM. The error message `Error GPU mining. GPU memory fragmentation?` indicates that there is insufficient memory available.
 
-
 ## CPU Mining with Geth
 
 When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores).
@@ -105,10 +102,10 @@ geth --mine --miner.threads=4
 CPU mining can also be started and stopped at runtime using the [console](/docs/interface/javascript-console). The command `miner.start` takes an optional parameter for the number of miner threads.
 
 ```js
-miner.start(8)
- true
-miner.stop()
- true
+miner.start(8);
+true;
+miner.stop();
+true;
 ```
 
 Note that mining for real ether only makes sense if you are in sync with the network (since you mine on top of the consensus block). Therefore the Ethereum blockchain downloader/synchroniser will delay mining until syncing is complete, and after that mining automatically starts unless you cancel your intention with `miner.stop()`.
@@ -118,6 +115,7 @@ Like with GPU mining, an etherbase account must be set. This defaults to the pri
 ```shell
 geth --miner.etherbase '0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10' --mine
 ```
+
 If there is no account available an account wil be created and automatically configured to be the coinbase. The Javascript console can be used to reset the etherbase account at runtime:
 
 ```shell
@@ -152,21 +150,20 @@ It is also possible to check which blocks were mined by a particular miner (addr
 function minedBlocks(lastn, addr) {
   addrs = [];
   if (!addr) {
-    addr = eth.coinbase
+    addr = eth.coinbase;
   }
-  limit = eth.blockNumber - lastn
+  limit = eth.blockNumber - lastn;
   for (i = eth.blockNumber; i >= limit; i--) {
     if (eth.getBlock(i).miner == addr) {
-        addrs.push(i)
+      addrs.push(i);
     }
   }
-  return addrs
+  return addrs;
 }
 
 // scans the last 1000 blocks and returns the blocknumbers of blocks mined by your coinbase
 // (more precisely blocks the mining reward for which is sent to your coinbase).
-minedBlocks(1000, eth.coinbase)
-[352708, 352655, 352559]
+minedBlocks(1000, eth.coinbase)[(352708, 352655, 352559)];
 ```
 
 The etherbase balance will fluctuate because quite often a mined block may be re-org'd out of the canonical chain. This means that when the local Geth node includes the mined block in its own local blockchain the account balance appears higher because the block rewards are applied. When the node switches to another version of the chain due to information received from peers, that block may not be included and the block rewards are not applied.

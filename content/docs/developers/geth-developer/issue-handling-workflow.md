@@ -5,36 +5,38 @@ description: Instructions for managing Github issues
 
 ### Draft proposal
 
-* Keep the number of open issues under 820
+- Keep the number of open issues under 820
 
-* Keep the ratio of open issues per all issues under 13%
+- Keep the ratio of open issues per all issues under 13%
 
-* Have 50 issues labelled [help wanted](https://github.com/ethereum/go-ethereum/labels/help%20wanted) and 50 [good first issue](https://github.com/ethereum/go-ethereum/labels/good%20first%20issue).
+- Have 50 issues labelled [help wanted](https://github.com/ethereum/go-ethereum/labels/help%20wanted) and 50 [good first issue](https://github.com/ethereum/go-ethereum/labels/good%20first%20issue).
 
-* Use structured labels of the form `<category>:<label>` or if need be `<category>:<main>/<sub>`, for example `area: plugins/foobuzzer`.
+- Use structured labels of the form `<category>:<label>` or if need be `<category>:<main>/<sub>`, for example `area: plugins/foobuzzer`.
 
-* Use the following labels. Areas and statuses depend on the application and workflow.
-- area
-    - `area: android`
-    - `area: clef`
-    - `area: network`
-    - `area: swarm`
-    - `area: whisper`
-- type
-    - `type: bug`
-    - `type: feature`
-    - `type: documentation`
-    - `type: discussion`
-- status
-    - `status: PR review`
-    - `status: community working on it`
-- need
-    - `need: more info`
-    - `need: steps to reproduce`
-    - `need: investigation`
-    - `need: decision`
+- Use the following labels. Areas and statuses depend on the application and workflow.
+
+* area
+  - `area: android`
+  - `area: clef`
+  - `area: network`
+  - `area: swarm`
+  - `area: whisper`
+* type
+  - `type: bug`
+  - `type: feature`
+  - `type: documentation`
+  - `type: discussion`
+* status
+  - `status: PR review`
+  - `status: community working on it`
+* need
+  - `need: more info`
+  - `need: steps to reproduce`
+  - `need: investigation`
+  - `need: decision`
 
 Use these milestones
+
 - [Future](https://github.com/ethereum/go-ethereum/milestone/80) - Maybe implement one day
 - [Coming soon](https://github.com/ethereum/go-ethereum/milestone/81) - Not assigned to a specific release, but to be delivered in one of the upcoming releases
 - \<next version\> - Next release with a version number
@@ -56,5 +58,5 @@ The Geth core team hold a weekly or bi-weekly triage meeting. Issues are presele
 
 Optional further activities:
 
-* Label the issue with the appropriate area/component.
-* Add a section to the FAQ or add a wiki page. Link to it from the issue.
+- Label the issue with the appropriate area/component.
+- Add a section to the FAQ or add a wiki page. Link to it from the issue.

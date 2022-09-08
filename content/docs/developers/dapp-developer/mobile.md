@@ -3,7 +3,7 @@ title: Geth for Mobile
 description: Introduction to mobile development with Geth
 ---
 
-Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. This is because being able to verify data, follow the chain and submit transactions without relying on centralized intermediaries is critical for censorship resistant access to the network. Doing so on a mobile device is the most convenient route for many users. This relies on Geth running a [light client](/docs/interface/les) on the mobile 
+Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. This is because being able to verify data, follow the chain and submit transactions without relying on centralized intermediaries is critical for censorship resistant access to the network. Doing so on a mobile device is the most convenient route for many users. This relies on Geth running a [light client](/docs/interface/les) on the mobile
 device and exposing an API that developers can use to build mobile apps on top of Geth. This page outlines how to download Geth for mobile and how to get started with managing Ethereum accounts in mobile applications. Ethereum mobile development is relatively nascent, but there is an active developer community. For further information on Geth mobile development visit the #mobile channel in the [Geth discord](https://discord.gg/wQdpS5aA).
 
 ## Download and install
@@ -53,7 +53,7 @@ Similarly to the reusable [Go libraries](content/docs/developers/dapp-developer/
 - Remote node interfacing via different transports
 - Contract interactions through auto-generated bindings
 
-The Geth mobile API is broadly equivalent to the [Go API](/content/docs/developers/dapp-developer/native-accounts.md). The source code can be found in the `mobile` section of Geth's 
+The Geth mobile API is broadly equivalent to the [Go API](/content/docs/developers/dapp-developer/native-accounts.md). The source code can be found in the `mobile` section of Geth's
 [Github](https://github.com/ethereum/go-ethereum/tree/master/mobile).
 
 ## Mobile Account Management
@@ -65,15 +65,15 @@ To support this, Geth provides an accounts library that includes the tools requi
 
 ### Encrypted keystores
 
-Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be stored encrypted so that even if the mobile device is accessed by a malicious third party the keys are still hidden under an additional layer of security. Geth provides a keystore that enables developers to store keys securely using the [`secp256k1` elliptic curve](https://www.secg.org/sec2-v2.pdf), implemented using [`libsecp256k`](https://github.com/bitcoin-core/secp256k1) and wrapped by [Geth accounts](https://godoc.org/github.com/ethereum/go-ethereum/accounts). 
+Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be stored encrypted so that even if the mobile device is accessed by a malicious third party the keys are still hidden under an additional layer of security. Geth provides a keystore that enables developers to store keys securely using the [`secp256k1` elliptic curve](https://www.secg.org/sec2-v2.pdf), implemented using [`libsecp256k`](https://github.com/bitcoin-core/secp256k1) and wrapped by [Geth accounts](https://godoc.org/github.com/ethereum/go-ethereum/accounts).
 
 Accounts are stored on disk in the [Web3 Secret Storage](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) format. Developers should be aware of these implementation details but are not required to deeply understand the cryptographic primitives in order to use the keystore.
 
-One thing that should be understood, though, is that the cryptographic primitives underpinning the keystore can operate in *light* or *standard* mode. Light mode is computationally cheaper, while standard mode has extra security. Light mode is appropriate for mobile devices, but developers
+One thing that should be understood, though, is that the cryptographic primitives underpinning the keystore can operate in _light_ or _standard_ mode. Light mode is computationally cheaper, while standard mode has extra security. Light mode is appropriate for mobile devices, but developers
 should be aware that there is a security trade-off.
 
-* *standard* needs 256MB memory and 1 second processing on a modern CPU to access a key 
-* *light* needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
+- _standard_ needs 256MB memory and 1 second processing on a modern CPU to access a key
+- _light_ needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
 
 ### Keystores on Android (Java)
 
@@ -92,11 +92,11 @@ KeyStore ks = new KeyStore("/path/to/keystore", Geth.LightScryptN, Geth.LightScr
 
 The keystore should be in a location writable by the local mobile application but on-readable for other installed applications such as inside the app's data directory. If the `KeyStore` is created from within a class extending an Android object, access to the `Context.getFilesDir()` method is probably provided via `this.getFilesDir()`, so the keystore path could be set to `this.getFilesDir() + "/keystore"`.
 
-The last two arguments of the `KeyStore` constructor are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `Geth.StandardScryptN, Geth.StandardScryptP`, `Geth.LightScryptN, Geth.LightScryptP` or custom numbers. The *light* version is recommended.
+The last two arguments of the `KeyStore` constructor are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `Geth.StandardScryptN, Geth.StandardScryptP`, `Geth.LightScryptN, Geth.LightScryptP` or custom numbers. The _light_ version is recommended.
 
 ### Keystores on iOS (Swift 3)
 
-The encrypted keystore on iOS is implemented by the `GethKeyStore` class from the `Geth` framework. The configuration constants are located in the same namespace as global variables. Hence to do client side account management on iOS, `Geth` framework should be 
+The encrypted keystore on iOS is implemented by the `GethKeyStore` class from the `Geth` framework. The configuration constants are located in the same namespace as global variables. Hence to do client side account management on iOS, `Geth` framework should be
 imported into the Swift code:
 
 ```swift
@@ -112,7 +112,7 @@ let ks = GethNewKeyStore("/path/to/keystore", GethLightScryptN, GethLightScryptP
 The keystore folder needs to be in a location writable by the local mobile application but non-readable for other installed applications such as inside the app's document directory. The document directory shopuld be retrievable using
 `let datadir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]`, so the keystore path could be `datadir + "/keystore"`.
 
-The last two arguments of the `GethNewKeyStore` factory method are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `GethStandardScryptN, GethStandardScryptP`, `GethLightScryptN, GethLightScryptP` or custom numbers. The *light* version is recommended.
+The last two arguments of the `GethNewKeyStore` factory method are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `GethStandardScryptN, GethStandardScryptP`, `GethLightScryptN, GethLightScryptP` or custom numbers. The _light_ version is recommended.
 
 ### Account lifecycle
 
@@ -123,13 +123,13 @@ Although the keystore defines the encryption strength it uses to store accounts,
 
 This individuality means that any operation requiring access to an account will need to provide the necessary authentication credentials for that particular account in the form of a passphrase:
 
- * When creating a new account, the caller must supply a passphrase to encrypt the account with. This passphrase will be required for any subsequent access.
- * When deleting an existing account, the caller must supply a passphrase to verify ownership of the account. This isn't cryptographically necessary, rather a protective measure against accidental loss of accounts.
- * When updating an existing account, the caller must supply both current and new passphrases. After completing the operation, the account will not be accessible via the old passphrase.
- * When exporting an existing account, the caller must supply both the current passphrase to decrypt the account, as well as an export passphrase to re-encrypt it with before returning the key-file to the user. This is required to allow moving accounts between devices without sharing original credentials.
- * When importing a new account, the caller must supply both the encryption passphrase of the key-file being imported, as well as a new passphrase with which to store the account. This is required to allow storing account with different credentials than used for moving them around.
+- When creating a new account, the caller must supply a passphrase to encrypt the account with. This passphrase will be required for any subsequent access.
+- When deleting an existing account, the caller must supply a passphrase to verify ownership of the account. This isn't cryptographically necessary, rather a protective measure against accidental loss of accounts.
+- When updating an existing account, the caller must supply both current and new passphrases. After completing the operation, the account will not be accessible via the old passphrase.
+- When exporting an existing account, the caller must supply both the current passphrase to decrypt the account, as well as an export passphrase to re-encrypt it with before returning the key-file to the user. This is required to allow moving accounts between devices without sharing original credentials.
+- When importing a new account, the caller must supply both the encryption passphrase of the key-file being imported, as well as a new passphrase with which to store the account. This is required to allow storing account with different credentials than used for moving them around.
 
-*Please note, there is no recovery mechanisms for losing the passphrases. The cryptographic properties of the encrypted keystore (if using the provided parameters) guarantee that account credentials cannot be brute forced in any meaningful time.*
+_Please note, there is no recovery mechanisms for losing the passphrases. The cryptographic properties of the encrypted keystore (if using the provided parameters) guarantee that account credentials cannot be brute forced in any meaningful time._
 
 ### Accounts on Android (Java)
 
@@ -187,10 +187,9 @@ As mentioned above, account objects do not hold the sensitive private keys of th
 
 There are a few different ways one can authorize the account manager to execute signing operations. Since the different methods have very different security guarantees, it is essential to be clear on how each works:
 
- * **Single authorization**: The simplest way to sign a transaction via the keystore is to provide the passphrase of the account every time something needs to be signed, which will ephemerally decrypt the private key, execute the signing operation and immediately throw away the decrypted key. The drawbacks are that the passphrase needs to be queried from the user every time, which can become annoying if done frequently; or the application needs to keep the passphrase in memory, which can have security consequences if not done properly; and depending on the keystore's configured strength, constantly decrypting keys can result in non-negligible resource requirements.
-  
- * **Multiple authorizations**: A more complex way of signing transactions via the keystore is to unlock the account via its passphrase once, and allow the account manager to cache the decrypted private key, enabling all subsequent signing requests tocomplete without the passphrase. The lifetime of the cached private key may be managed manually (by explicitly locking the account back up) or automatically (by providing a timeout during unlock). This mechanism is useful for scenarios where the user may need to sign many transactions or the application would need to do so without requiring user input. The crucial aspect to remember is that **anyone with access to the account manager can sign transactions while a particular account is unlocked** (e.g. device left unattended; application running untrusted code).
+- **Single authorization**: The simplest way to sign a transaction via the keystore is to provide the passphrase of the account every time something needs to be signed, which will ephemerally decrypt the private key, execute the signing operation and immediately throw away the decrypted key. The drawbacks are that the passphrase needs to be queried from the user every time, which can become annoying if done frequently; or the application needs to keep the passphrase in memory, which can have security consequences if not done properly; and depending on the keystore's configured strength, constantly decrypting keys can result in non-negligible resource requirements.
 
+- **Multiple authorizations**: A more complex way of signing transactions via the keystore is to unlock the account via its passphrase once, and allow the account manager to cache the decrypted private key, enabling all subsequent signing requests tocomplete without the passphrase. The lifetime of the cached private key may be managed manually (by explicitly locking the account back up) or automatically (by providing a timeout during unlock). This mechanism is useful for scenarios where the user may need to sign many transactions or the application would need to do so without requiring user input. The crucial aspect to remember is that **anyone with access to the account manager can sign transactions while a particular account is unlocked** (e.g. device left unattended; application running untrusted code).
 
 ### Signing on Android (Java)
 
@@ -223,7 +222,7 @@ signed = ks.signTx(signer, tx, chain);
 
 ### Signing on iOS (Swift 3)
 
-Assuming an instance of a `GethKeyStore` called `ks` exists, a new account can be created to sign transactions with its `newAccount` method. For 
+Assuming an instance of a `GethKeyStore` called `ks` exists, a new account can be created to sign transactions with its `newAccount` method. For
 this demonstation a hard-coded example transaction is created to sign:
 
 ```swift
@@ -255,5 +254,3 @@ signed = try! ks?.signTx(signer, tx: tx, chainID: chain)
 ## Summary
 
 This page introduced Geth for mobile. In addition to download and installation instructions, basic account management was demonstrated for mobile applications on iOS and Android.
-
-

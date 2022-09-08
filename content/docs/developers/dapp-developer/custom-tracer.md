@@ -11,42 +11,41 @@ Transaction traces include the complete status of the EVM at every point during 
 
 ### A simple filter
 
-Filters are Javascript functions that select information from the trace to persist and discard based on some conditions. The following Javascript function returns only the sequence of opcodes executed by the transaction as a comma-separated list. The function could be written directly in the Javascript console, but it is cleaner to write it in a separate re-usable file and load it into the console. 
+Filters are Javascript functions that select information from the trace to persist and discard based on some conditions. The following Javascript function returns only the sequence of opcodes executed by the transaction as a comma-separated list. The function could be written directly in the Javascript console, but it is cleaner to write it in a separate re-usable file and load it into the console.
 
 1. Create a file, `filterTrace_1.js`, with this content:
 
    ```javascript
-
-   tracer = function(tx) {
-      return debug.traceTransaction(tx, {tracer:
+   tracer = function (tx) {
+     return debug.traceTransaction(tx, {
+       tracer:
          '{' +
-            'retVal: [],' +
-            'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
-            'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-            'result: function(ctx,db) {return this.retVal}' +
+         'retVal: [],' +
+         'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
+         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+         'result: function(ctx,db) {return this.retVal}' +
          '}'
-      }) // return debug.traceTransaction ...
-   }   // tracer = function ...
-
+     }); // return debug.traceTransaction ...
+   }; // tracer = function ...
    ```
 
 2. Run the [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console).
-   
 3. Get the hash of a recent transaction from a node or block explorer.
 
 4. Run this command to run the script:
 
    ```javascript
-   loadScript("filterTrace_1.js")
+   loadScript('filterTrace_1.js');
    ```
 
 5. Run the tracer from the script. Be patient, it could take a long time.
 
    ```javascript
-   tracer("<hash of transaction>")
+   tracer('<hash of transaction>');
    ```
 
    The bottom of the output looks similar to:
+
    ```sh
    "3366:POP", "3367:JUMP", "1355:JUMPDEST", "1356:PUSH1", "1358:MLOAD", "1359:DUP1", "1360:DUP3", "1361:ISZERO", "1362:ISZERO",
    "1363:ISZERO", "1364:ISZERO", "1365:DUP2", "1366:MSTORE", "1367:PUSH1", "1369:ADD", "1370:SWAP2", "1371:POP", "1372:POP", "1373:PUSH1",
@@ -56,10 +55,10 @@ Filters are Javascript functions that select information from the trace to persi
 6. Run this line to get a more readable output with each string in its own line.
 
    ```javascript
-   console.log(JSON.stringify(tracer("<hash of transaction>"), null, 2))
+   console.log(JSON.stringify(tracer('<hash of transaction>'), null, 2));
    ```
 
-More information about the `JSON.stringify` function is available [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify). 
+More information about the `JSON.stringify` function is available [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify).
 
 The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](https://geth.ethereum.org/docs/dapp/tracing), but with a new parameter, `tracer`. This parameter takes the JavaScript object formated as a string. In the case of the trace above, it is:
 
@@ -71,6 +70,7 @@ The commands above worked by calling the same `debug.traceTransaction` function 
    result: function(ctx,db) {return this.retVal}
 }
 ```
+
 This object has three member functions:
 
 - `step`, called for each opcode.
@@ -86,21 +86,22 @@ The `step` function adds to `retVal` the program counter and the name of the opc
 For actual filtered tracing we need an `if` statement to only log relevant information. For example, to isolate the transaction's interaction with storage, the following tracer could be used:
 
 ```javascript
-tracer = function(tx) {
-      return debug.traceTransaction(tx, {tracer:
+tracer = function (tx) {
+  return debug.traceTransaction(tx, {
+    tracer:
       '{' +
-         'retVal: [],' +
-         'step: function(log,db) {' +
-         '   if(log.op.toNumber() == 0x54) ' +
-         '     this.retVal.push(log.getPC() + ": SLOAD");' +
-         '   if(log.op.toNumber() == 0x55) ' +
-         '     this.retVal.push(log.getPC() + ": SSTORE");' +
-         '},' +
-         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-         'result: function(ctx,db) {return this.retVal}' +
+      'retVal: [],' +
+      'step: function(log,db) {' +
+      '   if(log.op.toNumber() == 0x54) ' +
+      '     this.retVal.push(log.getPC() + ": SLOAD");' +
+      '   if(log.op.toNumber() == 0x55) ' +
+      '     this.retVal.push(log.getPC() + ": SSTORE");' +
+      '},' +
+      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+      'result: function(ctx,db) {return this.retVal}' +
       '}'
-      }) // return debug.traceTransaction ...
-}   // tracer = function ...
+  }); // return debug.traceTransaction ...
+}; // tracer = function ...
 ```
 
 The `step` function here looks at the opcode number of the op, and only pushes an entry if the opcode is `SLOAD` or `SSTORE` ([here is a list of EVM opcodes and their numbers](https://github.com/wolflo/evm-opcodes)). We could have used `log.op.toString()` instead, but it is faster to compare numbers rather than strings.
@@ -120,7 +121,6 @@ The output looks similar to this:
 ]
 ```
 
-
 ### Stack Information
 
 The trace above reports the program counter (PC) and whether the program read from storage or wrote to it. That alone isn't particularly useful. To know more, the `log.stack.peek` function can be used to peek into the stack. `log.stack.peek(0)` is the stack top, `log.stack.peek(1)` the entry below it, etc.
@@ -129,28 +129,28 @@ The values returned by `log.stack.peek` are Go `big.Int` objects. By default the
 
 #### Storage Information
 
-The function below provides a trace of all the storage operations and their parameters. This gives a more complete picture of the program's interaction with storage. 
+The function below provides a trace of all the storage operations and their parameters. This gives a more complete picture of the program's interaction with storage.
 
 ```javascript
-tracer = function(tx) {
-      return debug.traceTransaction(tx, {tracer:
+tracer = function (tx) {
+  return debug.traceTransaction(tx, {
+    tracer:
       '{' +
-         'retVal: [],' +
-         'step: function(log,db) {' +
-         '   if(log.op.toNumber() == 0x54) ' +
-         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-         '        log.stack.peek(0).toString(16));' +
-         '   if(log.op.toNumber() == 0x55) ' +
-         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-         '        log.stack.peek(0).toString(16) + " <- " +' +
-         '        log.stack.peek(1).toString(16));' +
-         '},' +
-         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-         'result: function(ctx,db) {return this.retVal}' +
+      'retVal: [],' +
+      'step: function(log,db) {' +
+      '   if(log.op.toNumber() == 0x54) ' +
+      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+      '        log.stack.peek(0).toString(16));' +
+      '   if(log.op.toNumber() == 0x55) ' +
+      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+      '        log.stack.peek(0).toString(16) + " <- " +' +
+      '        log.stack.peek(1).toString(16));' +
+      '},' +
+      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+      'result: function(ctx,db) {return this.retVal}' +
       '}'
-      }) // return debug.traceTransaction ...
-}   // tracer = function ...
-
+  }); // return debug.traceTransaction ...
+}; // tracer = function ...
 ```
 
 The output is similar to:
@@ -176,35 +176,36 @@ storage, so here we can't.
 The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.
 
 ```javascript
-tracer = function(tx) {
-      return debug.traceTransaction(tx, {tracer:
+tracer = function (tx) {
+  return debug.traceTransaction(tx, {
+    tracer:
       '{' +
-         'retVal: [],' +
-         'afterSload: false,' +
-         'step: function(log,db) {' +
-         '   if(this.afterSload) {' +
-         '     this.retVal.push("    Result: " + ' +
-         '          log.stack.peek(0).toString(16)); ' +
-         '     this.afterSload = false; ' +
-         '   } ' +
-         '   if(log.op.toNumber() == 0x54) {' +
-         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-         '        log.stack.peek(0).toString(16));' +
-         '        this.afterSload = true; ' +
-         '   } ' +
-         '   if(log.op.toNumber() == 0x55) ' +
-         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-         '        log.stack.peek(0).toString(16) + " <- " +' +
-         '        log.stack.peek(1).toString(16));' +
-         '},' +
-         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-         'result: function(ctx,db) {return this.retVal}' +
+      'retVal: [],' +
+      'afterSload: false,' +
+      'step: function(log,db) {' +
+      '   if(this.afterSload) {' +
+      '     this.retVal.push("    Result: " + ' +
+      '          log.stack.peek(0).toString(16)); ' +
+      '     this.afterSload = false; ' +
+      '   } ' +
+      '   if(log.op.toNumber() == 0x54) {' +
+      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+      '        log.stack.peek(0).toString(16));' +
+      '        this.afterSload = true; ' +
+      '   } ' +
+      '   if(log.op.toNumber() == 0x55) ' +
+      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+      '        log.stack.peek(0).toString(16) + " <- " +' +
+      '        log.stack.peek(1).toString(16));' +
+      '},' +
+      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+      'result: function(ctx,db) {return this.retVal}' +
       '}'
-      }) // return debug.traceTransaction ...
-}   // tracer = function ...
+  }); // return debug.traceTransaction ...
+}; // tracer = function ...
 ```
 
-The output now contains the result in the line that follows the `SLOAD`. 
+The output now contains the result in the line that follows the `SLOAD`.
 
 ```javascript
 [
@@ -229,64 +230,55 @@ So the storage has been treated as if there are only 2<sup>256</sup> cells. Howe
 However, `log.contract.getAddress()` returns an array of bytes. To convert this to the familiar hexadecimal representation of Ethereum addresses, `this.byteHex()` and `array2Hex()` can be used.
 
 ```javascript
-tracer = function(tx) {
-      return debug.traceTransaction(tx, {tracer:
+tracer = function (tx) {
+  return debug.traceTransaction(tx, {
+    tracer:
       '{' +
-         'retVal: [],' +
-         'afterSload: false,' +
-         'callStack: [],' +
-
-         'byte2Hex: function(byte) {' +
-         '  if (byte < 0x10) ' +
-         '      return "0" + byte.toString(16); ' +
-         '  return byte.toString(16); ' +
-         '},' +
-
-         'array2Hex: function(arr) {' +
-         '  var retVal = ""; ' +
-         '  for (var i=0; i<arr.length; i++) ' +
-         '    retVal += this.byte2Hex(arr[i]); ' +
-         '  return retVal; ' +
-         '}, ' +
-
-         'getAddr: function(log) {' +
-         '  return this.array2Hex(log.contract.getAddress());' +
-         '}, ' +
-
-         'step: function(log,db) {' +
-         '   var opcode = log.op.toNumber();' +
-
-         // SLOAD
-         '   if (opcode == 0x54) {' +
-         '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-         '        this.getAddr(log) + ":" + ' +
-         '        log.stack.peek(0).toString(16));' +
-         '        this.afterSload = true; ' +
-         '   } ' +
-
-         // SLOAD Result
-         '   if (this.afterSload) {' +
-         '     this.retVal.push("    Result: " + ' +
-         '          log.stack.peek(0).toString(16)); ' +
-         '     this.afterSload = false; ' +
-         '   } ' +
-
-         // SSTORE
-         '   if (opcode == 0x55) ' +
-         '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-         '        this.getAddr(log) + ":" + ' +
-         '        log.stack.peek(0).toString(16) + " <- " +' +
-         '        log.stack.peek(1).toString(16));' +
-
-         // End of step
-         '},' +
-
-         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-
-         'result: function(ctx,db) {return this.retVal}' +
+      'retVal: [],' +
+      'afterSload: false,' +
+      'callStack: [],' +
+      'byte2Hex: function(byte) {' +
+      '  if (byte < 0x10) ' +
+      '      return "0" + byte.toString(16); ' +
+      '  return byte.toString(16); ' +
+      '},' +
+      'array2Hex: function(arr) {' +
+      '  var retVal = ""; ' +
+      '  for (var i=0; i<arr.length; i++) ' +
+      '    retVal += this.byte2Hex(arr[i]); ' +
+      '  return retVal; ' +
+      '}, ' +
+      'getAddr: function(log) {' +
+      '  return this.array2Hex(log.contract.getAddress());' +
+      '}, ' +
+      'step: function(log,db) {' +
+      '   var opcode = log.op.toNumber();' +
+      // SLOAD
+      '   if (opcode == 0x54) {' +
+      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
+      '        this.getAddr(log) + ":" + ' +
+      '        log.stack.peek(0).toString(16));' +
+      '        this.afterSload = true; ' +
+      '   } ' +
+      // SLOAD Result
+      '   if (this.afterSload) {' +
+      '     this.retVal.push("    Result: " + ' +
+      '          log.stack.peek(0).toString(16)); ' +
+      '     this.afterSload = false; ' +
+      '   } ' +
+      // SSTORE
+      '   if (opcode == 0x55) ' +
+      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
+      '        this.getAddr(log) + ":" + ' +
+      '        log.stack.peek(0).toString(16) + " <- " +' +
+      '        log.stack.peek(1).toString(16));' +
+      // End of step
+      '},' +
+      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+      'result: function(ctx,db) {return this.retVal}' +
       '}'
-      }) // return debug.traceTransaction ...
-}   // tracer = function ...
+  }); // return debug.traceTransaction ...
+}; // tracer = function ...
 ```
 
 The output is similar to:
@@ -310,11 +302,9 @@ The output is similar to:
 ]
 ```
 
-
 ## Other traces
 
 This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, for specific `eth_call`s or rejected blocks. The full list of trace functions can be explored in the [reference documentation](/content/docs/interacting_with_geth/RPC/ns-debug.md).
-
 
 ## Custom Go tracing
 
@@ -418,5 +408,3 @@ As can be seen every method of the [EVMLogger interface](https://pkg.go.dev/gith
     ...
 }
 ```
-
-

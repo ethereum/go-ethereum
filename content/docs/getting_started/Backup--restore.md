@@ -10,9 +10,9 @@ Most important info first: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE
 Everything `geth` persists gets written inside its data directory. The default data
 directory locations are platform specific:
 
-* Mac: `~/Library/Ethereum`
-* Linux: `~/.ethereum`
-* Windows: `%LOCALAPPDATA%\Ethereum`
+- Mac: `~/Library/Ethereum`
+- Linux: `~/.ethereum`
+- Windows: `%LOCALAPPDATA%\Ethereum`
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories
 should be transportable between nodes, platforms, implementations (C++, Go, Python).
@@ -60,6 +60,5 @@ geth import <filename>
 ```
 
 _See https://eth.wiki/en/howto/blockchain-import-and-export-instructions for more info_
-
 
 And finally: **REMEMBER YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**

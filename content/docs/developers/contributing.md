@@ -11,11 +11,11 @@ If you'd like to contribute to the Geth source code, please fork the [Github rep
 
 Please make sure your contributions adhere to our coding guidelines:
 
-* Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
-* Code must be documented adhering to the official Go commentary guidelines.
-* Pull requests need to be based on and opened against the master branch.
-* Commit messages should be prefixed with the package(s) they modify.
-	E.g. "eth, rpc: make trace configs optional"
+- Code must adhere to the official Go formatting guidelines (i.e. uses gofmt).
+- Code must be documented adhering to the official Go commentary guidelines.
+- Pull requests need to be based on and opened against the master branch.
+- Commit messages should be prefixed with the package(s) they modify.
+  E.g. "eth, rpc: make trace configs optional"
 
 Pull requests generally need to be based on and opened against the `master` branch, unless by explicit agreement because the work is contributing to some more complex feature branch.
 

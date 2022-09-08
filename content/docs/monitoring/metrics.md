@@ -7,39 +7,36 @@ Geth includes a variety of optional metrics that can be reported to the user. Ho
 
 The goal of the Geth metrics system is that - similar to logs - arbitrary metric collections can be added to any part of the code without requiring fancy constructs to analyze them (counter variables, public interfaces, crossing over the APIs, console hooks, etc). Instead, metrics should be "updated" whenever and wherever needed and be automatically collected, surfaced through the APIs, queryable and visualizable for analysis.
 
-
 ## Metric types
 
 Geth's metrics can be classified into four types: meters, timers, counters and guages.
 
 ### Meters
 
-Analogous to physical meters (electricity, water, etc), Geth's meters are capable of measuring the *amount* of "things" that pass through and at the *rate* at which they do. A meter doesn't have a specific unit of measure (byte, block, malloc, etc), it just counts arbitrary *events*. At any point in time a meter can report:
+Analogous to physical meters (electricity, water, etc), Geth's meters are capable of measuring the _amount_ of "things" that pass through and at the _rate_ at which they do. A meter doesn't have a specific unit of measure (byte, block, malloc, etc), it just counts arbitrary _events_. At any point in time a meter can report:
 
-* *Total number of events* that passed through the meter
-* *Mean throughput rate* of the meter since startup (events / second)
-* *Weighted throughput rate* in the last *1*, *5* and *15* minutes (events / second)
-  ("weighted" means that recent seconds count more that in older ones*)
-
+- _Total number of events_ that passed through the meter
+- _Mean throughput rate_ of the meter since startup (events / second)
+- _Weighted throughput rate_ in the last _1_, _5_ and _15_ minutes (events / second)
+  ("weighted" means that recent seconds count more that in older ones\*)
 
 ### Timers
 
-Timers are extensions of *meters*, the *duration* of an event is collected alongside a log of its occurrence. Similarly to meters, a timer can also measure arbitrary events but each requires a duration to be assigned individually. In addition generating all of the meter report types, a timer also reports:
+Timers are extensions of _meters_, the _duration_ of an event is collected alongside a log of its occurrence. Similarly to meters, a timer can also measure arbitrary events but each requires a duration to be assigned individually. In addition generating all of the meter report types, a timer also reports:
 
-* *Percentiles (5, 20, 50, 80, 95)*, reporting that some percentage of the events took less than the reported time to execute (*e.g. Percentile 20 = 1.5s would mean that 20% of the measured events took less time than 1.5 seconds to execute; inherently 80%(=100%-20%) took more that 1.5s*)
-* Percentile 5: minimum durations (this is as fast as it gets)
-* Percentile 50: well behaved samples (boring, just to give an idea)
-* Percentile 80: general performance (these should be optimised)
-* Percentile 95: worst case outliers (rare, just handle gracefully)
+- _Percentiles (5, 20, 50, 80, 95)_, reporting that some percentage of the events took less than the reported time to execute (_e.g. Percentile 20 = 1.5s would mean that 20% of the measured events took less time than 1.5 seconds to execute; inherently 80%(=100%-20%) took more that 1.5s_)
+- Percentile 5: minimum durations (this is as fast as it gets)
+- Percentile 50: well behaved samples (boring, just to give an idea)
+- Percentile 80: general performance (these should be optimised)
+- Percentile 95: worst case outliers (rare, just handle gracefully)
 
-### Counters: 
+### Counters:
 
 A counter is a single int64 value that can be incremented and decremented. The current value of the counter can be queried.
 
-### Gauges: 
+### Gauges:
 
 A gauge is a single int64 value. Its value can increment and decrement - as with a counter - but can also be set arbitrarily.
-
 
 ## Querying metrics
 
@@ -98,7 +95,7 @@ meter := metrics.NewOrRegisteredMeter("system/memory/allocs")
 timer := metrics.NewOrRegisteredTimer("chain/inserts")
 ```
 
-The name given to the metric can be any arbitrary string. However, since Geth assumes it to be some meaningful sub-system hierarchy, it should be named accordingly. 
+The name given to the metric can be any arbitrary string. However, since Geth assumes it to be some meaningful sub-system hierarchy, it should be named accordingly.
 
 Metrics can then be updated:
 
@@ -112,4 +109,4 @@ timer.Time(function)    // Measure and record the execution of `function`
 
 ## Summary
 
-Geth can be configured to report metrics to an HTTP server or database. These functions are disabled by default but can be configured by passing the appropriate commands on startup. Users can easily create custom metrics by adding them to the Geth source code, following the instructions on this page. 
+Geth can be configured to report metrics to an HTTP server or database. These functions are disabled by default but can be configured by passing the appropriate commands on startup. Users can easily create custom metrics by adding them to the Geth source code, following the instructions on this page.

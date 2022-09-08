@@ -3,17 +3,17 @@ title: Rules
 description: Introduction to automated rulesets in Clef
 ---
 
-Rules in Clef are sets of conditions that determine whether a given action can be approved automatically without requiring manual intervention from the user. This can be useful for automatically approving transactions between a user's own accounts, or approving patterns that are commonly used by applications. Automatic signing also requires Clef to have access to account passwords which is configured independently of the ruleset. 
+Rules in Clef are sets of conditions that determine whether a given action can be approved automatically without requiring manual intervention from the user. This can be useful for automatically approving transactions between a user's own accounts, or approving patterns that are commonly used by applications. Automatic signing also requires Clef to have access to account passwords which is configured independently of the ruleset.
 
 Rules can define arbitrary conditions such as:
 
-* Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and `1 ether` per 24h period.
+- Auto-approve 10 transactions with contract `CasinoDapp`, with value between `0.05 ether` and `1 ether` per 24h period.
 
-* Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if `gas < 44k` and `gasPrice < 40Gwei`.
+- Auto-approve transactions to contract `Uniswapv2` with `value` up to 1 ether, if `gas < 44k` and `gasPrice < 40Gwei`.
 
-* Auto-approve signing if the data to be signed contains the string `"approve_me"`.
+- Auto-approve signing if the data to be signed contains the string `"approve_me"`.
 
-* Auto-approve any requests to list accounts in keystore if the request arrives over IPC
+- Auto-approve any requests to list accounts in keystore if the request arrives over IPC
 
 Because the rules are Javascript files they can be customized to implement any arbitrary logic on the available request data.
 
@@ -56,44 +56,32 @@ function ApproveListing(req){
 
 When a request is made via the external API, the logic flow is as follows:
 
-* Request is made to the `signer` binary using external API
-   
-* `signer` calls the UI - in this case the ruleset engine
+- Request is made to the `signer` binary using external API
+- `signer` calls the UI - in this case the ruleset engine
 
-* UI evaluates whether the call conforms to rules in an attested rulefile
+- UI evaluates whether the call conforms to rules in an attested rulefile
 
-* Assuming the call returns "Approve", request is signed.
-
+- Assuming the call returns "Approve", request is signed.
 
 There are three possible outcomes from the ruleset engine that are handled in different ways:
- 
-| Return value      |    Action                                 |
-| ------------------| ----------------------------------------- |
-| "Approve"         | Auto-approve request       			    |
-| "Reject"          | Auto-reject request        				|
-| Anything else     | Pass decision to UI for manual approval   |
- 
- 
+
+| Return value  | Action                                  |
+| ------------- | --------------------------------------- |
+| "Approve"     | Auto-approve request                    |
+| "Reject"      | Auto-reject request                     |
+| Anything else | Pass decision to UI for manual approval |
+
 There are some additional noteworthy implementation details that are important for defining rules correctly in `ruleset.js`:
 
-* The code in `ruleset.js` **cannot** load external Javascript files. 
-  
-* The Javascript engine can access `storage` and `console`
-  
-* The only preloaded library in the Javascript environment is `bignumber.js` version `2.0.3`.
-  
-* Each invocation is made in a fresh virtual machine meaning data cannot be stored in global variables between invocations.
-  
-* Since no global variable storage is available, disk backed `storage` must be used - rules should not rely on ephemeral data.
-  
-* Javascript API parameters are always objects. This ensures parameters are accessed by _key_ to avoid misordering errors. 
-  
-* Otto VM uses ES5. ES6-specific features (such as Typed Arrays) are not supported.
-  
-* The regular expression engine (re2/regexp) in Otto VM is not fully compatible with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
-  
-* [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "use strict" will parse but it does nothing.
-
+- The code in `ruleset.js` **cannot** load external Javascript files.
+- The Javascript engine can access `storage` and `console`
+- The only preloaded library in the Javascript environment is `bignumber.js` version `2.0.3`.
+- Each invocation is made in a fresh virtual machine meaning data cannot be stored in global variables between invocations.
+- Since no global variable storage is available, disk backed `storage` must be used - rules should not rely on ephemeral data.
+- Javascript API parameters are always objects. This ensures parameters are accessed by _key_ to avoid misordering errors.
+- Otto VM uses ES5. ES6-specific features (such as Typed Arrays) are not supported.
+- The regular expression engine (re2/regexp) in Otto VM is not fully compatible with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
+- [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "use strict" will parse but it does nothing.
 
 ## Credential management
 
@@ -103,16 +91,17 @@ When the `signer` is started it generates a seed that is locked with a user spec
 
 The `signer` uses the `seed` to:
 
-* Generate the `path` where the configuration and credentials data are stored.
-  * `$HOME/.clef/790046d38025/config.json`
-  * `$HOME/.clef/790046d38025/credentials.json`
-* Generate the encryption password for the config and credentials files.
+- Generate the `path` where the configuration and credentials data are stored.
+  - `$HOME/.clef/790046d38025/config.json`
+  - `$HOME/.clef/790046d38025/credentials.json`
+- Generate the encryption password for the config and credentials files.
 
 `config.json` stores the hashes of any attested rulesets. `credentials.json` stores encrypted account passwords. The masterseed is required to decrypt these files. The decrypted account passwords can then be used to decrypt keyfiles.
 
 ## Security
 
 ### The Javascript VM
+
 The downside of the very flexible rule implementation included in Clef is that the `signer` binary needs to contain a Javascript engine. This is an additional attack surface. The only viable attack is for an adversary to somehow extract cryptographic keys from memory during the Javascript VM execution. The hash-based rule attestation condition means the actual Javascript code executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler attack would be to surreptitiously insert an attested "always-approve" rule instead of attempting to exploit the Javascript virtual machine. The Javascript engine is quite simple to implement and there are currently no known security vulnerabilities, not have there been any security problems identified for the similar Javascript VM implemented in Geth.
 
 ### Writing rules
@@ -137,13 +126,13 @@ Below are some examples of `ruleset.js` files.
 
 ```js
 function ApproveTx(r) {
-	if (r.transaction.to.toLowerCase() == "0x0000000000000000000000000000000000001337") {
-		return "Approve"
-	}
-	if (r.transaction.to.toLowerCase() == "0x000000000000000000000000000000000000dead") {
-		return "Reject"
-	}
-	// Otherwise goes to manual processing
+  if (r.transaction.to.toLowerCase() == '0x0000000000000000000000000000000000001337') {
+    return 'Approve';
+  }
+  if (r.transaction.to.toLowerCase() == '0x000000000000000000000000000000000000dead') {
+    return 'Reject';
+  }
+  // Otherwise goes to manual processing
 }
 ```
 
@@ -151,7 +140,7 @@ function ApproveTx(r) {
 
 ```js
 function ApproveListing() {
-	return "Approve"
+  return 'Approve';
 }
 ```
 
@@ -159,93 +148,94 @@ function ApproveListing() {
 
 ```js
 function ApproveSignData(req) {
-    if (req.address.toLowerCase() == "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3") {
-        if (req.messages[0].value.indexOf("bazonk") >= 0) {
-            return "Approve"
-        }
-        return "Reject"
+  if (req.address.toLowerCase() == '0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3') {
+    if (req.messages[0].value.indexOf('bazonk') >= 0) {
+      return 'Approve';
     }
-    // Otherwise goes to manual processing
+    return 'Reject';
+  }
+  // Otherwise goes to manual processing
 }
 ```
-
 
 ### Example 4: Rate-limited window
 
 ```js
 function big(str) {
-	if (str.slice(0, 2) == "0x") {
-		return new BigNumber(str.slice(2), 16)
-	}
-	return new BigNumber(str)
+  if (str.slice(0, 2) == '0x') {
+    return new BigNumber(str.slice(2), 16);
+  }
+  return new BigNumber(str);
 }
 
 // Time window: 1 week
-var window = 1000* 3600*24*7;
+var window = 1000 * 3600 * 24 * 7;
 
 // Limit : 1 ether
-var limit = new BigNumber("1e18");
+var limit = new BigNumber('1e18');
 
 function isLimitOk(transaction) {
-	var value = big(transaction.value)
-	// Start of our window function
-	var windowstart = new Date().getTime() - window;
+  var value = big(transaction.value);
+  // Start of our window function
+  var windowstart = new Date().getTime() - window;
 
-	var txs = [];
-	var stored = storage.get('txs');
+  var txs = [];
+  var stored = storage.get('txs');
 
-	if (stored != "") {
-		txs = JSON.parse(stored)
-	}
-	// First, remove all that have passed out of the time-window
-	var newtxs = txs.filter(function(tx){return tx.tstamp > windowstart});
-	console.log(txs, newtxs.length);
+  if (stored != '') {
+    txs = JSON.parse(stored);
+  }
+  // First, remove all that have passed out of the time-window
+  var newtxs = txs.filter(function (tx) {
+    return tx.tstamp > windowstart;
+  });
+  console.log(txs, newtxs.length);
 
-	// Secondly, aggregate the current sum
-	sum = new BigNumber(0)
+  // Secondly, aggregate the current sum
+  sum = new BigNumber(0);
 
-	sum = newtxs.reduce(function(agg, tx){ return big(tx.value).plus(agg)}, sum);
-	console.log("ApproveTx > Sum so far", sum);
-	console.log("ApproveTx > Requested", value.toNumber());
+  sum = newtxs.reduce(function (agg, tx) {
+    return big(tx.value).plus(agg);
+  }, sum);
+  console.log('ApproveTx > Sum so far', sum);
+  console.log('ApproveTx > Requested', value.toNumber());
 
-	// Would we exceed weekly limit ?
-	return sum.plus(value).lt(limit)
-
+  // Would we exceed weekly limit ?
+  return sum.plus(value).lt(limit);
 }
 function ApproveTx(r) {
-	if (isLimitOk(r.transaction)) {
-		return "Approve"
-	}
-	return "Nope"
+  if (isLimitOk(r.transaction)) {
+    return 'Approve';
+  }
+  return 'Nope';
 }
 
 /**
-* OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
-	* 'response_str' contains the return value that will be sent to the external caller.
-* The return value from this method is ignore - the reason for having this callback is to allow the
-* ruleset to keep track of approved transactions.
-*
-* When implementing rate-limited rules, this callback should be used.
-* If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
-* then accepts the transaction, this method will be called.
-*
-* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
-*/
+ * OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
+ * 'response_str' contains the return value that will be sent to the external caller.
+ * The return value from this method is ignore - the reason for having this callback is to allow the
+ * ruleset to keep track of approved transactions.
+ *
+ * When implementing rate-limited rules, this callback should be used.
+ * If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
+ * then accepts the transaction, this method will be called.
+ *
+ * TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
+ */
 function OnApprovedTx(resp) {
-	var value = big(resp.tx.value)
-	var txs = []
-	// Load stored transactions
-	var stored = storage.get('txs');
-	if (stored != "") {
-		txs = JSON.parse(stored)
-	}
-	// Add this to the storage
-	txs.push({tstamp: new Date().getTime(), value: value});
-	storage.put("txs", JSON.stringify(txs));
+  var value = big(resp.tx.value);
+  var txs = [];
+  // Load stored transactions
+  var stored = storage.get('txs');
+  if (stored != '') {
+    txs = JSON.parse(stored);
+  }
+  // Add this to the storage
+  txs.push({ tstamp: new Date().getTime(), value: value });
+  storage.put('txs', JSON.stringify(txs));
 }
 ```
 
 ## Summary
 
 Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
-

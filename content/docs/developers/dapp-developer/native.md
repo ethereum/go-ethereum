@@ -11,7 +11,7 @@ To support this, Geth ships official Go packages that can be embedded into third
 
 This page provides a high-level overview of the Go API.
 
-*Note, this guide will assume some familiarity with Go development. It does not cover general topics about Go project layouts, import paths or any other standard methodologies. If you are new to Go, consider reading [Getting Started with Go](https://github.com/golang/go/wiki#getting-started-with-go) first.*
+_Note, this guide will assume some familiarity with Go development. It does not cover general topics about Go project layouts, import paths or any other standard methodologies. If you are new to Go, consider reading [Getting Started with Go](https://github.com/golang/go/wiki#getting-started-with-go) first._
 
 ## Overview
 
@@ -41,10 +41,9 @@ $ go get -d github.com/ethereum/go-ethereum/...
 
 More Go API support for dapp developers can be found on the [Go Contract Bindings](/content/docs/developers/dapp-developer/native-bindings.md) and [Go Account Management](/docs/dapp/native-accounts) pages.
 
-
 ## Tutorial
 
-This section includes some basic usage examples for the `ethclient` and `gethclient` packages available as part of the Go API. The `ethclient` package provides a client that implements the full Ethereum JSON-RPC API, whereas `gethclient` offers the Geth-specific API. 
+This section includes some basic usage examples for the `ethclient` and `gethclient` packages available as part of the Go API. The `ethclient` package provides a client that implements the full Ethereum JSON-RPC API, whereas `gethclient` offers the Geth-specific API.
 
 ### Instantiating a client
 
@@ -65,7 +64,7 @@ _ = cl
 
 The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function `BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to `eth_sendTransaction`. The full list of client methods can be found [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client).
 
-Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be created using `Context.Background()`. 
+Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be created using `Context.Background()`.
 
 ### Querying client for data
 
@@ -108,7 +107,7 @@ if err != nil {
 ### Sending a transaction
 
 Sending a transaction is achieved using the `SendTransaction()` function. `SendTransaction` takes an instance of `context.Context` as its leading argument and a signed transaction as its second argument. The signed transaction must be generated in advance. Building the signed transaction is a multi-stage process that requires first generating a key pair if none exists already, retrieving some chain data and defining sender and recipient
-addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction can then be passed to `SendTransaction`. 
+addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction can then be passed to `SendTransaction`.
 
 The example below assumes the following key pair has already been generated:
 
@@ -187,13 +186,11 @@ MemStats()
 SetHead()
 SubscribePendingTransactions()
 ```
-*Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument.*
 
-Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [Github](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [Github](https://github.com/MariusVanDerWijden/web3go). 
+_Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument._
 
+Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [Github](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [Github](https://github.com/MariusVanDerWijden/web3go).
 
 ## Summary
 
 There are a wide variety of Go APIs available for dapp developers that abstract away the complexity of interacting with Ethereum using a set of composable, reusable functions provided by Geth.
-
-

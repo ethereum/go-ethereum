@@ -5,7 +5,6 @@ description: Documentation for the JSON-RPC API "admin" namespace
 
 The `admin` API gives access to several non-standard RPC methods, which allows fine grained control over a Geth instance, including but not limited to network peer and RPC endpoint management.
 
-
 ### admin_addPeer
 
 The `addPeer` administrative method requests adding a new remote node to the list of tracked static nodes. The node will try to maintain connectivity to these nodes at all times, reconnecting every once in a while if the remote connection goes down.
@@ -13,7 +12,7 @@ The `addPeer` administrative method requests adding a new remote node to the lis
 The method accepts a single argument, the [`enode`](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) URL of the remote peer to start tracking and returns a `BOOL` indicating whether the peer was accepted for tracking or some error occurred.
 
 | Client  | Method invocation                              |
-|:--------|------------------------------------------------|
+| :------ | ---------------------------------------------- |
 | Go      | `admin.AddPeer(url string) (bool, error)`      |
 | Console | `admin.addPeer(url)`                           |
 | RPC     | `{"method": "admin_addPeer", "params": [url]}` |
@@ -29,8 +28,8 @@ true
 
 Adds the given node to a reserved trusted list which allows the node to always connect, even if the slots are full. It returns a `BOOL` to indicate whether the peer was successfully added to the list.
 
-| Client  | Method invocation                              |
-|:--------|------------------------------------------------|
+| Client  | Method invocation                                     |
+| :------ | ----------------------------------------------------- |
 | Console | `admin.addTrustedPeer(url)`                           |
 | RPC     | `{"method": "admin_addTrustedPeer", "params": [url]}` |
 
@@ -39,7 +38,7 @@ Adds the given node to a reserved trusted list which allows the node to always c
 The `datadir` administrative property can be queried for the absolute path the running Geth node currently uses to store all its databases.
 
 | Client  | Method invocation                 |
-|:--------|-----------------------------------|
+| :------ | --------------------------------- |
 | Go      | `admin.Datadir() (string, error`) |
 | Console | `admin.datadir`                   |
 | RPC     | `{"method": "admin_datadir"}`     |
@@ -56,7 +55,7 @@ The `datadir` administrative property can be queried for the absolute path the r
 Exports the current blockchain into a local file. It optionally takes a first and last block number, in which case it exports only that range of blocks. It returns a boolean indicating whether the operation succeeded.
 
 | Client  | Method invocation                                                     |
-|:--------|---------------------------------------------------------------------- |
+| :------ | --------------------------------------------------------------------- |
 | Console | `admin.exportChain(file, first, last)`                                |
 | RPC     | `{"method": "admin_exportChain", "params": [string, uint64, uint64]}` |
 
@@ -65,7 +64,7 @@ Exports the current blockchain into a local file. It optionally takes a first an
 Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them into the canonical chain. The state from the parent block of this range is required. It returns a boolean indicating whether the operation succeeded.
 
 | Client  | Method invocation                                     |
-|:--------|-------------------------------------------------------|
+| :------ | ----------------------------------------------------- |
 | Console | `admin.importChain(file)`                             |
 | RPC     | `{"method": "admin_importChain", "params": [string]}` |
 
@@ -74,7 +73,7 @@ Imports an exported list of blocks from a local file. Importing involves process
 The `nodeInfo` administrative property can be queried for all the information known about the running Geth node at the networking granularity. These include general information about the node itself as a participant of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                         |
-|:--------|-------------------------------------------|
+| :------ | ----------------------------------------- |
 | Go      | `admin.NodeInfo() (*p2p.NodeInfo, error`) |
 | Console | `admin.nodeInfo`                          |
 | RPC     | `{"method": "admin_nodeInfo"}`            |
@@ -118,7 +117,7 @@ PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer e
 The `peers` administrative property can be queried for all the information known about the connected remote nodes at the networking granularity. These include general information about the nodes themselves as participants of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
 | Client  | Method invocation                        |
-|:--------|------------------------------------------|
+| :------ | ---------------------------------------- |
 | Go      | `admin.Peers() ([]*p2p.PeerInfo, error`) |
 | Console | `admin.peers`                            |
 | RPC     | `{"method": "admin_peers"}`              |
@@ -165,7 +164,7 @@ The `peers` administrative property can be queried for all the information known
 Disconnects from a remote node if the connection exists. It returns a boolean indicating validations succeeded. Note a `true` value doesn't necessarily mean that there was a connection which was disconnected.
 
 | Client  | Method invocation                                    |
-|:--------|----------------------------------------------------- |
+| :------ | ---------------------------------------------------- |
 | Console | `admin.removePeer(url)`                              |
 | RPC     | `{"method": "admin_removePeer", "params": [string]}` |
 
@@ -173,8 +172,8 @@ Disconnects from a remote node if the connection exists. It returns a boolean in
 
 Removes a remote node from the trusted peer set, but it does not disconnect it automatically. It returns a boolean indicating validations succeeded.
 
-| Client  | Method invocation                                    |
-|:--------|----------------------------------------------------- |
+| Client  | Method invocation                                           |
+| :------ | ----------------------------------------------------------- |
 | Console | `admin.removeTrustedPeer(url)`                              |
 | RPC     | `{"method": "admin_removeTrustedPeer", "params": [string]}` |
 
@@ -182,15 +181,15 @@ Removes a remote node from the trusted peer set, but it does not disconnect it a
 
 The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/rpc/server) webserver to handle client requests. All the parameters are optional:
 
-* `host`: network interface to open the listener socket on (defaults to `"localhost"`)
-* `port`: network port to open the listener socket on (defaults to `8545`)
-* `cors`: [cross-origin resource sharing](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing) header to use (defaults to `""`)
-* `apis`: API modules to offer over this interface (defaults to `"eth,net,web3"`)
+- `host`: network interface to open the listener socket on (defaults to `"localhost"`)
+- `port`: network port to open the listener socket on (defaults to `8545`)
+- `cors`: [cross-origin resource sharing](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing) header to use (defaults to `""`)
+- `apis`: API modules to offer over this interface (defaults to `"eth,net,web3"`)
 
 The method returns a boolean flag specifying whether the HTTP RPC listener was opened or not. Please note, only one HTTP endpoint is allowed to be active at any time.
 
-| Client  | Method invocation                                                                             |
-|:--------|-----------------------------------------------------------------------------------------------|
+| Client  | Method invocation                                                                              |
+| :------ | ---------------------------------------------------------------------------------------------- |
 | Go      | `admin.StartHTTP(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
 | Console | `admin.startHTTP(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startHTTP", "params": [host, port, cors, apis]}`                            |
@@ -206,15 +205,15 @@ true
 
 The `startWS` administrative method starts an WebSocket based [JSON RPC](https://www.jsonrpc.org/specification) API webserver to handle client requests. All the parameters are optional:
 
-* `host`: network interface to open the listener socket on (defaults to `"localhost"`)
-* `port`: network port to open the listener socket on (defaults to `8546`)
-* `cors`: [cross-origin resource sharing](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing) header to use (defaults to `""`)
-* `apis`: API modules to offer over this interface (defaults to `"eth,net,web3"`)
+- `host`: network interface to open the listener socket on (defaults to `"localhost"`)
+- `port`: network port to open the listener socket on (defaults to `8546`)
+- `cors`: [cross-origin resource sharing](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing) header to use (defaults to `""`)
+- `apis`: API modules to offer over this interface (defaults to `"eth,net,web3"`)
 
 The method returns a boolean flag specifying whether the WebSocket RPC listener was opened or not. Please note, only one WebSocket endpoint is allowed to be active at any time.
 
-| Client  | Method invocation                                                                             |
-|:--------|-----------------------------------------------------------------------------------------------|
+| Client  | Method invocation                                                                            |
+| :------ | -------------------------------------------------------------------------------------------- |
 | Go      | `admin.StartWS(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error)` |
 | Console | `admin.startWS(host, port, cors, apis)`                                                      |
 | RPC     | `{"method": "admin_startWS", "params": [host, port, cors, apis]}`                            |
@@ -230,8 +229,8 @@ true
 
 The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint. As the node can only have a single HTTP endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
-| Client  | Method invocation               |
-|:--------|---------------------------------|
+| Client  | Method invocation                |
+| :------ | -------------------------------- |
 | Go      | `admin.StopHTTP() (bool, error`) |
 | Console | `admin.stopHTTP()`               |
 | RPC     | `{"method": "admin_stopHTTP"`    |
@@ -248,7 +247,7 @@ true
 The `stopWS` administrative method closes the currently open WebSocket RPC endpoint. As the node can only have a single WebSocket endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
 | Client  | Method invocation              |
-|:--------|--------------------------------|
+| :------ | ------------------------------ |
 | Go      | `admin.StopWS() (bool, error`) |
 | Console | `admin.stopWS()`               |
 | RPC     | `{"method": "admin_stopWS"`    |

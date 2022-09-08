@@ -11,7 +11,7 @@ accounts in Geth, is sufficiently secure for many purposes and provides a good e
 
 ## Prerequisites
 
-In order to get the most value from the tutorials on this page, the following skills are 
+In order to get the most value from the tutorials on this page, the following skills are
 necessary:
 
 - Experience using the command line
@@ -19,7 +19,7 @@ necessary:
 - Basic knowledge about HTTP and JavaScript
 - Basic knowledge of node architecture and consensus clients
 
-Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found [here](/content/docs/fundamentals/node-architecture.md) and our guide for configuring Geth to connect to a 
+Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found [here](/content/docs/fundamentals/node-architecture.md) and our guide for configuring Geth to connect to a
 consensus client is [here](/content/docs/getting_started/consensus-clients.md).
 
 {% include note.html content="If Geth was installed from source on Linux, `make` saves the binaries for Geth and the associated tools in `/build/bin`. To run these programs it is convenient to move them to the top level project directory (e.g. running `mv ./build/bin/* ./`) from `/go-ethereum`. Then `./` must be prepended to the commands in the code snippets in order to execute a particular program, e.g. `./geth` instead of simply `geth`. If the executables are not
@@ -28,13 +28,12 @@ moved then either navigate to the `bin` directory to run them (e.g. `cd ./build/
 ## Background
 
 Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being managed by a central server. Every 12 seconds one node is randomly selected to generate a new block
-containing a list of transactions that nodes receiving the block should execute. This "block proposer" node sends the new block to its peers. On receiving a new block, each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called a "blockchain". 
+containing a list of transactions that nodes receiving the block should execute. This "block proposer" node sends the new block to its peers. On receiving a new block, each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called a "blockchain".
 
-The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum and the data stored by each smart contract. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, 
+The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum and the data stored by each smart contract. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum,
 it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guide the user through creating an account, funding it with ether and sending some to another address.
 
 Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs/accounts/).
-
 
 ## Step 1: Generating accounts
 
@@ -49,6 +48,7 @@ This returns a prompt for a password. Once provided, a new account will be creat
 ```sh
 geth account new --keystore geth-tutorial/keystore
 ```
+
 The following will be returned to the console, confirming the new account has been created and added to the keystore.
 
 ```terminal
@@ -67,19 +67,20 @@ Path of the secret key file: /home/go-ethereum/geth-tutorial/keystore/UTC--2022-
 - You must REMEMBER your password! Without the password, it's impossible to decrypt the key!
 ```
 
-It is important to save the account address and the password somewhere secure. They will be used again later in this tutorial. Please note that the account address shown in the code snippets above and later in this tutorials are examples - those generated by followers of this tutorial will be different. The account generated above can be used as the main account throughout the remainder of this tutorial. However in order to demonstrate transactions between accounts it is 
+It is important to save the account address and the password somewhere secure. They will be used again later in this tutorial. Please note that the account address shown in the code snippets above and later in this tutorials are examples - those generated by followers of this tutorial will be different. The account generated above can be used as the main account throughout the remainder of this tutorial. However in order to demonstrate transactions between accounts it is
 also necessary to have a second account. A second account can be added to the same keystore by precisely repeating the previous steps, providing the same password.
 
-Notice that the path to the secret key includes a long filename that starts `UTC--`. This is the name of the file that contains the keys for the new account. It is **extremely important** that this file stays secure because it contains the secret key used to control access to any funds associated with the account. The file should be backed up securely along with the password used to encrypt it. If the file or the password is lost, then so is access to the funds in the account. If someone else gains access to the keyfile and password, they have access to any assets in the account. 
+Notice that the path to the secret key includes a long filename that starts `UTC--`. This is the name of the file that contains the keys for the new account. It is **extremely important** that this file stays secure because it contains the secret key used to control access to any funds associated with the account. The file should be backed up securely along with the password used to encrypt it. If the file or the password is lost, then so is access to the funds in the account. If someone else gains access to the keyfile and password, they have access to any assets in the account.
 
-## Step 2:  Start Geth
+## Step 2: Start Geth
 
-Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Goerli, an Ethereum testnet. Testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), the network ID and the sync mode. For this tutorial, snap sync is recommended 
-(see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The following command should be run in the terminal: 
+Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Goerli, an Ethereum testnet. Testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), the network ID and the sync mode. For this tutorial, snap sync is recommended
+(see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The following command should be run in the terminal:
 
 ```shell
 geth --datadir geth-tutorial --goerli --syncmode snap
 ```
+
 Running the above command starts Geth. The terminal should rapidly fill with status updates that look like the following:
 
 ```terminal
@@ -103,7 +104,7 @@ WARN [02-10|13:59:06.998] Light client mode is an experimental feature
 INFO [02-10|13:59:08.793] Block synchronisation started
 ```
 
-This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. 
+This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`.
 This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
 
 ```terminal
@@ -118,22 +119,20 @@ If there is no error message reported to the terminal, everything is OK. Geth mu
 
 {% include note.html content="Snap syncing Goerli will take some time and until the sync is finished you can't use the node to transfer funds. You can also try doing a [light sync](interface/les) which will be much quicker but depends on light servers being available to serve your node the data it needs." %}
 
-## Step 3:  Get Testnet Ether
+## Step 3: Get Testnet Ether
 
 In order to make some transactions, the user must fund their account with ether. On Ethereum mainnet, ether can only be obtained in three ways: 1) by receiving it as a reward for mining/validating; 2) receiving it in a transfer from another Ethereum user or contract; 3) receiving it from an exchange, having paid for it with fiat money. On Ethereum testnets, the ether has no real world value so it can be made freely available via faucets. Faucets allow users to request a transfer of testnet ether to their account.
 
 The address generated by `geth account new` can be pasted into the Paradigm Multifaucet faucet [here](https://fauceth.komputing.org/?chain=1115511). This requires a Twitter login as proof of personhood. The faucets adds ether to the given address on multiple testnets simultaneously, including Goerli. In the next steps Geth will be used to check that the ether has been sent to the given address and send some of it to the second address created earlier.
 
-
 ## Step 4: Interact with Geth
 
-For interacting with the blockchain, Geth provides JSON-RPC APIs. 
-[JSON-RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/) is a way to execute specific tasks by sending instructions to Geth in the form of [JSON](https://www.json.org/json-en.html) objects. RPC stands for "Remote Procedure Call" and it refers to the ability to send these JSON-encoded instructions from locations outside of those managed by Geth. It is possible to interact with Geth by sending these JSON encoded instructions directly to Geth using tools such as Curl. However, this is somewhat user-unfriendly and error-prone, especially for more complex instructions. For this reason, there are a set of libraries built on top of JSON-RPC that provide a more user-friendly interface for interacting with Geth. One of the most widely used is Web3.js. 
+For interacting with the blockchain, Geth provides JSON-RPC APIs.
+[JSON-RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/) is a way to execute specific tasks by sending instructions to Geth in the form of [JSON](https://www.json.org/json-en.html) objects. RPC stands for "Remote Procedure Call" and it refers to the ability to send these JSON-encoded instructions from locations outside of those managed by Geth. It is possible to interact with Geth by sending these JSON encoded instructions directly to Geth using tools such as Curl. However, this is somewhat user-unfriendly and error-prone, especially for more complex instructions. For this reason, there are a set of libraries built on top of JSON-RPC that provide a more user-friendly interface for interacting with Geth. One of the most widely used is Web3.js.
 
 Geth provides a Javascript console that exposes the Web3.js API. This means that with Geth running in one terminal, a Javascript environment can be opened in another allowing the user to interact with Geth using Web3.js. There are three transport protocols that can be used to connect the Javascript environment to Geth:
 
 - IPC (Inter-Process Communication): Provides unrestricted access to all APIs, but only works when the console is run on the same host as the Geth node.
-  
 - HTTP: By default provides access to the `eth`, `web3` and `net` method namespaces.
 
 - Websocket: By default provides access to the `eth`, `web3` and `net` method namespaces.
@@ -161,26 +160,25 @@ The console is now active and connected to Geth. It can now be used to interact 
 
 ### List of accounts
 
-Earlier in this tutorial, at least one account was created using `geth account new`. The following command will display the addresses of those two accounts and any others that might have been added to the keystore before or since. 
+Earlier in this tutorial, at least one account was created using `geth account new`. The following command will display the addresses of those two accounts and any others that might have been added to the keystore before or since.
 
 ```javascript
-eth.accounts
+eth.accounts;
 ```
 
 ```terminal
 ["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec", "0xce8dba5e4157c2b284d8853afeeea259344c1653"]
 ```
 
-
 ### Checking account balance.
 
 Having confirmed that the two addresses created earlier are indeed in the keystore and accessible through the Javascript console, it is possible to retrieve information about how much ether they own. The Goerli faucet should have sent 1 ETH to the address provided, meaning that the balance of one of the accounts should be 1 ether and the other should be 0. The following command displays the account balance in the console:
 
 ```javascript
-web3.fromWei(eth.getBalance("0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC"), "ether")
+web3.fromWei(eth.getBalance('0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC'), 'ether');
 ```
 
-There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 10<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that 
+There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 10<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that
 received faucet funds):
 
 ```terminal
@@ -199,10 +197,10 @@ The command `eth.sendTransaction` can be used to send some ether from one addres
 
 ```javascript
 eth.sendTransaction({
-    from: "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
-    to: "0xce8dba5e4157c2b284d8853afeeea259344c1653",
-    value: web3.toWei(0.1, "ether")
-})
+  from: '0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec',
+  to: '0xce8dba5e4157c2b284d8853afeeea259344c1653',
+  value: web3.toWei(0.1, 'ether')
+});
 ```
 
 This command will return an error message indicating that `authentication is needed: password or unlock`. This is a security feature that prevents unauthorized access to sensitive account operations. There are two ways to unlock the account. The first is to start Geth with the account permanently unlocked (by passing `--unlock <address>` at startup). This is not recommended because the account remains unlocked all the time Geth is running, creating a security weakness. Instead, it is better to temporarily unlock the account for the specific transaction. This requires using the `sendTransaction` method from the `personal` namespace instead of the `eth` namespace. The password can be provided as a string in the method call as follows:
@@ -228,7 +226,7 @@ It is also advised to check the account balances using Geth by repeating the ins
 The transaction hash is a unique identifier for this specific transaction that can be used later to retrieve the transaction details. For example, the transaction details can be viewed by pasting this hash into the [Goerli block explorer](https://goerli.etherscan.io/). The same information can also be retrieved directly from the Geth node. The hash returned in the previous step can be provided as an argument to `eth.getTransaction` to return the transaction information:
 
 ```javascript
-eth.getTransaction("0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb")
+eth.getTransaction('0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb');
 ```
 
 This returns the following response (although the actual values for each field will vary because they are specific to each transaction):
@@ -259,7 +257,7 @@ This returns the following response (although the actual values for each field w
 
 ## Using Curl
 
-Up to this point this tutorial has interacted with Geth using the convenience library Web3.js. This library enables the user to send instructions to Geth using a more user-friendly interface compared to sending raw JSON objects. However, it is also possible for the user to send these JSON objects directly to Geth's exposed HTTP port. Curl is a command line tool that sends HTTP requests. This part of the tutorial demonstrates how to check account balances and send a transaction using Curl. This requires Geth to expose an HTTP port to listen for requests. This can be configured at startup by passing the `--http` flag. If no other commands are passed with it, `--http` will expose the default `localhost:8545` port. 
+Up to this point this tutorial has interacted with Geth using the convenience library Web3.js. This library enables the user to send instructions to Geth using a more user-friendly interface compared to sending raw JSON objects. However, it is also possible for the user to send these JSON objects directly to Geth's exposed HTTP port. Curl is a command line tool that sends HTTP requests. This part of the tutorial demonstrates how to check account balances and send a transaction using Curl. This requires Geth to expose an HTTP port to listen for requests. This can be configured at startup by passing the `--http` flag. If no other commands are passed with it, `--http` will expose the default `localhost:8545` port.
 
 ### Checking account balance
 
@@ -282,9 +280,10 @@ The balance is in the `result` field in the returned JSON object. However, it is
 ```python
 0xc7d54951f87f7c0 / 1e18
 ```
+
 This returns the balance in ether:
 
-```terminal 
+```terminal
 0.8999684999998321
 ```
 
@@ -310,7 +309,6 @@ It is possible to send transactions using raw curl requests too, but this requir
 
 ## Summary
 
-This tutorial has demonstrated how to generate accounts using Geth's built-in account management tool, fund them with testnet ether and use those accounts to interact with Ethereum (Goerli) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using 
-the web3.js library via the Geth console and using the JSON-RPC directly using Curl. Note that this is an entry-level tutorial designed to help users get familiar with basic Geth processes, we strongly recommend following this with the [Geth with Clef](/content/docs/getting-started/geth_with_clef) tutorial which will help to 
+This tutorial has demonstrated how to generate accounts using Geth's built-in account management tool, fund them with testnet ether and use those accounts to interact with Ethereum (Goerli) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using
+the web3.js library via the Geth console and using the JSON-RPC directly using Curl. Note that this is an entry-level tutorial designed to help users get familiar with basic Geth processes, we strongly recommend following this with the [Geth with Clef](/content/docs/getting-started/geth_with_clef) tutorial which will help to
 adopt more secure account management practices than those outlined here.
- 
