@@ -12,7 +12,7 @@ syncmode = "full"
 # snapshot = true
 # ethstats = ""
 
-# [requiredblocks]
+# ["eth.requiredblocks"]
 
 [p2p]
   # maxpeers = 1
