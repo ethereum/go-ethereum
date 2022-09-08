@@ -2150,14 +2150,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
 
-	// If any logs need to be fired, do it now. In theory we could avoid creating
-	// this goroutine if there are no events to fire, but realistcally that only
-	// ever happens if we're reorging empty blocks, which will only happen on idle
-	// networks where performance is not an issue either way.
+	// Notify about removed logs first.      
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
 	}
-	// Collect the logs
+	
+	// Send events for 'reborn' logs, i.e. logs that were previously
+	// removed but now got restored in the new chain branch. The number of
+	// restored logs can be very high, so the events are sent in batches of
+	// size < 512.
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Collect reborn logs due to chain reorg
@@ -2172,6 +2173,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(rebirthLogs) > 0 {
 		bc.logsFeed.Send(rebirthLogs)
 	}
+
+	// Send notifications for blocks removed from the canon chain.
 	if len(oldChain) > 0 {
 		for i := len(oldChain) - 1; i >= 0; i-- {
 			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
