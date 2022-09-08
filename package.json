@@ -1,0 +1,30 @@
+{
+  "name": "geth-site",
+  "private": false,
+  "description": "The website for geth.ethereum.org",
+  "version": "2.0.0",
+  "author": "Nicolás Quiroz <nicolas.quiroz@ethereum.org>",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.3.2",
+    "@emotion/react": "^11.10.4",
+    "@emotion/styled": "^11.10.4",
+    "framer-motion": "^7.3.2",
+    "next": "12.2.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.7.16",
+    "@types/react": "18.0.18",
+    "@types/react-dom": "18.0.6",
+    "eslint": "8.23.0",
+    "eslint-config-next": "12.2.5",
+    "typescript": "4.8.2"
+  }
+}
