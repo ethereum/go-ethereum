@@ -46,10 +46,7 @@ var (
 				Usage:     "verify the conversion of a MPT into a verkle tree",
 				ArgsUsage: "<root>",
 				Action:    verifyVerkle,
-				Flags: flags.Merge([]cli.Flag{
-					utils.VerkleConversionInsertRangeStartFlag,
-					utils.VerkleConversionInsertRangeSizeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth verkle verify <state-root>
 This command takes a root commitment and attempts to rebuild the tree.
@@ -60,10 +57,7 @@ This command takes a root commitment and attempts to rebuild the tree.
 				Usage:     "Dump a verkle tree to a DOT file",
 				ArgsUsage: "<root> <key1> [<key 2> ...]",
 				Action:    expandVerkle,
-				Flags: flags.Merge([]cli.Flag{
-					utils.VerkleConversionInsertRangeStartFlag,
-					utils.VerkleConversionInsertRangeSizeFlag,
-				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabasePathFlags),
 				Description: `
 geth verkle dump <state-root> <key 1> [<key 2> ...]
 This command will produce a dot file representing the tree, rooted at <root>.
@@ -147,16 +141,6 @@ func verifyVerkle(ctx *cli.Context) error {
 		log.Info("Rebuilding the tree", "root", rootC, "number", headBlock.NumberU64())
 	}
 
-	var (
-		//start      = time.Now()
-		rangeStart = ctx.Uint64(utils.VerkleConversionInsertRangeStartFlag.Name)
-		rangeEnd   = rangeStart + ctx.Uint64(utils.VerkleConversionInsertRangeSizeFlag.Name)
-	)
-
-	if rangeEnd > 256 {
-		rangeEnd = 256
-	}
-
 	serializedRoot, err := chaindb.Get(rootC[:])
 	if err != nil {
 		return err
@@ -185,7 +169,7 @@ func expandVerkle(ctx *cli.Context) error {
 		keylist [][]byte
 		err     error
 	)
-	if ctx.NArg() > 1 {
+	if ctx.NArg() >= 2 {
 		rootC, err = parseRoot(ctx.Args().First())
 		if err != nil {
 			log.Error("Failed to resolve state root", "error", err)
