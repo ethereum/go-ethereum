@@ -2164,9 +2164,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if logs := bc.collectLogs(newChain[i].Hash(), false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
-		if len(rebirthLogs) > 1000 {
+		if len(rebirthLogs) > 512 {
 			bc.logsFeed.Send(rebirthLogs)
-			rebirthLogs = make([]*types.Log, 0)
+			rebirthLogs = nil
 		}
 	}
 	if len(rebirthLogs) > 0 {
