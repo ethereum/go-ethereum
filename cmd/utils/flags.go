@@ -976,6 +976,19 @@ var (
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Verkle-related flags
+	VerkleConversionInsertRangeStartFlag = &cli.Uint64Flag{
+		Name:  "range.start",
+		Usage: "Starting byte of the key insertion/verification range.",
+		Value: 0,
+	}
+	// Verkle-related flags
+	VerkleConversionInsertRangeSizeFlag = &cli.Uint64Flag{
+		Name:  "range.size",
+		Usage: "Number of prefix bytes in the key insertion/verification range.",
+		Value: 256,
+	}
 )
 
 var (
