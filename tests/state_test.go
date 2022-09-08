@@ -240,24 +240,29 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				nil, 0)
 
 			var gasUsed uint64
-			start := time.Now()
+			var elapsed uint64
 
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				snapshot := statedb.Snapshot()
+
 				b.StartTimer()
+				start := time.Now()
+
 				// Execute the message.
 				_, leftOverGas, err := evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
 				if err != nil {
 					b.Error(err)
 					return
 				}
+
 				b.StopTimer()
-				statedb.RevertToSnapshot(snapshot)
+				elapsed += uint64(time.Since(start))
 				gasUsed += msg.Gas() - leftOverGas
+
+				statedb.RevertToSnapshot(snapshot)
 			}
 
-			elapsed := uint64(time.Since(start))
 			if elapsed < 1 {
 				elapsed = 1
 			}
