@@ -25,10 +25,13 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.
@@ -79,6 +82,7 @@ func New(assetPath string, output io.Writer) *JSRE {
 	}
 	go re.runEventLoop()
 	re.Set("loadScript", MakeCallback(re.vm, re.loadScript))
+	re.Set("collectTraceConfigFields", MakeCallback(re.vm, re.collectTraceConifgFields))
 	re.Set("inspect", re.prettyPrintJS)
 	return re
 }
@@ -337,4 +341,15 @@ func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, e
 		return goja.Null(), err
 	}
 	return vm.RunProgram(script)
+}
+
+func (re *JSRE) collectTraceConifgFields(empty Call) (goja.Value, error) {
+	configObj := tracers.TraceConfig{}
+	var fields []string
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(configObj)) {
+		if !field.Anonymous {
+			fields = append(fields, strings.ToLower(field.Name))
+		}
+	}
+	return re.vm.ToValue(strings.Join(fields, ",")), nil
 }

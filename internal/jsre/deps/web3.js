@@ -3717,10 +3717,7 @@ var inputBlockNumberFormatter = function (blockNumber) {
 
 var inputTraceFormatter = function (config) {
     if (config !== undefined && Object.keys(config).length > 0) {
-        var validParams = [
-            "tracer", "timeout", "reexec", "traceconfig", // struct type at `eth/tracers/api.go`
-            "enablememory", "disablestack", "disablestorage", "debug", "limit", "overrides", // struct type at `eth/tracers/logger/logger.go`
-        ];
+        var validParams = collectTraceConfigFields().split(",");
         var copied = {};
         for (var field in config) copied[field.toLowerCase()] = config[field];
         for (var i=0; i<validParams.length; i++) if (copied[validParams[i]] !== undefined) delete copied[validParams[i]];
