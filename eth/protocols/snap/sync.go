@@ -2204,7 +2204,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 		}
 		s.trienodeHealThrottled = time.Now()
 
-		log.Warn("Updated trie node heal throttler", "rate", s.trienodeHealRate, "pending", pending, "throttle", s.trienodeHealThrottle)
+		log.Debug("Updated trie node heal throttler", "rate", s.trienodeHealRate, "pending", pending, "throttle", s.trienodeHealThrottle)
 	}
 }
 
