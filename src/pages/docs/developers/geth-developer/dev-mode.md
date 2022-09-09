@@ -170,7 +170,7 @@ Now that the user account is funded with ether, a contract can be created ready 
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
 
-```Solidity
+```solidity
 pragma solidity >=0.7.0;
 
 contract Storage{
