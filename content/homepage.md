@@ -38,7 +38,7 @@ We welcome contributions from anyone on the internet, and are grateful for even 
 
 ## About the Team
 
-The Geth team comprises 10 developers distributed all over the world. The Geth team is funded directly by [The Ethereum Foundation](https://ethereum.foundation).
+The Geth team comprises 10 developers distributed across the world. The Geth team is funded directly by [The Ethereum Foundation](https://ethereum.foundation).
 
 
  
