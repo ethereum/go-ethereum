@@ -2121,15 +2121,16 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
 
-	// Send out events for deleted logs. The number of
-	// restored logs can be very high, so the events are sent in batches of
-	// size < 512.
+	// Send out events for deleted and new logs. The number of logs can be very
+	// high, so the events are sent in batches of size around 512.
+
+	// Deleted logs + blocks
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
-		oldBlock := oldChain[i]
+		// Also send event for blocks removed from the canon chain.
+		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldBlock.Hash(), true); len(logs) > 0 {
-			//deletedLogs = append(deletedLogs, logs)
+		if logs := bc.collectLogs(oldChain[i].Hash(), true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
 		if len(deletedLogs) > 512 {
@@ -2140,11 +2141,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
-
-	// Send events for 'reborn' logs, i.e. logs that were previously
-	// removed but now got restored in the new chain branch. The number of
-	// restored logs can be very high, so the events are sent in batches of
-	// size < 512.
+	// New logs
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Collect reborn logs due to chain reorg
@@ -2158,13 +2155,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	if len(rebirthLogs) > 0 {
 		bc.logsFeed.Send(rebirthLogs)
-	}
-
-	// Send notifications for blocks removed from the canon chain.
-	if len(oldChain) > 0 {
-		for i := len(oldChain) - 1; i >= 0; i-- {
-			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
-		}
 	}
 	return nil
 }
