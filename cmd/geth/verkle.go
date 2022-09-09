@@ -204,8 +204,10 @@ func expandVerkle(ctx *cli.Context) error {
 		root.Get(key, chaindb.Get)
 	}
 
-	os.WriteFile("dump.dot", []byte(verkle.ToDot(root)), 0600)
-
-	log.Info("Tree was dumped to file")
+	if err := os.WriteFile("dump.dot", []byte(verkle.ToDot(root)), 0600); err != nil{
+		log.Error("Failed to dump file", "err", err)
+	} else{
+		log.Info("Tree was dumped to file", "file", "dump.dot")
+	}
 	return nil
 }
