@@ -228,7 +228,7 @@ func (g *G1) IsAffine(p *PointG1) bool {
 	return p[2].isOne()
 }
 
-// Add adds two G1 points p1, p2 and assigns the result to point at first argument.
+// Affine calculates affine form of given G1 point.
 func (g *G1) Affine(p *PointG1) *PointG1 {
 	if g.IsZero(p) {
 		return p
