@@ -2185,7 +2185,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	// We can expand that formula for the Nth item as:
 	//   HR(N) = (1-MI)^N*OR + (1-MI)^(N-1)*MI*NR + (1-MI)^(N-2)*MI*NR + ... + (1-MI)^0*MI*NR
 	//
-	// The above sequence is a geometric mean that can be summed to:
+	// The above is a geometric sequence that can be summed to:
 	//   HR(N) = (1-MI)^N*(OR-NR) + NR
 	s.trienodeHealRate = gomath.Pow(1-trienodeHealRateMeasurementImpact, float64(fills))*(s.trienodeHealRate-rate) + rate
 
