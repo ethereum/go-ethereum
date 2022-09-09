@@ -1160,23 +1160,25 @@ func TestLogRebirth(t *testing.T) {
 
 	// This chain contains a single log.
 	genDb, chain, _ := GenerateChainWithGenesis(gspec, engine, 3, func(i int, gen *BlockGen) {
-		if i == 1 {
-			tx, err := types.SignNewTx(key1, signer, &types.LegacyTx{
-				Nonce:    gen.TxNonce(addr1),
-				GasPrice: gen.header.BaseFee,
-				Gas:      1000000,
-				Data:     logCode,
-			})
-			if err != nil {
-				t.Fatalf("failed to create tx: %v", err)
+		if i < 2 {
+			for ii := 0; ii < 5; ii++ {
+				tx, err := types.SignNewTx(key1, signer, &types.LegacyTx{
+					Nonce:    gen.TxNonce(addr1),
+					GasPrice: gen.header.BaseFee,
+					Gas:      uint64(1000001),
+					Data:     logCode,
+				})
+				if err != nil {
+					t.Fatalf("failed to create tx: %v", err)
+				}
+				gen.AddTx(tx)
 			}
-			gen.AddTx(tx)
 		}
 	})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
-	checkLogEvents(t, newLogCh, rmLogsCh, 1, 0)
+	checkLogEvents(t, newLogCh, rmLogsCh, 10, 0)
 
 	// Generate long reorg chain containing more logs. Inserting the
 	// chain removes one log and adds four.
@@ -1189,7 +1191,7 @@ func TestLogRebirth(t *testing.T) {
 			tx, err := types.SignNewTx(key1, signer, &types.LegacyTx{
 				Nonce:    gen.TxNonce(addr1),
 				GasPrice: gen.header.BaseFee,
-				Gas:      uint64(1000000 + 10*i + ii),
+				Gas:      uint64(1000000),
 				Data:     logCode,
 			})
 			if err != nil {
@@ -1202,7 +1204,7 @@ func TestLogRebirth(t *testing.T) {
 	if _, err := blockchain.InsertChain(forkChain); err != nil {
 		t.Fatalf("failed to insert forked chain: %v", err)
 	}
-	checkLogEvents(t, newLogCh, rmLogsCh, 10, 1)
+	checkLogEvents(t, newLogCh, rmLogsCh, 10, 10)
 
 	// This chain segment is rooted in the original chain, but doesn't contain any logs.
 	// When inserting it, the canonical chain switches away from forkChain and re-emits
@@ -1211,7 +1213,7 @@ func TestLogRebirth(t *testing.T) {
 	if _, err := blockchain.InsertChain(newBlocks); err != nil {
 		t.Fatalf("failed to insert forked chain: %v", err)
 	}
-	checkLogEvents(t, newLogCh, rmLogsCh, 1, 10)
+	checkLogEvents(t, newLogCh, rmLogsCh, 10, 10)
 }
 
 // This test is a variation of TestLogRebirth. It verifies that log events are emitted
@@ -1276,18 +1278,28 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan Re
 		x := <-logsCh
 		countNew += len(x)
 		for _, log := range x {
-			// We expect logs to be in ascending order: 0:0, 0:1, 1:0 ...
+			// We expect added logs to be in ascending order: 0:0, 0:1, 1:0 ...
 			have := 100*int(log.BlockNumber) + int(log.TxIndex)
 			if have < prev {
-				t.Fatalf("Expected new logs to arrive in ascending order")
+				t.Fatalf("Expected new logs to arrive in ascending order (%d < %d)", have, prev)
 			}
 			prev = have
 		}
 	}
+	prev = 0
 	for len(rmLogsCh) > 0 {
 		x := <-rmLogsCh
 		countRm += len(x.Logs)
+		for _, log := range x.Logs {
+			// We expect removed logs to be in ascending order: 0:0, 0:1, 1:0 ...
+			have := 100*int(log.BlockNumber) + int(log.TxIndex)
+			if have < prev {
+				t.Fatalf("Expected removed logs to arrive in ascending order (%d < %d)", have, prev)
+			}
+			prev = have
+		}
 	}
+
 	if countNew != wantNew {
 		t.Fatalf("wrong number of log events: got %d, want %d", countNew, wantNew)
 	}
