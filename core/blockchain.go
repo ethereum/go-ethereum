@@ -2121,14 +2121,16 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
 
-	// Send out events for deleted and new logs. The number of logs can be very
+	// Send out events for logs from the old canon chain, and 'reborn'
+	// logs from the new canon chain. The number of logs can be very
 	// high, so the events are sent in batches of size around 512.
 
-	// Deleted logs + blocks
+	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
 		// Also send event for blocks removed from the canon chain.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
+
 		// Collect deleted logs for notification
 		if logs := bc.collectLogs(oldChain[i].Hash(), true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
@@ -2141,10 +2143,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
-	// New logs
+	
+	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		// Collect reborn logs due to chain reorg
 		if logs := bc.collectLogs(newChain[i].Hash(), false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
