@@ -70,7 +70,7 @@ func (testError) Error() string          { return "testError" }
 func (testError) ErrorCode() int         { return 444 }
 func (testError) ErrorData() interface{} { return "testError data" }
 
-type MarshalErrObj struct {}
+type MarshalErrObj struct{}
 
 func (o *MarshalErrObj) MarshalText() ([]byte, error) {
 	return nil, errors.New("marshal error")
