@@ -25,9 +25,9 @@ import (
 )
 
 // ConvertType converts an interface of a runtime type into a interface of the
-// given type
-// e.g. turn
-// var fields []reflect.StructField
+// given type, e.g. turn this code:
+//
+//	var fields []reflect.StructField
 //
 //	fields = append(fields, reflect.StructField{
 //			Name: "X",
@@ -35,8 +35,9 @@ import (
 //			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
 //	}
 //
-// into
-// type TupleT struct { X *big.Int }
+// into:
+//
+//	type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
 	protoType := reflect.TypeOf(proto)
 	if reflect.TypeOf(in).ConvertibleTo(protoType) {

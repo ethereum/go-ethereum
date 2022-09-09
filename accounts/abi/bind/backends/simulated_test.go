@@ -1206,7 +1206,7 @@ func TestFork(t *testing.T) {
 /*
 Example contract to test event emission:
 
-pragma solidity >=0.7.0 <0.9.0;
+	pragma solidity >=0.7.0 <0.9.0;
 
 	contract Callable {
 	    event Called();

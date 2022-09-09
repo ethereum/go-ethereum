@@ -694,9 +694,9 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 // common ancestor.
 // It returns parameters to be used for peer.RequestHeadersByNumber:
 //
-//	from - starting block number
+//	from  - starting block number
 //	count - number of headers to request
-//	skip - number of headers to skip
+//	skip  - number of headers to skip
 //
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
