@@ -36,3 +36,16 @@ Running your own node enables you to use Ethereum in a truly private, self-suffi
 We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes! If you'd like to contribute to the Geth source code, please fork the [Github repository](https://github.com/ethereum/go-ethereum), fix, commit and send a pull request for the maintainers to review and merge into the main code base. See our [contribution guidelines](/content/docs/developers/contributing.md) for more information.
 
 
+## About the Team
+
+The Geth team are:
+
+* Foo McBar: @beep
+* -
+* -
+* 
+...
+
+
+
+ 
