@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/miner"
 )
 
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
@@ -42,7 +43,7 @@ type payload struct {
 	done   bool
 	empty  *types.Block
 	block  *types.Block
-	result chan *types.Block
+	result chan *miner.Work
 }
 
 // resolve extracts the generated full block from the given channel if possible
@@ -53,27 +54,20 @@ func (req *payload) resolve() *beacon.ExecutableDataV1 {
 	req.lock.Lock()
 	defer req.lock.Unlock()
 
-	// Try to resolve the full block first if it's not obtained
-	// yet. The returned block can be nil if the generation fails.
-	timeout := time.NewTimer(100 * time.Millisecond)
-	defer timeout.Stop()
-
-	done := false
-
 	if !req.done {
-		for !done {
-			select {
-			case req.block = <-req.result:
-				req.done = true
-			case <-timeout.C:
-				done = true
-				// TODO(rjl49345642, Marius), should we keep this
-				// 100ms timeout allowance? Why not just use the
-				// default and then fallback to empty directly?
-			}
+		timeout := time.NewTimer(500 * time.Millisecond)
+		defer timeout.Stop()
+
+		select {
+		case res := <-req.result:
+			req.block = res.Resolve()
+			req.done = true
+		case <-timeout.C:
+			// TODO(rjl49345642, Marius), should we keep this
+			// 100ms timeout allowance? Why not just use the
+			// default and then fallback to empty directly?
 		}
 	}
-
 	if req.block != nil {
 		return beacon.BlockToExecutableData(req.block)
 	}

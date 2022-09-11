@@ -170,7 +170,8 @@ type newWorkReq struct {
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
 	params *generateParams
-	result chan *types.Block // non-blocking channel
+	result *Work
+	resCh  chan *Work // non-blocking channel
 	err    chan error
 }
 
@@ -535,13 +536,16 @@ func (w *worker) mainLoop() {
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
-			if err != nil {
+			res := &Work{b: block, mu: &sync.RWMutex{}}
+			if req.result == nil {
+				req.result = res
+				req.resCh <- res
 				req.err <- err
-				req.result <- nil
-			} else {
-				req.err <- nil
-				req.result <- block
+			} else if err != nil {
+				// Update the block if no error occured
+				req.result.set(block)
 			}
+
 			if time.Since(time.Unix(int64(req.params.timestamp), 0)) < maxRecommitInterval {
 				go func() {
 					time.Sleep(minRecommitInterval)
@@ -1176,10 +1180,10 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *Work, chan error, error) {
 	var (
-		resCh = make(chan *types.Block, 20)
-		errCh = make(chan error, 20)
+		result = make(chan *Work, 1)
+		errCh  = make(chan error, 1)
 	)
 	req := &getWorkReq{
 		params: &generateParams{
@@ -1192,12 +1196,13 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			noExtra:    true,
 			noTxs:      noTxs,
 		},
-		result: resCh,
-		err:    errCh,
+		resCh: result,
+		err:   errCh,
 	}
+
 	select {
 	case w.getWorkCh <- req:
-		return resCh, errCh, nil
+		return result, errCh, nil
 	case <-w.exitCh:
 		return nil, nil, errors.New("miner closed")
 	}

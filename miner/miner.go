@@ -245,7 +245,7 @@ func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscript
 // there is always a result that will be returned through the result channel.
 // The difference is that if the execution fails, the returned result is nil
 // and the concrete error is dropped silently.
-func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, error) {
+func (miner *Miner) GetSealingBlockAsync(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *Work, error) {
 	resCh, _, err := miner.worker.getSealingBlock(parent, timestamp, coinbase, random, noTxs)
 	if err != nil {
 		return nil, err
@@ -261,5 +261,23 @@ func (miner *Miner) GetSealingBlockSync(parent common.Hash, timestamp uint64, co
 	if err != nil {
 		return nil, err
 	}
-	return <-resCh, <-errCh
+	res := <-resCh
+	return res.Resolve(), <-errCh
+}
+
+type Work struct {
+	b  *types.Block
+	mu *sync.RWMutex
+}
+
+func (w *Work) Resolve() *types.Block {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.b
+}
+
+func (w *Work) set(b *types.Block) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.b = b
 }
