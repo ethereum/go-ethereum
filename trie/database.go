@@ -304,11 +304,6 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 	return db
 }
 
-// DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.KeyValueStore {
-	return db.diskdb
-}
-
 // insert inserts a simplified trie node into the memory database.
 // All nodes inserted by this function will be reference tracked
 // and in theory should only used for **trie nodes** insertion.
@@ -567,7 +562,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
 	if db.preimages != nil {
-		db.preimages.commit(false)
+		if err := db.preimages.commit(false); err != nil {
+			return err
+		}
 	}
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
@@ -645,7 +642,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 	// Move all of the accumulated preimages into a write batch
 	if db.preimages != nil {
-		db.preimages.commit(true)
+		if err := db.preimages.commit(true); err != nil {
+			return err
+		}
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize

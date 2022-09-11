@@ -44,7 +44,8 @@ func newCommitter(owner common.Hash, collectLeaf bool) *committer {
 	}
 }
 
-// Commit collapses a node down into a hash node and inserts it into the database
+// Commit collapses a node down into a hash node and returns it along with
+// the modified nodeset.
 func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 	h, err := c.commit(nil, n)
 	if err != nil {
@@ -53,7 +54,7 @@ func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 	return h.(hashNode), c.nodes, nil
 }
 
-// commit collapses a node down into a hash node and inserts it into the database
+// commit collapses a node down into a hash node and returns it.
 func (c *committer) commit(path []byte, n node) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
@@ -75,7 +76,8 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 			}
 			collapsed.Val = childV
 		}
-		// The key needs to be copied, since we're delivering it to database
+		// The key needs to be copied, since we're adding it to the
+		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
@@ -134,17 +136,16 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 	return children, nil
 }
 
-// store hashes the node n and if we have a storage layer specified, it writes
-// the key/value pair to it and tracks any node->child references as well as any
-// node->external trie references.
+// store hashes the node n and adds it to the modified nodeset. If leaf collection
+// is enabled, leaf nodes will be tracked in the modified nodeset as well.
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 
 	// This was not generated - must be a small node stored in the parent.
 	// In theory, we should check if the node is leaf here (embedded node
-	// usually is leaf node). But small value(less than 32bytes) is not
-	// our target(leaves in account trie only).
+	// usually is leaf node). But small value (less than 32bytes) is not
+	// our target (leaves in account trie only).
 	if hash == nil {
 		return n
 	}

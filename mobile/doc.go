@@ -20,7 +20,7 @@
 // with pieces plucked from go-ethereum, rather to allow writing native dapps on
 // mobile platforms. Keep this in mind when using or extending this package!
 //
-// API limitations
+// # API limitations
 //
 // Since gomobile cannot bridge arbitrary types between Go and Android/iOS, the
 // exposed APIs need to be manually wrapped into simplified types, with custom

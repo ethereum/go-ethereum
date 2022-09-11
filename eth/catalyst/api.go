@@ -142,15 +142,19 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:
-// If the method is called with an empty head block:
-// 		we return success, which can be used to check if the engine API is enabled
-// If the total difficulty was not reached:
-// 		we return INVALID
-// If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
-// We try to set our blockchain to the headBlock
-// If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+//
+// We try to set our blockchain to the headBlock.
+//
+// If the method is called with an empty head block: we return success, which can be used
+// to check if the engine API is enabled.
+//
+// If the total difficulty was not reached: we return INVALID.
+//
+// If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
+// if not we start a sync.
+//
+// If there are payloadAttributes: we try to assemble a block with the payloadAttributes
+// and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()

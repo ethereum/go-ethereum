@@ -27,8 +27,7 @@ value zero equivalent to the empty string).
 RLP values are distinguished by a type tag. The type tag precedes the value in the input
 stream and defines the size and kind of the bytes that follow.
 
-
-Encoding Rules
+# Encoding Rules
 
 Package rlp uses reflection and encodes RLP based on the Go type of the value.
 
@@ -58,8 +57,7 @@ An interface value encodes as the value contained in the interface.
 
 Floating point numbers, maps, channels and functions are not supported.
 
-
-Decoding Rules
+# Decoding Rules
 
 Decoding uses the following type-dependent rules:
 
@@ -93,30 +91,29 @@ or one (true).
 
 To decode into an interface value, one of these types is stored in the value:
 
-	  []interface{}, for RLP lists
-	  []byte, for RLP strings
+	[]interface{}, for RLP lists
+	[]byte, for RLP strings
 
 Non-empty interface types are not supported when decoding.
 Signed integers, floating point numbers, maps, channels and functions cannot be decoded into.
 
-
-Struct Tags
+# Struct Tags
 
 As with other encoding packages, the "-" tag ignores fields.
 
-    type StructWithIgnoredField struct{
-        Ignored uint `rlp:"-"`
-        Field   uint
-    }
+	type StructWithIgnoredField struct{
+	    Ignored uint `rlp:"-"`
+	    Field   uint
+	}
 
 Go struct values encode/decode as RLP lists. There are two ways of influencing the mapping
 of fields to list elements. The "tail" tag, which may only be used on the last exported
 struct field, allows slurping up any excess list elements into a slice.
 
-    type StructWithTail struct{
-        Field   uint
-        Tail    []string `rlp:"tail"`
-    }
+	type StructWithTail struct{
+	    Field   uint
+	    Tail    []string `rlp:"tail"`
+	}
 
 The "optional" tag says that the field may be omitted if it is zero-valued. If this tag is
 used on a struct field, all subsequent public fields must also be declared optional.
@@ -128,11 +125,11 @@ When decoding into a struct, optional fields may be omitted from the end of the 
 list. For the example below, this means input lists of one, two, or three elements are
 accepted.
 
-   type StructWithOptionalFields struct{
-        Required  uint
-        Optional1 uint `rlp:"optional"`
-        Optional2 uint `rlp:"optional"`
-   }
+	type StructWithOptionalFields struct{
+	     Required  uint
+	     Optional1 uint `rlp:"optional"`
+	     Optional2 uint `rlp:"optional"`
+	}
 
 The "nil", "nilList" and "nilString" tags apply to pointer-typed fields only, and change
 the decoding rules for the field type. For regular pointer fields without the "nil" tag,
@@ -140,9 +137,9 @@ input values must always match the required input length exactly and the decoder
 produce nil values. When the "nil" tag is set, input values of size zero decode as a nil
 pointer. This is especially useful for recursive types.
 
-    type StructWithNilField struct {
-        Field *[3]byte `rlp:"nil"`
-    }
+	type StructWithNilField struct {
+	    Field *[3]byte `rlp:"nil"`
+	}
 
 In the example above, Field allows two possible input sizes. For input 0xC180 (a list
 containing an empty string) Field is set to nil after decoding. For input 0xC483000000 (a

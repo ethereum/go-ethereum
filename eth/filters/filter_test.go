@@ -40,10 +40,8 @@ func makeReceipt(addr common.Address) *types.Receipt {
 }
 
 func BenchmarkFilters(b *testing.B) {
-	dir := b.TempDir()
-
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
+		db, _   = rawdb.NewLevelDBDatabase(b.TempDir(), 0, 0, "", false)
 		_, sys  = newTestFilterSystem(b, db, Config{})
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
@@ -51,17 +49,14 @@ func BenchmarkFilters(b *testing.B) {
 		addr3   = common.BytesToAddress([]byte("ethereum"))
 		addr4   = common.BytesToAddress([]byte("random addresses please"))
 
-		gspec = core.Genesis{
+		gspec = &core.Genesis{
 			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		genesis = gspec.ToBlock()
 	)
 	defer db.Close()
 
-	gspec.MustCommit(db)
-
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
+	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -100,10 +95,8 @@ func BenchmarkFilters(b *testing.B) {
 }
 
 func TestFilters(t *testing.T) {
-	dir := t.TempDir()
-
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(dir, 0, 0, "", false)
+		db, _   = rawdb.NewLevelDBDatabase(t.TempDir(), 0, 0, "", false)
 		_, sys  = newTestFilterSystem(t, db, Config{})
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
@@ -113,17 +106,15 @@ func TestFilters(t *testing.T) {
 		hash3 = common.BytesToHash([]byte("topic3"))
 		hash4 = common.BytesToHash([]byte("topic4"))
 
-		gspec = core.Genesis{
+		gspec = &core.Genesis{
+			Config:  params.TestChainConfig,
 			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		genesis = gspec.ToBlock()
 	)
 	defer db.Close()
 
-	gspec.MustCommit(db)
-
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
+	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, false, 0)
@@ -168,6 +159,10 @@ func TestFilters(t *testing.T) {
 			gen.AddUncheckedTx(types.NewTransaction(999, common.HexToAddress("0x999"), big.NewInt(999), 999, gen.BaseFee(), nil))
 		}
 	})
+	// The test txs are not properly signed, can't simply create a chain
+	// and then import blocks. TODO(rjl493456442) try to get rid of the
+	// manual database writes.
+	gspec.MustCommit(db)
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
