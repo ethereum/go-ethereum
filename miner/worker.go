@@ -542,6 +542,12 @@ func (w *worker) mainLoop() {
 				req.err <- nil
 				req.result <- block
 			}
+			if time.Since(time.Unix(int64(req.params.timestamp), 0)) < maxRecommitInterval {
+				go func() {
+					time.Sleep(minRecommitInterval)
+					w.getWorkCh <- req
+				}()
+			}
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
 			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
@@ -1172,8 +1178,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // the generation itself succeeds or not.
 func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
 	var (
-		resCh = make(chan *types.Block, 1)
-		errCh = make(chan error, 1)
+		resCh = make(chan *types.Block, 20)
+		errCh = make(chan error, 20)
 	)
 	req := &getWorkReq{
 		params: &generateParams{

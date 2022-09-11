@@ -55,18 +55,22 @@ func (req *payload) resolve() *beacon.ExecutableDataV1 {
 
 	// Try to resolve the full block first if it's not obtained
 	// yet. The returned block can be nil if the generation fails.
+	timeout := time.NewTimer(100 * time.Millisecond)
+	defer timeout.Stop()
+
+	done := false
 
 	if !req.done {
-		timeout := time.NewTimer(500 * time.Millisecond)
-		defer timeout.Stop()
-
-		select {
-		case req.block = <-req.result:
-			req.done = true
-		case <-timeout.C:
-			// TODO(rjl49345642, Marius), should we keep this
-			// 100ms timeout allowance? Why not just use the
-			// default and then fallback to empty directly?
+		for !done {
+			select {
+			case req.block = <-req.result:
+				req.done = true
+			case <-timeout.C:
+				done = true
+				// TODO(rjl49345642, Marius), should we keep this
+				// 100ms timeout allowance? Why not just use the
+				// default and then fallback to empty directly?
+			}
 		}
 	}
 
