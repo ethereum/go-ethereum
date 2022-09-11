@@ -536,7 +536,7 @@ func (w *worker) mainLoop() {
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
-			res := &Work{b: block, mu: &sync.RWMutex{}}
+			res := &Work{b: block, mu: new(sync.RWMutex)}
 			if req.result == nil {
 				req.result = res
 				req.resCh <- res
