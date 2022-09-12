@@ -90,6 +90,10 @@ const (
 	minVersion      = 1
 	sizeofMaskingIV = 16
 
+	// The minimum size of any Discovery v5 packet is 63 bytes.
+	// Should reject packets smaller than minPacketSize.
+	minPacketSize = 63
+
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
 )
@@ -415,10 +419,10 @@ func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []
 
 // Decode decodes a discovery packet.
 func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	// Unmask the static header.
-	if len(input) < sizeofStaticPacketData {
+	if len(input) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
+	// Unmask the static header.
 	var head Header
 	copy(head.IV[:], input[:sizeofMaskingIV])
 	mask := head.mask(c.localnode.ID())
