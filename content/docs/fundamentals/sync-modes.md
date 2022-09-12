@@ -1,8 +1,3 @@
----
-title: Sync modes
-description: Introduction to the three ways to sync Geth
----
-
 Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. This page outlines three sync configurations for full nodes and one for light nodes.
 
 ## Full nodes
@@ -29,13 +24,13 @@ It is also possible to create a partial/recent archive node where the node was s
 
 ## Light nodes
 
-A light node syncs very quickly and stores the bare minimum of blockchain data. Light nodes only process block headers, not entire blocks. This greatly reduces the computation time, storage and bandwidth required relative to a full node. Light nodes are suitable for resource-constrained devices and can catch up to the head of the chain much faster when they are new or have been offline for a while. The trade-off is that light nodes rely heavily on data served by altruistic full nodes. A light client can be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light nodes can't validate blocks in the same way as full nodes - they have to trust that the data they receive is honest. To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce so light nodes can struggle to find peers.
+A light node syncs very quickly and stores the bare minimum of blockchain data. Light nodes only process block headers, not entire blocks. This greatly reduces the computation time, storage and bandwidth required relative to a full node. This means light nodes are suitable for resource-constrained devices and can catch up to the head of the chain much faster when they are new or have been offline for a while. The trade-off is that light nodes rely heavily on data served by altruistic full nodes. A light client can be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light nodes can't validate blocks in the same way as full nodes - they have to trust that the data they receive is honest. To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce so light nodes can struggle to find peers.
 
 Read more about light nodes on our [LES page](/content/docs/fundamentals/les.md).
 
 ## Consensus layer syncing
 
-Since Ethereum transitioned to proof-of-stake, all consensus logic and block propagation was handed over to consensus clients. This means that syncing the blockchain is now a process shared between the consensus and execution clients. Blocks are downloaded by the consensus client and verified by the execution client. There are two ways to sync a consensus client: optimistic sync and checkpoint sync. 
+At the transition to proof-of-stake, all consensus logic and block propagation is handed over to consensus clients. This means that syncing the blockchain is a process shared between the consensus and execution clients. Blocks are downloaded by the consensus client and verified by the execution client. There are two ways to sync a consensus client: optimistic sync and checkpoint sync. 
 
 ### Optimistic sync
 
@@ -45,7 +40,7 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 
 ### Checkpoint sync
 
-Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from a trusted friend, but it could also come from block explorers or public APIs/web apps.
+Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or public APIs/web apps.
 
 **Note** it is not currently possible to use a Geth light node as an execution client on proof-of-stake Ethereum.
 
