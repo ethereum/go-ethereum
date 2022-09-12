@@ -1,6 +1,6 @@
 ---
 title: JSON-RPC Server
-sort_key: Introduction to the JSON-RPC server
+description: Introduction to the JSON_RPC server
 ---
 
 Interacting with Geth requires sending requests to specific JSON-RPC API methods. Geth supports all standard [JSON-RPC API](https://github.com/ethereum/execution-apis) endpoints.

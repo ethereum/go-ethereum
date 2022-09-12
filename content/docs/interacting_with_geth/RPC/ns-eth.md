@@ -1,6 +1,6 @@
 ---
 title: eth Namespace
-sort_key: Documentation for the JSON-RPC API "eth" namespace
+description: Documentation for the JSON-RPC API "eth" namespace
 ---
 
 Geth provides several extensions to the standard "eth" JSON-RPC namespace.
