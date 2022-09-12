@@ -144,42 +144,42 @@ func TestLightPruner(t *testing.T) {
 		{
 			1, 10, "GetHeaderByNumber",
 			func(n uint64) bool {
-				_, err := light.GetHeaderByNumber(context.Background(), client.handler.backend.odr, n)
+				_, err := light.GetHeaderByNumber(context.Background(), client.backend.odr, n)
 				return err == nil
 			},
 		},
 		{
 			11, 20, "GetCanonicalHash",
 			func(n uint64) bool {
-				_, err := light.GetCanonicalHash(context.Background(), client.handler.backend.odr, n)
+				_, err := light.GetCanonicalHash(context.Background(), client.backend.odr, n)
 				return err == nil
 			},
 		},
 		{
 			21, 30, "GetTd",
 			func(n uint64) bool {
-				_, err := light.GetTd(context.Background(), client.handler.backend.odr, server.handler.blockchain.GetHeaderByNumber(n).Hash(), n)
+				_, err := light.GetTd(context.Background(), client.backend.odr, server.server.blockchain.GetHeaderByNumber(n).Hash(), n)
 				return err == nil
 			},
 		},
 		{
 			31, 40, "GetBodyRLP",
 			func(n uint64) bool {
-				_, err := light.GetBodyRLP(context.Background(), client.handler.backend.odr, server.handler.blockchain.GetHeaderByNumber(n).Hash(), n)
+				_, err := light.GetBodyRLP(context.Background(), client.backend.odr, server.server.blockchain.GetHeaderByNumber(n).Hash(), n)
 				return err == nil
 			},
 		},
 		{
 			41, 50, "GetBlock",
 			func(n uint64) bool {
-				_, err := light.GetBlock(context.Background(), client.handler.backend.odr, server.handler.blockchain.GetHeaderByNumber(n).Hash(), n)
+				_, err := light.GetBlock(context.Background(), client.backend.odr, server.server.blockchain.GetHeaderByNumber(n).Hash(), n)
 				return err == nil
 			},
 		},
 		{
 			51, 60, "GetBlockReceipts",
 			func(n uint64) bool {
-				_, err := light.GetBlockReceipts(context.Background(), client.handler.backend.odr, server.handler.blockchain.GetHeaderByNumber(n).Hash(), n)
+				_, err := light.GetBlockReceipts(context.Background(), client.backend.odr, server.server.blockchain.GetHeaderByNumber(n).Hash(), n)
 				return err == nil
 			},
 		},
@@ -192,7 +192,7 @@ func TestLightPruner(t *testing.T) {
 		}
 	}
 	// Check GetBloombits
-	_, err := light.GetBloomBits(context.Background(), client.handler.backend.odr, 0, []uint64{0})
+	_, err := light.GetBloomBits(context.Background(), client.backend.odr, 0, []uint64{0})
 	if err != nil {
 		t.Fatalf("Failed to retrieve bloombits of pruned section: %v", err)
 	}

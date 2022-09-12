@@ -57,7 +57,7 @@ func (b *LesApiBackend) CurrentBlock() *types.Block {
 }
 
 func (b *LesApiBackend) SetHead(number uint64) {
-	b.eth.handler.downloader.Cancel()
+	b.eth.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
 

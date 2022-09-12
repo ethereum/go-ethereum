@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/fetcher"
@@ -129,10 +128,9 @@ func (fp *fetcherPeer) forwardAnno(td *big.Int) []*announce {
 // rules: e.g. evict "timeout" peers.
 type lightFetcher struct {
 	// Various handlers
-	ulc     *ulc
 	chaindb ethdb.Database
 	reqDist *requestDistributor
-	peerset *serverPeerSet        // The global peerset of light client which shared by all components
+	peerset *peerSet              // The global peerset of light client which shared by all components
 	chain   *light.LightChain     // The local light chain which maintains the canonical header chain.
 	fetcher *fetcher.BlockFetcher // The underlying fetcher which takes care block header retrieval.
 
@@ -150,31 +148,24 @@ type lightFetcher struct {
 	wg      sync.WaitGroup
 
 	// Callback
-	synchronise func(peer *serverPeer)
+	synchronise func(peer *peer)
 
 	// Test fields or hooks
 	newHeadHook func(*types.Header)
 }
 
 // newLightFetcher creates a light fetcher instance.
-func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *serverPeerSet, ulc *ulc, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *serverPeer)) *lightFetcher {
+func newLightFetcher(chain *light.LightChain, engine consensus.Engine, peers *peerSet, chaindb ethdb.Database, reqDist *requestDistributor, syncFn func(p *peer)) *lightFetcher {
 	// Construct the fetcher by offering all necessary APIs
 	validator := func(header *types.Header) error {
-		// Disable seal verification explicitly if we are running in ulc mode.
-		return engine.VerifyHeader(chain, header, ulc == nil)
+		return engine.VerifyHeader(chain, header, true)
 	}
 	heighter := func() uint64 { return chain.CurrentHeader().Number.Uint64() }
-	dropper := func(id string) { peers.unregister(id) }
+	dropper := func(id string) { peers.unregisterStringId(id) }
 	inserter := func(headers []*types.Header) (int, error) {
-		// Disable PoW checking explicitly if we are running in ulc mode.
-		checkFreq := 1
-		if ulc != nil {
-			checkFreq = 0
-		}
-		return chain.InsertHeaderChain(headers, checkFreq)
+		return chain.InsertHeaderChain(headers, 1)
 	}
 	f := &lightFetcher{
-		ulc:         ulc,
 		peerset:     peers,
 		chaindb:     chaindb,
 		chain:       chain,
@@ -205,7 +196,7 @@ func (f *lightFetcher) stop() {
 }
 
 // registerPeer adds an new peer to the fetcher's peer set
-func (f *lightFetcher) registerPeer(p *serverPeer) {
+func (f *lightFetcher) registerPeer(p *peer) {
 	f.plock.Lock()
 	defer f.plock.Unlock()
 
@@ -213,7 +204,7 @@ func (f *lightFetcher) registerPeer(p *serverPeer) {
 }
 
 // unregisterPeer removes the specified peer from the fetcher's peer set
-func (f *lightFetcher) unregisterPeer(p *serverPeer) {
+func (f *lightFetcher) unregisterPeer(p *peer) {
 	f.plock.Lock()
 	defer f.plock.Unlock()
 
@@ -243,19 +234,19 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 
 // mainloop is the main event loop of the light fetcher, which is responsible for
 //
-//   - announcement maintenance(ulc)
+// - announcement maintenance(ulc)
 //
-//     If we are running in ultra light client mode, then all announcements from
-//     the trusted servers are maintained. If the same announcements from trusted
-//     servers reach the threshold, then the relevant header is requested for retrieval.
+//   If we are running in ultra light client mode, then all announcements from
+//   the trusted servers are maintained. If the same announcements from trusted
+//   servers reach the threshold, then the relevant header is requested for retrieval.
 //
-//   - block header retrieval
-//     Whenever we receive announce with higher td compared with local chain, the
-//     request will be made for header retrieval.
+// - block header retrieval
+//   Whenever we receive announce with higher td compared with local chain, the
+//   request will be made for header retrieval.
 //
-//   - re-sync trigger
-//     If the local chain lags too much, then the fetcher will enter "synchronise"
-//     mode to retrieve missing headers in batch.
+// - re-sync trigger
+//   If the local chain lags too much, then the fetcher will enter "synnchronise"
+//   mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
 	defer f.wg.Done()
 
@@ -263,7 +254,6 @@ func (f *lightFetcher) mainloop() {
 		syncInterval = uint64(1) // Interval used to trigger a light resync.
 		syncing      bool        // Indicator whether the client is syncing
 
-		ulc          = f.ulc != nil
 		headCh       = make(chan core.ChainHeadEvent, 100)
 		fetching     = make(map[uint64]*request)
 		requestTimer = time.NewTimer(0)
@@ -280,26 +270,6 @@ func (f *lightFetcher) mainloop() {
 		localHead = header
 		localTd = f.chain.GetTd(header.Hash(), header.Number.Uint64())
 	}
-	// trustedHeader returns an indicator whether the header is regarded as
-	// trusted. If we are running in the ulc mode, only when we receive enough
-	// same announcement from trusted server, the header will be trusted.
-	trustedHeader := func(hash common.Hash, number uint64) (bool, []enode.ID) {
-		var (
-			agreed  []enode.ID
-			trusted bool
-		)
-		f.forEachPeer(func(id enode.ID, p *fetcherPeer) bool {
-			if anno := p.announces[hash]; anno != nil && anno.trust && anno.data.Number == number {
-				agreed = append(agreed, id)
-				if 100*len(agreed)/len(f.ulc.keys) >= f.ulc.fraction {
-					trusted = true
-					return false // abort iteration
-				}
-			}
-			return true
-		})
-		return trusted, agreed
-	}
 	for {
 		select {
 		case anno := <-f.announceCh:
@@ -314,7 +284,7 @@ func (f *lightFetcher) mainloop() {
 			// Announced tds should be strictly monotonic, drop the peer if
 			// the announce is out-of-order.
 			if peer.latest != nil && data.Td.Cmp(peer.latest.Td) <= 0 {
-				f.peerset.unregister(peerid.String())
+				f.peerset.unregister(peerid)
 				log.Debug("Non-monotonic td", "peer", peerid, "current", data.Td, "previous", peer.latest.Td)
 				continue
 			}
@@ -327,7 +297,7 @@ func (f *lightFetcher) mainloop() {
 			peer.addAnno(anno)
 
 			// If we are not syncing, try to trigger a single retrieval or re-sync
-			if !ulc && !syncing {
+			if !syncing {
 				// Two scenarios lead to re-sync:
 				// - reorg happens
 				// - local chain lags
@@ -343,22 +313,6 @@ func (f *lightFetcher) mainloop() {
 				log.Debug("Trigger header retrieval", "peer", peerid, "number", data.Number, "hash", data.Hash)
 			}
 			// Keep collecting announces from trusted server even we are syncing.
-			if ulc && anno.trust {
-				// Notify underlying fetcher to retrieve header or trigger a resync if
-				// we have receive enough announcements from trusted server.
-				trusted, agreed := trustedHeader(data.Hash, data.Number)
-				if trusted && !syncing {
-					if data.Number > localHead.Number.Uint64()+syncInterval || data.ReorgDepth > 0 {
-						syncing = true
-						go f.startSync(peerid)
-						log.Debug("Trigger trusted light sync", "local", localHead.Number, "localhash", localHead.Hash(), "remote", data.Number, "remotehash", data.Hash)
-						continue
-					}
-					p := agreed[rand.Intn(len(agreed))]
-					f.fetcher.Notify(p.String(), data.Hash, data.Number, time.Now(), f.requestHeaderByHash(p), nil)
-					log.Debug("Trigger trusted header retrieval", "number", data.Number, "hash", data.Hash)
-				}
-			}
 
 		case req := <-f.requestCh:
 			fetching[req.reqid] = req // Tracking all in-flight requests for response latency statistic.
@@ -370,7 +324,7 @@ func (f *lightFetcher) mainloop() {
 			for reqid, request := range fetching {
 				if time.Since(request.sendAt) > blockDelayTimeout-gatherSlack {
 					delete(fetching, reqid)
-					f.peerset.unregister(request.peerid.String())
+					f.peerset.unregister(request.peerid)
 					log.Debug("Request timeout", "peer", request.peerid, "reqid", reqid)
 				}
 			}
@@ -386,12 +340,12 @@ func (f *lightFetcher) mainloop() {
 				// delivery some mismatched header. So it can't be punished by the underlying fetcher.
 				// We have to add two more rules here to detect.
 				if len(resp.headers) != 1 {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.unregister(req.peerid)
 					log.Debug("Deliver more than requested", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
 				if resp.headers[0].Hash() != req.hash {
-					f.peerset.unregister(req.peerid.String())
+					f.peerset.unregister(req.peerid)
 					log.Debug("Deliver invalid header", "peer", req.peerid, "reqid", req.reqid)
 					continue
 				}
@@ -429,47 +383,15 @@ func (f *lightFetcher) mainloop() {
 				return true
 			})
 			for _, id := range droplist {
-				f.peerset.unregister(id.String())
+				f.peerset.unregister(id)
 				log.Debug("Kicked out peer for invalid announcement")
 			}
 			if f.newHeadHook != nil {
 				f.newHeadHook(localHead)
 			}
 
-		case origin := <-f.syncDone:
+		case /*origin :=*/ <-f.syncDone:
 			syncing = false // Reset the status
-
-			// Rewind all untrusted headers for ulc mode.
-			if ulc {
-				head := f.chain.CurrentHeader()
-				ancestor := rawdb.FindCommonAncestor(f.chaindb, origin, head)
-
-				// Recap the ancestor with genesis header in case the ancestor
-				// is not found. It can happen the original head is before the
-				// checkpoint while the synced headers are after it. In this
-				// case there is no ancestor between them.
-				if ancestor == nil {
-					ancestor = f.chain.Genesis().Header()
-				}
-				var untrusted []common.Hash
-				for head.Number.Cmp(ancestor.Number) > 0 {
-					hash, number := head.Hash(), head.Number.Uint64()
-					if trusted, _ := trustedHeader(hash, number); trusted {
-						break
-					}
-					untrusted = append(untrusted, hash)
-					head = f.chain.GetHeader(head.ParentHash, number-1)
-					if head == nil {
-						break // all the synced headers will be dropped
-					}
-				}
-				if len(untrusted) > 0 {
-					for i, j := 0, len(untrusted)-1; i < j; i, j = i+1, j-1 {
-						untrusted[i], untrusted[j] = untrusted[j], untrusted[i]
-					}
-					f.chain.Rollback(untrusted)
-				}
-			}
 			// Reset local status.
 			reset(f.chain.CurrentHeader())
 			if f.newHeadHook != nil {
@@ -484,9 +406,9 @@ func (f *lightFetcher) mainloop() {
 }
 
 // announce processes a new announcement message received from a peer.
-func (f *lightFetcher) announce(p *serverPeer, head *announceData) {
+func (f *lightFetcher) announce(p *peer, head *announceData) {
 	select {
-	case f.announceCh <- &announce{peerid: p.ID(), trust: p.trusted, data: head}:
+	case f.announceCh <- &announce{peerid: p.ID(), trust: false, data: head}:
 	case <-f.closeCh:
 		return
 	}
@@ -509,10 +431,10 @@ func (f *lightFetcher) trackRequest(peerid enode.ID, reqid uint64, hash common.H
 func (f *lightFetcher) requestHeaderByHash(peerid enode.ID) func(common.Hash) error {
 	return func(hash common.Hash) error {
 		req := &distReq{
-			getCost: func(dp distPeer) uint64 { return dp.(*serverPeer).getRequestCost(GetBlockHeadersMsg, 1) },
-			canSend: func(dp distPeer) bool { return dp.(*serverPeer).ID() == peerid },
+			getCost: func(dp distPeer) uint64 { return dp.(*peer).getRequestCost(GetBlockHeadersMsg, 1) },
+			canSend: func(dp distPeer) bool { return dp.(*peer).ID() == peerid },
 			request: func(dp distPeer) func() {
-				peer, id := dp.(*serverPeer), rand.Uint64()
+				peer, id := dp.(*peer), rand.Uint64()
 				cost := peer.getRequestCost(GetBlockHeadersMsg, 1)
 				peer.fcServer.QueuedRequest(id, cost)
 
@@ -533,15 +455,15 @@ func (f *lightFetcher) startSync(id enode.ID) {
 		f.syncDone <- header
 	}(f.chain.CurrentHeader())
 
-	peer := f.peerset.peer(id.String())
-	if peer == nil || peer.onlyAnnounce {
+	peer := f.peerset.peer(id)
+	if peer == nil {
 		return
 	}
 	f.synchronise(peer)
 }
 
 // deliverHeaders delivers header download request responses for processing
-func (f *lightFetcher) deliverHeaders(peer *serverPeer, reqid uint64, headers []*types.Header) []*types.Header {
+func (f *lightFetcher) deliverHeaders(peer *peer, reqid uint64, headers []*types.Header) []*types.Header {
 	remain := make(chan []*types.Header, 1)
 	select {
 	case f.deliverCh <- &response{reqid: reqid, headers: headers, peerid: peer.ID(), remain: remain}:

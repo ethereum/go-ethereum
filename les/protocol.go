@@ -33,9 +33,10 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	lpv2 = 2
-	lpv3 = 3
-	lpv4 = 4
+	lpv2      = 2
+	lpv3      = 3
+	lpv4      = 4
+	lpvLatest = lpv4
 )
 
 // Supported versions of the les protocol (first is primary)
@@ -260,7 +261,7 @@ func (a *announceData) sanityCheck() error {
 func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
 	rlp, _ := rlp.EncodeToBytes(blockInfo{a.Hash, a.Number, a.Td})
 	sig, _ := crypto.Sign(crypto.Keccak256(rlp), privKey)
-	a.Update = a.Update.add("sign", sig)
+	a.Update.add("sign", sig)
 }
 
 // checkSignature verifies if the block announcement has a valid signature by the given pubKey

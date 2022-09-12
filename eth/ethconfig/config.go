@@ -75,7 +75,6 @@ var Defaults = Config{
 	NetworkId:               1,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
-	UltraLightFraction:      75,
 	DatabaseCache:           512,
 	TrieCleanCache:          154,
 	TrieCleanCacheJournal:   "triecache",
@@ -152,11 +151,6 @@ type Config struct {
 	LightNoPrune       bool `toml:",omitempty"` // Whether to disable light chain pruning
 	LightNoSyncServe   bool `toml:",omitempty"` // Whether to serve light clients before syncing
 	SyncFromCheckpoint bool `toml:",omitempty"` // Whether to sync the header chain from the configured checkpoint
-
-	// Ultra Light client options
-	UltraLightServers      []string `toml:",omitempty"` // List of trusted ultra light servers
-	UltraLightFraction     int      `toml:",omitempty"` // Percentage of trusted servers to accept an announcement
-	UltraLightOnlyAnnounce bool     `toml:",omitempty"` // Whether to only announce headers, or also serve them
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`

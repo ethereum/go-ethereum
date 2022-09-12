@@ -203,7 +203,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	defer tearDown()
 
 	// Ensure the client has synced all necessary data.
-	clientHead := client.handler.backend.blockchain.CurrentHeader()
+	clientHead := client.backend.blockchain.CurrentHeader()
 	if clientHead.Number.Uint64() != 4 {
 		t.Fatalf("Failed to sync the chain with server, head: %v", clientHead.Number.Uint64())
 	}
@@ -215,14 +215,14 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 		// Mark this as a helper to put the failures at the correct lines
 		t.Helper()
 
-		for i := uint64(0); i <= server.handler.blockchain.CurrentHeader().Number.Uint64(); i++ {
+		for i := uint64(0); i <= server.server.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(server.db, i)
-			b1 := fn(light.NoOdr, server.db, server.handler.server.chainConfig, server.handler.blockchain, nil, bhash)
+			b1 := fn(light.NoOdr, server.db, server.server.chainConfig, server.server.blockchain, nil, bhash)
 
 			// Set the timeout as 1 second here, ensure there is enough time
 			// for travis to make the action.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			b2 := fn(ctx, client.db, client.handler.backend.chainConfig, nil, client.handler.backend.blockchain, bhash)
+			b2 := fn(ctx, client.db, client.backend.chainConfig, nil, client.backend.blockchain, bhash)
 			cancel()
 
 			eq := bytes.Equal(b1, b2)
@@ -237,20 +237,20 @@ func testOdr(t *testing.T, protocol int, expFail uint64, checkCached bool, fn od
 	}
 
 	// expect retrievals to fail (except genesis block) without a les peer
-	client.handler.backend.peers.lock.Lock()
+	client.backend.peers.lock.Lock()
 	client.peer.speer.hasBlockHook = func(common.Hash, uint64, bool) bool { return false }
-	client.handler.backend.peers.lock.Unlock()
+	client.backend.peers.lock.Unlock()
 	test(expFail)
 
 	// expect all retrievals to pass
-	client.handler.backend.peers.lock.Lock()
+	client.backend.peers.lock.Lock()
 	client.peer.speer.hasBlockHook = func(common.Hash, uint64, bool) bool { return true }
-	client.handler.backend.peers.lock.Unlock()
+	client.backend.peers.lock.Unlock()
 	test(5)
 
 	// still expect all retrievals to pass, now data should be cached locally
 	if checkCached {
-		client.handler.backend.peers.unregister(client.peer.speer.id)
+		client.backend.peers.unregister(client.peer.speer.ID())
 		time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 		test(5)
 	}
@@ -410,7 +410,7 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		err := client.handler.backend.odr.RetrieveTxStatus(ctx, r)
+		err := client.backend.odr.RetrieveTxStatus(ctx, r)
 		if err != nil {
 			t.Errorf("Failed to retrieve tx status %v", err)
 		} else {

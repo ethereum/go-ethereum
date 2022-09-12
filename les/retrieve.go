@@ -34,7 +34,7 @@ var (
 // matching replies by request ID and handles timeouts and resends if necessary.
 type retrieveManager struct {
 	dist               *requestDistributor
-	peers              *serverPeerSet
+	peers              *peerSet
 	softRequestTimeout func() time.Duration
 
 	lock     sync.RWMutex
@@ -90,7 +90,7 @@ const (
 )
 
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(peers *serverPeerSet, dist *requestDistributor, srto func() time.Duration) *retrieveManager {
+func newRetrieveManager(peers *peerSet, dist *requestDistributor, srto func() time.Duration) *retrieveManager {
 	return &retrieveManager{
 		peers:              peers,
 		dist:               dist,
@@ -335,11 +335,11 @@ func (r *sentReq) tryRequest() {
 	}
 
 	defer func() {
-		pp, ok := p.(*serverPeer)
+		pp, ok := p.(*peer)
 		if hrto && ok {
 			pp.Log().Debug("Request timed out hard")
 			if r.rm.peers != nil {
-				r.rm.peers.unregister(pp.id)
+				r.rm.peers.unregister(pp.ID())
 			}
 		}
 	}()

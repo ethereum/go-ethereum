@@ -23,6 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -97,7 +99,7 @@ func (c *lesCommons) nodeInfo() interface{} {
 	hash := head.Hash()
 	return &NodeInfo{
 		Network:    c.config.NetworkId,
-		Difficulty: rawdb.ReadTd(c.chainDb, hash, head.Number.Uint64()),
+		Difficulty: rawdb.ReadTd(c.chainDb, hash, head.Number.Uint64()), //TODO disable in PoS mode
 		Genesis:    c.genesis,
 		Config:     c.chainConfig,
 		Head:       hash,
@@ -158,4 +160,61 @@ func (c *lesCommons) setupOracle(node *node.Node, genesis common.Hash, ethconfig
 	oracle.Start(client)
 	log.Info("Configured checkpoint oracle", "address", config.Address, "signers", len(config.Signers), "threshold", config.Threshold)
 	return oracle
+}
+
+// sendHeadInfo adds info about local current head to the sent handshake
+func sendHeadInfo(send *keyValueList, head blockInfo) {
+	send.add("headTd", head.Td)
+	send.add("headHash", head.Hash)
+	send.add("headNum", head.Number)
+}
+
+// sendGeneralInfo adds info about local chain and protocol version to the sent handshake
+func sendGeneralInfo(p *peer, send *keyValueList, genesis common.Hash, forkID forkid.ID) {
+	send.add("protocolVersion", uint64(p.version))
+	send.add("networkId", p.network)
+	send.add("genesisHash", genesis)
+	// If the protocol version is beyond les4, then pass the forkID
+	// as well. Check http://eips.ethereum.org/EIPS/eip-2124 for more
+	// spec detail.
+	if p.version >= lpv4 {
+		send.add("forkID", forkID)
+	}
+}
+
+// receiveGeneralInfo fetches info about local chain and protocol version from the received handshake
+func receiveGeneralInfo(p *peer, recv keyValueMap, genesis common.Hash, forkFilter forkid.Filter) error {
+	var rGenesis common.Hash
+	var rVersion, rNetwork uint64
+
+	if err := recv.get("protocolVersion", &rVersion); err != nil {
+		return err
+	}
+	if err := recv.get("networkId", &rNetwork); err != nil {
+		return err
+	}
+	if err := recv.get("genesisHash", &rGenesis); err != nil {
+		return err
+	}
+	if rGenesis != genesis {
+		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
+	}
+	if rNetwork != p.network {
+		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
+	}
+	if int(rVersion) != p.version {
+		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
+	}
+
+	// Check forkID if the protocol version is beyond the les4
+	if p.version >= lpv4 {
+		var forkID forkid.ID
+		if err := recv.get("forkID", &forkID); err != nil {
+			return err
+		}
+		if err := forkFilter(forkID); err != nil {
+			return errResp(ErrForkIDRejected, "%v", err)
+		}
+	}
+	return nil
 }

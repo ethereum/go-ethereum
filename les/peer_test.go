@@ -18,7 +18,6 @@ package les
 
 import (
 	"crypto/rand"
-	"errors"
 	"math/big"
 	"reflect"
 	"sort"
@@ -35,26 +34,30 @@ import (
 )
 
 type testServerPeerSub struct {
-	regCh   chan *serverPeer
-	unregCh chan *serverPeer
+	regCh   chan *peer
+	unregCh chan *peer
 }
 
 func newTestServerPeerSub() *testServerPeerSub {
 	return &testServerPeerSub{
-		regCh:   make(chan *serverPeer, 1),
-		unregCh: make(chan *serverPeer, 1),
+		regCh:   make(chan *peer, 1),
+		unregCh: make(chan *peer, 1),
 	}
 }
 
-func (t *testServerPeerSub) registerPeer(p *serverPeer)   { t.regCh <- p }
-func (t *testServerPeerSub) unregisterPeer(p *serverPeer) { t.unregCh <- p }
+func (t *testServerPeerSub) registerPeer(p *peer)   { t.regCh <- p }
+func (t *testServerPeerSub) unregisterPeer(p *peer) { t.unregCh <- p }
 
 func TestPeerSubscription(t *testing.T) {
-	peers := newServerPeerSet()
+	peers := newPeerSet()
 	defer peers.close()
 
 	checkIds := func(expect []string) {
-		given := peers.ids()
+		givenIDs := peers.ids()
+		given := make([]string, len(givenIDs))
+		for i, id := range givenIDs {
+			given[i] = id.String()
+		}
 		if len(given) == 0 && len(expect) == 0 {
 			return
 		}
@@ -64,7 +67,7 @@ func TestPeerSubscription(t *testing.T) {
 			t.Fatalf("all peer ids mismatch, want %v, given %v", expect, given)
 		}
 	}
-	checkPeers := func(peerCh chan *serverPeer) {
+	checkPeers := func(peerCh chan *peer) {
 		select {
 		case <-peerCh:
 		case <-time.NewTimer(100 * time.Millisecond).C:
@@ -84,13 +87,13 @@ func TestPeerSubscription(t *testing.T) {
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newServerPeer(2, NetworkId, false, p2p.NewPeer(id, "name", nil), nil)
+	peer := newPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), nil)
 	peers.register(peer)
 
 	checkIds([]string{peer.id})
 	checkPeers(sub.regCh)
 
-	peers.unregister(peer.id)
+	peers.unregister(peer.ID())
 	checkIds([]string{})
 	checkPeers(sub.unregCh)
 }
@@ -103,7 +106,21 @@ func (f *fakeChain) Genesis() *types.Block {
 }
 func (f *fakeChain) CurrentHeader() *types.Header { return &types.Header{Number: big.NewInt(10000000)} }
 
-func TestHandshake(t *testing.T) {
+type testHandshakeModule struct {
+	genesis    common.Hash
+	forkID     forkid.ID
+	forkFilter forkid.Filter
+}
+
+func (m *testHandshakeModule) sendHandshake(p *peer, send *keyValueList) {
+	sendGeneralInfo(p, send, m.genesis, m.forkID)
+}
+
+func (m *testHandshakeModule) receiveHandshake(p *peer, recv keyValueMap) error {
+	return receiveGeneralInfo(p, recv, m.genesis, m.forkFilter)
+}
+
+func TestHandshake(t *testing.T) { //TODO make this test work
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -111,42 +128,33 @@ func TestHandshake(t *testing.T) {
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newClientPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), net)
-	peer2 := newServerPeer(2, NetworkId, true, p2p.NewPeer(id, "name", nil), app)
+	peer1 := newPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), net)
+	peer2 := newPeer(2, NetworkId, p2p.NewPeer(id, "name", nil), app)
 
 	var (
 		errCh1 = make(chan error, 1)
 		errCh2 = make(chan error, 1)
 
-		td      = big.NewInt(100)
-		head    = common.HexToHash("deadbeef")
-		headNum = uint64(10)
 		genesis = common.HexToHash("cafebabe")
 
-		chain1, chain2   = &fakeChain{}, &fakeChain{}
-		forkID1          = forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64())
-		forkID2          = forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64())
-		filter1, filter2 = forkid.NewFilter(chain1), forkid.NewFilter(chain2)
+		chain1, chain2 = &fakeChain{}, &fakeChain{}
 	)
+	module1 := &testHandshakeModule{
+		genesis:    genesis,
+		forkID:     forkid.NewID(chain1.Config(), chain1.Genesis().Hash(), chain1.CurrentHeader().Number.Uint64()),
+		forkFilter: forkid.NewFilter(chain1),
+	}
+	module2 := &testHandshakeModule{
+		genesis:    genesis,
+		forkID:     forkid.NewID(chain2.Config(), chain2.Genesis().Hash(), chain2.CurrentHeader().Number.Uint64()),
+		forkFilter: forkid.NewFilter(chain2),
+	}
 
 	go func() {
-		errCh1 <- peer1.handshake(td, head, headNum, genesis, forkID1, filter1, func(list *keyValueList) {
-			var announceType uint64 = announceTypeSigned
-			*list = (*list).add("announceType", announceType)
-		}, nil)
+		errCh1 <- peer1.handshake([]handshakeModule{module1})
 	}()
 	go func() {
-		errCh2 <- peer2.handshake(td, head, headNum, genesis, forkID2, filter2, nil, func(recv keyValueMap) error {
-			var reqType uint64
-			err := recv.get("announceType", &reqType)
-			if err != nil {
-				return err
-			}
-			if reqType != announceTypeSigned {
-				return errors.New("Expected announceTypeSigned")
-			}
-			return nil
-		})
+		errCh2 <- peer2.handshake([]handshakeModule{module2})
 	}()
 
 	for i := 0; i < 2; i++ {

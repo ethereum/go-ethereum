@@ -17,6 +17,7 @@
 package les
 
 import (
+	//"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -55,7 +56,7 @@ type servingQueue struct {
 type servingTask struct {
 	sq                                       *servingQueue
 	servingTime, timeAdded, maxTime, expTime uint64
-	peer                                     *clientPeer
+	peer                                     *peer
 	priority                                 int64
 	biasAdded                                bool
 	token                                    runToken
@@ -142,7 +143,7 @@ func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 }
 
 // newTask creates a new task with the given priority
-func (sq *servingQueue) newTask(peer *clientPeer, maxTime uint64, priority int64) *servingTask {
+func (sq *servingQueue) newTask(peer *peer, maxTime uint64, priority int64) *servingTask {
 	return &servingTask{
 		sq:       sq,
 		peer:     peer,
@@ -183,7 +184,7 @@ func (sq *servingQueue) threadController() {
 type (
 	// peerTasks lists the tasks received from a given peer when selecting peers to freeze
 	peerTasks struct {
-		peer     *clientPeer
+		peer     *peer
 		list     []*servingTask
 		sumTime  uint64
 		priority float64
@@ -207,7 +208,8 @@ func (l peerList) Swap(i, j int) {
 // freezePeers selects the peers with the worst priority queued tasks and freezes
 // them until burstTime goes under burstDropLimit or all peers are frozen
 func (sq *servingQueue) freezePeers() {
-	peerMap := make(map[*clientPeer]*peerTasks)
+	//fmt.Println("** sq.freezePeers()")
+	peerMap := make(map[*peer]*peerTasks)
 	var peerList peerList
 	if sq.best != nil {
 		sq.queue.Push(sq.best, sq.best.priority)
@@ -235,7 +237,7 @@ func (sq *servingQueue) freezePeers() {
 	drop := true
 	for _, tasks := range peerList {
 		if drop {
-			tasks.peer.freeze()
+			tasks.peer.freezeClient()
 			tasks.peer.fcClient.Freeze()
 			sq.queuedTime -= tasks.sumTime
 			sqQueuedGauge.Update(int64(sq.queuedTime))
@@ -286,6 +288,7 @@ func (sq *servingQueue) addTask(task *servingTask) {
 	sqServedGauge.Update(int64(sq.recentTime))
 	sqQueuedGauge.Update(int64(sq.queuedTime))
 	if sq.recentTime+sq.queuedTime > sq.burstLimit {
+		//fmt.Println("*** sq.recentTime", sq.recentTime, "sq.queuedTime", sq.queuedTime, "sq.burstLimit", sq.burstLimit)
 		sq.freezePeers()
 	}
 }
@@ -358,6 +361,7 @@ func (sq *servingQueue) threadCountLoop() {
 // setThreads sets the allowed processing thread count, suspending tasks as soon as
 // possible if necessary.
 func (sq *servingQueue) setThreads(threadCount int) {
+	//fmt.Println("*** sq.setThreads", threadCount)
 	select {
 	case sq.setThreadsCh <- threadCount:
 	case <-sq.quit:

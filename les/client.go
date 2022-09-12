@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -53,12 +54,12 @@ import (
 type LightEthereum struct {
 	lesCommons
 
-	peers              *serverPeerSet
+	peers              *peerSet
 	reqDist            *requestDistributor
 	retriever          *retrieveManager
 	odr                *LesOdr
 	relay              *lesTxRelay
-	handler            *clientHandler
+	handler            *handler
 	txPool             *light.TxPool
 	blockchain         *light.LightChain
 	serverPool         *vfc.ServerPool
@@ -66,6 +67,13 @@ type LightEthereum struct {
 	pruner             *pruner
 	merger             *consensus.Merger
 
+	fetcher    *lightFetcher
+	downloader *downloader.Downloader
+	// Hooks used in the testing
+	syncStart func(header *types.Header) // Hook called when the syncing is started
+	syncEnd   func(header *types.Header) // Hook called when the syncing is done
+
+	checkpoint    *params.TrustedCheckpoint
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
@@ -111,7 +119,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
-	peers := newServerPeerSet()
+	peers := newPeerSet()
 	merger := consensus.NewMerger(chainDb)
 	leth := &LightEthereum{
 		lesCommons: lesCommons{
@@ -141,29 +149,29 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if leth.udpEnabled {
 		prenegQuery = leth.prenegQuery
 	}
-	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, config.UltraLightServers, requestList)
+	leth.serverPool, leth.serverPoolIterator = vfc.NewServerPool(lesDb, []byte("serverpool:"), time.Second, prenegQuery, &mclock.System{}, []string{}, requestList) //TODO ul server list
 	leth.serverPool.AddMetrics(suggestedTimeoutGauge, totalValueGauge, serverSelectableGauge, serverConnectedGauge, sessionValueMeter, serverDialedMeter)
 
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool.GetTimeout)
 	leth.relay = newLesTxRelay(peers, leth.retriever)
-
 	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.peers, leth.retriever)
+
 	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequency, params.HelperTrieConfirmations, config.LightNoPrune)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency, config.LightNoPrune)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
 
-	checkpoint := config.Checkpoint
-	if checkpoint == nil {
-		checkpoint = params.TrustedCheckpoints[genesisHash]
+	leth.checkpoint = config.Checkpoint
+	if leth.checkpoint == nil {
+		leth.checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
-	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, checkpoint); err != nil {
+	if chain, err := light.NewLightChain(leth.odr, leth.chainConfig, leth.engine, leth.checkpoint); err == nil {
+		leth.blockchain = chain
+		leth.chainReader = chain
+	} else {
 		return nil, err
 	}
-	leth.chainReader = leth.blockchain
-	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-
 	// Set up checkpoint oracle.
 	leth.oracle = leth.setupOracle(stack, genesisHash, config)
 
@@ -181,6 +189,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		leth.blockchain.SetHead(compat.RewindTo)
 		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
+	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
 
 	leth.ApiBackend = &LesApiBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, leth, nil}
 	gpoParams := config.GPO
@@ -189,11 +198,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
-	leth.handler = newClientHandler(config.UltraLightServers, config.UltraLightFraction, checkpoint, leth)
-	if leth.handler.ulc != nil {
-		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.handler.ulc.keys), "minTrustedFraction", leth.handler.ulc.fraction)
-		leth.blockchain.DisableCheckFreq()
-	}
+	leth.setupHandler(false)
 
 	leth.netRPCService = ethapi.NewNetAPI(leth.p2pServer, leth.config.NetworkId)
 
@@ -206,6 +211,39 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	leth.shutdownTracker.MarkStartup()
 
 	return leth, nil
+}
+
+func (leth *LightEthereum) setupHandler(noInitAnnounce bool) {
+	leth.handler = newHandler(leth.peers, leth.config.NetworkId)
+	clientHandler := &clientHandler{
+		forkFilter:     forkid.NewFilter(leth.blockchain),
+		blockchain:     leth.blockchain,
+		peers:          leth.peers,
+		retriever:      leth.retriever,
+		noInitAnnounce: noInitAnnounce,
+	}
+	var height uint64
+	if leth.checkpoint != nil {
+		height = (leth.checkpoint.SectionIndex+1)*params.CHTFrequency - 1
+	}
+	leth.fetcher = newLightFetcher(leth.blockchain, leth.engine, leth.peers, leth.chainDb, leth.reqDist, leth.synchronise)
+	leth.downloader = downloader.New(height, leth.chainDb, leth.eventMux, nil, leth.blockchain, leth.peers.unregisterStringId)
+	leth.peers.subscribe(&downloaderPeerNotify{
+		downloader: leth.downloader,
+		retriever:  leth.retriever,
+	})
+	clientHandler.fetcher, clientHandler.downloader = leth.fetcher, leth.downloader
+	leth.handler.registerModule(clientHandler)
+
+	fcClientHandler := &fcClientHandler{
+		retriever: leth.retriever,
+	}
+	leth.handler.registerModule(fcClientHandler)
+
+	vfxClientHandler := &vfxClientHandler{
+		serverPool: leth.serverPool,
+	}
+	leth.handler.registerModule(vfxClientHandler)
 }
 
 // VfluxRequest sends a batch of requests to the given node through discv5 UDP TalkRequest and returns the responses
@@ -303,7 +341,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 			Service:   &LightDummyAPI{},
 		}, {
 			Namespace: "eth",
-			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
+			Service:   downloader.NewDownloaderAPI(s.downloader, s.eventMux),
 		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,
@@ -325,14 +363,14 @@ func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchai
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
 func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.handler.downloader }
+func (s *LightEthereum) Downloader() *downloader.Downloader { return s.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *LightEthereum) Merger() *consensus.Merger          { return s.merger }
 
 // Protocols returns all the currently configured network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ClientProtocolVersions, s.handler.runPeer, func(id enode.ID) interface{} {
-		if p := s.peers.peer(id.String()); p != nil {
+		if p := s.peers.peer(id); p != nil {
 			return p.Info()
 		}
 		return nil
@@ -355,13 +393,15 @@ func (s *LightEthereum) Start() error {
 	if err != nil {
 		return err
 	}
+	s.handler.start()
 	s.serverPool.AddSource(discovery)
 	s.serverPool.Start()
 	// Start bloom request workers.
 	s.wg.Add(bloomServiceThreads)
 	s.startBloomHandlers(params.BloomBitsBlocksClient)
-	s.handler.start()
-
+	if s.fetcher != nil {
+		s.fetcher.start()
+	}
 	return nil
 }
 
@@ -370,17 +410,29 @@ func (s *LightEthereum) Start() error {
 func (s *LightEthereum) Stop() error {
 	close(s.closeCh)
 	s.serverPool.Stop()
-	s.peers.close()
+	s.handler.stop()
 	s.reqDist.close()
 	s.odr.Stop()
 	s.relay.Stop()
-	s.bloomIndexer.Close()
-	s.chtIndexer.Close()
+	if s.bloomIndexer != nil {
+		s.bloomIndexer.Close()
+	}
+	if s.chtIndexer != nil {
+		s.chtIndexer.Close()
+	}
 	s.blockchain.Stop()
-	s.handler.stop()
+	if s.fetcher != nil {
+		s.fetcher.stop()
+	}
+	if s.downloader != nil {
+		s.downloader.Terminate()
+	}
+	//s.handler.stop()
 	s.txPool.Stop()
 	s.engine.Close()
-	s.pruner.close()
+	if s.pruner != nil {
+		s.pruner.close()
+	}
 	s.eventMux.Stop()
 	// Clean shutdown marker as the last thing before closing db
 	s.shutdownTracker.Stop()

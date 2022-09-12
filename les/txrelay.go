@@ -29,7 +29,7 @@ import (
 type lesTxRelay struct {
 	txSent       map[common.Hash]*types.Transaction
 	txPending    map[common.Hash]struct{}
-	peerList     []*serverPeer
+	peerList     []*peer
 	peerStartPos int
 	lock         sync.Mutex
 	stop         chan struct{}
@@ -37,7 +37,7 @@ type lesTxRelay struct {
 	retriever *retrieveManager
 }
 
-func newLesTxRelay(ps *serverPeerSet, retriever *retrieveManager) *lesTxRelay {
+func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
 	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*types.Transaction),
 		txPending: make(map[common.Hash]struct{}),
@@ -52,18 +52,14 @@ func (ltrx *lesTxRelay) Stop() {
 	close(ltrx.stop)
 }
 
-func (ltrx *lesTxRelay) registerPeer(p *serverPeer) {
+func (ltrx *lesTxRelay) registerPeer(p *peer) {
 	ltrx.lock.Lock()
 	defer ltrx.lock.Unlock()
 
-	// Short circuit if the peer is announce only.
-	if p.onlyAnnounce {
-		return
-	}
 	ltrx.peerList = append(ltrx.peerList, p)
 }
 
-func (ltrx *lesTxRelay) unregisterPeer(p *serverPeer) {
+func (ltrx *lesTxRelay) unregisterPeer(p *peer) {
 	ltrx.lock.Lock()
 	defer ltrx.lock.Unlock()
 
@@ -78,7 +74,7 @@ func (ltrx *lesTxRelay) unregisterPeer(p *serverPeer) {
 
 // send sends a list of transactions to at most a given number of peers.
 func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
-	sendTo := make(map[*serverPeer]types.Transactions)
+	sendTo := make(map[*peer]types.Transactions)
 
 	ltrx.peerStartPos++ // rotate the starting position of the peer list
 	if ltrx.peerStartPos >= len(ltrx.peerList) {
@@ -121,14 +117,14 @@ func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
 		reqID := rand.Uint64()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
-				peer := dp.(*serverPeer)
+				peer := dp.(*peer)
 				return peer.getTxRelayCost(len(ll), len(enc))
 			},
 			canSend: func(dp distPeer) bool {
-				return !dp.(*serverPeer).onlyAnnounce && dp.(*serverPeer) == pp
+				return dp.(*peer) == pp
 			},
 			request: func(dp distPeer) func() {
-				peer := dp.(*serverPeer)
+				peer := dp.(*peer)
 				cost := peer.getTxRelayCost(len(ll), len(enc))
 				peer.fcServer.QueuedRequest(reqID, cost)
 				return func() { peer.sendTxs(reqID, len(ll), enc) }

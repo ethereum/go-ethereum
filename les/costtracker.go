@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
@@ -137,19 +136,19 @@ type costTracker struct {
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
 // It also returns the minimum capacity that can be assigned to any peer.
-func newCostTracker(db ethdb.Database, config *ethconfig.Config) (*costTracker, uint64) {
-	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
+func newCostTracker(db ethdb.Database, lightServ, lightIngress, lightEgress int) (*costTracker, uint64) {
+	utilTarget := float64(lightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
 		db:         db,
 		stopCh:     make(chan chan struct{}),
 		reqInfoCh:  make(chan reqInfo, 100),
 		utilTarget: utilTarget,
 	}
-	if config.LightIngress > 0 {
-		ct.inSizeFactor = utilTarget / float64(config.LightIngress)
+	if lightIngress > 0 {
+		ct.inSizeFactor = utilTarget / float64(lightIngress)
 	}
-	if config.LightEgress > 0 {
-		ct.outSizeFactor = utilTarget / float64(config.LightEgress)
+	if lightEgress > 0 {
+		ct.outSizeFactor = utilTarget / float64(lightEgress)
 	}
 	if makeCostStats {
 		ct.stats = make(map[uint64][]uint64)

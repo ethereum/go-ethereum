@@ -20,6 +20,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 
+	//"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -27,17 +30,150 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// serverBackend defines the backend functions needed for serving LES requests
-type serverBackend interface {
-	ArchiveMode() bool
-	AddTxsSync() bool
-	BlockChain() *core.BlockChain
-	TxPool() *core.TxPool
-	GetHelperTrie(typ uint, index uint64) *trie.Trie
+// fcRequestWrapper performs flow control-related tasks for server side message handlers
+type fcRequestWrapper struct {
+	costTracker  *costTracker
+	servingQueue *servingQueue
+}
+
+// wrapMessageHandlers returns the flow controlled version of the provided message handlers
+func (f *fcRequestWrapper) wrapMessageHandlers(fcHandlers []FlowControlledHandler) messageHandlers {
+	wrappedHandlers := make(messageHandlers, len(fcHandlers))
+	for i, req := range fcHandlers {
+		req := req
+		wrappedHandlers[i] = messageHandlerWithCodeAndVersion{
+			code:         req.Code,
+			firstVersion: req.FirstVersion,
+			lastVersion:  req.LastVersion,
+			handler: func(p *peer, msg p2p.Msg) error {
+				// Decode the p2p message, resolve the concrete handler for it.
+				serve, reqID, reqCnt, err := req.Handle(msg)
+				if err != nil {
+					clientErrorMeter.Mark(1)
+					return errResp(ErrDecode, "%v: %v", msg, err)
+				}
+				if metrics.EnabledExpensive {
+					req.InPacketsMeter.Mark(1)
+					req.InTrafficMeter.Mark(int64(msg.Size))
+				}
+				p.responseCount++
+				responseCount := p.responseCount
+
+				// Ensure that the request sent by client peer is valid
+				inSizeCost := f.costTracker.realCost(0, msg.Size, 0)
+				if reqCnt == 0 || reqCnt > req.MaxCount {
+					p.fcClient.OneTimeCost(inSizeCost)
+					return nil
+				}
+				// Ensure that the client peer complies with the flow control
+				// rules agreed by both sides.
+				if p.isFrozen() {
+					p.fcClient.OneTimeCost(inSizeCost)
+					return nil
+				}
+				maxCost := p.fcCosts.getMaxCost(msg.Code, reqCnt)
+				accepted, bufShort, priority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost)
+				if !accepted {
+					p.freezeClient()
+					p.Log().Error("Flow control buffer too low", "time until sufficiently recharged", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
+					p.fcClient.OneTimeCost(inSizeCost)
+					return nil
+				}
+				// Create a multi-stage task, estimate the time it takes for the task to
+				// execute, and cache it in the request service queue.
+				factor := f.costTracker.globalFactor()
+				if factor < 0.001 {
+					factor = 1
+					p.Log().Error("Invalid global cost factor", "factor", factor)
+				}
+				maxTime := uint64(float64(maxCost) / factor)
+				task := f.servingQueue.newTask(p, maxTime, priority)
+				if !task.start() {
+					p.fcClient.RequestProcessed(reqID, responseCount, maxCost, inSizeCost)
+					return nil
+				}
+				p.wg.Add(1) //TODO ???
+				go func() {
+					defer p.wg.Done()
+
+					reply := serve(p, task.waitOrStop)
+					task.done()
+					p.responseLock.Lock()
+					defer p.responseLock.Unlock()
+
+					// Short circuit if the client is already frozen.
+					if p.isFrozen() {
+						realCost := f.costTracker.realCost(task.servingTime, msg.Size, 0)
+						p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+						return
+					}
+					// Positive correction buffer value with real cost.
+					var replySize uint32
+					if reply != nil {
+						replySize = reply.size()
+					}
+					var realCost uint64
+					if f.costTracker.testing {
+						realCost = maxCost // Assign a fake cost for testing purpose
+					} else {
+						realCost = f.costTracker.realCost(task.servingTime, msg.Size, replySize)
+						if realCost > maxCost {
+							realCost = maxCost
+						}
+					}
+					bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+					if reply != nil {
+						// Feed cost tracker request serving statistic.
+						f.costTracker.updateStats(msg.Code, reqCnt, task.servingTime, realCost)
+						// Reduce priority "balance" for the specific peer.
+						if p.balance != nil {
+							p.balance.RequestServed(realCost)
+						}
+						p.queueSend(func() {
+							if err := reply.send(bv); err != nil {
+								select {
+								case p.errCh <- err:
+								default:
+								}
+							}
+						})
+					}
+
+					if metrics.EnabledExpensive {
+						size := uint32(0)
+						if reply != nil {
+							size = reply.size()
+						}
+						req.OutPacketsMeter.Mark(1)
+						req.OutTrafficMeter.Mark(int64(size))
+						req.ServingTimeMeter.Update(time.Duration(task.servingTime))
+					}
+				}()
+				// If the client has made too much invalid request(e.g. request a non-existent data),
+				// reject them to prevent SPAM attack.
+				if p.getInvalid() > maxRequestErrors {
+					clientErrorMeter.Mark(1)
+					return errTooManyInvalidRequest
+				}
+				return nil
+			},
+		}
+	}
+	return wrappedHandlers
+}
+
+// RequestServer serves general protocol messages (not including beacon chain-related ones)
+type RequestServer struct {
+	ArchiveMode   bool
+	AddTxsSync    bool
+	BlockChain    *core.BlockChain
+	TxPool        *core.TxPool
+	GetHelperTrie func(typ uint, index uint64) *trie.Trie
 }
 
 // Decoder is implemented by the messages passed to the handler functions
@@ -45,10 +181,12 @@ type Decoder interface {
 	Decode(val interface{}) error
 }
 
-// RequestType is a static struct that describes an LES request type and references
+// FlowControlledRequest is a static struct that describes an LES request type and references
 // its handler function.
-type RequestType struct {
+type FlowControlledHandler struct {
 	Name                                                             string
+	Code                                                             uint64
+	FirstVersion, LastVersion                                        int
 	MaxCount                                                         uint64
 	InPacketsMeter, InTrafficMeter, OutPacketsMeter, OutTrafficMeter metrics.Meter
 	ServingTimeMeter                                                 metrics.Timer
@@ -56,107 +194,132 @@ type RequestType struct {
 }
 
 // serveRequestFn is returned by the request handler functions after decoding the request.
-// This function does the actual request serving using the supplied backend. waitOrStop is
+// This function does the actual request serving using the supplied s waitOrStop is
 // called between serving individual request items and may block if the serving process
 // needs to be throttled. If it returns false then the process is terminated.
 // The reply is not sent by this function yet. The flow control feedback value is supplied
 // by the protocol handler when calling the send function of the returned reply struct.
-type serveRequestFn func(backend serverBackend, peer *clientPeer, waitOrStop func() bool) *reply
+type serveRequestFn func(peer *peer, waitOrStop func() bool) *reply
 
-// Les3 contains the request types supported by les/2 and les/3
-var Les3 = map[uint64]RequestType{
-	GetBlockHeadersMsg: {
-		Name:             "block header request",
-		MaxCount:         MaxHeaderFetch,
-		InPacketsMeter:   miscInHeaderPacketsMeter,
-		InTrafficMeter:   miscInHeaderTrafficMeter,
-		OutPacketsMeter:  miscOutHeaderPacketsMeter,
-		OutTrafficMeter:  miscOutHeaderTrafficMeter,
-		ServingTimeMeter: miscServingTimeHeaderTimer,
-		Handle:           handleGetBlockHeaders,
-	},
-	GetBlockBodiesMsg: {
-		Name:             "block bodies request",
-		MaxCount:         MaxBodyFetch,
-		InPacketsMeter:   miscInBodyPacketsMeter,
-		InTrafficMeter:   miscInBodyTrafficMeter,
-		OutPacketsMeter:  miscOutBodyPacketsMeter,
-		OutTrafficMeter:  miscOutBodyTrafficMeter,
-		ServingTimeMeter: miscServingTimeBodyTimer,
-		Handle:           handleGetBlockBodies,
-	},
-	GetCodeMsg: {
-		Name:             "code request",
-		MaxCount:         MaxCodeFetch,
-		InPacketsMeter:   miscInCodePacketsMeter,
-		InTrafficMeter:   miscInCodeTrafficMeter,
-		OutPacketsMeter:  miscOutCodePacketsMeter,
-		OutTrafficMeter:  miscOutCodeTrafficMeter,
-		ServingTimeMeter: miscServingTimeCodeTimer,
-		Handle:           handleGetCode,
-	},
-	GetReceiptsMsg: {
-		Name:             "receipts request",
-		MaxCount:         MaxReceiptFetch,
-		InPacketsMeter:   miscInReceiptPacketsMeter,
-		InTrafficMeter:   miscInReceiptTrafficMeter,
-		OutPacketsMeter:  miscOutReceiptPacketsMeter,
-		OutTrafficMeter:  miscOutReceiptTrafficMeter,
-		ServingTimeMeter: miscServingTimeReceiptTimer,
-		Handle:           handleGetReceipts,
-	},
-	GetProofsV2Msg: {
-		Name:             "les/2 proofs request",
-		MaxCount:         MaxProofsFetch,
-		InPacketsMeter:   miscInTrieProofPacketsMeter,
-		InTrafficMeter:   miscInTrieProofTrafficMeter,
-		OutPacketsMeter:  miscOutTrieProofPacketsMeter,
-		OutTrafficMeter:  miscOutTrieProofTrafficMeter,
-		ServingTimeMeter: miscServingTimeTrieProofTimer,
-		Handle:           handleGetProofs,
-	},
-	GetHelperTrieProofsMsg: {
-		Name:             "helper trie proof request",
-		MaxCount:         MaxHelperTrieProofsFetch,
-		InPacketsMeter:   miscInHelperTriePacketsMeter,
-		InTrafficMeter:   miscInHelperTrieTrafficMeter,
-		OutPacketsMeter:  miscOutHelperTriePacketsMeter,
-		OutTrafficMeter:  miscOutHelperTrieTrafficMeter,
-		ServingTimeMeter: miscServingTimeHelperTrieTimer,
-		Handle:           handleGetHelperTrieProofs,
-	},
-	SendTxV2Msg: {
-		Name:             "new transactions",
-		MaxCount:         MaxTxSend,
-		InPacketsMeter:   miscInTxsPacketsMeter,
-		InTrafficMeter:   miscInTxsTrafficMeter,
-		OutPacketsMeter:  miscOutTxsPacketsMeter,
-		OutTrafficMeter:  miscOutTxsTrafficMeter,
-		ServingTimeMeter: miscServingTimeTxTimer,
-		Handle:           handleSendTx,
-	},
-	GetTxStatusMsg: {
-		Name:             "transaction status query request",
-		MaxCount:         MaxTxStatus,
-		InPacketsMeter:   miscInTxStatusPacketsMeter,
-		InTrafficMeter:   miscInTxStatusTrafficMeter,
-		OutPacketsMeter:  miscOutTxStatusPacketsMeter,
-		OutTrafficMeter:  miscOutTxStatusTrafficMeter,
-		ServingTimeMeter: miscServingTimeTxStatusTimer,
-		Handle:           handleGetTxStatus,
-	},
+func (s *RequestServer) MessageHandlers() []FlowControlledHandler {
+	return []FlowControlledHandler{
+		{
+			Code:             GetBlockHeadersMsg,
+			Name:             "block header request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxHeaderFetch,
+			InPacketsMeter:   miscInHeaderPacketsMeter,
+			InTrafficMeter:   miscInHeaderTrafficMeter,
+			OutPacketsMeter:  miscOutHeaderPacketsMeter,
+			OutTrafficMeter:  miscOutHeaderTrafficMeter,
+			ServingTimeMeter: miscServingTimeHeaderTimer,
+			Handle:           s.handleGetBlockHeaders,
+		},
+		{
+			Code:             GetBlockBodiesMsg,
+			Name:             "block bodies request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxBodyFetch,
+			InPacketsMeter:   miscInBodyPacketsMeter,
+			InTrafficMeter:   miscInBodyTrafficMeter,
+			OutPacketsMeter:  miscOutBodyPacketsMeter,
+			OutTrafficMeter:  miscOutBodyTrafficMeter,
+			ServingTimeMeter: miscServingTimeBodyTimer,
+			Handle:           s.handleGetBlockBodies,
+		},
+		{
+			Code:             GetCodeMsg,
+			Name:             "code request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxCodeFetch,
+			InPacketsMeter:   miscInCodePacketsMeter,
+			InTrafficMeter:   miscInCodeTrafficMeter,
+			OutPacketsMeter:  miscOutCodePacketsMeter,
+			OutTrafficMeter:  miscOutCodeTrafficMeter,
+			ServingTimeMeter: miscServingTimeCodeTimer,
+			Handle:           s.handleGetCode,
+		},
+		{
+			Code:             GetReceiptsMsg,
+			Name:             "receipts request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxReceiptFetch,
+			InPacketsMeter:   miscInReceiptPacketsMeter,
+			InTrafficMeter:   miscInReceiptTrafficMeter,
+			OutPacketsMeter:  miscOutReceiptPacketsMeter,
+			OutTrafficMeter:  miscOutReceiptTrafficMeter,
+			ServingTimeMeter: miscServingTimeReceiptTimer,
+			Handle:           s.handleGetReceipts,
+		},
+		{
+			Code:             GetProofsV2Msg,
+			Name:             "les/2 proofs request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxProofsFetch,
+			InPacketsMeter:   miscInTrieProofPacketsMeter,
+			InTrafficMeter:   miscInTrieProofTrafficMeter,
+			OutPacketsMeter:  miscOutTrieProofPacketsMeter,
+			OutTrafficMeter:  miscOutTrieProofTrafficMeter,
+			ServingTimeMeter: miscServingTimeTrieProofTimer,
+			Handle:           s.handleGetProofs,
+		},
+		{
+			Code:             GetHelperTrieProofsMsg,
+			Name:             "helper trie proof request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpv4,
+			MaxCount:         MaxHelperTrieProofsFetch,
+			InPacketsMeter:   miscInHelperTriePacketsMeter,
+			InTrafficMeter:   miscInHelperTrieTrafficMeter,
+			OutPacketsMeter:  miscOutHelperTriePacketsMeter,
+			OutTrafficMeter:  miscOutHelperTrieTrafficMeter,
+			ServingTimeMeter: miscServingTimeHelperTrieTimer,
+			Handle:           s.handleGetHelperTrieProofs,
+		},
+		{
+			Code:             SendTxV2Msg,
+			Name:             "new transactions",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxTxSend,
+			InPacketsMeter:   miscInTxsPacketsMeter,
+			InTrafficMeter:   miscInTxsTrafficMeter,
+			OutPacketsMeter:  miscOutTxsPacketsMeter,
+			OutTrafficMeter:  miscOutTxsTrafficMeter,
+			ServingTimeMeter: miscServingTimeTxTimer,
+			Handle:           s.handleSendTx,
+		},
+		{
+			Code:             GetTxStatusMsg,
+			Name:             "transaction status query request",
+			FirstVersion:     lpv2,
+			LastVersion:      lpvLatest,
+			MaxCount:         MaxTxStatus,
+			InPacketsMeter:   miscInTxStatusPacketsMeter,
+			InTrafficMeter:   miscInTxStatusTrafficMeter,
+			OutPacketsMeter:  miscOutTxStatusPacketsMeter,
+			OutTrafficMeter:  miscOutTxStatusTrafficMeter,
+			ServingTimeMeter: miscServingTimeTxStatusTimer,
+			Handle:           s.handleGetTxStatus,
+		},
+	}
 }
 
 // handleGetBlockHeaders handles a block header request
-func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetBlockHeadersPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		// Gather headers until the fetch or network limits is reached
 		var (
-			bc              = backend.BlockChain()
+			bc              = s.BlockChain
 			hashMode        = r.Query.Origin.Hash != (common.Hash{})
 			first           = true
 			maxNonCanonical = uint64(100)
@@ -241,17 +404,17 @@ func handleGetBlockHeaders(msg Decoder) (serveRequestFn, uint64, uint64, error) 
 }
 
 // handleGetBlockBodies handles a block body request
-func handleGetBlockBodies(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetBlockBodies(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetBlockBodiesPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		var (
 			bytes  int
 			bodies []rlp.RawValue
 		)
-		bc := backend.BlockChain()
+		bc := s.BlockChain
 		for i, hash := range r.Hashes {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -272,17 +435,17 @@ func handleGetBlockBodies(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 }
 
 // handleGetCode handles a contract code request
-func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetCodePacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		var (
 			bytes int
 			data  [][]byte
 		)
-		bc := backend.BlockChain()
+		bc := s.BlockChain
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -297,7 +460,7 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 			// Refuse to search stale state data in the database since looking for
 			// a non-exist key is kind of expensive.
 			local := bc.CurrentHeader().Number.Uint64()
-			if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
+			if !s.ArchiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 				p.Log().Debug("Reject stale code request", "number", header.Number.Uint64(), "head", local)
 				p.bumpInvalid()
 				continue
@@ -326,17 +489,17 @@ func handleGetCode(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 }
 
 // handleGetReceipts handles a block receipts request
-func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetReceiptsPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		var (
 			bytes    int
 			receipts []rlp.RawValue
 		)
-		bc := backend.BlockChain()
+		bc := s.BlockChain
 		for i, hash := range r.Hashes {
 			if i != 0 && !waitOrStop() {
 				return nil
@@ -365,19 +528,19 @@ func handleGetReceipts(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 }
 
 // handleGetProofs handles a proof request
-func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetProofsPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		var (
 			lastBHash common.Hash
 			root      common.Hash
 			header    *types.Header
 			err       error
 		)
-		bc := backend.BlockChain()
+		bc := s.BlockChain
 		nodes := light.NewNodeSet()
 
 		for i, request := range r.Reqs {
@@ -396,7 +559,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				// Refuse to search stale state data in the database since looking for
 				// a non-exist key is kind of expensive.
 				local := bc.CurrentHeader().Number.Uint64()
-				if !backend.ArchiveMode() && header.Number.Uint64()+core.TriesInMemory <= local {
+				if !s.ArchiveMode && header.Number.Uint64()+core.TriesInMemory <= local {
 					p.Log().Debug("Reject stale trie request", "number", header.Number.Uint64(), "head", local)
 					p.bumpInvalid()
 					continue
@@ -448,12 +611,12 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 }
 
 // handleGetHelperTrieProofs handles a helper trie proof request
-func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetHelperTrieProofsPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		var (
 			lastIdx  uint64
 			lastType uint
@@ -461,7 +624,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			auxBytes int
 			auxData  [][]byte
 		)
-		bc := backend.BlockChain()
+		bc := s.BlockChain
 		nodes := light.NewNodeSet()
 		for i, request := range r.Reqs {
 			if i != 0 && !waitOrStop() {
@@ -469,7 +632,7 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 			}
 			if auxTrie == nil || request.Type != lastType || request.TrieIdx != lastIdx {
 				lastType, lastIdx = request.Type, request.TrieIdx
-				auxTrie = backend.GetHelperTrie(request.Type, request.TrieIdx)
+				auxTrie = s.GetHelperTrie(request.Type, request.TrieIdx)
 			}
 			if auxTrie == nil {
 				return nil
@@ -502,31 +665,31 @@ func handleGetHelperTrieProofs(msg Decoder) (serveRequestFn, uint64, uint64, err
 }
 
 // handleSendTx handles a transaction propagation request
-func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r SendTxPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
 	amount := uint64(len(r.Txs))
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		stats := make([]light.TxStatus, len(r.Txs))
 		for i, tx := range r.Txs {
 			if i != 0 && !waitOrStop() {
 				return nil
 			}
 			hash := tx.Hash()
-			stats[i] = txStatus(backend, hash)
+			stats[i] = s.txStatus(hash)
 			if stats[i].Status == core.TxStatusUnknown {
-				addFn := backend.TxPool().AddRemotes
+				addFn := s.TxPool.AddRemotes
 				// Add txs synchronously for testing purpose
-				if backend.AddTxsSync() {
-					addFn = backend.TxPool().AddRemotesSync
+				if s.AddTxsSync {
+					addFn = s.TxPool.AddRemotesSync
 				}
 				if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
 					stats[i].Error = errs[0].Error()
 					continue
 				}
-				stats[i] = txStatus(backend, hash)
+				stats[i] = s.txStatus(hash)
 			}
 		}
 		return p.replyTxStatus(r.ReqID, stats)
@@ -534,32 +697,32 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 }
 
 // handleGetTxStatus handles a transaction status query
-func handleGetTxStatus(msg Decoder) (serveRequestFn, uint64, uint64, error) {
+func (s *RequestServer) handleGetTxStatus(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 	var r GetTxStatusPacket
 	if err := msg.Decode(&r); err != nil {
 		return nil, 0, 0, err
 	}
-	return func(backend serverBackend, p *clientPeer, waitOrStop func() bool) *reply {
+	return func(p *peer, waitOrStop func() bool) *reply {
 		stats := make([]light.TxStatus, len(r.Hashes))
 		for i, hash := range r.Hashes {
 			if i != 0 && !waitOrStop() {
 				return nil
 			}
-			stats[i] = txStatus(backend, hash)
+			stats[i] = s.txStatus(hash)
 		}
 		return p.replyTxStatus(r.ReqID, stats)
 	}, r.ReqID, uint64(len(r.Hashes)), nil
 }
 
 // txStatus returns the status of a specified transaction.
-func txStatus(b serverBackend, hash common.Hash) light.TxStatus {
+func (s *RequestServer) txStatus(hash common.Hash) light.TxStatus {
 	var stat light.TxStatus
 	// Looking the transaction in txpool first.
-	stat.Status = b.TxPool().Status([]common.Hash{hash})[0]
+	stat.Status = s.TxPool.Status([]common.Hash{hash})[0]
 
 	// If the transaction is unknown to the pool, try looking it up locally.
 	if stat.Status == core.TxStatusUnknown {
-		lookup := b.BlockChain().GetTransactionLookup(hash)
+		lookup := s.BlockChain.GetTransactionLookup(hash)
 		if lookup != nil {
 			stat.Status = core.TxStatusIncluded
 			stat.Lookup = lookup

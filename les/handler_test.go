@@ -62,7 +62,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	// Create a "random" unknown hash for testing
 	var unknown common.Hash
@@ -200,7 +200,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	// Create a batch of tests for various scenarios
 	limit := MaxBodyFetch
@@ -287,7 +287,7 @@ func testGetCode(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	var codereqs []*CodeReq
 	var codes [][]byte
@@ -326,7 +326,7 @@ func testGetStaleCode(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	check := func(number uint64, expected [][]byte) {
 		req := &CodeReq{
@@ -361,7 +361,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	// Collect the hashes to request, and the response to expect
 	var receipts []types.Receipts
@@ -397,7 +397,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	var proofreqs []ProofReq
 	proofsV2 := light.NewNodeSet()
@@ -440,7 +440,7 @@ func testGetStaleProof(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	check := func(number uint64, wantOK bool) {
 		var (
@@ -499,7 +499,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	// Assemble the proofs from the different protocols
 	header := bc.GetHeaderByNumber(config.ChtSize - 1)
@@ -558,7 +558,7 @@ func testGetBloombitsProofs(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	bc := server.handler.blockchain
+	bc := server.server.blockchain
 
 	// Request and verify each bit of the bloom bits proofs
 	for bit := 0; bit < 2048; bit++ {
@@ -603,9 +603,9 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
 
-	server.handler.addTxsSync = true
+	server.server.serverHandler.addTxsSync = true
 
-	chain := server.handler.blockchain
+	chain := server.server.blockchain
 
 	var reqID uint64
 
@@ -649,12 +649,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the inserted block
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 1 {
+		if pending, _ := server.server.serverHandler.txpool.Stats(); pending == 1 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 1 {
+	if pending, _ := server.server.serverHandler.txpool.Stats(); pending != 1 {
 		t.Fatalf("pending count mismatch: have %d, want 1", pending)
 	}
 	// Discard new block announcement
@@ -674,12 +674,12 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	}
 	// wait until TxPool processes the reorg
 	for i := 0; i < 10; i++ {
-		if pending, _ := server.handler.txpool.Stats(); pending == 3 {
+		if pending, _ := server.server.serverHandler.txpool.Stats(); pending == 3 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if pending, _ := server.handler.txpool.Stats(); pending != 3 {
+	if pending, _ := server.server.serverHandler.txpool.Stats(); pending != 3 {
 		t.Fatalf("pending count mismatch: have %d, want 3", pending)
 	}
 	// Discard new block announcement
@@ -703,8 +703,8 @@ func testStopResume(t *testing.T, protocol int) {
 	server, _, tearDown := newClientServerEnv(t, netconfig)
 	defer tearDown()
 
-	server.handler.server.costTracker.testing = true
-	server.handler.server.costTracker.testCostList = testCostList(testBufLimit / 10)
+	server.server.costTracker.testing = true
+	server.server.costTracker.testCostList = testCostList(testBufLimit / 10)
 
 	rawPeer, closePeer, _ := server.newRawPeer(t, "peer", protocol)
 	defer closePeer()
@@ -714,7 +714,7 @@ func testStopResume(t *testing.T, protocol int) {
 		expBuf   = testBufLimit
 		testCost = testBufLimit / 10
 	)
-	header := server.handler.blockchain.CurrentHeader()
+	header := server.server.blockchain.CurrentHeader()
 	req := func() {
 		reqID++
 		sendRequest(rawPeer.app, GetBlockHeadersMsg, reqID, &GetBlockHeadersData{Origin: hashOrNumber{Hash: header.Hash()}, Amount: 1})

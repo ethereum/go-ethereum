@@ -298,23 +298,6 @@ var (
 		Value:    ethconfig.Defaults.LightPeers,
 		Category: flags.LightCategory,
 	}
-	UltraLightServersFlag = &cli.StringFlag{
-		Name:     "ulc.servers",
-		Usage:    "List of trusted ultra-light servers",
-		Value:    strings.Join(ethconfig.Defaults.UltraLightServers, ","),
-		Category: flags.LightCategory,
-	}
-	UltraLightFractionFlag = &cli.IntFlag{
-		Name:     "ulc.fraction",
-		Usage:    "Minimum % of trusted ultra-light servers required to announce a new head",
-		Value:    ethconfig.Defaults.UltraLightFraction,
-		Category: flags.LightCategory,
-	}
-	UltraLightOnlyAnnounceFlag = &cli.BoolFlag{
-		Name:     "ulc.onlyannounce",
-		Usage:    "Ultra light server sends announcements only",
-		Category: flags.LightCategory,
-	}
 	LightNoPruneFlag = &cli.BoolFlag{
 		Name:     "light.nopruning",
 		Usage:    "Disable ancient light chain data pruning",
@@ -1264,19 +1247,6 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(LightMaxPeersFlag.Name) {
 		cfg.LightPeers = ctx.Int(LightMaxPeersFlag.Name)
-	}
-	if ctx.IsSet(UltraLightServersFlag.Name) {
-		cfg.UltraLightServers = strings.Split(ctx.String(UltraLightServersFlag.Name), ",")
-	}
-	if ctx.IsSet(UltraLightFractionFlag.Name) {
-		cfg.UltraLightFraction = ctx.Int(UltraLightFractionFlag.Name)
-	}
-	if cfg.UltraLightFraction <= 0 && cfg.UltraLightFraction > 100 {
-		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", ethconfig.Defaults.UltraLightFraction)
-		cfg.UltraLightFraction = ethconfig.Defaults.UltraLightFraction
-	}
-	if ctx.IsSet(UltraLightOnlyAnnounceFlag.Name) {
-		cfg.UltraLightOnlyAnnounce = ctx.Bool(UltraLightOnlyAnnounceFlag.Name)
 	}
 	if ctx.IsSet(LightNoPruneFlag.Name) {
 		cfg.LightNoPrune = ctx.Bool(LightNoPruneFlag.Name)

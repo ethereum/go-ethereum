@@ -74,7 +74,7 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDistributor {
+func newRequestDistributor(peers *peerSet, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
 		clock:    clock,
 		reqQueue: list.New(),
@@ -91,14 +91,14 @@ func newRequestDistributor(peers *serverPeerSet, clock mclock.Clock) *requestDis
 }
 
 // registerPeer implements peerSetNotify
-func (d *requestDistributor) registerPeer(p *serverPeer) {
+func (d *requestDistributor) registerPeer(p *peer) {
 	d.peerLock.Lock()
 	d.peers[p] = struct{}{}
 	d.peerLock.Unlock()
 }
 
 // unregisterPeer implements peerSetNotify
-func (d *requestDistributor) unregisterPeer(p *serverPeer) {
+func (d *requestDistributor) unregisterPeer(p *peer) {
 	d.peerLock.Lock()
 	delete(d.peers, p)
 	d.peerLock.Unlock()

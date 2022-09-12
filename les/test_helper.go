@@ -190,7 +190,7 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, config *light.Indexer
 	return indexers[:]
 }
 
-func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *serverPeerSet, ulcServers []string, ulcFraction int) (*clientHandler, func()) {
+func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, indexers []*core.ChainIndexer, db ethdb.Database, peers *peerSet, noInitAnnounce bool) (*LightEthereum, func()) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -242,18 +242,19 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		eventMux:   evmux,
 		merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 	}
-	client.handler = newClientHandler(ulcServers, ulcFraction, nil, client)
+
+	client.setupHandler(noInitAnnounce)
 
 	if client.oracle != nil {
 		client.oracle.Start(backend)
 	}
 	client.handler.start()
-	return client.handler, func() {
+	return client, func() {
 		client.handler.stop()
 	}
 }
 
-func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*serverHandler, *backends.SimulatedBackend, func()) {
+func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Database, clock mclock.Clock) (*LesServer, *backends.SimulatedBackend, func()) {
 	var (
 		gspec = core.Genesis{
 			Config:   params.AllEthashProtocolChanges,
@@ -301,7 +302,8 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 			oracle:      oracle,
 			closeCh:     make(chan struct{}),
 		},
-		peers:        newClientPeerSet(),
+		blockchain: simulation.Blockchain(),
+		peers:        newPeerSet(),
 		servingQueue: newServingQueue(int64(time.Millisecond*10), 1),
 		defParams: flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
@@ -309,19 +311,24 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 		},
 		fcManager: flowcontrol.NewClientManager(nil, clock),
 	}
-	server.costTracker, server.minCapacity = newCostTracker(db, server.config)
+	server.costTracker, server.minCapacity = newCostTracker(db, 100, 10000, 10000)
 	server.costTracker.testCostList = testCostList(0) // Disable flow control mechanism.
 	server.clientPool = vfs.NewClientPool(db, testBufRecharge, defaultConnectedBias, clock, alwaysTrueFn)
 	server.clientPool.Start()
 	server.clientPool.SetLimits(10000, 10000) // Assign enough capacity for clientpool
-	server.handler = newServerHandler(server, simulation.Blockchain(), db, txpool, func() bool { return true })
+
+	server.setupHandler(newServerHandler(server, simulation.Blockchain(), db, txpool, &fcRequestWrapper{
+		costTracker:  server.costTracker,
+		servingQueue: server.servingQueue,
+	}, func() bool { return true }))
+
 	if server.oracle != nil {
 		server.oracle.Start(simulation)
 	}
 	server.servingQueue.setThreads(4)
 	server.handler.start()
 	closer := func() { server.Stop() }
-	return server.handler, simulation, closer
+	return server, simulation, closer
 }
 
 func alwaysTrueFn() bool {
@@ -330,8 +337,7 @@ func alwaysTrueFn() bool {
 
 // testPeer is a simulated peer to allow testing direct network calls.
 type testPeer struct {
-	cpeer *clientPeer
-	speer *serverPeer
+	cpeer, speer *peer
 
 	net p2p.MsgReadWriter // Network layer reader/writer to simulate remote messaging
 	app *p2p.MsgPipeRW    // Application layer reader/writer to simulate the local side
@@ -344,14 +350,14 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 		t.Fatal("handshake for client peer only")
 	}
 	var sendList keyValueList
-	sendList = sendList.add("protocolVersion", uint64(p.cpeer.version))
-	sendList = sendList.add("networkId", uint64(NetworkId))
-	sendList = sendList.add("headTd", td)
-	sendList = sendList.add("headHash", head)
-	sendList = sendList.add("headNum", headNum)
-	sendList = sendList.add("genesisHash", genesis)
+	sendList.add("protocolVersion", uint64(p.cpeer.version))
+	sendList.add("networkId", uint64(NetworkId))
+	sendList.add("headTd", td)
+	sendList.add("headHash", head)
+	sendList.add("headNum", headNum)
+	sendList.add("genesisHash", genesis)
 	if p.cpeer.version >= lpv4 {
-		sendList = sendList.add("forkID", &forkID)
+		sendList.add("forkID", &forkID)
 	}
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
@@ -368,23 +374,23 @@ func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Ha
 		t.Fatal("handshake for server peer only")
 	}
 	var sendList keyValueList
-	sendList = sendList.add("protocolVersion", uint64(p.speer.version))
-	sendList = sendList.add("networkId", uint64(NetworkId))
-	sendList = sendList.add("headTd", td)
-	sendList = sendList.add("headHash", head)
-	sendList = sendList.add("headNum", headNum)
-	sendList = sendList.add("genesisHash", genesis)
-	sendList = sendList.add("serveHeaders", nil)
-	sendList = sendList.add("serveChainSince", uint64(0))
-	sendList = sendList.add("serveStateSince", uint64(0))
-	sendList = sendList.add("serveRecentState", uint64(core.TriesInMemory-4))
-	sendList = sendList.add("txRelay", nil)
-	sendList = sendList.add("flowControl/BL", testBufLimit)
-	sendList = sendList.add("flowControl/MRR", testBufRecharge)
-	sendList = sendList.add("flowControl/MRC", costList)
+	sendList.add("protocolVersion", uint64(p.speer.version))
+	sendList.add("networkId", uint64(NetworkId))
+	sendList.add("headTd", td)
+	sendList.add("headHash", head)
+	sendList.add("headNum", headNum)
+	sendList.add("genesisHash", genesis)
+	sendList.add("serveHeaders", nil)
+	sendList.add("serveChainSince", uint64(0))
+	sendList.add("serveStateSince", uint64(0))
+	sendList.add("serveRecentState", uint64(core.TriesInMemory-4))
+	sendList.add("txRelay", nil)
+	sendList.add("flowControl/BL", testBufLimit)
+	sendList.add("flowControl/MRR", testBufRecharge)
+	sendList.add("flowControl/MRC", costList)
 	if p.speer.version >= lpv4 {
-		sendList = sendList.add("forkID", &forkID)
-		sendList = sendList.add("recentTxLookup", recentTxLookup)
+		sendList.add("forkID", &forkID)
+		sendList.add("recentTxLookup", recentTxLookup)
 	}
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
@@ -400,7 +406,7 @@ func (p *testPeer) close() {
 	p.app.Close()
 }
 
-func newTestPeerPair(name string, version int, server *serverHandler, client *clientHandler, noInitAnnounce bool) (*testPeer, *testPeer, error) {
+func newTestPeerPair(name string, version int, server, client *handler) (*testPeer, *testPeer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -408,8 +414,8 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 	var id enode.ID
 	rand.Read(id[:])
 
-	peer1 := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
-	peer2 := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), app)
+	peer1 := newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer2 := newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), app)
 
 	// Start the peer on a new thread
 	errc1 := make(chan error, 1)
@@ -425,7 +431,7 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 		select {
 		case <-client.closeCh:
 			errc2 <- p2p.DiscQuitting
-		case errc2 <- client.handle(peer2, noInitAnnounce):
+		case errc2 <- client.handle(peer2):
 		}
 	}()
 	// Ensure the connection is established or exits when any error occurs
@@ -452,7 +458,8 @@ type testClient struct {
 	clock   mclock.Clock
 	db      ethdb.Database
 	peer    *testPeer
-	handler *clientHandler
+	backend *LightEthereum
+	handler *handler
 
 	chtIndexer       *core.ChainIndexer
 	bloomIndexer     *core.ChainIndexer
@@ -467,7 +474,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newServerPeer(version, NetworkId, false, p2p.NewPeer(id, name, nil), net)
+	peer := newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
@@ -475,7 +482,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		select {
 		case <-client.handler.closeCh:
 			errCh <- p2p.DiscQuitting
-		case errCh <- client.handler.handle(peer, false):
+		case errCh <- client.handler.handle(peer):
 		}
 	}()
 	tp := &testPeer{
@@ -484,11 +491,11 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		speer: peer,
 	}
 	var (
-		genesis = client.handler.backend.blockchain.Genesis()
-		head    = client.handler.backend.blockchain.CurrentHeader()
-		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		genesis = client.backend.blockchain.Genesis()
+		head    = client.backend.blockchain.CurrentHeader()
+		td      = client.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(client.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
 	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
 	// Ensure the connection is established or exits when any error occurs
@@ -516,7 +523,8 @@ type testServer struct {
 	backend *backends.SimulatedBackend
 	db      ethdb.Database
 	peer    *testPeer
-	handler *serverHandler
+	server  *LesServer
+	handler *handler
 
 	chtIndexer       *core.ChainIndexer
 	bloomIndexer     *core.ChainIndexer
@@ -531,7 +539,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 	// Generate a random id and create the peer
 	var id enode.ID
 	rand.Read(id[:])
-	peer := newClientPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
+	peer := newPeer(version, NetworkId, p2p.NewPeer(id, name, nil), net)
 
 	// Start the peer on a new thread
 	errCh := make(chan error, 1)
@@ -548,11 +556,11 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		cpeer: peer,
 	}
 	var (
-		genesis = server.handler.blockchain.Genesis()
-		head    = server.handler.blockchain.CurrentHeader()
-		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		genesis = server.server.blockchain.Genesis()
+		head    = server.server.blockchain.CurrentHeader()
+		td      = server.server.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(server.server.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs
@@ -576,21 +584,20 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 
 // testnetConfig wraps all the configurations for testing network.
 type testnetConfig struct {
-	blocks      int
-	protocol    int
-	indexFn     indexerCallback
-	ulcServers  []string
-	ulcFraction int
-	simClock    bool
-	connect     bool
-	nopruning   bool
+	blocks         int
+	protocol       int
+	indexFn        indexerCallback
+	simClock       bool
+	connect        bool
+	nopruning      bool
+	noInitAnnounce bool
 }
 
 func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testClient, func()) {
 	var (
 		sdb    = rawdb.NewMemoryDatabase()
 		cdb    = rawdb.NewMemoryDatabase()
-		speers = newServerPeerSet()
+		speers = newPeerSet()
 	)
 	var clock mclock.Clock = &mclock.System{}
 	if config.simClock {
@@ -608,12 +615,12 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	odr.SetIndexers(ccIndexer, cbIndexer, cbtIndexer)
 
 	server, b, serverClose := newTestServerHandler(config.blocks, sindexers, sdb, clock)
-	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.ulcServers, config.ulcFraction)
+	client, clientClose := newTestClientHandler(b, odr, cIndexers, cdb, speers, config.noInitAnnounce)
 
 	scIndexer.Start(server.blockchain)
 	sbIndexer.Start(server.blockchain)
-	ccIndexer.Start(client.backend.blockchain)
-	cbIndexer.Start(client.backend.blockchain)
+	ccIndexer.Start(client.blockchain)
+	cbIndexer.Start(client.blockchain)
 
 	if config.indexFn != nil {
 		config.indexFn(scIndexer, sbIndexer, sbtIndexer)
@@ -625,7 +632,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	if config.connect {
 		done := make(chan struct{})
 		client.syncEnd = func(_ *types.Header) { close(done) }
-		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server, client, false)
+		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server.handler, client.handler)
 		if err != nil {
 			t.Fatalf("Failed to connect testing peers %v", err)
 		}
@@ -640,7 +647,8 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		backend:          b,
 		db:               sdb,
 		peer:             cpeer,
-		handler:          server,
+		server:           server,
+		handler:          server.handler,
 		chtIndexer:       scIndexer,
 		bloomIndexer:     sbIndexer,
 		bloomTrieIndexer: sbtIndexer,
@@ -649,7 +657,8 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 		clock:            clock,
 		db:               cdb,
 		peer:             speer,
-		handler:          client,
+		backend:          client,
+		handler:          client.handler,
 		chtIndexer:       ccIndexer,
 		bloomIndexer:     cbIndexer,
 		bloomTrieIndexer: cbtIndexer,
@@ -676,7 +685,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 // NewFuzzerPeer creates a client peer for test purposes, and also returns
 // a function to close the peer: this is needed to avoid goroutine leaks in the
 // exec queue.
-func NewFuzzerPeer(version int) (p *clientPeer, closer func()) {
-	p = newClientPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
-	return p, func() { p.peerCommons.close() }
+func NewFuzzerPeer(version int) (p *peer, closer func()) {
+	p = newPeer(version, 0, p2p.NewPeer(enode.ID{}, "", nil), nil)
+	return p, func() { p.close() }
 }
