@@ -5,7 +5,7 @@ description: A primer on Geth security best practice.
 
 ## Downloading Geth
 
-Download Geth using the links on our [Downloads](/downloads) page. The SHA256 hashes of the downloaded files can be compared to ours to ensure precise consistency with our releases. This protects against malicious code being inadvertently downloaded from an adversarial source. The same measures should also be taken to download trusted consensus client software.
+Download Geth using the links on the [Downloads](/downloads) page. The SHA256 hashes of the downloaded files can be used to confirm precise consistency with our releases. This protects against malicious code being inadvertently downloaded from an adversarial source. The same measures should also be taken to download trusted consensus client software.
 
 ## Networking security
 
@@ -23,8 +23,7 @@ Geth has built-in account management tools that are sufficiently secure for most
 
 Geth allows account unlocking by passing account passwords at startup. This unlocks the account all the while that Geth is running. This is not allowed when `http` traffic is enabled, even with appropriate firewall settings. The combination of `http` and `-unlock` poses too much of a security risk because an attacker able to access the node over the exposed HTTP port would be able to make JSON-RPC requests to the node from the unlocked account, including sending funds to other addresses.
 
-**back up your keystore and passwords safely and securely!**
-
+**Back up your keystore and passwords safely and securely!**
 
 ## Other security considerations
 
