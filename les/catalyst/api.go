@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
@@ -188,4 +189,32 @@ func (api *ConsensusAPI) setCanonical(newHead common.Hash) error {
 		merger.FinalizePoS()
 	}
 	return nil
+}
+
+// ExchangeTransitionConfigurationV1 checks the given configuration against
+// the configuration of the node.
+func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.TransitionConfigurationV1) (*beacon.TransitionConfigurationV1, error) {
+	log.Trace("Engine API request received", "method", "ExchangeTransitionConfiguration", "ttd", config.TerminalTotalDifficulty)
+	if config.TerminalTotalDifficulty == nil {
+		return nil, errors.New("invalid terminal total difficulty")
+	}
+
+	ttd := api.les.BlockChain().Config().TerminalTotalDifficulty
+	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
+		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
+		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
+	}
+
+	if config.TerminalBlockHash != (common.Hash{}) {
+		if hash := api.les.BlockChain().GetCanonicalHash(uint64(config.TerminalBlockNumber)); hash == config.TerminalBlockHash {
+			return &beacon.TransitionConfigurationV1{
+				TerminalTotalDifficulty: (*hexutil.Big)(ttd),
+				TerminalBlockHash:       config.TerminalBlockHash,
+				TerminalBlockNumber:     config.TerminalBlockNumber,
+			}, nil
+		}
+		return nil, fmt.Errorf("invalid terminal block hash")
+	}
+
+	return &beacon.TransitionConfigurationV1{TerminalTotalDifficulty: (*hexutil.Big)(ttd)}, nil
 }
