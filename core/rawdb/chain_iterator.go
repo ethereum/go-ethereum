@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// InitDatabaseFromFreezer re-initializes an empty database from a previous batch
+// InitDatabaseFromFreezer reinitializes an empty database from a previous batch
 // of frozen ancient blocks. The method iterates over all the frozen blocks and
 // injects into the database the block hash->number mappings.
 func InitDatabaseFromFreezer(db ethdb.Database) {
@@ -39,10 +39,10 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		return
 	}
 	var (
-		hash   common.Hash
 		batch  = db.NewBatch()
 		start  = time.Now()
 		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
+		hash   common.Hash
 	)
 	for i := uint64(0); i < frozen; {
 		// We read 100K hashes at a time, for a total of 3.2M
@@ -58,9 +58,8 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 			number := i + uint64(j)
 			hash = common.BytesToHash(h)
 			WriteHeaderNumber(batch, hash, number)
-
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
-			if batch.ValueSize() > ethdb.IdealBatchSize || j == len(data)-1 {
+			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write data to db", "err", err)
 				}
@@ -68,13 +67,17 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 			}
 		}
 		i += uint64(len(data))
-
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write data to db", "err", err)
+	}
+	batch.Reset()
+
 	WriteHeadHeaderHash(db, hash)
 	WriteHeadFastBlockHash(db, hash)
 	log.Info("Initialized database from freezer", "blocks", frozen, "elapsed", common.PrettyDuration(time.Since(start)))
