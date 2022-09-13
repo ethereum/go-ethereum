@@ -170,7 +170,7 @@ func runRandTest(rt randTest) error {
 					return err
 				}
 			}
-			newtr, err := trie.New(common.Hash{}, hash, triedb)
+			newtr, err := trie.New(hash, common.Hash{}, hash, triedb)
 			if err != nil {
 				return err
 			}

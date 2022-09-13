@@ -1372,7 +1372,7 @@ func makeAccountTrieNoStorage(n int) (*trie.Trie, entrySlice) {
 	root, nodes, _ := accTrie.Commit(false)
 	db.Update(trie.NewWithNodeSet(nodes))
 
-	accTrie, _ = trie.New(common.Hash{}, root, db)
+	accTrie, _ = trie.New(root, common.Hash{}, root, db)
 	return accTrie, entries
 }
 
@@ -1434,7 +1434,7 @@ func makeBoundaryAccountTrie(n int) (*trie.Trie, entrySlice) {
 	root, nodes, _ := accTrie.Commit(false)
 	db.Update(trie.NewWithNodeSet(nodes))
 
-	accTrie, _ = trie.New(common.Hash{}, root, db)
+	accTrie, _ = trie.New(root, common.Hash{}, root, db)
 	return accTrie, entries
 }
 
@@ -1484,10 +1484,10 @@ func makeAccountTrieWithStorageWithUniqueStorage(accounts, slots int, code bool)
 	db.Update(nodes)
 
 	// Re-create tries with new root
-	accTrie, _ = trie.New(common.Hash{}, root, db)
+	accTrie, _ = trie.New(root, common.Hash{}, root, db)
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		trie, _ := trie.New(common.BytesToHash(key), storageRoots[common.BytesToHash(key)], db)
+		trie, _ := trie.New(root, common.BytesToHash(key), storageRoots[common.BytesToHash(key)], db)
 		storageTries[common.BytesToHash(key)] = trie
 	}
 	return accTrie, entries, storageTries, storageEntries
@@ -1548,13 +1548,13 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 	db.Update(nodes)
 
 	// Re-create tries with new root
-	accTrie, err := trie.New(common.Hash{}, root, db)
+	accTrie, err := trie.New(root, common.Hash{}, root, db)
 	if err != nil {
 		panic(err)
 	}
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		trie, err := trie.New(common.BytesToHash(key), storageRoots[common.BytesToHash(key)], db)
+		trie, err := trie.New(root, common.BytesToHash(key), storageRoots[common.BytesToHash(key)], db)
 		if err != nil {
 			panic(err)
 		}
@@ -1567,7 +1567,7 @@ func makeAccountTrieWithStorage(accounts, slots int, code, boundary bool) (*trie
 // not-yet-committed trie and the sorted entries. The seeds can be used to ensure
 // that tries are unique.
 func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *trie.Database) (common.Hash, *trie.NodeSet, entrySlice) {
-	trie, _ := trie.New(owner, common.Hash{}, db)
+	trie, _ := trie.New(common.Hash{}, owner, common.Hash{}, db)
 	var entries entrySlice
 	for i := uint64(1); i <= n; i++ {
 		// store 'x' at slot 'x'
@@ -1593,7 +1593,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 	var (
 		entries    entrySlice
 		boundaries []common.Hash
-		trie, _    = trie.New(owner, common.Hash{}, db)
+		trie, _    = trie.New(common.Hash{}, owner, common.Hash{}, db)
 	)
 	// Initialize boundaries
 	var next common.Hash
@@ -1640,7 +1640,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
 	triedb := trie.NewDatabase(db)
-	accTrie, err := trie.New(common.Hash{}, root, triedb)
+	accTrie, err := trie.New(root, common.Hash{}, root, triedb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1658,7 +1658,7 @@ func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
 		}
 		accounts++
 		if acc.Root != emptyRoot {
-			storeTrie, err := trie.NewStateTrie(common.BytesToHash(accIt.Key), acc.Root, triedb)
+			storeTrie, err := trie.NewStateTrie(root, common.BytesToHash(accIt.Key), acc.Root, triedb)
 			if err != nil {
 				t.Fatal(err)
 			}

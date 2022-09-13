@@ -87,7 +87,7 @@ type Pruner struct {
 func NewPruner(db ethdb.Database, datadir, trieCachePath string, bloomSize uint64) (*Pruner, error) {
 	headBlock := rawdb.ReadHeadBlock(db)
 	if headBlock == nil {
-		return nil, errors.New("Failed to load head block")
+		return nil, errors.New("failed to load head block")
 	}
 	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, false)
 	if err != nil {
@@ -410,7 +410,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}
-	t, err := trie.NewStateTrie(common.Hash{}, genesis.Root(), trie.NewDatabase(db))
+	t, err := trie.NewStateTrie(genesis.Root(), common.Hash{}, genesis.Root(), trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				return err
 			}
 			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewStateTrie(common.BytesToHash(accIter.LeafKey()), acc.Root, trie.NewDatabase(db))
+				storageTrie, err := trie.NewStateTrie(genesis.Root(), common.BytesToHash(accIter.LeafKey()), acc.Root, trie.NewDatabase(db))
 				if err != nil {
 					return err
 				}

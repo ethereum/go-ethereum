@@ -67,9 +67,8 @@ type Trie struct {
 	// actually unhashed nodes.
 	unhashed int
 
-	// db is the handler trie can retrieve nodes from. It's
-	// only for reading purpose and not available for writing.
-	db *Database
+	// reader is the handler trie can retrieve nodes from.
+	reader *trieReader
 
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
@@ -87,7 +86,7 @@ func (t *Trie) Copy() *Trie {
 		root:     t.root,
 		owner:    t.owner,
 		unhashed: t.unhashed,
-		db:       t.db,
+		reader:   t.reader,
 		tracer:   t.tracer.copy(),
 	}
 }
@@ -99,10 +98,14 @@ func (t *Trie) Copy() *Trie {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
+func New(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeReader) (*Trie, error) {
+	reader, err := newTrieReader(owner, stateRoot, db)
+	if err != nil {
+		return nil, err
+	}
 	trie := &Trie{
-		owner: owner,
-		db:    db,
+		owner:  owner,
+		reader: reader,
 		//tracer: newTracer(),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
@@ -117,7 +120,7 @@ func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
-	tr, _ := New(common.Hash{}, common.Hash{}, db)
+	tr, _ := New(common.Hash{}, common.Hash{}, common.Hash{}, db)
 	return tr
 }
 
@@ -219,7 +222,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.db.Node(common.BytesToHash(hash))
+		blob, err := t.reader.nodeBlob(t.owner, path, common.BytesToHash(hash))
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -553,25 +556,16 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
-// resolveHash loads node from the underlying database with the provided
-// node hash and path prefix.
+// resolveHash loads node from the underlying store with the given node hash and
+// path prefix. The rlp-encoded blob is preferred to be loaded from database
+// because node pre-value is required to be tracked.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
-	hash := common.BytesToHash(n)
-	if node := t.db.node(hash); node != nil {
-		return node, nil
+	blob, err := t.reader.nodeBlob(t.owner, prefix, common.BytesToHash(n))
+	if err != nil {
+		return nil, err
 	}
-	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
-}
-
-// resolveHash loads rlp-encoded node blob from the underlying database
-// with the provided node hash and path prefix.
-func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
-	hash := common.BytesToHash(n)
-	blob, _ := t.db.Node(hash)
-	if len(blob) != 0 {
-		return blob, nil
-	}
-	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
+	t.tracer.onRead(prefix, blob)
+	return mustDecodeNode(n, blob), nil
 }
 
 // Hash returns the root hash of the trie. It does not write to the
@@ -606,7 +600,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
-	h := newCommitter(t.owner, collectLeaf)
+	h := newCommitter(t.owner, t.tracer, collectLeaf)
 	newRoot, nodes, err := h.Commit(t.root)
 	if err != nil {
 		return common.Hash{}, nil, err
@@ -633,6 +627,5 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
-	//t.db = nil
 	t.tracer.reset()
 }

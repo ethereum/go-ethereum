@@ -29,8 +29,8 @@ type SecureTrie = StateTrie
 
 // NewSecure creates a new StateTrie.
 // Deprecated: use NewStateTrie.
-func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
-	return NewStateTrie(owner, root, db)
+func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db *Database) (*SecureTrie, error) {
+	return NewStateTrie(stateRoot, owner, root, db)
 }
 
 // StateTrie wraps a trie with key hashing. In a stateTrie trie, all
@@ -56,11 +56,11 @@ type StateTrie struct {
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
-func NewStateTrie(owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
+func NewStateTrie(stateRoot common.Hash, owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
 	if db == nil {
 		panic("trie.NewStateTrie called without a database")
 	}
-	trie, err := New(owner, root, db)
+	trie, err := New(stateRoot, owner, root, db)
 	if err != nil {
 		return nil, err
 	}

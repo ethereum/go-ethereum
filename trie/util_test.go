@@ -72,7 +72,7 @@ func TestTrieTracer(t *testing.T) {
 	if err := db.Update(NewWithNodeSet(nodes)); err != nil {
 		t.Fatal(err)
 	}
-	trie, _ = New(common.Hash{}, root, db)
+	trie, _ = New(root, common.Hash{}, root, db)
 	trie.tracer = newTracer()
 
 	// Delete all the elements, check deletion set

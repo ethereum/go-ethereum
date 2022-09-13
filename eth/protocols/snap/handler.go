@@ -283,7 +283,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		req.Bytes = softResponseLimit
 	}
 	// Retrieve the requested state and bail out if non existent
-	tr, err := trie.New(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+	tr, err := trie.New(req.Root, common.Hash{}, req.Root, chain.StateCache().TrieDB())
 	if err != nil {
 		return nil, nil
 	}
@@ -413,7 +413,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+			accTrie, err := trie.NewStateTrie(req.Root, common.Hash{}, req.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -421,7 +421,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err != nil || acc == nil {
 				return nil, nil
 			}
-			stTrie, err := trie.NewStateTrie(account, acc.Root, chain.StateCache().TrieDB())
+			stTrie, err := trie.NewStateTrie(req.Root, account, acc.Root, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -487,7 +487,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 	// Make sure we have the state associated with the request
 	triedb := chain.StateCache().TrieDB()
 
-	accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, triedb)
+	accTrie, err := trie.NewStateTrie(req.Root, common.Hash{}, req.Root, triedb)
 	if err != nil {
 		// We don't have the requested state available, bail out
 		return nil, nil
@@ -529,7 +529,7 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			if err != nil || account == nil {
 				break
 			}
-			stTrie, err := trie.NewStateTrie(common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
+			stTrie, err := trie.NewStateTrie(req.Root, common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
 			loads++ // always account database reads, even for failures
 			if err != nil {
 				break
