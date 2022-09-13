@@ -267,12 +267,15 @@ func (h *httpServer) doStop() {
 		h.wsHandler.Store((*rpcHandler)(nil))
 		wsHandler.server.Stop()
 	}
+	
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := h.server.Shutdown(ctx); err != nil && err == ctx.Err() {
+	err := h.server.Shutdown(ctx)
+	if err != nil && err == ctx.Err() {
 		h.log.Warn("HTTP server graceful shutdown timed out")
 		h.server.Close()
 	}
+	
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
