@@ -92,9 +92,9 @@ var (
 	}
 )
 
-func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int) *StructLog {
+func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int, err error) *StructLog {
 	structlog := loggerPool.Get().(*StructLog)
-	structlog.Pc, structlog.Op, structlog.Gas, structlog.GasCost, structlog.Depth = pc, op, gas, cost, depth
+	structlog.Pc, structlog.Op, structlog.Gas, structlog.GasCost, structlog.Depth, structlog.Err = pc, op, gas, cost, depth, err
 
 	runtime.SetFinalizer(structlog, func(logger *StructLog) {
 		logger.clean()
@@ -109,6 +109,7 @@ func (s *StructLog) clean() {
 	s.ReturnData.Reset()
 	s.Storage = nil
 	s.ExtraData = nil
+	s.Err = nil
 }
 
 func (s *StructLog) getOrInitExtraData() *types.ExtraData {
@@ -219,12 +220,12 @@ func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Add
 // CaptureState logs a new structured log message and pushes it out to the environment
 //
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
+func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, opErr error) {
 	memory := scope.Memory
 	stack := scope.Stack
 	contract := scope.Contract
 	// create a struct log.
-	structlog := NewStructlog(pc, op, gas, cost, depth)
+	structlog := NewStructlog(pc, op, gas, cost, depth, opErr)
 
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
@@ -274,13 +275,13 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	if ok {
 		// execute trace func list.
 		for _, exec := range execFuncList {
-			if err = exec(l, scope, structlog.getOrInitExtraData()); err != nil {
+			if err := exec(l, scope, structlog.getOrInitExtraData()); err != nil {
 				log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 			}
 		}
 	}
 
-	structlog.RefundCounter, structlog.Err = l.env.StateDB.GetRefund(), err
+	structlog.RefundCounter = l.env.StateDB.GetRefund()
 	l.logs = append(l.logs, *structlog)
 }
 
@@ -295,7 +296,9 @@ func (l *StructLogger) CaptureFault(pc uint64, op OpCode, gas, cost uint64, scop
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	l.output = output
-	l.err = err
+	if err != nil {
+		l.err = err
+	}
 	if l.cfg.Debug {
 		fmt.Printf("0x%x\n", output)
 		if err != nil {
