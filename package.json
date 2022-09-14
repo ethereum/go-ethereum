@@ -1,0 +1,39 @@
+{
+  "name": "geth-site",
+  "private": false,
+  "description": "The website for geth.ethereum.org",
+  "version": "2.0.0",
+  "author": "Nicolás Quiroz <nicolas.quiroz@ethereum.org>",
+  "scripts": {
+    "dev": "next dev",
+    "build": "npm run lint && next build && npm run format:fix",
+    "start": "next start",
+    "lint": "next lint",
+    "format:fix": "prettier . --write --config .prettierrc --ignore-path .prettierignore --loglevel warn"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.3.2",
+    "@emotion/react": "^11.10.4",
+    "@emotion/styled": "^11.10.4",
+    "@mdx-js/loader": "^2.1.3",
+    "@mdx-js/react": "^2.1.3",
+    "@next/mdx": "^12.3.0",
+    "focus-visible": "^5.2.0",
+    "framer-motion": "^7.3.2",
+    "next": "^12.3.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-syntax-highlighter": "^15.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.7.16",
+    "@types/react": "18.0.18",
+    "@types/react-dom": "18.0.6",
+    "@types/react-syntax-highlighter": "^15.5.5",
+    "eslint": "8.23.0",
+    "eslint-config-next": "12.2.5",
+    "eslint-config-prettier": "^8.5.0",
+    "prettier": "^2.7.1",
+    "typescript": "4.8.2"
+  }
+}
