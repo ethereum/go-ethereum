@@ -55,7 +55,7 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 }
 
 var (
-	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_678_101_303_445_213_893_891", 0)
+	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_663_170_930_306_422_703_639", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
