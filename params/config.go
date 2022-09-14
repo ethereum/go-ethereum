@@ -55,7 +55,7 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 }
 
 var (
-	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_663_170_930_306_422_703_639", 0)
+	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_683_021_662_203_238_116_716", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
@@ -577,7 +577,6 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 }
 
 func (c *ChainConfig) IsRome(num *big.Int) bool {
-	fmt.Println("IsRome", c.RomeBlock, num)
 	if c.RomeBlock == nil {
 		return false
 	}
