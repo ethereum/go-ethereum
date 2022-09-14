@@ -487,7 +487,7 @@ func (bc *BlockChain) loadLastState() error {
 	fastTd := bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64())
 
 	if ttd := bc.Config().TerminalTotalDifficulty; ttd != nil && ttd.Cmp(headerTd) <= 0 {
-		bc.Config().SetRome(big.NewInt(15530084))
+		bc.Config().SetRome(currentHeader.Number)
 		bc.Config().ReChainId()
 	}
 

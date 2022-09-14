@@ -577,6 +577,7 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 }
 
 func (c *ChainConfig) IsRome(num *big.Int) bool {
+	fmt.Println("IsRome", c.RomeBlock, num)
 	if c.RomeBlock == nil {
 		return false
 	}
