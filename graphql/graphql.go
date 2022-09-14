@@ -481,7 +481,7 @@ func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
 	}
 	var ret []*Log
 	// Select tx logs from all block logs
-	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) == t.index })
+	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) >= t.index })
 	for ix < len(logs) && uint64(logs[ix].TxIndex) == t.index {
 		ret = append(ret, &Log{
 			r:           t.r,
