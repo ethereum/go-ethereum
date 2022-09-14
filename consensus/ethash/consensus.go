@@ -341,7 +341,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	switch {
 	case config.IsRome(next):
 		if config.RomeBlock.Cmp(next) == 0 {
-			return params.MinimumDifficulty
+			newDiff, _ := new(big.Int).SetString("100_000_000_000", 0)
+			return newDiff
 		}
 		return calcDifficultyRome(time, parent)
 	case config.IsGrayGlacier(next):
