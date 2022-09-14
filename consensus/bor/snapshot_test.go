@@ -1,11 +1,11 @@
 package bor
 
 import (
-	"crypto/rand"
 	"math/big"
 	"sort"
 	"testing"
 
+	"github.com/JekaMas/crand"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 
@@ -133,7 +133,7 @@ func buildRandomValidatorSet(numVals int) []*valset.Validator {
 	valAddrs := randomAddresses(numVals)
 
 	for i := 0; i < numVals; i++ {
-		power, _ := rand.Int(rand.Reader, big.NewInt(99))
+		power := crand.BigInt(big.NewInt(99))
 		powerN := power.Int64() + 1
 
 		validators[i] = &valset.Validator{
@@ -156,14 +156,10 @@ func randomAddress(exclude ...common.Address) common.Address {
 		excl[addr] = struct{}{}
 	}
 
-	bytes := make([]byte, 32)
-
-	var addr common.Address
+	r := crand.NewRand()
 
 	for {
-		_, _ = rand.Read(bytes)
-		addr = common.BytesToAddress(bytes)
-
+		addr := r.Address()
 		if _, ok := excl[addr]; ok {
 			continue
 		}
@@ -180,17 +176,12 @@ func randomAddresses(n int) []common.Address {
 	addrs := make([]common.Address, 0, n)
 	addrsSet := make(map[common.Address]struct{}, n)
 
-	var (
-		addr  common.Address
-		exist bool
-	)
+	var exist bool
 
-	bytes := make([]byte, 32)
+	r := crand.NewRand()
 
 	for {
-		_, _ = rand.Read(bytes)
-
-		addr = common.BytesToAddress(bytes)
+		addr := r.Address()
 
 		_, exist = addrsSet[addr]
 		if !exist {
