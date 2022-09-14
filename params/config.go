@@ -55,7 +55,7 @@ var CheckpointOracles = map[common.Hash]*CheckpointOracleConfig{
 }
 
 var (
-	//MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
+	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_678_101_303_445_213_893_891", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
@@ -77,8 +77,8 @@ var (
 		LondonBlock:             big.NewInt(12_965_000),
 		ArrowGlacierBlock:       big.NewInt(13_773_000),
 		GrayGlacierBlock:        big.NewInt(15_050_000),
-		TerminalTotalDifficulty: nil, // 58_750_000_000_000_000_000_000
-		RomeBlock:               big.NewInt(15_530_084),
+		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, //
+		RomeBlock:               nil,
 		Ethash:                  new(EthashConfig),
 	}
 
@@ -496,10 +496,12 @@ func (c *ChainConfig) ChainId(num *big.Int) *big.Int {
 	return c.ChainID
 }
 
-func (c *ChainConfig) ReChainId(num *big.Int) {
-	if c.IsRome(num) {
-		c.ChainID = c.ChainIDEtf
-	}
+func (c *ChainConfig) ReChainId() {
+	c.ChainID = c.ChainIDEtf
+}
+
+func (c *ChainConfig) SetRome(num *big.Int) {
+	c.RomeBlock = num
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -575,6 +577,9 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 }
 
 func (c *ChainConfig) IsRome(num *big.Int) bool {
+	if c.RomeBlock == nil {
+		return false
+	}
 	return isForked(c.RomeBlock, num)
 }
 

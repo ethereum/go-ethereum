@@ -343,7 +343,7 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 		if config.RomeBlock.Cmp(next) == 0 {
 			return params.MinimumDifficulty
 		}
-		return calcDifficultyFair(time, parent)
+		return calcDifficultyRome(time, parent)
 	case config.IsGrayGlacier(next):
 		return calcDifficultyEip5133(time, parent)
 	case config.IsArrowGlacier(next):
@@ -373,7 +373,7 @@ var (
 	bigMinus99    = big.NewInt(-99)
 )
 
-func calcDifficultyFair(time uint64, parent *types.Header) *big.Int {
+func calcDifficultyRome(time uint64, parent *types.Header) *big.Int {
 	// Note, the calculations below looks at the parent number, which is 1 below
 	// the block number. Thus we remove one from the delay given
 	// https://github.com/ethereum/EIPs/issues/100.

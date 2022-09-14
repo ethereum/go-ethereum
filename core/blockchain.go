@@ -1251,7 +1251,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
-	bc.chainConfig.ReChainId(block.Number())
+	bc.chainConfig.ReChainId()
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
 		return consensus.ErrUnknownAncestor
@@ -1670,7 +1670,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		bc.chainConfig.ReChainId(block.Number())
 		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
