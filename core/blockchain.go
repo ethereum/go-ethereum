@@ -487,7 +487,7 @@ func (bc *BlockChain) loadLastState() error {
 	fastTd := bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64())
 
 	if ttd := bc.Config().TerminalTotalDifficulty; ttd != nil && ttd.Cmp(headerTd) <= 0 {
-		bc.Config().SetRome(big.NewInt(15530086))
+		bc.Config().SetRome(new(big.Int).Add(currentHeader.Number, big.NewInt(1)))
 		bc.Config().ReChainId()
 	}
 
@@ -1256,7 +1256,6 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
-	bc.chainConfig.ReChainId()
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
 		return consensus.ErrUnknownAncestor
