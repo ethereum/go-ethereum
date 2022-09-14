@@ -41,7 +41,7 @@ In keeping with this policy, we have taken inspiration from [Solidity bug disclo
 
 ## Disclosed vulnerabilities
 
-There is a JSON-formatted list ([`vulnerabilities.json`](vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
+There is a JSON-formatted list ([`vulnerabilities.json`](/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
 
 As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](vulnerabilities.json.minisig), and cross-check the data against it's own version number.
 
@@ -79,3 +79,7 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 We prefer to not rely on Github as the only/primary publishing protocol for security advisories, but we plan to use the Github-advisory process as a second channel for disseminating vulnerability-information.
 
 Advisories published via Github can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
+
+## Bug Bounties
+
+The Ethereum Foundation run a bug bounty program to reward responsible disclosures of bugs in client software and specs. The details are provided on [ethereum.org](https://ethereum.org/en/bug-bounty/). 
