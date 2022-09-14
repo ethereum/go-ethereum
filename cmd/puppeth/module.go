@@ -150,3 +150,12 @@ func checkPort(host string, port int) error {
 	conn.Close()
 	return nil
 }
+
+// getEthName gets the Ethereum Name from ethstats
+func getEthName(s string) string {
+	n := strings.Index(s, ":")
+	if n >= 0 {
+		return s[:n]
+	}
+	return s
+}

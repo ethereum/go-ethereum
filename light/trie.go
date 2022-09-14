@@ -112,6 +112,22 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
+func (t *odrTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
+	key = crypto.Keccak256(key)
+	var res types.StateAccount
+	err := t.do(key, func() (err error) {
+		value, err := t.trie.TryGet(key)
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		return rlp.DecodeBytes(value, &res)
+	})
+	return &res, err
+}
+
 func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 	key = crypto.Keccak256(key)
 	value, err := rlp.EncodeToBytes(acc)
@@ -137,11 +153,19 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-func (t *odrTrie) Commit(onleaf trie.LeafCallback) (common.Hash, int, error) {
+// TryDeleteAccount abstracts an account deletion from the trie.
+func (t *odrTrie) TryDeleteAccount(key []byte) error {
+	key = crypto.Keccak256(key)
+	return t.do(key, func() error {
+		return t.trie.TryDelete(key)
+	})
+}
+
+func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet, error) {
 	if t.trie == nil {
-		return t.id.Root, 0, nil
+		return t.id.Root, nil, nil
 	}
-	return t.trie.Commit(onleaf)
+	return t.trie.Commit(collectLeaf)
 }
 
 func (t *odrTrie) Hash() common.Hash {

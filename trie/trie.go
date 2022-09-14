@@ -21,14 +21,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -55,23 +51,28 @@ var (
 // for extracting the raw states(leaf nodes) with corresponding paths.
 type LeafCallback func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
 
-// Trie is a Merkle Patricia Trie.
-// The zero value is an empty trie with no database.
-// Use New to create a trie that sits on top of a database.
+// Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
+// top of a database. Whenever trie performs a commit operation, the generated
+// nodes will be gathered and returned in a set. Once the trie is committed,
+// it's not usable anymore. Callers have to re-create the trie with new root
+// based on the updated trie database.
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db    *Database
 	root  node
 	owner common.Hash
 
 	// Keep track of the number leaves which have been inserted since the last
 	// hashing operation. This number will not directly map to the number of
-	// actually unhashed nodes
+	// actually unhashed nodes.
 	unhashed int
 
-	// tracer is the state diff tracer can be used to track newly added/deleted
-	// trie node. It will be reset after each commit operation.
+	// db is the handler trie can retrieve nodes from. It's
+	// only for reading purpose and not available for writing.
+	db *Database
+
+	// tracer is the tool to track the trie changes.
+	// It will be reset after each commit operation.
 	tracer *tracer
 }
 
@@ -83,10 +84,10 @@ func (t *Trie) newFlag() nodeFlag {
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
 	return &Trie{
-		db:       t.db,
 		root:     t.root,
 		owner:    t.owner,
 		unhashed: t.unhashed,
+		db:       t.db,
 		tracer:   t.tracer.copy(),
 	}
 }
@@ -99,33 +100,9 @@ func (t *Trie) Copy() *Trie {
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
-	return newTrie(owner, root, db)
-}
-
-// NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
-func NewEmpty(db *Database) *Trie {
-	tr, _ := newTrie(common.Hash{}, common.Hash{}, db)
-	return tr
-}
-
-// newWithRootNode initializes the trie with the given root node.
-// It's only used by range prover.
-func newWithRootNode(root node) *Trie {
-	return &Trie{
-		root: root,
-		//tracer: newTracer(),
-		db: NewDatabase(rawdb.NewMemoryDatabase()),
-	}
-}
-
-// newTrie is the internal function used to construct the trie with given parameters.
-func newTrie(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
-	if db == nil {
-		panic("trie.New called without a database")
-	}
 	trie := &Trie{
-		db:    db,
 		owner: owner,
+		db:    db,
 		//tracer: newTracer(),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
@@ -136,6 +113,12 @@ func newTrie(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 		trie.root = rootnode
 	}
 	return trie, nil
+}
+
+// NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
+func NewEmpty(db *Database) *Trie {
+	tr, _ := New(common.Hash{}, common.Hash{}, db)
+	return tr
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
@@ -290,14 +273,6 @@ func (t *Trie) Update(key, value []byte) {
 	}
 }
 
-func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	data, err := rlp.EncodeToBytes(acc)
-	if err != nil {
-		return fmt.Errorf("can't encode object at %x: %w", key[:], err)
-	}
-	return t.TryUpdate(key, data)
-}
-
 // TryUpdate associates key with value in the trie. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
 // is deleted from the trie and calls to Get will return nil.
@@ -307,6 +282,12 @@ func (t *Trie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	return t.tryUpdate(key, value)
+}
+
+// tryUpdate expects an RLP-encoded value and performs the core function
+// for TryUpdate and TryUpdateAccount.
+func (t *Trie) tryUpdate(key, value []byte) error {
 	t.unhashed++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
@@ -512,7 +493,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// shortNode{..., shortNode{...}}.  Since the entry
 				// might not be loaded yet, resolve it just for this
 				// check.
-				cnode, err := t.resolve(n.Children[pos], prefix)
+				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
 				if err != nil {
 					return false, nil, err
 				}
@@ -572,6 +553,8 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	return n, nil
 }
 
+// resolveHash loads node from the underlying database with the provided
+// node hash and path prefix.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	hash := common.BytesToHash(n)
 	if node := t.db.node(hash); node != nil {
@@ -580,6 +563,8 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	return nil, &MissingNodeError{Owner: t.owner, NodeHash: hash, Path: prefix}
 }
 
+// resolveHash loads rlp-encoded node blob from the underlying database
+// with the provided node hash and path prefix.
 func (t *Trie) resolveBlob(n hashNode, prefix []byte) ([]byte, error) {
 	hash := common.BytesToHash(n)
 	blob, _ := t.db.Node(hash)
@@ -597,56 +582,37 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
-// Commit writes all nodes to the trie's memory database, tracking the internal
-// and external (for account tries) references.
-func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
-	if t.db == nil {
-		panic("commit called on trie with nil database")
-	}
+// Commit collects all dirty nodes in the trie and replace them with the
+// corresponding node hash. All collected nodes(including dirty leaves if
+// collectLeaf is true) will be encapsulated into a nodeset for return.
+// The returned nodeset can be nil if the trie is clean(nothing to commit).
+// Once the trie is committed, it's not usable anymore. A new trie must
+// be created with new root and updated trie database for following usage
+func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	defer t.tracer.reset()
 
 	if t.root == nil {
-		return emptyRoot, 0, nil
+		return emptyRoot, nil, nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
 	rootHash := t.Hash()
-	h := newCommitter()
-	defer returnCommitterToPool(h)
 
-	// Do a quick check if we really need to commit, before we spin
-	// up goroutines. This can happen e.g. if we load a trie for reading storage
-	// values, but don't write to it.
+	// Do a quick check if we really need to commit. This can happen e.g.
+	// if we load a trie for reading storage values, but don't write to it.
 	if hashedNode, dirty := t.root.cache(); !dirty {
 		// Replace the root node with the origin hash in order to
 		// ensure all resolved nodes are dropped after the commit.
 		t.root = hashedNode
-		return rootHash, 0, nil
+		return rootHash, nil, nil
 	}
-	var wg sync.WaitGroup
-	if onleaf != nil {
-		h.onleaf = onleaf
-		h.leafCh = make(chan *leaf, leafChanSize)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			h.commitLoop(t.db)
-		}()
-	}
-	newRoot, committed, err := h.Commit(t.root, t.db)
-	if onleaf != nil {
-		// The leafch is created in newCommitter if there was an onleaf callback
-		// provided. The commitLoop only _reads_ from it, and the commit
-		// operation was the sole writer. Therefore, it's safe to close this
-		// channel here.
-		close(h.leafCh)
-		wg.Wait()
-	}
+	h := newCommitter(t.owner, collectLeaf)
+	newRoot, nodes, err := h.Commit(t.root)
 	if err != nil {
-		return common.Hash{}, 0, err
+		return common.Hash{}, nil, err
 	}
 	t.root = newRoot
-	return rootHash, committed, nil
+	return rootHash, nodes, nil
 }
 
 // hashRoot calculates the root hash of the given trie
@@ -667,10 +633,6 @@ func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
 	t.unhashed = 0
+	//t.db = nil
 	t.tracer.reset()
-}
-
-// Owner returns the associated trie owner.
-func (t *Trie) Owner() common.Hash {
-	return t.owner
 }

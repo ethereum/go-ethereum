@@ -100,7 +100,7 @@ func TestWebsocketOrigins(t *testing.T) {
 			expFail: []string{
 				"test",                                // no scheme, required by spec
 				"http://test",                         // wrong scheme
-				"http://test.foo", "https://a.test.x", // subdomain variatoins
+				"http://test.foo", "https://a.test.x", // subdomain variations
 				"http://testx:8540", "https://xtest:8540"},
 		},
 		// ip tests
@@ -356,11 +356,11 @@ func TestJWT(t *testing.T) {
 	expFail := []func() string{
 		// future
 		func() string {
-			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 6}))
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 1}))
 		},
 		// stale
 		func() string {
-			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 6}))
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - int64(jwtExpiryTimeout.Seconds()) - 1}))
 		},
 		// wrong algo
 		func() string {

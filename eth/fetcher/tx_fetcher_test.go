@@ -1011,7 +1011,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 }
 
 // Tests that dropping a peer cleans out all internal data structures in all the
-// live or danglng stages.
+// live or dangling stages.
 func TestTransactionFetcherDrop(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
@@ -1121,7 +1121,7 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 }
 
 // This test reproduces a crash caught by the fuzzer. The root cause was a
-// dangling transaction timing out and clashing on readd with a concurrently
+// dangling transaction timing out and clashing on re-add with a concurrently
 // announced one.
 func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
@@ -1148,7 +1148,7 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 }
 
 // This test reproduces a crash caught by the fuzzer. The root cause was a
-// dangling transaction getting peer-dropped and clashing on readd with a
+// dangling transaction getting peer-dropped and clashing on re-add with a
 // concurrently announced one.
 func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{

@@ -252,7 +252,7 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 //   request will be made for header retrieval.
 //
 // - re-sync trigger
-//   If the local chain lags too much, then the fetcher will enter "synnchronise"
+//   If the local chain lags too much, then the fetcher will enter "synchronise"
 //   mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
 	defer f.wg.Done()

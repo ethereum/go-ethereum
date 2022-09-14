@@ -872,7 +872,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
 			reconstruct(accepted, res)
 		} else {
-			// else: betweeen here and above, some other peer filled this result,
+			// else: between here and above, some other peer filled this result,
 			// or it was indeed a no-op. This should not happen, but if it does it's
 			// not something to panic about
 			log.Error("Delivery stale", "stale", stale, "number", header.Number.Uint64(), "err", err)

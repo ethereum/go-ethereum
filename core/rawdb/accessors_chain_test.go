@@ -285,7 +285,7 @@ func TestTdStorage(t *testing.T) {
 func TestCanonicalMappingStorage(t *testing.T) {
 	db := NewMemoryDatabase()
 
-	// Create a test canonical number and assinged hash to move around
+	// Create a test canonical number and assigned hash to move around
 	hash, number := common.Hash{0: 0xff}, uint64(314)
 	if entry := ReadCanonicalHash(db, number); entry != (common.Hash{}) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)

@@ -41,7 +41,7 @@ func (q *headerQueue) pending() int {
 }
 
 // capacity is responsible for calculating how many headers a particular peer is
-// estimated to be able to retrieve within the alloted round trip time.
+// estimated to be able to retrieve within the allotted round trip time.
 func (q *headerQueue) capacity(peer *peerConnection, rtt time.Duration) int {
 	return peer.HeaderCapacity(rtt)
 }
@@ -58,7 +58,7 @@ func (q *headerQueue) reserve(peer *peerConnection, items int) (*fetchRequest, b
 	return q.queue.ReserveHeaders(peer, items), false, false
 }
 
-// unreserve is resposible for removing the current header retrieval allocation
+// unreserve is responsible for removing the current header retrieval allocation
 // assigned to a specific peer and placing it back into the pool to allow
 // reassigning to some other peer.
 func (q *headerQueue) unreserve(peer string) int {

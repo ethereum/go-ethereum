@@ -66,7 +66,7 @@ type ServerPoolTest struct {
 	// (accessed from both the main thread and the preNeg callback)
 	preNegLock sync.Mutex
 	queryWg    *sync.WaitGroup // a new wait group is created each time the simulation is started
-	stopping   bool            // stopping avoid callind queryWg.Add after queryWg.Wait
+	stopping   bool            // stopping avoid calling queryWg.Add after queryWg.Wait
 
 	cycle, conn, servedConn  int
 	serviceCycles, dialCount int

@@ -104,7 +104,7 @@ func TestFillSet(t *testing.T) {
 	fs.SetTarget(10)
 	expWaiting(4, true)
 	expNotWaiting()
-	// remove all previosly set flags
+	// remove all previously set flags
 	ns.ForEach(sfTest1, nodestate.Flags{}, func(node *enode.Node, state nodestate.Flags) {
 		ns.SetState(node, nodestate.Flags{}, sfTest1, 0)
 	})

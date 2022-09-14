@@ -163,7 +163,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 			return nil
 		}
 		// We have a mismatch, forbid connecting
-		return errors.New("ssh key mismatch, readd the machine to update")
+		return errors.New("ssh key mismatch, re-add the machine to update")
 	}
 	client, err := ssh.Dial("tcp", hostport, &ssh.ClientConfig{User: username, Auth: auths, HostKeyCallback: keycheck})
 	if err != nil {
