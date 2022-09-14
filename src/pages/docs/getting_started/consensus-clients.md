@@ -23,7 +23,7 @@ geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --a
 
 ## Consensus clients
 
-There are currently four consensus clients that can be run alongside Geth. These are:
+There are currently five consensus clients that can be run alongside Geth. These are:
 
 [Lighthouse](https://lighthouse-book.sigmaprime.io/): written in Rust
 

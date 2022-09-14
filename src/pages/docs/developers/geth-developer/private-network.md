@@ -441,7 +441,7 @@ This account can then be unlocked and some ether sent to Node 2, using the follo
 
 ```javascript
 // unlock account
-personal.unlock(eth.accounts[0]);
+personal.unlockAccount(eth.accounts[0]);
 
 // send some Wei
 eth.sendTransaction({

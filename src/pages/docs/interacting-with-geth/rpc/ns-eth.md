@@ -1,31 +1,31 @@
 ---
 title: eth Namespace
-sort_key: Documentation for the JSON-RPC API "eth" namespace
+description: Documentation for the JSON-RPC API "eth" namespace
 ---
 
 Geth provides several extensions to the standard "eth" JSON-RPC namespace.
 
-## eth_subscribe, eth_unsubscribe
+### eth_subscribe, eth_unsubscribe
 
 These methods are used for real-time events through subscriptions. See the [subscription documentation](/content/docs/interacting_with_geth/RPC/pubsub.md) for more information.
 
-## eth_call
+### eth_call
 
 Executes a new message call immediately, without creating a transaction on the block chain. The `eth_call` method can be used to query internal contract state, to execute validations coded into a contract or even to test what the effect of a transaction would be without running it live.
 
-### Parameters
+#### Parameters
 
 The method takes 3 parameters: an unsigned transaction object to execute in read-only mode; the block number to execute the call against; and an optional state override-set to allow executing the call against a modified chain state.
 
-#### 1. `Object` - Transaction call object
+##### 1. `Object` - Transaction call object
 
 The _transaction call object_ is mandatory. Please see [here](/content/docs/interacting_with_geth/RPC/objects.md) for details.
 
-#### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
+##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 
 The _block number_ is mandatory and defines the context (state) against which the specified transaction should be executed. It is not possible to execute calls against reorged blocks; or blocks older than 128 (unless the node is an archive node).
 
-#### 3. `Object` - State override set
+##### 3. `Object` - State override set
 
 The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Each address maps to an object containing:
 
@@ -59,11 +59,11 @@ Example:
 }
 ```
 
-### Return Values
+#### Return Values
 
 The method returns a single `Binary` consisting the return value of the executed contract call.
 
-### Simple example
+#### Simple example
 
 With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --http`) we can make a call against the [CheckpointOracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540) to retrieve the list of administrators:
 
@@ -90,7 +90,7 @@ Just for the sake of completeness, decoded the response is:
 0xb86e2b0ab5a4b1373e40c51a7c712c70ba2f9f8e
 ```
 
-### Override example
+#### Override example
 
 The above _simple example_ showed how to call a method already exposed by an on-chain smart contract. What if we want to access some data not exposed by it?
 
@@ -134,24 +134,24 @@ And the result is the Ethereum ABI encoded threshold number:
 
 Just for the sake of completeness, decoded the response is: `2`.
 
-## eth_createAccessList
+### eth_createAccessList
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
-### Parameters
+#### Parameters
 
 | Field              | Type     | Description                                    |
 | :----------------- | :------- | :--------------------------------------------- |
 | `transaction`      | `Object` | `TransactionCall` object                       |
 | `blockNumberOrTag` | `Object` | Optional, blocknumber or `latest` or `pending` |
 
-### Usage
+#### Usage
 
 ```
 curl --data '{"method":"eth_createAccessList","params":[{"from": "0x8cd02c6cbd8375b39b06577f8d50c51d86e8d5cd", "data": "0x608060806080608155"}, "pending"],"id":1,"jsonrpc":"2.0"}' -H "Content-Type: application/json" -X POST localhost:8545
 ```
 
-### Response
+#### Response
 
 The method `eth_createAccessList` returns list of addresses and storage keys used by the transaction, plus the gas consumed when the access list is added.
 
