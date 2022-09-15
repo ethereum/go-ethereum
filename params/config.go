@@ -78,7 +78,7 @@ var (
 		ArrowGlacierBlock:       big.NewInt(13_773_000),
 		GrayGlacierBlock:        big.NewInt(15_050_000),
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, //
-		RomeBlock:               big.NewInt(15_537_393),
+		RomeBlock:               big.NewInt(15_537_394),
 		Ethash:                  new(EthashConfig),
 	}
 
