@@ -48,3 +48,9 @@ devtools:
 	env GOBIN= go install ./cmd/abigen
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+ssz:
+	rm -f cmd/utils/sszarchive_encoding.go
+	rm -f core/types/sszcodec/block_encoding.go
+	go run github.com/ferranbt/fastssz/sszgen@v0.1.2 --include core/types/sszcodec --path cmd/utils -objs ArchiveBody,ArchiveHeader
+	go run github.com/ferranbt/fastssz/sszgen@v0.1.2 --path core/types/sszcodec -objs Header,Block,Receipt,Log

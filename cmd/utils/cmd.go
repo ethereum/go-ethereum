@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/sszcodec"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -42,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/henridf/eip44s-proto/spec"
 	"github.com/urfave/cli/v2"
 )
 
@@ -276,7 +276,7 @@ func ExportHistory(bc *core.BlockChain, fn string, targetSize int) error {
 }
 
 func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint64, targetSize int) error {
-	var blocks []*spec.Block
+	var blocks []*sszcodec.Block
 	size := 0
 	fileno := 1
 	var parentHash common.Hash
@@ -289,15 +289,15 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 			return fmt.Errorf("export failed: chain reorg during export")
 		}
 		parentHash = block.Hash()
-		sb := &spec.Block{}
-		if err := spec.FillBlock(sb, *block); err != nil {
+		sb := &sszcodec.Block{}
+		if err := sszcodec.FillBlock(sb, *block); err != nil {
 			return err
 		}
 		receipts := bc.GetReceiptsByHash(block.Hash())
 		if receipts == nil {
 			return fmt.Errorf("nil receipts for block %d %s\n", nr, block.Hash())
 		}
-		spec.FillReceipts(sb, receipts)
+		sszcodec.FillReceipts(sb, receipts)
 		blocks = append(blocks, sb)
 		size += sb.SizeSSZ()
 		if targetSize > 0 && size > targetSize {
@@ -307,7 +307,7 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 			if err := writeSSZ(fn, blocks); err != nil {
 				return err
 			}
-			blocks = []*spec.Block{}
+			blocks = []*sszcodec.Block{}
 		}
 	}
 	if targetSize > 0 {
@@ -316,12 +316,12 @@ func ExportHistoryRange(bc *core.BlockChain, fn string, first uint64, last uint6
 	return writeSSZ(fn, blocks)
 }
 
-func writeSSZ(fn string, blocks []*spec.Block) error {
-	arc := spec.ArchiveBody{
+func writeSSZ(fn string, blocks []*sszcodec.Block) error {
+	arc := ArchiveBody{
 		Blocks: blocks,
 	}
-	archdr := spec.ArchiveHeader{
-		Version:         spec.Version,
+	archdr := ArchiveHeader{
+		Version:         Version,
 		HeadBlockNumber: arc.Blocks[0].Header.BlockNumber,
 		BlockCount:      uint32(len(arc.Blocks)),
 	}
