@@ -76,7 +76,7 @@ var (
 		LondonBlock:                   big.NewInt(12_965_000),
 		ArrowGlacierBlock:             big.NewInt(13_773_000),
 		GrayGlacierBlock:              big.NewInt(15_050_000),
-		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000"0x56a9bb0302da44b8c0b3df540781424684c3af04d0b7a38d72842b762076a664"_000
+		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 	}
