@@ -675,14 +675,10 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 
 	// create the proof for the storageKeys
 	for i, hexKey := range storageKeys {
-		b, err := hexutil.Decode(hexKey)
+		key, err := decodeHash(hexKey)
 		if err != nil {
 			return nil, err
 		}
-		if len(b) > 32 {
-			return nil, fmt.Errorf("input larger than 32 bytes")
-		}
-		key := common.BytesToHash(b)
 		if storageTrie != nil {
 			proof, storageError := state.GetStorageProof(address, key)
 			if storageError != nil {
@@ -709,6 +705,17 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
 	}, state.Error()
+}
+
+func decodeHash(s string) (common.Hash, error) {
+	b, err := hexutil.Decode(s)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > 32 {
+		return nil, fmt.Errorf("hex string too long, want at most 32 bytes")
+	}
+	return common.BytesToHash(b)
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
@@ -834,14 +841,11 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	if state == nil || err != nil {
 		return nil, err
 	}
-	b, err := hexutil.Decode(hexKey)
+	key, err := decodeHash(hexKey)
 	if err != nil {
 		return nil, err
 	}
-	if len(b) > 32 {
-		return nil, fmt.Errorf("input larger than 32 bytes", b)
-	}
-	res := state.GetState(address, common.BytesToHash(b))
+	res := state.GetState(address, key)
 	return res[:], state.Error()
 }
 
