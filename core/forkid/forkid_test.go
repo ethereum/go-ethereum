@@ -70,8 +70,8 @@ func TestCreation(t *testing.T) {
 				{13772999, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // Last London block
 				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // First Arrow Glacier block
 				{15049999, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // Last Arrow Glacier block
-				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // First Gray Glacier block
-				{20000000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // Future Gray Glacier block
+				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0xf42400}}, // First Gray Glacier block
+				{20000000, ID{Hash: checksumToBytes(0x20e53762), Next: 0}},        // Future Gray Glacier block
 			},
 		},
 		// Ropsten test cases
@@ -177,9 +177,9 @@ func TestCreation(t *testing.T) {
 				{13772999, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // Last London block
 				{13773000, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // First Arrow Glacier block
 				{15049999, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // Last Arrow Glacier block
-				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 18000000}}, // First Gray Glacier block
-				{18000000, ID{Hash: checksumToBytes(0x4fb8a872), Next: 0}},        // First Merge Start block
-				{20000000, ID{Hash: checksumToBytes(0x4fb8a872), Next: 0}},        // Future Merge Start block
+				{15050000, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0xf42400}}, // First Gray Glacier block
+				{18000000, ID{Hash: checksumToBytes(0x3118e3fc), Next: 0}},        // First Merge Start block
+				{20000000, ID{Hash: checksumToBytes(0x3118e3fc), Next: 0}},        // Future Merge Start block
 			},
 		},
 	}
@@ -260,7 +260,7 @@ func TestValidation(t *testing.T) {
 		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{88888888, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 88888888}, ErrLocalIncompatibleOrStale},
+		{88888888, ID{Hash: checksumToBytes(0x20e53762), Next: 88888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non existing
 		// fork) at block 7279999, before Petersburg. Local is incompatible.

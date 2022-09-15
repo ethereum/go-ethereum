@@ -119,7 +119,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
 	// chain id as the default.
-	want := b.ChainConfig().ChainID
+	header, _ := b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+	chainId := b.ChainConfig().ChainID
+	if header != nil && b.ChainConfig().IsEthPoWFork(header.Number) {
+		chainId = b.ChainConfig().ChainID_ALT
+	}
+	want := chainId
 	if args.ChainID != nil {
 		if have := (*big.Int)(args.ChainID); have.Cmp(want) != 0 {
 			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, want)
@@ -238,7 +243,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 			gasPrice = args.GasPrice.ToInt()
 			gasFeeCap, gasTipCap = gasPrice, gasPrice
 		} else {
-			// User specified 1559 gas feilds (or none), use those
+			// User specified 1559 gas fields (or none), use those
 			gasFeeCap = new(big.Int)
 			if args.MaxFeePerGas != nil {
 				gasFeeCap = args.MaxFeePerGas.ToInt()

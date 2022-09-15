@@ -26,6 +26,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,6 +75,12 @@ func TestOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal("error loading expected test output:", err)
 			}
+			output_string := strings.ReplaceAll(string(output), "\r\n", "\n")
+			output = []byte(output_string)
+
+			wantOutput_string := strings.ReplaceAll(string(wantOutput), "\r\n", "\n")
+			wantOutput = []byte(wantOutput_string)
+
 			if !bytes.Equal(output, wantOutput) {
 				t.Fatal("output mismatch:\n", string(output))
 			}

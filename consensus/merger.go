@@ -51,6 +51,9 @@ func NewMerger(db ethdb.KeyValueStore) *Merger {
 			log.Crit("Failed to decode the transition status", "err", err)
 		}
 	}
+
+	status.LeftPoW = false
+	status.EnteredPoS = false
 	return &Merger{
 		db:     db,
 		status: status,
@@ -62,6 +65,8 @@ func NewMerger(db ethdb.KeyValueStore) *Merger {
 func (m *Merger) ReachTTD() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	return
 
 	if m.status.LeftPoW {
 		return
@@ -81,6 +86,8 @@ func (m *Merger) FinalizePoS() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	return
+
 	if m.status.EnteredPoS {
 		return
 	}
@@ -97,14 +104,12 @@ func (m *Merger) FinalizePoS() {
 func (m *Merger) TDDReached() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	return m.status.LeftPoW
+	return false
 }
 
 // PoSFinalized reports whether the chain has entered the PoS stage.
 func (m *Merger) PoSFinalized() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	return m.status.EnteredPoS
+	return false
 }

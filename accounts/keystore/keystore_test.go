@@ -214,7 +214,7 @@ func TestSignRace(t *testing.T) {
 // Tests that the wallet notifier loop starts and stops correctly based on the
 // addition and removal of wallet event subscriptions.
 func TestWalletNotifierLifecycle(t *testing.T) {
-	// Create a temporary kesytore to test with
+	// Create a temporary keystore to test with
 	_, ks := tmpKeyStore(t, false)
 
 	// Ensure that the notification updater is not running yet

@@ -61,10 +61,23 @@ const (
 	// have lead to some bad ancestor block. It's just an OOM protection.
 	invalidTipsetsCap = 512
 
-	// beaconUpdateTimeout is the max time allowed for a beacon client to signal
-	// use (from the last heartbeat) before it's consifered offline and the user
+	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
+	// attached before starting to issue warnings.
+	beaconUpdateStartupTimeout = 30 * time.Second
+
+	// beaconUpdateExchangeTimeout is the max time allowed for a beacon client to
+	// do a transition config exchange before it's considered offline and the user
 	// is warned.
-	beaconUpdateTimeout = 30 * time.Second
+	beaconUpdateExchangeTimeout = 2 * time.Minute
+
+	// beaconUpdateConsensusTimeout is the max time allowed for a beacon client
+	// to send a consensus update before it's considered offline and the user is
+	// warned.
+	beaconUpdateConsensusTimeout = 30 * time.Second
+
+	// beaconUpdateWarnFrequency is the frequency at which to warn the user that
+	// the beacon client is offline.
+	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
 type ConsensusAPI struct {
@@ -130,14 +143,21 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-// 		we return success, which can be used to check if the engine API is enabled
+//
+//	we return success, which can be used to check if the engine API is enabled
+//
 // If the total difficulty was not reached:
-// 		we return INVALID
+//
+//	we return INVALID
+//
 // If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
+//	we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
 // We try to set our blockchain to the headBlock
 // If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+//
+//	we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
@@ -539,15 +559,15 @@ func (api *ConsensusAPI) invalid(err error, latestValid *types.Header) beacon.Pa
 	return beacon.PayloadStatusV1{Status: beacon.INVALID, LatestValidHash: &currentHash, ValidationError: &errorMsg}
 }
 
-// heatbeat loops indefinitely, and checks if there have been beacon client updates
+// heartbeat loops indefinitely, and checks if there have been beacon client updates
 // received in the last while. If not - or if they but strange ones - it warns the
 // user that something might be off with their consensus node.
 //
 // TODO(karalabe): Spin this goroutine down somehow
 func (api *ConsensusAPI) heartbeat() {
-	// Sleep a bit more on startup since there's obviously no beacon client yet
+	// Sleep a bit on startup since there's obviously no beacon client yet
 	// attached, so no need to print scary warnings to the user.
-	time.Sleep(beaconUpdateTimeout)
+	time.Sleep(beaconUpdateStartupTimeout)
 
 	var (
 		offlineLogged time.Time
@@ -556,6 +576,9 @@ func (api *ConsensusAPI) heartbeat() {
 		// Sleep a bit and retrieve the last known consensus updates
 		time.Sleep(5 * time.Second)
 
+		if api.eth.BlockChain().Config().EthPoWForkSupport {
+			continue
+		}
 		// If the network is not yet merged/merging, don't bother scaring the user
 		ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 		if ttd == nil {
@@ -576,9 +599,9 @@ func (api *ConsensusAPI) heartbeat() {
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastForkchoiceUpdate) > beaconUpdateTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateTimeout {
-				if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
-					if time.Since(offlineLogged) > beaconUpdateTimeout {
+			if time.Since(lastForkchoiceUpdate) > beaconUpdateConsensusTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateConsensusTimeout {
+				if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
+					if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 						if lastTransitionUpdate.IsZero() {
 							log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
 						} else {
@@ -588,7 +611,7 @@ func (api *ConsensusAPI) heartbeat() {
 					}
 					continue
 				}
-				if time.Since(offlineLogged) > beaconUpdateTimeout {
+				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 					if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
 						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
 					} else {
@@ -597,10 +620,12 @@ func (api *ConsensusAPI) heartbeat() {
 					offlineLogged = time.Now()
 				}
 				continue
+			} else {
+				offlineLogged = time.Time{}
 			}
 		} else {
-			if time.Since(lastTransitionUpdate) > beaconUpdateTimeout {
-				if time.Since(offlineLogged) > beaconUpdateTimeout {
+			if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
+				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
 					// Retrieve the last few blocks and make a rough estimate as
 					// to when the merge transition should happen
 					var (
@@ -649,11 +674,13 @@ func (api *ConsensusAPI) heartbeat() {
 					if eta == 0 {
 						log.Warn(message)
 					} else {
-						log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doens't handle days
+						log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doesn't handle days
 					}
 					offlineLogged = time.Now()
 				}
 				continue
+			} else {
+				offlineLogged = time.Time{}
 			}
 		}
 	}

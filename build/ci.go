@@ -608,7 +608,7 @@ func doDocker(cmdline []string) {
 			}
 			if mismatch {
 				// Build numbers mismatching, retry in a short time to
-				// avoid concurrent failes in both publisher images. If
+				// avoid concurrent fails in both publisher images. If
 				// however the retry failed too, it means the concurrent
 				// builder is still crunching, let that do the publish.
 				if i == 0 {
