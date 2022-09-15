@@ -66,7 +66,7 @@ func NewWithCap(size int) *Database {
 }
 
 // Close deallocates the internal map and ensures any consecutive data access op
-// failes with an error.
+// fails with an error.
 func (db *Database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()

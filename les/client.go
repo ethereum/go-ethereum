@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -105,6 +104,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
 
+	if !config.IsNetworkIdSet && chainConfig != nil {
+		if chainConfig.ChainID_ALT != nil && chainConfig.EthPoWForkSupport {
+			config.NetworkId = chainConfig.ChainID_ALT.Uint64()
+		}
+	}
+	
 	peers := newServerPeerSet()
 	merger := consensus.NewMerger(chainDb)
 	leth := &LightEthereum{
@@ -298,9 +303,6 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
-		}, {
-			Namespace: "eth",
-			Service:   filters.NewFilterAPI(s.ApiBackend, true, 5*time.Minute),
 		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,

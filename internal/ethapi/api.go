@@ -446,8 +446,12 @@ func (s *PersonalAccountAPI) signTransaction(ctx context.Context, args *Transact
 	}
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
-
-	return wallet.SignTxWithPassphrase(account, passwd, tx, s.b.ChainConfig().ChainID)
+	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+	chainId := s.b.ChainConfig().ChainID
+	if header != nil && s.b.ChainConfig().IsEthPoWFork(header.Number) {
+		chainId = s.b.ChainConfig().ChainID_ALT
+	}
+	return wallet.SignTxWithPassphrase(account, passwd, tx, chainId)
 }
 
 // SendTransaction will create a transaction from the given arguments and
@@ -616,6 +620,10 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
+	header, _ := api.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+	if header != nil && api.b.ChainConfig().IsEthPoWFork(header.Number) {
+		return (*hexutil.Big)(api.b.ChainConfig().ChainID_ALT)
+	}
 	return (*hexutil.Big)(api.b.ChainConfig().ChainID)
 }
 
@@ -988,7 +996,7 @@ func newRevertError(result *core.ExecutionResult) *revertError {
 	}
 }
 
-// revertError is an API error that encompassas an EVM revertal with JSON error
+// revertError is an API error that encompasses an EVM revertal with JSON error
 // code and a binary data blob.
 type revertError struct {
 	error
@@ -1646,7 +1654,12 @@ func (s *TransactionAPI) sign(addr common.Address, tx *types.Transaction) (*type
 		return nil, err
 	}
 	// Request the wallet to sign the transaction
-	return wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
+	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+	chainId := s.b.ChainConfig().ChainID
+	if header != nil && s.b.ChainConfig().IsEthPoWFork(header.Number) {
+		chainId = s.b.ChainConfig().ChainID_ALT
+	}
+	return wallet.SignTx(account, tx, chainId)
 }
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
@@ -1662,7 +1675,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	// check eip155 sign after EthPow block
 	if b.ChainConfig().IsEthPoWFork(b.CurrentBlock().Number()) && !tx.Protected() {
-		return common.Hash{}, types.ErrUnexpectedProtection
+		return common.Hash{}, errors.New("only replay-protected (EIP-155) transactions allowed")
 	}
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
@@ -1707,8 +1720,12 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 	}
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
-
-	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
+	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+	chainId := s.b.ChainConfig().ChainID
+	if header != nil && s.b.ChainConfig().IsEthPoWFork(header.Number) {
+		chainId = s.b.ChainConfig().ChainID_ALT
+	}
+	signed, err := wallet.SignTx(account, tx, chainId)
 	if err != nil {
 		return common.Hash{}, err
 	}

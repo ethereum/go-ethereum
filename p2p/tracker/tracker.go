@@ -121,7 +121,7 @@ func (t *Tracker) Track(peer string, version uint, reqCode uint64, resCode uint6
 }
 
 // clean is called automatically when a preset time passes without a response
-// being dleivered for the first network request.
+// being delivered for the first network request.
 func (t *Tracker) clean() {
 	t.lock.Lock()
 	defer t.lock.Unlock()

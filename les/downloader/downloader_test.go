@@ -653,8 +653,8 @@ func testForkedSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnForkedChain(t, tester, testChainBase.len(), []int{chainA.len(), chainB.len()})
 }
 
-// Tests that synchronising against a much shorter but much heavyer fork works
-// corrently and is not dropped.
+// Tests that synchronising against a much shorter but much heavier fork works
+// correctly and is not dropped.
 func TestHeavyForkedSync66Full(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FullSync) }
 func TestHeavyForkedSync66Fast(t *testing.T)  { testHeavyForkedSync(t, eth.ETH66, FastSync) }
 func TestHeavyForkedSync66Light(t *testing.T) { testHeavyForkedSync(t, eth.ETH66, LightSync) }

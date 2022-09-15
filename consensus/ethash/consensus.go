@@ -340,8 +340,12 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsEthPoWFork(next):
-		if config.EthPoWForkBlock.Cmp(next) == 0 {
+		if config.EthPoWForkBlock != nil && big.NewInt(0).Add(config.EthPoWForkBlock, big.NewInt(2048)).Cmp(next) == 0 {
 			return params.ETHWStartDifficulty //Reset difficulty
+		}
+
+		if config.EthPoWForkBlock != nil && config.EthPoWForkBlock.Cmp(next) == 0 {
+			return big.NewInt(1) //Reset
 		}
 		return calcDifficultyEthPoW(time, parent)
 	case config.IsGrayGlacier(next):
@@ -372,6 +376,7 @@ var (
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
 )
+
 // calcDifficultyEthPOW creates a difficultyCalculator with the origin Proof-of-work (PoW).
 // Remain old calculations & deleted fakeBlockNumber
 func calcDifficultyEthPoW(time uint64, parent *types.Header) *big.Int {

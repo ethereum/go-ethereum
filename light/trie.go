@@ -153,6 +153,14 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
+// TryDeleteAccount abstracts an account deletion from the trie.
+func (t *odrTrie) TryDeleteAccount(key []byte) error {
+	key = crypto.Keccak256(key)
+	return t.do(key, func() error {
+		return t.trie.TryDelete(key)
+	})
+}
+
 func (t *odrTrie) Commit(collectLeaf bool) (common.Hash, *trie.NodeSet, error) {
 	if t.trie == nil {
 		return t.id.Root, nil, nil

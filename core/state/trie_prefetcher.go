@@ -212,7 +212,7 @@ type subfetcher struct {
 
 	wake chan struct{}  // Wake channel if a new task is scheduled
 	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal iterruption
+	term chan struct{}  // Channel to signal interruption
 	copy chan chan Trie // Channel to request a copy of the current trie
 
 	seen map[string]struct{} // Tracks the entries already loaded

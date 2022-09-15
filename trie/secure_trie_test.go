@@ -121,7 +121,7 @@ func TestStateTrieConcurrency(t *testing.T) {
 	for i := 0; i < threads; i++ {
 		tries[i] = trie.Copy()
 	}
-	// Start a batch of goroutines interactng with the trie
+	// Start a batch of goroutines interacting with the trie
 	pend := new(sync.WaitGroup)
 	pend.Add(threads)
 	for i := 0; i < threads; i++ {

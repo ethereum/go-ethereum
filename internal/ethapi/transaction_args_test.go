@@ -298,6 +298,9 @@ func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return nil, nil
 }
+func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
+	return nil, nil
+}
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
 func (b *backendMock) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	return nil, nil, nil
@@ -325,11 +328,8 @@ func (b *backendMock) TxPoolContent() (map[common.Address]types.Transactions, ma
 func (b *backendMock) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
 	return nil, nil
 }
-func (b *backendMock) SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription { return nil }
-func (b *backendMock) BloomStatus() (uint64, uint64)                                   { return 0, 0 }
-func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	return nil, nil
-}
+func (b *backendMock) SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription      { return nil }
+func (b *backendMock) BloomStatus() (uint64, uint64)                                        { return 0, 0 }
 func (b *backendMock) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {}
 func (b *backendMock) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription         { return nil }
 func (b *backendMock) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {

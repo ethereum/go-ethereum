@@ -99,7 +99,7 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 func set(dst, src reflect.Value) error {
 	dstType, srcType := dst.Type(), src.Type()
 	switch {
-	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid():
+	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Ptr || dst.Elem().CanSet()):
 		return set(dst.Elem(), src)
 	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
 		return set(dst.Elem(), src)

@@ -50,9 +50,12 @@ func TestVerification(t *testing.T) {
 func testVerification(t *testing.T, pubkey, sigdir string) {
 	// Data to verify
 	data, err := os.ReadFile("./testdata/vcheck/data.json")
+
 	if err != nil {
 		t.Fatal(err)
 	}
+	dataString := strings.ReplaceAll(string(data), "\r\n", "\n")
+	data = []byte(dataString)
 	// Signatures, with and without comments, both trusted and untrusted
 	files, err := os.ReadDir(sigdir)
 	if err != nil {
@@ -63,7 +66,9 @@ func testVerification(t *testing.T, pubkey, sigdir string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = verifySignature([]string{pubkey}, data, sig)
+		sigdataString := string(sig)
+		sigdataString = strings.ReplaceAll(sigdataString, "\r\n", "\n")
+		err = verifySignature([]string{pubkey}, data, []byte(sigdataString))
 		if err != nil {
 			t.Fatal(err)
 		}
