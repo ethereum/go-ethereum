@@ -78,7 +78,7 @@ var (
 		ArrowGlacierBlock:       big.NewInt(13_773_000),
 		GrayGlacierBlock:        big.NewInt(15_050_000),
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, //
-		RomeBlock:               nil,
+		RomeBlock:               big.NewInt(15_537_393),
 		Ethash:                  new(EthashConfig),
 	}
 
@@ -500,9 +500,9 @@ func (c *ChainConfig) ReChainId() {
 	c.ChainID = c.ChainIDEtf
 }
 
-func (c *ChainConfig) SetRome(num *big.Int) {
-	c.RomeBlock = num
-}
+//func (c *ChainConfig) SetRome(num *big.Int) {
+//	c.RomeBlock = num
+//}
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
