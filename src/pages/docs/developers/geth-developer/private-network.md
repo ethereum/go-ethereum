@@ -38,6 +38,7 @@ Clique consensus is a PoA system where new blocks can be created by authorized '
 Every blockchain starts with a genesis block. When Geth is run with default settings for the first time, it commits the Mainnet genesis to the database. For a private network, it is generally preferable to use a different genesis block. The genesis block is configured using a _genesis.json_ file whose path must be provided to Geth on start-up. When creating a genesis block, a few initial parameters for the private blockchain must be defined:
 
 - Ethereum platform features enabled at launch (`config`). Enabling and disabling features once the blockchain is running requires scheduling a [hard fork](https://ethereum.org/en/glossary/#hard-fork).
+
 - Initial block gas limit (`gasLimit`). This impacts how much EVM computation can happen within a single block. Mirroring the main Ethereum network is generally a [good choice](https://etherscan.io/chart/gaslimit). The block gas limit can be adjusted after launch using the `--miner.gastarget` command-line flag.
 
 - Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through mining as the chain progresses.

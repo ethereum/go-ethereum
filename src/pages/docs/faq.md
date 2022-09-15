@@ -18,12 +18,7 @@ RPC stands for Remote Procedure Call. RPC is a mode of communication between pro
 
 The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key, proving each party's identity. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
 
-<<<<<<< HEAD:content/docs/faq.md
-
-#### I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
-=======
 ## I noticed my peercount slowly decreasing, and now it is at 0. Restarting doesn't get any peers.
->>>>>>> geth-next:src/pages/docs/faq.md
 
 This may be because your clock has fallen out of sync with other nodes. You can [force a clock update using ntp](https://askubuntu.com/questions/254826/how-to-force-a-clock-update-using-ntp) like so:
 
@@ -50,11 +45,6 @@ Additional details and/or any updates on more robust handling are at <https://gi
 The current default syncing mode used by Geth is called [snap sync](https://github.com/ethereum/devp2p/blob/master/caps/snap.md). Instead of starting from the genesis block and processing all the transactions that ever occurred (which could take weeks), snap sync downloads the blocks, and only verifies the associated proof-of-works, assuming state transitions to be correct. Downloading all the blocks is a straightforward and fast procedure and will relatively quickly reassemble the entire chain.
 
 Many people assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods. Geth downloads the leaves of the trie without the intermediate nodes that connect the leaves to the root. The full trie is regenerated locally. However, while this is happening, the blockchain is progressing, meaning some of the regenerated state trie becomes invalid. Therefor, there is also a healing phase that corrects any errors in the state trie. The state sync has to progress faster than the chain growth otherwise it will never finish.
-<<<<<<< HEAD:content/docs/faq.md
-
-Geth can also be sync'd with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, only 128 blocks are stored in memory.
-=======
->>>>>>> geth-next:src/pages/docs/faq.md
 
 Geth can also be sync'd with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, only 128 blocks are stored in memory.
 
@@ -66,11 +56,7 @@ This cryptographic linking is done by creating a tree-like data structure, where
 
 Read more about Merkle Tries in general and the Ethereum state trie specifically on [ethereum.org](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie)
 
-<<<<<<< HEAD:content/docs/faq.md
-#### Why does the state trie download phase require a special syncing mode?
-=======
 ## Why does the state trie download phase require a special syncing mode?
->>>>>>> geth-next:src/pages/docs/faq.md
 
 The trie data structure is an intricate interlink of hundreds of millions of tiny cryptographic proofs (trie nodes). To truly have a synchronized node, you need to download all the account data, as well as all the tiny cryptographic proofs to verify that no one in the network is trying to cheat you. This itself is already a crazy number of data items.
 
@@ -82,15 +68,6 @@ Snap syncing was introduced by version [1.10.0](https://blog.ethereum.org/2021/0
 
 You can read more in the article posted above why snap sync replaced fast sync in Geth.
 
-<<<<<<< HEAD:content/docs/faq.md
-#### What is wrong with my light client?
-
-Light sync relies on full nodes that serve data to light clients. Historically, this has been hampered by the fact that serving light clients was turned off by default in geth full nodes and few nodes chose to turn it on. Therefore, light nodes often struggled to find peers. Since Ethereum switched to proof-of-stake, Geth light clients have stopped working altogether. Light clients for proof-of-stake Ethereum are expected to be implemented soon!
-
-#### Why do I need another client in addition to Geth?
-
-Historically, running Geth was enough to turn a computer into an Ethereum node. However, when Ethereum transitioned to proof-of-stake, responsibility for consensus logic and block gossip was handed over to a separate consensus layer client. However, Geth still handles transactions and state management. When the consensus client is required to create a new block, it requests Geth to gather transactions from the transaction pool, execute them to compute a state transition and pass this information back to the consensus client. When the consensus client receives a new block from a peer, it passes the transactions to Geth to re-execute to verify the proposed state-transition. There is a clear separationm of concerns between the two clients, meaning that both are required for a computer function as an Ethereum node.
-=======
 ## What is wrong with my light client?
 
 Light sync relies on full nodes that serve data to light clients. Historically, this has been hampered by the fact that serving light clients was turned off by default in geth full nodes and few nodes chose to turn it on. Therefore, light nodes often struggled to find peers. Since Ethereum switched to proof-of-stake, Geth light clients have stopped working altogether. Light clients for proof-of-stake Ethereum are expected to be implemented soon!
@@ -98,4 +75,3 @@ Light sync relies on full nodes that serve data to light clients. Historically, 
 ## Why do I need another client in addition to Geth?
 
 Historically, running Geth was enough to turn a computer into an Ethereum node. However, when Ethereum transitioned to proof-of-stake, responsibility for consensus logic and block gossip was handed over to a separate consensus layer client. However, Geth still handles transactions and state management. When the consensus client is required to create a new block, it requests Geth to gather transactions from the transaction pool, execute them to compute a state transition and pass this information back to the consensus client. When the consensus client receives a new block from a peer, it passes the transactions to Geth to re-execute to verify the proposed state-transition. There is a clear separationm of concerns between the two clients, meaning that both are required for a computer function as an Ethereum node.
->>>>>>> geth-next:src/pages/docs/faq.md
