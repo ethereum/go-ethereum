@@ -936,10 +936,10 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 		}
 
 		// Update pairing engine with G1 and G2 points
-    if i == 0 {
-      e.AddPairInv(p1, p2)
-      continue
-    }
+		if i == 0 {
+		  e.AddPairInv(p1, p2)
+		  continue
+		}
 		e.AddPair(p1, p2)
 	}
 	// Prepare 32 byte output
