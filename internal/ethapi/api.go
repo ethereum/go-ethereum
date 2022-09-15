@@ -710,10 +710,10 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 func decodeHash(s string) (common.Hash, error) {
 	b, err := hexutil.Decode(s)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 	if len(b) > 32 {
-		return nil, fmt.Errorf("hex string too long, want at most 32 bytes")
+		return common.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
 	}
 	return common.BytesToHash(b)
 }
