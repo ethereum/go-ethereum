@@ -73,13 +73,18 @@ func runtimeInfo() string {
 		if dirty {
 			version += " (dirty)"
 		}
+
 	default:
 		// Not our main package, probably imported by a different
 		// project. VCS data less relevant here.
 		mod := findModule(buildInfo, ourPath)
-		version = fmt.Sprintf("%s%s %s@%s", buildInfo.Path, buildInfo.Main.Version, mod.Path, mod.Version)
-		if mod.Replace != nil {
-			version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
+		if mod == nil {
+			version = params.VersionWithMeta
+		} else {
+			version = fmt.Sprintf("%s %s %s@%s", buildInfo.Path, buildInfo.Main.Version, mod.Path, mod.Version)
+			if mod.Replace != nil {
+				version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
+			}
 		}
 	}
 	return fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
