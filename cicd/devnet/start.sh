@@ -12,9 +12,11 @@ then
   private_key=${private_keys[ $RANDOM % ${#private_keys[@]} ]}
 
   echo "${private_key}" >> /tmp/key
+  echo "Creating a new wallet"
   wallet=$(XDC account import --password .pwd --datadir /work/xdcchain /tmp/key | awk -v FS="({|})" '{print $2}')
   XDC --datadir /work/xdcchain init /work/genesis.json
 else
+  echo "Wallet already exist, re-use the same one"
   wallet=$(XDC account list --datadir /work/xdcchain | head -n 1 | awk -v FS="({|})" '{print $2}')
 fi
 
