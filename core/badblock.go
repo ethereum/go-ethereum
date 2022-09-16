@@ -33,61 +33,114 @@ const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
 func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *params.ChainConfig, err error) string {
 	var receiptString string
 	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
+		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x",
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
+	}
+	version, vcs := runtimeInfo()
+	platform := fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
+	if vcs != "" {
+		vcs = fmt.Sprintf("\nVCS: %s", vcs)
 	}
 	return fmt.Sprintf(`
 ########## BAD BLOCK #########
 Block: %v (%#x)
 Error: %v
-Version: %v
+Platform: %v%v
 Chain config: %#v
-Receipts:
-%v##############################
-`, block.Number(), block.Hash(), err, runtimeInfo(), config, receiptString)
+Receipts: %v
+##############################
+`, block.Number(), block.Hash(), err, platform, vcs, config, receiptString)
 }
 
-// RuntimeInfo returns build and platform information about the current binary.
+// runtimeInfo returns build and platform information about the current binary.
 //
 // If the package that is currently executing is a prefixed by our go-ethereum
 // module path, it will print out commit and date VCS information. Otherwise,
 // it will assume it's imported by a third-party and will return the imported
 // version and whether it was replaced by another module.
-func runtimeInfo() string {
+func runtimeInfo() (string, string) {
 	var (
-		version       string
+		version       = params.VersionWithMeta
+		vcs           = ""
 		buildInfo, ok = debug.ReadBuildInfo()
 	)
-
-	switch {
-	case !ok:
-		// BuildInfo should generally be set. Fallback to the coded
-		// version if not.
-		version = params.VersionWithMeta
-	case strings.HasPrefix(buildInfo.Path, ourPath):
-		// If the main package is from our repo, we can actually
-		// retrieve the VCS information directly from the buildInfo.
-		revision, date, dirty := vcsInfo(buildInfo)
-		version = fmt.Sprintf("geth %s", params.VersionWithCommit(revision, date))
-		if dirty {
-			version += " (dirty)"
-		}
-
-	default:
-		// Not our main package, probably imported by a different
-		// project. VCS data less relevant here.
-		mod := findModule(buildInfo, ourPath)
-		if mod == nil {
-			version = params.VersionWithMeta
-		} else {
-			version = fmt.Sprintf("%s %s %s@%s", buildInfo.Path, buildInfo.Main.Version, mod.Path, mod.Version)
-			if mod.Replace != nil {
-				version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
+	if ok {
+		version = versionInfo(buildInfo)
+		if status, ok := vcsInfo(buildInfo); ok {
+			modified := ""
+			if status.modified {
+				modified = " (dirty)"
 			}
+			vcs = status.revision + "-" + status.time + modified
 		}
 	}
-	return fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
+	return version, vcs
+}
+
+// versionInfo returns version information for the currently executing
+// implementation.
+//
+// Depending on how the code is instansiated, it returns different amounts of
+// information. If it is unable to determine which module is related to our
+// package it falls back to the hardcoded values in the params package.
+func versionInfo(info *debug.BuildInfo) string {
+	// If the main package is from our repo, prefix version with "geth".
+	if strings.HasPrefix(info.Path, ourPath) {
+		return fmt.Sprintf("geth %s", info.Main.Version)
+	}
+	// Not our main package, so explicitly print out the module path and
+	// version.
+	var version string
+	if info.Main.Path != "" && info.Main.Version != "" {
+		// These can be empty when invoked with "go run".
+		version = fmt.Sprintf("%s@%s ", info.Main.Path, info.Main.Version)
+	}
+	mod := findModule(info, ourPath)
+	if mod == nil {
+		// If our module path wasn't imported, it's unclear which
+		// version of our code they are running. Fallback to hardcoded
+		// version.
+		return version + fmt.Sprintf("geth %s", params.VersionWithMeta)
+	}
+	// Our package is a dependency for the main module. Return path and
+	// version data for both.
+	version += fmt.Sprintf("%s@%s", mod.Path, mod.Version)
+	if mod.Replace != nil {
+		// If our package was replaced by something else, also note that.
+		version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
+	}
+	return version
+}
+
+type status struct {
+	revision string
+	time     string
+	modified bool
+}
+
+// vcsInfo returns VCS information of the build.
+func vcsInfo(info *debug.BuildInfo) (s status, ok bool) {
+	for _, v := range info.Settings {
+		switch v.Key {
+		case "vcs.revision":
+			if len(v.Value) < 8 {
+				s.revision = v.Value
+			} else {
+				s.revision = v.Value[:8]
+			}
+		case "vcs.modified":
+			if v.Value == "true" {
+				s.modified = true
+			}
+		case "vcs.time":
+			s.time = v.Value
+		}
+	}
+	if s.revision != "" && s.time != "" {
+		ok = true
+	}
+	return
 }
 
 // findModule returns the module at path.
@@ -101,24 +154,4 @@ func findModule(info *debug.BuildInfo, path string) *debug.Module {
 		}
 	}
 	return nil
-}
-
-// vcsInfo returns VCS information of the build.
-func vcsInfo(info *debug.BuildInfo) (revision, date string, dirty bool) {
-	revision = "unknown"
-	date = "unknown"
-
-	for _, v := range info.Settings {
-		switch v.Key {
-		case "vcs.revision":
-			revision = v.Value
-		case "vcs.modified":
-			if v.Value == "true" {
-				dirty = true
-			}
-		case "vcs.time":
-			date = v.Value
-		}
-	}
-	return revision, date, dirty
 }
