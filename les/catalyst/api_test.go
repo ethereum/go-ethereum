@@ -20,19 +20,17 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/beacon"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereumfair/go-ethereum/consensus/ethash"
+	"github.com/ethereumfair/go-ethereum/core"
+	//"github.com/ethereumfair/go-ethereum/core/beacon"
+	"github.com/ethereumfair/go-ethereum/core/rawdb"
+	"github.com/ethereumfair/go-ethereum/core/types"
+	"github.com/ethereumfair/go-ethereum/crypto"
+	"github.com/ethereumfair/go-ethereum/eth/downloader"
+	"github.com/ethereumfair/go-ethereum/eth/ethconfig"
+	"github.com/ethereumfair/go-ethereum/les"
+	"github.com/ethereumfair/go-ethereum/node"
+	"github.com/ethereumfair/go-ethereum/params"
 )
 
 var (
@@ -68,95 +66,6 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Bloc
 	config.TerminalTotalDifficulty = totalDifficulty
 
 	return genesis, headers, blocks
-}
-
-func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
-	genesis, headers, blocks := generatePreMergeChain(10)
-	n, lesService := startLesService(t, genesis, headers)
-	defer n.Close()
-
-	api := NewConsensusAPI(lesService)
-	fcState := beacon.ForkchoiceStateV1{
-		HeadBlockHash:      blocks[5].Hash(),
-		SafeBlockHash:      common.Hash{},
-		FinalizedBlockHash: common.Hash{},
-	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err == nil {
-		t.Errorf("fork choice updated before total terminal difficulty should fail")
-	}
-}
-
-func TestExecutePayloadV1(t *testing.T) {
-	genesis, headers, blocks := generatePreMergeChain(10)
-	n, lesService := startLesService(t, genesis, headers[:9])
-	lesService.Merger().ReachTTD()
-	defer n.Close()
-
-	api := NewConsensusAPI(lesService)
-	fcState := beacon.ForkchoiceStateV1{
-		HeadBlockHash:      blocks[8].Hash(),
-		SafeBlockHash:      common.Hash{},
-		FinalizedBlockHash: common.Hash{},
-	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-		t.Errorf("Failed to update head %v", err)
-	}
-	block := blocks[9]
-
-	fakeBlock := types.NewBlock(&types.Header{
-		ParentHash:  block.ParentHash(),
-		UncleHash:   crypto.Keccak256Hash(nil),
-		Coinbase:    block.Coinbase(),
-		Root:        block.Root(),
-		TxHash:      crypto.Keccak256Hash(nil),
-		ReceiptHash: crypto.Keccak256Hash(nil),
-		Bloom:       block.Bloom(),
-		Difficulty:  big.NewInt(0),
-		Number:      block.Number(),
-		GasLimit:    block.GasLimit(),
-		GasUsed:     block.GasUsed(),
-		Time:        block.Time(),
-		Extra:       block.Extra(),
-		MixDigest:   block.MixDigest(),
-		Nonce:       types.BlockNonce{},
-		BaseFee:     block.BaseFee(),
-	}, nil, nil, nil, trie.NewStackTrie(nil))
-
-	_, err := api.ExecutePayloadV1(beacon.ExecutableDataV1{
-		ParentHash:    fakeBlock.ParentHash(),
-		FeeRecipient:  fakeBlock.Coinbase(),
-		StateRoot:     fakeBlock.Root(),
-		ReceiptsRoot:  fakeBlock.ReceiptHash(),
-		LogsBloom:     fakeBlock.Bloom().Bytes(),
-		Random:        fakeBlock.MixDigest(),
-		Number:        fakeBlock.NumberU64(),
-		GasLimit:      fakeBlock.GasLimit(),
-		GasUsed:       fakeBlock.GasUsed(),
-		Timestamp:     fakeBlock.Time(),
-		ExtraData:     fakeBlock.Extra(),
-		BaseFeePerGas: fakeBlock.BaseFee(),
-		BlockHash:     fakeBlock.Hash(),
-		Transactions:  encodeTransactions(fakeBlock.Transactions()),
-	})
-	if err != nil {
-		t.Errorf("Failed to execute payload %v", err)
-	}
-	headHeader := api.les.BlockChain().CurrentHeader()
-	if headHeader.Number.Uint64() != fakeBlock.NumberU64()-1 {
-		t.Fatal("Unexpected chain head update")
-	}
-	fcState = beacon.ForkchoiceStateV1{
-		HeadBlockHash:      fakeBlock.Hash(),
-		SafeBlockHash:      common.Hash{},
-		FinalizedBlockHash: common.Hash{},
-	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-		t.Fatal("Failed to update head")
-	}
-	headHeader = api.les.BlockChain().CurrentHeader()
-	if headHeader.Number.Uint64() != fakeBlock.NumberU64() {
-		t.Fatal("Failed to update chain head")
-	}
 }
 
 func TestEth2DeepReorg(t *testing.T) {
