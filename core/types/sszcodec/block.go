@@ -124,7 +124,7 @@ func FillReceipts(sb *Block, receipts []*types.Receipt) {
 				topic := rlplog.Topics[j]
 				// xxx ugly conversion from []common.Hash to [][]byte...
 				// maybe just common.Hash directly? (here and elsewhere)
-				log.Topics = append(log.Topics, []byte(topic[:]))
+				log.Topics = append(log.Topics, topic[:])
 			}
 			p.Logs = append(p.Logs, log)
 		}
