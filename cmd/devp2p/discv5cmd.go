@@ -36,6 +36,7 @@ var (
 			discv5CrawlCommand,
 			discv5TestCommand,
 			discv5ListenCommand,
+			discv5WormholeCommand,
 		},
 	}
 	discv5PingCommand = &cli.Command{
@@ -76,6 +77,26 @@ var (
 			nodedbFlag,
 			listenAddrFlag,
 		},
+	}
+	discv5WormholeCommand = &cli.Command{
+		Name:  "wormhole",
+		Usage: "Interact with a discv5 wormhole",
+		Subcommands: []*cli.Command{
+			discv5WormholeSendCommand,
+			discv5WormholeReceiveCommand,
+		},
+	}
+	discv5WormholeSendCommand = &cli.Command{
+		Name:   "send",
+		Usage:  "Send a file over wormhole",
+		Action: discv5WormholeSend,
+		Flags:  []cli.Flag{},
+	}
+	discv5WormholeReceiveCommand = &cli.Command{
+		Name:   "receieve",
+		Usage:  "Receive a file over wormhole",
+		Action: discv5WormholeReceive,
+		Flags:  []cli.Flag{},
 	}
 )
 
@@ -132,6 +153,16 @@ func discv5Listen(ctx *cli.Context) error {
 
 	fmt.Println(disc.Self())
 	select {}
+}
+
+func discv5WormholeSend(ctx *cli.Context) error {
+	// TODO
+	return nil
+}
+
+func discv5WormholeReceive(ctx *cli.Context) error {
+	// TODO
+	return nil
 }
 
 // startV5 starts an ephemeral discovery v5 node.
