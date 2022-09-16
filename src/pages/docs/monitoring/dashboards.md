@@ -112,35 +112,35 @@ sudo systemctl start grafana-server
 
 When Grafana is up and running, it should be reachable at `localhost:3000`. A browser can be pointed to that URL to access a visualization dashboard. The browser will prompt for login credentials (user: `admin` and password: `admin`). When prompted, the default password should be changed and saved.
 
-![](/assets/grafana1.png)
+![](/images/grafana1.png)
 
 The browser first redirects to the Grafana home page to set up the source data. Click on the configuration icon in the left bar and select "Data sources".
 
-![](/assets/grafana2.png)
+![](/images/grafana2.png)
 
 There aren't any data sources yet, click on "Add data source" to define one.
 
-![](/assets/grafana3.png)
+![](/images/grafana3.png)
 
 Select "InfluxDB" and proceed.
 
-![](/assets/grafana4.png)
+![](/images/grafana4.png)
 
 Data source configuration is pretty straight forward if the tools run on the same machine as Geth. The InfluxDB address and details for accessing the database must be set. Refer to the image below.
 
-![](/assets/grafana5.png)
+![](/images/grafana5.png)
 
 If everything is complete and InfluxDB is reachable, click on "Save and test" and wait for the confirmation to pop up.
 
-![](/assets/grafana6.png)
+![](/images/grafana6.png)
 
 Grafana is now set up to read data from InfluxDB. Now a dashboard can be created to interpret and display it. Dashboards properties are encoded in JSON files which can be created by anybody and easily imported. On the left bar, click on "Create and Import".
 
-![](/assets/grafana7.png)
+![](/images/grafana7.png)
 
 For a Geth monitoring dashboard, copy the ID of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
 
-![](/assets/grafana8.png)
+![](/images/grafana8.png)
 
 The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to [Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
 

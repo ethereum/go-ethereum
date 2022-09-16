@@ -25,7 +25,7 @@ The libraries are updated synchronously with the Geth Github repository. The Go 
 
 Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource ([available here](https://ethereum.karalabe.com/talks/2016-devcon.html)) and the talk itself can be viewed by clicking the image below (it is also archived on [IPFS](https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR)).
 
-[![Peter's Devcon2 talk](/assets/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
+[![Peter's Devcon2 talk](/images/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
 ## Go packages
 

@@ -72,7 +72,7 @@ The external API never handles any sensitive data directly, but it can be used t
 
 The general flow for a basic transaction-signing operation using Clef and an Ethereum node such as Geth is as follows:
 
-![Clef signing logic](/assets/clef_sign_flow.png)
+![Clef signing logic](/images/clef_sign_flow.png)
 
 In the case illustrated in the schematic above, Geth would be started with `--signer <addr>:<port>` and would relay requests to `eth.sendTransaction`. Text in `mono` font positioned along arrows shows the objects passed between each component.
 
