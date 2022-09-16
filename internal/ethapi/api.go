@@ -708,8 +708,10 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 	}, state.Error()
 }
 
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have an byte length up to 32.
 func decodeHash(s string) (common.Hash, error) {
-	if has0xPrefix(s) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
 	b, err := hex.DecodeString(s)
@@ -720,10 +722,6 @@ func decodeHash(s string) (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
 	}
 	return common.BytesToHash(b), nil
-}
-
-func has0xPrefix(input string) bool {
-	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
