@@ -30,7 +30,13 @@ do
     fi
 done < "$input"
 
-
+log_level=3
+if test -z "$LOG_LEVEL" 
+then
+  echo "Log level not set, default to verbosity of 3"
+else
+  log_level=$LOG_LEVEL
+fi
 
 netstats="aws_${wallet}:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
 INSTANCE_IP=$(curl https://checkip.amazonaws.com)
@@ -45,6 +51,6 @@ XDC --ethstats ${netstats} --gcmode=archive \
 --rpcport 8545 \
 --rpcapi admin,db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
 --rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
---gasprice "1" --targetgaslimit "420000000" --verbosity 3 \
+--gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
 --ws --wsaddr=0.0.0.0 --wsport 8555 \
 --wsorigins "*" 2>&1 >>/work/xdcchain/xdc.log | tee --append /work/xdcchain/xdc.log
