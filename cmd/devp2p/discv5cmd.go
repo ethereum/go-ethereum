@@ -155,16 +155,6 @@ func discv5Listen(ctx *cli.Context) error {
 	select {}
 }
 
-func discv5WormholeSend(ctx *cli.Context) error {
-	// TODO
-	return nil
-}
-
-func discv5WormholeReceive(ctx *cli.Context) error {
-	// TODO
-	return nil
-}
-
 // startV5 starts an ephemeral discovery v5 node.
 func startV5(ctx *cli.Context) *discover.UDPv5 {
 	ln, config := makeDiscoveryConfig(ctx)
