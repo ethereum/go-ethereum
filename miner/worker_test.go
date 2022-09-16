@@ -644,7 +644,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
-			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+			assertBlock(block.Resolve(), c.expectNumber, c.coinbase, c.random)
 		}
 	}
 
@@ -662,7 +662,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			if err != nil {
 				t.Errorf("Unexpected error %v", err)
 			}
-			assertBlock(block, c.expectNumber, c.coinbase, c.random)
+			assertBlock(block.Resolve(), c.expectNumber, c.coinbase, c.random)
 		}
 	}
 }
