@@ -18,6 +18,7 @@ package ethapi
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -708,14 +709,21 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 }
 
 func decodeHash(s string) (common.Hash, error) {
-	b, err := hexutil.Decode(s)
+	if has0xPrefix(s) {
+		s = s[2:]
+	}
+	b, err := hex.DecodeString(s)
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, fmt.Errorf("hex string invalid")
 	}
 	if len(b) > 32 {
 		return common.Hash{}, fmt.Errorf("hex string too long, want at most 32 bytes")
 	}
-	return common.BytesToHash(b)
+	return common.BytesToHash(b), nil
+}
+
+func has0xPrefix(input string) bool {
+	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
@@ -843,7 +851,7 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	}
 	key, err := decodeHash(hexKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to decode storage key: %s", err)
 	}
 	res := state.GetState(address, key)
 	return res[:], state.Error()
