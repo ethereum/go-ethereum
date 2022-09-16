@@ -91,14 +91,20 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
 	err := ec.c.CallContext(ctx, &result, "eth_blockNumber")
-	return uint64(result), err
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
 
 // PeerCount returns the number of p2p peers as reported by the net_peerCount method.
 func (ec *Client) PeerCount(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
 	err := ec.c.CallContext(ctx, &result, "net_peerCount")
-	return uint64(result), err
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
 
 type rpcBlock struct {
@@ -338,7 +344,10 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	var result hexutil.Big
 	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, toBlockNumArg(blockNumber))
-	return (*big.Int)(&result), err
+	if err != nil {
+		return (*big.Int)(&result), err
+	}
+	return (*big.Int)(&result), nil
 }
 
 // StorageAt returns the value of key in the contract storage of the given account.
@@ -346,7 +355,10 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNu
 func (ec *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, toBlockNumArg(blockNumber))
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // CodeAt returns the contract code of the given account.
@@ -354,7 +366,10 @@ func (ec *Client) StorageAt(ctx context.Context, account common.Address, key com
 func (ec *Client) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, toBlockNumArg(blockNumber))
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // NonceAt returns the account nonce of the given account.
@@ -362,7 +377,10 @@ func (ec *Client) CodeAt(ctx context.Context, account common.Address, blockNumbe
 func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
 	var result hexutil.Uint64
 	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, toBlockNumArg(blockNumber))
-	return uint64(result), err
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
 
 // Filters
@@ -375,7 +393,10 @@ func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]typ
 		return nil, err
 	}
 	err = ec.c.CallContext(ctx, &result, "eth_getLogs", arg)
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.
@@ -414,21 +435,30 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
 	var result hexutil.Big
 	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, "pending")
-	return (*big.Int)(&result), err
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&result), nil
 }
 
 // PendingStorageAt returns the value of key in the contract storage of the given account in the pending state.
 func (ec *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, "pending")
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // PendingCodeAt returns the contract code of the given account in the pending state.
 func (ec *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, "pending")
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // PendingNonceAt returns the account nonce of the given account in the pending state.
@@ -436,14 +466,20 @@ func (ec *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]
 func (ec *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
 	var result hexutil.Uint64
 	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, "pending")
-	return uint64(result), err
+	if err != nil {
+		return 0, err
+	}
+	return uint64(result), nil
 }
 
 // PendingTransactionCount returns the total number of transactions in the pending state.
 func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	var num hexutil.Uint
 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
-	return uint(num), err
+	if err != nil {
+		return 0, err
+	}
+	return uint(num), nil
 }
 
 // Contract Calling
