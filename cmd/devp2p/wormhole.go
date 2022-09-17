@@ -140,10 +140,12 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	o.readMu.Lock()
 	for len(o.inqueue) == 0 {
 		o.flag.Wait()
+		fmt.Printf("Woke up reader\n")
 	}
 	defer o.readMu.Unlock()
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
+	log.Info("Packet conn delivered to reader", "n", n)
 	return n, nil, nil
 }
 
