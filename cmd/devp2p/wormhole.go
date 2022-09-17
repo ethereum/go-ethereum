@@ -53,14 +53,16 @@ func discv5WormholeSend(ctx *cli.Context) error {
 }
 
 func discv5WormholeReceive(ctx *cli.Context) error {
-	var unhandled chan discover.ReadPacket
+	var unhandled = make(chan discover.ReadPacket)
 	disc := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
+	defer close(unhandled)
 
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
 	handleUnhandledLoop(unhandled)
+
 	return nil
 }
 
@@ -73,6 +75,7 @@ func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []by
 }
 
 func handleUnhandledLoop(unhandled chan discover.ReadPacket) {
+
 	for {
 		select {
 		case packet := <-unhandled:

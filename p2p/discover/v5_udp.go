@@ -82,6 +82,7 @@ type UDPv5 struct {
 	callCh        chan *callV5
 	callDoneCh    chan *callV5
 	respTimeoutCh chan *callTimeout
+	unhandled     chan<- ReadPacket
 
 	// state of dispatch
 	codec            codecV5
@@ -155,6 +156,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
+		unhandled:     cfg.Unhandled,
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
@@ -522,7 +524,10 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(id)
 
 		case p := <-t.packetInCh:
-			t.handlePacket(p.Data, p.Addr)
+			if err := t.handlePacket(p.Data, p.Addr); err != nil && t.unhandled != nil {
+				// TODO: ship it to the 'unhandled' handler
+				t.unhandled <- p
+			}
 			// Arm next read.
 			t.readNextCh <- struct{}{}
 
@@ -634,7 +639,13 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
-		t.dispatchReadPacket(from, buf[:nbytes])
+		if !t.dispatchReadPacket(from, buf[:nbytes]) && t.unhandled != nil {
+			//unhandled <- ReadPacket{buf[:nbytes], from}
+			select {
+			case t.unhandled <- ReadPacket{buf[:nbytes], from}:
+			default:
+			}
+		}
 	}
 }
 
