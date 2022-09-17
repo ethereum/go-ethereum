@@ -27,6 +27,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/crypto/pbkdf2"
+	"time"
 )
 
 func discv5WormholeSend(ctx *cli.Context) error {
@@ -54,6 +55,10 @@ func discv5WormholeSend(ctx *cli.Context) error {
 
 func discv5WormholeReceive(ctx *cli.Context) error {
 	var unhandled = make(chan discover.ReadPacket)
+
+	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
+	block, _ := kcp.NewAESBlockCrypt(key)
+	kcpWrapper := newUnhandledWrapper(unhandled)
 	disc := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
 	defer close(unhandled)
@@ -61,8 +66,8 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
-	handleUnhandledLoop(unhandled)
-
+	handleUnhandledLoop(kcpWrapper)
+	kcp.ServeConn(block, 10, 3, kcpWrapper)
 	return nil
 }
 
@@ -74,12 +79,43 @@ func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []by
 	return []byte("oll korrekt!")
 }
 
-func handleUnhandledLoop(unhandled chan discover.ReadPacket) {
-
+func handleUnhandledLoop(wrapper *ourPacketConn) {
 	for {
 		select {
-		case packet := <-unhandled:
+		case packet := <-wrapper.unhandled:
 			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
+			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
 		}
 	}
 }
+
+func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
+	return &ourPacketConn{packetCh, make([]byte, 0)}
+}
+
+type ourPacketConn struct {
+	unhandled chan discover.ReadPacket
+	inqueue   []byte
+}
+
+func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
+	// modify that thing from two threads at once.
+
+	panic("implement me")
+}
+
+func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *ourPacketConn) LocalAddr() net.Addr {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (o *ourPacketConn) Close() error                       { return nil }
+func (o *ourPacketConn) SetDeadline(t time.Time) error      { return nil }
+func (o *ourPacketConn) SetReadDeadline(t time.Time) error  { return nil }
+func (o *ourPacketConn) SetWriteDeadline(t time.Time) error { return nil }
