@@ -343,10 +343,7 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 
 	select {
 	case pong := <-resp.ch:
-		resp := pong.(*v5wire.Pong)
-		log.Info("Pong", "name", resp.Name(), "kind", resp.Kind(), "toport", resp.ToPort)
-
-		return resp.ENRSeq, nil
+		return pong.(*v5wire.Pong).ENRSeq, nil
 	case err := <-resp.err:
 		return 0, err
 	}
@@ -526,7 +523,11 @@ func (t *UDPv5) dispatch() {
 		case p := <-t.packetInCh:
 			if err := t.handlePacket(p.Data, p.Addr); err != nil && t.unhandled != nil {
 				// TODO: ship it to the 'unhandled' handler
-				t.unhandled <- p
+				//unhandled <- ReadPacket{buf[:nbytes], from}
+				select {
+				case t.unhandled <- p:
+				default:
+				}
 			}
 			// Arm next read.
 			t.readNextCh <- struct{}{}
@@ -639,13 +640,7 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
-		if !t.dispatchReadPacket(from, buf[:nbytes]) && t.unhandled != nil {
-			//unhandled <- ReadPacket{buf[:nbytes], from}
-			select {
-			case t.unhandled <- ReadPacket{buf[:nbytes], from}:
-			default:
-			}
-		}
+		t.dispatchReadPacket(from, buf[:nbytes])
 	}
 }
 
