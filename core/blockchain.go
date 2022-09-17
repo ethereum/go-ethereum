@@ -239,7 +239,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
-	for _, line := range strings.Split(chainConfig.String(), "\n") {
+	for _, line := range strings.Split(chainConfig.Description(), "\n") {
 		log.Info(line)
 	}
 	log.Info(strings.Repeat("-", 153))
@@ -2375,24 +2375,7 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	rawdb.WriteBadBlock(bc.db, block)
-
-	var receiptString string
-	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
-			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
-			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
-	}
-	log.Error(fmt.Sprintf(`
-########## BAD BLOCK #########
-Chain config: %v
-
-Number: %v
-Hash: %#x
-%v
-
-Error: %v
-##############################
-`, bc.chainConfig, block.Number(), block.Hash(), receiptString, err))
+	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local

@@ -407,8 +407,8 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
-// String implements the fmt.Stringer interface.
-func (c *ChainConfig) String() string {
+// Description returns a human-readable description of ChainConfig.
+func (c *ChainConfig) Description() string {
 	var banner string
 
 	// Create some basinc network config output
