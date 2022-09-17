@@ -229,7 +229,7 @@ func (c *Codec) EncodeRaw(id enode.ID, head Header, msgdata []byte) ([]byte, err
 }
 
 func (c *Codec) writeHeaders(head *Header) {
-	resetBufferWithSize(&c.buf, len(head.IV)+binary.Size(head.StaticHeader)+len(head.AuthData))
+	resetBuffer(&c.buf)
 	c.buf.Write(head.IV[:])
 	binary.Write(&c.buf, binary.BigEndian, &head.StaticHeader)
 	c.buf.Write(head.AuthData)
@@ -271,7 +271,7 @@ func (c *Codec) encodeRandom(toID enode.ID) (Header, []byte, error) {
 	if _, err := crand.Read(head.Nonce[:]); err != nil {
 		return head, nil, fmt.Errorf("can't get random data: %v", err)
 	}
-	resetBufferWithSize(&c.headbuf, binary.Size(auth))
+	resetBuffer(&c.headbuf)
 	binary.Write(&c.headbuf, binary.BigEndian, auth)
 	head.AuthData = c.headbuf.Bytes()
 
@@ -298,7 +298,7 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 		IDNonce:   packet.IDNonce,
 		RecordSeq: packet.RecordSeq,
 	}
-	resetBufferWithSize(&c.headbuf, binary.Size(auth))
+	resetBuffer(&c.headbuf)
 	binary.Write(&c.headbuf, binary.BigEndian, auth)
 	head.AuthData = c.headbuf.Bytes()
 	return head, nil
@@ -331,7 +331,7 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 		authsizeExtra = len(auth.pubkey) + len(auth.signature) + len(auth.record)
 		head          = c.makeHeader(toID, flagHandshake, authsizeExtra)
 	)
-	resetBufferWithSize(&c.headbuf, binary.Size(auth.h)+len(auth.signature)+len(auth.pubkey)+len(auth.record))
+	resetBuffer(&c.headbuf)
 	binary.Write(&c.headbuf, binary.BigEndian, &auth.h)
 	c.headbuf.Write(auth.signature)
 	c.headbuf.Write(auth.pubkey)
@@ -393,7 +393,7 @@ func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 		return Header{}, fmt.Errorf("can't generate nonce: %v", err)
 	}
 	auth := messageAuthData{SrcID: c.localnode.ID()}
-	resetBufferWithSize(&c.buf, binary.Size(auth))
+	resetBuffer(&c.buf)
 	binary.Write(&c.buf, binary.BigEndian, &auth)
 	head.AuthData = bytesCopy(&c.buf)
 	head.Nonce = nonce
@@ -402,7 +402,7 @@ func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 
 func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []byte) ([]byte, error) {
 	// Encode message plaintext.
-	resetBufferWithSize(&c.msgbuf, 0)
+	resetBuffer(&c.msgbuf)
 	c.msgbuf.WriteByte(p.Kind())
 	if err := rlp.Encode(&c.msgbuf, p); err != nil {
 		return nil, err
@@ -645,9 +645,8 @@ func (h *Header) mask(destID enode.ID) cipher.Stream {
 	return cipher.NewCTR(block, h.IV[:])
 }
 
-func resetBufferWithSize(buf *bytes.Buffer, size int) {
-	b := make([]byte, 0, size)
-	*buf = *bytes.NewBuffer(b)
+func resetBuffer(buf *bytes.Buffer) {
+	*buf = *bytes.NewBuffer([]byte{})
 }
 
 func bytesCopy(r *bytes.Buffer) []byte {
