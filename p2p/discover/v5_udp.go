@@ -521,13 +521,14 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(id)
 
 		case p := <-t.packetInCh:
-			if err := t.handlePacket(p.Data, p.Addr); err != nil && t.unhandled != nil {
-				// TODO: ship it to the 'unhandled' handler
-				t.unhandled <- p
-				//select {
-				//case t.unhandled <- p:
-				//default:
-				//}
+			err := t.handlePacket(p.Data, p.Addr)
+			if err != nil && t.unhandled != nil {
+				// TODO: the condition above needs to be more precise,
+				// we don't want to deliver all invalid packets to the channel,
+				// only those which have an invalid header.
+				up := ReadPacket{Data: make([]byte, len(p.Data)), Addr: p.Addr}
+				copy(up.Data, p.Data)
+				t.unhandled <- up
 			}
 			// Arm next read.
 			t.readNextCh <- struct{}{}
