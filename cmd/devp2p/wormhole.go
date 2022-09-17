@@ -52,8 +52,8 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Create discv5 session.
-	unhandled := make(chan discover.ReadPacket)
-	disc := startV5WithUnhandled(ctx, unhandled)
+	unhandled := make(chan discover.ReadPacket, 10)
+	disc, socket := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
 	defer close(unhandled)
 
@@ -67,10 +67,11 @@ func discv5WormholeSend(ctx *cli.Context) error {
 		return fmt.Errorf("talk request rejected: %s", string(resp))
 	}
 
-	conn := newUnhandledWrapper(unhandled, disc)
-	go handleUnhandledLoop(conn)
-
 	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
+
+	conn := newUnhandledWrapper(addr, socket)
+	go enqueueUnhandledPackets(unhandled, conn)
+
 	sess, err := kcp.NewConn3(0, addr, nil, ecDataShards, ecParityShards, conn)
 	if err != nil {
 		log.Error("Could not establish kcp session", "err", err)
@@ -97,8 +98,8 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	startSession := make(chan *net.UDPAddr)
 
 	// Setup discv5 protocol.
-	unhandled := make(chan discover.ReadPacket)
-	disc := startV5WithUnhandled(ctx, unhandled)
+	unhandled := make(chan discover.ReadPacket, 10)
+	disc, socket := startV5WithUnhandled(ctx, unhandled)
 	disc.RegisterTalkHandler("wrm", func(id enode.ID, addr *net.UDPAddr, data []byte) []byte {
 		startSession <- addr
 		return []byte("ok")
@@ -109,12 +110,11 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	// Print ENR.
 	fmt.Println(disc.Self())
 
-	// Create wrapped connection based on discv5 unhandled channel.
-	conn := newUnhandledWrapper(unhandled, disc)
-	go handleUnhandledLoop(conn)
-
 	// Wait for talk request, then start the session.
 	addr := <-startSession
+	conn := newUnhandledWrapper(addr, socket)
+	go enqueueUnhandledPackets(unhandled, conn)
+
 	s, err := kcp.NewConn3(0, addr, nil, ecDataShards, ecParityShards, conn)
 	if err != nil {
 		log.Error("Could not establish kcp session", "err", err)
@@ -145,54 +145,39 @@ func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []by
 	return []byte("ok")
 }
 
-func handleUnhandledLoop(wrapper *unhandledWrapper) {
-	for {
-		select {
-		case packet := <-wrapper.unhandled:
-			if len(packet.Data) > 10 {
-				log.Trace("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data),
-					"data", fmt.Sprintf("%#x...", packet.Data[:10]))
-			} else {
-				log.Trace("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data))
-			}
-
-			wrapper.readMu.Lock()
-			// This is a bit hacky: setting the remote addr here.
-			// Ideally we shouldn't need to do it on _every_ single packet really.
-			wrapper.remote = packet.Addr
-			wrapper.inqueue = append(wrapper.inqueue, packet.Data)
-			wrapper.flag.Broadcast()
-			wrapper.readMu.Unlock()
-
-		}
-	}
-}
-
-func newUnhandledWrapper(packetCh chan discover.ReadPacket, disc *discover.UDPv5) *unhandledWrapper {
-	x := sync.Mutex{}
-	cond := sync.NewCond(&x)
-	return &unhandledWrapper{
-		unhandled: packetCh,
-		readMu:    &x,
-		flag:      cond,
-		disc:      disc,
+func enqueueUnhandledPackets(ch <-chan discover.ReadPacket, o *unhandledWrapper) {
+	for packet := range ch {
+		o.enqueue(packet.Data)
 	}
 }
 
 type unhandledWrapper struct {
-	unhandled chan discover.ReadPacket
-	inqueue   [][]byte
-	remote    *net.UDPAddr
-	disc      *discover.UDPv5
-	readMu    *sync.Mutex
-	flag      *sync.Cond
+	out net.PacketConn
+
+	mu      sync.Mutex
+	flag    *sync.Cond
+	inqueue [][]byte
+	remote  *net.UDPAddr
+}
+
+func newUnhandledWrapper(remote *net.UDPAddr, out net.PacketConn) *unhandledWrapper {
+	o := &unhandledWrapper{out: out, remote: remote}
+	o.flag = sync.NewCond(&o.mu)
+	return o
+}
+
+func (o *unhandledWrapper) enqueue(p []byte) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.inqueue = append(o.inqueue, p)
+	o.flag.Broadcast()
 }
 
 // ReadFrom delivers a single packet from o.inqueue into the buffer p.
 // If a packet does not fit into the buffer, the remaining bytes of the packet
 // are discarded.
 func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	o.readMu.Lock()
+	o.mu.Lock()
 	for len(o.inqueue) == 0 {
 		o.flag.Wait()
 	}
@@ -204,14 +189,14 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 	copy(o.inqueue, o.inqueue[1:])
 	o.inqueue = o.inqueue[:len(o.inqueue)-1]
 
-	o.readMu.Unlock()
+	o.mu.Unlock()
 
 	log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
 	return n, o.remote, nil
 }
 
 func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	n, err = o.disc.WriteTo(addr.(*net.UDPAddr), p)
+	n, err = o.out.WriteTo(p, addr)
 	log.Info("KCP write", "buf", len(p), "n", n, "err", err)
 	return n, err
 }

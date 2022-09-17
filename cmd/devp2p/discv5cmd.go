@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
@@ -179,7 +180,7 @@ func startV5(ctx *cli.Context) *discover.UDPv5 {
 }
 
 // startV5 starts an ephemeral discovery v5 node.
-func startV5WithUnhandled(ctx *cli.Context, unhandled chan discover.ReadPacket) *discover.UDPv5 {
+func startV5WithUnhandled(ctx *cli.Context, unhandled chan discover.ReadPacket) (*discover.UDPv5, net.PacketConn) {
 	ln, config := makeDiscoveryConfig(ctx)
 	config.Unhandled = unhandled
 	socket := listen(ln, ctx.String(listenAddrFlag.Name))
@@ -187,5 +188,5 @@ func startV5WithUnhandled(ctx *cli.Context, unhandled chan discover.ReadPacket) 
 	if err != nil {
 		exit(err)
 	}
-	return disc
+	return disc, socket
 }
