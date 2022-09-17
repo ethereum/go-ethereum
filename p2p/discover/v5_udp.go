@@ -522,10 +522,8 @@ func (t *UDPv5) dispatch() {
 
 		case p := <-t.packetInCh:
 			err := t.handlePacket(p.Data, p.Addr)
-			if err != nil && t.unhandled != nil {
-				// TODO: the condition above needs to be more precise,
-				// we don't want to deliver all invalid packets to the channel,
-				// only those which have an invalid header.
+			if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
+				// The packet seems unrelated to discv5, send it to the next protocol.
 				up := ReadPacket{Data: make([]byte, len(p.Data)), Addr: p.Addr}
 				copy(up.Data, p.Data)
 				t.unhandled <- up

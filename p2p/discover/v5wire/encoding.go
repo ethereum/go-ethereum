@@ -121,6 +121,13 @@ var (
 	ErrInvalidReqID = errors.New("request ID larger than 8 bytes")
 )
 
+// IsInvalidHeader reports whether 'err' is related to an invalid packet header. When it
+// returns false, it is pretty certain that the packet causing the error does not belong
+// to discv5.
+func IsInvalidHeader(err error) bool {
+	return err == errTooShort || err == errInvalidHeader || err == errMsgTooShort
+}
+
 // Packet sizes.
 var (
 	sizeofStaticHeader      = binary.Size(StaticHeader{})
