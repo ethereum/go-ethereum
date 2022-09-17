@@ -27,6 +27,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/crypto/pbkdf2"
+	"sync"
 	"time"
 )
 
@@ -66,8 +67,8 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
-	go handleUnhandledLoop(kcpWrapper)
 	kcp.ServeConn(block, 10, 3, kcpWrapper)
+	handleUnhandledLoop(kcpWrapper)
 	return nil
 }
 
@@ -90,19 +91,27 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 }
 
 func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
-	return &ourPacketConn{packetCh, make([]byte, 0)}
+	return &ourPacketConn{
+		unhandled: packetCh,
+	}
 }
 
 type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
+	readMu    sync.Mutex
 }
 
 func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
 	// modify that thing from two threads at once.
-
-	panic("implement me")
+	o.readMu.Lock()
+	defer o.readMu.Unlock()
+	if len(o.inqueue) > 0 {
+		n = copy(p, o.inqueue)
+		return n, nil, nil
+	}
+	return 0, nil, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
