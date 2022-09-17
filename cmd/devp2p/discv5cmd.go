@@ -91,6 +91,10 @@ var (
 		Usage:  "Send a file over wormhole",
 		Action: discv5WormholeSend,
 		Flags: []cli.Flag{
+			bootnodesFlag,
+			nodekeyFlag,
+			nodedbFlag,
+			listenAddrFlag,
 			verbosityFlag,
 		},
 	}
@@ -99,6 +103,10 @@ var (
 		Usage:  "Receive a file over wormhole",
 		Action: discv5WormholeReceive,
 		Flags: []cli.Flag{
+			bootnodesFlag,
+			nodekeyFlag,
+			nodedbFlag,
+			listenAddrFlag,
 			verbosityFlag,
 		},
 	}
