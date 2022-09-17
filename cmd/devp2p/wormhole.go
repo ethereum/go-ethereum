@@ -43,8 +43,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
 	block = nil // Encryption disabled
-	conn := newUnhandledWrapper(unhandled)
-	conn.disc = disc
+	conn := newUnhandledWrapper(unhandled, disc)
 	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3, conn); err == nil {
 		log.Info("Transmitting data")
 		n, err := sess.Write([]byte("this is a very large file"))
@@ -63,8 +62,8 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
 	block = nil // Encryption disabled
-	kcpWrapper := newUnhandledWrapper(unhandled)
 	disc := startV5WithUnhandled(ctx, unhandled)
+	kcpWrapper := newUnhandledWrapper(unhandled, disc)
 	defer disc.Close()
 	defer close(unhandled)
 
@@ -113,6 +112,9 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 		case packet := <-wrapper.unhandled:
 			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
 			wrapper.readMu.Lock()
+			// This is a bit hacky: setting the remote addr here.
+			// Ideally we shouldn't need to do it on _every_ single packet really.
+			wrapper.remote = packet.Addr
 			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
 			wrapper.flag.Broadcast()
 			wrapper.readMu.Unlock()
@@ -121,19 +123,21 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 	}
 }
 
-func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
+func newUnhandledWrapper(packetCh chan discover.ReadPacket, disc *discover.UDPv5) *ourPacketConn {
 	x := sync.Mutex{}
 	cond := sync.NewCond(&x)
 	return &ourPacketConn{
 		unhandled: packetCh,
 		readMu:    &x,
 		flag:      cond,
+		disc:      disc,
 	}
 }
 
 type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
+	remote    *net.UDPAddr
 	disc      *discover.UDPv5
 	readMu    *sync.Mutex
 	flag      *sync.Cond
@@ -152,11 +156,7 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
 	log.Info("Packet conn delivered to reader", "n", n)
-	return n, &net.UDPAddr{
-		IP:   net.IPv4(5, 6, 7, 8),
-		Port: 0,
-		Zone: "",
-	}, nil
+	return n, o.remote, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
