@@ -67,8 +67,31 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
-	kcp.ServeConn(block, 10, 3, kcpWrapper)
-	handleUnhandledLoop(kcpWrapper)
+	l, err := kcp.ServeConn(block, 10, 3, kcpWrapper)
+	if err != nil {
+		return err
+	}
+	go handleUnhandledLoop(kcpWrapper)
+	for {
+		log.Info("Waiting for KCP conn\n")
+		socket, err := l.Accept()
+		log.Info("KCP socket accepted\n")
+		if err != nil {
+			log.Error("Error", "err", err)
+			return err
+		}
+		go func(net.Conn) {
+			for {
+				buf := make([]byte, 10224)
+				n, err := socket.Read(buf)
+				if err != nil {
+					log.Error("Error", "err", err)
+					return
+				}
+				fmt.Printf("Read KCP data: %v %x\n", buf[:n], buf[:n])
+			}
+		}(socket)
+	}
 	return nil
 }
 
@@ -85,33 +108,43 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 		select {
 		case packet := <-wrapper.unhandled:
 			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
+			wrapper.readMu.Lock()
 			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
+			wrapper.flag.Broadcast()
+			wrapper.readMu.Unlock()
+
 		}
 	}
 }
 
 func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
+	x := sync.Mutex{}
+	cond := sync.NewCond(&x)
 	return &ourPacketConn{
 		unhandled: packetCh,
+		readMu:    &x,
+		flag:      cond,
 	}
 }
 
 type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
-	readMu    sync.Mutex
+	readMu    *sync.Mutex
+	flag      *sync.Cond
 }
 
 func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
 	// modify that thing from two threads at once.
+
 	o.readMu.Lock()
-	defer o.readMu.Unlock()
-	if len(o.inqueue) > 0 {
-		n = copy(p, o.inqueue)
-		return n, nil, nil
+	for len(o.inqueue) == 0 {
+		o.flag.Wait()
 	}
-	return 0, nil, nil
+	defer o.readMu.Unlock()
+	n = copy(p, o.inqueue)
+	return n, nil, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
