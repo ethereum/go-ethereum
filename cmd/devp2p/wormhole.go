@@ -38,7 +38,6 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	fmt.Println(disc.Ping(n))
 	resp, err := disc.TalkRequest(n, "wrm", []byte("rand"))
 	log.Info("Talkrequest", "resp", fmt.Sprintf("%v (%x)", string(resp), resp), "err", err)
-
 	// taken from https://github.com/xtaci/kcp-go/blob/master/examples/echo.go#L51
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
@@ -144,6 +143,7 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	}
 	defer o.readMu.Unlock()
 	n = copy(p, o.inqueue)
+	o.inqueue = make([]byte)
 	return n, nil, nil
 }
 
