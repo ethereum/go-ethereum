@@ -622,6 +622,11 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 	return nonce, err
 }
 
+// send sends a packet to the given node.
+func (t *UDPv5) WriteTo(toAddr *net.UDPAddr, packet []byte) (int, error) {
+	return t.conn.WriteToUDP(packet, toAddr)
+}
+
 // readLoop runs in its own goroutine and reads packets from the network.
 func (t *UDPv5) readLoop() {
 	defer t.wg.Done()

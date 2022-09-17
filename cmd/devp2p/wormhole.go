@@ -43,17 +43,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
 	conn := newUnhandledWrapper(unhandled)
-	laddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", disc.Self().IP(), disc.Self().UDP()))
-	if err != nil {
-		panic(err)
-	}
-	raddr, err := net.ResolveUDPAddr("udp", string(n.UDP()))
-	if err != nil {
-		panic(err)
-	}
-	if conn.udpOut, err = net.DialUDP("udp", laddr, raddr); err != nil {
-		log.Error("Could not dial udp", "err", err)
-	}
+	conn.disc = disc
 	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3, conn); err == nil {
 		log.Info("Transmitting data")
 		n, err := sess.Write([]byte("this is a very large file"))
@@ -142,7 +132,7 @@ func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
 type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
-	udpOut    net.PacketConn
+	disc      *discover.UDPv5
 	readMu    *sync.Mutex
 	flag      *sync.Cond
 }
@@ -164,7 +154,11 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	return o.udpOut.WriteTo(p, addr)
+	udpAddr, err := net.ResolveUDPAddr("udp", addr.String())
+	if err != nil {
+		return 0, err
+	}
+	return o.disc.WriteTo(udpAddr, p)
 }
 
 func (o *ourPacketConn) LocalAddr() net.Addr {
