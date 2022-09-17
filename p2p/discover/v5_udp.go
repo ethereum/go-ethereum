@@ -523,11 +523,11 @@ func (t *UDPv5) dispatch() {
 		case p := <-t.packetInCh:
 			if err := t.handlePacket(p.Data, p.Addr); err != nil && t.unhandled != nil {
 				// TODO: ship it to the 'unhandled' handler
-				//unhandled <- ReadPacket{buf[:nbytes], from}
-				select {
-				case t.unhandled <- p:
-				default:
-				}
+				t.unhandled <- p
+				//select {
+				//case t.unhandled <- p:
+				//default:
+				//}
 			}
 			// Arm next read.
 			t.readNextCh <- struct{}{}

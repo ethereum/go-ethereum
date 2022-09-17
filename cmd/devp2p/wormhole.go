@@ -54,7 +54,11 @@ func discv5WormholeSend(ctx *cli.Context) error {
 		log.Info("Transmitting data")
 		n, err := sess.Write([]byte("this is a very large file"))
 		for i := 0; i < 1024; i++ {
-			if n, err := sess.Write(make([]byte, 1024)); err != nil {
+			payload := make([]byte, 1024)
+			for i := range payload {
+				payload[i] = byte(i)
+			}
+			if n, err := sess.Write(payload); err != nil {
 				return fmt.Errorf("failed during send, chunk %d: %w", i, err)
 			} else {
 				log.Info("Sent data", "n", n)
@@ -125,7 +129,13 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 	for {
 		select {
 		case packet := <-wrapper.unhandled:
-			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
+			if len(packet.Data) > 10 {
+				log.Info("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data),
+					"data", fmt.Sprintf("%#x...", packet.Data[:10]))
+			} else {
+				log.Info("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data))
+			}
+
 			wrapper.readMu.Lock()
 			// This is a bit hacky: setting the remote addr here.
 			// Ideally we shouldn't need to do it on _every_ single packet really.
