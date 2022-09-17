@@ -164,7 +164,7 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	return len(p), nil
+	return o.udpOut.WriteTo(p, addr)
 }
 
 func (o *ourPacketConn) LocalAddr() net.Addr {
