@@ -27,6 +27,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/crypto/pbkdf2"
+	"sync"
 	"time"
 )
 
@@ -38,7 +39,6 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	fmt.Println(disc.Ping(n))
 	resp, err := disc.TalkRequest(n, "wrm", []byte("rand"))
 	log.Info("Talkrequest", "resp", fmt.Sprintf("%v (%x)", string(resp), resp), "err", err)
-
 	// taken from https://github.com/xtaci/kcp-go/blob/master/examples/echo.go#L51
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
@@ -79,8 +79,31 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
-	handleUnhandledLoop(kcpWrapper)
-	kcp.ServeConn(block, 10, 3, kcpWrapper)
+	l, err := kcp.ServeConn(block, 10, 3, kcpWrapper)
+	if err != nil {
+		return err
+	}
+	go handleUnhandledLoop(kcpWrapper)
+	for {
+		log.Info("Waiting for KCP conn\n")
+		socket, err := l.Accept()
+		log.Info("KCP socket accepted\n")
+		if err != nil {
+			log.Error("Error", "err", err)
+			return err
+		}
+		go func(net.Conn) {
+			for {
+				buf := make([]byte, 10224)
+				n, err := socket.Read(buf)
+				if err != nil {
+					log.Error("Error", "err", err)
+					return
+				}
+				fmt.Printf("Read KCP data: %v %x\n", buf[:n], buf[:n])
+			}
+		}(socket)
+	}
 	return nil
 }
 
@@ -97,15 +120,22 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 		select {
 		case packet := <-wrapper.unhandled:
 			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
+			wrapper.readMu.Lock()
 			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
+			wrapper.flag.Broadcast()
+			wrapper.readMu.Unlock()
+
 		}
 	}
 }
 
 func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
+	x := sync.Mutex{}
+	cond := sync.NewCond(&x)
 	return &ourPacketConn{
 		unhandled: packetCh,
-		inqueue:   make([]byte, 0),
+		readMu:    &x,
+		flag:      cond,
 	}
 }
 
@@ -113,12 +143,24 @@ type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
 	udpOut    net.PacketConn
+	readMu    *sync.Mutex
+	flag      *sync.Cond
 }
 
 func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	v := <-o.unhandled
-	copy(p, v.Data)
-	return len(p), v.Addr, nil
+	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
+	// modify that thing from two threads at once.
+
+	o.readMu.Lock()
+	for len(o.inqueue) == 0 {
+		o.flag.Wait()
+		fmt.Printf("Woke up reader\n")
+	}
+	defer o.readMu.Unlock()
+	n = copy(p, o.inqueue)
+	o.inqueue = make([]byte, 0)
+	log.Info("Packet conn delivered to reader", "n", n)
+	return n, nil, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
