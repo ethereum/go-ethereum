@@ -66,7 +66,7 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	fmt.Println(disc.Self())
 
 	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
-	handleUnhandledLoop(kcpWrapper)
+	go handleUnhandledLoop(kcpWrapper)
 	kcp.ServeConn(block, 10, 3, kcpWrapper)
 	return nil
 }
