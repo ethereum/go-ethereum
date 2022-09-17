@@ -42,6 +42,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	// taken from https://github.com/xtaci/kcp-go/blob/master/examples/echo.go#L51
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
+	block = nil // Encryption disabled
 	conn := newUnhandledWrapper(unhandled)
 	laddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", disc.Self().IP(), disc.Self().UDP()))
 	if err != nil {
@@ -71,6 +72,7 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
+	block = nil // Encryption disabled
 	kcpWrapper := newUnhandledWrapper(unhandled)
 	disc := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
@@ -160,7 +162,11 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
 	log.Info("Packet conn delivered to reader", "n", n)
-	return n, nil, nil
+	return n, &net.UDPAddr{
+		IP:   net.IPv4(5, 6, 7, 8),
+		Port: 0,
+		Zone: "",
+	}, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
