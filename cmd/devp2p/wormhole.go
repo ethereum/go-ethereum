@@ -113,8 +113,8 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	conn := newUnhandledWrapper(unhandled, disc)
 	go handleUnhandledLoop(conn)
 
+	// Wait for talk request, then start the session.
 	addr := <-startSession
-
 	s, err := kcp.NewConn3(0, addr, nil, ecDataShards, ecParityShards, conn)
 	if err != nil {
 		log.Error("Could not establish kcp session", "err", err)
@@ -160,7 +160,7 @@ func handleUnhandledLoop(wrapper *unhandledWrapper) {
 			// This is a bit hacky: setting the remote addr here.
 			// Ideally we shouldn't need to do it on _every_ single packet really.
 			wrapper.remote = packet.Addr
-			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
+			wrapper.inqueue = append(wrapper.inqueue, packet.Data)
 			wrapper.flag.Broadcast()
 			wrapper.readMu.Unlock()
 
@@ -181,35 +181,39 @@ func newUnhandledWrapper(packetCh chan discover.ReadPacket, disc *discover.UDPv5
 
 type unhandledWrapper struct {
 	unhandled chan discover.ReadPacket
-	inqueue   []byte
+	inqueue   [][]byte
 	remote    *net.UDPAddr
 	disc      *discover.UDPv5
 	readMu    *sync.Mutex
 	flag      *sync.Cond
 }
 
+// ReadFrom delivers a single packet from o.inqueue into the buffer p.
+// If a packet does not fit into the buffer, the remaining bytes of the packet
+// are discarded.
 func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
-	// modify that thing from two threads at once.
-
 	o.readMu.Lock()
 	for len(o.inqueue) == 0 {
 		o.flag.Wait()
 	}
-	defer o.readMu.Unlock()
 
-	n = copy(p, o.inqueue)
-	o.inqueue = make([]byte, 0)
-	log.Trace("Reading from unhandled", "n", n)
+	// Move packet data into p.
+	n = copy(p, o.inqueue[0])
+
+	// Delete the packet from inqueue.
+	copy(o.inqueue, o.inqueue[1:])
+	o.inqueue = o.inqueue[:len(o.inqueue)-1]
+
+	o.readMu.Unlock()
+
+	log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
 	return n, o.remote, nil
 }
 
 func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	udpAddr, err := net.ResolveUDPAddr("udp", addr.String())
-	if err != nil {
-		return 0, err
-	}
-	return o.disc.WriteTo(udpAddr, p)
+	n, err = o.disc.WriteTo(addr.(*net.UDPAddr), p)
+	log.Info("KCP write", "buf", len(p), "n", n, "err", err)
+	return n, err
 }
 
 func (o *unhandledWrapper) LocalAddr() net.Addr {
