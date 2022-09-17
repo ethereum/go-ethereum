@@ -402,7 +402,7 @@ func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 
 func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []byte) ([]byte, error) {
 	// Encode message plaintext.
-	resetBufferWithSize(&c.msgbuf, 1)
+	resetBufferWithSize(&c.msgbuf, 0)
 	c.msgbuf.WriteByte(p.Kind())
 	if err := rlp.Encode(&c.msgbuf, p); err != nil {
 		return nil, err
