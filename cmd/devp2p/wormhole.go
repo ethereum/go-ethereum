@@ -27,11 +27,14 @@ import (
 	"github.com/urfave/cli/v2"
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/crypto/pbkdf2"
+	"os"
 	"sync"
 	"time"
 )
 
 func discv5WormholeSend(ctx *cli.Context) error {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
 	var unhandled = make(chan discover.ReadPacket)
 	n := getNodeArg(ctx)
 	disc := startV5WithUnhandled(ctx, unhandled)
@@ -44,9 +47,19 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	block, _ := kcp.NewAESBlockCrypt(key)
 	block = nil // Encryption disabled
 	conn := newUnhandledWrapper(unhandled, disc)
+
+	go handleUnhandledLoop(conn)
+
 	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3, conn); err == nil {
 		log.Info("Transmitting data")
 		n, err := sess.Write([]byte("this is a very large file"))
+		for i := 0; i < 1024; i++ {
+			if n, err := sess.Write(make([]byte, 1024)); err != nil {
+				return fmt.Errorf("failed during send, chunk %d: %w", i, err)
+			} else {
+				log.Info("Sent data", "n", n)
+			}
+		}
 		log.Info("Sent data", "n", n, "err", err)
 		log.Info("Closing session")
 		sess.Close()
@@ -57,6 +70,8 @@ func discv5WormholeSend(ctx *cli.Context) error {
 }
 
 func discv5WormholeReceive(ctx *cli.Context) error {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+
 	var unhandled = make(chan discover.ReadPacket)
 
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
@@ -85,13 +100,13 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 		}
 		go func(net.Conn) {
 			for {
-				buf := make([]byte, 10224)
+				buf := make([]byte, 2048)
 				n, err := socket.Read(buf)
 				if err != nil {
 					log.Error("Error", "err", err)
 					return
 				}
-				fmt.Printf("Read KCP data: %v %x\n", string(buf[:n]), buf[:n])
+				fmt.Printf("Read KCP data:\n\t%v|%x\n", string(buf[:n]), buf[:n])
 			}
 		}(socket)
 	}
