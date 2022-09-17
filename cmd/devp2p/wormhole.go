@@ -18,7 +18,11 @@ package main
 
 import (
 	"fmt"
+	"net"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/urfave/cli/v2"
 )
 
@@ -26,13 +30,38 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
 	disc := startV5(ctx)
 	defer disc.Close()
-
 	fmt.Println(disc.Ping(n))
+	resp, err := disc.TalkRequest(n, "wrm", []byte("rand"))
+	log.Info("Talkrequest", "resp", fmt.Sprintf("%v (%x)", string(resp), resp), "err", err)
 
 	return nil
 }
 
 func discv5WormholeReceive(ctx *cli.Context) error {
-	// TODO
+	var unhandled chan discover.ReadPacket
+	disc := startV5WithUnhandled(ctx, unhandled)
+	defer disc.Close()
+
+	fmt.Println(disc.Self())
+
+	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
+	handleUnhandledLoop(unhandled)
 	return nil
+}
+
+// TalkRequestHandler callback processes a talk request and optionally returns a reply
+//type TalkRequestHandler func(enode.ID, *net.UDPAddr, []byte) []byte
+
+func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []byte {
+	log.Info("Handling talk request", "from", addr, "id", id, "data", fmt.Sprintf("%x", data))
+	return []byte("oll korrekt!")
+}
+
+func handleUnhandledLoop(unhandled chan discover.ReadPacket) {
+	for {
+		select {
+		case packet := <-unhandled:
+			log.Info("Unhandled packet handled", "from", packet.Addr, "data", fmt.Sprintf("%v %#x", string(packet.Data), packet.Data))
+		}
+	}
 }

@@ -93,7 +93,7 @@ var (
 		Flags:  []cli.Flag{},
 	}
 	discv5WormholeReceiveCommand = &cli.Command{
-		Name:   "receieve",
+		Name:   "receive",
 		Usage:  "Receive a file over wormhole",
 		Action: discv5WormholeReceive,
 		Flags:  []cli.Flag{},
@@ -158,6 +158,18 @@ func discv5Listen(ctx *cli.Context) error {
 // startV5 starts an ephemeral discovery v5 node.
 func startV5(ctx *cli.Context) *discover.UDPv5 {
 	ln, config := makeDiscoveryConfig(ctx)
+	socket := listen(ln, ctx.String(listenAddrFlag.Name))
+	disc, err := discover.ListenV5(socket, ln, config)
+	if err != nil {
+		exit(err)
+	}
+	return disc
+}
+
+// startV5 starts an ephemeral discovery v5 node.
+func startV5WithUnhandled(ctx *cli.Context, unhandled chan discover.ReadPacket) *discover.UDPv5 {
+	ln, config := makeDiscoveryConfig(ctx)
+	config.Unhandled = unhandled
 	socket := listen(ln, ctx.String(listenAddrFlag.Name))
 	disc, err := discover.ListenV5(socket, ln, config)
 	if err != nil {
