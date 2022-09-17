@@ -31,6 +31,23 @@ import (
 	"github.com/xtaci/kcp-go"
 )
 
+const (
+	ecParityShards = 1
+	ecDataShards   = 1
+)
+
+func setupKCP(s *kcp.UDPSession) {
+	s.SetMtu(1200)
+	s.SetStreamMode(true)
+
+	// https://github.com/skywind3000/kcp/blob/master/README.en.md#protocol-configuration
+	// Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
+	// Turbo Mode: ikcp_nodelay(kcp, 1, 10, 2, 1);
+
+	s.SetNoDelay(1, 10, 2, 1)
+	// s.SetNoDelay(0, 40, 0, 0)
+}
+
 func discv5WormholeSend(ctx *cli.Context) error {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
@@ -53,20 +70,23 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	conn := newUnhandledWrapper(unhandled, disc)
 	go handleUnhandledLoop(conn)
 
-	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), nil, 10, 3, conn); err == nil {
-		log.Info("Transmitting data")
-		for i := 0; i < 10; i++ {
-			n, err := sess.Write([]byte("this is a very large file"))
-			time.Sleep(time.Second)
-			log.Info("Sent data", "n", n, "err", err)
-		}
-		_, err := sess.Write([]byte("FIN"))
-		if err != nil {
-			return fmt.Errorf("unable to close connection: %s", err)
-		}
-		sess.Close()
-	} else {
+	addr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
+	sess, err := kcp.NewConn3(0, addr, nil, ecDataShards, ecParityShards, conn)
+	if err != nil {
 		log.Error("Could not establish kcp session", "err", err)
+		return err
+	}
+	defer sess.Close()
+
+	setupKCP(sess)
+
+	log.Info("Transmitting data")
+	for i := 0; i < 10; i++ {
+		n, err := sess.Write([]byte("this is a very large file"))
+		log.Info("Sent data", "n", n, "err", err)
+	}
+	if _, err := sess.Write([]byte("FIN")); err != nil {
+		return fmt.Errorf("unable to close connection: %s", err)
 	}
 	return nil
 }
@@ -74,10 +94,15 @@ func discv5WormholeSend(ctx *cli.Context) error {
 func discv5WormholeReceive(ctx *cli.Context) error {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
+	startSession := make(chan *net.UDPAddr)
+
 	// Setup discv5 protocol.
 	unhandled := make(chan discover.ReadPacket)
 	disc := startV5WithUnhandled(ctx, unhandled)
-	disc.RegisterTalkHandler("wrm", handleWormholeTalkrequest)
+	disc.RegisterTalkHandler("wrm", func(id enode.ID, addr *net.UDPAddr, data []byte) []byte {
+		startSession <- addr
+		return []byte("ok")
+	})
 	defer close(unhandled)
 	defer disc.Close()
 
@@ -86,22 +111,19 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 
 	// Create wrapped connection based on discv5 unhandled channel.
 	conn := newUnhandledWrapper(unhandled, disc)
-	l, err := kcp.ServeConn(nil, 10, 3, conn)
-	if err != nil {
-		return err
-	}
-
-	// Sping up routine to buffer packets on unhandled channel.
 	go handleUnhandledLoop(conn)
 
-	log.Info("Waiting for KCP conn")
-	s, err := l.Accept()
+	addr := <-startSession
+
+	s, err := kcp.NewConn3(0, addr, nil, ecDataShards, ecParityShards, conn)
 	if err != nil {
-		log.Error("Error", "err", err)
+		log.Error("Could not establish kcp session", "err", err)
 		return err
 	}
+	defer s.Close()
 
 	log.Info("KCP socket accepted")
+	setupKCP(s)
 
 	for {
 		buf := make([]byte, 2048)
@@ -175,6 +197,7 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 		o.flag.Wait()
 	}
 	defer o.readMu.Unlock()
+
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
 	log.Trace("Reading from unhandled", "n", n)
