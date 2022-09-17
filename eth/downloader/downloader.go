@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package downloader contains the manual full chain synchronisation.
+// Package downloader contains the manual full chain synchronization.
 package downloader
 
 import (
@@ -97,7 +97,7 @@ type headerTask struct {
 }
 
 type Downloader struct {
-	mode uint32         // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
+	mode uint32         // Synchronization mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
 	checkpoint uint64   // Checkpoint block number to enforce head against (e.g. snap sync)
@@ -233,11 +233,11 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 	return dl
 }
 
-// Progress retrieves the synchronisation boundaries, specifically the origin
-// block where synchronisation started at (may have failed/suspended); the block
+// Progress retrieves the synchronization boundaries, specifically the origin
+// block where synchronization started at (may have failed/suspended); the block
 // or header sync is currently at; and the latest known block which the sync targets.
 //
-// In addition, during the state download phase of snap synchronisation the number
+// In addition, during the state download phase of snap synchronization the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
 func (d *Downloader) Progress() ethereum.SyncProgress {
@@ -340,7 +340,7 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
 		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
-		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
+		log.Warn("Synchronization failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
 			// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
@@ -353,7 +353,7 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 	if errors.Is(err, ErrMergeTransition) {
 		return err // This is an expected fault, don't keep printing it in a spin-loop
 	}
-	log.Warn("Synchronisation failed, retrying", "err", err)
+	log.Warn("Synchronization failed, retrying", "err", err)
 	return err
 }
 
@@ -375,7 +375,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 			}
 		}()
 	}
-	// Mock out the synchronisation if testing
+	// Mock out the synchronization if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
 	}
@@ -387,7 +387,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 
 	// Post a user notification of the sync (only once per session)
 	if atomic.CompareAndSwapInt32(&d.notified, 0, 1) {
-		log.Info("Block synchronisation started")
+		log.Info("Block synchronization started")
 	}
 	if mode == SnapSync {
 		// Snap sync uses the snapshot namespace to store potentially flakey data until
@@ -464,7 +464,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 		log.Debug("Backfilling with the network", "mode", mode)
 	}
 	defer func(start time.Time) {
-		log.Debug("Synchronisation terminated", "elapsed", common.PrettyDuration(time.Since(start)))
+		log.Debug("Synchronization terminated", "elapsed", common.PrettyDuration(time.Since(start)))
 	}(time.Now())
 
 	// Look up the sync boundaries: the common ancestor and the target block
@@ -1574,7 +1574,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 }
 
 // processSnapSyncContent takes fetch results from the queue and writes them to the
-// database. It also controls the synchronisation of state nodes of the pivot block.
+// database. It also controls the synchronization of state nodes of the pivot block.
 func (d *Downloader) processSnapSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.

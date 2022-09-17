@@ -523,7 +523,7 @@ func (f *BlockFetcher) loop() {
 			for _, header := range task.headers {
 				hash := header.Hash()
 
-				// Filter fetcher-requested headers from other synchronisation algorithms
+				// Filter fetcher-requested headers from other synchronization algorithms
 				if announce := f.fetching[hash]; announce != nil && announce.origin == task.peer && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
 					// If the delivered header does not match the promised number, drop the announcer
 					if header.Number.Uint64() != announce.number {

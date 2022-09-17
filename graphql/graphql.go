@@ -1340,7 +1340,7 @@ func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*r.backend.ChainConfig().ChainID), nil
 }
 
-// SyncState represents the synchronisation status returned from the `syncing` accessor.
+// SyncState represents the synchronization status returned from the `syncing` accessor.
 type SyncState struct {
 	progress ethereum.SyncProgress
 }
@@ -1411,7 +1411,7 @@ func (s *SyncState) HealingBytecode() hexutil.Uint64 {
 func (r *Resolver) Syncing() (*SyncState, error) {
 	progress := r.backend.SyncProgress()
 
-	// Return not syncing if the synchronisation already completed
+	// Return not syncing if the synchronization already completed
 	if progress.CurrentBlock >= progress.HighestBlock {
 		return nil, nil
 	}

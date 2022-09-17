@@ -522,9 +522,9 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 	}
 }
 
-func TestCanonicalSynchronisation66Full(t *testing.T)  { testCanonSync(t, eth.ETH66, FullSync) }
-func TestCanonicalSynchronisation66Fast(t *testing.T)  { testCanonSync(t, eth.ETH66, FastSync) }
-func TestCanonicalSynchronisation66Light(t *testing.T) { testCanonSync(t, eth.ETH66, LightSync) }
+func TestCanonicalSynchronization66Full(t *testing.T)  { testCanonSync(t, eth.ETH66, FullSync) }
+func TestCanonicalSynchronization66Fast(t *testing.T)  { testCanonSync(t, eth.ETH66, FastSync) }
+func TestCanonicalSynchronization66Light(t *testing.T) { testCanonSync(t, eth.ETH66, LightSync) }
 
 func testCanonSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
@@ -562,7 +562,7 @@ func testThrottling(t *testing.T, protocol uint, mode SyncMode) {
 		atomic.StoreUint32(&blocked, uint32(len(results)))
 		<-proceed
 	}
-	// Start a synchronisation concurrently
+	// Start a synchronization concurrently
 	errc := make(chan error, 1)
 	go func() {
 		errc <- tester.sync("peer", nil, mode)
@@ -798,12 +798,12 @@ func testCancel(t *testing.T, protocol uint, mode SyncMode) {
 	}
 }
 
-// Tests that synchronisation from multiple peers works as intended (multi thread sanity test).
-func TestMultiSynchronisation66Full(t *testing.T)  { testMultiSynchronisation(t, eth.ETH66, FullSync) }
-func TestMultiSynchronisation66Fast(t *testing.T)  { testMultiSynchronisation(t, eth.ETH66, FastSync) }
-func TestMultiSynchronisation66Light(t *testing.T) { testMultiSynchronisation(t, eth.ETH66, LightSync) }
+// Tests that synchronization from multiple peers works as intended (multi thread sanity test).
+func TestMultiSynchronization66Full(t *testing.T)  { testMultiSynchronization(t, eth.ETH66, FullSync) }
+func TestMultiSynchronization66Fast(t *testing.T)  { testMultiSynchronization(t, eth.ETH66, FastSync) }
+func TestMultiSynchronization66Light(t *testing.T) { testMultiSynchronization(t, eth.ETH66, LightSync) }
 
-func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
+func testMultiSynchronization(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
 
 	tester := newTester()
@@ -823,11 +823,11 @@ func testMultiSynchronisation(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, chain.len())
 }
 
-// Tests that synchronisations behave well in multi-version protocol environments
+// Tests that synchronizations behave well in multi-version protocol environments
 // and not wreak havoc on other nodes in the network.
-func TestMultiProtoSynchronisation66Full(t *testing.T)  { testMultiProtoSync(t, eth.ETH66, FullSync) }
-func TestMultiProtoSynchronisation66Fast(t *testing.T)  { testMultiProtoSync(t, eth.ETH66, FastSync) }
-func TestMultiProtoSynchronisation66Light(t *testing.T) { testMultiProtoSync(t, eth.ETH66, LightSync) }
+func TestMultiProtoSynchronization66Full(t *testing.T)  { testMultiProtoSync(t, eth.ETH66, FullSync) }
+func TestMultiProtoSynchronization66Fast(t *testing.T)  { testMultiProtoSync(t, eth.ETH66, FastSync) }
+func TestMultiProtoSynchronization66Light(t *testing.T) { testMultiProtoSync(t, eth.ETH66, LightSync) }
 
 func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	t.Parallel()
@@ -925,7 +925,7 @@ func testMissingHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("attack", protocol, brokenChain)
 
 	if err := tester.sync("attack", nil, mode); err == nil {
-		t.Fatalf("succeeded attacker synchronisation")
+		t.Fatalf("succeeded attacker synchronization")
 	}
 	// Synchronise with the valid peer and make sure sync succeeds
 	tester.newPeer("valid", protocol, chain)
@@ -956,7 +956,7 @@ func testShiftedHeaderAttack(t *testing.T, protocol uint, mode SyncMode) {
 	delete(brokenChain.receiptm, brokenChain.chain[1])
 	tester.newPeer("attack", protocol, brokenChain)
 	if err := tester.sync("attack", nil, mode); err == nil {
-		t.Fatalf("succeeded attacker synchronisation")
+		t.Fatalf("succeeded attacker synchronization")
 	}
 
 	// Synchronise with the valid peer and make sure sync succeeds
@@ -989,7 +989,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("fast-attack", protocol, fastAttackChain)
 
 	if err := tester.sync("fast-attack", nil, mode); err == nil {
-		t.Fatalf("succeeded fast attacker synchronisation")
+		t.Fatalf("succeeded fast attacker synchronization")
 	}
 	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
@@ -1005,7 +1005,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 	tester.newPeer("block-attack", protocol, blockAttackChain)
 
 	if err := tester.sync("block-attack", nil, mode); err == nil {
-		t.Fatalf("succeeded block attacker synchronisation")
+		t.Fatalf("succeeded block attacker synchronization")
 	}
 	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
@@ -1028,7 +1028,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol uint, mode SyncMode) {
 		tester.downloader.syncInitHook = nil
 	}
 	if err := tester.sync("withhold-attack", nil, mode); err == nil {
-		t.Fatalf("succeeded withholding attacker synchronisation")
+		t.Fatalf("succeeded withholding attacker synchronization")
 	}
 	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
@@ -1078,7 +1078,7 @@ func testHighTDStarvationAttack(t *testing.T, protocol uint, mode SyncMode) {
 	chain := testChainBase.shorten(1)
 	tester.newPeer("attack", protocol, chain)
 	if err := tester.sync("attack", big.NewInt(1000000), mode); err != errStallingPeer {
-		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
+		t.Fatalf("synchronization error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 	tester.terminate()
 }
@@ -1108,7 +1108,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 		{errInvalidChain, true},             // Hash chain was detected as invalid, definitely drop
 		{errInvalidBody, false},             // A bad peer was detected, but not the sync origin
 		{errInvalidReceipt, false},          // A bad peer was detected, but not the sync origin
-		{errCancelContentProcessing, false}, // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelContentProcessing, false}, // Synchronization was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()
@@ -1124,7 +1124,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 		if _, ok := tester.peers[id]; !ok {
 			t.Fatalf("test %d: registered peer not found", i)
 		}
-		// Simulate a synchronisation and check the required result
+		// Simulate a synchronization and check the required result
 		tester.downloader.synchroniseMock = func(string, common.Hash) error { return tt.result }
 
 		tester.downloader.Synchronise(id, tester.genesis.Hash(), big.NewInt(1000), FullSync)
@@ -1134,7 +1134,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol uint) {
 	}
 }
 
-// Tests that synchronisation progress (origin block number, current block number
+// Tests that synchronization progress (origin block number, current block number
 // and highest block number) is tracked and updated correctly.
 func TestSyncProgress66Full(t *testing.T)  { testSyncProgress(t, eth.ETH66, FullSync) }
 func TestSyncProgress66Fast(t *testing.T)  { testSyncProgress(t, eth.ETH66, FastSync) }
@@ -1213,7 +1213,7 @@ func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.Sync
 	}
 }
 
-// Tests that synchronisation progress (origin block number and highest block
+// Tests that synchronization progress (origin block number and highest block
 // number) is tracked and updated correctly in case of a fork (or manual head
 // revertal).
 func TestForkedSyncProgress66Full(t *testing.T)  { testForkedSyncProgress(t, eth.ETH66, FullSync) }
@@ -1285,7 +1285,7 @@ func testForkedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	})
 }
 
-// Tests that if synchronisation is aborted due to some failure, then the progress
+// Tests that if synchronization is aborted due to some failure, then the progress
 // origin is not updated in the next sync cycle, as it should be considered the
 // continuation of the previous sync and not a new instance.
 func TestFailedSyncProgress66Full(t *testing.T)  { testFailedSyncProgress(t, eth.ETH66, FullSync) }
@@ -1322,7 +1322,7 @@ func testFailedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("faulty", nil, mode); err == nil {
-			panic("succeeded faulty synchronisation")
+			panic("succeeded faulty synchronization")
 		}
 	}()
 	<-starting
@@ -1390,7 +1390,7 @@ func testFakedSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("attack", nil, mode); err == nil {
-			panic("succeeded attacker synchronisation")
+			panic("succeeded attacker synchronization")
 		}
 	}()
 	<-starting

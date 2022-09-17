@@ -92,6 +92,6 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 		t.Fatal("sync failed:", err)
 	}
 	if atomic.LoadUint32(&empty.handler.snapSync) == 1 {
-		t.Fatalf("snap sync not disabled after successful synchronisation")
+		t.Fatalf("snap sync not disabled after successful synchronization")
 	}
 }

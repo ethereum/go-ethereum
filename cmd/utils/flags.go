@@ -184,7 +184,7 @@ var (
 	}
 	ExitWhenSyncedFlag = &cli.BoolFlag{
 		Name:     "exitwhensynced",
-		Usage:    "Exits after block synchronisation completes",
+		Usage:    "Exits after block synchronization completes",
 		Category: flags.EthCategory,
 	}
 

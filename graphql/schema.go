@@ -304,11 +304,11 @@ const schema string = `
         topics: [[Bytes32!]!]
     }
 
-    # SyncState contains the current synchronisation state of the client.
+    # SyncState contains the current synchronization state of the client.
     type SyncState{
-        # StartingBlock is the block number at which synchronisation started.
+        # StartingBlock is the block number at which synchronization started.
         startingBlock: Long!
-        # CurrentBlock is the point at which synchronisation has presently reached.
+        # CurrentBlock is the point at which synchronization has presently reached.
         currentBlock: Long!
         # HighestBlock is the latest known block number.
         highestBlock: Long!
@@ -348,7 +348,7 @@ const schema string = `
         # MaxPriorityFeePerGas returns the node's estimate of a gas tip sufficient
         # to ensure a transaction is mined in a timely fashion.
         maxPriorityFeePerGas: BigInt!
-        # Syncing returns information on the current synchronisation state.
+        # Syncing returns information on the current synchronization state.
         syncing: SyncState
         # ChainID returns the current chain ID for transaction replay protection.
         chainID: BigInt!

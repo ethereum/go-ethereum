@@ -92,7 +92,7 @@ func (d *Downloader) stateFetcher() {
 	}
 }
 
-// runStateSync runs a state synchronisation until it completes or another root
+// runStateSync runs a state synchronization until it completes or another root
 // hash is requested to be switched over to.
 func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	var (

@@ -110,7 +110,7 @@ func (f *fetchResult) Done(kind uint) bool {
 
 // queue represents hashes that are either need fetching or are being fetched
 type queue struct {
-	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
+	mode SyncMode // Synchronization mode to decide on the block parts to schedule for fetching
 
 	// Headers are "special", they download in batches, supported by a skeleton chain
 	headerHead      common.Hash                    // Hash of the last queued header to verify order
