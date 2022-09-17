@@ -143,7 +143,7 @@ func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	}
 	defer o.readMu.Unlock()
 	n = copy(p, o.inqueue)
-	o.inqueue = make([]byte)
+	o.inqueue = make([]byte, 0)
 	return n, nil, nil
 }
 
