@@ -92,7 +92,7 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 					log.Error("Error", "err", err)
 					return
 				}
-				fmt.Printf("Read KCP data: %v %x\n", buf[:n], buf[:n])
+				fmt.Printf("Read KCP data: %v %x\n", string(buf[:n]), buf[:n])
 			}
 		}(socket)
 	}
