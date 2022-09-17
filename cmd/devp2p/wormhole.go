@@ -31,8 +31,9 @@ import (
 )
 
 func discv5WormholeSend(ctx *cli.Context) error {
+	var unhandled = make(chan discover.ReadPacket)
 	n := getNodeArg(ctx)
-	disc := startV5(ctx)
+	disc := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
 	fmt.Println(disc.Ping(n))
 	resp, err := disc.TalkRequest(n, "wrm", []byte("rand"))
@@ -41,7 +42,19 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	// taken from https://github.com/xtaci/kcp-go/blob/master/examples/echo.go#L51
 	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
 	block, _ := kcp.NewAESBlockCrypt(key)
-	if sess, err := kcp.DialWithOptions(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3); err == nil {
+	conn := newUnhandledWrapper(unhandled)
+	laddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", disc.Self().IP(), disc.Self().UDP()))
+	if err != nil {
+		panic(err)
+	}
+	raddr, err := net.ResolveUDPAddr("udp", string(n.UDP()))
+	if err != nil {
+		panic(err)
+	}
+	if conn.udpOut, err = net.DialUDP("udp", laddr, raddr); err != nil {
+		log.Error("Could not dial udp", "err", err)
+	}
+	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3, conn); err == nil {
 		log.Info("Transmitting data")
 		n, err := sess.Write([]byte("this is a very large file"))
 		log.Info("Sent data", "n", n, "err", err)
@@ -90,29 +103,30 @@ func handleUnhandledLoop(wrapper *ourPacketConn) {
 }
 
 func newUnhandledWrapper(packetCh chan discover.ReadPacket) *ourPacketConn {
-	return &ourPacketConn{packetCh, make([]byte, 0)}
+	return &ourPacketConn{
+		unhandled: packetCh,
+		inqueue:   make([]byte, 0),
+	}
 }
 
 type ourPacketConn struct {
 	unhandled chan discover.ReadPacket
 	inqueue   []byte
+	udpOut    net.PacketConn
 }
 
 func (o *ourPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	// TODO: We must deliver from our wrapper.inqueue here. Make sure not to
-	// modify that thing from two threads at once.
-
-	panic("implement me")
+	v := <-o.unhandled
+	copy(p, v.Data)
+	return len(p), v.Addr, nil
 }
 
 func (o *ourPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	//TODO implement me
-	panic("implement me")
+	return len(p), nil
 }
 
 func (o *ourPacketConn) LocalAddr() net.Addr {
-	//TODO implement me
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (o *ourPacketConn) Close() error                       { return nil }
