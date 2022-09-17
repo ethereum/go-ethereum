@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"net"
 
+	"crypto/sha1"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/urfave/cli/v2"
+	"github.com/xtaci/kcp-go"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func discv5WormholeSend(ctx *cli.Context) error {
@@ -34,6 +37,18 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	resp, err := disc.TalkRequest(n, "wrm", []byte("rand"))
 	log.Info("Talkrequest", "resp", fmt.Sprintf("%v (%x)", string(resp), resp), "err", err)
 
+	// taken from https://github.com/xtaci/kcp-go/blob/master/examples/echo.go#L51
+	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
+	block, _ := kcp.NewAESBlockCrypt(key)
+	if sess, err := kcp.DialWithOptions(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), block, 10, 3); err == nil {
+		log.Info("Transmitting data")
+		n, err := sess.Write([]byte("this is a very large file"))
+		log.Info("Sent data", "n", n, "err", err)
+		log.Info("Closing session")
+		sess.Close()
+	} else {
+		log.Error("Could not establish kcp session", "err", err)
+	}
 	return nil
 }
 
