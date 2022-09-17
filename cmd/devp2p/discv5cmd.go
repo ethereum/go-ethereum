@@ -90,13 +90,17 @@ var (
 		Name:   "send",
 		Usage:  "Send a file over wormhole",
 		Action: discv5WormholeSend,
-		Flags:  []cli.Flag{},
+		Flags: []cli.Flag{
+			verbosityFlag,
+		},
 	}
 	discv5WormholeReceiveCommand = &cli.Command{
 		Name:   "receive",
 		Usage:  "Receive a file over wormhole",
 		Action: discv5WormholeReceive,
-		Flags:  []cli.Flag{},
+		Flags: []cli.Flag{
+			verbosityFlag,
+		},
 	}
 )
 

@@ -120,6 +120,11 @@ var (
 		Usage:   "Enode of the remote node under test",
 		EnvVars: []string{"REMOTE_ENODE"},
 	}
+	verbosityFlag = &cli.IntFlag{
+		Name:  "verbosity",
+		Usage: "Log level verbosity",
+		Value: 3,
+	}
 )
 
 var v4NodeFlags = []cli.Flag{

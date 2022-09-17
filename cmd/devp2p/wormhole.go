@@ -32,7 +32,7 @@ import (
 )
 
 func discv5WormholeSend(ctx *cli.Context) error {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Create discv5 session.
 	unhandled := make(chan discover.ReadPacket)
@@ -57,9 +57,13 @@ func discv5WormholeSend(ctx *cli.Context) error {
 		log.Info("Transmitting data")
 		for i := 0; i < 10; i++ {
 			n, err := sess.Write([]byte("this is a very large file"))
+			time.Sleep(time.Second)
 			log.Info("Sent data", "n", n, "err", err)
 		}
-		log.Info("Closing session")
+		_, err := sess.Write([]byte("FIN"))
+		if err != nil {
+			return fmt.Errorf("unable to close connection: %s", err)
+		}
 		sess.Close()
 	} else {
 		log.Error("Could not establish kcp session", "err", err)
@@ -68,7 +72,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 }
 
 func discv5WormholeReceive(ctx *cli.Context) error {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Setup discv5 protocol.
 	unhandled := make(chan discover.ReadPacket)
@@ -90,26 +94,27 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	// Sping up routine to buffer packets on unhandled channel.
 	go handleUnhandledLoop(conn)
 
+	log.Info("Waiting for KCP conn")
+	s, err := l.Accept()
+	if err != nil {
+		log.Error("Error", "err", err)
+		return err
+	}
+
+	log.Info("KCP socket accepted")
+
 	for {
-		log.Info("Waiting for KCP conn")
-		s, err := l.Accept()
+		buf := make([]byte, 2048)
+		n, err := s.Read(buf)
 		if err != nil {
-			log.Error("Error", "err", err)
 			return err
 		}
+		if string(buf[:n]) == "FIN" {
+			log.Trace("connection finished")
+			return nil
+		}
 
-		log.Info("KCP socket accepted")
-		go func(net.Conn) {
-			for {
-				buf := make([]byte, 2048)
-				n, err := s.Read(buf)
-				if err != nil {
-					log.Error("Error", "err", err)
-					return
-				}
-				log.Info("Read KCP data", "data", string(buf[:n]))
-			}
-		}(s)
+		log.Info("Read KCP data", "data", string(buf[:n]))
 	}
 }
 
@@ -123,10 +128,10 @@ func handleUnhandledLoop(wrapper *unhandledWrapper) {
 		select {
 		case packet := <-wrapper.unhandled:
 			if len(packet.Data) > 10 {
-				log.Info("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data),
+				log.Trace("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data),
 					"data", fmt.Sprintf("%#x...", packet.Data[:10]))
 			} else {
-				log.Info("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data))
+				log.Trace("Unhandled packet handled", "from", packet.Addr, "size", len(packet.Data))
 			}
 
 			wrapper.readMu.Lock()
@@ -168,12 +173,11 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 	o.readMu.Lock()
 	for len(o.inqueue) == 0 {
 		o.flag.Wait()
-		fmt.Printf("Woke up reader\n")
 	}
 	defer o.readMu.Unlock()
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
-	log.Info("Packet conn delivered to reader", "n", n)
+	log.Trace("Reading from unhandled", "n", n)
 	return n, o.remote, nil
 }
 
