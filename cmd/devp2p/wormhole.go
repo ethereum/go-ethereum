@@ -46,8 +46,8 @@ func setupKCP(s *kcp.UDPSession) {
 	// Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
 	// Turbo Mode: ikcp_nodelay(kcp, 1, 10, 2, 1);
 
-	// s.SetNoDelay(1, 10, 2, 1)
-	s.SetNoDelay(0, 40, 0, 0)
+	s.SetNoDelay(1, 10, 2, 1)
+	// s.SetNoDelay(0, 40, 0, 0)
 }
 
 func discv5WormholeSend(ctx *cli.Context) error {
