@@ -140,11 +140,6 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 	}
 }
 
-func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []byte {
-	log.Info("Handling talk request", "from", addr, "id", id, "data", fmt.Sprintf("%x", data))
-	return []byte("ok")
-}
-
 func enqueueUnhandledPackets(ch <-chan discover.ReadPacket, o *unhandledWrapper) {
 	for packet := range ch {
 		o.enqueue(packet.Data)
