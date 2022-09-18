@@ -186,14 +186,14 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 
 	o.mu.Unlock()
 
-	log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
-	kcpStatsDump(kcp.DefaultSnmp)
+	// log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
+	// kcpStatsDump(kcp.DefaultSnmp)
 	return n, o.remote, nil
 }
 
 func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	n, err = o.out.WriteTo(p, addr)
-	log.Info("KCP write", "buf", len(p), "n", n, "err", err)
+	// log.Info("KCP write", "buf", len(p), "n", n, "err", err)
 	return n, err
 }
 
