@@ -187,6 +187,7 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 	o.mu.Unlock()
 
 	log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
+	kcpStatsDump(kcp.DefaultSnmp)
 	return n, o.remote, nil
 }
 
@@ -204,3 +205,10 @@ func (o *unhandledWrapper) Close() error                       { return nil }
 func (o *unhandledWrapper) SetDeadline(t time.Time) error      { return nil }
 func (o *unhandledWrapper) SetReadDeadline(t time.Time) error  { return nil }
 func (o *unhandledWrapper) SetWriteDeadline(t time.Time) error { return nil }
+
+func kcpStatsDump(snmp *kcp.Snmp) {
+	header := snmp.Header()
+	for i, value := range snmp.ToSlice() {
+		fmt.Printf("%s: %s\n", header[i], value)
+	}
+}
