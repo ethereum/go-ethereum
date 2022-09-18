@@ -142,7 +142,7 @@ func doReceive(ctx *cli.Context, file *os.File) error {
 		var startReq xferStart
 		err := rlp.DecodeBytes(data, &startReq)
 		if err != nil {
-			resp, _ := rlp.EncodeToBytes(&xferResponse{Accept: false})
+			resp, _ := rlp.EncodeToBytes(&xferResponse{Accept: false, Error: "bad request"})
 			return resp
 		}
 
