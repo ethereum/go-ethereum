@@ -50,6 +50,7 @@ func traceLastNAddressCode(n int) traceFunc {
 		address := common.Address(stack.data[stack.len()-1-n].Bytes20())
 		code := l.env.StateDB.GetCode(address)
 		extraData.CodeList = append(extraData.CodeList, hexutil.Encode(code))
+		l.statesAffected[address] = struct{}{}
 		return nil
 	}
 }
