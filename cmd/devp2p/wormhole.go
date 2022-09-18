@@ -46,8 +46,8 @@ func setupKCP(s *kcp.UDPSession) {
 	// Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
 	// Turbo Mode: ikcp_nodelay(kcp, 1, 10, 2, 1);
 
-	s.SetNoDelay(1, 10, 2, 1)
-	// s.SetNoDelay(0, 40, 0, 0)
+	// s.SetNoDelay(1, 10, 2, 1)
+	s.SetNoDelay(0, 40, 0, 0)
 }
 
 func discv5WormholeSend(ctx *cli.Context) error {
@@ -92,9 +92,19 @@ func discv5WormholeSend(ctx *cli.Context) error {
 		n, err := sess.Write(msg)
 		log.Info("Sent data", "n", n, "err", err)
 	}
+
 	if _, err := sess.Write([]byte("FIN")); err != nil {
 		return fmt.Errorf("unable to close connection: %s", err)
 	}
+
+	// KCP writes are a bit 'async', so wait for the remote to ACK the FIN.
+	sess.SetReadDeadline(time.Now().Add(5 * time.Second))
+	ackbuf := make([]byte, 3)
+	_, err = sess.Read(ackbuf)
+	if err != nil {
+		log.Error("FIN-ACK read error", "err", err)
+	}
+	kcpStatsDump(kcp.DefaultSnmp)
 	return nil
 }
 
@@ -137,13 +147,18 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
 		if string(buf[:n]) == "FIN" {
 			log.Trace("connection finished")
-			return nil
+			break
 		}
 
 		log.Info("Read KCP data", "data", string(buf[:n]))
 	}
+
+	s.Write([]byte("ACK"))
+	kcpStatsDump(kcp.DefaultSnmp)
+	return nil
 }
 
 func enqueueUnhandledPackets(ch <-chan discover.ReadPacket, o *unhandledWrapper) {
