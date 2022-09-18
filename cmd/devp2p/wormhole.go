@@ -182,6 +182,7 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 	for len(o.inqueue) == 0 {
 		o.flag.Wait()
 	}
+	defer o.mu.Unlock()
 
 	// Move packet data into p.
 	n = copy(p, o.inqueue[0])
@@ -189,8 +190,6 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 	// Delete the packet from inqueue.
 	copy(o.inqueue, o.inqueue[1:])
 	o.inqueue = o.inqueue[:len(o.inqueue)-1]
-
-	o.mu.Unlock()
 
 	// log.Info("KCP read", "buf", len(p), "n", n, "remaining-in-q", len(o.inqueue))
 	// kcpStatsDump(kcp.DefaultSnmp)
