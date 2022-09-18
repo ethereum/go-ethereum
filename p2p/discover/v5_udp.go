@@ -521,13 +521,7 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(id)
 
 		case p := <-t.packetInCh:
-			err := t.handlePacket(p.Data, p.Addr)
-			if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
-				// The packet seems unrelated to discv5, send it to the next protocol.
-				up := ReadPacket{Data: make([]byte, len(p.Data)), Addr: p.Addr}
-				copy(up.Data, p.Data)
-				t.unhandled <- up
-			}
+			t.handlePacket(p.Data, p.Addr)
 			// Arm next read.
 			t.readNextCh <- struct{}{}
 
@@ -658,9 +652,18 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
+		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
+			// The packet seems unrelated to discv5, send it to the next protocol.
+			t.log.Trace("Unhandled discv5 packet", "id", fromID, "addr", addr, "err", err)
+			up := ReadPacket{Data: make([]byte, len(rawpacket)), Addr: fromAddr}
+			copy(up.Data, rawpacket)
+			t.unhandled <- up
+			return nil
+		}
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
 		return err
 	}
+
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addSeenNode(wrapNode(fromNode))
