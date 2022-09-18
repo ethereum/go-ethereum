@@ -17,6 +17,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 
@@ -82,8 +84,12 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	setupKCP(sess)
 
 	log.Info("Transmitting data")
+	rndbuf := make([]byte, 1024)
+	msg := make([]byte, hex.EncodedLen(len(rndbuf)))
 	for i := 0; i < 10; i++ {
-		n, err := sess.Write([]byte("this is a very large file"))
+		rand.Read(rndbuf)
+		hex.Encode(msg, rndbuf)
+		n, err := sess.Write(msg)
 		log.Info("Sent data", "n", n, "err", err)
 	}
 	if _, err := sess.Write([]byte("FIN")); err != nil {
