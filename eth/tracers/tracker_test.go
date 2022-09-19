@@ -21,20 +21,17 @@ import "testing"
 func TestTracker(t *testing.T) {
 	var cases = []struct {
 		limit   int
-		head    uint64
 		calls   []uint64
 		expHead uint64
 	}{
 		// Release in order
 		{
 			limit:   3,
-			head:    0,
 			calls:   []uint64{0, 1, 2},
 			expHead: 3,
 		},
 		{
 			limit:   3,
-			head:    0,
 			calls:   []uint64{0, 1, 2, 3, 4, 5},
 			expHead: 6,
 		},
@@ -42,24 +39,22 @@ func TestTracker(t *testing.T) {
 		// Release out of order
 		{
 			limit:   3,
-			head:    0,
 			calls:   []uint64{1, 2, 0},
 			expHead: 3,
 		},
 		{
 			limit:   3,
-			head:    0,
 			calls:   []uint64{1, 2, 0, 5, 4, 3},
 			expHead: 6,
 		},
 	}
 	for _, c := range cases {
-		tracker := newStateTracker(c.limit, c.head)
+		tracker := newStateTracker(c.limit, 0)
 		for _, call := range c.calls {
 			tracker.releaseState(call, func() {})
 		}
 		tracker.lock.RLock()
-		head := tracker.head
+		head := tracker.oldest
 		tracker.lock.RUnlock()
 
 		if head != c.expHead {

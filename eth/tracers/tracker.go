@@ -27,30 +27,36 @@ import (
 // to be paused in case there are too many states waiting for tracing.
 type stateTracker struct {
 	limit    int                // Maximum number of states allowed waiting for tracing
-	head     uint64             // The number of the first trace state which isn't used up
+	oldest   uint64             // The number of the oldest state which is still using for trace
 	used     []bool             // List of flags indicating whether the trace state has been used up
 	releases []StateReleaseFunc // List of trace state release functions waiting to be called
 	lock     sync.RWMutex
 }
 
 // newStateTracker initializes the tracker with provided state limits and
-// head state number.
-func newStateTracker(limit int, head uint64) *stateTracker {
+// the number of the first state that will be used.
+func newStateTracker(limit int, oldest uint64) *stateTracker {
 	return &stateTracker{
-		limit: limit,
-		head:  head,
-		used:  make([]bool, limit),
+		limit:  limit,
+		oldest: oldest,
+		used:   make([]bool, limit),
 	}
 }
 
-// releaseState marks the state specified by the number is released and caches
+// releaseState marks the state specified by the number as released and caches
 // the corresponding release functions internally.
 func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.used[int(number-t.head)] = true
-	if number == t.head {
+	// Set the state as used, the corresponding flag is indexed by
+	// the distance between the specified state and the oldest state
+	// which is still using for trace.
+	t.used[int(number-t.oldest)] = true
+
+	// If the oldest state is used up, update the oldest marker by moving
+	// it to the next state which is not used up.
+	if number == t.oldest {
 		var count int
 		for i := 0; i < len(t.used); i++ {
 			if !t.used[i] {
@@ -58,8 +64,11 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 			}
 			count += 1
 		}
-		t.head += uint64(count)
+		t.oldest += uint64(count)
 		copy(t.used, t.used[count:])
+
+		// The tail of t.used is left unchanged. It will be overwritten
+		// by the following states anyway.
 	}
 	t.releases = append(t.releases, release)
 }
@@ -79,11 +88,11 @@ func (t *stateTracker) callReleases() {
 func (t *stateTracker) wait(number uint64) error {
 	for {
 		t.lock.RLock()
-		head := t.head
+		head := t.oldest
 		t.lock.RUnlock()
 
-		if number < t.head {
-			return fmt.Errorf("invalid state number %d head %d", number, t.head)
+		if number < t.oldest {
+			return fmt.Errorf("invalid state number %d head %d", number, t.oldest)
 		}
 		if int(number-head) < t.limit {
 			return nil
