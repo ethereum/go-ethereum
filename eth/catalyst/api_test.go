@@ -277,10 +277,12 @@ func TestEth2NewBlock(t *testing.T) {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
 		newResp, err := api.NewPayloadV1(*execData)
-		if err != nil || newResp.Status != "VALID" {
+		switch {
+		case err != nil:
 			t.Fatalf("Failed to insert block: %v", err)
-		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1 {
+		case newResp.Status != "VALID":
+			t.Fatalf("Failed to insert block: %v", newResp.Status)
+		case ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1:
 			t.Fatalf("Chain head shouldn't be updated")
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
@@ -411,7 +413,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	time.Sleep(500 * time.Millisecond) // give txpool enough time to consume head event
 
 	ethservice.SetEtherbase(testAddr)
 	ethservice.SetSynced()
