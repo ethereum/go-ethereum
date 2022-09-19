@@ -13,7 +13,6 @@ The Geth team have also recently started to run AMA's on Reddit:
 
 It is also recommended to search for 'Geth' and 'go-ethereum' on [ethereum.stackexchange](ethereum.stackexchange.com).
 
-
 ## What are RPC and IPC?
 
 IPC stands for Inter-Process Communications. Geth creates a `geth.ipc` file on startup that other processes on the same computer can use to communicate with Geth.
@@ -83,7 +82,7 @@ Historically, running Geth was enough to turn a computer into an Ethereum node. 
 
 ## What is staking and how do I participate?
 
-Staking is how node operators participate in proof-of-stake based consensus. Staking requires validators to deposit 32 ETH to a smart contract and run validator software connected to their node. The validator software broadcasts a vote ("attestation") in favour of checkpoint blocks that it determines to be in the canonical blockchain. The corrct chain is then the one with the greatest accumulation of votes, weighted by the validators stake (up to a maximum of 32 ETH). Geth, as an execution client, does not directly handle consensus logic but it does provide the node with the execution and state-management tools required to validate incoming blocks. Validators are also occasionally picked to propose the next block broadcast across the network. In this case Geth's role is to bundle transactions it has received over the execution layer gossip network, pass them to the consensus client to be included in the block and execute them to determine the resulting state change. 
+Staking is how node operators participate in proof-of-stake based consensus. Staking requires validators to deposit 32 ETH to a smart contract and run validator software connected to their node. The validator software broadcasts a vote ("attestation") in favour of checkpoint blocks that it determines to be in the canonical blockchain. The corrct chain is then the one with the greatest accumulation of votes, weighted by the validators stake (up to a maximum of 32 ETH). Geth, as an execution client, does not directly handle consensus logic but it does provide the node with the execution and state-management tools required to validate incoming blocks. Validators are also occasionally picked to propose the next block broadcast across the network. In this case Geth's role is to bundle transactions it has received over the execution layer gossip network, pass them to the consensus client to be included in the block and execute them to determine the resulting state change.
 
 It is entirely possible to run a node without staking any ETH. In this case the node runs the execution and consensus clients but not the validator software. In order to participate in consensus and earn ETH rewards, the node must run an execution cleint, consensus client and a validator. The validator software comes bundled with the consensus client.
 
