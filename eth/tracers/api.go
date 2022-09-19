@@ -896,10 +896,11 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	var traceConfig *TraceConfig
 	if config != nil {
 		traceConfig = &TraceConfig{
-			Config:  config.Config,
-			Tracer:  config.Tracer,
-			Timeout: config.Timeout,
-			Reexec:  config.Reexec,
+			Config:       config.Config,
+			Tracer:       config.Tracer,
+			TracerConfig: config.TracerConfig,
+			Timeout:      config.Timeout,
+			Reexec:       config.Reexec,
 		}
 	}
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
