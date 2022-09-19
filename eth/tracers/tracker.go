@@ -19,7 +19,6 @@ package tracers
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 // stateTracker is an auxiliary tool used to cache the release functions of all
@@ -30,16 +29,20 @@ type stateTracker struct {
 	oldest   uint64             // The number of the oldest state which is still using for trace
 	used     []bool             // List of flags indicating whether the trace state has been used up
 	releases []StateReleaseFunc // List of trace state release functions waiting to be called
-	lock     sync.RWMutex
+	cond     *sync.Cond
+	lock     *sync.RWMutex
 }
 
 // newStateTracker initializes the tracker with provided state limits and
 // the number of the first state that will be used.
 func newStateTracker(limit int, oldest uint64) *stateTracker {
+	lock := new(sync.RWMutex)
 	return &stateTracker{
 		limit:  limit,
 		oldest: oldest,
 		used:   make([]bool, limit),
+		cond:   sync.NewCond(lock),
+		lock:   lock,
 	}
 }
 
@@ -69,6 +72,9 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 
 		// The tail of t.used is left unchanged. It will be overwritten
 		// by the following states anyway.
+
+		// Fire the signal to all waiters that oldest marker is updated.
+		t.cond.Broadcast()
 	}
 	t.releases = append(t.releases, release)
 }
@@ -87,16 +93,17 @@ func (t *stateTracker) callReleases() {
 // wait blocks until the accumulated trace states are less than the limit.
 func (t *stateTracker) wait(number uint64) error {
 	for {
-		t.lock.RLock()
+		t.lock.Lock()
 		head := t.oldest
-		t.lock.RUnlock()
-
 		if number < t.oldest {
+			t.lock.Unlock()
 			return fmt.Errorf("invalid state number %d head %d", number, t.oldest)
 		}
 		if int(number-head) < t.limit {
+			t.lock.Unlock()
 			return nil
 		}
-		time.Sleep(time.Millisecond * 100)
+		t.cond.Wait()
+		t.lock.Unlock()
 	}
 }
