@@ -88,6 +88,9 @@ type Header struct {
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
+	// ExcessBlobs was added by EIP-4844 and is ignored in legacy headers.
+	ExcessBlobs uint64 `json:"excessBlobs" rlp:"optional"`
+
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
 		// Random was added during the merge and contains the BeaconState randomness
@@ -97,14 +100,15 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty *hexutil.Big
-	Number     *hexutil.Big
-	GasLimit   hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Time       hexutil.Uint64
-	Extra      hexutil.Bytes
-	BaseFee    *hexutil.Big
-	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty  *hexutil.Big
+	Number      *hexutil.Big
+	GasLimit    hexutil.Uint64
+	GasUsed     hexutil.Uint64
+	Time        hexutil.Uint64
+	Extra       hexutil.Bytes
+	BaseFee     *hexutil.Big
+	ExcessBlobs hexutil.Uint64
+	Hash        common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -389,6 +393,8 @@ func (b *Block) BaseFee() *big.Int {
 	}
 	return new(big.Int).Set(b.header.BaseFee)
 }
+
+func (b *Block) ExcessBlobs() uint64 { return b.header.ExcessBlobs }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

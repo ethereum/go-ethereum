@@ -161,9 +161,11 @@ const (
 	// Fixed cost for sending a data blob.
 	BlobGas uint64 = 120000
 
-	MaxBlobsPerTx        = 2
-	MaxBlobsPerBlock     = 16
-	FieldElementsPerBlob = 4096 // each field element is 32 bytes
+	MaxBlobsPerTx                 = 2
+	MaxBlobsPerBlock              = 16
+	TargetBlobsPerBlock           = 8
+	FieldElementsPerBlob          = 4096 // each field element is 32 bytes
+	GasPriceUpdateFractionPerBlob = 64
 
 	BlobVerificationGas      uint64 = 1800000
 	BlobCommitmentVersionKZG uint8  = 0x01

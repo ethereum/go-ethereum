@@ -601,6 +601,9 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+		header.ExcessBlobs = misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs)))
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
@@ -635,6 +638,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
+	enc = append(enc, header.ExcessBlobs)
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash

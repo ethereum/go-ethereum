@@ -109,6 +109,7 @@ type TxData interface {
 
 	chainID() *big.Int
 	accessList() AccessList
+	dataHashes() []common.Hash
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
@@ -369,6 +370,9 @@ func (tx *Transaction) Data() []byte { return tx.inner.data() }
 // AccessList returns the access list of the transaction.
 func (tx *Transaction) AccessList() AccessList { return tx.inner.accessList() }
 
+// DataHashes returns the blob versioned hashes of the transaction.
+func (tx *Transaction) DataHashes() []common.Hash { return tx.inner.dataHashes() }
+
 // Gas returns the gas limit of the transaction.
 func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 
@@ -543,14 +547,6 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		out.wrapData = tx.wrapData.copy()
 	}
 	return out, nil
-}
-
-func (tx *Transaction) BlobVersionedHashes() []common.Hash {
-	blobTx, ok := tx.inner.(*SignedBlobTx)
-	if !ok {
-		return nil
-	}
-	return blobTx.Message.BlobVersionedHashes
 }
 
 // Transactions implements DerivableList for transactions.
@@ -779,7 +775,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		amount:     tx.Value(),
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
-		dataHashes: tx.BlobVersionedHashes(),
+		dataHashes: tx.DataHashes(),
 		isFake:     false,
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.

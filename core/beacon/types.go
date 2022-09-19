@@ -65,6 +65,7 @@ type ExecutableDataV1 struct {
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
 	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
 	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
+	ExcessBlobs   uint64         `json:"excessBlobs"   gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }
@@ -76,6 +77,7 @@ type executableDataMarshaling struct {
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
 	BaseFeePerGas *hexutil.Big
+	ExcessBlobs   hexutil.Uint64
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
@@ -178,6 +180,7 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		GasUsed:     params.GasUsed,
 		Time:        params.Timestamp,
 		BaseFee:     params.BaseFeePerGas,
+		ExcessBlobs: params.ExcessBlobs,
 		Extra:       params.ExtraData,
 		MixDigest:   params.Random,
 	}
@@ -201,6 +204,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		GasLimit:      block.GasLimit(),
 		GasUsed:       block.GasUsed(),
 		BaseFeePerGas: block.BaseFee(),
+		ExcessBlobs:   block.ExcessBlobs(),
 		Timestamp:     block.Time(),
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),

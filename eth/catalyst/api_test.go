@@ -704,6 +704,7 @@ func setBlockhash(data *beacon.ExecutableDataV1) *beacon.ExecutableDataV1 {
 		GasUsed:     data.GasUsed,
 		Time:        data.Timestamp,
 		BaseFee:     data.BaseFeePerGas,
+		Blobs:       data.Blobs,
 		Extra:       data.ExtraData,
 		MixDigest:   data.Random,
 	}

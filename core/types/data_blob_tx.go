@@ -416,17 +416,18 @@ func u256ToBig(v *Uint256View) *big.Int {
 }
 
 // accessors for innerTx.
-func (stx *SignedBlobTx) txType() byte           { return BlobTxType }
-func (stx *SignedBlobTx) chainID() *big.Int      { return u256ToBig(&stx.Message.ChainID) }
-func (stx *SignedBlobTx) accessList() AccessList { return AccessList(stx.Message.AccessList) }
-func (stx *SignedBlobTx) data() []byte           { return stx.Message.Data }
-func (stx *SignedBlobTx) gas() uint64            { return uint64(stx.Message.Gas) }
-func (stx *SignedBlobTx) gasFeeCap() *big.Int    { return u256ToBig(&stx.Message.GasFeeCap) }
-func (stx *SignedBlobTx) gasTipCap() *big.Int    { return u256ToBig(&stx.Message.GasTipCap) }
-func (stx *SignedBlobTx) gasPrice() *big.Int     { return u256ToBig(&stx.Message.GasFeeCap) }
-func (stx *SignedBlobTx) value() *big.Int        { return u256ToBig(&stx.Message.Value) }
-func (stx *SignedBlobTx) nonce() uint64          { return uint64(stx.Message.Nonce) }
-func (stx *SignedBlobTx) to() *common.Address    { return (*common.Address)(stx.Message.To.Address) }
+func (stx *SignedBlobTx) txType() byte              { return BlobTxType }
+func (stx *SignedBlobTx) chainID() *big.Int         { return u256ToBig(&stx.Message.ChainID) }
+func (stx *SignedBlobTx) accessList() AccessList    { return AccessList(stx.Message.AccessList) }
+func (stx *SignedBlobTx) dataHashes() []common.Hash { return stx.Message.BlobVersionedHashes }
+func (stx *SignedBlobTx) data() []byte              { return stx.Message.Data }
+func (stx *SignedBlobTx) gas() uint64               { return uint64(stx.Message.Gas) }
+func (stx *SignedBlobTx) gasFeeCap() *big.Int       { return u256ToBig(&stx.Message.GasFeeCap) }
+func (stx *SignedBlobTx) gasTipCap() *big.Int       { return u256ToBig(&stx.Message.GasTipCap) }
+func (stx *SignedBlobTx) gasPrice() *big.Int        { return u256ToBig(&stx.Message.GasFeeCap) }
+func (stx *SignedBlobTx) value() *big.Int           { return u256ToBig(&stx.Message.Value) }
+func (stx *SignedBlobTx) nonce() uint64             { return uint64(stx.Message.Nonce) }
+func (stx *SignedBlobTx) to() *common.Address       { return (*common.Address)(stx.Message.To.Address) }
 
 func (stx *SignedBlobTx) rawSignatureValues() (v, r, s *big.Int) {
 	return big.NewInt(int64(stx.Signature.V)), u256ToBig(&stx.Signature.R), u256ToBig(&stx.Signature.S)

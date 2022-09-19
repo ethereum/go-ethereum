@@ -41,7 +41,8 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
 	_tmp1 := obj.BaseFee != nil
-	if _tmp1 {
+	_tmp2 := obj.ExcessBlobs != 0
+	if _tmp1 || _tmp2 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -50,6 +51,9 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			}
 			w.WriteBigInt(obj.BaseFee)
 		}
+	}
+	if _tmp2 {
+		w.WriteUint64(obj.ExcessBlobs)
 	}
 	w.ListEnd(_tmp0)
 	return w.Flush()

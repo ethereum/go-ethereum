@@ -253,12 +253,12 @@ type TxPool struct {
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
+	eip4844  bool // Fork indicator whether we are using EIP-4844 type transactions.
 
-	eipDataBlobs bool // Fork indicator whether we are using data blobs (mini danksharding)
-
-	currentState  *state.StateDB // Current state in the blockchain head
-	pendingNonces *txNoncer      // Pending state tracking virtual nonces
-	currentMaxGas uint64         // Current gas limit for transaction caps
+	currentState       *state.StateDB // Current state in the blockchain head
+	pendingNonces      *txNoncer      // Pending state tracking virtual nonces
+	currentMaxGas      uint64         // Current gas limit for transaction caps
+	currentExcessBlobs uint64         // Current block excess_blobs
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
@@ -608,7 +608,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrTxTypeNotSupported
 	}
 	// Reject data blob transactions until data blob EIP activates.
-	if !pool.eipDataBlobs && tx.Type() == types.BlobTxType {
+	if !pool.eip4844 && tx.Type() == types.BlobTxType {
 		return ErrTxTypeNotSupported
 	}
 	// Reject transactions over defined size to prevent DOS attacks.
@@ -659,7 +659,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.BlobVersionedHashes()), tx.To() == nil, true, pool.istanbul)
+	rules := IntrinsicGasChainRules{
+		Homestead: true,
+		EIP2028:   pool.istanbul,
+		EIP4844:   pool.eip4844,
+	}
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), pool.currentExcessBlobs, tx.To() == nil, rules)
 	if err != nil {
 		return err
 	}
@@ -1385,6 +1390,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
+	pool.currentExcessBlobs = newHead.ExcessBlobs
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
@@ -1396,7 +1402,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.eipDataBlobs = pool.chainconfig.IsSharding(next)
+	pool.eip4844 = pool.chainconfig.IsSharding(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

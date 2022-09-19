@@ -138,9 +138,16 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
-		// Check intrinsic gas
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.BlobVersionedHashes()), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
+		// Check intrinsic gas assuming no excess blobs
+		// NOTE: We set excess_blobs prestate to zero. So this may not accurately compute the
+		// intrinsic gas unless the tool is updated to take in an excess_blobs parameter.
+
+		rules := core.IntrinsicGasChainRules{
+			Homestead: chainConfig.IsHomestead(new(big.Int)),
+			EIP2028:   chainConfig.IsIstanbul(new(big.Int)),
+			EIP4844:   chainConfig.IsSharding(new(big.Int)),
+		}
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), 0, tx.To() == nil, rules); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue

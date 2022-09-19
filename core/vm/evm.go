@@ -77,6 +77,7 @@ type BlockContext struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	BaseFee     *big.Int       // Provides information for BASEFEE
+	ExcessBlobs uint64         // Provides information for EIP-4844 fee calculation
 	Random      *common.Hash   // Provides information for RANDOM
 }
 

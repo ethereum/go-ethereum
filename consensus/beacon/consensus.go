@@ -318,6 +318,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
+	if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+		header.ExcessBlobs = misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs)))
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and

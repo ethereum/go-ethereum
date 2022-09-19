@@ -28,6 +28,7 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 		Timestamp     hexutil.Uint64  `json:"timestamp"     gencodec:"required"`
 		ExtraData     hexutil.Bytes   `json:"extraData"     gencodec:"required"`
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
+		ExcessBlobs   hexutil.Uint64  `json:"excessBlobs"   gencodec:"required"`
 		BlockHash     common.Hash     `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
 	}
@@ -44,6 +45,7 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 	enc.Timestamp = hexutil.Uint64(e.Timestamp)
 	enc.ExtraData = e.ExtraData
 	enc.BaseFeePerGas = (*hexutil.Big)(e.BaseFeePerGas)
+	enc.ExcessBlobs = hexutil.Uint64(e.ExcessBlobs)
 	enc.BlockHash = e.BlockHash
 	if e.Transactions != nil {
 		enc.Transactions = make([]hexutil.Bytes, len(e.Transactions))
@@ -69,6 +71,7 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		Timestamp     *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
 		ExtraData     *hexutil.Bytes  `json:"extraData"     gencodec:"required"`
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
+		ExcessBlobs   *hexutil.Uint64 `json:"excessBlobs"   gencodec:"required"`
 		BlockHash     *common.Hash    `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
 	}
@@ -124,6 +127,10 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'baseFeePerGas' for ExecutableDataV1")
 	}
 	e.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
+	if dec.ExcessBlobs == nil {
+		return errors.New("missing required field 'excessBlobs' for ExecutableDataV1")
+	}
+	e.ExcessBlobs = uint64(*dec.ExcessBlobs)
 	if dec.BlockHash == nil {
 		return errors.New("missing required field 'blockHash' for ExecutableDataV1")
 	}

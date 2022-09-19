@@ -54,6 +54,7 @@ type header struct {
 	MixDigest   common.Hash       `json:"mixHash"`
 	Nonce       *types.BlockNonce `json:"nonce"`
 	BaseFee     *big.Int          `json:"baseFeePerGas" rlp:"optional"`
+	ExcessBlobs uint64            `json:"excessBlobs"   rlp:"optional"`
 }
 
 type headerMarshaling struct {
@@ -129,6 +130,7 @@ func (i *bbInput) ToBlock() *types.Block {
 		Extra:       i.Header.Extra,
 		MixDigest:   i.Header.MixDigest,
 		BaseFee:     i.Header.BaseFee,
+		ExcessBlobs: i.Header.ExcessBlobs,
 	}
 
 	// Fill optional values.
