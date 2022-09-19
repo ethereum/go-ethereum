@@ -542,7 +542,7 @@ func (w *worker) mainLoop() {
 				req.resCh <- res
 				req.err <- err
 			} else if err != nil {
-				// Update the block if no error occured
+				// Update the block if no error occurred
 				req.result.set(block)
 			}
 
