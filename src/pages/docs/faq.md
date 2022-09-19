@@ -3,11 +3,16 @@ title: FAQ
 description: Frequently asked questions related to Geth
 ---
 
-This page contains answers to common questions about Geth. The Geth team have also recently started to run AMA's on Reddit:
+### Where can I get more information?
 
-[Aug 2022 AMA](https://www.reddit.com/r/ethereum/comments/wpqmo1/ama_we_are_the_go_ethereum_geth_team_18_august/)
+This page contains answers to common questions about Geth. Source code and README documentation can be found on the Geth [Github](https://github.com/ethereum/go-ethereum). You can also ask questions on Geth's [Discord channel](https://discord.gg/WHNkYDsAKU) or keep up to date with Geth on [Twitter](https://twitter.com/go_ethereum). Information about Ethereum in general can be found at [ethereum.org](https://ethereum.org).
+
+The Geth team have also recently started to run AMA's on Reddit:
+
+- [Aug 2022 AMA](https://www.reddit.com/r/ethereum/comments/wpqmo1/ama_we_are_the_go_ethereum_geth_team_18_august/)
 
 It is also recommended to search for 'Geth' and 'go-ethereum' on [ethereum.stackexchange](ethereum.stackexchange.com).
+
 
 ## What are RPC and IPC?
 
@@ -16,7 +21,7 @@ RPC stands for Remote Procedure Call. RPC is a mode of communication between pro
 
 ## What is `jwtsecret`?
 
-The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key, proving each party's identity. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
+The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
 
 ## I noticed my peercount slowly decreasing, and now it is at 0. Restarting doesn't get any peers.
 
@@ -44,9 +49,9 @@ Additional details and/or any updates on more robust handling are at <https://gi
 
 The current default syncing mode used by Geth is called [snap sync](https://github.com/ethereum/devp2p/blob/master/caps/snap.md). Instead of starting from the genesis block and processing all the transactions that ever occurred (which could take weeks), snap sync downloads the blocks, and only verifies the associated proof-of-works, assuming state transitions to be correct. Downloading all the blocks is a straightforward and fast procedure and will relatively quickly reassemble the entire chain.
 
-Many people assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, so we do not have any account state available (ie. balances, nonces, smart contract code and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to hasten this process by downloading contiguous chunks of useful state data, instead of doing so one-by-one, as in previous synchronization methods. Geth downloads the leaves of the trie without the intermediate nodes that connect the leaves to the root. The full trie is regenerated locally. However, while this is happening, the blockchain is progressing, meaning some of the regenerated state trie becomes invalid. Therefor, there is also a healing phase that corrects any errors in the state trie. The state sync has to progress faster than the chain growth otherwise it will never finish.
+Many people assume that because they have the blocks, they are in sync. Unfortunately this is not the case. Since no transaction was executed, we do not have any account state available (e.g. balances, nonces, smart contract code, and data). These need to be downloaded separately and cross-checked with the latest blocks. This phase is called the state trie download phase. Snap sync tries to expedite this process by downloading contiguous chunks of state data, instead of doing so one-by-one, as in previous synchronization methods. Geth downloads the leaves of the trie without the intermediate nodes that connect the leaves to the root. The full trie is regenerated locally. However, while this is happening, the blockchain is progressing, meaning some of the regenerated state trie becomes invalid. Therefore, there is also a healing phase that corrects any errors in the state trie. The state sync has to progress faster than the chain growth otherwise it will never finish.
 
-Geth can also be sync'd with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, only 128 blocks are stored in memory.
+Geth can also be synced with `--syncmode full`. In this case, Geth downloads and independently verifies every block since genesis in sequence, including re-executing transactions to verify state transitions. Although Geth verifies every block since genesis, the state of 128 blocks only are stored in memory.
 
 ## What's the state trie?
 
