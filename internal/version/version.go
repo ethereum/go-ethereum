@@ -14,44 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+// Package version implements reading of build version information.
+package version
 
 import (
 	"fmt"
-	"runtime"
 	"runtime/debug"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
-
-// summarizeBadBlock returns a string summarizing the bad block and other
-// relevant information.
-func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *params.ChainConfig, err error) string {
-	var receiptString string
-	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x",
-			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
-			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
-	}
-	version, vcs := runtimeInfo()
-	platform := fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
-	if vcs != "" {
-		vcs = fmt.Sprintf("\nVCS: %s", vcs)
-	}
-	return fmt.Sprintf(`
-########## BAD BLOCK #########
-Block: %v (%#x)
-Error: %v
-Platform: %v%v
-Chain config: %#v
-Receipts: %v
-##############################
-`, block.Number(), block.Hash(), err, platform, vcs, config, receiptString)
-}
 
 // runtimeInfo returns build and platform information about the current binary.
 //
@@ -59,23 +33,27 @@ Receipts: %v
 // module path, it will print out commit and date VCS information. Otherwise,
 // it will assume it's imported by a third-party and will return the imported
 // version and whether it was replaced by another module.
-func runtimeInfo() (string, string) {
-	var (
-		version       = params.VersionWithMeta
-		vcs           = ""
-		buildInfo, ok = debug.ReadBuildInfo()
-	)
-	if ok {
-		version = versionInfo(buildInfo)
-		if status, ok := vcsInfo(buildInfo); ok {
-			modified := ""
-			if status.modified {
-				modified = " (dirty)"
-			}
-			vcs = status.revision + "-" + status.time + modified
+func Info() (version, vcs string) {
+	version = params.VersionWithMeta
+	buildInfo, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version, ""
+	}
+	version = versionInfo(buildInfo)
+	if status, ok := vcsInfo(buildInfo); ok {
+		modified := ""
+		if status.modified {
+			modified = " (dirty)"
 		}
+		vcs = status.revision + "-" + status.time + modified
 	}
 	return version, vcs
+}
+
+type gitStatus struct {
+	revision string
+	time     string
+	modified bool
 }
 
 // versionInfo returns version information for the currently executing
@@ -111,36 +89,6 @@ func versionInfo(info *debug.BuildInfo) string {
 		version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
 	}
 	return version
-}
-
-type status struct {
-	revision string
-	time     string
-	modified bool
-}
-
-// vcsInfo returns VCS information of the build.
-func vcsInfo(info *debug.BuildInfo) (s status, ok bool) {
-	for _, v := range info.Settings {
-		switch v.Key {
-		case "vcs.revision":
-			if len(v.Value) < 8 {
-				s.revision = v.Value
-			} else {
-				s.revision = v.Value[:8]
-			}
-		case "vcs.modified":
-			if v.Value == "true" {
-				s.modified = true
-			}
-		case "vcs.time":
-			s.time = v.Value
-		}
-	}
-	if s.revision != "" && s.time != "" {
-		ok = true
-	}
-	return
 }
 
 // findModule returns the module at path.
