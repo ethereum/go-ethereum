@@ -148,6 +148,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			pebbleDb.onWriteStallEnd()
 		},
 	}
+	// The max memtable size is limited by the uint32 offsets stored in
+	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
+	// Taken from https://github.com/cockroachdb/pebble/blob/master/open.go#L38
+	maxMemTableSize := 4 << 30 // 4 GB
+	memTableSize := cache * 1024 * 1024 / 4
+	if memTableSize > maxMemTableSize {
+		memTableSize = maxMemTableSize
+	}
+
 	// Open the db and recover any potential corruptions
 	db, err := pebble.Open(file, &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -158,7 +167,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// The size of memory table(as well as the write buffer).
 		// Note, there may have more than two memory tables in the system.
 		// MemTableStopWritesThreshold can be configured to avoid the memory abuse.
-		MemTableSize: cache * 1024 * 1024 / 4,
+		MemTableSize: memTableSize,
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
 		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
