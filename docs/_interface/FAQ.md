@@ -91,6 +91,18 @@ Historically, running Geth was enough to turn a computer into an Ethereum node. 
 
 If you do not run a consensus client, your consensus client is not working or not correctly connected to Geth, you will see the following error in the Geth logs: `WARN [09-07|08:48:00.149] Post-merge network, but no beacon client seen. Please launch one to follow the chain!`
 
+## What is staking and how do I participate?
+
+Staking is how node operators participate in proof-of-stake based consensus. Staking requires validators to deposit 32 ETH to a smart contract and run validator software connected to their node. The validator software broadcasts a vote ("attestation") in favour of checkpoint blocks that it determines to be in the canonical blockchain. The corrct chain is then the one with the greatest accumulation of votes, weighted by the validators stake (up to a maximum of 32 ETH). Geth, as an execution client, does not directly handle consensus logic but it does provide the node with the execution and state-management tools required to validate incoming blocks. Validators are also occasionally picked to propose the next block broadcast across the network. In this case Geth's role is to bundle transactions it has received over the execution layer gossip network, pass them to the consensus client to be included in the block and execute them to determine the resulting state change. 
+
+It is entirely possible to run a node without staking any ETH. In this case the node runs the execution and consensus clients but not the validator software. In order to participate in consensus and earn ETH rewards, the node must run an execution cleint, consensus client and a validator. The validator software comes bundled with the consensus client.
+
+For step-by-step instruction for staking and spinning up a validating node, see [ethereum.org](https://ethereum.org/en/staking/) or get started on the Ethereum Foundation's [Staking Launchpad](https://launchpad.ethereum.org/).
+
+## How do I set up a consensus client/validator and connect it to Geth?
+
+These docs mainly cover how to set up Geth, but since the switch to proof-of-stake it is also necessary to run a consensus client in order to track the head of the chain, and a validator in order to participate in proof-of-stake consensus. A validator node is also required to deposit 32 ETH into a specific smart contract. Our [consensus clients page](/src/pages/docs/getting-started/consensus-clients.md) includes a general overview of how to connect a consensus client to Geth. For step by step instructions for specific clients, see their documentation and also see these helpful [online guides](https://github.com/SomerEsat/ethereum-staking-guides).
+
 ### How do I update Geth?
 
 Updating Geth to the latest version simply requires stopping the node, downloading the latest release and restarting the node. Precisely how to download the latest software depends on the installation method - please refer to our [Installation pages](/docs/install-and-build/Installing-Geth.md).
