@@ -28,7 +28,7 @@ RPC stands for Remote Procedure Call. RPC is a mode of communication between pro
 ### What is `jwtsecret`?
 
 
-The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key, proving each party's identity. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
+The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/content/docs/getting_started/consensus-clients.md) page.
 
 
 ### I noticed my peercount slowly decreasing, and now it is at 0.  Restarting doesn't get any peers.
