@@ -17,11 +17,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
-
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -75,9 +76,9 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	disc, socket := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
 	defer close(unhandled)
-
 	// Send request
-	xfer := &xferStart{Size: uint64(fileInfo.Size())}
+	fName := filepath.Base(filepath.Clean(file.Name()))
+	xfer := &xferStart{Size: uint64(fileInfo.Size()), Filename: fName}
 	if err := requestTransfer(disc, n, xfer); err != nil {
 		return err
 	}
@@ -114,27 +115,34 @@ func discv5WormholeSend(ctx *cli.Context) error {
 func discv5WormholeReceive(ctx *cli.Context) error {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int(verbosityFlag.Name)), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-	if ctx.Args().Len() < 1 {
-		return fmt.Errorf("receive command needs filename as argument %d", ctx.Args().Len())
+	path := "./" // filePath is where received files are stored.
+	if ctx.Args().Len() > 0 {
+		path = ctx.Args().First()
+		fInfo, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("first argument must be a directory: %w", err)
+		}
+		if !fInfo.IsDir() {
+			return fmt.Errorf("first argument must be a directory")
+		}
 	}
-	filePath := ctx.Args().First()
-
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644)
+	rootPath, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
-
-	err = doReceive(ctx, file)
-	file.Close()
-	if err != nil {
-		os.Remove(filePath)
-	}
-	return err
+	log.Info("File destination set", "directory", rootPath)
+	return doReceive(rootPath, ctx)
 }
 
-func doReceive(ctx *cli.Context, file *os.File) error {
-	startSession := make(chan *xferStart)
+//func promptUser(q string) (string, error) {
+//	var ans string
+//	fmt.Print(q)
+//	_, err := fmt.Scanln(&ans)
+//	return ans, err
+//}
 
+func doReceive(root string, ctx *cli.Context) error {
+	startSession := make(chan *xferStart)
 	// Setup discv5 protocol.
 	unhandled := make(chan discover.ReadPacket, 10)
 	disc, socket := startV5WithUnhandled(ctx, unhandled)
@@ -145,13 +153,23 @@ func doReceive(ctx *cli.Context, file *os.File) error {
 			resp, _ := rlp.EncodeToBytes(&xferResponse{Accept: false, Error: "bad request"})
 			return resp
 		}
-
+		/*
+			Unfortunately, we cannot do user-prompt here, because the TALKREQUEST has a very short
+			timeout-window. TODO fix.
+		*/
+		//ans, err := promptUser(fmt.Sprintf("Incoming request:\n  Filename: %v\n  File size %d bytes\nAccept transfer? (Y/n) > ",
+		//	startReq.Filename, startReq.Size))
+		//if err != nil {
+		//	log.Error("Error doing prompt", "err", err)
+		//} else if ans == "Y" || ans == "y" {
 		startReq.fromNode = id
 		startReq.fromAddr = addr
 		startSession <- &startReq
-
 		resp, _ := rlp.EncodeToBytes(&xferResponse{Accept: true})
 		return resp
+		//}
+		//resp, _ := rlp.EncodeToBytes(&xferResponse{Accept: false})
+		//return resp
 	})
 
 	defer close(unhandled)
@@ -175,24 +193,65 @@ func doReceive(ctx *cli.Context, file *os.File) error {
 	log.Info("KCP socket accepted")
 	setupKCP(s)
 
+	file, err := createTmpDest(root, xfer.Filename)
+	if err != nil {
+		return err
+	}
+	fName := filepath.Base(file.Name())
+	if err != nil {
+		return err
+	}
 	if _, err := io.CopyN(file, s, int64(xfer.Size)); err != nil {
+		// Clean up
+		file.Close()
+		os.Remove(filepath.Join(root, fName))
 		return fmt.Errorf("copy failed: %v", err)
 	}
-
 	s.Write([]byte("ACK"))
 	kcpStatsDump(kcp.DefaultSnmp)
-	fmt.Println("transfer OK")
+	file.Close()
+	if err := os.Rename(filepath.Join(root, fName), filepath.Join(root, xfer.Filename)); err != nil {
+		log.Error("Error renaming file", "err", err)
+	}
+	log.Info("Transfer OK", "file", filepath.Join(root, xfer.Filename))
 	return nil
 }
 
+// createTmpDest creates a temporary destination-file, but avoid overwriting an
+// existing file. If the incoming file is "file.txt", then it will create
+// "file.txt.0.tmp" first, and if that already exists, "file,txt.1.tmp" etc.
+// This method will return error if the filename is not the canonical represention,
+// (i.e: if the name contains more than just the filename).
+func createTmpDest(rootPath, filename string) (*os.File, error) {
+	if filepath.Clean(filename) != filename {
+		return nil, fmt.Errorf("filename not canonical, possibly path-traversal attempt: %v != %v", filename, filepath.Clean(filename))
+	}
+	for i := 0; i < 20; i++ {
+		fullPath := fmt.Sprintf("%v.%d.tmp", filepath.Join(rootPath, filename), i)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			// We can create a file here
+			file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return nil, err
+			}
+			return file, nil
+		}
+	}
+	return nil, errors.New("file creation aborted after 20 retries, please clean up destination path")
+}
+
+// xferStart is sent in the initial TALKREQUEST, and contains some metadata
+// about the file file that is being requested to send.
 type xferStart struct {
-	Size uint64
+	Size     uint64
+	Filename string
 	// Key [16]byte
 
 	fromNode enode.ID
 	fromAddr *net.UDPAddr
 }
 
+// xferResponse is the response to the xferStart request
 type xferResponse struct {
 	Accept bool
 	Error  string
@@ -206,7 +265,7 @@ func requestTransfer(disc *discover.UDPv5, node *enode.Node, xfer *xferStart) er
 	}
 	resp, err := disc.TalkRequest(node, "wrm", req)
 	if err != nil {
-		return err
+		return fmt.Errorf("talk request error: %w", err)
 	}
 	var xresp xferResponse
 	if err := rlp.DecodeBytes(resp, &xresp); err != nil {
