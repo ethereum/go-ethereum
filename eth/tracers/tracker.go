@@ -92,18 +92,16 @@ func (t *stateTracker) callReleases() {
 
 // wait blocks until the accumulated trace states are less than the limit.
 func (t *stateTracker) wait(number uint64) error {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	for {
-		t.lock.Lock()
-		head := t.oldest
 		if number < t.oldest {
-			t.lock.Unlock()
 			return fmt.Errorf("invalid state number %d head %d", number, t.oldest)
 		}
-		if int(number-head) < t.limit {
-			t.lock.Unlock()
+		if int(number-t.oldest) < t.limit {
 			return nil
 		}
 		t.cond.Wait()
-		t.lock.Unlock()
 	}
 }
