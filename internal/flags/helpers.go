@@ -95,7 +95,14 @@ func doMigrateFlags(ctx *cli.Context) {
 	for _, name := range ctx.FlagNames() {
 		for _, parent := range ctx.Lineage()[1:] {
 			if parent.IsSet(name) {
-				ctx.Set(name, parent.String(name))
+				// It is a string-slice, not a string. We need to set it
+				// as "alfa, beta, gamma" instead of "[alfa beta gamma]", in order
+				// for the backing StringSlice to parse it properly.
+				if result := parent.StringSlice(name); len(result) > 0 {
+					ctx.Set(name, strings.Join(result, ","))
+				} else {
+					ctx.Set(name, parent.String(name))
+				}
 				break
 			}
 		}
