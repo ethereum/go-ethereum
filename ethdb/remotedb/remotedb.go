@@ -22,7 +22,10 @@
 package remotedb
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -150,7 +153,7 @@ func (db *Database) Close() error {
 	return nil
 }
 
-func dialRPC(endpoint string) (*rpc.Client, error) {
+func dialRPC(endpoint string, headers []string) (*rpc.Client, error) {
 	if endpoint == "" {
 		return nil, errors.New("endpoint must be specified")
 	}
@@ -159,11 +162,23 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	var opts []rpc.ClientOption
+	if len(headers) > 0 {
+		var customHeaders = make(http.Header)
+		for _, h := range headers {
+			kv := strings.Split(h, ":")
+			if len(kv) != 2 {
+				return nil, fmt.Errorf("invalid http header directive: %q", h)
+			}
+			customHeaders.Add(kv[0], kv[1])
+		}
+		opts = append(opts, rpc.WithHeaders(customHeaders))
+	}
+	return rpc.DialOptions(context.Background(), endpoint, opts...)
 }
 
-func New(endpoint string) (ethdb.Database, error) {
-	client, err := dialRPC(endpoint)
+func New(endpoint string, headers []string) (ethdb.Database, error) {
+	client, err := dialRPC(endpoint, headers)
 	if err != nil {
 		return nil, err
 	}
