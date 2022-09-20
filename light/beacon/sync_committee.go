@@ -59,6 +59,14 @@ const (
 	advertiseDelay          = time.Second * 10
 )
 
+// SignedHead represents a beacon header signed by a sync committee
+type SignedHead struct {
+	BitMask   []byte
+	Signature []byte
+	Header    Header
+}
+
+// calculateScore returns a score value based on signer participation and block height. //TODO ???
 func (s *SignedHead) calculateScore() (int, uint64) {
 	if len(s.BitMask) != 64 {
 		return 0, 0 // signature check will filter it out later but we calculate score before sig check
@@ -80,26 +88,24 @@ func (s *SignedHead) calculateScore() (int, uint64) {
 	return signerCount, baseScore + uint64(signerCount)*3 + 0x800 // 0..0xC00..0xE00; 3..3.5 slots offset
 }
 
-type SignedHead struct {
-	BitMask   []byte
-	Signature []byte
-	Header    Header
-}
-
+// Equal returns true if both the headers and the signer sets are the same
 func (s *SignedHead) Equal(s2 *SignedHead) bool {
 	return s.Header == s2.Header && bytes.Equal(s.BitMask, s2.BitMask) && bytes.Equal(s.Signature, s2.Signature)
 }
 
+// syncCommittee is a set of sync committee signer pubkeys
 type syncCommittee struct {
 	keys      [512]*bls.Pubkey
 	aggregate *bls.Pubkey
 }
 
+// sctClient represents a peer that SyncCommitteeTracker sends signed heads and sync committee advertisements to
 type sctClient interface {
 	SendSignedHeads(heads []SignedHead)
 	SendUpdateInfo(updateInfo *UpdateInfo)
 }
 
+// sctServer represents a peer that SyncCommitteeTracker can request sync committee update proofs from
 type sctServer interface {
 	GetBestCommitteeProofs(ctx context.Context, req CommitteeRequest) (CommitteeReply, error)
 	ClosedChannel() chan struct{}
@@ -108,6 +114,13 @@ type sctServer interface {
 
 const lastProcessedCount = 4
 
+// SyncCommitteeTracker maintains a chain of sync committee updates and a small set of best known signed heads.
+// It is used in all client configurations operating on a beacon chain. It can sync its update chain and receive
+// signed heads from either an ODR or beacon node API backend and propagate/serve this data to subscribed peers.
+// Received signed heads are validated based on the known sync committee chain and added to the local set if
+// valid or placed in a deferred queue if the committees are not synced up to the period of the new head yet.
+// Sync committee chain is either initialized from a weak subjectivity checkpoint or controlled by a BeaconChain
+// that is driven by a trusted source (beacon node API).
 type SyncCommitteeTracker struct {
 	lock                                                                              sync.RWMutex
 	db                                                                                ethdb.Database
@@ -135,6 +148,7 @@ type SyncCommitteeTracker struct {
 	headSubs []func(Header)
 }
 
+// NewSyncCommitteeTracker creates a new SyncCommitteeTracker
 func NewSyncCommitteeTracker(db ethdb.Database, forks Forks, constraints SctConstraints, clock mclock.Clock) *SyncCommitteeTracker {
 	db = rawdb.NewTable(db, "sct-")
 	s := &SyncCommitteeTracker{
@@ -177,10 +191,12 @@ func NewSyncCommitteeTracker(db ethdb.Database, forks Forks, constraints SctCons
 	return s
 }
 
+// Stop stops the syncing/propagation process and shuts down the tracker
 func (s *SyncCommitteeTracker) Stop() {
 	close(s.stopCh)
 }
 
+//TODO chain reset function?
 /*func (s *SyncCommitteeTracker) clearDb() {
 	//fmt.Println("clearDb")
 	iter := s.db.NewIterator(nil, nil)
@@ -195,6 +211,7 @@ func (s *SyncCommitteeTracker) Stop() {
 	s.updateInfo = nil
 }*/
 
+// getBestUpdateKey returns the database key for the canonical sync committee update at the given period
 func getBestUpdateKey(period uint64) []byte {
 	kl := len(bestUpdateKey)
 	key := make([]byte, kl+8)
@@ -203,13 +220,7 @@ func getBestUpdateKey(period uint64) []byte {
 	return key
 }
 
-/*func (s *SyncCommitteeTracker) getNextPeriod() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.nextPeriod
-}*/
-
+// GetBestUpdate returns the best known canonical sync committee update at the given period
 func (s *SyncCommitteeTracker) GetBestUpdate(period uint64) *LightClientUpdate {
 	//fmt.Println("GetBestUpdate", period)
 	if v, ok := s.bestUpdateCache.Get(period); ok {
@@ -240,6 +251,7 @@ func (s *SyncCommitteeTracker) GetBestUpdate(period uint64) *LightClientUpdate {
 	return nil
 }
 
+// storeBestUpdate stores a sync committee update in the canonical update chain
 func (s *SyncCommitteeTracker) storeBestUpdate(update *LightClientUpdate) {
 	period := uint64(update.Header.Slot) >> 13 //TODO which header?
 	//fmt.Println("storeBestUpdate", period, update)
@@ -254,6 +266,7 @@ func (s *SyncCommitteeTracker) storeBestUpdate(update *LightClientUpdate) {
 	s.updateInfoChanged()
 }
 
+// deleteBestUpdate deletes a sync committee update from the canonical update chain
 func (s *SyncCommitteeTracker) deleteBestUpdate(period uint64) {
 	s.db.Delete(getBestUpdateKey(period))
 	s.bestUpdateCache.Remove(period)
@@ -261,13 +274,8 @@ func (s *SyncCommitteeTracker) deleteBestUpdate(period uint64) {
 	s.updateInfoChanged()
 }
 
-const (
-	sciSuccess = iota
-	sciNeedCommittee
-	sciWrongUpdate
-	sciUnexpectedError
-)
-
+// verifyUpdate checks whether the sync committee Merkle proof and the header signature is
+// correct and the update fits into the specified constraints
 func (s *SyncCommitteeTracker) verifyUpdate(update *LightClientUpdate) bool {
 	if update.Header.Slot&0x1fff == 0x1fff {
 		// last slot of each period is not suitable for an update because it is signed by the next period's sync committee, proves the same committee it is signed by
@@ -297,14 +305,18 @@ func (s *SyncCommitteeTracker) verifyUpdate(update *LightClientUpdate) bool {
 	return s.verifySignature(SignedHead{Header: update.Header, Signature: update.SyncCommitteeSignature, BitMask: update.SyncCommitteeBits})
 }
 
-// returns true if nextCommittee is needed; call again
-// verifies update before inserting
+const (
+	sciSuccess = iota
+	sciNeedCommittee
+	sciWrongUpdate
+	sciUnexpectedError
+)
+
+// insertUpdate verifies the update and stores it in the update chain if possible. The serialized version
+// of the next committee should also be supplied if it is not already stored in the database.
 func (s *SyncCommitteeTracker) insertUpdate(update *LightClientUpdate, nextCommittee []byte) int {
-	//fmt.Println("insertUpdate", update, nextCommittee != nil)
 	period := uint64(update.Header.Slot) >> 13
-	//fmt.Println(" before insert (first, next, update):", s.firstPeriod, s.nextPeriod, period)
 	if !s.verifyUpdate(update) {
-		//fmt.Println("wrong update")
 		return sciWrongUpdate
 	}
 
@@ -328,24 +340,18 @@ func (s *SyncCommitteeTracker) insertUpdate(update *LightClientUpdate, nextCommi
 		rollback = update.NextSyncCommitteeRoot != oldUpdate.NextSyncCommitteeRoot
 		if !update.score.betterThan(oldUpdate.score) {
 			// not better that existing one, nothing to do
-			//fmt.Println(" not better than existing update, nothing changed")
 			return sciSuccess
 		}
 	}
 
-	//fmt.Println(" insertUpdate(period, nextPeriod, p+1 committee root, exists):", period, s.nextPeriod, update.NextSyncCommitteeRoot, s.GetSerializedSyncCommittee(period+1, update.NextSyncCommitteeRoot) != nil)
 	if (period == s.nextPeriod || rollback) && s.GetSerializedSyncCommittee(period+1, update.NextSyncCommitteeRoot) == nil {
-		//fmt.Println("111")
 		// committee is not yet stored in db
 		if nextCommittee == nil {
-			//fmt.Println("need committee")
 			return sciNeedCommittee
 		}
 		if SerializedCommitteeRoot(nextCommittee) != update.NextSyncCommitteeRoot {
-			//fmt.Println("wrong committee root")
 			return sciWrongUpdate
 		}
-		//fmt.Println("222")
 		s.storeSerializedSyncCommittee(period+1, update.NextSyncCommitteeRoot, nextCommittee)
 	}
 
@@ -362,11 +368,11 @@ func (s *SyncCommitteeTracker) insertUpdate(update *LightClientUpdate, nextCommi
 	if period+1 == s.firstPeriod {
 		s.firstPeriod--
 	}
-	//fmt.Println(" after insert (first, next):", s.firstPeriod, s.nextPeriod)
 	log.Info("Synced new committee update", "period", period, "nextCommitteeRoot", update.NextSyncCommitteeRoot)
 	return sciSuccess
 }
 
+// getSyncCommitteeKey returns the database key for the specified sync committee
 func getSyncCommitteeKey(period uint64, committeeRoot common.Hash) []byte {
 	kl := len(syncCommitteeKey)
 	key := make([]byte, kl+8+32)
@@ -376,6 +382,7 @@ func getSyncCommitteeKey(period uint64, committeeRoot common.Hash) []byte {
 	return key
 }
 
+// GetSerializedSyncCommittee
 func (s *SyncCommitteeTracker) GetSerializedSyncCommittee(period uint64, committeeRoot common.Hash) []byte {
 	//fmt.Println("GetSerializedSyncCommittee", period, committeeRoot)
 	key := getSyncCommitteeKey(period, committeeRoot)
