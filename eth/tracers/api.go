@@ -871,7 +871,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	// try to recompute the state
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
-		reexec = *config.TraceConfig.Reexec
+		reexec = *config.Reexec
 	}
 	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
 	if err != nil {
