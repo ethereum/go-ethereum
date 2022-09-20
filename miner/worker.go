@@ -164,7 +164,6 @@ const (
 type newWorkReq struct {
 	interrupt *int32
 	noempty   bool
-	timestamp int64
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -419,7 +418,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	var (
 		interrupt   *int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
-		timestamp   int64      // timestamp for each round of sealing.
 	)
 
 	timer := time.NewTimer(0)
@@ -433,7 +431,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		}
 		interrupt = new(int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty}:
 		case <-w.exitCh:
 			return
 		}
@@ -455,12 +453,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		select {
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
-			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
-			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
@@ -531,7 +527,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			w.commitWork(req.interrupt, req.noempty, req.timestamp)
+			w.commitWork(req.interrupt, req.noempty)
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
@@ -609,7 +605,7 @@ func (w *worker) mainLoop() {
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, true, time.Now().Unix())
+					w.commitWork(nil, true)
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
@@ -978,13 +974,13 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		return nil, fmt.Errorf("missing parent")
 	}
 	// Sanity check the timestamp correctness, recap the timestamp
-	// to parent+1 if the mutation is allowed.
+	// to parent+12 if the mutation is allowed.
 	timestamp := genParams.timestamp
 	if parent.Time() >= timestamp {
 		if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time(), timestamp)
 		}
-		timestamp = parent.Time() + 1
+		timestamp = parent.Time() + 12
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
@@ -1001,6 +997,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
+	} else {
+		// Beacon chain randomness changes every epoch, this will usually be correct.
+		header.MixDigest = parent.Header().MixDigest
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
@@ -1089,7 +1088,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
+func (w *worker) commitWork(interrupt *int32, noempty bool) {
 	start := time.Now()
 
 	// Set the coinbase if the worker is running or it's required
@@ -1101,10 +1100,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		}
 		coinbase = w.coinbase // Use the preset address as the fee recipient
 	}
-	work, err := w.prepareWork(&generateParams{
-		timestamp: uint64(timestamp),
-		coinbase:  coinbase,
-	})
+	work, err := w.prepareWork(&generateParams{coinbase: coinbase})
 	if err != nil {
 		return
 	}
