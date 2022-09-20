@@ -215,7 +215,6 @@ func dumpConfig(ctx *cli.Context) error {
 
 func applyTraceConfig(ctx *cli.Context, cfg *ethconfig.Config) {
 	subCfg := debug.ConfigTrace(ctx)
-	cfg.TraceCacheLimit = subCfg.TraceCacheLimit
 	cfg.MPTWitness = subCfg.MPTWitness
 }
 

@@ -206,8 +206,7 @@ type Config struct {
 	OverrideArrowGlacier *big.Int `toml:",omitempty"`
 
 	// Trace option
-	TraceCacheLimit int
-	MPTWitness      int
+	MPTWitness int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

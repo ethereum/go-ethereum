@@ -51,6 +51,10 @@ func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }
 
+func (b *LesApiBackend) CacheConfig() *core.CacheConfig {
+	return nil
+}
+
 func (b *LesApiBackend) CurrentBlock() *types.Block {
 	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
 }

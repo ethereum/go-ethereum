@@ -31,7 +31,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/scroll-tech/go-ethereum/common"
-	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/mclock"
 	"github.com/scroll-tech/go-ethereum/common/prque"
 	"github.com/scroll-tech/go-ethereum/consensus"
@@ -87,14 +86,13 @@ var (
 )
 
 const (
-	bodyCacheLimit        = 256
-	blockCacheLimit       = 256
-	receiptsCacheLimit    = 32
-	txLookupCacheLimit    = 1024
-	maxFutureBlocks       = 256
-	maxTimeFutureBlocks   = 30
-	TriesInMemory         = 128
-	blockResultCacheLimit = 128
+	bodyCacheLimit      = 256
+	blockCacheLimit     = 256
+	receiptsCacheLimit  = 32
+	txLookupCacheLimit  = 1024
+	maxFutureBlocks     = 256
+	maxTimeFutureBlocks = 30
+	TriesInMemory       = 128
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -134,8 +132,7 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
-	TraceCacheLimit     int
-	MPTWitness          int // How to generate witness data for mpt circuit, 0: nothing, 1: natural
+	MPTWitness          int           // How to generate witness data for mpt circuit, 0: nothing, 1: natural
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -143,13 +140,12 @@ type CacheConfig struct {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit:  256,
-	TrieDirtyLimit:  256,
-	TrieTimeLimit:   5 * time.Minute,
-	SnapshotLimit:   256,
-	SnapshotWait:    true,
-	TraceCacheLimit: 32,
-	MPTWitness:      int(zkproof.MPTWitnessNothing),
+	TrieCleanLimit: 256,
+	TrieDirtyLimit: 256,
+	TrieTimeLimit:  5 * time.Minute,
+	SnapshotLimit:  256,
+	SnapshotWait:   true,
+	MPTWitness:     int(zkproof.MPTWitnessNothing),
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -199,14 +195,13 @@ type BlockChain struct {
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache       state.Database // State database to reuse between imports (contains state cache)
-	bodyCache        *lru.Cache     // Cache for the most recent block bodies
-	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
-	receiptsCache    *lru.Cache     // Cache for the most recent receipts per block
-	blockCache       *lru.Cache     // Cache for the most recent entire blocks
-	txLookupCache    *lru.Cache     // Cache for the most recent transaction lookup data.
-	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
-	blockResultCache *lru.Cache     // Cache for the most recent block results.
+	stateCache    state.Database // State database to reuse between imports (contains state cache)
+	bodyCache     *lru.Cache     // Cache for the most recent block bodies
+	bodyRLPCache  *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
+	receiptsCache *lru.Cache     // Cache for the most recent receipts per block
+	blockCache    *lru.Cache     // Cache for the most recent entire blocks
+	txLookupCache *lru.Cache     // Cache for the most recent transaction lookup data.
+	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -235,10 +230,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	blockCache, _ := lru.New(blockCacheLimit)
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	blockResultCache, _ := lru.New(blockResultCacheLimit)
-	if cacheConfig.TraceCacheLimit != 0 {
-		blockResultCache, _ = lru.New(cacheConfig.TraceCacheLimit)
-	}
 	// override snapshot setting
 	if chainConfig.Zktrie && cacheConfig.SnapshotLimit > 0 {
 		log.Warn("snapshot has been disabled by zktrie")
@@ -256,18 +247,17 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			Preimages: cacheConfig.Preimages,
 			Zktrie:    chainConfig.Zktrie,
 		}),
-		quit:             make(chan struct{}),
-		chainmu:          syncx.NewClosableMutex(),
-		shouldPreserve:   shouldPreserve,
-		bodyCache:        bodyCache,
-		bodyRLPCache:     bodyRLPCache,
-		receiptsCache:    receiptsCache,
-		blockCache:       blockCache,
-		txLookupCache:    txLookupCache,
-		futureBlocks:     futureBlocks,
-		blockResultCache: blockResultCache,
-		engine:           engine,
-		vmConfig:         vmConfig,
+		quit:           make(chan struct{}),
+		chainmu:        syncx.NewClosableMutex(),
+		shouldPreserve: shouldPreserve,
+		bodyCache:      bodyCache,
+		bodyRLPCache:   bodyRLPCache,
+		receiptsCache:  receiptsCache,
+		blockCache:     blockCache,
+		txLookupCache:  txLookupCache,
+		futureBlocks:   futureBlocks,
+		engine:         engine,
+		vmConfig:       vmConfig,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -1202,17 +1192,17 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 }
 
 // WriteBlockWithState writes the block and all associated state to the database.
-func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, evmTraces []*types.ExecutionResult, storageTrace *types.StorageTrace, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
-	return bc.writeBlockWithState(block, receipts, logs, evmTraces, storageTrace, state, emitHeadEvent)
+	return bc.writeBlockWithState(block, receipts, logs, state, emitHeadEvent)
 }
 
 // writeBlockWithState writes the block and all associated state to the database,
 // but is expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, evmTraces []*types.ExecutionResult, storageTrace *types.StorageTrace, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if bc.insertStopped() {
 		return NonStatTy, errInsertionInterrupted
 	}
@@ -1333,15 +1323,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	bc.futureBlocks.Remove(block.Hash())
 
-	// Fill blockResult content
-	var blockResult *types.BlockResult
-	if evmTraces != nil {
-		blockResult = bc.writeBlockResult(state, block, evmTraces, storageTrace)
-		bc.blockResultCache.Add(block.Hash(), blockResult)
-	}
-
 	if status == CanonStatTy {
-		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs, BlockResult: blockResult})
+		bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 		if len(logs) > 0 {
 			bc.logsFeed.Send(logs)
 		}
@@ -1357,40 +1340,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
 	}
 	return status, nil
-}
-
-// Fill blockResult content
-func (bc *BlockChain) writeBlockResult(state *state.StateDB, block *types.Block, evmTraces []*types.ExecutionResult, storageTrace *types.StorageTrace) *types.BlockResult {
-	blockResult := &types.BlockResult{
-		ExecutionResults: evmTraces,
-		StorageTrace:     storageTrace,
-	}
-	coinbase := types.AccountWrapper{
-		Address:  block.Coinbase(),
-		Nonce:    state.GetNonce(block.Coinbase()),
-		Balance:  (*hexutil.Big)(state.GetBalance(block.Coinbase())),
-		CodeHash: state.GetCodeHash(block.Coinbase()),
-	}
-
-	blockResult.BlockTrace = types.NewTraceBlock(bc.chainConfig, block, &coinbase)
-	for i, tx := range block.Transactions() {
-		evmTrace := blockResult.ExecutionResults[i]
-		// Contract is called
-		if len(tx.Data()) != 0 && tx.To() != nil {
-			evmTrace.ByteCode = hexutil.Encode(state.GetCode(*tx.To()))
-			// Get tx.to address's code hash.
-			codeHash := state.GetCodeHash(*tx.To())
-			evmTrace.CodeHash = &codeHash
-		} else if tx.To() == nil { // Contract is created.
-			evmTrace.ByteCode = hexutil.Encode(tx.Data())
-		}
-	}
-
-	if err := zkproof.FillBlockResultForMPTWitness(zkproof.MPTWitnessType(bc.cacheConfig.MPTWitness), blockResult); err != nil {
-		log.Error("fill mpt witness fail", "error", err)
-	}
-
-	return blockResult
 }
 
 // addFutureBlock checks if the block is within the max allowed window to get
@@ -1706,7 +1655,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		// Write the block to the chain and get the status.
 		substart = time.Now()
 		// EvmTraces & StorageTrace being nil is safe because l2geth's p2p server is stoped and the code will not execute there.
-		status, err := bc.writeBlockWithState(block, receipts, logs, nil, nil, statedb, false)
+		status, err := bc.writeBlockWithState(block, receipts, logs, statedb, false)
 		atomic.StoreUint32(&followupInterrupt, 1)
 		if err != nil {
 			return it.index, err

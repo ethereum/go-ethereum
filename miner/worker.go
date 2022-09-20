@@ -19,7 +19,6 @@ package miner
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -28,13 +27,11 @@ import (
 	mapset "github.com/deckarep/golang-set"
 
 	"github.com/scroll-tech/go-ethereum/common"
-	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
@@ -92,22 +89,17 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header           *types.Header
-	txs              []*types.Transaction
-	receipts         []*types.Receipt
-	executionResults []*types.ExecutionResult
-	proofs           map[string][]hexutil.Bytes
-	storageProofs    map[string]map[string][]hexutil.Bytes
+	header   *types.Header
+	txs      []*types.Transaction
+	receipts []*types.Receipt
 }
 
 // task contains all information for consensus engine sealing and result submitting.
 type task struct {
-	receipts         []*types.Receipt
-	executionResults []*types.ExecutionResult
-	storageResults   *types.StorageTrace
-	state            *state.StateDB
-	block            *types.Block
-	createdAt        time.Time
+	receipts  []*types.Receipt
+	state     *state.StateDB
+	block     *types.Block
+	createdAt time.Time
 }
 
 const (
@@ -642,20 +634,13 @@ func (w *worker) resultLoop() {
 			}
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
 			var (
-				receipts     = make([]*types.Receipt, len(task.receipts))
-				evmTraces    = make([]*types.ExecutionResult, len(task.executionResults))
-				logs         []*types.Log
-				storageTrace = new(types.StorageTrace)
+				receipts = make([]*types.Receipt, len(task.receipts))
+				logs     []*types.Log
 			)
 			for i, taskReceipt := range task.receipts {
 				receipt := new(types.Receipt)
 				receipts[i] = receipt
 				*receipt = *taskReceipt
-
-				evmTrace := new(types.ExecutionResult)
-				evmTraces[i] = evmTrace
-				*evmTrace = *task.executionResults[i]
-				*storageTrace = *task.storageResults
 
 				// add block location fields
 				receipt.BlockHash = hash
@@ -674,7 +659,7 @@ func (w *worker) resultLoop() {
 				logs = append(logs, receipt.Logs...)
 			}
 			// Commit block and state to database.
-			_, err := w.chain.WriteBlockWithState(block, receipts, logs, evmTraces, storageTrace, task.state, true)
+			_, err := w.chain.WriteBlockWithState(block, receipts, logs, task.state, true)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
@@ -704,37 +689,13 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	}
 	state.StartPrefetcher("miner")
 
-	proofs := make(map[string][]hexutil.Bytes)
-	// init proof with coinbase's proof
-	for _, coinbase := range []common.Address{w.coinbase, header.Coinbase} {
-		if coinbase == (common.Address{}) {
-			continue
-		}
-
-		key := coinbase.String()
-		if _, exist := proofs[key]; !exist {
-			proof, err := state.GetProof(coinbase)
-			if err != nil {
-				log.Error("Proof for coinbase not available", "coinbase", coinbase, "error", err)
-				// but we still mark the proofs map with nil array
-			}
-			wrappedProof := make([]hexutil.Bytes, len(proof))
-			for i, bt := range proof {
-				wrappedProof[i] = bt
-			}
-			proofs[key] = wrappedProof
-		}
-	}
-
 	env := &environment{
-		signer:        types.MakeSigner(w.chainConfig, header.Number),
-		state:         state,
-		ancestors:     mapset.NewSet(),
-		family:        mapset.NewSet(),
-		uncles:        mapset.NewSet(),
-		header:        header,
-		proofs:        proofs,
-		storageProofs: make(map[string]map[string][]hexutil.Bytes),
+		signer:    types.MakeSigner(w.chainConfig, header.Number),
+		state:     state,
+		ancestors: mapset.NewSet(),
+		family:    mapset.NewSet(),
+		uncles:    mapset.NewSet(),
+		header:    header,
 	}
 	// when 08 is processed ancestors contain 07 (quick block)
 	for _, ancestor := range w.chain.GetBlocksFromHash(parent.Hash(), 7) {
@@ -812,113 +773,13 @@ func (w *worker) updateSnapshot() {
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
 
-	// reset tracer.
-	tracer := w.chain.GetVMConfig().Tracer.(*vm.StructLogger)
-	tracer.Reset()
-	// Get sender's address.
-	from, _ := types.Sender(w.current.signer, tx)
-	sender := &types.AccountWrapper{
-		Address:  from,
-		Nonce:    w.current.state.GetNonce(from),
-		Balance:  (*hexutil.Big)(w.current.state.GetBalance(from)),
-		CodeHash: w.current.state.GetCodeHash(from),
-	}
-	// Get receiver's address.
-	var receiver *types.AccountWrapper
-	if tx.To() != nil {
-		to := *tx.To()
-		receiver = &types.AccountWrapper{
-			Address:  to,
-			Nonce:    w.current.state.GetNonce(to),
-			Balance:  (*hexutil.Big)(w.current.state.GetBalance(to)),
-			CodeHash: w.current.state.GetCodeHash(to),
-		}
-	}
-
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}
-
-	createdAcc := tracer.CreatedAccount()
-	var after []*types.AccountWrapper
-	to := tx.To()
-
-	if to == nil {
-		if createdAcc == nil {
-			panic("unexpected tx: address for created contract unavialable")
-		}
-		to = &createdAcc.Address
-	}
-
-	// collect affected account after tx being applied
-	for acc := range map[common.Address]bool{from: true, (*to): true, w.coinbase: true} {
-		after = append(after, &types.AccountWrapper{
-			Address:  acc,
-			Nonce:    w.current.state.GetNonce(acc),
-			Balance:  (*hexutil.Big)(w.current.state.GetBalance(acc)),
-			CodeHash: w.current.state.GetCodeHash(acc),
-		})
-	}
-
-	// merge required proof data
-	proofAccounts := tracer.UpdatedAccounts()
-	for addr := range proofAccounts {
-		addrStr := addr.String()
-		if _, existed := w.current.proofs[addrStr]; !existed {
-			proof, err := w.current.state.GetProof(addr)
-			if err != nil {
-				log.Error("Proof not available", "address", addrStr, "error", err)
-				// but we still mark the proofs map with nil array
-			}
-			wrappedProof := make([]hexutil.Bytes, len(proof))
-			for i, bt := range proof {
-				wrappedProof[i] = bt
-			}
-			w.current.proofs[addrStr] = wrappedProof
-		}
-	}
-
-	proofStorages := tracer.UpdatedStorages()
-	for addr, keys := range proofStorages {
-		for key := range keys {
-			addrStr := addr.String()
-			m, existed := w.current.storageProofs[addrStr]
-			if !existed {
-				m = make(map[string][]hexutil.Bytes)
-				w.current.storageProofs[addrStr] = m
-			}
-
-			keyStr := key.String()
-			if _, existed := m[keyStr]; !existed {
-				proof, err := w.current.state.GetStorageTrieProof(addr, key)
-				if err != nil {
-					log.Error("Storage proof not available", "error", err, "address", addrStr, "key", keyStr)
-					// but we still mark the proofs map with nil array
-				}
-				wrappedProof := make([]hexutil.Bytes, len(proof))
-				for i, bt := range proof {
-					wrappedProof[i] = bt
-				}
-				m[keyStr] = wrappedProof
-			}
-		}
-	}
-
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
-
-	w.current.executionResults = append(w.current.executionResults, &types.ExecutionResult{
-		Gas:            receipt.GasUsed,
-		From:           sender,
-		To:             receiver,
-		AccountCreated: createdAcc,
-		AccountsAfter:  after,
-		Failed:         receipt.Status != types.ReceiptStatusSuccessful,
-		ReturnValue:    fmt.Sprintf("%x", receipt.ReturnValue),
-		StructLogs:     vm.FormatLogs(tracer.StructLogs()),
-	})
 
 	return receipt.Logs, nil
 }
@@ -1174,26 +1035,16 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	// when block is not mined by myself, we just omit
-	// complete storage before Finalize state (only RootAfter left unknown)
-	storage := &types.StorageTrace{
-		RootBefore:    s.GetRootHash(),
-		Proofs:        w.current.proofs,
-		StorageProofs: w.current.storageProofs,
-	}
-
 	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
 	if err != nil {
 		return err
 	}
-	storage.RootAfter = block.Header().Root
-
 	if w.isRunning() {
 		if interval != nil {
 			interval()
 		}
 		select {
-		case w.taskCh <- &task{receipts: receipts, executionResults: w.current.executionResults, storageResults: storage, state: s, block: block, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,

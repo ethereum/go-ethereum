@@ -278,35 +278,6 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 	return rpcSub, nil
 }
 
-// NewBlockResult sends the block execution result when a new block is created.
-func (api *PublicFilterAPI) NewBlockResult(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		blockResults := make(chan *types.BlockResult)
-		blockResultsSub := api.events.SubscribeBlockResult(blockResults)
-
-		for {
-			select {
-			case blockResult := <-blockResults:
-				notifier.Notify(rpcSub.ID, blockResult)
-			case <-rpcSub.Err():
-				blockResultsSub.Unsubscribe()
-				return
-			case <-notifier.Closed():
-				blockResultsSub.Unsubscribe()
-				return
-			}
-		}
-	}()
-	return rpcSub, nil
-}
-
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery

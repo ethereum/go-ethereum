@@ -49,7 +49,7 @@ type StorageTrace struct {
 type ExecutionResult struct {
 	Gas         uint64 `json:"gas"`
 	Failed      bool   `json:"failed"`
-	ReturnValue string `json:"returnValue,omitempty"`
+	ReturnValue string `json:"returnValue"`
 	// Sender's account state (before Tx)
 	From *AccountWrapper `json:"from,omitempty"`
 	// Receiver's account state (before Tx)

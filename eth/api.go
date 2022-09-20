@@ -607,21 +607,3 @@ func (api *PrivateDebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64
 	}
 	return 0, fmt.Errorf("No state found")
 }
-
-// PublicTraceAPI provides an API to get evmTrace, mpt proof.
-type PublicTraceAPI struct {
-	e *Ethereum
-}
-
-// NewPublicTraceAPI creates a new Ethereum trace API.
-func NewPublicTraceAPI(eth *Ethereum) *PublicTraceAPI {
-	return &PublicTraceAPI{eth}
-}
-
-// GetBlockResultByHash returns the blockResult by blockHash.
-func (api *PublicTraceAPI) GetBlockResultByHash(blockHash common.Hash) (*types.BlockResult, error) {
-	if blockResult := api.e.blockchain.GetBlockResultByHash(blockHash); blockResult != nil {
-		return blockResult, nil
-	}
-	return nil, fmt.Errorf("No block result found")
-}

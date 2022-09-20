@@ -325,13 +325,16 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// GetBlockResultByHash returns the blockResult.
+// GetBlockResultByHash returns the BlockResult given the block hash.
 func (ec *Client) GetBlockResultByHash(ctx context.Context, blockHash common.Hash) (*types.BlockResult, error) {
-	var blockResult types.BlockResult
-	if err := ec.c.CallContext(ctx, &blockResult, "eth_getBlockResultByHash", blockHash); err != nil {
-		return nil, err
-	}
-	return &blockResult, nil
+	blockResult := &types.BlockResult{}
+	return blockResult, ec.c.CallContext(ctx, &blockResult, "scroll_getBlockResultByNumberOrHash", blockHash)
+}
+
+// GetBlockResultByNumber returns the BlockResult given the block number.
+func (ec *Client) GetBlockResultByNumber(ctx context.Context, number *big.Int) (*types.BlockResult, error) {
+	blockResult := &types.BlockResult{}
+	return blockResult, ec.c.CallContext(ctx, &blockResult, "scroll_getBlockResultByNumberOrHash", toBlockNumArg(number))
 }
 
 // SubscribeNewBlockResult subscribes to block execution trace when a new block is created.

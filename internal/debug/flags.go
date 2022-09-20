@@ -91,12 +91,6 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
-	// NoTrace settings
-	traceCacheLimitFlag = cli.IntFlag{
-		Name:  "trace.limit",
-		Usage: "Handle the latest several blockResults",
-		Value: 32,
-	}
 	// mpt witness settings
 	mptWitnessFlag = cli.IntFlag{
 		Name:  "trace.mptwitness",
@@ -119,7 +113,6 @@ var Flags = []cli.Flag{
 	blockprofilerateFlag,
 	cpuprofileFlag,
 	traceFlag,
-	traceCacheLimitFlag,
 	mptWitnessFlag,
 }
 
@@ -135,14 +128,12 @@ func init() {
 type TraceConfig struct {
 	TracePath string
 	// Trace option
-	TraceCacheLimit int
-	MPTWitness      int
+	MPTWitness int
 }
 
 func ConfigTrace(ctx *cli.Context) *TraceConfig {
 	cfg := new(TraceConfig)
 	cfg.TracePath = ctx.GlobalString(traceFlag.Name)
-	cfg.TraceCacheLimit = ctx.GlobalInt(traceCacheLimitFlag.Name)
 	cfg.MPTWitness = ctx.GlobalInt(mptWitnessFlag.Name)
 
 	return cfg
