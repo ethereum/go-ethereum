@@ -171,7 +171,7 @@ type StructLogger struct {
 	createdAccount *types.AccountWrapper
 
 	callStackLogInd []int
-	logs            []StructLog
+	logs            []*StructLog
 	output          []byte
 	err             error
 }
@@ -282,7 +282,7 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	}
 
 	structlog.RefundCounter = l.env.StateDB.GetRefund()
-	l.logs = append(l.logs, *structlog)
+	l.logs = append(l.logs, structlog)
 }
 
 func (l *StructLogger) CaptureStateAfter(pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error) {
@@ -317,7 +317,7 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 		panic("unexpected evm depth in capture enter")
 	}
 	l.statesAffected[to] = struct{}{}
-	theLog := &l.logs[lastLogPos]
+	theLog := l.logs[lastLogPos]
 	theLog.getOrInitExtraData()
 	// handling additional updating for CALL/STATICCALL/CALLCODE/CREATE/CREATE2 only
 	// append extraData part for the log, capture the account status (the nonce / balance has been updated in capture enter)
@@ -375,7 +375,7 @@ func (l *StructLogger) UpdatedStorages() map[common.Address]Storage {
 func (l *StructLogger) CreatedAccount() *types.AccountWrapper { return l.createdAccount }
 
 // StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+func (l *StructLogger) StructLogs() []*StructLog { return l.logs }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
@@ -384,7 +384,7 @@ func (l *StructLogger) Error() error { return l.err }
 func (l *StructLogger) Output() []byte { return l.output }
 
 // WriteTrace writes a formatted trace to the given writer
-func WriteTrace(writer io.Writer, logs []StructLog) {
+func WriteTrace(writer io.Writer, logs []*StructLog) {
 	for _, log := range logs {
 		fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
 		if log.Err != nil {
@@ -504,7 +504,7 @@ func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Addre
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 // FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []StructLog) []*types.StructLogRes {
+func FormatLogs(logs []*StructLog) []*types.StructLogRes {
 	formatted := make([]*types.StructLogRes, 0, len(logs))
 
 	for _, trace := range logs {
