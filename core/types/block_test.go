@@ -314,7 +314,7 @@ func TestRlpDecodeParentHash(t *testing.T) {
 	}
 	// Also test a very very large header.
 	{
-		// The rlp-encoding of the heder belowCauses _total_ length of 65540,
+		// The rlp-encoding of the header belowCauses _total_ length of 65540,
 		// which is the first to blow the fast-path.
 		h := &Header{
 			ParentHash: want,

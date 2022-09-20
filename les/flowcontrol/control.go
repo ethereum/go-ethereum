@@ -182,7 +182,7 @@ func (node *ClientNode) UpdateParams(params ServerParams) {
 				return
 			}
 		}
-		node.updateSchedule = append(node.updateSchedule, scheduledUpdate{time: now + mclock.AbsTime(DecParamDelay), params: params})
+		node.updateSchedule = append(node.updateSchedule, scheduledUpdate{time: now.Add(DecParamDelay), params: params})
 	}
 }
 

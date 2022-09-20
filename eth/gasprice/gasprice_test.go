@@ -45,6 +45,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	if number > testHead {
 		return nil, nil
 	}
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
+	if number == rpc.FinalizedBlockNumber {
+		return b.chain.CurrentFinalizedBlock().Header(), nil
+	}
+	if number == rpc.SafeBlockNumber {
+		return b.chain.CurrentSafeBlock().Header(), nil
+	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
 	}
@@ -61,6 +70,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number > testHead {
 		return nil, nil
+	}
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
+	if number == rpc.FinalizedBlockNumber {
+		return b.chain.CurrentFinalizedBlock(), nil
+	}
+	if number == rpc.SafeBlockNumber {
+		return b.chain.CurrentSafeBlock(), nil
 	}
 	if number == rpc.LatestBlockNumber {
 		number = testHead
@@ -109,12 +127,11 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
+	config.TerminalTotalDifficulty = common.Big0
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
-	genesis, err := gspec.Commit(db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	genesis := gspec.MustCommit(db)
+
 	// Generate testing blocks
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
@@ -144,12 +161,14 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	})
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
-	gspec.Commit(diskdb)
+	gspec.MustCommit(diskdb)
 	chain, err := core.NewBlockChain(diskdb, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec.Config, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
 	chain.InsertChain(blocks)
+	chain.SetFinalized(chain.GetBlockByNumber(25))
+	chain.SetSafe(chain.GetBlockByNumber(25))
 	return &testBackend{chain: chain, pending: pending}
 }
 

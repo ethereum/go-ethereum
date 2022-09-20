@@ -193,7 +193,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				return
 			}
 			vmconfig.ExtraEips = eips
-			block := t.genesis(config).ToBlock(nil)
+			block := t.genesis(config).ToBlock()
 			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
 
 			var baseFee *big.Int

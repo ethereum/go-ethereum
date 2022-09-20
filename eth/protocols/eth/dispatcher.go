@@ -224,7 +224,7 @@ func (p *Peer) dispatcher() {
 			switch {
 			case res.Req == nil:
 				// Response arrived with an untracked ID. Since even cancelled
-				// requests are tracked until fulfilment, a dangling repsponse
+				// requests are tracked until fulfilment, a dangling response
 				// means the remote peer implements the protocol badly.
 				resOp.fail <- errDanglingResponse
 

@@ -44,7 +44,7 @@ Three things can happen:
 3. Anything else; other return values [*], method not implemented or exception occurred during processing. This means
 that the operation will continue to manual processing, via the regular UI method chosen by the user.
 
-[*] Note: Future version of the ruleset may use more complex json-based returnvalues, making it possible to not
+[*] Note: Future version of the ruleset may use more complex json-based return values, making it possible to not
 only respond Approve/Reject/Manual, but also modify responses. For example, choose to list only one, but not all
 accounts in a list-request. The points above will continue to hold for non-json based responses ("Approve"/"Reject").
 
@@ -242,7 +242,7 @@ func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
-//TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
+// TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
 func TestForwarding(t *testing.T) {
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
@@ -434,7 +434,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			Gas:      gas,
 		},
 		Callinfo: []apitypes.ValidationInfo{
-			{Typ: "Warning", Message: "All your base are bellong to us"},
+			{Typ: "Warning", Message: "All your base are belong to us"},
 		},
 		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	}
@@ -536,7 +536,7 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 }
 
-//TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
+// TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
 func TestContextIsCleared(t *testing.T) {

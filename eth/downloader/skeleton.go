@@ -51,7 +51,7 @@ const requestHeaders = 512
 // errSyncLinked is an internal helper error to signal that the current sync
 // cycle linked up to the genesis block, this the skeleton syncer should ping
 // the backfiller to resume. Since we already have that logic on sync start,
-// piggie-back on that instead of 2 entrypoints.
+// piggy-back on that instead of 2 entrypoints.
 var errSyncLinked = errors.New("sync linked")
 
 // errSyncMerged is an internal helper error to signal that the current sync
@@ -148,7 +148,7 @@ type backfiller interface {
 	// suspend requests the backfiller to abort any running full or snap sync
 	// based on the skeleton chain as it might be invalid. The backfiller should
 	// gracefully handle multiple consecutive suspends without a resume, even
-	// on initial sartup.
+	// on initial startup.
 	//
 	// The method should return the last block header that has been successfully
 	// backfilled, or nil if the backfiller was not resumed.
@@ -209,7 +209,7 @@ type skeleton struct {
 
 	headEvents chan *headUpdate // Notification channel for new heads
 	terminate  chan chan error  // Termination channel to abort sync
-	terminated chan struct{}    // Channel to signal that the syner is dead
+	terminated chan struct{}    // Channel to signal that the syncer is dead
 
 	// Callback hooks used during testing
 	syncStarting func() // callback triggered after a sync cycle is inited but before started
@@ -358,6 +358,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// If the sync is already done, resume the backfiller. When the loop stops,
 	// terminate the backfiller too.
 	linked := len(s.progress.Subchains) == 1 &&
+		rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.scratchHead) &&
 		rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.scratchHead)
 	if linked {
@@ -553,7 +554,7 @@ func (s *skeleton) initSync(head *types.Header) {
 			return
 		}
 	}
-	// Either we've failed to decode the previus state, or there was none. Start
+	// Either we've failed to decode the previous state, or there was none. Start
 	// a fresh sync with a single subchain represented by the currently sent
 	// chain head.
 	s.progress = &skeletonProgress{
@@ -823,7 +824,7 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 	}
 }
 
-// revertRequests locates all the currently pending reuqests from a particular
+// revertRequests locates all the currently pending requests from a particular
 // peer and reverts them, rescheduling for others to fulfill.
 func (s *skeleton) revertRequests(peer string) {
 	// Gather the requests first, revertals need the lock too
@@ -871,7 +872,7 @@ func (s *skeleton) revertRequest(req *headerRequest) {
 	delete(s.requests, req.id)
 
 	// Remove the request from the tracked set and mark the task as not-pending,
-	// ready for resheduling
+	// ready for rescheduling
 	s.scratchOwners[(s.scratchHead-req.head)/requestHeaders] = ""
 }
 
@@ -946,12 +947,12 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// In the case of full sync it would be enough to check for the body,
 				// but even a full syncing node will generate a receipt once block
 				// processing is done, so it's just one more "needless" check.
-				var (
-					hasBody    = rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1)
-					hasReceipt = rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
-				)
-				if hasBody && hasReceipt {
-					linked = true
+				//
+				// The weird cascading checks are done to minimize the database reads.
+				linked = rawdb.HasHeader(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasBody(s.db, header.ParentHash, header.Number.Uint64()-1) &&
+					rawdb.HasReceipts(s.db, header.ParentHash, header.Number.Uint64()-1)
+				if linked {
 					break
 				}
 			}

@@ -38,7 +38,7 @@ func Handler(reg metrics.Registry, begin time.Time) http.Handler {
 		})
 		sort.Strings(names)
 
-		// Aggregate all the metris into a Prometheus collector
+		// Aggregate all the metrics into a Prometheus collector
 		c := newCollector()
 
 		c.addBuildInfo(start)
