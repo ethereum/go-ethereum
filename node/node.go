@@ -339,15 +339,9 @@ func (n *Node) closeDataDir() {
 	}
 }
 
-// obtainJWTSecret loads the jwt-secret, either from the provided config,
-// or from the default location. If neither of those are present, it generates
-// a new secret and stores to the default location.
-func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
-	fileName := cliParam
-	if len(fileName) == 0 {
-		// no path provided, use default
-		fileName = n.ResolvePath(datadirJWTKey)
-	}
+// ObtainJWTSecret loads the jwt-secret from the provided config. If the file is not
+// present, it generates a new secret and stores to the given location.
+func ObtainJWTSecret(fileName string) ([]byte, error) {
 	// try reading from file
 	if data, err := os.ReadFile(fileName); err == nil {
 		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
@@ -371,6 +365,18 @@ func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
 	}
 	log.Info("Generated JWT secret", "path", fileName)
 	return jwtSecret, nil
+}
+
+// obtainJWTSecret loads the jwt-secret, either from the provided config,
+// or from the default location. If neither of those are present, it generates
+// a new secret and stores to the default location.
+func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
+	fileName := cliParam
+	if len(fileName) == 0 {
+		// no path provided, use default
+		fileName = n.ResolvePath(datadirJWTKey)
+	}
+	return ObtainJWTSecret(fileName)
 }
 
 // startRPC is a helper method to configure all the various RPC endpoints during node
