@@ -17,7 +17,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -47,7 +49,7 @@ See https://geth.ethereum.org/docs/interface/javascript-console.`,
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
-		Flags:     flags.Merge([]cli.Flag{utils.DataDirFlag}, consoleFlags),
+		Flags:     flags.Merge([]cli.Flag{utils.DataDirFlag, utils.HttpHeaderFlag}, consoleFlags),
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -118,14 +120,25 @@ func remoteConsole(ctx *cli.Context) error {
 	if ctx.Args().Len() > 1 {
 		utils.Fatalf("invalid command-line: too many arguments")
 	}
-
+	var opts []rpc.ClientOption
+	if ctx.IsSet(utils.HttpHeaderFlag.Name) {
+		var customHeaders = make(http.Header)
+		for _, h := range ctx.StringSlice(utils.HttpHeaderFlag.Name) {
+			kv := strings.Split(h, ":")
+			if len(kv) != 2 {
+				utils.Fatalf("invalid http header directive: %q", h)
+			}
+			customHeaders.Add(kv[0], kv[1])
+		}
+		opts = append(opts, rpc.WithHeaders(customHeaders))
+	}
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		cfg := defaultNodeConfig()
 		utils.SetDataDir(ctx, &cfg)
 		endpoint = cfg.IPCEndpoint()
 	}
-	client, err := dialRPC(endpoint)
+	client, err := dialRPC(endpoint, opts)
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}
@@ -168,7 +181,7 @@ geth --exec "%s" console`, b.String())
 // dialRPC returns a RPC client which connects to the given endpoint.
 // The check for empty endpoint implements the defaulting logic
 // for "geth attach" with no argument.
-func dialRPC(endpoint string) (*rpc.Client, error) {
+func dialRPC(endpoint string, opts []rpc.ClientOption) (*rpc.Client, error) {
 	if endpoint == "" {
 		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
 	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
@@ -176,5 +189,5 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	return rpc.DialOptions(context.Background(), endpoint, opts...)
 }
