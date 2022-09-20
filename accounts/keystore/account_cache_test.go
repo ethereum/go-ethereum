@@ -50,6 +50,19 @@ var (
 	}
 )
 
+// waitForWatcher ensures that the keystore file-watcher is alive.
+func waitForWatcher(t *testing.T, ks *KeyStore) {
+	// It is possible for this to loop forever, but that will also count
+	// as a test failure.
+	t.Helper()
+	for {
+		if ks.cache.watcher.running {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
@@ -57,7 +70,7 @@ func TestWatchNewFile(t *testing.T) {
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
-	time.Sleep(1000 * time.Millisecond)
+	waitForWatcher(t, ks)
 
 	// Move in the files.
 	wantAccounts := make([]accounts.Account, len(cachetestAccounts))
@@ -72,26 +85,13 @@ func TestWatchNewFile(t *testing.T) {
 	}
 
 	// ks should see the accounts.
-	var list []accounts.Account
-	for d := 200 * time.Millisecond; d < 5*time.Second; d *= 2 {
-		list = ks.Accounts()
-		if reflect.DeepEqual(list, wantAccounts) {
-			// ks should have also received change notifications
-			select {
-			case <-ks.changes:
-			default:
-				t.Fatalf("wasn't notified of new accounts")
-			}
-			return
-		}
-		time.Sleep(d)
+	if err := waitForAccounts(wantAccounts, ks); err != nil {
+		t.Error(err)
 	}
-	t.Errorf("got %s, want %s", spew.Sdump(list), spew.Sdump(wantAccounts))
 }
 
 func TestWatchNoDir(t *testing.T) {
 	t.Parallel()
-
 	// Create ks but not the directory that it watches.
 	rand.Seed(time.Now().UnixNano())
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watchnodir-test-%d-%d", os.Getpid(), rand.Int()))
@@ -101,8 +101,7 @@ func TestWatchNoDir(t *testing.T) {
 	if len(list) > 0 {
 		t.Error("initial account list not empty:", list)
 	}
-	time.Sleep(100 * time.Millisecond)
-
+	waitForKsUpdating(t, ks, true, 250*time.Millisecond)
 	// Create the directory and copy a key file into it.
 	os.MkdirAll(dir, 0700)
 	defer os.RemoveAll(dir)
@@ -327,10 +326,10 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	if len(list) > 0 {
 		t.Error("initial account list not empty:", list)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	// Create the directory and copy a key file into it.
 	os.MkdirAll(dir, 0700)
+	waitForWatcher(t, ks)
 	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, "aaa")
 
@@ -347,9 +346,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(1000 * time.Millisecond)
-
 	// Now replace file contents
 	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
 		t.Fatal(err)
@@ -363,9 +359,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(1000 * time.Millisecond)
-
 	// Now replace file contents again
 	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
 		t.Fatal(err)
@@ -378,9 +371,6 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
-	// needed so that modTime of `file` is different to its current value after os.WriteFile
-	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents with crap
 	if err := os.WriteFile(file, []byte("foo"), 0600); err != nil {
