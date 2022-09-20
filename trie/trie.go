@@ -91,13 +91,19 @@ func (t *Trie) Copy() *Trie {
 	}
 }
 
-// New creates a trie with an existing root node from db and an assigned
-// owner for storage proximity.
+// New creates the trie instance with provided information and read-only database.
 //
-// If root is the zero hash or the sha3 hash of an empty string, the
-// trie is initially empty and does not require a database. Otherwise,
-// New will panic if db is nil and returns a MissingNodeError if root does
-// not exist in the database. Accessing the trie loads nodes from db on demand.
+//   - stateRoot: the identifier for selecting state to access trie nodes.
+//     If the corresponding state is not available, an error will be returned.
+//
+//   - owner: the identifier of second-layer trie(namely the storage trie in
+//     ethereum). It's the hash of the corresponding contract address
+//     used for uniquely identifying trie nodes. It's empty for account trie.
+//
+//   - root: the root hash of the trie. If root is the zero hash or the sha3
+//     hash of an empty string, then trie is initially empty. Otherwise,
+//     the root node must be present in database or returns a MissingNodeError
+//     if not.
 func New(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeReader) (*Trie, error) {
 	reader, err := newTrieReader(owner, stateRoot, db)
 	if err != nil {
