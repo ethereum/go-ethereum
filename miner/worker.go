@@ -980,7 +980,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time(), timestamp)
 		}
-		timestamp = parent.Time() + 12
+		timestamp = parent.Time() + 12 // seconds per slot
 	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
