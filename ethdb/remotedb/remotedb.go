@@ -22,12 +22,6 @@
 package remotedb
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"net/http"
-	"strings"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -153,36 +147,8 @@ func (db *Database) Close() error {
 	return nil
 }
 
-func dialRPC(endpoint string, headers []string) (*rpc.Client, error) {
-	if endpoint == "" {
-		return nil, errors.New("endpoint must be specified")
-	}
-	if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
-		// Backwards compatibility with geth < 1.5 which required
-		// these prefixes.
-		endpoint = endpoint[4:]
-	}
-	var opts []rpc.ClientOption
-	if len(headers) > 0 {
-		var customHeaders = make(http.Header)
-		for _, h := range headers {
-			kv := strings.Split(h, ":")
-			if len(kv) != 2 {
-				return nil, fmt.Errorf("invalid http header directive: %q", h)
-			}
-			customHeaders.Add(kv[0], kv[1])
-		}
-		opts = append(opts, rpc.WithHeaders(customHeaders))
-	}
-	return rpc.DialOptions(context.Background(), endpoint, opts...)
-}
-
-func New(endpoint string, headers []string) (ethdb.Database, error) {
-	client, err := dialRPC(endpoint, headers)
-	if err != nil {
-		return nil, err
-	}
+func New(client *rpc.Client) ethdb.Database {
 	return &Database{
 		remote: client,
-	}, nil
+	}
 }

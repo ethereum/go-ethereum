@@ -17,16 +17,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -120,25 +116,13 @@ func remoteConsole(ctx *cli.Context) error {
 	if ctx.Args().Len() > 1 {
 		utils.Fatalf("invalid command-line: too many arguments")
 	}
-	var opts []rpc.ClientOption
-	if ctx.IsSet(utils.HttpHeaderFlag.Name) {
-		var customHeaders = make(http.Header)
-		for _, h := range ctx.StringSlice(utils.HttpHeaderFlag.Name) {
-			kv := strings.Split(h, ":")
-			if len(kv) != 2 {
-				utils.Fatalf("invalid http header directive: %q", h)
-			}
-			customHeaders.Add(kv[0], kv[1])
-		}
-		opts = append(opts, rpc.WithHeaders(customHeaders))
-	}
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		cfg := defaultNodeConfig()
 		utils.SetDataDir(ctx, &cfg)
 		endpoint = cfg.IPCEndpoint()
 	}
-	client, err := dialRPC(endpoint, opts)
+	client, err := utils.DialRPCWithHeaders(endpoint, ctx.StringSlice(utils.HttpHeaderFlag.Name))
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}
@@ -176,18 +160,4 @@ func ephemeralConsole(ctx *cli.Context) error {
 	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:
 geth --exec "%s" console`, b.String())
 	return nil
-}
-
-// dialRPC returns a RPC client which connects to the given endpoint.
-// The check for empty endpoint implements the defaulting logic
-// for "geth attach" with no argument.
-func dialRPC(endpoint string, opts []rpc.ClientOption) (*rpc.Client, error) {
-	if endpoint == "" {
-		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
-	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
-		// Backwards compatibility with geth < 1.5 which required
-		// these prefixes.
-		endpoint = endpoint[4:]
-	}
-	return rpc.DialOptions(context.Background(), endpoint, opts...)
 }
