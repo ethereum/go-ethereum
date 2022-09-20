@@ -86,6 +86,11 @@ func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signer
 	return newCommitteeChain(db, config, signerThreshold, enforceTime, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 }
 
+// NewTestCommitteeChain creates a new CommitteeChain for testing.
+func NewTestCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, clock *mclock.Simulated) *CommitteeChain {
+	return newCommitteeChain(db, config, signerThreshold, enforceTime, dummyVerifier{}, clock, func() int64 { return int64(clock.Now()) })
+}
+
 // newCommitteeChain creates a new CommitteeChain with the option of replacing the
 // clock source and signature verification for testing purposes.
 func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
@@ -183,17 +188,14 @@ func (s *CommitteeChain) Reset() {
 	}
 }
 
-// CheckpointInit initializes a CommitteeChain based on the checkpoint.
+// CheckpointInit initializes a CommitteeChain based on a previously validated
+// checkpoint.
 // Note: if the chain is already initialized and the committees proven by the
 // checkpoint do match the existing chain then the chain is retained and the
 // new checkpoint becomes fixed.
-func (s *CommitteeChain) CheckpointInit(bootstrap *types.BootstrapData) error {
+func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 	s.chainmu.Lock()
 	defer s.chainmu.Unlock()
-
-	if err := bootstrap.Validate(); err != nil {
-		return err
-	}
 
 	period := bootstrap.Header.SyncPeriod()
 	if err := s.deleteFixedCommitteeRootsFrom(period + 2); err != nil {

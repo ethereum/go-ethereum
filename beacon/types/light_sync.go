@@ -25,6 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// HeadInfo represents an unvalidated new head announcement.
+type HeadInfo struct {
+	Slot      uint64
+	BlockRoot common.Hash
+}
+
 // BootstrapData contains a sync committee where light sync can be started,
 // together with a proof through a beacon header and corresponding state.
 // Note: BootstrapData is fetched from a server based on a known checkpoint hash.
@@ -36,7 +42,10 @@ type BootstrapData struct {
 }
 
 // Validate verifies the proof included in BootstrapData.
-func (c *BootstrapData) Validate() error {
+func (c *BootstrapData) Validate(checkpointHash common.Hash) error {
+	if c.Header.Hash() != checkpointHash {
+		return errors.New("wrong checkpoint hash")
+	}
 	if c.CommitteeRoot != c.Committee.Root() {
 		return errors.New("wrong committee root")
 	}

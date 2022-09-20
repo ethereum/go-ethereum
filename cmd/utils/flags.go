@@ -36,6 +36,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	bparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
@@ -280,6 +281,58 @@ var (
 		Usage:    "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.StateCategory,
+	}
+	// Beacon client light sync settings
+	BeaconApiFlag = &cli.StringSliceFlag{
+		Name:     "beacon.api",
+		Usage:    "Beacon node (CL) light client API URL. This flag can be given multiple times.",
+		Category: flags.BeaconCategory,
+	}
+	BeaconApiHeaderFlag = &cli.StringSliceFlag{
+		Name:     "beacon.api.header",
+		Usage:    "Pass custom HTTP header fields to the emote beacon node API in \"key:value\" format. This flag can be given multiple times.",
+		Category: flags.BeaconCategory,
+	}
+	BeaconThresholdFlag = &cli.IntFlag{
+		Name:     "beacon.threshold",
+		Usage:    "Beacon sync committee participation threshold",
+		Value:    bparams.SyncCommitteeSupermajority,
+		Category: flags.BeaconCategory,
+	}
+	BeaconNoFilterFlag = &cli.BoolFlag{
+		Name:     "beacon.nofilter",
+		Usage:    "Disable future slot signature filter",
+		Category: flags.BeaconCategory,
+	}
+	BeaconConfigFlag = &cli.StringFlag{
+		Name:     "beacon.config",
+		Usage:    "Beacon chain config YAML file",
+		Category: flags.BeaconCategory,
+	}
+	BeaconGenesisRootFlag = &cli.StringFlag{
+		Name:     "beacon.genesis.gvroot",
+		Usage:    "Beacon chain genesis validators root",
+		Category: flags.BeaconCategory,
+	}
+	BeaconGenesisTimeFlag = &cli.Uint64Flag{
+		Name:     "beacon.genesis.time",
+		Usage:    "Beacon chain genesis time",
+		Category: flags.BeaconCategory,
+	}
+	BeaconCheckpointFlag = &cli.StringFlag{
+		Name:     "beacon.checkpoint",
+		Usage:    "Beacon chain weak subjectivity checkpoint block hash",
+		Category: flags.BeaconCategory,
+	}
+	BlsyncApiFlag = &cli.StringFlag{
+		Name:     "blsync.engine.api",
+		Usage:    "Target EL engine API URL",
+		Category: flags.BeaconCategory,
+	}
+	BlsyncJWTSecretFlag = &cli.StringFlag{
+		Name:     "blsync.jwtsecret",
+		Usage:    "Path to a JWT secret to use for target engine API endpoint",
+		Category: flags.BeaconCategory,
 	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = &cli.StringFlag{
