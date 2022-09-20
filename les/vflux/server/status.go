@@ -41,7 +41,7 @@ type serverSetup struct {
 	activeFlag    nodestate.Flags // Flag is set if the node is active
 	inactiveFlag  nodestate.Flags // Flag is set if the node is inactive
 	capacityField nodestate.Field // Field contains the capacity of the node
-	queueField    nodestate.Field // Field contains the infomration in the priority queue
+	queueField    nodestate.Field // Field contains the information in the priority queue
 }
 
 // newServerSetup initializes the setup for state machine and returns the flags/fields group.

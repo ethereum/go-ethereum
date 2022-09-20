@@ -581,7 +581,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(1)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// PendingCallCOntract
+	// PendingCallContract
 	if _, err := ec.PendingCallContract(context.Background(), msg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

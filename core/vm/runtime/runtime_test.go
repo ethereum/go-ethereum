@@ -457,7 +457,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.JUMP),
 	}
 
-	calllRevertingContractWithInput := []byte{
+	callRevertingContractWithInput := []byte{
 		byte(vm.JUMPDEST), //
 		// push args for the call
 		byte(vm.PUSH1), 0, // out size
@@ -485,7 +485,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
-	benchmarkNonModifyingCode(100000000, calllRevertingContractWithInput, "call-reverting-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callRevertingContractWithInput, "call-reverting-100M", "", b)
 
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)

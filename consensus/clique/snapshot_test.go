@@ -305,7 +305,7 @@ func TestClique(t *testing.T) {
 		}, {
 			// Ensure that pending votes don't survive authorization status changes. This
 			// corner case can only appear if a signer is quickly added, removed and then
-			// readded (or the inverse), while one of the original voters dropped. If a
+			// re-added (or the inverse), while one of the original voters dropped. If a
 			// past vote is left cached in the system somewhere, this will interfere with
 			// the final signer outcome.
 			signers: []string{"A", "B", "C", "D", "E"},
@@ -344,7 +344,7 @@ func TestClique(t *testing.T) {
 			},
 			failure: errUnauthorizedSigner,
 		}, {
-			// An authorized signer that signed recenty should not be able to sign again
+			// An authorized signer that signed recently should not be able to sign again
 			signers: []string{"A", "B"},
 			votes: []testerVote{
 				{signer: "A"},

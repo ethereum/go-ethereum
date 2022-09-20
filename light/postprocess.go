@@ -313,7 +313,7 @@ var (
 	BloomTrieTablePrefix = "blt-"
 )
 
-// GetBloomTrieRoot reads the BloomTrie root assoctiated to the given section from the database
+// GetBloomTrieRoot reads the BloomTrie root associated to the given section from the database
 func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -321,7 +321,7 @@ func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.H
 	return common.BytesToHash(data)
 }
 
-// StoreBloomTrieRoot writes the BloomTrie root assoctiated to the given section into the database
+// StoreBloomTrieRoot writes the BloomTrie root associated to the given section into the database
 func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)

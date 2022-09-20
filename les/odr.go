@@ -126,7 +126,7 @@ const (
 // RetrieveTxStatus retrieves the transaction status from the LES network.
 // There is no guarantee in the LES protocol that the mined transaction will
 // be retrieved back for sure because of different reasons(the transaction
-// is unindexed, the malicous server doesn't reply it deliberately, etc).
+// is unindexed, the malicious server doesn't reply it deliberately, etc).
 // Therefore, unretrieved transactions(UNKNOWN) will receive a certain number
 // of retries, thus giving a weak guarantee.
 func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequest) error {

@@ -365,7 +365,7 @@ type SyncPeer interface {
 	RequestAccountRange(id uint64, root, origin, limit common.Hash, bytes uint64) error
 
 	// RequestStorageRanges fetches a batch of storage slots belonging to one or
-	// more accounts. If slots from only one accout is requested, an origin marker
+	// more accounts. If slots from only one account is requested, an origin marker
 	// may also be used to retrieve from there.
 	RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error
 
@@ -373,7 +373,7 @@ type SyncPeer interface {
 	RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error
 
 	// RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
-	// a specificstate trie.
+	// a specific state trie.
 	RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error
 
 	// Log retrieves the peer's own contextual logger.
@@ -1183,10 +1183,10 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		}
 		if subtask == nil {
 			// No large contract required retrieval, but small ones available
-			for acccount, root := range task.stateTasks {
-				delete(task.stateTasks, acccount)
+			for account, root := range task.stateTasks {
+				delete(task.stateTasks, account)
 
-				accounts = append(accounts, acccount)
+				accounts = append(accounts, account)
 				roots = append(roots, root)
 
 				if len(accounts) >= storageSets {
@@ -1486,7 +1486,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 	}
 }
 
-// revertRequests locates all the currently pending reuqests from a particular
+// revertRequests locates all the currently pending requests from a particular
 // peer and reverts them, rescheduling for others to fulfill.
 func (s *Syncer) revertRequests(peer string) {
 	// Gather the requests first, revertals need the lock too
@@ -1575,7 +1575,7 @@ func (s *Syncer) revertAccountRequest(req *accountRequest) {
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the account
-	// task as not-pending, ready for resheduling
+	// task as not-pending, ready for rescheduling
 	req.timeout.Stop()
 	if req.task.req == req {
 		req.task.req = nil
@@ -1616,7 +1616,7 @@ func (s *Syncer) revertBytecodeRequest(req *bytecodeRequest) {
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code
-	// retrievals as not-pending, ready for resheduling
+	// retrievals as not-pending, ready for rescheduling
 	req.timeout.Stop()
 	for _, hash := range req.hashes {
 		req.task.codeTasks[hash] = struct{}{}
@@ -1657,7 +1657,7 @@ func (s *Syncer) revertStorageRequest(req *storageRequest) {
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the storage
-	// task as not-pending, ready for resheduling
+	// task as not-pending, ready for rescheduling
 	req.timeout.Stop()
 	if req.subTask != nil {
 		req.subTask.req = nil
@@ -1743,7 +1743,7 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 	s.lock.Unlock()
 
 	// If there's a timeout timer still running, abort it and mark the code
-	// retrievals as not-pending, ready for resheduling
+	// retrievals as not-pending, ready for rescheduling
 	req.timeout.Stop()
 	for _, hash := range req.hashes {
 		req.task.codeTasks[hash] = struct{}{}
@@ -2035,7 +2035,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			}
 			tr.Commit()
 		}
-		// Persist the received storage segements. These flat state maybe
+		// Persist the received storage segments. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
@@ -2170,7 +2170,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	}
 	task.res = nil
 
-	// Persist the received account segements. These flat state maybe
+	// Persist the received account segments. These flat state maybe
 	// outdated during the sync, but it can be fixed later during the
 	// snapshot generation.
 	oldAccountBytes := s.accountBytes
@@ -2773,7 +2773,7 @@ func (s *Syncer) onHealByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) e
 }
 
 // onHealState is a callback method to invoke when a flat state(account
-// or storage slot) is downloded during the healing stage. The flat states
+// or storage slot) is downloaded during the healing stage. The flat states
 // can be persisted blindly and can be fixed later in the generation stage.
 // Note it's not concurrent safe, please handle the concurrent issue outside.
 func (s *Syncer) onHealState(paths [][]byte, value []byte) error {

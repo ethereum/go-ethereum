@@ -36,7 +36,7 @@ type blockPropagation struct {
 	td    *big.Int
 }
 
-// broadcastBlocks is a write loop that multiplexes blocks and block accouncements
+// broadcastBlocks is a write loop that multiplexes blocks and block announcements
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.
 func (p *Peer) broadcastBlocks() {

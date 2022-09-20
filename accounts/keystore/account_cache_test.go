@@ -318,7 +318,7 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 func TestUpdatedKeyfileContents(t *testing.T) {
 	t.Parallel()
 
-	// Create a temporary kesytore to test with
+	// Create a temporary keystore to test with
 	rand.Seed(time.Now().UnixNano())
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-updatedkeyfilecontents-test-%d-%d", os.Getpid(), rand.Int()))
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)

@@ -205,7 +205,7 @@ type GasPricer interface {
 // FeeHistory provides recent fee market data that consumers can use to determine
 // a reasonable maxPriorityFeePerGas value.
 type FeeHistory struct {
-	OldestBlock  *big.Int     // block coresponding to first response value
+	OldestBlock  *big.Int     // block corresponding to first response value
 	Reward       [][]*big.Int // list every txs priority fee per block
 	BaseFee      []*big.Int   // list of each block's base fee
 	GasUsedRatio []float64    // ratio of gas used out of the total available limit

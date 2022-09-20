@@ -153,7 +153,7 @@ func (t *odrTrie) TryDelete(key []byte) error {
 	})
 }
 
-// TryDeleteACcount abstracts an account deletion from the trie.
+// TryDeleteAccount abstracts an account deletion from the trie.
 func (t *odrTrie) TryDeleteAccount(key []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {

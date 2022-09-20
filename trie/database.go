@@ -163,7 +163,10 @@ func (n *cachedNode) rlp() []byte {
 // or by regenerating it from the rlp encoded blob.
 func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		return mustDecodeNode(hash[:], node)
+		// The raw-blob format nodes are loaded from either from
+		// clean cache or the database, they are all in their own
+		// copy and safe to use unsafe decoder.
+		return mustDecodeNodeUnsafe(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
 }
@@ -346,7 +349,10 @@ func (db *Database) node(hash common.Hash) node {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
-			return mustDecodeNode(hash[:], enc)
+
+			// The returned value from cache is in its own copy,
+			// safe to use mustDecodeNodeUnsafe for decoding.
+			return mustDecodeNodeUnsafe(hash[:], enc)
 		}
 	}
 	// Retrieve the node from the dirty cache if available
@@ -371,7 +377,9 @@ func (db *Database) node(hash common.Hash) node {
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
-	return mustDecodeNode(hash[:], enc)
+	// The returned value from database is in its own copy,
+	// safe to use mustDecodeNodeUnsafe for decoding.
+	return mustDecodeNodeUnsafe(hash[:], enc)
 }
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
@@ -768,9 +776,22 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 
 	// Insert dirty nodes into the database. In the same tree, it must be
 	// ensured that children are inserted first, then parent so that children
-	// can be linked with their parent correctly. The order of writing between
-	// different tries(account trie, storage tries) is not required.
-	for owner, subset := range nodes.sets {
+	// can be linked with their parent correctly.
+	//
+	// Note, the storage tries must be flushed before the account trie to
+	// retain the invariant that children go into the dirty cache first.
+	var order []common.Hash
+	for owner := range nodes.sets {
+		if owner == (common.Hash{}) {
+			continue
+		}
+		order = append(order, owner)
+	}
+	if _, ok := nodes.sets[common.Hash{}]; ok {
+		order = append(order, common.Hash{})
+	}
+	for _, owner := range order {
+		subset := nodes.sets[owner]
 		for _, path := range subset.paths {
 			n, ok := subset.nodes[path]
 			if !ok {

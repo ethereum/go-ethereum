@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum"
@@ -450,17 +451,44 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 }
 
 func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
-	receipt, err := t.getReceipt(ctx)
-	if err != nil || receipt == nil {
+	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
 	}
-	ret := make([]*Log, 0, len(receipt.Logs))
-	for _, log := range receipt.Logs {
+	if t.block == nil {
+		return nil, nil
+	}
+	if _, ok := t.block.numberOrHash.Hash(); !ok {
+		header, err := t.r.backend.HeaderByNumberOrHash(ctx, *t.block.numberOrHash)
+		if err != nil {
+			return nil, err
+		}
+		hash := header.Hash()
+		t.block.numberOrHash.BlockHash = &hash
+	}
+	return t.getLogs(ctx)
+}
+
+// getLogs returns log objects for the given tx.
+// Assumes block hash is resolved.
+func (t *Transaction) getLogs(ctx context.Context) (*[]*Log, error) {
+	var (
+		hash, _   = t.block.numberOrHash.Hash()
+		filter    = t.r.filterSystem.NewBlockFilter(hash, nil, nil)
+		logs, err = filter.Logs(ctx)
+	)
+	if err != nil {
+		return nil, err
+	}
+	var ret []*Log
+	// Select tx logs from all block logs
+	ix := sort.Search(len(logs), func(i int) bool { return uint64(logs[i].TxIndex) >= t.index })
+	for ix < len(logs) && uint64(logs[ix].TxIndex) == t.index {
 		ret = append(ret, &Log{
 			r:           t.r,
 			transaction: t,
-			log:         log,
+			log:         logs[ix],
 		})
+		ix++
 	}
 	return &ret, nil
 }
@@ -978,7 +1006,7 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 		hash = header.Hash()
 	}
 	// Construct the range filter
-	filter := filters.NewBlockFilter(b.r.backend, hash, addresses, topics)
+	filter := b.r.filterSystem.NewBlockFilter(hash, addresses, topics)
 
 	// Run the filter and return all the logs
 	return runFilter(ctx, b.r, filter)
@@ -1137,7 +1165,8 @@ func (p *Pending) EstimateGas(ctx context.Context, args struct {
 
 // Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
-	backend ethapi.Backend
+	backend      ethapi.Backend
+	filterSystem *filters.FilterSystem
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
@@ -1284,7 +1313,7 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 		topics = *args.Filter.Topics
 	}
 	// Construct the range filter
-	filter := filters.NewRangeFilter(r.backend, begin, end, addresses, topics)
+	filter := r.filterSystem.NewRangeFilter(begin, end, addresses, topics)
 	return runFilter(ctx, r, filter)
 }
 
