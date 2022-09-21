@@ -105,6 +105,9 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	if _, err := io.CopyN(progress, inbuf, fileInfo.Size()); err != nil {
 		return fmt.Errorf("copy error: %v", err)
 	}
+	if err := progress.dstBuf.Flush(); err != nil {
+		return fmt.Errorf("copy error: %v", err)
+	}
 
 	// KCP writes are a bit 'async', so wait for the remote send ACK in the end.
 	sess.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -113,6 +116,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	if err != nil {
 		log.Error("FIN-ACK read error", "err", err)
 	}
+
 	kcpStatsDump(kcp.DefaultSnmp)
 	return nil
 }
@@ -210,11 +214,14 @@ func doReceive(root string, ctx *cli.Context) error {
 	progress := newDownloadWriter(file, int64(xfer.Size))
 	if _, err := io.CopyN(progress, s, int64(xfer.Size)); err != nil {
 		// Clean up
-		file.Close()
+		progress.Close()
 		os.Remove(filepath.Join(root, fName))
 		return fmt.Errorf("copy failed: %v", err)
 	}
+
+	// Send FIN-ACK.
 	s.Write([]byte("ACK"))
+
 	kcpStatsDump(kcp.DefaultSnmp)
 	file.Close()
 	if err := os.Rename(filepath.Join(root, fName), filepath.Join(root, xfer.Filename)); err != nil {
