@@ -892,9 +892,9 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		// Insert it 10 times in parallel. Should be ignored.
 		{
 			var (
-				wg    sync.WaitGroup
-				err   error
-				errMu sync.Mutex
+				wg      sync.WaitGroup
+				testErr error
+				errMu   sync.Mutex
 			)
 			wg.Add(10)
 			for ii := 0; ii < 10; ii++ {
@@ -902,18 +902,18 @@ func TestSimultaneousNewBlock(t *testing.T) {
 					defer wg.Done()
 					if newResp, err := api.NewPayloadV1(*execData); err != nil {
 						errMu.Lock()
-						err = fmt.Errorf("Failed to insert block: %w", err)
+						testErr = fmt.Errorf("Failed to insert block: %w", err)
 						errMu.Unlock()
 					} else if newResp.Status != "VALID" {
 						errMu.Lock()
-						err = fmt.Errorf("Failed to insert block: %v", newResp.Status)
+						testErr = fmt.Errorf("Failed to insert block: %v", newResp.Status)
 						errMu.Unlock()
 					}
 				}()
 			}
 			wg.Wait()
-			if err != nil {
-				t.Fatal(err)
+			if testErr != nil {
+				t.Fatal(testErr)
 			}
 		}
 		block, err := beacon.ExecutableDataToBlock(*execData)
@@ -930,9 +930,9 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		}
 		{
 			var (
-				wg    sync.WaitGroup
-				err   error
-				errMu sync.Mutex
+				wg      sync.WaitGroup
+				testErr error
+				errMu   sync.Mutex
 			)
 			wg.Add(10)
 			// Do each FCU 10 times
@@ -941,14 +941,14 @@ func TestSimultaneousNewBlock(t *testing.T) {
 					defer wg.Done()
 					if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 						errMu.Lock()
-						err = fmt.Errorf("Failed to insert block: %w", err)
+						testErr = fmt.Errorf("Failed to insert block: %w", err)
 						errMu.Unlock()
 					}
 				}()
 			}
 			wg.Wait()
-			if err != nil {
-				t.Fatal(err)
+			if testErr != nil {
+				t.Fatal(testErr)
 			}
 		}
 		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
