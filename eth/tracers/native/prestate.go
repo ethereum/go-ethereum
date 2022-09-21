@@ -17,6 +17,7 @@
 package native
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"sync/atomic"
@@ -182,14 +183,26 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		if _, ok := t.deleted[addr]; ok {
 			continue
 		}
-		t.post[addr] = &account{
-			Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
-			Nonce:   t.env.StateDB.GetNonce(addr),
-			Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
-			Storage: make(map[common.Hash]common.Hash),
+		t.post[addr] = &account{Storage: make(map[common.Hash]common.Hash)}
+		newBalance := t.env.StateDB.GetBalance(addr)
+		newNonce := t.env.StateDB.GetNonce(addr)
+		newCode := t.env.StateDB.GetCode(addr)
+
+		if newBalance.Cmp(t.pre[addr].Balance) == 0 {
+			t.post[addr].Balance = newBalance
 		}
-		for key := range state.Storage {
-			t.post[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
+		if newNonce != t.pre[addr].Nonce {
+			t.post[addr].Nonce = newNonce
+		}
+		if !bytes.Equal(newCode, t.pre[addr].Code) {
+			t.post[addr].Code = newCode
+		}
+
+		for key, val := range state.Storage {
+			newVal := t.env.StateDB.GetState(addr, key)
+			if val != newVal {
+				t.post[addr].Storage[key] = newVal
+			}
 		}
 	}
 	for a := range t.created {
