@@ -52,7 +52,8 @@ var (
 
 // waitWatcherStarts waits up to 1s for the keystore watcher to start.
 func waitWatcherStart(ks *KeyStore) bool {
-	if ks.cache.watcher.enabled() {
+	// On systems where file watch is not supported, just return "ok".
+	if !ks.cache.watcher.enabled() {
 		return true
 	}
 	// The watcher should start, and then exit.
