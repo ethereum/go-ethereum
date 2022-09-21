@@ -109,9 +109,14 @@ var (
 			nodedbFlag,
 			listenAddrFlag,
 			verbosityFlag,
+			extIPFlag,
 		},
 	}
 )
+
+var extIPFlag = &cli.StringFlag{
+	Name: "extip",
+}
 
 func discv5Ping(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
@@ -183,6 +188,15 @@ func startV5(ctx *cli.Context) *discover.UDPv5 {
 func startV5WithUnhandled(ctx *cli.Context, unhandled chan discover.ReadPacket) (*discover.UDPv5, net.PacketConn) {
 	ln, config := makeDiscoveryConfig(ctx)
 	config.Unhandled = unhandled
+
+	if ctx.IsSet(extIPFlag.Name) {
+		extip := net.ParseIP(ctx.String(extIPFlag.Name))
+		if extip == nil {
+			exit(fmt.Errorf("invalid ext IP %q", ctx.String(extIPFlag.Name)))
+		}
+		ln.SetStaticIP(extip)
+	}
+
 	socket := listen(ln, ctx.String(listenAddrFlag.Name))
 	disc, err := discover.ListenV5(socket, ln, config)
 	if err != nil {
