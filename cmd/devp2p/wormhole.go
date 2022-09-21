@@ -77,6 +77,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	disc, socket := startV5WithUnhandled(ctx, unhandled)
 	defer disc.Close()
 	defer close(unhandled)
+
 	// Send request
 	fName := filepath.Base(filepath.Clean(file.Name()))
 	xfer := &xferStart{Size: uint64(fileInfo.Size()), Filename: fName}
@@ -99,7 +100,9 @@ func discv5WormholeSend(ctx *cli.Context) error {
 
 	log.Info("Transmitting data")
 	progress := newDownloadWriter(sess, int64(xfer.Size))
-	if _, err := io.CopyN(progress, file, fileInfo.Size()); err != nil {
+
+	inbuf := bufio.NewReader(file)
+	if _, err := io.CopyN(progress, inbuf, fileInfo.Size()); err != nil {
 		return fmt.Errorf("copy error: %v", err)
 	}
 
