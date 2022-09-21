@@ -41,7 +41,7 @@ const (
 
 func setupKCP(s *kcp.UDPSession) {
 	s.SetMtu(1200)
-	// s.SetStreamMode(true)
+	s.SetStreamMode(true)
 
 	// https://github.com/skywind3000/kcp/blob/master/README.en.md#protocol-configuration
 	// Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
