@@ -889,20 +889,33 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		var wg sync.WaitGroup
 		// Insert it 10 times in parallel. Should be ignored.
-		wg.Add(10)
-		for ii := 0; ii < 10; ii++ {
-			go func() {
-				defer wg.Done()
-				if newResp, err := api.NewPayloadV1(*execData); err != nil {
-					t.Fatalf("Failed to insert block: %v", err)
-				} else if newResp.Status != "VALID" {
-					t.Fatalf("Failed to insert block: %v", newResp.Status)
-				}
-			}()
+		{
+			var (
+				wg    sync.WaitGroup
+				err   error
+				errMu sync.Mutex
+			)
+			wg.Add(10)
+			for ii := 0; ii < 10; ii++ {
+				go func() {
+					defer wg.Done()
+					if newResp, err := api.NewPayloadV1(*execData); err != nil {
+						errMu.Lock()
+						err = fmt.Errorf("Failed to insert block: %w", err)
+						errMu.Unlock()
+					} else if newResp.Status != "VALID" {
+						errMu.Lock()
+						err = fmt.Errorf("Failed to insert block: %v", newResp.Status)
+						errMu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		wg.Wait()
 		block, err := beacon.ExecutableDataToBlock(*execData)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
@@ -915,18 +928,29 @@ func TestSimultaneousNewBlock(t *testing.T) {
 			SafeBlockHash:      block.Hash(),
 			FinalizedBlockHash: block.Hash(),
 		}
-		wg = sync.WaitGroup{}
-		wg.Add(10)
-		// Do each FCU 10 times
-		for ii := 0; ii < 10; ii++ {
-			go func() {
-				defer wg.Done()
-				if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
-					t.Fatalf("Failed to insert block: %v", err)
-				}
-			}()
+		{
+			var (
+				wg    sync.WaitGroup
+				err   error
+				errMu sync.Mutex
+			)
+			wg.Add(10)
+			// Do each FCU 10 times
+			for ii := 0; ii < 10; ii++ {
+				go func() {
+					defer wg.Done()
+					if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+						errMu.Lock()
+						err = fmt.Errorf("Failed to insert block: %w", err)
+						errMu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-		wg.Wait()
 		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
