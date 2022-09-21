@@ -98,7 +98,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	setupKCP(sess)
 
 	log.Info("Transmitting data")
-	progress := newDownloadWriter(file, int64(xfer.Size))
+	progress := newDownloadWriter(sess, int64(xfer.Size))
 	if _, err := io.CopyN(progress, file, fileInfo.Size()); err != nil {
 		return fmt.Errorf("copy error: %v", err)
 	}
