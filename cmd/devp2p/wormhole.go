@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -97,7 +98,8 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	setupKCP(sess)
 
 	log.Info("Transmitting data")
-	if _, err := io.CopyN(sess, file, fileInfo.Size()); err != nil {
+	progress := newDownloadWriter(file, int64(xfer.Size))
+	if _, err := io.CopyN(progress, file, fileInfo.Size()); err != nil {
 		return fmt.Errorf("copy error: %v", err)
 	}
 
@@ -201,7 +203,9 @@ func doReceive(root string, ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.CopyN(file, s, int64(xfer.Size)); err != nil {
+
+	progress := newDownloadWriter(file, int64(xfer.Size))
+	if _, err := io.CopyN(progress, s, int64(xfer.Size)); err != nil {
 		// Clean up
 		file.Close()
 		os.Remove(filepath.Join(root, fName))
@@ -329,7 +333,7 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 
 func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	n, err = o.out.WriteTo(p, addr)
-	log.Info("KCP packet out", "len", n, "err", err)
+	// log.Info("KCP packet out", "len", n, "err", err)
 	return n, err
 }
 
@@ -347,4 +351,48 @@ func kcpStatsDump(snmp *kcp.Snmp) {
 	for i, value := range snmp.ToSlice() {
 		fmt.Printf("%s: %s\n", header[i], value)
 	}
+}
+
+type downloadWriter struct {
+	file    *os.File
+	dstBuf  *bufio.Writer
+	size    int64
+	written int64
+	lastpct int64
+}
+
+func newDownloadWriter(dst *os.File, size int64) *downloadWriter {
+	return &downloadWriter{
+		file:   dst,
+		dstBuf: bufio.NewWriter(dst),
+		size:   size,
+	}
+}
+
+func (w *downloadWriter) Write(buf []byte) (int, error) {
+	n, err := w.dstBuf.Write(buf)
+
+	// Report progress.
+	w.written += int64(n)
+	pct := w.written * 10 / w.size * 10
+	if pct != w.lastpct {
+		if w.lastpct != 0 {
+			fmt.Print("...")
+		}
+		fmt.Print(pct, "%")
+		w.lastpct = pct
+	}
+	return n, err
+}
+
+func (w *downloadWriter) Close() error {
+	if w.lastpct > 0 {
+		fmt.Println() // Finish the progress line.
+	}
+	flushErr := w.dstBuf.Flush()
+	closeErr := w.file.Close()
+	if flushErr != nil {
+		return flushErr
+	}
+	return closeErr
 }
