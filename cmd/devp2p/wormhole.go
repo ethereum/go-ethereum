@@ -329,7 +329,7 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 
 func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	n, err = o.out.WriteTo(p, addr)
-	// log.Info("KCP write", "buf", len(p), "n", n, "err", err)
+	log.Info("KCP packet out", "len", n, "err", err)
 	return n, err
 }
 
