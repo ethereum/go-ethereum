@@ -37,10 +37,10 @@ import (
 // prestateTrace is the result of a prestateTrace run.
 type prestateTrace = map[common.Address]*account
 type account struct {
-	Balance string                      `json:"balance"`
-	Nonce   uint64                      `json:"nonce"`
-	Code    string                      `json:"code"`
-	Storage map[common.Hash]common.Hash `json:"storage"`
+	Balance string                      `json:"balance,omitempty"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
+	Code    string                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 }
 type prePostStateTrace struct {
 	Pre  prestateTrace `json:"pre"`
