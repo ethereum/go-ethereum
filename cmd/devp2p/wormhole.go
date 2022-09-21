@@ -36,13 +36,14 @@ import (
 )
 
 const (
-	ecParityShards = 0
-	ecDataShards   = 0
+	ecParityShards = 3
+	ecDataShards   = 10
 )
 
 func setupKCP(s *kcp.UDPSession) {
 	s.SetMtu(1200)
 	s.SetStreamMode(true)
+	s.SetWindowSize(10000, 10000)
 
 	// https://github.com/skywind3000/kcp/blob/master/README.en.md#protocol-configuration
 	// Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
