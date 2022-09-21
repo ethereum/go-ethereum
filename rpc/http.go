@@ -318,6 +318,6 @@ func validateRequest(r *http.Request) (int, error) {
 		}
 	}
 	// Invalid content-type
-	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
+	err := fmt.Errorf("invalid content type, only %q are supported", acceptedContentTypes)
 	return http.StatusUnsupportedMediaType, err
 }
