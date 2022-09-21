@@ -654,7 +654,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	if err != nil {
 		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
 			// The packet seems unrelated to discv5, send it to the next protocol.
-			t.log.Trace("Unhandled discv5 packet", "id", fromID, "addr", addr, "err", err)
+			// t.log.Trace("Unhandled discv5 packet", "id", fromID, "addr", addr, "err", err)
 			up := ReadPacket{Data: make([]byte, len(rawpacket)), Addr: fromAddr}
 			copy(up.Data, rawpacket)
 			t.unhandled <- up
