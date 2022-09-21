@@ -183,26 +183,34 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		if _, ok := t.deleted[addr]; ok {
 			continue
 		}
-		t.post[addr] = &account{Storage: make(map[common.Hash]common.Hash)}
+		modified := false
+		postAccount := &account{Storage: make(map[common.Hash]common.Hash)}
 		newBalance := t.env.StateDB.GetBalance(addr)
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
 		if newBalance.Cmp(t.pre[addr].Balance) == 0 {
+			modified = true
 			t.post[addr].Balance = newBalance
 		}
 		if newNonce != t.pre[addr].Nonce {
-			t.post[addr].Nonce = newNonce
+			modified = true
+			postAccount.Nonce = newNonce
 		}
 		if !bytes.Equal(newCode, t.pre[addr].Code) {
+			modified = true
 			t.post[addr].Code = newCode
 		}
 
 		for key, val := range state.Storage {
 			newVal := t.env.StateDB.GetState(addr, key)
 			if val != newVal {
-				t.post[addr].Storage[key] = newVal
+				modified = true
+				postAccount.Storage[key] = newVal
 			}
+		}
+		if modified {
+			t.post[addr] = postAccount
 		}
 	}
 	for a := range t.created {
