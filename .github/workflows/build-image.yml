@@ -8,7 +8,7 @@ env:
   DOCKER_USER: ${{ secrets.DOCKER_USER }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   REPO_NAME: ${{ github.event.repository.name }}
-  PACKAGE_VERSION: 0.0.${{ github.ref != 'refs/heads/main' && format('{0}-{1}.{2}', github.run_number, github.ref_name, github.run_attempt) || github.run_number }}
+  PACKAGE_VERSION: 0.0.${{ github.ref != 'refs/heads/master' && format('{0}-{1}.{2}', github.run_number, github.ref_name, github.run_attempt) || github.run_number }}
 
 jobs:
   push-image-to-docker-hub:  
