@@ -111,7 +111,8 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	}
 
 	// KCP writes are a bit 'async', so wait for the remote send ACK in the end.
-	sess.SetReadDeadline(time.Now().Add(5 * time.Second))
+	log.Info("Done writing to KCP, waiting for FIN-ACK")
+	sess.SetReadDeadline(time.Now().Add(30 * time.Minute))
 	ackbuf := make([]byte, 3)
 	_, err = sess.Read(ackbuf)
 	if err != nil {
