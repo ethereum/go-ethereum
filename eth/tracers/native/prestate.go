@@ -177,23 +177,6 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		return
 	}
 
-	// // Refund the from address with rest gas
-	// refundGas := new(big.Int).Mul(t.env.TxContext.GasPrice, new(big.Int).SetUint64(restGas))
-	// fromBal := hexutil.MustDecodeBig(t.pre[t.from].Balance)
-	// fromBal.Add(fromBal, refundGas)
-	// t.post[t.from].Balance = hexutil.EncodeBig(fromBal)
-	//
-	// // Refund the used gas to miner
-	// miner := t.env.Context.Coinbase
-	// gasPrice := t.env.TxContext.GasPrice
-	// if !t.env.Config.NoBaseFee && t.env.Context.BaseFee != nil {
-	// 	gasPrice.Sub(gasPrice, t.env.Context.BaseFee)
-	// }
-	// usedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit-restGas))
-	// minerBal := hexutil.MustDecodeBig(t.pre[miner].Balance)
-	// minerBal.Add(minerBal, usedGas)
-	// t.post[miner].Balance = hexutil.EncodeBig(minerBal)
-
 	for addr, state := range t.pre {
 		// the deleted account's state is pruned
 		if _, ok := t.deleted[addr]; ok {
