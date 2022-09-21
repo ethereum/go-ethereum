@@ -169,6 +169,15 @@ of requests is fairly low. Websockets provides a continuous open channel that ca
 event subscriptions and streaming and handle large volumes of requests with smaller per-message
 overheads.
 
+## Engine-API
+
+The Engine-API is a set of RPC methods that enable communication between Geth and the
+[consensus client](/docs/interface/consensus-clients.md). These are not designed to be 
+exposed to the user - instead they are called automatically by the clients when they
+need to exchange information. The Engine API is enabled by default - the user is not required
+to pass any instruction to Geth to enable these methods.
+
+Read more in the [Engine API spec](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md).
 
 ## Summary
 

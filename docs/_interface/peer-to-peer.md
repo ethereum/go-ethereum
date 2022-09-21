@@ -122,21 +122,24 @@ It is often useful for developers to connect to private test networks rather tha
 
 ## Static nodes
 
-Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by saving their enode addresses to a json file which must be stored in `datadir/geth/static-nodes.json`. The content of `static-nodes.json` should be formatted as follows:
+Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
 
-```javascript
-[
-  "enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303",
-  "enode://pubkey@ip:port"
-]
 ```
+geth --datadir <datadir> dumpconfig > config.toml
+```
+
+This will create `config.toml` in the current directory. The enode addresses for static nodes can then be added as a list to the `StaticNodes` field of the `Node.P2P` section in `config.toml`. When Geth is started, pass `--config config.toml`. The relevant line in `config.toml` looks as follows:
+
+```toml
+StaticNodes = ["enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303"]
+```
+
+Ensure the other lines in `config.toml` are also set correctly before starting Geth, as passing `--config` instructs Geth to get its configuration values from this file. An example of a complete `config.toml` file can be found [here](https://gist.github.com/jmcook1186/16db2f0feddb4bd0581ebb9ba867a47a).
 
 Static nodes can also be added at runtime in the Javascript console by passing an enode address to `admin.addPeer()`:
 
 ```javascript
-
 admin.addPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
-
 ```
 
 ## Peer limit
@@ -151,7 +154,7 @@ geth <otherflags> --maxpeers 15
 
 ## Trusted nodes
 
-Geth supports trusted nodes that are always allowed to reconnect, even if the peer limit is reached. They can be added persistently via a config file `<datadir>/geth/trusted-nodes.json` or temporarily using the Javascript console. The format for the config file is identical to the one used for static nodes.
+Trusted nodes can be added to `config.toml` in the same way as for static nodes. Add the trusted node's enode address to the `TrustedNodes` field in `config.toml` before starting Geth with `--config config.toml`.
 
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
