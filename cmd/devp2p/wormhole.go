@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	ecParityShards = 3
-	ecDataShards   = 10
+	ecParityShards = 0
+	ecDataShards   = 0
 )
 
 func setupKCP(s *kcp.UDPSession) {
