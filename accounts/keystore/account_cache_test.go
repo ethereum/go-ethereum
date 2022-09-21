@@ -52,10 +52,13 @@ var (
 
 // waitWatcherStarts waits up to 1s for the keystore watcher to start.
 func waitWatcherStart(ks *KeyStore) bool {
+	if ks.cache.watcher.enabled() {
+		return true
+	}
 	// The watcher should start, and then exit.
 	for t0 := time.Now(); time.Since(t0) < 1*time.Second; time.Sleep(100 * time.Millisecond) {
 		ks.cache.mu.Lock()
-		watchOk := ks.cache.watcher.haswatched || ks.cache.watcher.running
+		watchOk := ks.cache.watcher.runEnded || ks.cache.watcher.running
 		ks.cache.mu.Unlock()
 		if watchOk {
 			return true
