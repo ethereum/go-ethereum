@@ -52,7 +52,7 @@ func setupKCP(s *kcp.UDPSession) {
 	// s.SetNoDelay(1, 10, 2, 1)
 	// s.SetNoDelay(0, 40, 0, 0)
 
-	s.SetNoDelay(0, 20, 0, 0)
+	s.SetNoDelay(1, 10, 2, 0)
 }
 
 func discv5WormholeSend(ctx *cli.Context) error {
