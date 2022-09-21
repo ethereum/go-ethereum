@@ -354,14 +354,14 @@ func kcpStatsDump(snmp *kcp.Snmp) {
 }
 
 type downloadWriter struct {
-	file    *os.File
+	file    io.WriteCloser
 	dstBuf  *bufio.Writer
 	size    int64
 	written int64
 	lastpct int64
 }
 
-func newDownloadWriter(dst *os.File, size int64) *downloadWriter {
+func newDownloadWriter(dst io.WriteCloser, size int64) *downloadWriter {
 	return &downloadWriter{
 		file:   dst,
 		dstBuf: bufio.NewWriter(dst),
