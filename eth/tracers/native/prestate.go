@@ -60,6 +60,8 @@ type prestateTracer struct {
 	config    prestateTracerConfig
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
+	created   map[common.Address]bool
+	deleted   map[common.Address]bool
 }
 
 type prestateTracerConfig struct {
@@ -75,7 +77,13 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 			return nil, err
 		}
 	}
-	return &prestateTracer{pre: state{}, post: state{}, config: config}, nil
+	return &prestateTracer{
+		pre:     state{},
+		post:    state{},
+		config:  config,
+		created: make(map[common.Address]bool),
+		deleted: make(map[common.Address]bool),
+	}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -116,27 +124,34 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	stack := scope.Stack
 	stackData := stack.Data()
 	stackLen := len(stackData)
+	caller := scope.Contract.Address()
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
-		t.lookupStorage(scope.Contract.Address(), slot)
+		t.lookupStorage(caller, slot)
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
-		addr := common.Address(stackData[stackLen-1].Bytes20())
-		t.lookupAccount(addr)
+		refundAddr := common.Address(stackData[stackLen-1].Bytes20())
+		t.lookupAccount(refundAddr)
+		if op == vm.SELFDESTRUCT {
+			t.deleted[caller] = true
+		}
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
 		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
 	case op == vm.CREATE:
-		addr := scope.Contract.Address()
-		nonce := t.env.StateDB.GetNonce(addr)
-		t.lookupAccount(crypto.CreateAddress(addr, nonce))
+		nonce := t.env.StateDB.GetNonce(caller)
+		addr := crypto.CreateAddress(caller, nonce)
+		t.lookupAccount(addr)
+		t.created[addr] = true
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
 		init := scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		inithash := crypto.Keccak256(init)
 		salt := stackData[stackLen-4]
-		t.lookupAccount(crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), inithash))
+		addr := crypto.CreateAddress2(caller, salt.Bytes32(), inithash)
+		t.lookupAccount(addr)
+		t.created[addr] = true
 	}
 }
 
@@ -162,25 +177,40 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		return
 	}
 
-	// Refund the from address with rest gas
-	refundGas := new(big.Int).Mul(t.env.TxContext.GasPrice, new(big.Int).SetUint64(restGas))
-	fromBal := new(big.Int).Add(t.pre[t.from].Balance, refundGas)
-	t.post[t.from].Balance = fromBal
-
-	// Refund the used gas to miner
-	miner := t.env.Context.Coinbase
-	gasPrice := t.env.TxContext.GasPrice
-	if !t.env.Config.NoBaseFee && t.env.Context.BaseFee != nil {
-		gasPrice.Sub(gasPrice, t.env.Context.BaseFee)
-	}
-	usedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit-restGas))
-	minerBal := new(big.Int).Add(t.pre[miner].Balance, usedGas)
-	t.post[miner].Balance = minerBal
+	// // Refund the from address with rest gas
+	// refundGas := new(big.Int).Mul(t.env.TxContext.GasPrice, new(big.Int).SetUint64(restGas))
+	// fromBal := hexutil.MustDecodeBig(t.pre[t.from].Balance)
+	// fromBal.Add(fromBal, refundGas)
+	// t.post[t.from].Balance = hexutil.EncodeBig(fromBal)
+	//
+	// // Refund the used gas to miner
+	// miner := t.env.Context.Coinbase
+	// gasPrice := t.env.TxContext.GasPrice
+	// if !t.env.Config.NoBaseFee && t.env.Context.BaseFee != nil {
+	// 	gasPrice.Sub(gasPrice, t.env.Context.BaseFee)
+	// }
+	// usedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit-restGas))
+	// minerBal := hexutil.MustDecodeBig(t.pre[miner].Balance)
+	// minerBal.Add(minerBal, usedGas)
+	// t.post[miner].Balance = hexutil.EncodeBig(minerBal)
 
 	for addr, state := range t.pre {
+		// the deleted account's state is pruned
+		if _, ok := t.deleted[addr]; ok {
+			continue
+		}
+		t.post[addr] = &account{
+			Balance: bigToHex(t.env.StateDB.GetBalance(addr)),
+			Nonce:   t.env.StateDB.GetNonce(addr),
+			Code:    bytesToHex(t.env.StateDB.GetCode(addr)),
+			Storage: make(map[common.Hash]common.Hash),
+		}
 		for key := range state.Storage {
 			t.post[addr].Storage[key] = t.env.StateDB.GetState(addr, key)
 		}
+	}
+	for a := range t.created {
+		delete(t.pre, a)
 	}
 }
 
@@ -215,19 +245,12 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	if _, ok := t.pre[addr]; ok {
 		return
 	}
+
 	t.pre[addr] = &account{
 		Balance: t.env.StateDB.GetBalance(addr),
 		Nonce:   t.env.StateDB.GetNonce(addr),
 		Code:    t.env.StateDB.GetCode(addr),
 		Storage: make(map[common.Hash]common.Hash),
-	}
-	if t.config.CollectPost {
-		t.post[addr] = &account{
-			Balance: t.env.StateDB.GetBalance(addr),
-			Nonce:   t.env.StateDB.GetNonce(addr),
-			Code:    t.env.StateDB.GetCode(addr),
-			Storage: make(map[common.Hash]common.Hash),
-		}
 	}
 }
 
