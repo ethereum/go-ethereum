@@ -420,72 +420,16 @@ func (c *ChainConfig) String() string {
 	if network == "" {
 		network = "unknown"
 	}
-	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
+	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainIDEtf, network)
 	switch {
 	case c.Ethash != nil:
-		if c.TerminalTotalDifficulty == nil {
-			banner += "Consensus: Ethash (proof-of-work)\n"
-		} else {
-			banner += "Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)\n"
-		}
+		banner += "Consensus: Ethash (proof-of-work)\n"
 	case c.Clique != nil:
-		if c.TerminalTotalDifficulty == nil {
-			banner += "Consensus: Clique (proof-of-authority)\n"
-		} else {
-			banner += "Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n"
-		}
+		banner += "Consensus: Clique (proof-of-authority)\n"
 	default:
 		banner += "Consensus: unknown\n"
 	}
 	banner += "\n"
-
-	// Create a list of forks with a short description of them. Forks that only
-	// makes sense for mainnet should be optional at printing to avoid bloating
-	// the output for testnets and private networks.
-	//banner += "Pre-Merge hard forks:\n"
-	//banner += fmt.Sprintf(" - Homestead:                   %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)\n", c.HomesteadBlock)
-	//if c.DAOForkBlock != nil {
-	//	banner += fmt.Sprintf(" - DAO Fork:                    %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md)\n", c.DAOForkBlock)
-	//}
-	//banner += fmt.Sprintf(" - Tangerine Whistle (EIP 150): %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md)\n", c.EIP150Block)
-	//banner += fmt.Sprintf(" - Spurious Dragon/1 (EIP 155): %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
-	//banner += fmt.Sprintf(" - Spurious Dragon/2 (EIP 158): %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)\n", c.EIP155Block)
-	//banner += fmt.Sprintf(" - Byzantium:                   %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/byzantium.md)\n", c.ByzantiumBlock)
-	//banner += fmt.Sprintf(" - Constantinople:              %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md)\n", c.ConstantinopleBlock)
-	//banner += fmt.Sprintf(" - Petersburg:                  %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md)\n", c.PetersburgBlock)
-	//banner += fmt.Sprintf(" - Istanbul:                    %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md)\n", c.IstanbulBlock)
-	//if c.MuirGlacierBlock != nil {
-	//	banner += fmt.Sprintf(" - Muir Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md)\n", c.MuirGlacierBlock)
-	//}
-	//banner += fmt.Sprintf(" - Berlin:                      %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md)\n", c.BerlinBlock)
-	//banner += fmt.Sprintf(" - London:                      %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md)\n", c.LondonBlock)
-	//if c.ArrowGlacierBlock != nil {
-	//	banner += fmt.Sprintf(" - Arrow Glacier:               %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)\n", c.ArrowGlacierBlock)
-	//}
-	//if c.GrayGlacierBlock != nil {
-	//	banner += fmt.Sprintf(" - Gray Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
-	//}
-	//if c.FairBlock != nil {
-	//	banner += fmt.Sprintf(" - Fair:                %-8v", c.FairBlock)
-	//}
-	//if c.ShanghaiBlock != nil {
-	//	banner += fmt.Sprintf(" - Shanghai:                     %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiBlock)
-	//}
-	//if c.CancunBlock != nil {
-	//	banner += fmt.Sprintf(" - Cancun:                      %-8v\n", c.CancunBlock)
-	//}
-	//banner += "\n"
-
-	// Add a special section for the merge as it's non-obvious
-	//if c.TerminalTotalDifficulty == nil {
-	//	banner += "The Merge is not yet available for this network!\n"
-	//	banner += " - Hard-fork specification: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)"
-	//} else {
-	//	banner += "Merge configured:\n"
-	//	banner += " - Hard-fork specification:   https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md)\n"
-	//	banner += fmt.Sprintf(" - Total terminal difficulty: %v\n", c.TerminalTotalDifficulty)
-	//	//banner += fmt.Sprintf(" - Merge netsplit block:      %-8v", c.MergeNetsplitBlock)
-	//}
 	return banner
 }
 
@@ -499,10 +443,6 @@ func (c *ChainConfig) ChainId(num *big.Int) *big.Int {
 func (c *ChainConfig) ReChainId() {
 	c.ChainID = c.ChainIDEtf
 }
-
-//func (c *ChainConfig) SetRome(num *big.Int) {
-//	c.RomeBlock = num
-//}
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
@@ -577,9 +517,6 @@ func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 }
 
 func (c *ChainConfig) IsRome(num *big.Int) bool {
-	if c.RomeBlock == nil {
-		return false
-	}
 	return isForked(c.RomeBlock, num)
 }
 
@@ -590,16 +527,6 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 	}
 	return parentTotalDiff.Cmp(c.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(c.TerminalTotalDifficulty) >= 0
 }
-
-// IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
-//func (c *ChainConfig) IsShanghai(num *big.Int) bool {
-//	return isForked(c.ShanghaiBlock, num)
-//}
-
-// IsCancun returns whether num is either equal to the Cancun fork block or greater.
-//func (c *ChainConfig) IsCancun(num *big.Int) bool {
-//	return isForked(c.CancunBlock, num)
-//}
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
@@ -644,9 +571,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
 		{name: "RomeBlock", block: c.RomeBlock, optional: true},
-		//{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
-		//{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
-		//{name: "cancunBlock", block: c.CancunBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -722,15 +646,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.GrayGlacierBlock, newcfg.GrayGlacierBlock, head) {
 		return newCompatError("Gray Glacier fork block", c.GrayGlacierBlock, newcfg.GrayGlacierBlock)
 	}
-	//if isForkIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, head) {
-	//	return newCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
-	//}
-	//if isForkIncompatible(c.ShanghaiBlock, newcfg.ShanghaiBlock, head) {
-	//	return newCompatError("Shanghai fork block", c.ShanghaiBlock, newcfg.ShanghaiBlock)
-	//}
-	//if isForkIncompatible(c.CancunBlock, newcfg.CancunBlock, head) {
-	//	return newCompatError("Cancun fork block", c.CancunBlock, newcfg.CancunBlock)
-	//}
 	return nil
 }
 

@@ -40,12 +40,14 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsLondon(blockNumber):
+	case config.IsRome(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
+	case config.IsLondon(blockNumber):
+		signer = NewLondonSigner(big.NewInt(1))
 	case config.IsBerlin(blockNumber):
-		signer = NewEIP2930Signer(config.ChainID)
+		signer = NewEIP2930Signer(big.NewInt(1))
 	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainID)
+		signer = NewEIP155Signer(big.NewInt(1))
 	case config.IsHomestead(blockNumber):
 		signer = HomesteadSigner{}
 	default:
