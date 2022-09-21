@@ -414,7 +414,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	time.Sleep(500 * time.Millisecond) // give txpool enough time to consume head event
 
 	ethservice.SetEtherbase(testAddr)
 	ethservice.SetSynced()
