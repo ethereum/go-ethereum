@@ -27,11 +27,12 @@ import (
 )
 
 type watcher struct {
-	ac       *accountCache
-	starting bool
-	running  bool
-	ev       chan notify.EventInfo
-	quit     chan struct{}
+	ac         *accountCache
+	haswatched bool
+	starting   bool
+	running    bool
+	ev         chan notify.EventInfo
+	quit       chan struct{}
 }
 
 func newWatcher(ac *accountCache) *watcher {
@@ -62,6 +63,7 @@ func (w *watcher) loop() {
 		w.ac.mu.Lock()
 		w.running = false
 		w.starting = false
+		w.haswatched = true
 		w.ac.mu.Unlock()
 	}()
 	logger := log.New("path", w.ac.keydir)
