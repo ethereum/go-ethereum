@@ -223,7 +223,7 @@ func doReceive(root string, ctx *cli.Context) error {
 	s.Write([]byte("ACK"))
 
 	kcpStatsDump(kcp.DefaultSnmp)
-	file.Close()
+	progress.Close()
 	if err := os.Rename(filepath.Join(root, fName), filepath.Join(root, xfer.Filename)); err != nil {
 		log.Error("Error renaming file", "err", err)
 	}
