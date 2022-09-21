@@ -41,7 +41,10 @@ type account struct {
 	Nonce   uint64                      `json:"nonce"`
 	Code    string                      `json:"code"`
 	Storage map[common.Hash]common.Hash `json:"storage"`
-	Post    *account                    `json:"post,omitempty"`
+}
+type prePostStateTrace struct {
+	Pre  prestateTrace `json:"pre"`
+	Post prestateTrace `json:"post"`
 }
 
 // prestateTraceTest defines a single test to check the stateDiff tracer against.
@@ -54,10 +57,14 @@ type prestateTraceTest struct {
 }
 
 func TestPrestateTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t, func() interface{} { return new(prestateTrace) })
 }
 
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+func TestPrestateWithCollectPostTracer(t *testing.T) {
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_collect_post", t, func() interface{} { return new(prePostStateTrace) })
+}
+
+func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typeBuilder func() interface{}) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -120,12 +127,12 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := new(prestateTrace)
+			ret := typeBuilder()
 			if err := json.Unmarshal(res, ret); err != nil {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !jsonEqual(ret, test.Result, new(prestateTrace), new(prestateTrace)) {
+			if !jsonEqual(ret, test.Result, typeBuilder(), typeBuilder()) {
 				// uncomment this for easier debugging
 				// have, _ := json.MarshalIndent(ret, "", " ")
 				// want, _ := json.MarshalIndent(test.Result, "", " ")
