@@ -17,16 +17,14 @@
 package core
 
 import (
-	crand "crypto/rand"
 	"errors"
 	"math/big"
-	mrand "math/rand"
+
+	"github.com/JekaMas/crand"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -48,7 +46,7 @@ type ChainReader interface {
 // for all other proof-of-work networks.
 type ForkChoice struct {
 	chain ChainReader
-	rand  *mrand.Rand
+	rand  Floater
 
 	// preserve is a helper function used in td fork choice.
 	// Miners will prefer to choose the local mined block if the
@@ -59,15 +57,16 @@ type ForkChoice struct {
 	validator ethereum.ChainValidator
 }
 
+type Floater interface {
+	Float64() float64
+}
+
 func NewForkChoice(chainReader ChainReader, preserve func(header *types.Header) bool, validator ethereum.ChainValidator) *ForkChoice {
 	// Seed a fast but crypto originating random generator
-	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
-	if err != nil {
-		log.Crit("Failed to initialize random seed", "err", err)
-	}
+	r := crand.NewRand()
 	return &ForkChoice{
 		chain:     chainReader,
-		rand:      mrand.New(mrand.NewSource(seed.Int64())), //nolint:gosec
+		rand:      r,
 		preserve:  preserve,
 		validator: validator,
 	}
