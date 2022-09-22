@@ -59,7 +59,7 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// FIXME POS-618
-	st.skipLoad(`.*micro/*`)
+	/*st.skipLoad(`.*micro/*`)
 	st.skipLoad(`.*main/*`)
 	st.skipLoad(`.*stSStoreTest*`)
 	st.skipLoad(`.*stReturnDataTest*`)
@@ -115,6 +115,7 @@ func TestState(t *testing.T) {
 	st.skipLoad(`.*stBadOpcode*`)
 	st.skipLoad(`.*stStackTests*`)
 	st.skipLoad(`.*stAttackTest*`)
+	*/
 
 	// Broken tests:
 	// Expected failures:
