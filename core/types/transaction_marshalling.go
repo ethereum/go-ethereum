@@ -118,12 +118,11 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
 		enc.BlobVersionedHashes = tx.Message.BlobVersionedHashes
-		if t.wrapData == nil {
-			return nil, fmt.Errorf("expected wrap-data for blob tx")
+		if t.wrapData != nil {
+			enc.Blobs = t.wrapData.blobs()
+			enc.BlobKzgs = t.wrapData.kzgs()
+			enc.KzgAggregatedProof = t.wrapData.aggregatedProof()
 		}
-		enc.Blobs = t.wrapData.blobs()
-		enc.BlobKzgs = t.wrapData.kzgs()
-		enc.KzgAggregatedProof = t.wrapData.aggregatedProof()
 	}
 	return json.Marshal(&enc)
 }
@@ -349,14 +348,17 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
-		t.wrapData = &BlobTxWrapData{
-			BlobKzgs:           dec.BlobKzgs,
-			Blobs:              dec.Blobs,
-			KzgAggregatedProof: dec.KzgAggregatedProof,
-		}
-		// Verify that versioned hashes match kzgs, and kzgs match blobs.
-		if err := t.wrapData.verifyBlobs(&itx); err != nil {
-			return fmt.Errorf("blob wrapping data is invalid: %v", err)
+		// A BlobTx may not contain data
+		if len(dec.Blobs) != 0 || len(dec.BlobKzgs) != 0 {
+			t.wrapData = &BlobTxWrapData{
+				BlobKzgs:           dec.BlobKzgs,
+				Blobs:              dec.Blobs,
+				KzgAggregatedProof: dec.KzgAggregatedProof,
+			}
+			// Verify that versioned hashes match kzgs, and kzgs match blobs.
+			if err := t.wrapData.verifyBlobs(&itx); err != nil {
+				return fmt.Errorf("blob wrapping data is invalid: %v", err)
+			}
 		}
 	default:
 		return ErrTxTypeNotSupported
