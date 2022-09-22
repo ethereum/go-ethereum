@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -994,12 +995,14 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if !genParams.noExtra && len(w.extra) != 0 {
 		header.Extra = w.extra
 	}
-	// Set the randomness field from the beacon chain if it's available.
+	// Set the randomness field from the beacon chain if it's available,
+	// otherwise fill with random bytes.
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
 	} else {
-		// Beacon chain randomness changes every epoch, this will usually be correct.
-		header.MixDigest = parent.Header().MixDigest
+		for ind := range header.MixDigest {
+			header.MixDigest[ind] = byte(rand.Intn(256))
+		}
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
