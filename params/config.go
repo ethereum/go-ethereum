@@ -603,7 +603,8 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 	for i := 0; i < len(keys)-1; i++ {
 		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
 		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
-		if number > valUint && number < valUintNext {
+
+		if number >= valUint && number < valUintNext {
 			return field[keys[i]]
 		}
 	}

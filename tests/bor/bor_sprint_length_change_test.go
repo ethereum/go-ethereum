@@ -158,7 +158,8 @@ func TestSprintLengths(t *testing.T) {
 		"0": 16,
 		"8": 4,
 	}
-	assert.Equal(t, testBorConfig.CalculateSprint(0), 16)
-	assert.Equal(t, testBorConfig.CalculateSprint(9), 4)
+	assert.Equal(t, testBorConfig.CalculateSprint(0), uint64(16))
+	assert.Equal(t, testBorConfig.CalculateSprint(8), uint64(4))
+	assert.Equal(t, testBorConfig.CalculateSprint(9), uint64(4))
 
 }
