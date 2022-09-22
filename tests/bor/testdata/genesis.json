@@ -20,7 +20,8 @@
       },
       "producerDelay": 4,
       "sprint": {
-        "0": 4
+        "0": 4,
+        "32": 2
       },
       "backupMultiplier": {
         "0": 1
