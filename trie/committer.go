@@ -62,7 +62,7 @@ func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 		// embedded in the parent and now deleted from the trie. In this case
 		// it's noop from database's perspective.
 		val := c.tracer.getPrev(path)
-		if val == nil {
+		if len(val) == 0 {
 			continue
 		}
 		c.nodes.markDeleted(path, val)

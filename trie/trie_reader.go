@@ -35,7 +35,7 @@ type Reader interface {
 	NodeBlob(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 
-// NodeReader warps all the necessary functions for accessing trie node.
+// NodeReader wraps all the necessary functions for accessing trie node.
 type NodeReader interface {
 	// GetReader returns a reader for accessing all trie nodes with provided
 	// state root. Nil is returned in case the state is not available.
