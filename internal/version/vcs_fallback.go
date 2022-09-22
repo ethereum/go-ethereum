@@ -23,6 +23,6 @@ import "runtime/debug"
 
 // In Go versions before 1.18, VCS information is not available.
 
-func vcsInfo(info *debug.BuildInfo) (gitStatus, bool) {
-	return gitStatus{}, false
+func buildInfoVCS(info *debug.BuildInfo) (VCSInfo, bool) {
+	return VCSInfo{}, false
 }
