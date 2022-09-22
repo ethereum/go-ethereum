@@ -38,7 +38,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	)
 	for i := 0; i < 2; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner(genesis, keys[i])
+		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
 		if err != nil {
 			panic(err)
 		}

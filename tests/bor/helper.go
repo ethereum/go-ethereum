@@ -367,7 +367,7 @@ func IsSprintEnd(number uint64) bool {
 	return (number+1)%sprintSize == 0
 }
 
-func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *eth.Ethereum, error) {
+func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
@@ -402,7 +402,7 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *e
 			GasPrice:  big.NewInt(1),
 			Recommit:  time.Second,
 		},
-		WithoutHeimdall: true,
+		WithoutHeimdall: withoutHeimdall,
 	})
 	if err != nil {
 		return nil, nil, err
