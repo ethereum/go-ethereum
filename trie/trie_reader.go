@@ -51,10 +51,10 @@ type trieReader struct {
 }
 
 // newTrieReader initializes the trie reader with the given node reader.
-func newTrieReader(owner common.Hash, root common.Hash, db NodeReader) (*trieReader, error) {
-	reader := db.GetReader(root)
+func newTrieReader(stateRoot, owner common.Hash, db NodeReader) (*trieReader, error) {
+	reader := db.GetReader(stateRoot)
 	if reader == nil {
-		return nil, fmt.Errorf("state not found #%x", root)
+		return nil, fmt.Errorf("state not found #%x", stateRoot)
 	}
 	return &trieReader{owner: owner, reader: reader}, nil
 }
@@ -68,17 +68,17 @@ func newEmptyReader() *trieReader {
 // node retrieves the trie node with the provided trie node information.
 // An MissingNodeError will be returned in case the node is not found or
 // any error is encountered.
-func (r *trieReader) node(owner common.Hash, path []byte, hash common.Hash) (node, error) {
+func (r *trieReader) node(path []byte, hash common.Hash) (node, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
 		if _, ok := r.banned[string(path)]; ok {
-			return nil, &MissingNodeError{Owner: owner, NodeHash: hash, Path: path}
+			return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
 		}
 	}
 	if r.reader == nil {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
 	}
-	node, err := r.reader.Node(owner, path, hash)
+	node, err := r.reader.Node(r.owner, path, hash)
 	if err != nil || node == nil {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
 	}
@@ -88,17 +88,17 @@ func (r *trieReader) node(owner common.Hash, path []byte, hash common.Hash) (nod
 // node retrieves the rlp-encoded trie node with the provided trie node
 // information. An MissingNodeError will be returned in case the node is
 // not found or any error is encountered.
-func (r *trieReader) nodeBlob(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (r *trieReader) nodeBlob(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
 		if _, ok := r.banned[string(path)]; ok {
-			return nil, &MissingNodeError{Owner: owner, NodeHash: hash, Path: path}
+			return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
 		}
 	}
 	if r.reader == nil {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
 	}
-	blob, err := r.reader.NodeBlob(owner, path, hash)
+	blob, err := r.reader.NodeBlob(r.owner, path, hash)
 	if err != nil || len(blob) == 0 {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
 	}

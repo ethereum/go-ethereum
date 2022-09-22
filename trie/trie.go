@@ -91,31 +91,24 @@ func (t *Trie) Copy() *Trie {
 	}
 }
 
-// New creates the trie instance with provided information and read-only database.
-//
-//   - stateRoot: the identifier for selecting state to access trie nodes.
-//     If the corresponding state is not available, an error will be returned.
-//
-//   - owner: the identifier of second-layer trie(namely the storage trie in
-//     ethereum). It's the hash of the corresponding contract address
-//     used for uniquely identifying trie nodes. It's empty for account trie.
-//
-//   - root: the root hash of the trie. If root is the zero hash or the sha3
-//     hash of an empty string, then trie is initially empty. Otherwise,
-//     the root node must be present in database or returns a MissingNodeError
-//     if not.
-func New(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeReader) (*Trie, error) {
-	reader, err := newTrieReader(owner, stateRoot, db)
+// New creates the trie instance with provided trie id and the read-only
+// database. The state specified by trie id must be available, otherwise
+// an error will be returned. The trie root specified by trie id can be
+// zero hash or the sha3 hash of an empty string, then trie is initially
+// empty, otherwise, the root node must be present in database or returns
+// a MissingNodeError if not.
+func New(id *ID, db NodeReader) (*Trie, error) {
+	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err
 	}
 	trie := &Trie{
-		owner:  owner,
+		owner:  id.Owner,
 		reader: reader,
 		//tracer: newTracer(),
 	}
-	if root != (common.Hash{}) && root != emptyRoot {
-		rootnode, err := trie.resolveHash(root[:], nil)
+	if id.Root != (common.Hash{}) && id.Root != emptyRoot {
+		rootnode, err := trie.resolveHash(id.Root[:], nil)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +119,7 @@ func New(stateRoot common.Hash, owner common.Hash, root common.Hash, db NodeRead
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
-	tr, _ := New(common.Hash{}, common.Hash{}, common.Hash{}, db)
+	tr, _ := New(TrieID(common.Hash{}), db)
 	return tr
 }
 
@@ -228,7 +221,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		if hash == nil {
 			return nil, origNode, 0, errors.New("non-consensus node")
 		}
-		blob, err := t.reader.nodeBlob(t.owner, path, common.BytesToHash(hash))
+		blob, err := t.reader.nodeBlob(path, common.BytesToHash(hash))
 		return blob, origNode, 1, err
 	}
 	// Path still needs to be traversed, descend into children
@@ -566,7 +559,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 // path prefix. The rlp-encoded blob is preferred to be loaded from database
 // because node pre-value is required to be tracked.
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
-	blob, err := t.reader.nodeBlob(t.owner, prefix, common.BytesToHash(n))
+	blob, err := t.reader.nodeBlob(prefix, common.BytesToHash(n))
 	if err != nil {
 		return nil, err
 	}

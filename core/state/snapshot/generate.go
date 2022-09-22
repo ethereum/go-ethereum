@@ -166,7 +166,7 @@ func (result *proofResult) forEach(callback func(key []byte, val []byte) error) 
 //
 // The proof result will be returned if the range proving is finished, otherwise
 // the error will be returned to abort the entire procedure.
-func (dl *diskLayer) proveRange(ctx *generatorContext, stateRoot common.Hash, owner common.Hash, root common.Hash, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
+func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix []byte, kind string, origin []byte, max int, valueConvertFn func([]byte) ([]byte, error)) (*proofResult, error) {
 	var (
 		keys     [][]byte
 		vals     [][]byte
@@ -233,8 +233,9 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, stateRoot common.Hash, ow
 	}(time.Now())
 
 	// The snap state is exhausted, pass the entire key/val set for verification
+	root := trieId.Root
 	if origin == nil && !diskMore {
-		stackTr := trie.NewStackTrieWithOwner(nil, owner)
+		stackTr := trie.NewStackTrieWithOwner(nil, trieId.Owner)
 		for i, key := range keys {
 			stackTr.TryUpdate(key, vals[i])
 		}
@@ -248,7 +249,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, stateRoot common.Hash, ow
 		return &proofResult{keys: keys, vals: vals}, nil
 	}
 	// Snap state is chunked, generate edge proofs for verification.
-	tr, err := trie.New(stateRoot, owner, root, dl.triedb)
+	tr, err := trie.New(trieId, dl.triedb)
 	if err != nil {
 		ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 		return nil, errMissingTrie
@@ -313,9 +314,9 @@ type onStateCallback func(key []byte, val []byte, write bool, delete bool) error
 // generateRange generates the state segment with particular prefix. Generation can
 // either verify the correctness of existing state through range-proof and skip
 // generation, or iterate trie to regenerate state on demand.
-func (dl *diskLayer) generateRange(ctx *generatorContext, state common.Hash, owner common.Hash, root common.Hash, prefix []byte, kind string, origin []byte, max int, onState onStateCallback, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
+func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefix []byte, kind string, origin []byte, max int, onState onStateCallback, valueConvertFn func([]byte) ([]byte, error)) (bool, []byte, error) {
 	// Use range prover to check the validity of the flat state in the range
-	result, err := dl.proveRange(ctx, state, owner, root, prefix, kind, origin, max, valueConvertFn)
+	result, err := dl.proveRange(ctx, trieId, prefix, kind, origin, max, valueConvertFn)
 	if err != nil {
 		return false, nil, err
 	}
@@ -363,7 +364,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, state common.Hash, own
 	if len(result.keys) > 0 {
 		snapNodeCache = memorydb.New()
 		snapTrieDb := trie.NewDatabase(snapNodeCache)
-		snapTrie, _ := trie.New(common.Hash{}, owner, common.Hash{}, snapTrieDb)
+		snapTrie, _ := trie.New(trie.TrieID(common.Hash{}), snapTrieDb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
@@ -377,7 +378,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, state common.Hash, own
 	// if it's already opened with some nodes resolved.
 	tr := result.tr
 	if tr == nil {
-		tr, err = trie.New(state, owner, root, dl.triedb)
+		tr, err = trie.New(trieId, dl.triedb)
 		if err != nil {
 			ctx.stats.Log("Trie missing, state snapshotting paused", dl.root, dl.genMarker)
 			return false, nil, errMissingTrie
@@ -460,7 +461,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, state common.Hash, own
 	} else {
 		snapAccountTrieReadCounter.Inc((time.Since(start) - internal).Nanoseconds())
 	}
-	logger.Debug("Regenerated state range", "root", root, "last", hexutil.Encode(last),
+	logger.Debug("Regenerated state range", "root", trieId.Root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 
 	// If there are either more trie items, or there are more snap items
@@ -540,7 +541,8 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 	// Loop for re-generating the missing storage slots.
 	var origin = common.CopyBytes(storeMarker)
 	for {
-		exhausted, last, err := dl.generateRange(ctx, stateRoot, account, storageRoot, append(rawdb.SnapshotStoragePrefix, account.Bytes()...), snapStorage, origin, storageCheckRange, onStorage, nil)
+		id := trie.StorageTrieID(stateRoot, account, storageRoot)
+		exhausted, last, err := dl.generateRange(ctx, id, append(rawdb.SnapshotStoragePrefix, account.Bytes()...), snapStorage, origin, storageCheckRange, onStorage, nil)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
@@ -640,7 +642,8 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	}
 	origin := common.CopyBytes(accMarker)
 	for {
-		exhausted, last, err := dl.generateRange(ctx, dl.root, common.Hash{}, dl.root, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
+		id := trie.StateTrieID(dl.root)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}

@@ -184,12 +184,12 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	c.trie, err = trie.New(root, common.Hash{}, root, c.triedb)
+	c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 
 	if err != nil && c.odr != nil {
 		err = c.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			c.trie, err = trie.New(root, common.Hash{}, root, c.triedb)
+			c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 		}
 	}
 	c.section = section
@@ -228,7 +228,7 @@ func (c *ChtIndexerBackend) Commit() error {
 		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	c.trie, err = trie.New(root, common.Hash{}, root, c.triedb)
+	c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 	if err != nil {
 		return err
 	}
@@ -415,11 +415,11 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	b.trie, err = trie.New(root, common.Hash{}, root, b.triedb)
+	b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 	if err != nil && b.odr != nil {
 		err = b.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			b.trie, err = trie.New(root, common.Hash{}, root, b.triedb)
+			b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 		}
 	}
 	b.section = section
@@ -479,7 +479,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	b.trie, err = trie.New(root, common.Hash{}, root, b.triedb)
+	b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 	if err != nil {
 		return err
 	}

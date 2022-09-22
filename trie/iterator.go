@@ -380,7 +380,7 @@ func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.
-	return it.trie.reader.node(it.trie.owner, path, common.BytesToHash(hash))
+	return it.trie.reader.node(path, common.BytesToHash(hash))
 }
 
 func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) {
@@ -394,7 +394,7 @@ func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) 
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.
-	return it.trie.reader.nodeBlob(it.trie.owner, path, common.BytesToHash(hash))
+	return it.trie.reader.nodeBlob(path, common.BytesToHash(hash))
 }
 
 func (st *nodeIteratorState) resolve(it *nodeIterator, path []byte) error {

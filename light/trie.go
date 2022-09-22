@@ -196,11 +196,13 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 	for {
 		var err error
 		if t.trie == nil {
-			var owner common.Hash
+			var id *trie.ID
 			if len(t.id.AccKey) > 0 {
-				owner = common.BytesToHash(t.id.AccKey)
+				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+			} else {
+				id = trie.StateTrieID(t.id.StateRoot)
 			}
-			t.trie, err = trie.New(t.id.StateRoot, owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(id, trie.NewDatabase(t.db.backend.Database()))
 		}
 		if err == nil {
 			err = fn()
@@ -226,11 +228,13 @@ func newNodeIterator(t *odrTrie, startkey []byte) trie.NodeIterator {
 	// Open the actual non-ODR trie if that hasn't happened yet.
 	if t.trie == nil {
 		it.do(func() error {
-			var owner common.Hash
+			var id *trie.ID
 			if len(t.id.AccKey) > 0 {
-				owner = common.BytesToHash(t.id.AccKey)
+				id = trie.StorageTrieID(t.id.StateRoot, common.BytesToHash(t.id.AccKey), t.id.Root)
+			} else {
+				id = trie.StateTrieID(t.id.StateRoot)
 			}
-			t, err := trie.New(t.id.StateRoot, owner, t.id.Root, trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(id, trie.NewDatabase(t.db.backend.Database()))
 			if err == nil {
 				it.t.trie = t
 			}
