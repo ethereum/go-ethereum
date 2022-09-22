@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 	"gotest.tools/assert"
 )
 
@@ -148,5 +149,16 @@ func TestValidatorsBlockProduction(t *testing.T) {
 
 	// check block mined by node1
 	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+}
+
+func TestSprintLengths(t *testing.T) {
+	testBorConfig := params.TestChainConfig.Bor
+	testBorConfig.Sprint = map[string]uint64{
+		"0": 16,
+		"8": 4,
+	}
+	assert.Equal(t, testBorConfig.CalculateSprint(0), 16)
+	assert.Equal(t, testBorConfig.CalculateSprint(9), 4)
 
 }
