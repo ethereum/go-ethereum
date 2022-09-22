@@ -3,7 +3,6 @@ package blockstm
 import (
 	"container/heap"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -127,413 +126,402 @@ type ParallelExecutionResult struct {
 }
 
 const numGoProcs = 2
-const numSpeculativeProcs = 16
+const numSpeculativeProcs = 8
 
-// Max number of pre-validation to run per loop
-const preValidateLimit = 5
-
-// Max number of times a transaction (t) can be executed before its dependency is resolved to its previous tx (t-1)
-const maxIncarnation = 2
-
-// nolint: gocognit
-// A stateless executor that executes transactions in parallel
-func ExecuteParallel(tasks []ExecTask, profile bool) (ParallelExecutionResult, error) {
-	if len(tasks) == 0 {
-		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil}, nil
-	}
+type ParallelExecutor struct {
+	tasks []ExecTask
 
 	// Stores the execution statistics for each task
-	stats := make([][]uint64, 0, len(tasks))
-	statsMutex := sync.Mutex{}
+	stats      [][]uint64
+	statsMutex sync.Mutex
 
 	// Channel for tasks that should be prioritized
-	chTasks := make(chan ExecVersionView, len(tasks))
+	chTasks chan ExecVersionView
 
 	// Channel for speculative tasks
-	chSpeculativeTasks := make(chan struct{}, len(tasks))
-
-	// A priority queue that stores speculative tasks
-	specTaskQueue := NewSafePriorityQueue(len(tasks))
+	chSpeculativeTasks chan struct{}
 
 	// Channel to signal that the result of a transaction could be written to storage
-	chSettle := make(chan int, len(tasks))
+	specTaskQueue *SafePriorityQueue
+
+	// A priority queue that stores speculative tasks
+	chSettle chan int
 
 	// Channel to signal that a transaction has finished executing
-	chResults := make(chan struct{}, len(tasks))
+	chResults chan struct{}
 
 	// A priority queue that stores the transaction index of results, so we can validate the results in order
-	resultQueue := NewSafePriorityQueue(len(tasks))
+	resultQueue *SafePriorityQueue
 
 	// A wait group to wait for all settling tasks to finish
-	var settleWg sync.WaitGroup
+	settleWg sync.WaitGroup
 
 	// An integer that tracks the index of last settled transaction
-	lastSettled := -1
+	lastSettled int
 
 	// For a task that runs only after all of its preceding tasks have finished and passed validation,
 	// its result will be absolutely valid and therefore its validation could be skipped.
 	// This map stores the boolean value indicating whether a task satisfy this condition ( absolutely valid).
-	skipCheck := make(map[int]bool)
-
-	for i := 0; i < len(tasks); i++ {
-		skipCheck[i] = false
-	}
+	skipCheck map[int]bool
 
 	// Execution tasks stores the state of each execution task
-	execTasks := makeStatusManager(len(tasks))
+	execTasks taskStatusManager
 
 	// Validate tasks stores the state of each validation task
-	validateTasks := makeStatusManager(0)
+	validateTasks taskStatusManager
 
 	// Stats for debugging purposes
-	var cntExec, cntSuccess, cntAbort, cntTotalValidations, cntValidationFail int
+	cntExec, cntSuccess, cntAbort, cntTotalValidations, cntValidationFail int
 
-	diagExecSuccess := make([]int, len(tasks))
-	diagExecAbort := make([]int, len(tasks))
+	diagExecSuccess, diagExecAbort []int
 
-	// Initialize MVHashMap
-	mvh := MakeMVHashMap()
+	// Multi-version hash map
+	mvh *MVHashMap
 
 	// Stores the inputs and outputs of the last incardanotion of all transactions
-	lastTxIO := MakeTxnInputOutput(len(tasks))
+	lastTxIO *TxnInputOutput
 
 	// Tracks the incarnation number of each transaction
-	txIncarnations := make([]int, len(tasks))
+	txIncarnations []int
 
 	// A map that stores the estimated dependency of a transaction if it is aborted without any known dependency
-	estimateDeps := make(map[int][]int, len(tasks))
-
-	for i := 0; i < len(tasks); i++ {
-		estimateDeps[i] = make([]int, 0)
-	}
+	estimateDeps map[int][]int
 
 	// A map that records whether a transaction result has been speculatively validated
-	preValidated := make(map[int]bool, len(tasks))
+	preValidated map[int]bool
 
-	begin := time.Now()
+	// Time records when the parallel execution starts
+	begin time.Time
 
-	workerWg := sync.WaitGroup{}
-	workerWg.Add(numSpeculativeProcs + numGoProcs)
+	// Enable profiling
+	profile bool
+
+	// Worker wait group
+	workerWg sync.WaitGroup
+}
+
+func NewParallelExecutor(tasks []ExecTask, profile bool) *ParallelExecutor {
+	numTasks := len(tasks)
+
+	pe := &ParallelExecutor{
+		tasks:              tasks,
+		stats:              make([][]uint64, numTasks),
+		chTasks:            make(chan ExecVersionView, numTasks),
+		chSpeculativeTasks: make(chan struct{}, numTasks),
+		chSettle:           make(chan int, numTasks),
+		chResults:          make(chan struct{}, numTasks),
+		specTaskQueue:      NewSafePriorityQueue(numTasks),
+		resultQueue:        NewSafePriorityQueue(numTasks),
+		lastSettled:        -1,
+		skipCheck:          make(map[int]bool),
+		execTasks:          makeStatusManager(numTasks),
+		validateTasks:      makeStatusManager(0),
+		diagExecSuccess:    make([]int, numTasks),
+		diagExecAbort:      make([]int, numTasks),
+		mvh:                MakeMVHashMap(),
+		lastTxIO:           MakeTxnInputOutput(numTasks),
+		txIncarnations:     make([]int, numTasks),
+		estimateDeps:       make(map[int][]int),
+		preValidated:       make(map[int]bool),
+		begin:              time.Now(),
+		profile:            profile,
+	}
+
+	return pe
+}
+
+func (pe *ParallelExecutor) Prepare() {
+	prevSenderTx := make(map[common.Address]int)
+
+	for i, t := range pe.tasks {
+		pe.skipCheck[i] = false
+		pe.estimateDeps[i] = make([]int, 0)
+
+		if tx, ok := prevSenderTx[t.Sender()]; ok {
+			pe.execTasks.addDependencies(tx, i)
+			pe.execTasks.clearPending(i)
+		}
+
+		prevSenderTx[t.Sender()] = i
+	}
+
+	pe.workerWg.Add(numSpeculativeProcs + numGoProcs)
 
 	// Launch workers that execute transactions
 	for i := 0; i < numSpeculativeProcs+numGoProcs; i++ {
 		go func(procNum int) {
-			defer workerWg.Done()
+			defer pe.workerWg.Done()
 
 			doWork := func(task ExecVersionView) {
 				start := time.Duration(0)
-				if profile {
-					start = time.Since(begin)
+				if pe.profile {
+					start = time.Since(pe.begin)
 				}
 
 				res := task.Execute()
 
 				if res.err == nil {
-					mvh.FlushMVWriteSet(res.txAllOut)
+					pe.mvh.FlushMVWriteSet(res.txAllOut)
 				}
 
-				resultQueue.Push(res.ver.TxnIndex, res)
-				chResults <- struct{}{}
+				pe.resultQueue.Push(res.ver.TxnIndex, res)
+				pe.chResults <- struct{}{}
 
-				if profile {
-					end := time.Since(begin)
+				if pe.profile {
+					end := time.Since(pe.begin)
 
 					stat := []uint64{uint64(res.ver.TxnIndex), uint64(res.ver.Incarnation), uint64(start), uint64(end), uint64(procNum)}
 
-					statsMutex.Lock()
-					stats = append(stats, stat)
-					statsMutex.Unlock()
+					pe.statsMutex.Lock()
+					pe.stats = append(pe.stats, stat)
+					pe.statsMutex.Unlock()
 				}
 			}
 
 			if procNum < numSpeculativeProcs {
-				for range chSpeculativeTasks {
-					doWork(specTaskQueue.Pop().(ExecVersionView))
+				for range pe.chSpeculativeTasks {
+					doWork(pe.specTaskQueue.Pop().(ExecVersionView))
 				}
 			} else {
-				for task := range chTasks {
+				for task := range pe.chTasks {
 					doWork(task)
 				}
 			}
 		}(i)
 	}
 
-	// Launch a worker that settles valid transactions
-	settleWg.Add(len(tasks))
+	pe.settleWg.Add(len(pe.tasks))
 
 	go func() {
-		for t := range chSettle {
-			tasks[t].Settle()
-			settleWg.Done()
+		for t := range pe.chSettle {
+			pe.tasks[t].Settle()
+			pe.settleWg.Done()
 		}
 	}()
 
 	// bootstrap first execution
-	tx := execTasks.takeNextPending()
+	tx := pe.execTasks.takeNextPending()
 	if tx != -1 {
-		cntExec++
+		pe.cntExec++
 
-		chTasks <- ExecVersionView{ver: Version{tx, 0}, et: tasks[tx], mvh: mvh, sender: tasks[tx].Sender()}
+		pe.chTasks <- ExecVersionView{ver: Version{tx, 0}, et: pe.tasks[tx], mvh: pe.mvh, sender: pe.tasks[tx].Sender()}
+	}
+}
+
+// nolint: gocognit
+func (pe *ParallelExecutor) Step(res ExecResult) (result ParallelExecutionResult, err error) {
+	tx := res.ver.TxnIndex
+
+	if _, ok := res.err.(ErrExecAbortError); res.err != nil && !ok {
+		err = res.err
+		return
 	}
 
-	// Before starting execution, going through each task to check their explicit dependencies (whether they are coming from the same account)
-	prevSenderTx := make(map[common.Address]int)
+	// nolint: nestif
+	if execErr, ok := res.err.(ErrExecAbortError); ok {
+		addedDependencies := false
 
-	for i, t := range tasks {
-		if tx, ok := prevSenderTx[t.Sender()]; ok {
-			execTasks.addDependencies(tx, i)
-			execTasks.clearPending(i)
-		}
-
-		prevSenderTx[t.Sender()] = i
-	}
-
-	var res ExecResult
-
-	var err error
-
-	// Start main validation loop
-	// nolint:nestif
-	for range chResults {
-		res = resultQueue.Pop().(ExecResult)
-		tx := res.ver.TxnIndex
-
-		if res.err == nil {
-			lastTxIO.recordRead(tx, res.txIn)
-
-			if res.ver.Incarnation == 0 {
-				lastTxIO.recordWrite(tx, res.txOut)
-				lastTxIO.recordAllWrite(tx, res.txAllOut)
-			} else {
-				if res.txAllOut.hasNewWrite(lastTxIO.AllWriteSet(tx)) {
-					validateTasks.pushPendingSet(execTasks.getRevalidationRange(tx + 1))
-				}
-
-				prevWrite := lastTxIO.AllWriteSet(tx)
-
-				// Remove entries that were previously written but are no longer written
-
-				cmpMap := make(map[Key]bool)
-
-				for _, w := range res.txAllOut {
-					cmpMap[w.Path] = true
-				}
-
-				for _, v := range prevWrite {
-					if _, ok := cmpMap[v.Path]; !ok {
-						mvh.Delete(v.Path, tx)
-					}
-				}
-
-				lastTxIO.recordWrite(tx, res.txOut)
-				lastTxIO.recordAllWrite(tx, res.txAllOut)
+		if execErr.Dependency >= 0 {
+			l := len(pe.estimateDeps[tx])
+			for l > 0 && pe.estimateDeps[tx][l-1] > execErr.Dependency {
+				pe.execTasks.removeDependency(pe.estimateDeps[tx][l-1])
+				pe.estimateDeps[tx] = pe.estimateDeps[tx][:l-1]
+				l--
 			}
 
-			validateTasks.pushPending(tx)
-			execTasks.markComplete(tx)
-			diagExecSuccess[tx]++
-			cntSuccess++
-
-			execTasks.removeDependency(tx)
-		} else if execErr, ok := res.err.(ErrExecAbortError); ok {
-
-			addedDependencies := false
-
-			if execErr.Dependency >= 0 {
-				l := len(estimateDeps[tx])
-				for l > 0 && estimateDeps[tx][l-1] > execErr.Dependency {
-					execTasks.removeDependency(estimateDeps[tx][l-1])
-					estimateDeps[tx] = estimateDeps[tx][:l-1]
-					l--
-				}
-				if txIncarnations[tx] < maxIncarnation {
-					addedDependencies = execTasks.addDependencies(execErr.Dependency, tx)
-				} else {
-					addedDependencies = execTasks.addDependencies(tx-1, tx)
-				}
-			} else {
-				estimate := 0
-
-				if len(estimateDeps[tx]) > 0 {
-					estimate = estimateDeps[tx][len(estimateDeps[tx])-1]
-				}
-				addedDependencies = execTasks.addDependencies(estimate, tx)
-				newEstimate := estimate + (estimate+tx)/2
-				if newEstimate >= tx {
-					newEstimate = tx - 1
-				}
-				estimateDeps[tx] = append(estimateDeps[tx], newEstimate)
-			}
-
-			execTasks.clearInProgress(tx)
-			if !addedDependencies {
-				execTasks.pushPending(tx)
-			}
-			txIncarnations[tx]++
-			diagExecAbort[tx]++
-			cntAbort++
+			addedDependencies = pe.execTasks.addDependencies(execErr.Dependency, tx)
 		} else {
-			err = res.err
-			break
+			estimate := 0
+
+			if len(pe.estimateDeps[tx]) > 0 {
+				estimate = pe.estimateDeps[tx][len(pe.estimateDeps[tx])-1]
+			}
+			addedDependencies = pe.execTasks.addDependencies(estimate, tx)
+			newEstimate := estimate + (estimate+tx)/2
+			if newEstimate >= tx {
+				newEstimate = tx - 1
+			}
+			pe.estimateDeps[tx] = append(pe.estimateDeps[tx], newEstimate)
 		}
 
-		// do validations ...
-		maxComplete := execTasks.maxAllComplete()
+		pe.execTasks.clearInProgress(tx)
 
-		var toValidate []int
-
-		for validateTasks.minPending() <= maxComplete && validateTasks.minPending() >= 0 {
-			toValidate = append(toValidate, validateTasks.takeNextPending())
+		if !addedDependencies {
+			pe.execTasks.pushPending(tx)
 		}
+		pe.txIncarnations[tx]++
+		pe.diagExecAbort[tx]++
+		pe.cntAbort++
+	} else {
+		pe.lastTxIO.recordRead(tx, res.txIn)
 
-		for i := 0; i < len(toValidate); i++ {
-			cntTotalValidations++
+		if res.ver.Incarnation == 0 {
+			pe.lastTxIO.recordWrite(tx, res.txOut)
+			pe.lastTxIO.recordAllWrite(tx, res.txAllOut)
+		} else {
+			if res.txAllOut.hasNewWrite(pe.lastTxIO.AllWriteSet(tx)) {
+				pe.validateTasks.pushPendingSet(pe.execTasks.getRevalidationRange(tx + 1))
+			}
 
-			tx := toValidate[i]
+			prevWrite := pe.lastTxIO.AllWriteSet(tx)
 
-			if skipCheck[tx] || ValidateVersion(tx, lastTxIO, mvh) {
-				validateTasks.markComplete(tx)
-			} else {
-				cntValidationFail++
-				diagExecAbort[tx]++
-				for _, v := range lastTxIO.AllWriteSet(tx) {
-					mvh.MarkEstimate(v.Path, tx)
+			// Remove entries that were previously written but are no longer written
+
+			cmpMap := make(map[Key]bool)
+
+			for _, w := range res.txAllOut {
+				cmpMap[w.Path] = true
+			}
+
+			for _, v := range prevWrite {
+				if _, ok := cmpMap[v.Path]; !ok {
+					pe.mvh.Delete(v.Path, tx)
 				}
-				// 'create validation tasks for all transactions > tx ...'
-				validateTasks.pushPendingSet(execTasks.getRevalidationRange(tx + 1))
-				validateTasks.clearInProgress(tx) // clear in progress - pending will be added again once new incarnation executes
-
-				addedDependencies := false
-				if txIncarnations[tx] >= maxIncarnation {
-					addedDependencies = execTasks.addDependencies(tx-1, tx)
-				}
-
-				execTasks.clearComplete(tx)
-				if !addedDependencies {
-					execTasks.pushPending(tx)
-				}
-
-				preValidated[tx] = false
-				txIncarnations[tx]++
-			}
-		}
-
-		preValidateCount := 0
-		invalidated := []int{}
-
-		i := sort.SearchInts(validateTasks.pending, maxComplete+1)
-
-		for i < len(validateTasks.pending) && preValidateCount < preValidateLimit {
-			tx := validateTasks.pending[i]
-
-			if !preValidated[tx] {
-				cntTotalValidations++
-
-				if !ValidateVersion(tx, lastTxIO, mvh) {
-					cntValidationFail++
-					diagExecAbort[tx]++
-
-					invalidated = append(invalidated, tx)
-
-					if execTasks.checkComplete(tx) {
-						execTasks.clearComplete(tx)
-					}
-
-					if !execTasks.checkInProgress(tx) {
-						for _, v := range lastTxIO.AllWriteSet(tx) {
-							mvh.MarkEstimate(v.Path, tx)
-						}
-
-						validateTasks.pushPendingSet(execTasks.getRevalidationRange(tx + 1))
-
-						addedDependencies := false
-						if txIncarnations[tx] >= maxIncarnation {
-							addedDependencies = execTasks.addDependencies(tx-1, tx)
-						}
-
-						if !addedDependencies {
-							execTasks.pushPending(tx)
-						}
-					}
-
-					txIncarnations[tx]++
-
-					preValidated[tx] = false
-				} else {
-					preValidated[tx] = true
-				}
-				preValidateCount++
 			}
 
-			i++
+			pe.lastTxIO.recordWrite(tx, res.txOut)
+			pe.lastTxIO.recordAllWrite(tx, res.txAllOut)
 		}
 
-		for _, tx := range invalidated {
-			validateTasks.clearPending(tx)
-		}
+		pe.validateTasks.pushPending(tx)
+		pe.execTasks.markComplete(tx)
+		pe.diagExecSuccess[tx]++
+		pe.cntSuccess++
 
-		// Settle transactions that have been validated to be correct and that won't be re-executed again
-		maxValidated := validateTasks.maxAllComplete()
+		pe.execTasks.removeDependency(tx)
+	}
 
-		for lastSettled < maxValidated {
-			lastSettled++
-			if execTasks.checkInProgress(lastSettled) || execTasks.checkPending(lastSettled) || execTasks.blockCount[lastSettled] >= 0 {
-				lastSettled--
-				break
+	// do validations ...
+	maxComplete := pe.execTasks.maxAllComplete()
+
+	toValidate := make([]int, 0, 2)
+
+	for pe.validateTasks.minPending() <= maxComplete && pe.validateTasks.minPending() >= 0 {
+		toValidate = append(toValidate, pe.validateTasks.takeNextPending())
+	}
+
+	for i := 0; i < len(toValidate); i++ {
+		pe.cntTotalValidations++
+
+		tx := toValidate[i]
+
+		if pe.skipCheck[tx] || ValidateVersion(tx, pe.lastTxIO, pe.mvh) {
+			pe.validateTasks.markComplete(tx)
+		} else {
+			pe.cntValidationFail++
+			pe.diagExecAbort[tx]++
+			for _, v := range pe.lastTxIO.AllWriteSet(tx) {
+				pe.mvh.MarkEstimate(v.Path, tx)
 			}
-			chSettle <- lastSettled
-		}
+			// 'create validation tasks for all transactions > tx ...'
+			pe.validateTasks.pushPendingSet(pe.execTasks.getRevalidationRange(tx + 1))
+			pe.validateTasks.clearInProgress(tx) // clear in progress - pending will be added again once new incarnation executes
 
-		if validateTasks.countComplete() == len(tasks) && execTasks.countComplete() == len(tasks) {
-			log.Debug("blockstm exec summary", "execs", cntExec, "success", cntSuccess, "aborts", cntAbort, "validations", cntTotalValidations, "failures", cntValidationFail, "#tasks/#execs", fmt.Sprintf("%.2f%%", float64(len(tasks))/float64(cntExec)*100))
-			break
-		}
+			pe.execTasks.clearComplete(tx)
+			pe.execTasks.pushPending(tx)
 
-		// Send the next immediate pending transaction to be executed
-		if execTasks.minPending() != -1 && execTasks.minPending() == maxValidated+1 {
-			nextTx := execTasks.takeNextPending()
-			if nextTx != -1 {
-				cntExec++
-
-				skipCheck[nextTx] = true
-
-				chTasks <- ExecVersionView{ver: Version{nextTx, txIncarnations[nextTx]}, et: tasks[nextTx], mvh: mvh, sender: tasks[nextTx].Sender()}
-			}
-		}
-
-		// Send speculative tasks
-		for execTasks.peekPendingGE(maxValidated+3) != -1 || len(execTasks.inProgress) == 0 {
-			// We skip the next transaction to avoid the case where they all have conflicts and could not be
-			// scheduled for re-execution immediately even when it's their time to run, because they are already in
-			// speculative queue.
-			nextTx := execTasks.takePendingGE(maxValidated + 3)
-
-			if nextTx == -1 {
-				nextTx = execTasks.takeNextPending()
-			}
-
-			if nextTx != -1 {
-				cntExec++
-
-				task := ExecVersionView{ver: Version{nextTx, txIncarnations[nextTx]}, et: tasks[nextTx], mvh: mvh, sender: tasks[nextTx].Sender()}
-
-				specTaskQueue.Push(nextTx, task)
-				chSpeculativeTasks <- struct{}{}
-			}
+			pe.preValidated[tx] = false
+			pe.txIncarnations[tx]++
 		}
 	}
 
-	close(chTasks)
-	close(chSpeculativeTasks)
-	workerWg.Wait()
-	close(chResults)
-	settleWg.Wait()
-	close(chSettle)
+	// Settle transactions that have been validated to be correct and that won't be re-executed again
+	maxValidated := pe.validateTasks.maxAllComplete()
 
-	var dag DAG
-	if profile {
-		dag = BuildDAG(*lastTxIO)
+	for pe.lastSettled < maxValidated {
+		pe.lastSettled++
+		if pe.execTasks.checkInProgress(pe.lastSettled) || pe.execTasks.checkPending(pe.lastSettled) || pe.execTasks.isBlocked(pe.lastSettled) {
+			pe.lastSettled--
+			break
+		}
+		pe.chSettle <- pe.lastSettled
 	}
 
-	return ParallelExecutionResult{lastTxIO, &stats, &dag}, err
+	if pe.validateTasks.countComplete() == len(pe.tasks) && pe.execTasks.countComplete() == len(pe.tasks) {
+		log.Debug("blockstm exec summary", "execs", pe.cntExec, "success", pe.cntSuccess, "aborts", pe.cntAbort, "validations", pe.cntTotalValidations, "failures", pe.cntValidationFail, "#tasks/#execs", fmt.Sprintf("%.2f%%", float64(len(pe.tasks))/float64(pe.cntExec)*100))
+
+		close(pe.chTasks)
+		close(pe.chSpeculativeTasks)
+		pe.workerWg.Wait()
+		close(pe.chResults)
+		pe.settleWg.Wait()
+		close(pe.chSettle)
+
+		var dag DAG
+
+		if pe.profile {
+			dag = BuildDAG(*pe.lastTxIO)
+		}
+
+		return ParallelExecutionResult{pe.lastTxIO, &pe.stats, &dag}, err
+	}
+
+	// Send the next immediate pending transaction to be executed
+	if pe.execTasks.minPending() != -1 && pe.execTasks.minPending() == maxValidated+1 {
+		nextTx := pe.execTasks.takeNextPending()
+		if nextTx != -1 {
+			pe.cntExec++
+
+			pe.skipCheck[nextTx] = true
+
+			pe.chTasks <- ExecVersionView{ver: Version{nextTx, pe.txIncarnations[nextTx]}, et: pe.tasks[nextTx], mvh: pe.mvh, sender: pe.tasks[nextTx].Sender()}
+		}
+	}
+
+	// Send speculative tasks
+	for pe.execTasks.minPending() != -1 || len(pe.execTasks.inProgress) == 0 {
+		nextTx := pe.execTasks.takeNextPending()
+
+		if nextTx == -1 {
+			nextTx = pe.execTasks.takeNextPending()
+		}
+
+		if nextTx != -1 {
+			pe.cntExec++
+
+			task := ExecVersionView{ver: Version{nextTx, pe.txIncarnations[nextTx]}, et: pe.tasks[nextTx], mvh: pe.mvh, sender: pe.tasks[nextTx].Sender()}
+
+			pe.specTaskQueue.Push(nextTx, task)
+			pe.chSpeculativeTasks <- struct{}{}
+		}
+	}
+
+	return
+}
+
+type PropertyCheck func(*ParallelExecutor) error
+
+func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck) (result ParallelExecutionResult, err error) {
+	if len(tasks) == 0 {
+		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil}, nil
+	}
+
+	pe := NewParallelExecutor(tasks, profile)
+	pe.Prepare()
+
+	for range pe.chResults {
+		res := pe.resultQueue.Pop().(ExecResult)
+
+		result, err = pe.Step(res)
+
+		if err != nil {
+			return result, err
+		}
+
+		if check != nil {
+			err = check(pe)
+		}
+
+		if result.TxIO != nil || err != nil {
+			return result, err
+		}
+	}
+
+	return
+}
+
+func ExecuteParallel(tasks []ExecTask, profile bool) (result ParallelExecutionResult, err error) {
+	return executeParallelWithCheck(tasks, profile, func(pe *ParallelExecutor) error {
+		return nil
+	})
 }

@@ -275,11 +275,8 @@ func MVRead[T any](s *StateDB, k blockstm.Key, defaultV T, readStorage func(s *S
 		}
 	case blockstm.MVReadResultDependency:
 		{
-			if res.DepIdx() > s.dep {
-				s.dep = res.DepIdx()
-			}
+			s.dep = res.DepIdx()
 
-			// Return immediate to executor when we found a dependency
 			panic("Found dependency")
 		}
 	case blockstm.MVReadResultNone:

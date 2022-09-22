@@ -12,10 +12,10 @@ func makeStatusManager(numTasks int) (t taskStatusManager) {
 	}
 
 	t.dependency = make(map[int]map[int]bool, numTasks)
-	t.blockCount = make(map[int]int, numTasks)
+	t.blocker = make(map[int]map[int]bool, numTasks)
 
 	for i := 0; i < numTasks; i++ {
-		t.blockCount[i] = -1
+		t.blocker[i] = make(map[int]bool)
 	}
 
 	return
@@ -26,7 +26,7 @@ type taskStatusManager struct {
 	inProgress []int
 	complete   []int
 	dependency map[int]map[int]bool
-	blockCount map[int]int
+	blocker    map[int]map[int]bool
 }
 
 func insertInList(l []int, v int) []int {
@@ -56,35 +56,6 @@ func (m *taskStatusManager) takeNextPending() int {
 	return x
 }
 
-func (m *taskStatusManager) peekPendingGE(n int) int {
-	x := sort.SearchInts(m.pending, n)
-	if x >= len(m.pending) {
-		return -1
-	}
-
-	return m.pending[x]
-}
-
-// Take a pending task whose transaction index is greater than or equal to the given tx index
-func (m *taskStatusManager) takePendingGE(n int) int {
-	x := sort.SearchInts(m.pending, n)
-	if x >= len(m.pending) {
-		return -1
-	}
-
-	v := m.pending[x]
-
-	if x < len(m.pending)-1 {
-		m.pending = append(m.pending[:x], m.pending[x+1:]...)
-	} else {
-		m.pending = m.pending[:x]
-	}
-
-	m.inProgress = insertInList(m.inProgress, v)
-
-	return v
-}
-
 func hasNoGap(l []int) bool {
 	return l[0]+len(l) == l[len(l)-1]+1
 }
@@ -106,11 +77,7 @@ func (m taskStatusManager) maxAllComplete() int {
 }
 
 func (m *taskStatusManager) pushPending(tx int) {
-	if !m.checkComplete(tx) && !m.checkInProgress(tx) {
-		m.pending = insertInList(m.pending, tx)
-	} else {
-		panic(fmt.Errorf("should not happen - clear complete or inProgress before pushing pending"))
-	}
+	m.pending = insertInList(m.pending, tx)
 }
 
 func removeFromList(l []int, v int, expect bool) []int {
@@ -155,15 +122,12 @@ func (m *taskStatusManager) addDependencies(blocker int, dependent int) bool {
 		return false
 	}
 
-	curBlocker := m.blockCount[dependent]
-
-	if curBlocker > blocker {
-		return true
-	}
+	curblockers := m.blocker[dependent]
 
 	if m.checkComplete(blocker) {
-		// Blocking blocker has already completed
-		m.blockCount[dependent] = -1
+		// Blocker has already completed
+		delete(curblockers, blocker)
+
 		return false
 	}
 
@@ -172,16 +136,21 @@ func (m *taskStatusManager) addDependencies(blocker int, dependent int) bool {
 	}
 
 	m.dependency[blocker][dependent] = true
-	m.blockCount[dependent] = blocker
+	curblockers[blocker] = true
 
 	return true
+}
+
+func (m *taskStatusManager) isBlocked(tx int) bool {
+	return len(m.blocker[tx]) > 0
 }
 
 func (m *taskStatusManager) removeDependency(tx int) {
 	if deps, ok := m.dependency[tx]; ok && len(deps) > 0 {
 		for k := range deps {
-			if m.blockCount[k] == tx {
-				m.blockCount[k] = -1
+			delete(m.blocker[k], tx)
+
+			if len(m.blocker[k]) == 0 {
 				if !m.checkComplete(k) && !m.checkPending(k) && !m.checkInProgress(k) {
 					m.pushPending(k)
 				}
@@ -243,9 +212,7 @@ func (m *taskStatusManager) pushPendingSet(set []int) {
 			m.clearComplete(v)
 		}
 
-		if !m.checkInProgress(v) {
-			m.pushPending(v)
-		}
+		m.pushPending(v)
 	}
 }
 
