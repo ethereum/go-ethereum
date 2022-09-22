@@ -3,6 +3,7 @@
 package bor
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -31,7 +33,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
@@ -358,4 +365,82 @@ func IsSprintStart(number uint64) bool {
 
 func IsSprintEnd(number uint64) bool {
 	return (number+1)%sprintSize == 0
+}
+
+func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *eth.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
+	datadir, _ := ioutil.TempDir("", "")
+
+	config := &node.Config{
+		Name:    "geth",
+		Version: params.Version,
+		DataDir: datadir,
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		},
+		UseLightweightKDF: true,
+	}
+	// Create the node and configure a full Ethereum node on it
+	stack, err := node.New(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             ethconfig.Defaults.GPO,
+		Ethash:          ethconfig.Defaults.Ethash,
+		Miner: miner.Config{
+			Etherbase: crypto.PubkeyToAddress(privKey.PublicKey),
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
+		},
+		WithoutHeimdall: true,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// register backend to account manager with keystore for signing
+	keydir := stack.KeyStoreDir()
+
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	kStore := keystore.NewKeyStore(keydir, n, p)
+
+	kStore.ImportECDSA(privKey, "")
+	acc := kStore.Accounts()[0]
+	kStore.Unlock(acc, "")
+	// proceed to authorize the local account manager in any case
+	ethBackend.AccountManager().AddBackend(kStore)
+
+	// ethBackend.AccountManager().AddBackend()
+	err = stack.Start()
+	return stack, ethBackend, err
+}
+
+func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string) *core.Genesis {
+
+	// sprint size = 8 in genesis
+	genesisData, err := ioutil.ReadFile(fileLocation)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis := &core.Genesis{}
+
+	if err := json.Unmarshal(genesisData, genesis); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis.Config.ChainID = big.NewInt(15001)
+	genesis.Config.EIP150Hash = common.Hash{}
+
+	return genesis
 }
