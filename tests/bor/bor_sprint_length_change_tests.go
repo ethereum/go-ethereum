@@ -1,11 +1,8 @@
-//go:build integration
-
 package bor
 
 import (
 	"crypto/ecdsa"
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
@@ -25,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
 )
 
 var (
@@ -36,9 +33,9 @@ var (
 	keys     = []*ecdsa.PrivateKey{pkey1, pkey2}
 )
 
-func initMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *eth.Ethereum, error) {
+func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir := os.TempDir()
 
 	config := &node.Config{
 		Name:    "geth",
@@ -94,10 +91,10 @@ func initMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey) (*node.Node, *e
 	return stack, ethBackend, err
 }
 
-func initGenesis(t *testing.T, faucets []*ecdsa.PrivateKey) *core.Genesis {
+func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string) *core.Genesis {
 
 	// sprint size = 8 in genesis
-	genesisData, err := ioutil.ReadFile("./testdata/genesis_2val.json")
+	genesisData, err := os.ReadFile(fileLocation)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -114,7 +111,8 @@ func initGenesis(t *testing.T, faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func TestValidatorWentOffline(t *testing.T) {
+// Sprint length change tests
+func TestValidatorsBlockProduction(t *testing.T) {
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
@@ -126,16 +124,15 @@ func TestValidatorWentOffline(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := initGenesis(t, faucets)
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_sprint_length_change.json")
 
 	var (
-		stacks []*node.Node
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
 	for i := 0; i < 2; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := initMiner(genesis, keys[i])
+		stack, ethBackend, err := InitMiner(genesis, keys[i])
 		if err != nil {
 			panic(err)
 		}
@@ -149,7 +146,6 @@ func TestValidatorWentOffline(t *testing.T) {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
-		stacks = append(stacks, stack)
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
 	}
@@ -164,36 +160,21 @@ func TestValidatorWentOffline(t *testing.T) {
 
 	for {
 
-		// for block 1 to 8, the primary validator is node0
-		// for block 9 to 16, the primary validator is node1
-		// for block 17 to 24, the primary validator is node0
-		// for block 25 to 32, the primary validator is node1
+		// for block 0 to 7, the primary validator is node0
+		// for block 8 to 15, the primary validator is node1
+		// for block 16 to 19, the primary validator is node0
+		// for block 20 to 23, the primary validator is node1
 		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
 
-		// we remove peer connection between node0 and node1
-		if blockHeaderVal0.Number.Uint64() == 9 {
-			stacks[0].Server().RemovePeer(enodes[1])
-		}
-
-		// here, node1 is the primary validator, node0 will sign out-of-turn
-
-		// we add peer connection between node1 and node0
-		if blockHeaderVal0.Number.Uint64() == 14 {
-			stacks[0].Server().AddPeer(enodes[1])
-		}
-
-		// reorg happens here, node1 has higher difficulty, it will replace blocks by node0
-
-		if blockHeaderVal0.Number.Uint64() == 30 {
-
+		if blockHeaderVal0.Number.Uint64() == 24 {
 			break
 		}
 
 	}
 
-	// check block 10 miner ; expected author is node1 signer
-	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(10)
-	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(10)
+	// check block 7 miner ; expected author is node0 signer
+	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(7)
+	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(7)
 	authorVal0, err := nodes[0].Engine().Author(blockHeaderVal0)
 	if err != nil {
 		log.Error("Error in getting author", "err", err)
@@ -203,76 +184,64 @@ func TestValidatorWentOffline(t *testing.T) {
 		log.Error("Error in getting author", "err", err)
 	}
 
-	// check both nodes have the same block 10
+	// check both nodes have the same block 7
 	assert.Equal(t, authorVal0, authorVal1)
 
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 11 miner ; expected author is node1 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(11)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(11)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 11
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 12 miner ; expected author is node1 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(12)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(12)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 12
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 17 miner ; expected author is node0 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(17)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(17)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 17
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
+	// check block mined by node0
 	assert.Equal(t, authorVal0, nodes[0].AccountManager().Accounts()[0])
 
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[0].AccountManager().Accounts()[0])
+	// check block 15 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(15)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(15)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 15
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 19 miner ; expected author is node0 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(19)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(19)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 19
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check block mined by node0
+	assert.Equal(t, authorVal0, nodes[0].AccountManager().Accounts()[0])
+
+	// check block 23 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(23)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(23)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 23
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
 
 }
