@@ -205,12 +205,20 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		}
 
 		for key, val := range state.Storage {
+			// don't include the empty slot
+			if val == (common.Hash{}) {
+				delete(t.pre[addr].Storage, key)
+			}
+
 			newVal := t.env.StateDB.GetState(addr, key)
 			if val != newVal {
 				modified = true
-				postAccount.Storage[key] = newVal
+				if newVal != (common.Hash{}) {
+					postAccount.Storage[key] = newVal
+				}
 			}
 		}
+
 		if modified {
 			t.post[addr] = postAccount
 		}
