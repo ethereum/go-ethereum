@@ -19,6 +19,8 @@ gcmode = "full"
 snapshot = true
 ethstats = ""
 
+["eth.requiredblocks"]
+
 [p2p]
 maxpeers = 30
 maxpendpeers = 50

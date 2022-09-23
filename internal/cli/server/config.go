@@ -45,7 +45,7 @@ type Config struct {
 	Identity string `hcl:"identity,optional" toml:"identity,optional"`
 
 	// RequiredBlocks is a list of required (block number, hash) pairs to accept
-	RequiredBlocks map[string]string `hcl:"requiredblocks,optional" toml:"requiredblocks,optional"`
+	RequiredBlocks map[string]string `hcl:"eth.requiredblocks,optional" toml:"eth.requiredblocks,optional"`
 
 	// LogLevel is the level of the logs to put out
 	LogLevel string `hcl:"log-level,optional" toml:"log-level,optional"`

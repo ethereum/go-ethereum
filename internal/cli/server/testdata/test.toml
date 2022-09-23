@@ -1,6 +1,6 @@
 datadir = "./data"
 
-[requiredblocks]
+["eth.requiredblocks"]
 a = "b"
 
 [p2p]
