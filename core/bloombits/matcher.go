@@ -634,7 +634,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 				s.errLock.Lock()
 				s.err = result.Error
 				s.errLock.Unlock()
-				s.Close()
+				//s.Close()
 			}
 			s.deliverSections(result.Bit, result.Sections, result.Bitsets)
 		}
