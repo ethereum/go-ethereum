@@ -108,11 +108,15 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
 	t.pre[from].Balance = fromBal
 	t.pre[from].Nonce--
+
+	if create && t.config.CollectPost {
+		t.created[to] = true
+	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if t.create {
+	if t.create && !t.config.CollectPost {
 		// Exclude created contract.
 		delete(t.pre, t.to)
 	}
@@ -211,6 +215,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 			t.post[addr] = postAccount
 		}
 	}
+	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		delete(t.pre, a)
 	}
