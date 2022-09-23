@@ -55,7 +55,6 @@ type prestateTracer struct {
 	pre       state
 	post      state
 	create    bool
-	from      common.Address
 	to        common.Address
 	gasLimit  uint64 // Amount of gas bought for the whole tx
 	config    prestateTracerConfig
@@ -91,7 +90,6 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.create = create
-	t.from = from
 	t.to = to
 
 	t.lookupAccount(from)
