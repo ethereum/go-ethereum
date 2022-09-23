@@ -221,6 +221,9 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 
 		if modified {
 			t.post[addr] = postAccount
+		} else {
+			// if state is not modified, then no need to include into the pre state
+			delete(t.pre, addr)
 		}
 	}
 	// the new created contracts' prestate were empty, so delete them
