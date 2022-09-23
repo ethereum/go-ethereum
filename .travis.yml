@@ -84,8 +84,8 @@ jobs:
       - GO111MODULE=auto
     name: T-Z tests
   
-  - stage: (Devnet) Build and push image
-    if: branch = dev-upgrade
+  - stage: (Devnet) Build, push and deploy
+    if: branch = dev-upgrade AND type = push AND tag IS blank
     services:
       - docker
     install: skip
@@ -98,3 +98,5 @@ jobs:
       - eval $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_BASE_URI > /dev/null 2>&1) #needs AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars
       - docker tag xdc-devnet:latest $ECR_BASE_URI/$ECR_REPO_NAME:latest # Need ECR_REPO_NAME
       - docker push $ECR_BASE_URI/$ECR_REPO_NAME:latest
+      - aws ecs update-service --region us-east-1 --cluster devnet --service devnet-group-1 --force-new-deployment #TODO: Temporary solution until we have proper automated scripts ready
+  
