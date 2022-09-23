@@ -38,7 +38,10 @@ var makeTest = function(tx, rewind) {
 
   genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer", rewind: rewind});
   for (var key in genesis.alloc) {
-    genesis.alloc[key].nonce = genesis.alloc[key].nonce.toString();
+    var nonce = genesis.alloc[key].nonce;
+    if (nonce) {
+      genesis.alloc[key].nonce = nonce.toString();
+    }
   }
   genesis.config = admin.nodeInfo.protocols.eth.config;
 
