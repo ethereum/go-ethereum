@@ -80,20 +80,28 @@ Read more about light nodes on our [LES page](/docs/interface/les.md).
 
 ## Consensus layer syncing
 
-At the transition to proof-of-stake, all consensus logic and block propagation is handed over to consensus clients. 
+Now that Ethereum has switched to proof-of-stake, all consensus logic and block propagation is handled by consensus clients. 
 This means that syncing the blockchain is a process shared between the consensus and execution clients. Blocks are 
-downloaded by the consensus client and verified by the execution client. There are two ways to sync a consensus 
-client: optimistic sync and checkpoint sync. 
+downloaded by the consensus client and verified by the execution client. In order for Geth to sync, it requires a header from
+its connected consensus client. Geth does not import any data until it is instructed to by the consensus client. 
+
+Once a header is available to use as a syncing target, Geth retrieves all headers between that target header and the 
+local header chain in reverse chronological order. These headers show that the sequence of blocks is correct because
+the parenthashes link one block to the next right up to the target block. Eventually, the sync will reach a block held 
+in the local database, at which point the local data and the target data are considered 'linked' and there is a very high 
+chance the node is syncing the correct chain. The block bodies are then downloaded and then the state data. The consensus
+client can update the target header - as long as the syncing outpaces the growth of the blockchain then the node will eventually
+get in sync.
+
+There are two ways for the consensus client to find a block header that Geth can use as a sync target: optimistic syncing and 
+checkpoint syncing:
 
 ### Optimistic sync
 
-Optimistic sync downloads blocks before the execution client has validated them. This means the execution client can 
-constantly be fed with up-to-date states to snap-sync to. Assuming the blocks are valid, eventually the sync catches 
-up to the optimistically downloaded head and the blockchain is in sync. From this point, verification is done 
-block-by-block (i.e. the sync mode switches to `full`). In optimistic sync the node assumes the data it receives 
-from its peers is correct during the downloading phase but then retroactively verifies each downloaded block. Nodes 
-are not allowed to attest or propose blocks while they are still 'optimistic' because they can't yet guarantee their 
-view of the ehad of the chain is correct.
+Optimistic sync downloads blocks before the execution client has validated them. In optimistic sync the node assumes 
+the data it receives from its peers is correct during the downloading phase but then retroactively verifies each 
+downloaded block. Nodes are not allowed to attest or propose blocks while they are still 'optimistic' because they 
+can't yet guarantee their view of the head of the chain is correct.
 
 Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-specs/blob/dev/sync/optimistic.md).
 
@@ -109,10 +117,11 @@ from another trusted friend, but it could also come from block explorers or publ
 ## Summary
 
 There are several ways to sync a Geth node. The default is to use snap sync to create a full node. This verifies all 
-blocks starting at a recent checkpoint. A trust-minimized alternative is full-sync, which verifies every block since genesis. 
-These modes prune the blockchain data older than 128 blocks, keeping only checkpoints that enable on-request regeneration of 
-historical states. For rapid queries of historical data an archive node is required. Archive nodes keep local copies of all 
-historical data right back to genesis - currently about 12 TB and growing. The opposite extreme is a light node that doesn't 
-store any blockchain data - it requests everything from full nodes. These configurations are controlled by passing `full`, 
-`snap` or `light` to `--syncmode` at startup. For an archive node, `--syncmode` should be `full` and `--gcmode` should be set 
-to `archive`. At the transition to proof-of-stake, light-sync will no longer work (until new light client protocols are shipped). 
+blocks using some recent block that is old enough to be safe from re-orgs as a sync target. A trust-minimized alternative 
+is full-sync, which verifies every block since genesis. These modes drop state data older than 128 blocks, keeping only 
+checkpoints that enable on-request regeneration of historical states. For rapid queries of historical data an archive node 
+is required. Archive nodes keep local copies of all historical data right back to genesis - currently about 12 TB and growing. 
+The opposite extreme is a light node that doesn't store any blockchain data - it requests everything from full nodes. 
+These configurations are controlled by passing `full`, `snap` or `light` to `--syncmode` at startup. For an archive node,
+`--syncmode` should be `full` and `--gcmode` should be set to `archive`. Currently, due to the transition to proof-of-stake, 
+light-sync dot not work (new light client protocols are being developed). 
