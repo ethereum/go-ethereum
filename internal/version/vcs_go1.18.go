@@ -19,29 +19,36 @@
 
 package version
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+	"time"
+)
 
 // In go 1.18 and beyond, the go tool embeds VCS information into the build.
 
-// vcsInfo returns VCS information of the build.
-func vcsInfo(info *debug.BuildInfo) (s gitStatus, ok bool) {
+const (
+	govcsTimeLayout = "2006-01-02T15:04:05Z"
+	ourTimeLayout   = "20060102"
+)
+
+// buildInfoVCS returns VCS information of the build.
+func buildInfoVCS(info *debug.BuildInfo) (s VCSInfo, ok bool) {
 	for _, v := range info.Settings {
 		switch v.Key {
 		case "vcs.revision":
-			if len(v.Value) < 8 {
-				s.revision = v.Value
-			} else {
-				s.revision = v.Value[:8]
-			}
+			s.Commit = v.Value
 		case "vcs.modified":
 			if v.Value == "true" {
-				s.modified = true
+				s.Dirty = true
 			}
 		case "vcs.time":
-			s.time = v.Value
+			t, err := time.Parse(govcsTimeLayout, v.Value)
+			if err == nil {
+				s.Date = t.Format(ourTimeLayout)
+			}
 		}
 	}
-	if s.revision != "" && s.time != "" {
+	if s.Commit != "" && s.Date != "" {
 		ok = true
 	}
 	return

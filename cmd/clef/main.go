@@ -215,13 +215,7 @@ The gendoc generates example structures of the json-rpc communication types.
 `}
 )
 
-var (
-	// Git SHA1 commit hash of the release (set via linker flags)
-	gitCommit = ""
-	gitDate   = ""
-
-	app = flags.NewApp(gitCommit, gitDate, "Manage Ethereum account operations")
-)
+var app = flags.NewApp("Manage Ethereum account operations")
 
 func init() {
 	app.Name = "Clef"
