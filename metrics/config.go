@@ -18,16 +18,17 @@ package metrics
 
 // Config contains the configuration for the metric collection.
 type Config struct {
-	Enabled          bool   `toml:",omitempty"`
-	EnabledExpensive bool   `toml:",omitempty"`
-	HTTP             string `toml:",omitempty"`
-	Port             int    `toml:",omitempty"`
-	EnableInfluxDB   bool   `toml:",omitempty"`
-	InfluxDBEndpoint string `toml:",omitempty"`
-	InfluxDBDatabase string `toml:",omitempty"`
-	InfluxDBUsername string `toml:",omitempty"`
-	InfluxDBPassword string `toml:",omitempty"`
-	InfluxDBTags     string `toml:",omitempty"`
+	Enabled                   bool   `toml:",omitempty"`
+	EnabledExpensive          bool   `toml:",omitempty"`
+	DisabledRPCHistogramReset bool   `toml:",omitempty"`
+	HTTP                      string `toml:",omitempty"`
+	Port                      int    `toml:",omitempty"`
+	EnableInfluxDB            bool   `toml:",omitempty"`
+	InfluxDBEndpoint          string `toml:",omitempty"`
+	InfluxDBDatabase          string `toml:",omitempty"`
+	InfluxDBUsername          string `toml:",omitempty"`
+	InfluxDBPassword          string `toml:",omitempty"`
+	InfluxDBTags              string `toml:",omitempty"`
 
 	EnableInfluxDBV2     bool   `toml:",omitempty"`
 	InfluxDBToken        string `toml:",omitempty"`

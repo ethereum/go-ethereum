@@ -26,11 +26,21 @@ var Enabled = false
 // for health monitoring and debug metrics that might impact runtime performance.
 var EnabledExpensive = false
 
+// DisableRPCHistogramReset controls whether the per-RPC duration histogram is
+// reset each time the metrics endpoint is scraped, or not.
+// The legacy behavior is to reset the histogram and it is likely that some
+// installations depend on this, so the histogram resets by default.
+var DisabledRPCHistogramReset = false
+
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}
+
+// disableRPCHistogramResetFlags is the CLI flag names to use to disable resetting
+// the per-RPC duration histogram when the metrics endpoint is scraped.
+var disableRPCHistogramResetFlags = []string{"metrics.disable-rpc-histogram-reset"}
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
@@ -49,6 +59,12 @@ func init() {
 			if !EnabledExpensive && flag == enabler {
 				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
+			}
+		}
+		for _, enabler := range disableRPCHistogramResetFlags {
+			if !DisabledRPCHistogramReset && flag == enabler {
+				log.Info("Disabling per-RPC duration histogram reset on scrape")
+				DisabledRPCHistogramReset = true
 			}
 		}
 	}

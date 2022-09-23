@@ -893,6 +893,11 @@ var (
 		Usage:    "Enable expensive metrics collection and reporting",
 		Category: flags.MetricsCategory,
 	}
+	MetricsDisableRPCHistogramResetFlag = &cli.BoolFlag{
+		Name:     "metrics.disable-rpc-histogram-reset",
+		Usage:    "Disable resetting the per-RPC duration histogram when the metrics endpoint is scraped",
+		Category: flags.MetricsCategory,
+	}
 
 	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
 	// Since the pprof service enables sensitive/vulnerable behavior, this allows a user

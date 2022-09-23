@@ -42,9 +42,12 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 	}
 	h := fmt.Sprintf("%s/%s/%s", serveTimeHistName, method, note)
 	sampler := func() metrics.Sample {
-		return metrics.ResettingSample(
-			metrics.NewExpDecaySample(1028, 0.015),
-		)
+		var sample metrics.Sample
+		sample = metrics.NewExpDecaySample(1028, 0.015)
+		if !metrics.DisabledRPCHistogramReset {
+			sample = metrics.ResettingSample(sample)
+		}
+		return sample
 	}
 	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Microseconds())
 }

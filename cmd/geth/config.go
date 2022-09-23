@@ -236,6 +236,9 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 	if ctx.IsSet(utils.MetricsEnabledExpensiveFlag.Name) {
 		cfg.Metrics.EnabledExpensive = ctx.Bool(utils.MetricsEnabledExpensiveFlag.Name)
 	}
+	if ctx.IsSet(utils.MetricsDisableRPCHistogramResetFlag.Name) {
+		cfg.Metrics.DisabledRPCHistogramReset = ctx.Bool(utils.MetricsDisableRPCHistogramResetFlag.Name)
+	}
 	if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
 		cfg.Metrics.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
 	}
