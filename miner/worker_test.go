@@ -576,7 +576,8 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			}
 		}
 		if !isClique {
-			if block.MixDigest() != random {
+			if block.MixDigest() != random && random != (common.Hash{}) {
+				// if random unset, MixDigest will be set randomly.
 				t.Error("Unexpected mix digest")
 			}
 		}
