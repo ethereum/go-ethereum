@@ -154,9 +154,12 @@ func abigen(c *cli.Context) error {
 		types = append(types, kind)
 	} else {
 		// Generate the list of types to exclude from binding
-		exclude, err := newNameFilter(strings.Split(c.String(excFlag.Name), ",")...)
-		if err != nil {
-			utils.Fatalf("Failed to parse excludes: %v", err)
+		var exclude *nameFilter
+		if c.IsSet(excFlag.Name) {
+			var err error
+			if exclude, err = newNameFilter(strings.Split(c.String(excFlag.Name), ",")...); err != nil {
+				utils.Fatalf("Failed to parse excludes: %v", err)
+			}
 		}
 		var contracts map[string]*compiler.Contract
 
@@ -184,7 +187,8 @@ func abigen(c *cli.Context) error {
 			// fully qualified name is of the form <solFilePath>:<type>
 			nameParts := strings.Split(name, ":")
 			typeName := nameParts[len(nameParts)-1]
-			if exclude.Matches(name) {
+			if exclude != nil && exclude.Matches(name) {
+				fmt.Fprintf(os.Stderr, "excluding: %v\n", name)
 				continue
 			}
 			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
