@@ -24,7 +24,7 @@ Geth is an execution client. Historically, running an execution client alone was
 into a full Ethereum node. However, since The Merge, Geth has not been able to track the Ethereum chain on 
 its own. Instead, it needs to be coupled to another piece of software called a ["consensus client"][con-client-link]. 
 The execution client is responsible for transaction handling, transaction gossip, state management and
-the Ethereum Virtual Machine (EVM). However, Geth is no longer responsible for block building, block gossiping or 
+the Ethereum Virtual Machine (EVM). However, Geth is no longer responsible for block proposals or 
 handling consensus logic. These are in the remit of the consensus client.
 
 There are five consensus clients available, all of which connect to Geth in the same way. 
@@ -43,7 +43,7 @@ network, enabling consensus and chain growth.
 For this two-client structure to work, consensus clients must be able to pass bundles of transactions to Geth
 to be executed. Executing the transactions locally is how the client validates that the transactions do not
 violate any Ethereum rules and that the proposed update to Ethereum's state is correct. Likewise, when the node
-is selected to be a block producer the consensus client must be able to request bundles of transactions from Geth to
+is selected to be a block producer the consensus client must be able to request executable data from Geth including bundles of transactions and metadata to
 include in the new block and a resulting state change. This inter-client communication is handled by a local RPC 
 connection using the [`engine` API][engine-api-link] which is part of the JSON-RPC API exposed by Geth. 
 
