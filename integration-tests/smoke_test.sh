@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
+
 delay=600
 
 echo "Wait ${delay} seconds for state-sync..."
@@ -16,7 +18,7 @@ fi
 
 echo "Found matic balance on account[0]: " $balance
 
-if (( $balance <= 1001 )); then
+if (( $balance <= $balanceInit )); then
     echo "Balance in bor network has not increased. This indicates that something is wrong with state sync."
     exit 1
 fi
