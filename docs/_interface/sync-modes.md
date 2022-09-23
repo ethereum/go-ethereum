@@ -13,7 +13,7 @@ There are two types of full node that use different mechanisms to sync up to the
 
 ### Snap (default)
 
-A snap sync'd node holds the most recent 128 blocks in memory, so transactions in that range are always 
+A snap sync'd node holds the most recent 128 block states in memory, so transactions in that range are always quickly 
 accessible. However, snap-sync only starts processing from a relatively recent block (as opposed to genesis 
 for a full node). Between the initial sync block and the 128 most recent blocks, the node stores occasional 
 checkpoints that can be used to rebuild the state on-the-fly. This means transactions can be traced back as 
@@ -46,8 +46,8 @@ caught up to the head of the chain.
 
 A full sync generates the current state by executing every block starting from the genesis block. A full sync 
 indendently verifies proof-of-work and block provenance as well as all state transitions by re-executing the 
-transactions in the entire historical sequence of blocks. Only the most recent 128 blocks are stored in a full 
-node - older blocks are pruned periodically and represented as a series of checkpoints from which any previous 
+transactions in the entire historical sequence of blocks. Only the most recent 128 block states are stored in a full 
+node - older block states are pruned periodically and represented as a series of checkpoints from which any previous 
 state can be regenerated on request. 128 blocks is about 25.6 minutes of history with a block time of 12 seconds. 
 To create a full node pass `--syncmode full` at startup.
 
@@ -72,7 +72,7 @@ full node. This means light nodes are suitable for resource-constrained devices 
 chain much faster when they are new or have been offline for a while. The trade-off is that light nodes rely heavily 
 on data served by altruistic full nodes. A light client can be used to query data from Ethereum and submit transactions, 
 acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light 
-nodes can't validate blocks in the same way as full nodes - they have to trust that the data they receive is honest. 
+nodes can't validate blocks in the same way as full nodes - they receive a proof from the full node and verify it against their local header chain. 
 To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce 
 so light nodes can struggle to find peers.
 
