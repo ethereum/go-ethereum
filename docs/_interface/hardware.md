@@ -3,7 +3,7 @@ title: Hardware requirements
 sort-key: M
 ---
 
-The hardware requirements for running an Ethereum node depend upon the node configuration and can change over time as upgrades to the network are implemented. Ethereum nodes can be run on low power, resource-constrained devices such as Raspberry Pi's. Prebuilt, dedicated staking machines are available from several companies - these might be good choices for users who want plug-and-play hardware specifically designed for Ethereum. However, many users will choose to run nodes on laptop or desktop computers. 
+The hardware requirements for running a Geth node depend upon the node configuration and can change over time as upgrades to the network are implemented. Ethereum nodes can be run on low power, resource-constrained devices such as Raspberry Pi's. Prebuilt, dedicated staking machines are available from several companies - these might be good choices for users who want plug-and-play hardware specifically designed for Ethereum. However, many users will choose to run nodes on laptop or desktop computers. 
 
 ## Processor
 
