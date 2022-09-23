@@ -410,7 +410,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
-	if c.node.UDP() <= 1024 {
+	if c.node.UDP() < 1024 {
 		return nil, errLowPort
 	}
 	if distances != nil {
