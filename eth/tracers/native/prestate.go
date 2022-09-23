@@ -225,7 +225,10 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	}
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
-		delete(t.pre, a)
+		// the created contract maybe exists in statedb before the creating tx
+		if s := t.pre[a]; s.Balance == "0x0" && len(s.Storage) == 0 && s.Code == "0x" {
+			delete(t.pre, a)
+		}
 	}
 }
 
