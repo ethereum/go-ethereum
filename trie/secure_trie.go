@@ -265,10 +265,3 @@ func (t *StateTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
-
-func (t *StateTrie) BatchStart() {
-	t.trie.batchStart()
-}
-func (t *StateTrie) BatchEnd() {
-	t.trie.batchEnd()
-}

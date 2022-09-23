@@ -150,9 +150,6 @@ func (t *odrTrie) TryUpdate(key, value []byte) error {
 	})
 }
 
-func (t *odrTrie) BatchStart() {}
-func (t *odrTrie) BatchEnd()   {}
-
 func (t *odrTrie) TryDelete(key []byte) error {
 	key = crypto.Keccak256(key)
 	return t.do(key, func() error {
