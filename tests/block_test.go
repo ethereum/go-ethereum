@@ -53,7 +53,7 @@ func TestBlockchain(t *testing.T) {
 	// FIXME POS-618
 	bt.skipLoad(`.*ValidBlocks*`)
 	bt.skipLoad(`.*InvalidBlocks*`)
-	//bt.skipLoad(`.*TransitionTests*`)
+	bt.skipLoad(`.*TransitionTests*`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, test.Run(false)); err != nil {
