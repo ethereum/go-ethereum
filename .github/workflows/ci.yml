@@ -19,7 +19,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-11 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v3
@@ -63,7 +63,7 @@ jobs:
 
         - name: test-integration
           run: make test-integration
-        
+
         - name: Upload coverage to Codecov
           uses: codecov/codecov-action@v1
           with:
