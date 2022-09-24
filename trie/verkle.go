@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -62,14 +63,18 @@ func (trie *VerkleTrie) TryGet(key []byte) ([]byte, error) {
 	return trie.root.Get(key, trie.db.DiskDB().Get)
 }
 
-func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+func (t *VerkleTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var (
 		err                                error
-		nonce, balance                     [32]byte
 		balancekey, cskey, ckkey, noncekey [32]byte
+		acc                                *types.StateAccount = &types.StateAccount{}
 	)
 
 	// Only evaluate the polynomial once
+	// TODO implement GetStem as well, so that the trie is only traversed once
+	// it's not as bad because the commitments aren't updated, but it could, in
+	// theory, have to deserialize some more nodes (if there is some sort of cache
+	// dump)
 	versionkey := utils.GetTreeKeyVersion(key[:])
 	copy(balancekey[:], versionkey)
 	balancekey[31] = utils.BalanceLeafKey
@@ -80,28 +85,83 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 	copy(ckkey[:], versionkey)
 	ckkey[31] = utils.CodeKeccakLeafKey
 
-	if err = t.TryUpdate(versionkey, []byte{0}); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	nonce, err := t.TryGet(noncekey[:])
+	if err != nil {
+		return nil, fmt.Errorf("TryGetAccount (%x) error: %v", key, err)
 	}
+	if len(nonce) > 0 {
+		acc.Nonce = binary.LittleEndian.Uint64(nonce)
+	}
+	balance, err := t.TryGet(balancekey[:])
+	if err != nil {
+		return nil, fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	}
+	if len(balance) > 0 {
+		for i := 0; i < len(balance)/2; i++ {
+			balance[len(balance)-i-1], balance[i] = balance[i], balance[len(balance)-i-1]
+		}
+	}
+	acc.Balance = new(big.Int).SetBytes(balance[:])
+	ck, err := t.TryGet(ckkey[:])
+	if err != nil {
+		return nil, fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+
+	}
+	acc.CodeHash = ck
+
+	// TODO fix the code size as well
+
+	return acc, nil
+}
+
+var zero [32]byte
+
+func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+	var (
+		err            error
+		nonce, balance [32]byte
+		values         = make([][]byte, verkle.NodeWidth)
+		stem           = utils.GetTreeKeyVersion(key[:])
+	)
+
+	// Only evaluate the polynomial once
+	values[utils.VersionLeafKey] = zero[:]
+	values[utils.NonceLeafKey] = nonce[:]
+	values[utils.BalanceLeafKey] = balance[:]
+	values[utils.CodeKeccakLeafKey] = acc.CodeHash[:]
+
 	binary.LittleEndian.PutUint64(nonce[:], acc.Nonce)
-	if err = t.TryUpdate(noncekey[:], nonce[:]); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
-	}
 	bbytes := acc.Balance.Bytes()
 	if len(bbytes) > 0 {
 		for i, b := range bbytes {
 			balance[len(bbytes)-i-1] = b
 		}
 	}
-	if err = t.TryUpdate(balancekey[:], balance[:]); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+
+	flusher := func(hash []byte) ([]byte, error) {
+		return t.db.diskdb.Get(hash)
 	}
-	if err = t.TryUpdate(ckkey[:], acc.CodeHash); err != nil {
-		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+
+	switch root := t.root.(type) {
+	case *verkle.InternalNode:
+		leaf := verkle.NewLeafNode(stem, values)
+		err = root.InsertStem(stem, leaf, flusher, true)
+		// case *verkle.StatelessNode:
+		// 	err = root.InsertAtStem(stem, values, flusher, true)
+	}
+	if err != nil {
+		return fmt.Errorf("TryUpdateAccount (%x) error: %v", key, err)
 	}
 	// TODO figure out if the code size needs to be updated, too
 
 	return nil
+}
+
+func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) {
+	leaf := verkle.NewLeafNode(key[:31], values)
+	trie.root.(*verkle.InternalNode).InsertStem(key, leaf, func(h []byte) ([]byte, error) {
+		return trie.db.DiskDB().Get(h)
+	}, false /* catch a code overwrite */)
 }
 
 // TryUpdate associates key with value in the trie. If value has length zero, any
@@ -112,6 +172,41 @@ func (trie *VerkleTrie) TryUpdate(key, value []byte) error {
 	return trie.root.Insert(key, value, func(h []byte) ([]byte, error) {
 		return trie.db.DiskDB().Get(h)
 	})
+}
+
+func (t *VerkleTrie) TryDeleteAccount(key []byte) error {
+	var (
+		err                                error
+		balancekey, cskey, ckkey, noncekey [32]byte
+	)
+
+	// Only evaluate the polynomial once
+	// TODO InsertStem with overwrite of values 0
+	versionkey := utils.GetTreeKeyVersion(key[:])
+	copy(balancekey[:], versionkey)
+	balancekey[31] = utils.BalanceLeafKey
+	copy(noncekey[:], versionkey)
+	noncekey[31] = utils.NonceLeafKey
+	copy(cskey[:], versionkey)
+	cskey[31] = utils.CodeSizeLeafKey
+	copy(ckkey[:], versionkey)
+	ckkey[31] = utils.CodeKeccakLeafKey
+
+	if err = t.TryDelete(versionkey); err != nil {
+		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	}
+	if err = t.TryDelete(noncekey[:]); err != nil {
+		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	}
+	if err = t.TryDelete(balancekey[:]); err != nil {
+		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	}
+	if err = t.TryDelete(ckkey[:]); err != nil {
+		return fmt.Errorf("updateStateObject (%x) error: %v", key, err)
+	}
+	// TODO figure out if the code size needs to be updated, too
+
+	return nil
 }
 
 // TryDelete removes any existing value for key from the trie. If a node was not
@@ -284,7 +379,7 @@ const (
 )
 
 // ChunkifyCode generates the chunked version of an array representing EVM bytecode
-func ChunkifyCode(code []byte) (ChunkedCode, error) {
+func ChunkifyCode(code []byte) ChunkedCode {
 	var (
 		chunkOffset = 0 // offset in the chunk
 		chunkCount  = len(code) / 31
@@ -331,5 +426,5 @@ func ChunkifyCode(code []byte) (ChunkedCode, error) {
 		}
 	}
 
-	return chunks, nil
+	return chunks
 }

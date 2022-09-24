@@ -447,10 +447,7 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, addrPoint *verkle.Po
 	} else {
 		endOffset = offset + size
 	}
-	chunks, err := trie.ChunkifyCode(code)
-	if err != nil {
-		panic(err)
-	}
+	chunks := trie.ChunkifyCode(code)
 
 	// endOffset - 1 since if the end offset is aligned on a chunk boundary,
 	// the last chunk should not be included.

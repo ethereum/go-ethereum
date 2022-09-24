@@ -183,7 +183,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 	// Evaluate one address per group of 256, 31-byte chunks
 	if in.evm.ChainConfig().IsCancun(in.evm.Context.BlockNumber) && !contract.IsDeployment {
-		chunks, err = trie.ChunkifyCode(contract.Code)
+		chunks = trie.ChunkifyCode(contract.Code)
 
 		totalEvals := len(contract.Code) / 31 / 256
 		if len(contract.Code)%(256*31) != 0 {
