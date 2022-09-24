@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo "Preparing to start the XDC chain, it's likely to take up to 1 minute"
+# Sleep for > 30 as we need to wait for the ECS tasks container being killed by fargate. Otherwise it will ended up with two same nodes running on a single /work/xdcchain directory
+sleep 45
+
 if [ ! -d /work/xdcchain/XDC/chaindata ]
 then
   # Randomly select a key from environment variable, seperated by ','

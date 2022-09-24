@@ -6,6 +6,16 @@ env:
   global:
     - GOPROXY=https://proxy.golang.org
     - GO111MODULE=on
+    # Terraform env
+    - tf_version=1.3.0
+    # Setting terraform init CLI options - https://www.terraform.io/docs/commands/init.html
+    - tf_init_cli_options=" -input=false"
+    # Set terraform validation CLI options - https://www.terraform.io/docs/commands/validate.html
+    - tf_validation_cli_options=""
+    # Set terraform plan CLI options - https://www.terraform.io/docs/commands/plan.html
+    - tf_plan_cli_options=" -lock=false -input=false"
+    # Set terraform apply CLI options - https://www.terraform.io/docs/commands/apply.html
+    - tf_apply_cli_options=" -auto-approve -input=false"
 
 
 jobs:
@@ -83,6 +93,40 @@ jobs:
     env:
       - GO111MODULE=auto
     name: T-Z tests
+    
+  - stage: (Devnet)Terraform plan
+    if: branch = dev-upgrade AND type = pull_request
+    dist: xenial
+    language: bash
+    install:
+      - wget https://releases.hashicorp.com/terraform/"$tf_version"/terraform_"$tf_version"_linux_amd64.zip
+      - unzip terraform_"$tf_version"_linux_amd64.zip
+      - sudo mv terraform /usr/local/bin/
+      - rm terraform_"$tf_version"_linux_amd64.zip
+    script:
+        - echo "Pull request detected, creating change plan(Devnet)"
+        - cd cicd/devnet/terraform
+        # Terraform init, validate, then create change plan. If any fail, fail validation
+        - terraform init $tf_init_cli_options
+        - terraform validate $tf_validation_cli_options
+        - terraform plan $tf_plan_cli_options
+  
+  - stage: (Devnet)Terraform apply
+    if: branch = dev-upgrade AND type = push AND tag IS blank
+    dist: xenial
+    language: bash
+    install:
+        # Download and install terraform before each run
+        - wget https://releases.hashicorp.com/terraform/"$tf_version"/terraform_"$tf_version"_linux_amd64.zip
+        - unzip terraform_"$tf_version"_linux_amd64.zip
+        - sudo mv terraform /usr/local/bin/
+        - rm terraform_"$tf_version"_linux_amd64.zip
+    script:
+      - echo "Merge detected, executing changes(Devnet)"
+      - cd cicd/devnet/terraform
+      # Terraform init and then apply changes to environment
+      - terraform init $tf_init_cli_options
+      - terraform apply $tf_apply_cli_options
   
   - stage: (Devnet) Build, push and deploy
     if: branch = dev-upgrade AND type = push AND tag IS blank
@@ -99,4 +143,5 @@ jobs:
       - docker tag xdc-devnet:latest $ECR_BASE_URI/$ECR_REPO_NAME:latest # Need ECR_REPO_NAME
       - docker push $ECR_BASE_URI/$ECR_REPO_NAME:latest
       - aws ecs update-service --region us-east-1 --cluster devnet --service devnet-group-1 --force-new-deployment #TODO: Temporary solution until we have proper automated scripts ready
+  
   
