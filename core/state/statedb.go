@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -1016,9 +1017,22 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			// Write any contract code associated with the state object
 			if obj.code != nil && obj.dirtyCode {
 				if s.trie.IsVerkle() {
-					if chunks := trie.ChunkifyCode(obj.code); err == nil {
-						for i := 0; i < len(chunks); i += 32 {
-							s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32)), chunks[i:32+i])
+					var (
+						chunks = trie.ChunkifyCode(obj.code)
+						key    []byte
+						values [][]byte
+					)
+					for i := 0; i < len(chunks); i += 32 {
+
+						groupOffset := (i / 32) % 256
+						if groupOffset == 0 {
+							values = make([][]byte, verkle.NodeWidth)
+							key = trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32))
+						}
+						values[groupOffset] = chunks[i : i+32]
+
+						if groupOffset == 255 || len(chunks)-1 <= 32 {
+							s.trie.(*trie.VerkleTrie).TryUpdateStem(key[:31], values)
 						}
 					}
 				}
