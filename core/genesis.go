@@ -71,7 +71,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	if (stored == common.Hash{}) {
 		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
 	}
-	blob := rawdb.ReadGenesisState(db, stored)
+	blob := rawdb.ReadGenesisStateSpec(db, stored)
 	if blob == nil {
 		return nil, fmt.Errorf("genesis state missing from db")
 	}
