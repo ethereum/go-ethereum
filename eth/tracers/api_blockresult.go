@@ -356,8 +356,11 @@ func (api *API) fillBlockResult(env *traceEnv, block *types.Block) (*types.Block
 		}
 	}
 
-	if err := zkproof.FillBlockResultForMPTWitness(zkproof.MPTWitnessType(api.backend.CacheConfig().MPTWitness), blockResult); err != nil {
-		log.Error("fill mpt witness fail", "error", err)
+	// only zktrie model has the ability to get `mptwitness`.
+	if api.backend.ChainConfig().Zktrie {
+		if err := zkproof.FillBlockResultForMPTWitness(zkproof.MPTWitnessType(api.backend.CacheConfig().MPTWitness), blockResult); err != nil {
+			log.Error("fill mpt witness fail", "error", err)
+		}
 	}
 
 	return blockResult, nil
