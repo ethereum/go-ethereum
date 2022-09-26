@@ -235,7 +235,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 	// The snap state is exhausted, pass the entire key/val set for verification
 	root := trieId.Root
 	if origin == nil && !diskMore {
-		stackTr := trie.NewStackTrieWithOwner(nil, trieId.Owner)
+		stackTr := trie.NewStackTrie(nil)
 		for i, key := range keys {
 			stackTr.TryUpdate(key, vals[i])
 		}
@@ -364,7 +364,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 	if len(result.keys) > 0 {
 		snapNodeCache = memorydb.New()
 		snapTrieDb := trie.NewDatabase(snapNodeCache)
-		snapTrie, _ := trie.New(trie.TrieID(common.Hash{}), snapTrieDb)
+		snapTrie := trie.NewEmpty(snapTrieDb)
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}

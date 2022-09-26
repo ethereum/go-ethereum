@@ -59,6 +59,11 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			key = key[1:]
 			nodes = append(nodes, n)
 		case hashNode:
+			// Retrieve the specified node from the underlying node reader.
+			// trie.resolveAndTrack is not used since in that function the
+			// loaded blob will be tracked, while it's not required here since
+			// all loaded nodes won't be linked to trie at all and track nodes
+			// may lead to out-of-memory issue.
 			var err error
 			tn, err = t.reader.node(prefix, common.BytesToHash(n))
 			if err != nil {

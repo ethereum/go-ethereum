@@ -439,9 +439,18 @@ func runRandTest(rt randTest) bool {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
 			}
 		case opProve:
-			err := tr.Prove(step.key, 0, rawdb.NewMemoryDatabase())
+			hash := tr.Hash()
+			if hash == emptyRoot {
+				continue
+			}
+			proofDb := rawdb.NewMemoryDatabase()
+			err := tr.Prove(step.key, 0, proofDb)
 			if err != nil {
 				rt[i].err = fmt.Errorf("failed for proving key %#x, %v", step.key, err)
+			}
+			_, err = VerifyProof(hash, step.key, proofDb)
+			if err != nil {
+				rt[i].err = fmt.Errorf("failed for verifying key %#x, %v", step.key, err)
 			}
 		case opHash:
 			tr.Hash()
@@ -483,7 +492,7 @@ func runRandTest(rt randTest) bool {
 			// Enable node tracing. Resolve the root node again explicitly
 			// since it's not captured at the beginning.
 			tr.tracer = newTracer()
-			tr.resolveHash(root.Bytes(), nil)
+			tr.resolveAndTrack(root.Bytes(), nil)
 
 			origTrie = tr.Copy()
 		case opItercheckhash:

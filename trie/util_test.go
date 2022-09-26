@@ -160,7 +160,7 @@ func TestTrieTracePrevValue(t *testing.T) {
 	}
 	trie, _ = New(TrieID(root), db)
 	trie.tracer = newTracer()
-	trie.resolveHash(root.Bytes(), nil)
+	trie.resolveAndTrack(root.Bytes(), nil)
 
 	// Load all nodes in trie
 	for _, val := range vals {
@@ -222,7 +222,7 @@ func TestTrieTracePrevValue(t *testing.T) {
 	// Delete entries from trie, ensure all previous values are correct.
 	trie, _ = New(TrieID(root), db)
 	trie.tracer = newTracer()
-	trie.resolveHash(root.Bytes(), nil)
+	trie.resolveAndTrack(root.Bytes(), nil)
 
 	for _, val := range vals {
 		trie.TryDelete([]byte(val.k))

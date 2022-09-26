@@ -376,7 +376,7 @@ func (it *nodeIterator) resolveHash(hash hashNode, path []byte) (node, error) {
 		}
 	}
 	// Retrieve the specified node from the underlying node reader.
-	// it.trie.resolveHash is not used since in that function the
+	// it.trie.resolveAndTrack is not used since in that function the
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.
@@ -390,7 +390,7 @@ func (it *nodeIterator) resolveBlob(hash hashNode, path []byte) ([]byte, error) 
 		}
 	}
 	// Retrieve the specified node from the underlying node reader.
-	// it.trie.resolveHash is not used since in that function the
+	// it.trie.resolveAndTrack is not used since in that function the
 	// loaded blob will be tracked, while it's not required here since
 	// all loaded nodes won't be linked to trie at all and track nodes
 	// may lead to out-of-memory issue.

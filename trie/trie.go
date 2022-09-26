@@ -108,7 +108,7 @@ func New(id *ID, db NodeReader) (*Trie, error) {
 		//tracer: newTracer(),
 	}
 	if id.Root != (common.Hash{}) && id.Root != emptyRoot {
-		rootnode, err := trie.resolveHash(id.Root[:], nil)
+		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +175,7 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		}
 		return value, n, didResolve, err
 	case hashNode:
-		child, err := t.resolveHash(n, key[:pos])
+		child, err := t.resolveAndTrack(n, key[:pos])
 		if err != nil {
 			return nil, n, true, err
 		}
@@ -251,7 +251,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 		return item, n, resolved, err
 
 	case hashNode:
-		child, err := t.resolveHash(n, path[:pos])
+		child, err := t.resolveAndTrack(n, path[:pos])
 		if err != nil {
 			return nil, n, 1, err
 		}
@@ -372,7 +372,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, err := t.resolveHash(n, prefix)
+		rn, err := t.resolveAndTrack(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -526,7 +526,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, err := t.resolveHash(n, prefix)
+		rn, err := t.resolveAndTrack(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -550,15 +550,16 @@ func concat(s1 []byte, s2 ...byte) []byte {
 
 func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	if n, ok := n.(hashNode); ok {
-		return t.resolveHash(n, prefix)
+		return t.resolveAndTrack(n, prefix)
 	}
 	return n, nil
 }
 
-// resolveHash loads node from the underlying store with the given node hash and
-// path prefix. The rlp-encoded blob is preferred to be loaded from database
-// because node pre-value is required to be tracked.
-func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
+// resolveAndTrack loads node from the underlying store with the given node hash
+// and path prefix and also tracks the loaded node blob in tracer treated as the
+// node's original value. The rlp-encoded blob is preferred to be loaded from
+// database because it's easy to decode node while complex to encode node to blob.
+func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	blob, err := t.reader.nodeBlob(prefix, common.BytesToHash(n))
 	if err != nil {
 		return nil, err
