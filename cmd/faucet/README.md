@@ -50,4 +50,4 @@ Sybil protection via Facebook uses the website to directly download post data th
 
 ## Miscellaneous
 
-Besides the above - mostly essential - CLI flags, there is a number that can be used to fine-tune the `faucet`'s operation. Please see `faucet --help` for a full list.
+Beside the above - mostly essential - CLI flags, there are a number that can be used to fine-tune the `faucet`'s operation. Please see `faucet --help` for a full list.
