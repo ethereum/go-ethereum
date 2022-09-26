@@ -27,7 +27,7 @@ changes. Snap sync is much faster than full sync. To start a node with snap sync
 startup.
 
 Snap sync starts by downloading the headers for a chunk of blocks. Once the headers have been verified, the block
-bodies and receipts for those blockjs are downloaded. Next, state sync begins. In state-sync, Geth first downloads the 
+bodies and receipts for those blocks are downloaded. Next, state sync begins. In state-sync, Geth first downloads the 
 leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is 
 then regenerated locally. The state download is the part of the snap-sync that takes the most time to complete 
 and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also 
