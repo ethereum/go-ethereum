@@ -685,7 +685,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	pool.filterKnownTxsLocked(txs, errs)
 	pool.filterInvalidTxsLocked(txs, errs, local)
 	pool.filterInvalidBlobTxsLocked(txs, errs)
-	if errs[0] != nil {
+	if errs[0] == nil {
 		return pool.addValidTx(tx, local)
 	}
 	return false, errs[0]
