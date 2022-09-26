@@ -115,6 +115,23 @@ func (t *tracer) deleteList() [][]byte {
 	return ret
 }
 
+// prevList returns the tracked node blobs in list format.
+func (t *tracer) prevList() ([][]byte, [][]byte) {
+	// Tracer isn't used right now, remove this check later.
+	if t == nil {
+		return nil, nil
+	}
+	var (
+		paths [][]byte
+		blobs [][]byte
+	)
+	for path, blob := range t.origin {
+		paths = append(paths, []byte(path))
+		blobs = append(blobs, blob)
+	}
+	return paths, blobs
+}
+
 // getPrev returns the cached original value of the specified node.
 func (t *tracer) getPrev(path []byte) []byte {
 	// Tracer isn't used right now, remove this check later.

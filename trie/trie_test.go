@@ -378,6 +378,7 @@ const (
 	opCommit
 	opItercheckhash
 	opNodeDiff
+	opProve
 	opMax // boundary value, not an actual op
 )
 
@@ -403,7 +404,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 			step.key = genKey()
 			step.value = make([]byte, 8)
 			binary.BigEndian.PutUint64(step.value, uint64(i))
-		case opGet, opDelete:
+		case opGet, opDelete, opProve:
 			step.key = genKey()
 		}
 		steps = append(steps, step)
@@ -436,6 +437,11 @@ func runRandTest(rt randTest) bool {
 			want := values[string(step.key)]
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
+			}
+		case opProve:
+			err := tr.Prove(step.key, 0, rawdb.NewMemoryDatabase())
+			if err != nil {
+				rt[i].err = fmt.Errorf("failed for proving key %#x, %v", step.key, err)
 			}
 		case opHash:
 			tr.Hash()

@@ -60,7 +60,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			nodes = append(nodes, n)
 		case hashNode:
 			var err error
-			tn, err = t.resolveHash(n, prefix)
+			tn, err = t.reader.node(prefix, common.BytesToHash(n))
 			if err != nil {
 				log.Error("Unhandled trie error in Trie.Prove", "err", err)
 				return err
