@@ -227,7 +227,7 @@ For PoW in a simple private network, a single CPU miner instance is enough to cr
 geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0xf41c74c9ae680c1aa78f42e5647a62f353b7bdde
 ```
 
-This will start mining bocks and transactions on a single CPU thread, crediting all block rewards to the account specified by `--miner.etherbase`.
+This will start mining blocks and transactions on a single CPU thread, crediting all block rewards to the account specified by `--miner.etherbase`.
 
 
 ## End-to-end example {#end-to-end-example}
@@ -460,7 +460,7 @@ This account can then be unlocked and some ether sent to Node 2, using the follo
 
 ```javascript
 // unlock account
-personal.unlock(eth.accounts[0])
+personal.unlockAccount(eth.accounts[0])
 
 // send some Wei
 eth.sendTransaction({to: "0xc94d95a5106270775351eecfe43f97e8e75e59e8", from: eth.accounts[0], value: 25000})
