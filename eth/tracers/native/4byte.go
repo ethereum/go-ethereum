@@ -151,3 +151,7 @@ func (t *fourByteTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
 }
+
+func bytesToHex(s []byte) string {
+	return "0x" + common.Bytes2Hex(s)
+}
