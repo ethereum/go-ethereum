@@ -26,8 +26,9 @@ state transitions are correct rather than re-executing the transactions in each 
 changes. Snap sync is much faster than full sync. To start a node with snap sync pass `--syncmode snap` at 
 startup.
 
-Snap sync starts by downloading the blocks between the head of the chain and the previous checkpoint. Then 
-it downloads the leaves of the state trie for each block without the intermediate nodes. The state trie is 
+Snap sync starts by downloading the headers for a chunk of blocks. Once the headers have been verified, the block
+bodies and receipts for those blockjs are downloaded. Next, state sync begins. In state-sync, Geth first downloads the 
+leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is 
 then regenerated locally. The state download is the part of the snap-sync that takes the most time to complete 
 and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also 
 progressing at the same time and invalidating some of the regenerated state data. This means it is also necessary 
@@ -37,6 +38,13 @@ The healing has to outpace the growth of the blockchain, otherwise the node will
 There are some hardware factors that determine the speed of the state healing (speed of disk read/write and internet 
 connection) and also the total gas used in each block (more gas means more changes to the state that have to be 
 handled).
+
+To summarize, snap sync progresses in the following sequence:
+- download and verify headers
+- download block bodies and receipts
+- download raw state data
+- regenerate state trie
+- heal state trie to account for newly arriving data
 
 **Note** Snap sync is the default behaviour, so if the `--syncmode` value is not passed to Geth at startup, 
 Geth will use snap sync. A node that is started using `snap` will switch to block-by-block sync once it has 
