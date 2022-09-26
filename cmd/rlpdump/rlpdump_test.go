@@ -43,7 +43,7 @@ func TestRoundtrip(t *testing.T) {
 			t.Errorf("test %d: error %v", i, err)
 			continue
 		}
-		have := fmt.Sprintf("0x%x", rlpBytes)
+		have := fmt.Sprintf("%#x", rlpBytes)
 		if have != want {
 			t.Errorf("test %d: have\n%v\nwant:\n%v\n", i, have, want)
 		}

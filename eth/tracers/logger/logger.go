@@ -40,7 +40,7 @@ type Storage map[common.Hash]common.Hash
 
 // Copy duplicates the current storage.
 func (s Storage) Copy() Storage {
-	cpy := make(Storage)
+	cpy := make(Storage, len(s))
 	for key, value := range s {
 		cpy[key] = value
 	}
@@ -224,7 +224,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
-		fmt.Printf("0x%x\n", output)
+		fmt.Printf("%#x\n", output)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
@@ -346,11 +346,11 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 func (t *mdLogger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `0x%x`\nGas: `%d`\nValue `%v` wei\n",
+		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
 			from.String(), to.String(),
 			input, gas, value)
 	}
@@ -387,7 +387,7 @@ func (t *mdLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope
 }
 
 func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) {
-	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
+	fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
 

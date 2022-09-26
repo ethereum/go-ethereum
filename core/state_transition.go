@@ -31,23 +31,26 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
-/*
-The State Transitioning Model
-
-A state transition is a change made when a transaction is applied to the current world state
-The state transitioning model does all the necessary work to work out a valid new state root.
-
-1) Nonce handling
-2) Pre pay gas
-3) Create a new state object if the recipient is \0*32
-4) Value transfer
-== If contract creation ==
-  4a) Attempt to run transaction data
-  4b) If valid, use result as code for the new state object
-== end ==
-5) Run Script section
-6) Derive new state root
-*/
+// The State Transitioning Model
+//
+// A state transition is a change made when a transaction is applied to the current world
+// state. The state transitioning model does all the necessary work to work out a valid new
+// state root.
+//
+//  1. Nonce handling
+//  2. Pre pay gas
+//  3. Create a new state object if the recipient is \0*32
+//  4. Value transfer
+//
+// == If contract creation ==
+//
+//	4a. Attempt to run transaction data
+//	4b. If valid, use result as code for the new state object
+//
+// == end ==
+//
+//  5. Run Script section
+//  6. Derive new state root
 type StateTransition struct {
 	gp         *GasPool
 	msg        Message
@@ -262,13 +265,10 @@ func (st *StateTransition) preCheck() error {
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
-// - used gas:
-//      total gas used (including gas being refunded)
-// - returndata:
-//      the returned data from evm
-// - concrete execution error:
-//      various **EVM** error which aborts the execution,
-//      e.g. ErrOutOfGas, ErrExecutionReverted
+//   - used gas: total gas used (including gas being refunded)
+//   - returndata: the returned data from evm
+//   - concrete execution error: various EVM errors which abort the execution, e.g.
+//     ErrOutOfGas, ErrExecutionReverted
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
@@ -344,7 +344,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	if st.evm.Config.NoBaseFee && st.gasFeeCap.Sign() == 0 && st.gasTipCap.Sign() == 0 {
+		// Skip fee payment when NoBaseFee is set and the fee fields
+		// are 0. This avoids a negative effectiveTip being applied to
+		// the coinbase when simulating calls.
+	} else {
+		fee := new(big.Int).SetUint64(st.gasUsed())
+		fee.Mul(fee, effectiveTip)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),

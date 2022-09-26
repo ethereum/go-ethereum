@@ -24,19 +24,18 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
-   test       [ -coverage ] [ packages... ]                                                    -- runs the tests
-   lint                                                                                        -- runs certain pre-selected linters
-   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
-   importkeys                                                                                  -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
-   nsis                                                                                        -- creates a Windows NSIS installer
-   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
-   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
-   purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
+	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
+	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
+	lint                                                                                        -- runs certain pre-selected linters
+	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
+	importkeys                                                                                  -- imports signing keys from env
+	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
+	nsis                                                                                        -- creates a Windows NSIS installer
+	aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
+	xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
+	purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
 For all commands, -n prevents execution of external programs (dry run mode).
-
 */
 package main
 
@@ -132,12 +131,12 @@ var (
 	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
 	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite
 	debDistroGoBoots = map[string]string{
-		"trusty":  "golang-1.11", // EOL: 04/2024
-		"xenial":  "golang-go",   // EOL: 04/2026
-		"bionic":  "golang-go",   // EOL: 04/2028
-		"focal":   "golang-go",   // EOL: 04/2030
-		"impish":  "golang-go",   // EOL: 07/2022
-		"jammy":   "golang-go",   // EOL: 04/2032
+		"trusty": "golang-1.11", // EOL: 04/2024
+		"xenial": "golang-go",   // EOL: 04/2026
+		"bionic": "golang-go",   // EOL: 04/2028
+		"focal":  "golang-go",   // EOL: 04/2030
+		"impish": "golang-go",   // EOL: 07/2022
+		"jammy":  "golang-go",   // EOL: 04/2032
 		//"kinetic": "golang-go",   //  EOL: 07/2023
 	}
 
@@ -149,7 +148,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.18.1"
+	dlgoVersion = "1.19.1"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -200,9 +199,10 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch = flag.String("arch", "", "Architecture to cross build for")
-		cc   = flag.String("cc", "", "C compiler to cross build with")
+		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch       = flag.String("arch", "", "Architecture to cross build for")
+		cc         = flag.String("cc", "", "C compiler to cross build with")
+		staticlink = flag.Bool("static", false, "Create statically-linked executable")
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -213,9 +213,12 @@ func doInstall(cmdline []string) {
 		tc.Root = build.DownloadGo(csdb, dlgoVersion)
 	}
 
+	// Disable CLI markdown doc generation in release builds.
+	buildTags := []string{"urfave_cli_no_docs"}
+
 	// Configure the build.
 	env := build.Env()
-	gobuild := tc.Go("build", buildFlags(env)...)
+	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
@@ -248,24 +251,34 @@ func doInstall(cmdline []string) {
 }
 
 // buildFlags returns the go tool flags for building.
-func buildFlags(env build.Environment) (flags []string) {
+func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
-		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
-		ld = append(ld, "-X", "main.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
 	if runtime.GOOS == "darwin" {
 		ld = append(ld, "-s")
 	}
-	// Enforce the stacksize to 8M, which is the case on most platforms apart from
-	// alpine Linux.
 	if runtime.GOOS == "linux" {
-		ld = append(ld, "-extldflags", "-Wl,-z,stack-size=0x800000")
+		// Enforce the stacksize to 8M, which is the case on most platforms apart from
+		// alpine Linux.
+		extld := []string{"-Wl,-z,stack-size=0x800000"}
+		if staticLinking {
+			extld = append(extld, "-static")
+			// Under static linking, use of certain glibc features must be
+			// disabled to avoid shared library dependencies.
+			buildTags = append(buildTags, "osusergo", "netgo")
+		}
+		ld = append(ld, "-extldflags", "'"+strings.Join(extld, " ")+"'")
 	}
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
+	}
+	if len(buildTags) > 0 {
+		flags = append(flags, "-tags", strings.Join(buildTags, ","))
 	}
 	return flags
 }
@@ -333,7 +346,7 @@ func doLint(cmdline []string) {
 
 // downloadLinter downloads and unpacks golangci-lint.
 func downloadLinter(cachedir string) string {
-	const version = "1.45.2"
+	const version = "1.49.0"
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	arch := runtime.GOARCH
@@ -594,7 +607,7 @@ func doDocker(cmdline []string) {
 			}
 			if mismatch {
 				// Build numbers mismatching, retry in a short time to
-				// avoid concurrent failes in both publisher images. If
+				// avoid concurrent fails in both publisher images. If
 				// however the retry failed too, it means the concurrent
 				// builder is still crunching, let that do the publish.
 				if i == 0 {
@@ -968,7 +981,10 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
-	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	if err != nil {
+		log.Fatalf("Failed to convert installer file path: %v", err)
+	}
 	build.MustRunCommand("makensis.exe",
 		"/DOUTPUTFILE="+installer,
 		"/DMAJORVERSION="+version[0],

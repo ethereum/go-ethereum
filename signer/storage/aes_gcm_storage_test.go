@@ -51,7 +51,6 @@ func TestEncryption(t *testing.T) {
 }
 
 func TestFileStorage(t *testing.T) {
-
 	a := map[string]storedCredential{
 		"secret": {
 			Iv:         common.Hex2Bytes("cdb30036279601aeee60f16b"),

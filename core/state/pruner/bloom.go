@@ -39,7 +39,7 @@ func (f stateBloomHasher) BlockSize() int                    { panic("not implem
 func (f stateBloomHasher) Size() int                         { return 8 }
 func (f stateBloomHasher) Sum64() uint64                     { return binary.BigEndian.Uint64(f) }
 
-// stateBloom is a bloom filter used during the state convesion(snapshot->state).
+// stateBloom is a bloom filter used during the state conversion(snapshot->state).
 // The keys of all generated entries will be recorded here so that in the pruning
 // stage the entries belong to the specific version can be avoided for deletion.
 //
@@ -100,7 +100,7 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 	}
 	f.Close()
 
-	// Move the teporary file into it's final location
+	// Move the temporary file into it's final location
 	return os.Rename(tempname, filename)
 }
 

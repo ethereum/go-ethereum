@@ -30,7 +30,7 @@ type hasher struct {
 	sha      crypto.KeccakState
 	tmp      []byte
 	encbuf   rlp.EncoderBuffer
-	parallel bool // Whether to use paralallel threads when hashing
+	parallel bool // Whether to use parallel threads when hashing
 }
 
 // hasherPool holds pureHashers
@@ -170,8 +170,8 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 //
 // All node encoding must be done like this:
 //
-//     node.encode(h.encbuf)
-//     enc := h.encodedBytes()
+//	node.encode(h.encbuf)
+//	enc := h.encodedBytes()
 //
 // This convention exists because node.encode can only be inlined/escape-analyzed when
 // called on a concrete receiver type.
@@ -191,7 +191,7 @@ func (h *hasher) hashData(data []byte) hashNode {
 }
 
 // proofHash is used to construct trie proofs, and returns the 'collapsed'
-// node (for later RLP encoding) aswell as the hashed node -- unless the
+// node (for later RLP encoding) as well as the hashed node -- unless the
 // node is smaller than 32 bytes, in which case it will be returned as is.
 // This method does not do anything on value- or hash-nodes.
 func (h *hasher) proofHash(original node) (collapsed, hashed node) {

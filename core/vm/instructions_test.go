@@ -46,7 +46,6 @@ var commonParams []*twoOperandParams
 var twoOpMethods map[string]executionFunc
 
 func init() {
-
 	// Params is a list of common edgecases that should be used for some common tests
 	params := []string{
 		"0000000000000000000000000000000000000000000000000000000000000000", // 0
@@ -92,7 +91,6 @@ func init() {
 }
 
 func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
-
 	var (
 		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
@@ -229,31 +227,31 @@ func TestAddMod(t *testing.T) {
 	}
 }
 
-// getResult is a convenience function to generate the expected values
-func getResult(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
-	var (
-		env         = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
-		stack       = newstack()
-		pc          = uint64(0)
-		interpreter = env.interpreter
-	)
-	result := make([]TwoOperandTestcase, len(args))
-	for i, param := range args {
-		x := new(uint256.Int).SetBytes(common.Hex2Bytes(param.x))
-		y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
-		stack.push(x)
-		stack.push(y)
-		opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
-		actual := stack.pop()
-		result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
-	}
-	return result
-}
-
 // utility function to fill the json-file with testcases
 // Enable this test to generate the 'testcases_xx.json' files
 func TestWriteExpectedValues(t *testing.T) {
 	t.Skip("Enable this test to create json test cases.")
+
+	// getResult is a convenience function to generate the expected values
+	getResult := func(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
+		var (
+			env         = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+			stack       = newstack()
+			pc          = uint64(0)
+			interpreter = env.interpreter
+		)
+		result := make([]TwoOperandTestcase, len(args))
+		for i, param := range args {
+			x := new(uint256.Int).SetBytes(common.Hex2Bytes(param.x))
+			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
+			stack.push(x)
+			stack.push(y)
+			opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
+			actual := stack.pop()
+			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
+		}
+		return result
+	}
 
 	for name, method := range twoOpMethods {
 		data, err := json.Marshal(getResult(commonParams, method))
@@ -641,7 +639,6 @@ func TestCreate2Addreses(t *testing.T) {
 			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
 		},
 	} {
-
 		origin := common.BytesToAddress(common.FromHex(tt.origin))
 		salt := common.BytesToHash(common.FromHex(tt.salt))
 		code := common.FromHex(tt.code)

@@ -463,9 +463,6 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.Address) uint64 {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
-
 	return pool.pendingNonces.get(addr)
 }
 
@@ -498,11 +495,11 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	pending := make(map[common.Address]types.Transactions)
+	pending := make(map[common.Address]types.Transactions, len(pool.pending))
 	for addr, list := range pool.pending {
 		pending[addr] = list.Flatten()
 	}
-	queued := make(map[common.Address]types.Transactions)
+	queued := make(map[common.Address]types.Transactions, len(pool.queue))
 	for addr, list := range pool.queue {
 		queued[addr] = list.Flatten()
 	}
@@ -1459,7 +1456,7 @@ func (pool *TxPool) truncatePending() {
 	pendingRateLimitMeter.Mark(int64(pendingBeforeCap - pending))
 }
 
-// truncateQueue drops the oldes transactions in the queue if the pool is above the global queue limit.
+// truncateQueue drops the oldest transactions in the queue if the pool is above the global queue limit.
 func (pool *TxPool) truncateQueue() {
 	queued := uint64(0)
 	for _, list := range pool.queue {
@@ -1588,7 +1585,7 @@ type accountSet struct {
 // derivations.
 func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 	as := &accountSet{
-		accounts: make(map[common.Address]struct{}),
+		accounts: make(map[common.Address]struct{}, len(addrs)),
 		signer:   signer,
 	}
 	for _, addr := range addrs {
@@ -1601,10 +1598,6 @@ func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 func (as *accountSet) contains(addr common.Address) bool {
 	_, exist := as.accounts[addr]
 	return exist
-}
-
-func (as *accountSet) empty() bool {
-	return len(as.accounts) == 0
 }
 
 // containsTx checks if the sender of a given tx is within the set. If the sender

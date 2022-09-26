@@ -699,7 +699,6 @@ func TestDeleteCreateRevert(t *testing.T) {
 // the Commit operation fails with an error
 // If we are missing trie nodes, we should not continue writing to the trie
 func TestMissingTrieNodes(t *testing.T) {
-
 	// Create an initial state with a few accounts
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
@@ -772,7 +771,7 @@ func TestStateDBAccessList(t *testing.T) {
 				t.Fatalf("expected %x to be in access list", address)
 			}
 		}
-		// Check that only the expected addresses are present in the acesslist
+		// Check that only the expected addresses are present in the access list
 		for address := range state.accessList.addresses {
 			if _, exist := addressMap[address]; !exist {
 				t.Fatalf("extra address %x in access list", address)
@@ -913,5 +912,45 @@ func TestStateDBAccessList(t *testing.T) {
 	}
 	if got, exp := len(state.accessList.slots), 1; got != exp {
 		t.Fatalf("expected empty, got %d", got)
+	}
+}
+
+// Tests that account and storage tries are flushed in the correct order and that
+// no data loss occurs.
+func TestFlushOrderDataLoss(t *testing.T) {
+	// Create a state trie with many accounts and slots
+	var (
+		memdb    = rawdb.NewMemoryDatabase()
+		statedb  = NewDatabase(memdb)
+		state, _ = New(common.Hash{}, statedb, nil)
+	)
+	for a := byte(0); a < 10; a++ {
+		state.CreateAccount(common.Address{a})
+		for s := byte(0); s < 10; s++ {
+			state.SetState(common.Address{a}, common.Hash{a, s}, common.Hash{a, s})
+		}
+	}
+	root, err := state.Commit(false)
+	if err != nil {
+		t.Fatalf("failed to commit state trie: %v", err)
+	}
+	statedb.TrieDB().Reference(root, common.Hash{})
+	if err := statedb.TrieDB().Cap(1024); err != nil {
+		t.Fatalf("failed to cap trie dirty cache: %v", err)
+	}
+	if err := statedb.TrieDB().Commit(root, false, nil); err != nil {
+		t.Fatalf("failed to commit state trie: %v", err)
+	}
+	// Reopen the state trie from flushed disk and verify it
+	state, err = New(root, NewDatabase(memdb), nil)
+	if err != nil {
+		t.Fatalf("failed to reopen state trie: %v", err)
+	}
+	for a := byte(0); a < 10; a++ {
+		for s := byte(0); s < 10; s++ {
+			if have := state.GetState(common.Address{a}, common.Hash{a, s}); have != (common.Hash{a, s}) {
+				t.Errorf("account %d: slot %d: state mismatch: have %x, want %x", a, s, have, common.Hash{a, s})
+			}
+		}
 	}
 }

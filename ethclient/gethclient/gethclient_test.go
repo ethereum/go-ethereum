@@ -26,11 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -60,6 +60,12 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
+	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
+	n.RegisterAPIs([]rpc.API{{
+		Namespace: "eth",
+		Service:   filters.NewFilterAPI(filterSystem, false),
+	}})
+
 	// Import the test chain.
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
@@ -71,10 +77,8 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
-	db := rawdb.NewMemoryDatabase()
-	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
+		Config:    params.AllEthashProtocolChanges,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
@@ -83,10 +87,8 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
 	}
-	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, 1, generate)
-	blocks = append([]*types.Block{gblock}, blocks...)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
+	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
 	return genesis, blocks
 }
 
@@ -222,7 +224,6 @@ func testGetProof(t *testing.T, client *rpc.Client) {
 	if proof.Key != testSlot.String() {
 		t.Fatalf("invalid storage proof key, want: %v, got: %v", testSlot.String(), proof.Key)
 	}
-
 }
 
 func testGCStats(t *testing.T, client *rpc.Client) {

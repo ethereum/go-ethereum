@@ -109,7 +109,7 @@ func PrintDisassembled(code string) error {
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			fmt.Printf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg())
+			fmt.Printf("%05x: %v %#x\n", it.PC(), it.Op(), it.Arg())
 		} else {
 			fmt.Printf("%05x: %v\n", it.PC(), it.Op())
 		}
@@ -124,7 +124,7 @@ func Disassemble(script []byte) ([]string, error) {
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			instrs = append(instrs, fmt.Sprintf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg()))
+			instrs = append(instrs, fmt.Sprintf("%05x: %v %#x\n", it.PC(), it.Op(), it.Arg()))
 		} else {
 			instrs = append(instrs, fmt.Sprintf("%05x: %v\n", it.PC(), it.Op()))
 		}

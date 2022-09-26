@@ -23,8 +23,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/crypto"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // getPassphrase obtains a passphrase given by the user.  It first checks the
@@ -44,18 +43,6 @@ func getPassphrase(ctx *cli.Context, confirmation bool) string {
 
 	// Otherwise prompt the user for the passphrase.
 	return utils.GetPassPhrase("", confirmation)
-}
-
-// signHash is a helper function that calculates a hash for the given message
-// that can be safely used to calculate a signature from.
-//
-// The hash is calculated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
-//
-// This gives context to the signed message and prevents signing of transactions.
-func signHash(data []byte) []byte {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return crypto.Keccak256([]byte(msg))
 }
 
 // mustPrintJSON prints the JSON encoding of the given object and

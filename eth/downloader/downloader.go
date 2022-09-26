@@ -85,6 +85,10 @@ var (
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
+// badBlockFn is a callback for the async beacon sync to notify the caller that
+// the origin header requested to sync to, produced a chain with a bad block.
+type badBlockFn func(invalid *types.Header, origin *types.Header)
+
 // headerTask is a set of downloaded headers to queue along with their precomputed
 // hashes to avoid constant rehashing.
 type headerTask struct {
@@ -113,6 +117,7 @@ type Downloader struct {
 
 	// Callbacks
 	dropPeer peerDropFn // Drops a peer for misbehaving
+	badBlock badBlockFn // Reports a block as rejected by the chain
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
@@ -131,7 +136,6 @@ type Downloader struct {
 	pivotHeader *types.Header // Pivot block header to dynamically push the syncing state root
 	pivotLock   sync.RWMutex  // Lock protecting pivot header reads from updates
 
-	snapSync       bool         // Whether to run state sync over the snap protocol
 	SnapSyncer     *snap.Syncer // TODO(karalabe): make private! hack for now
 	stateSyncStart chan *stateSync
 
@@ -360,7 +364,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
-	// inited the cancel cannel) or not yet. Make sure that we'll signal even in
+	// inited the cancel channel) or not yet. Make sure that we'll signal even in
 	// case of a failure.
 	if beaconPing != nil {
 		defer func() {
@@ -737,9 +741,11 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 // calculateRequestSpan calculates what headers to request from a peer when trying to determine the
 // common ancestor.
 // It returns parameters to be used for peer.RequestHeadersByNumber:
-//  from - starting block number
-//  count - number of headers to request
-//  skip - number of headers to skip
+//
+//	from  - starting block number
+//	count - number of headers to request
+//	skip  - number of headers to skip
+//
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
@@ -1457,7 +1463,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 			}
 			d.syncStatsLock.Unlock()
 
-			// Signal the content downloaders of the availablility of new tasks
+			// Signal the content downloaders of the availability of new tasks
 			for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {
 				select {
 				case ch <- true:
@@ -1529,7 +1535,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		return errCancelContentProcessing
 	default:
 	}
-	// Retrieve the a batch of results to import
+	// Retrieve a batch of results to import
 	first, last := results[0].Header, results[len(results)-1].Header
 	log.Debug("Inserting downloaded chain", "items", len(results),
 		"firstnum", first.Number, "firsthash", first.Hash(),
@@ -1545,6 +1551,16 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		if index < len(results) {
 			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+
+			// In post-merge, notify the engine API of encountered bad chains
+			if d.badBlock != nil {
+				head, _, err := d.skeleton.Bounds()
+				if err != nil {
+					log.Error("Failed to retrieve beacon bounds for bad block reporting", "err", err)
+				} else {
+					d.badBlock(blocks[index].Header(), head)
+				}
+			}
 		} else {
 			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
 			// when it needs to preprocess blocks to import a sidechain.

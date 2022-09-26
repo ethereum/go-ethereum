@@ -242,18 +242,20 @@ func (f *lightFetcher) forEachPeer(check func(id enode.ID, p *fetcherPeer) bool)
 }
 
 // mainloop is the main event loop of the light fetcher, which is responsible for
-// - announcement maintenance(ulc)
-//   If we are running in ultra light client mode, then all announcements from
-//   the trusted servers are maintained. If the same announcements from trusted
-//   servers reach the threshold, then the relevant header is requested for retrieval.
 //
-// - block header retrieval
-//   Whenever we receive announce with higher td compared with local chain, the
-//   request will be made for header retrieval.
+//   - announcement maintenance(ulc)
 //
-// - re-sync trigger
-//   If the local chain lags too much, then the fetcher will enter "synnchronise"
-//   mode to retrieve missing headers in batch.
+//     If we are running in ultra light client mode, then all announcements from
+//     the trusted servers are maintained. If the same announcements from trusted
+//     servers reach the threshold, then the relevant header is requested for retrieval.
+//
+//   - block header retrieval
+//     Whenever we receive announce with higher td compared with local chain, the
+//     request will be made for header retrieval.
+//
+//   - re-sync trigger
+//     If the local chain lags too much, then the fetcher will enter "synchronise"
+//     mode to retrieve missing headers in batch.
 func (f *lightFetcher) mainloop() {
 	defer f.wg.Done()
 

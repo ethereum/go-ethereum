@@ -340,7 +340,6 @@ func freezeClient(ctx context.Context, t *testing.T, server *rpc.Client, clientI
 	if err := server.CallContext(ctx, nil, "debug_freezeClient", clientID); err != nil {
 		t.Fatalf("Failed to freeze client: %v", err)
 	}
-
 }
 
 func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {

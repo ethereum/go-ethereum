@@ -191,11 +191,22 @@ func newHandler(config *handlerConfig) (*handler, error) {
 			}
 		}
 	}
-	// Construct the downloader (long sync) and its backing state bloom if snap
-	// sync is requested. The downloader is responsible for deallocating the state
-	// bloom when it's done.
+	// Construct the downloader (long sync)
 	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
-
+	if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
+		if h.chain.Config().TerminalTotalDifficultyPassed {
+			log.Info("Chain post-merge, sync via beacon client")
+		} else {
+			head := h.chain.CurrentBlock()
+			if td := h.chain.GetTd(head.Hash(), head.NumberU64()); td.Cmp(ttd) >= 0 {
+				log.Info("Chain post-TTD, sync via beacon client")
+			} else {
+				log.Warn("Chain pre-merge, sync via PoW (ensure beacon client is ready)")
+			}
+		}
+	} else if h.chain.Config().TerminalTotalDifficultyPassed {
+		log.Error("Chain configured post-merge, but without TTD. Are you debugging sync?")
+	}
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
 		// All the block fetcher activities should be disabled
@@ -249,7 +260,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
 		if atomic.LoadUint32(&h.snapSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			log.Warn("Snap syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
 		if h.merger.TDDReached() {
@@ -296,7 +307,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 }
 
 // runEthPeer registers an eth peer into the joint eth/snap peerset, adds it to
-// various subsistems and starts handling messages.
+// various subsystems and starts handling messages.
 func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If the peer has a `snap` extension, wait for it to connect so we can have
 	// a uniform initialization/teardown mechanism
@@ -380,11 +391,16 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if h.checkpointHash != (common.Hash{}) {
 		// Request the peer's checkpoint header for chain height/weight validation
 		resCh := make(chan *eth.Response)
-		if _, err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false, resCh); err != nil {
+
+		req, err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false, resCh)
+		if err != nil {
 			return err
 		}
 		// Start a timer to disconnect if the peer doesn't reply in time
 		go func() {
+			// Ensure the request gets cancelled in case of error/drop
+			defer req.Close()
+
 			timeout := time.NewTimer(syncChallengeTimeout)
 			defer timeout.Stop()
 
@@ -426,10 +442,15 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If we have any explicit peer required block hashes, request them
 	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
-		if _, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh); err != nil {
+
+		req, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh)
+		if err != nil {
 			return err
 		}
-		go func(number uint64, hash common.Hash) {
+		go func(number uint64, hash common.Hash, req *eth.Request) {
+			// Ensure the request gets cancelled in case of error/drop
+			defer req.Close()
+
 			timeout := time.NewTimer(syncChallengeTimeout)
 			defer timeout.Stop()
 
@@ -458,7 +479,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 				peer.Log().Warn("Required block challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
 				h.removePeer(peer.ID())
 			}
-		}(number, hash)
+		}(number, hash, req)
 	}
 	// Handle incoming messages until the connection is torn down
 	return handler(peer)

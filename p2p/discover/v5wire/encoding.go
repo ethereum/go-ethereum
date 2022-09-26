@@ -90,6 +90,10 @@ const (
 	minVersion      = 1
 	sizeofMaskingIV = 16
 
+	// The minimum size of any Discovery v5 packet is 63 bytes.
+	// Should reject packets smaller than minPacketSize.
+	minPacketSize = 63
+
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
 )
@@ -300,7 +304,7 @@ func (c *Codec) encodeWhoareyou(toID enode.ID, packet *Whoareyou) (Header, error
 	return head, nil
 }
 
-// encodeHandshakeMessage encodes the handshake message packet header.
+// encodeHandshakeHeader encodes the handshake message packet header.
 func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Whoareyou) (Header, *session, error) {
 	// Ensure calling code sets challenge.node.
 	if challenge.Node == nil {
@@ -337,7 +341,7 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 	return head, session, err
 }
 
-// encodeAuthHeader creates the auth header on a request packet following WHOAREYOU.
+// makeHandshakeAuth creates the auth header on a request packet following WHOAREYOU.
 func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoareyou) (*handshakeAuthData, *session, error) {
 	auth := new(handshakeAuthData)
 	auth.h.SrcID = c.localnode.ID()
@@ -379,7 +383,7 @@ func (c *Codec) makeHandshakeAuth(toID enode.ID, addr string, challenge *Whoarey
 	return auth, sec, err
 }
 
-// encodeMessage encodes an encrypted message packet.
+// encodeMessageHeader encodes an encrypted message packet.
 func (c *Codec) encodeMessageHeader(toID enode.ID, s *session) (Header, error) {
 	head := c.makeHeader(toID, flagMessage, 0)
 
@@ -415,10 +419,10 @@ func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []
 
 // Decode decodes a discovery packet.
 func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	// Unmask the static header.
-	if len(input) < sizeofStaticPacketData {
+	if len(input) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
+	// Unmask the static header.
 	var head Header
 	copy(head.IV[:], input[:sizeofMaskingIV])
 	mask := head.mask(c.localnode.ID())
@@ -596,7 +600,7 @@ func (c *Codec) decodeMessage(fromAddr string, head *Header, headerData, msgData
 	// Try decrypting the message.
 	key := c.sc.readKey(auth.SrcID, fromAddr)
 	msg, err := c.decryptMessage(msgData, head.Nonce[:], headerData, key)
-	if err == errMessageDecrypt {
+	if errors.Is(err, errMessageDecrypt) {
 		// It didn't work. Start the handshake since this is an ordinary message packet.
 		return &Unknown{Nonce: head.Nonce}, nil
 	}
@@ -632,7 +636,7 @@ func (h *StaticHeader) checkValid(packetLen int) error {
 	return nil
 }
 
-// headerMask returns a cipher for 'masking' / 'unmasking' packet headers.
+// mask returns a cipher for 'masking' / 'unmasking' packet headers.
 func (h *Header) mask(destID enode.ID) cipher.Stream {
 	block, err := aes.NewCipher(destID[:16])
 	if err != nil {

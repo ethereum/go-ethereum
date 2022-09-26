@@ -83,6 +83,7 @@ var Defaults = Config{
 	TrieDirtyCache:          256,
 	TrieTimeout:             60 * time.Minute,
 	SnapshotCache:           102,
+	FilterLogCacheSize:      32,
 	Miner: miner.Config{
 		GasCeil:  30000000,
 		GasPrice: big.NewInt(params.GWei),
@@ -171,6 +172,9 @@ type Config struct {
 	SnapshotCache           int
 	Preimages               bool
 
+	// This is the number of blocks for which logs will be cached in the filter system.
+	FilterLogCacheSize int
+
 	// Mining options
 	Miner miner.Config
 
@@ -196,7 +200,7 @@ type Config struct {
 	RPCEVMTimeout time.Duration
 
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
+	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
@@ -205,21 +209,21 @@ type Config struct {
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
-	// Arrow Glacier block override (TODO: remove after the fork)
-	OverrideArrowGlacier *big.Int `toml:",omitempty"`
-
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
+
+	// OverrideTerminalTotalDifficultyPassed (TODO: remove after the fork)
+	OverrideTerminalTotalDifficultyPassed *bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
-	if chainConfig.Clique != nil {
-		engine = clique.New(chainConfig.Clique, db)
+	if cliqueConfig != nil {
+		engine = clique.New(cliqueConfig, db)
 	} else {
-		switch config.PowMode {
+		switch ethashConfig.PowMode {
 		case ethash.ModeFake:
 			log.Warn("Ethash used in fake mode")
 		case ethash.ModeTest:
@@ -228,16 +232,16 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 			log.Warn("Ethash used in shared mode")
 		}
 		engine = ethash.New(ethash.Config{
-			PowMode:          config.PowMode,
-			CacheDir:         stack.ResolvePath(config.CacheDir),
-			CachesInMem:      config.CachesInMem,
-			CachesOnDisk:     config.CachesOnDisk,
-			CachesLockMmap:   config.CachesLockMmap,
-			DatasetDir:       config.DatasetDir,
-			DatasetsInMem:    config.DatasetsInMem,
-			DatasetsOnDisk:   config.DatasetsOnDisk,
-			DatasetsLockMmap: config.DatasetsLockMmap,
-			NotifyFull:       config.NotifyFull,
+			PowMode:          ethashConfig.PowMode,
+			CacheDir:         stack.ResolvePath(ethashConfig.CacheDir),
+			CachesInMem:      ethashConfig.CachesInMem,
+			CachesOnDisk:     ethashConfig.CachesOnDisk,
+			CachesLockMmap:   ethashConfig.CachesLockMmap,
+			DatasetDir:       ethashConfig.DatasetDir,
+			DatasetsInMem:    ethashConfig.DatasetsInMem,
+			DatasetsOnDisk:   ethashConfig.DatasetsOnDisk,
+			DatasetsLockMmap: ethashConfig.DatasetsLockMmap,
+			NotifyFull:       ethashConfig.NotifyFull,
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}

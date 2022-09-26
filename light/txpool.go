@@ -71,15 +71,16 @@ type TxPool struct {
 	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
 
-// TxRelayBackend provides an interface to the mechanism that forwards transacions
-// to the ETH network. The implementations of the functions should be non-blocking.
+// TxRelayBackend provides an interface to the mechanism that forwards transactions to the
+// ETH network. The implementations of the functions should be non-blocking.
 //
-// Send instructs backend to forward new transactions
-// NewHead notifies backend about a new head after processed by the tx pool,
-//  including  mined and rolled back transactions since the last event
-// Discard notifies backend about transactions that should be discarded either
-//  because they have been replaced by a re-send or because they have been mined
-//  long ago and no rollback is expected
+// Send instructs backend to forward new transactions NewHead notifies backend about a new
+// head after processed by the tx pool, including mined and rolled back transactions since
+// the last event.
+//
+// Discard notifies backend about transactions that should be discarded either because
+// they have been replaced by a re-send or because they have been mined long ago and no
+// rollback is expected.
 type TxRelayBackend interface {
 	Send(txs types.Transactions)
 	NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash)
@@ -398,7 +399,7 @@ func (pool *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 	hash := tx.Hash()
 
 	if pool.pending[hash] != nil {
-		return fmt.Errorf("Known transaction (%x)", hash[:4])
+		return fmt.Errorf("known transaction (%x)", hash[:4])
 	}
 	err := pool.validateTx(ctx, tx)
 	if err != nil {

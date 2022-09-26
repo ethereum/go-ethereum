@@ -57,18 +57,16 @@ const freezerTableSize = 2 * 1000 * 1000 * 1000
 // Freezer is a memory mapped append-only database to store immutable ordered
 // data into flat files:
 //
-// - The append-only nature ensures that disk writes are minimized.
-// - The memory mapping ensures we can max out system memory for caching without
-//   reserving it for go-ethereum. This would also reduce the memory requirements
-//   of Geth, and thus also GC overhead.
+//   - The append-only nature ensures that disk writes are minimized.
+//   - The memory mapping ensures we can max out system memory for caching without
+//     reserving it for go-ethereum. This would also reduce the memory requirements
+//     of Geth, and thus also GC overhead.
 type Freezer struct {
 	// WARNING: The `frozen` and `tail` fields are accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	frozen uint64 // Number of blocks already frozen
 	tail   uint64 // Number of the first stored item in the freezer
-
-	datadir string // Path of root directory of ancient store
 
 	// This lock synchronizes writers and the truncate operation, as well as
 	// the "atomic" (batched) read operations.
@@ -111,7 +109,6 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
-		datadir:      datadir,
 	}
 
 	// Create the tables.
@@ -191,9 +188,9 @@ func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 
 // AncientRange retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
-//  - at most 'max' items,
-//  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
-//   return as many items as fit into maxByteSize.
+//   - at most 'max' items,
+//   - at least 1 item (even if exceeding the maxByteSize), but will otherwise
+//     return as many items as fit into maxByteSize.
 func (f *Freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
@@ -429,7 +426,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := NewFreezerTable(migrationPath, kind, table.noCompression, false)
+	newTable, err := newFreezerTable(migrationPath, kind, table.noCompression, false)
 	if err != nil {
 		return err
 	}
@@ -486,11 +483,5 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	if err := os.Remove(migrationPath); err != nil {
 		return err
 	}
-
 	return nil
-}
-
-// AncientDatadir returns the root directory path of the ancient store.
-func (f *Freezer) AncientDatadir() (string, error) {
-	return f.datadir, nil
 }

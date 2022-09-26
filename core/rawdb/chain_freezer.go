@@ -92,6 +92,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		backoff   bool
 		triggered chan struct{} // Used in tests
 	)
+	timer := time.NewTimer(freezerRecheckInterval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-f.quit:
@@ -106,8 +108,9 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				triggered = nil
 			}
 			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
+			case <-timer.C:
 				backoff = false
+				timer.Reset(freezerRecheckInterval)
 			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
@@ -241,7 +244,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
-		log.Info("Deep froze chain segment", context...)
+		log.Debug("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
 		if frozen-first < freezerBatchLimit {
@@ -278,19 +281,19 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 
 			// Write to the batch.
-			if err := op.AppendRaw(freezerHashTable, number, hash[:]); err != nil {
+			if err := op.AppendRaw(chainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(freezerHeaderTable, number, header); err != nil {
+			if err := op.AppendRaw(chainFreezerHeaderTable, number, header); err != nil {
 				return fmt.Errorf("can't write header to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(freezerBodiesTable, number, body); err != nil {
+			if err := op.AppendRaw(chainFreezerBodiesTable, number, body); err != nil {
 				return fmt.Errorf("can't write body to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(freezerReceiptTable, number, receipts); err != nil {
+			if err := op.AppendRaw(chainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
-			if err := op.AppendRaw(freezerDifficultyTable, number, td); err != nil {
+			if err := op.AppendRaw(chainFreezerDifficultyTable, number, td); err != nil {
 				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 

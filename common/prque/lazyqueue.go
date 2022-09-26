@@ -26,9 +26,10 @@ import (
 // LazyQueue is a priority queue data structure where priorities can change over
 // time and are only evaluated on demand.
 // Two callbacks are required:
-// - priority evaluates the actual priority of an item
-// - maxPriority gives an upper estimate for the priority in any moment between
-//   now and the given absolute time
+//   - priority evaluates the actual priority of an item
+//   - maxPriority gives an upper estimate for the priority in any moment between
+//     now and the given absolute time
+//
 // If the upper estimate is exceeded then Update should be called for that item.
 // A global Refresh function should also be called periodically.
 type LazyQueue struct {
@@ -87,13 +88,13 @@ func (q *LazyQueue) Refresh() {
 
 // refresh re-evaluates items in the older queue and swaps the two queues
 func (q *LazyQueue) refresh(now mclock.AbsTime) {
-	q.maxUntil = now + mclock.AbsTime(q.period)
+	q.maxUntil = now.Add(q.period)
 	for q.queue[0].Len() != 0 {
 		q.Push(heap.Pop(q.queue[0]).(*item).value)
 	}
 	q.queue[0], q.queue[1] = q.queue[1], q.queue[0]
 	q.indexOffset = 1 - q.indexOffset
-	q.maxUntil += mclock.AbsTime(q.period)
+	q.maxUntil = q.maxUntil.Add(q.period)
 }
 
 // Push adds an item to the queue
@@ -163,7 +164,7 @@ func (q *LazyQueue) PopItem() interface{} {
 	return i
 }
 
-// Remove removes removes the item with the given index.
+// Remove removes the item with the given index.
 func (q *LazyQueue) Remove(index int) interface{} {
 	if index < 0 {
 		return nil

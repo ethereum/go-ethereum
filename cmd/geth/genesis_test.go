@@ -83,7 +83,7 @@ func TestCustomGenesis(t *testing.T) {
 
 		// Query the custom genesis block
 		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
-			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
+			"--datadir", datadir, "--maxpeers", "0", "--port", "0", "--authrpc.port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)

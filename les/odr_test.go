@@ -129,7 +129,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		data[35] = byte(i)
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			statedb, err := state.New(header.Root, state.NewDatabase(db), nil)
+			statedb, err := state.New(header.Root, bc.StateCache(), nil)
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(bankAddr)
@@ -392,12 +392,10 @@ func testGetTxStatusFromUnindexedPeers(t *testing.T, protocol int) {
 	for _, testspec := range testspecs {
 		// Create a bunch of server peers with different tx history
 		var (
-			serverPeers []*testPeer
-			closeFns    []func()
+			closeFns []func()
 		)
 		for i := 0; i < testspec.peers; i++ {
 			peer, closePeer, _ := client.newRawPeer(t, fmt.Sprintf("server-%d", i), protocol, testspec.txLookups[i])
-			serverPeers = append(serverPeers, peer)
 			closeFns = append(closeFns, closePeer)
 
 			// Create a one-time routine for serving message

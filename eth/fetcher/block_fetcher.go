@@ -692,7 +692,6 @@ func (f *BlockFetcher) loop() {
 						} else {
 							f.forgetHash(hash)
 						}
-
 					}
 					if matched {
 						task.transactions = append(task.transactions[:i], task.transactions[i+1:]...)

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -54,7 +53,7 @@ func newHookedBackfiller() backfiller {
 // suspend requests the backfiller to abort any running full or snap sync
 // based on the skeleton chain as it might be invalid. The backfiller should
 // gracefully handle multiple consecutive suspends without a resume, even
-// on initial sartup.
+// on initial startup.
 func (hf *hookedBackfiller) suspend() *types.Header {
 	if hf.suspendHook != nil {
 		hf.suspendHook()
@@ -112,7 +111,7 @@ func newSkeletonTestPeerWithHook(id string, headers []*types.Header, serve func(
 // function can be used to retrieve batches of headers from the particular peer.
 func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *eth.Response) (*eth.Request, error) {
 	// Since skeleton test peer are in-memory mocks, dropping the does not make
-	// them inaccepssible. As such, check a local `dropped` field to see if the
+	// them inaccessible. As such, check a local `dropped` field to see if the
 	// peer has been dropped and should not respond any more.
 	if atomic.LoadUint64(&p.dropped) != 0 {
 		return nil, errors.New("peer already dropped")
@@ -205,7 +204,7 @@ func (p *skeletonTestPeer) RequestReceipts([]common.Hash, chan *eth.Response) (*
 	panic("skeleton sync must not request receipts")
 }
 
-// Tests various sync initialzations based on previous leftovers in the database
+// Tests various sync initializations based on previous leftovers in the database
 // and announced heads.
 func TestSkeletonSyncInit(t *testing.T) {
 	// Create a few key headers
@@ -228,7 +227,7 @@ func TestSkeletonSyncInit(t *testing.T) {
 			newstate: []*subchain{{Head: 50, Tail: 50}},
 		},
 		// Empty database with only the genesis set with a leftover empty sync
-		// progess. This is a synthetic case, just for the sake of covering things.
+		// progress. This is a synthetic case, just for the sake of covering things.
 		{
 			oldstate: []*subchain{},
 			head:     block50,
@@ -515,7 +514,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 // Tests that the skeleton sync correctly retrieves headers from one or more
 // peers without duplicates or other strange side effects.
 func TestSkeletonSyncRetrievals(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	// Since skeleton headers don't need to be meaningful, beyond a parent hash
 	// progression, create a long fake chain to test with.
@@ -534,13 +533,13 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		peers    []*skeletonTestPeer // Initial peer set to start the sync with
 		midstate []*subchain         // Expected sync state after initial cycle
 		midserve uint64              // Expected number of header retrievals after initial cycle
-		middrop  uint64              // Expectd number of peers dropped after initial cycle
+		middrop  uint64              // Expected number of peers dropped after initial cycle
 
-		newHead  *types.Header     // New header to annount on top of the old one
+		newHead  *types.Header     // New header to anoint on top of the old one
 		newPeer  *skeletonTestPeer // New peer to join the skeleton syncer
 		endstate []*subchain       // Expected sync state after the post-init event
 		endserve uint64            // Expected number of header retrievals after the post-init event
-		enddrop  uint64            // Expectd number of peers dropped after the post-init event
+		enddrop  uint64            // Expected number of peers dropped after the post-init event
 	}{
 		// Completely empty database with only the genesis set. The sync is expected
 		// to create a single subchain with the requested head. No peers however, so
@@ -791,7 +790,6 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		check := func() error {
 			if len(progress.Subchains) != len(tt.midstate) {
 				return fmt.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
-
 			}
 			for j := 0; j < len(progress.Subchains); j++ {
 				if progress.Subchains[j].Head != tt.midstate[j].Head {

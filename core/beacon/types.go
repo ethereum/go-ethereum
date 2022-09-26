@@ -42,7 +42,7 @@ type payloadAttributesMarshaling struct {
 
 //go:generate go run github.com/fjl/gencodec -type ExecutableDataV1 -field-override executableDataMarshaling -out gen_ed.go
 
-// ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/src/engine/specification.md
+// ExecutableDataV1 structure described at https://github.com/ethereum/execution-apis/tree/main/src/engine/specification.md
 type ExecutableDataV1 struct {
 	ParentHash    common.Hash    `json:"parentHash"    gencodec:"required"`
 	FeeRecipient  common.Address `json:"feeRecipient"  gencodec:"required"`
@@ -136,9 +136,11 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
-// 		len(extraData) <= 32
-// 		uncleHash = emptyUncleHash
-// 		difficulty = 0
+//
+//	len(extraData) <= 32
+//	uncleHash = emptyUncleHash
+//	difficulty = 0
+//
 // and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
@@ -147,6 +149,13 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	}
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	}
+	if len(params.LogsBloom) != 256 {
+		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
+	}
+	// Check that baseFeePerGas is not negative or too big
+	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
+		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
 	header := &types.Header{
 		ParentHash:  params.ParentHash,

@@ -305,7 +305,7 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 	)
 	var r []*enode.Node
 	r, err = t.findnode(unwrapNode(destNode), dists)
-	if err == errClosed {
+	if errors.Is(err, errClosed) {
 		return nil, err
 	}
 	for _, n := range r {
@@ -347,7 +347,7 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	}
 }
 
-// requestENR requests n's record.
+// RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	nodes, err := t.findnode(n, []uint{0})
 	if err != nil {
@@ -406,6 +406,9 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
+	}
+	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+		return nil, errors.New("not contained in netrestrict list")
 	}
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
@@ -622,8 +625,8 @@ func (t *UDPv5) readLoop() {
 			t.log.Debug("Temporary UDP read error", "err", err)
 			continue
 		} else if err != nil {
-			// Shut down the loop for permament errors.
-			if err != io.EOF {
+			// Shut down the loop for permanent errors.
+			if !errors.Is(err, io.EOF) {
 				t.log.Debug("UDP read error", "err", err)
 			}
 			return

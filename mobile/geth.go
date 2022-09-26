@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
@@ -156,6 +158,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
+			rawStack.Close()
 			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
 		// If we have the Ropsten testnet, hard code the chain configs too
@@ -196,11 +199,21 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		lesBackend, err := les.New(rawStack, &ethConf)
 		if err != nil {
+			rawStack.Close()
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
+		// Register log filter RPC API.
+		filterSystem := filters.NewFilterSystem(lesBackend.ApiBackend, filters.Config{
+			LogCacheSize: ethConf.FilterLogCacheSize,
+		})
+		rawStack.RegisterAPIs([]rpc.API{{
+			Namespace: "eth",
+			Service:   filters.NewFilterAPI(filterSystem, true),
+		}})
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
 			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
+				rawStack.Close()
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}

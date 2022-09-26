@@ -290,7 +290,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	if len(line) == 0 || pos == 0 {
 		return "", nil, ""
 	}
-	// Chunck data to relevant part for autocompletion
+	// Chunk data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
@@ -407,7 +407,7 @@ func (c *Console) StopInteractive() {
 	}
 }
 
-// Interactive starts an interactive user session, where in.put is propted from
+// Interactive starts an interactive user session, where input is prompted from
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
@@ -497,7 +497,7 @@ func (c *Console) readLines(input chan<- string, errc chan<- error, prompt <-cha
 	}
 }
 
-// countIndents returns the number of identations for the given input.
+// countIndents returns the number of indentations for the given input.
 // In case of invalid input such as var a = } the result can be negative.
 func countIndents(input string) int {
 	var (
@@ -538,11 +538,6 @@ func countIndents(input string) int {
 	}
 
 	return indents
-}
-
-// Execute runs the JavaScript file specified as the argument.
-func (c *Console) Execute(path string) error {
-	return c.jsre.Exec(path)
 }
 
 // Stop cleans up the console and terminates the runtime environment.

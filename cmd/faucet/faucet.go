@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -86,15 +87,11 @@ var (
 
 	goerliFlag  = flag.Bool("goerli", false, "Initializes the faucet with Görli network config")
 	rinkebyFlag = flag.Bool("rinkeby", false, "Initializes the faucet with Rinkeby network config")
+	sepoliaFlag = flag.Bool("sepolia", false, "Initializes the faucet with Sepolia network config")
 )
 
 var (
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-)
-
-var (
-	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
-	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
 )
 
 //go:embed faucet.html
@@ -143,7 +140,7 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *rinkebyFlag)
+	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *rinkebyFlag, *sepoliaFlag)
 	if err != nil {
 		log.Crit("Failed to parse genesis config", "err", err)
 	}
@@ -225,9 +222,10 @@ type wsConn struct {
 
 func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
+	git, _ := version.VCS()
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
-		Version: params.VersionWithCommit(gitCommit, gitDate),
+		Version: params.VersionWithCommit(git.Commit, git.Date),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
@@ -247,7 +245,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	cfg.SyncMode = downloader.LightSync
 	cfg.NetworkId = network
 	cfg.Genesis = genesis
-	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
+	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock().Hash())
 
 	lesBackend, err := les.New(stack, &cfg)
 	if err != nil {
@@ -708,7 +706,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 	case tokenV2 != "":
 		return authTwitterWithTokenV2(tweetID, tokenV2)
 	}
-	// Twiter API token isn't provided so we just load the public posts
+	// Twitter API token isn't provided so we just load the public posts
 	// and scrape it for the Ethereum address and profile URL. We need to load
 	// the mobile page though since the main page loads tweet contents via JS.
 	url = strings.Replace(url, "https://twitter.com/", "https://mobile.twitter.com/", 1)
@@ -860,7 +858,7 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund. Please check the post URL and verify that it can be viewed publicly.")
 	}
 	var avatar string
 	if parts = regexp.MustCompile(`src="([^"]+fbcdn\.net[^"]+)"`).FindStringSubmatch(string(body)); len(parts) == 2 {
@@ -882,7 +880,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 }
 
 // getGenesis returns a genesis based on input args
-func getGenesis(genesisFlag string, goerliFlag bool, rinkebyFlag bool) (*core.Genesis, error) {
+func getGenesis(genesisFlag string, goerliFlag bool, rinkebyFlag bool, sepoliaFlag bool) (*core.Genesis, error) {
 	switch {
 	case genesisFlag != "":
 		var genesis core.Genesis
@@ -892,6 +890,8 @@ func getGenesis(genesisFlag string, goerliFlag bool, rinkebyFlag bool) (*core.Ge
 		return core.DefaultGoerliGenesisBlock(), nil
 	case rinkebyFlag:
 		return core.DefaultRinkebyGenesisBlock(), nil
+	case sepoliaFlag:
+		return core.DefaultSepoliaGenesisBlock(), nil
 	default:
 		return nil, fmt.Errorf("no genesis flag provided")
 	}

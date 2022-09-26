@@ -14,27 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-/*
-Package native is a collection of tracers written in go.
-
-In order to add a native tracer and have it compiled into the binary, a new
-file needs to be added to this folder, containing an implementation of the
-`eth.tracers.Tracer` interface.
-
-Aside from implementing the tracer, it also needs to register itself, using the
-`register` method -- and this needs to be done in the package initialization.
-
-Example:
-
-```golang
-func init() {
-	register("noopTracerNative", newNoopTracer)
-}
-```
-*/
+// Package native is a collection of tracers written in go.
+//
+// In order to add a native tracer and have it compiled into the binary, a new
+// file needs to be added to this folder, containing an implementation of the
+// `eth.tracers.Tracer` interface.
+//
+// Aside from implementing the tracer, it also needs to register itself, using the
+// `register` method -- and this needs to be done in the package initialization.
+//
+// Example:
+//
+//	func init() {
+//		register("noopTracerNative", newNoopTracer)
+//	}
 package native
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -46,7 +43,7 @@ func init() {
 }
 
 // ctorFn is the constructor signature of a native tracer.
-type ctorFn = func(*tracers.Context) tracers.Tracer
+type ctorFn = func(*tracers.Context, json.RawMessage) (tracers.Tracer, error)
 
 /*
 ctors is a map of package-local tracer constructors.
@@ -71,12 +68,12 @@ func register(name string, ctor ctorFn) {
 }
 
 // lookup returns a tracer, if one can be matched to the given name.
-func lookup(name string, ctx *tracers.Context) (tracers.Tracer, error) {
+func lookup(name string, ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
 	if ctors == nil {
 		ctors = make(map[string]ctorFn)
 	}
 	if ctor, ok := ctors[name]; ok {
-		return ctor(ctx), nil
+		return ctor(ctx, cfg)
 	}
 	return nil, errors.New("no tracer found")
 }

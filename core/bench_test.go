@@ -187,16 +187,15 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
-	gspec := Genesis{
+	gspec := &Genesis{
 		Config: params.TestChainConfig,
 		Alloc:  GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
 	}
-	genesis := gspec.MustCommit(db)
-	chain, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, b.N, gen)
+	_, chain, _ := GenerateChainWithGenesis(gspec, ethash.NewFaker(), b.N, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chainman, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -262,6 +261,11 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 		rawdb.WriteCanonicalHash(db, hash, n)
 		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
 
+		if n == 0 {
+			rawdb.WriteChainConfig(db, hash, params.AllEthashProtocolChanges)
+		}
+		rawdb.WriteHeadHeaderHash(db, hash)
+
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
 			rawdb.WriteBody(db, hash, n, block.Body())
@@ -303,7 +307,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, &cacheConfig, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := NewBlockChain(db, &cacheConfig, nil, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

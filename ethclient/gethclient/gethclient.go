@@ -79,7 +79,6 @@ type StorageResult struct {
 // GetProof returns the account and storage values of the specified account including the Merkle-proof.
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*AccountResult, error) {
-
 	type storageResult struct {
 		Key   string       `json:"key"`
 		Value *hexutil.Big `json:"value"`
@@ -187,6 +186,14 @@ func toBlockNumArg(number *big.Int) string {
 	pending := big.NewInt(-1)
 	if number.Cmp(pending) == 0 {
 		return "pending"
+	}
+	finalized := big.NewInt(int64(rpc.FinalizedBlockNumber))
+	if number.Cmp(finalized) == 0 {
+		return "finalized"
+	}
+	safe := big.NewInt(int64(rpc.SafeBlockNumber))
+	if number.Cmp(safe) == 0 {
+		return "safe"
 	}
 	return hexutil.EncodeBig(number)
 }

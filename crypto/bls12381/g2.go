@@ -41,7 +41,6 @@ func (p *PointG2) Zero() *PointG2 {
 	p[1].one()
 	p[2].zero()
 	return p
-
 }
 
 type tempG2 struct {

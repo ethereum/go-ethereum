@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
-//Used for testing
+// Used for testing
 type headlessUi struct {
 	approveCh chan string // to send approve/deny
 	inputCh   chan string // to send password
@@ -55,14 +55,13 @@ func (ui *headlessUi) RegisterUIServer(api *core.UIServerAPI)       {}
 func (ui *headlessUi) OnApprovedTx(tx ethapi.SignTransactionResult) {}
 
 func (ui *headlessUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
-
 	switch <-ui.approveCh {
 	case "Y":
 		return core.SignTxResponse{request.Transaction, true}, nil
 	case "M": // modify
 		// The headless UI always modifies the transaction
 		old := big.Int(request.Transaction.Value)
-		newVal := big.NewInt(0).Add(&old, big.NewInt(1))
+		newVal := new(big.Int).Add(&old, big.NewInt(1))
 		request.Transaction.Value = hexutil.Big(*newVal)
 		return core.SignTxResponse{request.Transaction, true}, nil
 	default:
@@ -125,7 +124,6 @@ func setup(t *testing.T) (*core.SignerAPI, *headlessUi) {
 	am := core.StartClefAccountManager(tmpDirName(t), true, true, "")
 	api := core.NewSignerAPI(am, 1337, true, ui, db, true, &storage.NoStorage{})
 	return api, ui
-
 }
 func createAccount(ui *headlessUi, api *core.SignerAPI, t *testing.T) {
 	ui.approveCh <- "Y"
@@ -139,7 +137,6 @@ func createAccount(ui *headlessUi, api *core.SignerAPI, t *testing.T) {
 }
 
 func failCreateAccountWithPassword(ui *headlessUi, api *core.SignerAPI, password string, t *testing.T) {
-
 	ui.approveCh <- "Y"
 	// We will be asked three times to provide a suitable password
 	ui.inputCh <- password
@@ -169,7 +166,6 @@ func failCreateAccount(ui *headlessUi, api *core.SignerAPI, t *testing.T) {
 func list(ui *headlessUi, api *core.SignerAPI, t *testing.T) ([]common.Address, error) {
 	ui.approveCh <- "A"
 	return api.List(context.Background())
-
 }
 
 func TestNewAcc(t *testing.T) {
@@ -321,5 +317,4 @@ func TestSignTx(t *testing.T) {
 	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
 	}
-
 }

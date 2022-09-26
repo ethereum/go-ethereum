@@ -61,7 +61,6 @@ type ClientPool struct {
 
 	setup  *serverSetup
 	clock  mclock.Clock
-	closed bool
 	ns     *nodestate.NodeStateMachine
 	synced func() bool
 

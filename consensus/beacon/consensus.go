@@ -45,6 +45,7 @@ var (
 	errTooManyUncles    = errors.New("too many uncles")
 	errInvalidNonce     = errors.New("invalid nonce")
 	errInvalidUncleHash = errors.New("invalid uncle hash")
+	errInvalidTimestamp = errors.New("invalid timestamp")
 )
 
 // Beacon is a consensus engine that combines the eth1 consensus and proof-of-stake
@@ -78,7 +79,10 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	reached, _ := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
+	if err != nil {
+		return err
+	}
 	if !reached {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
@@ -112,10 +116,23 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			break
 		}
 	}
-	// All the headers have passed the transition point, use new rules.
+
 	if len(preHeaders) == 0 {
+		// All the headers are pos headers. Verify that the parent block reached total terminal difficulty.
+		if reached, err := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
+			// TTD not reached for the first block, mark subsequent with invalid terminal block
+			if err == nil {
+				err = consensus.ErrInvalidTerminalBlock
+			}
+			results := make(chan error, len(headers))
+			for i := 0; i < len(headers); i++ {
+				results <- err
+			}
+			return make(chan struct{}), results
+		}
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
+
 	// The transition point exists in the middle, separate the headers
 	// into two batches and apply different verification rules for them.
 	var (
@@ -130,6 +147,14 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
+		// Verify that pre-merge headers don't overflow the TTD
+		if index, err := verifyTerminalPoWBlock(chain, preHeaders); err != nil {
+			// Mark all subsequent pow headers with the error.
+			for i := index; i < len(preHeaders); i++ {
+				errors[i], done[i] = err, true
+			}
+		}
+		// Collect the results
 		for {
 			for ; done[out]; out++ {
 				results <- errors[out]
@@ -139,7 +164,9 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			}
 			select {
 			case err := <-oldResult:
-				errors[old], done[old] = err, true
+				if !done[old] { // skip TTD-verified failures
+					errors[old], done[old] = err, true
+				}
 				old++
 			case err := <-newResult:
 				errors[new], done[new] = err, true
@@ -152,6 +179,33 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		}
 	}()
 	return abort, results
+}
+
+// verifyTerminalPoWBlock verifies that the preHeaders conform to the specification
+// wrt. their total difficulty.
+// It expects:
+// - preHeaders to be at least 1 element
+// - the parent of the header element to be stored in the chain correctly
+// - the preHeaders to have a set difficulty
+// - the last element to be the terminal block
+func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
+	td := chain.GetTd(preHeaders[0].ParentHash, preHeaders[0].Number.Uint64()-1)
+	if td == nil {
+		return 0, consensus.ErrUnknownAncestor
+	}
+	td = new(big.Int).Set(td)
+	// Check that all blocks before the last one are below the TTD
+	for i, head := range preHeaders {
+		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
+			return i, consensus.ErrInvalidTerminalBlock
+		}
+		td.Add(td, head.Difficulty)
+	}
+	// Check that the last block is the terminal block
+	if td.Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
+		return len(preHeaders) - 1, consensus.ErrInvalidTerminalBlock
+	}
+	return 0, nil
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
@@ -170,11 +224,12 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 // verifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine. The difference between the beacon and classic is
 // (a) The following fields are expected to be constants:
-//     - difficulty is expected to be 0
-// 	   - nonce is expected to be 0
-//     - unclehash is expected to be Hash(emptyHeader)
+//   - difficulty is expected to be 0
+//   - nonce is expected to be 0
+//   - unclehash is expected to be Hash(emptyHeader)
 //     to be the desired constants
-// (b) the timestamp is not verified anymore
+//
+// (b) we don't verify if a block is in the future anymore
 // (c) the extradata is limited to 32 bytes
 func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
 	// Ensure that the header's extra-data section is of a reasonable size
@@ -187,6 +242,10 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
+	}
+	// Verify the timestamp
+	if header.Time <= parent.Time {
+		return errInvalidTimestamp
 	}
 	// Verify the block's difficulty to ensure it's the default constant
 	if beaconDifficulty.Cmp(header.Difficulty) != 0 {

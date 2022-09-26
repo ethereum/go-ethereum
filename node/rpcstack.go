@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -81,6 +82,10 @@ type httpServer struct {
 	handlerNames map[string]string
 }
 
+const (
+	shutdownTimeout = 5 * time.Second
+)
+
 func newHTTPServer(log log.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	h := &httpServer{log: log, timeouts: timeouts, handlerNames: make(map[string]string)}
 
@@ -129,6 +134,7 @@ func (h *httpServer) start() error {
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(&h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
+		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
 		h.server.WriteTimeout = h.timeouts.WriteTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
@@ -261,7 +267,15 @@ func (h *httpServer) doStop() {
 		h.wsHandler.Store((*rpcHandler)(nil))
 		wsHandler.server.Stop()
 	}
-	h.server.Shutdown(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	err := h.server.Shutdown(ctx)
+	if err != nil && err == ctx.Err() {
+		h.log.Warn("HTTP server graceful shutdown timed out")
+		h.server.Close()
+	}
+
 	h.listener.Close()
 	h.log.Info("HTTP server stopped", "endpoint", h.listener.Addr())
 
@@ -281,7 +295,7 @@ func (h *httpServer) enableRPC(apis []rpc.API, config httpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.httpConfig = config
@@ -312,7 +326,7 @@ func (h *httpServer) enableWS(apis []rpc.API, config wsConfig) error {
 	}
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	if err := RegisterApis(apis, config.Modules, srv, false); err != nil {
+	if err := RegisterApis(apis, config.Modules, srv); err != nil {
 		return err
 	}
 	h.wsConfig = config
@@ -427,7 +441,6 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// It's an IP address, we can serve that
 		h.next.ServeHTTP(w, r)
 		return
-
 	}
 	// Not an IP address, but a hostname. Need to validate
 	if _, exist := h.vhosts["*"]; exist {
@@ -528,7 +541,7 @@ func (is *ipcServer) stop() error {
 
 // RegisterApis checks the given modules' availability, generates an allowlist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
-func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
+func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
@@ -539,7 +552,7 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll b
 	}
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
-		if exposeAll || allowList[api.Namespace] || (len(allowList) == 0 && api.Public) {
+		if allowList[api.Namespace] || len(allowList) == 0 {
 			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}

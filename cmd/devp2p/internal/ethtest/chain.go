@@ -47,7 +47,7 @@ func (c *Chain) Len() int {
 // TD calculates the total difficulty of the chain at the
 // chain head.
 func (c *Chain) TD() *big.Int {
-	sum := big.NewInt(0)
+	sum := new(big.Int)
 	for _, block := range c.blocks[:c.Len()] {
 		sum.Add(sum, block.Difficulty())
 	}
@@ -57,7 +57,7 @@ func (c *Chain) TD() *big.Int {
 // TotalDifficultyAt calculates the total difficulty of the chain
 // at the given block height.
 func (c *Chain) TotalDifficultyAt(height int) *big.Int {
-	sum := big.NewInt(0)
+	sum := new(big.Int)
 	if height >= c.Len() {
 		return sum
 	}
@@ -96,12 +96,12 @@ func (c *Chain) Head() *types.Block {
 	return c.blocks[c.Len()-1]
 }
 
-func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
+func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
 		return nil, fmt.Errorf("no block headers requested")
 	}
 
-	headers := make(BlockHeaders, req.Amount)
+	headers := make([]*types.Header, req.Amount)
 	var blockNumber uint64
 
 	// range over blocks to check if our chain has the requested header
@@ -119,7 +119,6 @@ func (c *Chain) GetHeaders(req GetBlockHeaders) (BlockHeaders, error) {
 		for i := 1; i < int(req.Amount); i++ {
 			blockNumber -= (1 - req.Skip)
 			headers[i] = c.blocks[blockNumber].Header()
-
 		}
 
 		return headers, nil
@@ -140,7 +139,7 @@ func loadChain(chainfile string, genesis string) (*Chain, error) {
 	if err != nil {
 		return nil, err
 	}
-	gblock := gen.ToBlock(nil)
+	gblock := gen.ToBlock()
 
 	blocks, err := blocksFromFile(chainfile, gblock)
 	if err != nil {

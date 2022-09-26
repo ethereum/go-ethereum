@@ -35,6 +35,19 @@ func TestULCAnnounceThresholdLes3(t *testing.T) { testULCAnnounceThreshold(t, 3)
 func testULCAnnounceThreshold(t *testing.T, protocol int) {
 	// todo figure out why it takes fetcher so longer to fetcher the announced header.
 	t.Skip("Sometimes it can failed")
+
+	// newTestLightPeer creates node with light sync mode
+	newTestLightPeer := func(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
+		netconfig := testnetConfig{
+			protocol:    protocol,
+			ulcServers:  ulcServers,
+			ulcFraction: ulcFraction,
+			nopruning:   true,
+		}
+		_, c, teardown := newClientServerEnv(t, netconfig)
+		return c, teardown
+	}
+
 	var cases = []struct {
 		height    []int
 		threshold int
@@ -147,16 +160,4 @@ func newTestServerPeer(t *testing.T, blocks int, protocol int, indexFn indexerCa
 	s.handler.server.privateKey = key
 	n := enode.NewV4(&key.PublicKey, net.ParseIP("127.0.0.1"), 35000, 35000)
 	return s, n, teardown
-}
-
-// newTestLightPeer creates node with light sync mode
-func newTestLightPeer(t *testing.T, protocol int, ulcServers []string, ulcFraction int) (*testClient, func()) {
-	netconfig := testnetConfig{
-		protocol:    protocol,
-		ulcServers:  ulcServers,
-		ulcFraction: ulcFraction,
-		nopruning:   true,
-	}
-	_, c, teardown := newClientServerEnv(t, netconfig)
-	return c, teardown
 }

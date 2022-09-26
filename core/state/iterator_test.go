@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.
@@ -55,7 +54,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			t.Errorf("state entry not reported %x", hash)
 		}
 	}
-	it := db.TrieDB().DiskDB().(ethdb.Database).NewIterator(nil, nil)
+	it := db.DiskDB().NewIterator(nil, nil)
 	for it.Next() {
 		key := it.Key()
 		if bytes.HasPrefix(key, []byte("secure-key-")) {

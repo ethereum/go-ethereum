@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -39,7 +40,7 @@ var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
-	fmt.Println(">>>", strings.Join(cmd.Args, " "))
+	fmt.Println(">>>", printArgs(cmd.Args))
 	if !*DryRunFlag {
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
@@ -47,6 +48,20 @@ func MustRun(cmd *exec.Cmd) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func printArgs(args []string) string {
+	var s strings.Builder
+	for i, arg := range args {
+		if i > 0 {
+			s.WriteByte(' ')
+		}
+		if strings.IndexByte(arg, ' ') >= 0 {
+			arg = strconv.QuoteToASCII(arg)
+		}
+		s.WriteString(arg)
+	}
+	return s.String()
 }
 
 func MustRunCommand(cmd string, args ...string) {
@@ -121,7 +136,7 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 		sftp.Args = append(sftp.Args, "-i", identityFile)
 	}
 	sftp.Args = append(sftp.Args, host)
-	fmt.Println(">>>", strings.Join(sftp.Args, " "))
+	fmt.Println(">>>", printArgs(sftp.Args))
 	if *DryRunFlag {
 		return nil
 	}

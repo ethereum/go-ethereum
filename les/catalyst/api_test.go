@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -46,18 +45,15 @@ var (
 )
 
 func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Block) {
-	db := rawdb.NewMemoryDatabase()
-	config := params.AllEthashProtocolChanges
+	config := *params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
+		Config:    &config,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
-	gblock := genesis.ToBlock(db)
-	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, n, nil)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), n, nil)
 	totalDifficulty := big.NewInt(0)
 
 	var headers []*types.Header

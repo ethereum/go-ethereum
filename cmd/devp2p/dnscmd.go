@@ -29,14 +29,14 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	dnsCommand = cli.Command{
+	dnsCommand = &cli.Command{
 		Name:  "dns",
 		Usage: "DNS Discovery Commands",
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			dnsSyncCommand,
 			dnsSignCommand,
 			dnsTXTCommand,
@@ -45,34 +45,34 @@ var (
 			dnsRoute53NukeCommand,
 		},
 	}
-	dnsSyncCommand = cli.Command{
+	dnsSyncCommand = &cli.Command{
 		Name:      "sync",
 		Usage:     "Download a DNS discovery tree",
 		ArgsUsage: "<url> [ <directory> ]",
 		Action:    dnsSync,
 		Flags:     []cli.Flag{dnsTimeoutFlag},
 	}
-	dnsSignCommand = cli.Command{
+	dnsSignCommand = &cli.Command{
 		Name:      "sign",
 		Usage:     "Sign a DNS discovery tree",
 		ArgsUsage: "<tree-directory> <key-file>",
 		Action:    dnsSign,
 		Flags:     []cli.Flag{dnsDomainFlag, dnsSeqFlag},
 	}
-	dnsTXTCommand = cli.Command{
+	dnsTXTCommand = &cli.Command{
 		Name:      "to-txt",
 		Usage:     "Create a DNS TXT records for a discovery tree",
 		ArgsUsage: "<tree-directory> <output-file>",
 		Action:    dnsToTXT,
 	}
-	dnsCloudflareCommand = cli.Command{
+	dnsCloudflareCommand = &cli.Command{
 		Name:      "to-cloudflare",
 		Usage:     "Deploy DNS TXT records to CloudFlare",
 		ArgsUsage: "<tree-directory>",
 		Action:    dnsToCloudflare,
 		Flags:     []cli.Flag{cloudflareTokenFlag, cloudflareZoneIDFlag},
 	}
-	dnsRoute53Command = cli.Command{
+	dnsRoute53Command = &cli.Command{
 		Name:      "to-route53",
 		Usage:     "Deploy DNS TXT records to Amazon Route53",
 		ArgsUsage: "<tree-directory>",
@@ -84,7 +84,7 @@ var (
 			route53RegionFlag,
 		},
 	}
-	dnsRoute53NukeCommand = cli.Command{
+	dnsRoute53NukeCommand = &cli.Command{
 		Name:      "nuke-route53",
 		Usage:     "Deletes DNS TXT records of a subdomain on Amazon Route53",
 		ArgsUsage: "<domain>",
@@ -99,15 +99,15 @@ var (
 )
 
 var (
-	dnsTimeoutFlag = cli.DurationFlag{
+	dnsTimeoutFlag = &cli.DurationFlag{
 		Name:  "timeout",
 		Usage: "Timeout for DNS lookups",
 	}
-	dnsDomainFlag = cli.StringFlag{
+	dnsDomainFlag = &cli.StringFlag{
 		Name:  "domain",
 		Usage: "Domain name of the tree",
 	}
-	dnsSeqFlag = cli.UintFlag{
+	dnsSeqFlag = &cli.UintFlag{
 		Name:  "seq",
 		Usage: "New sequence number of the tree",
 	}
