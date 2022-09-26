@@ -463,6 +463,9 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (pool *TxPool) Nonce(addr common.Address) uint64 {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
 	return pool.pendingNonces.get(addr)
 }
 

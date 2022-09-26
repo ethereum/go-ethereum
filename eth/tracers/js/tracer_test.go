@@ -60,7 +60,7 @@ func testCtx() *vmContext {
 	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
-func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
+func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
 	var (
 		env             = vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
 		gasLimit uint64 = 31000
@@ -69,6 +69,9 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
+	if contractCode != nil {
+		contract.Code = contractCode
+	}
 
 	tracer.CaptureTxStart(gasLimit)
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
@@ -83,22 +86,23 @@ func runTrace(tracer tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCon
 }
 
 func TestTracer(t *testing.T) {
-	execTracer := func(code string) ([]byte, string) {
+	execTracer := func(code string, contract []byte) ([]byte, string) {
 		t.Helper()
 		tracer, err := newJsTracer(code, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
+		ret, err := runTrace(tracer, testCtx(), params.TestChainConfig, contract)
 		if err != nil {
 			return nil, err.Error() // Stringify to allow comparison without nil checks
 		}
 		return ret, ""
 	}
 	for i, tt := range []struct {
-		code string
-		want string
-		fail string
+		code     string
+		want     string
+		fail     string
+		contract []byte
 	}{
 		{ // tests that we don't panic on bad arguments to memory access
 			code: "{depths: [], step: function(log) { this.depths.push(log.memory.slice(-1,-2)); }, fault: function() {}, result: function() { return this.depths; }}",
@@ -139,9 +143,18 @@ func TestTracer(t *testing.T) {
 		}, {
 			code: "{res: null, step: function(log) { var address = Array.prototype.slice.call(log.contract.getAddress()); this.res = toAddress(address); }, fault: function() {}, result: function() { return this.res }}",
 			want: `{"0":0,"1":0,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14":0,"15":0,"16":0,"17":0,"18":0,"19":0}`,
+		}, {
+			code:     "{res: [], step: function(log) { var op = log.op.toString(); if (op === 'MSTORE8' || op === 'STOP') { this.res.push(log.memory.slice(0, 2)) } }, fault: function() {}, result: function() { return this.res }}",
+			want:     `[{"0":0,"1":0},{"0":255,"1":0}]`,
+			contract: []byte{byte(vm.PUSH1), byte(0xff), byte(vm.PUSH1), byte(0x00), byte(vm.MSTORE8), byte(vm.STOP)},
+		}, {
+			code:     "{res: [], step: function(log) { if (log.op.toString() === 'STOP') { this.res.push(log.memory.slice(5, 1025 * 1024)) } }, fault: function() {}, result: function() { return this.res }}",
+			want:     "",
+			fail:     "tracer reached limit for padding memory slice: end 1049600, memorySize 32 at step (<eval>:1:83(23))    in server-side tracer function 'step'",
+			contract: []byte{byte(vm.PUSH1), byte(0xff), byte(vm.PUSH1), byte(0x00), byte(vm.MSTORE8), byte(vm.STOP)},
 		},
 	} {
-		if have, err := execTracer(tt.code); tt.want != string(have) || tt.fail != err {
+		if have, err := execTracer(tt.code, tt.contract); tt.want != string(have) || tt.fail != err {
 			t.Errorf("testcase %d: expected return value to be '%s' got '%s', error to be '%s' got '%s'\n\tcode: %v", i, tt.want, string(have), tt.fail, err, tt.code)
 		}
 	}
@@ -157,7 +170,7 @@ func TestHalt(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		tracer.Stop(timeout)
 	}()
-	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); !strings.Contains(err.Error(), "stahp") {
+	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig, nil); !strings.Contains(err.Error(), "stahp") {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
@@ -227,7 +240,7 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	blockCtx := vm.BlockContext{BlockNumber: big.NewInt(150)}
-	res, err := runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	res, err := runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -237,7 +250,7 @@ func TestIsPrecompile(t *testing.T) {
 
 	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
-	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}

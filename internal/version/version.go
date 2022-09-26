@@ -19,6 +19,7 @@ package version
 
 import (
 	"fmt"
+	"runtime"
 	"runtime/debug"
 	"strings"
 
@@ -26,6 +27,43 @@ import (
 )
 
 const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
+
+// These variables are set at build-time by the linker when the build is
+// done by build/ci.go.
+var gitCommit, gitDate string
+
+// VCSInfo represents the git repository state.
+type VCSInfo struct {
+	Commit string // head commit hash
+	Date   string // commit time in YYYYMMDD format
+	Dirty  bool
+}
+
+// VCS returns version control information of the current executable.
+func VCS() (VCSInfo, bool) {
+	if gitCommit != "" {
+		// Use information set by the build script if present.
+		return VCSInfo{Commit: gitCommit, Date: gitDate}, true
+	}
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		if buildInfo.Main.Path == ourPath {
+			return buildInfoVCS(buildInfo)
+		}
+	}
+	return VCSInfo{}, false
+}
+
+// ClientName creates a software name/version identifier according to common
+// conventions in the Ethereum p2p network.
+func ClientName(clientIdentifier string) string {
+	git, _ := VCS()
+	return fmt.Sprintf("%s/v%v/%v-%v/%v",
+		strings.Title(clientIdentifier),
+		params.VersionWithCommit(git.Commit, git.Date),
+		runtime.GOOS, runtime.GOARCH,
+		runtime.Version(),
+	)
+}
 
 // runtimeInfo returns build and platform information about the current binary.
 //
@@ -40,20 +78,18 @@ func Info() (version, vcs string) {
 		return version, ""
 	}
 	version = versionInfo(buildInfo)
-	if status, ok := vcsInfo(buildInfo); ok {
+	if status, ok := VCS(); ok {
 		modified := ""
-		if status.modified {
+		if status.Dirty {
 			modified = " (dirty)"
 		}
-		vcs = status.revision + "-" + status.time + modified
+		commit := status.Commit
+		if len(commit) > 8 {
+			commit = commit[:8]
+		}
+		vcs = commit + "-" + status.Date + modified
 	}
 	return version, vcs
-}
-
-type gitStatus struct {
-	revision string
-	time     string
-	modified bool
 }
 
 // versionInfo returns version information for the currently executing

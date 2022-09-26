@@ -637,7 +637,7 @@ var (
 		Value:    strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
 		Category: flags.APICategory,
 	}
-	JWTSecretFlag = &cli.StringFlag{
+	JWTSecretFlag = &flags.DirectoryFlag{
 		Name:     "authrpc.jwtsecret",
 		Usage:    "Path to a JWT secret to use for authenticated RPC endpoints",
 		Category: flags.APICategory,
@@ -994,9 +994,7 @@ var (
 		KilnFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{
-		MainnetFlag,
-	}, TestnetFlags...)
+	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
 
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
@@ -1658,9 +1656,6 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
 	}
-	if ctx.IsSet(LegacyMinerGasTargetFlag.Name) {
-		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
-	}
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
@@ -2152,6 +2147,16 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	return chainDb
 }
 
+func IsNetworkPreset(ctx *cli.Context) bool {
+	for _, flag := range NetworkFlags {
+		bFlag, _ := flag.(*cli.BoolFlag)
+		if ctx.IsSet(bFlag.Name) {
+			return true
+		}
+	}
+	return false
+}
+
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
@@ -2207,6 +2212,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Data
 	if !ctx.Bool(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
 	}
+	// Disable snapshot generation/wiping by default
+	cache.SnapshotNoBuild = true
+
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
@@ -2215,7 +2223,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Data
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 
-	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
