@@ -18,9 +18,9 @@ package trie
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/common"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
