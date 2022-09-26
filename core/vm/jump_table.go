@@ -55,6 +55,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -76,6 +77,18 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	instructionSet[SENDALL] = &operation{
+		execute:     opSendAll,
+		constantGas: params.SelfdestructGasEIP150,
+		dynamicGas:  gasSelfdestructEIP3529,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	return newShanghaiInstructionSet()
 }
 
 func newMergeInstructionSet() JumpTable {
