@@ -56,14 +56,20 @@ type AccessWitness struct {
 	// Caches all the points that correspond to an address,
 	// so they are not recalculated.
 	addrToPoint map[string]*verkle.Point
+
+	// Caches which code chunks have been accessed, in order
+	// to reduce the number of times that GetTreeKeyCodeChunk
+	// is called.
+	CodeLocations map[string]map[uint64]struct{}
 }
 
 func NewAccessWitness() *AccessWitness {
 	return &AccessWitness{
-		Branches:     make(map[VerkleStem]Mode),
-		Chunks:       make(map[common.Hash]Mode),
-		InitialValue: make(map[string][]byte),
-		addrToPoint:  make(map[string]*verkle.Point),
+		Branches:      make(map[VerkleStem]Mode),
+		Chunks:        make(map[common.Hash]Mode),
+		InitialValue:  make(map[string][]byte),
+		addrToPoint:   make(map[string]*verkle.Point),
+		CodeLocations: make(map[string]map[uint64]struct{}),
 	}
 }
 
@@ -82,6 +88,31 @@ func (aw *AccessWitness) SetLeafValue(addr []byte, value []byte) {
 			aw.InitialValue[string(addr)] = aligned[:]
 		}
 	}
+}
+
+func (aw *AccessWitness) HasCodeChunk(addr []byte, chunknr uint64) bool {
+	if locs, ok := aw.CodeLocations[string(addr)]; ok {
+		if _, ok = locs[chunknr]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+// SetCodeLeafValue does the same thing as SetLeafValue, but for code chunks. It
+// maintains a cache of which (address, chunk) were calculated, in order to avoid
+// calling GetTreeKey more than once per chunk.
+func (aw *AccessWitness) SetCachedCodeChunk(addr []byte, chunknr uint64) {
+	if locs, ok := aw.CodeLocations[string(addr)]; ok {
+		if _, ok = locs[chunknr]; ok {
+			return
+		}
+	} else {
+		aw.CodeLocations[string(addr)] = map[uint64]struct{}{}
+	}
+
+	aw.CodeLocations[string(addr)][chunknr] = struct{}{}
 }
 
 func (aw *AccessWitness) touchAddressOnWrite(addr []byte) (bool, bool, bool) {

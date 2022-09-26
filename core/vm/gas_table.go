@@ -89,10 +89,10 @@ func memoryCopierGas(stackpos int) gasFunc {
 }
 
 var (
-	gasCallDataCopy        = memoryCopierGas(2)
-	gasCodeCopyStateful    = memoryCopierGas(2)
-	gasExtCodeCopyStateful = memoryCopierGas(3)
-	gasReturnDataCopy      = memoryCopierGas(2)
+	gasCallDataCopy   = memoryCopierGas(2)
+	gasCodeCopy       = memoryCopierGas(2)
+	gasExtCodeCopy    = memoryCopierGas(3)
+	gasReturnDataCopy = memoryCopierGas(2)
 )
 
 func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -104,56 +104,6 @@ func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	}
 
 	return usedGas, nil
-}
-
-func gasCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	var statelessGas uint64
-	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
-		var (
-			codeOffset = stack.Back(1)
-			length     = stack.Back(2)
-		)
-		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
-		if overflow {
-			uint64CodeOffset = 0xffffffffffffffff
-		}
-		uint64Length, overflow := length.Uint64WithOverflow()
-		if overflow {
-			uint64Length = 0xffffffffffffffff
-		}
-		_, offset, nonPaddedSize := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, uint64Length)
-		statelessGas = touchEachChunksOnReadAndChargeGas(offset, nonPaddedSize, contract.AddressPoint(), nil, evm.Accesses, contract.IsDeployment)
-	}
-	usedGas, err := gasCodeCopyStateful(evm, contract, stack, mem, memorySize)
-	return usedGas + statelessGas, err
-}
-
-func gasExtCodeCopy(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	var statelessGas uint64
-	if evm.chainConfig.IsCancun(evm.Context.BlockNumber) {
-		var (
-			codeOffset = stack.Back(2)
-			length     = stack.Back(3)
-			targetAddr = stack.Back(0).Bytes20()
-		)
-		uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
-		if overflow {
-			uint64CodeOffset = 0xffffffffffffffff
-		}
-		uint64Length, overflow := length.Uint64WithOverflow()
-		if overflow {
-			uint64Length = 0xffffffffffffffff
-		}
-		// note:  we must charge witness costs for the specified range regardless of whether it
-		// is in-bounds of the actual target account code.  This is because we must charge the cost
-		// before hitting the db to be able to now what the actual code size is.  This is different
-		// behavior from CODECOPY which only charges witness access costs for the part of the range
-		// which overlaps in the account code.  TODO: clarify this is desired behavior and amend the
-		// spec.
-		statelessGas = touchEachChunksOnReadAndChargeGasWithAddress(uint64CodeOffset, uint64Length, targetAddr[:], nil, evm.Accesses, contract.IsDeployment)
-	}
-	usedGas, err := gasExtCodeCopyStateful(evm, contract, stack, mem, memorySize)
-	return usedGas + statelessGas, err
 }
 
 func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {

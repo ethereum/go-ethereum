@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/gballet/go-verkle"
 	"github.com/holiman/uint256"
@@ -57,6 +58,7 @@ type Contract struct {
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
+	Chunks   trie.ChunkedCode
 	CodeHash common.Hash
 	CodeAddr *common.Address
 	Input    []byte
