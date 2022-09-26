@@ -19,6 +19,7 @@ package trie
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
