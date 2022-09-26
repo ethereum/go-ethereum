@@ -529,11 +529,6 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 					s.trie.TryUpdate(trieUtils.GetTreeKeyCodeChunkWithEvaluatedAddress(obj.pointEval, uint256.NewInt(uint64(i)/32)), chunks[i:i+32])
 				}
 			}
-		} else {
-			cs := []byte{0}
-			if err := s.trie.TryUpdate(trieUtils.GetTreeKeyCodeSize(addr[:]), cs); err != nil {
-				s.setError(fmt.Errorf("updateStateObject (%x) error: %w", addr[:], err))
-			}
 		}
 	}
 
