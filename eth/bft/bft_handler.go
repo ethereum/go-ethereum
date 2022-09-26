@@ -20,7 +20,7 @@ type broadcastSyncInfoFn func(*types.SyncInfo)
 type chainHeightFn func() uint64
 
 type Bfter struct {
-	gapNumber uint64
+	epoch uint64
 
 	blockChainReader consensus.ChainReader
 	broadcastCh      chan interface{}
@@ -59,8 +59,8 @@ func New(broadcasts BroadcastFns, blockChainReader *core.BlockChain, chainHeight
 }
 
 // Create this function to avoid massive test change
-func (b *Bfter) InitGapNumber() {
-	b.gapNumber = b.blockChainReader.Config().XDPoS.Gap
+func (b *Bfter) InitEpochNumber() {
+	b.epoch = b.blockChainReader.Config().XDPoS.Epoch
 }
 
 func (b *Bfter) SetConsensusFuns(engine consensus.Engine) {
@@ -113,7 +113,7 @@ func (b *Bfter) Timeout(peer string, timeout *types.Timeout) error {
 	log.Debug("Receive Timeout", "timeout", timeout)
 
 	gapNum := timeout.GapNumber
-	if dist := int64(gapNum) - int64(b.chainHeight()); dist < -int64(b.gapNumber)*2 || dist > int64(b.gapNumber)*2 { // times 2 is to avoid miscalculation on cross epoch case
+	if dist := int64(gapNum) - int64(b.chainHeight()); dist < -int64(b.epoch)*2 || dist > int64(b.epoch)*2 { // times 2 is to avoid cross epoch case, ex: timeout block between 901 to 1799, gapnumber is 450
 		log.Debug("Discarded propagated timeout, too far away", "peer", peer, "gapNumber", gapNum, "hash", timeout.Hash, "distance", dist)
 		return nil
 	}

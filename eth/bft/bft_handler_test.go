@@ -24,9 +24,9 @@ func makeVotes(n int) []types.Vote {
 	var votes []types.Vote
 	for i := 0; i < n; i++ {
 		votes = append(votes, types.Vote{
-			ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1)},
+			ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1350)},
 			Signature:         []byte{byte(i)},
-			GapNumber:         0,
+			GapNumber:         450,
 		})
 	}
 	return votes
@@ -44,12 +44,12 @@ func newTester() *bfterTester {
 	blockChain := &core.BlockChain{}
 	blockChain.SetConfig(params.TestXDPoSMockChainConfig)
 	chainHeight := func() uint64 {
-		return 1
+		return 1351
 	}
 
 	tester := &bfterTester{}
 	tester.bfter = New(broadcasts, blockChain, chainHeight)
-	tester.bfter.InitGapNumber()
+	tester.bfter.InitEpochNumber()
 	tester.bfter.SetConsensusFuns(testConsensus)
 	tester.bfter.broadcastCh = make(chan interface{})
 	tester.bfter.Start()
@@ -140,7 +140,7 @@ func TestBoardcastButNotProcessDisqualifiedVotes(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	vote := types.Vote{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1)}}
+	vote := types.Vote{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1350)}}
 	tester.bfter.Vote(peerID, &vote)
 
 	time.Sleep(50 * time.Millisecond)
@@ -194,7 +194,7 @@ func TestBoardcastButNotProcessDisqualifiedSyncInfo(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	syncInfo := types.SyncInfo{HighestQuorumCert: &types.QuorumCert{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1)}}}
+	syncInfo := types.SyncInfo{HighestQuorumCert: &types.QuorumCert{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1350)}}}
 	tester.bfter.SyncInfo(peerID, &syncInfo)
 
 	time.Sleep(50 * time.Millisecond)
@@ -281,7 +281,7 @@ func TestSyncInfoHandler(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	syncInfo := types.SyncInfo{HighestQuorumCert: &types.QuorumCert{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1)}}}
+	syncInfo := types.SyncInfo{HighestQuorumCert: &types.QuorumCert{ProposedBlockInfo: &types.BlockInfo{Number: big.NewInt(1350)}}}
 	tester.bfter.SyncInfo(peerID, &syncInfo)
 
 	time.Sleep(50 * time.Millisecond)
@@ -312,7 +312,7 @@ func TestTooFarVotes(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	tester.bfter.chainHeight = func() uint64 { return 100 }
+	tester.bfter.chainHeight = func() uint64 { return 10000 }
 
 	votes := makeVotes(numberVotes)
 	for _, vote := range votes {
@@ -349,7 +349,9 @@ func TestTooFarTimeout(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	timeoutMsg := &types.Timeout{GapNumber: 10000}
+	tester.bfter.chainHeight = func() uint64 { return 2400 }
+
+	timeoutMsg := &types.Timeout{GapNumber: 450}
 
 	err := tester.bfter.Timeout(peerID, timeoutMsg)
 	if err != nil {

@@ -256,7 +256,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	}
 	manager.bft = bft.New(broadcasts, blockchain, heighter)
 	if blockchain.Config().XDPoS != nil {
-		manager.bft.InitGapNumber()
+		manager.bft.InitEpochNumber()
 		manager.bft.SetConsensusFuns(engine)
 	}
 
