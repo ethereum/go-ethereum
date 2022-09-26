@@ -3,25 +3,21 @@ title: Connecting To The Network
 sort_key: B
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). Command line flags are provided for connecting to the popular public testnets:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simpyl by passing:
 
-- `--ropsten`, Ropsten proof-of-work test network
-- `--rinkeby`, Rinkeby proof-of-authority test network
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
 
-Providing these flags at startup instructs Geth to connect to the specific public testnet instead of Ethereum Mainnet. Because these are public testnets that have been running for several years, Geth has to download the historical blockchain data from genesis, just the same as for Ethereum Mainnet.
+These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/interface/consensus-clients.md) page.
 
-**Note:** network selection is not persisted in the config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
+**Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
 ```shell 
-
 # Generate desired config file. You must specify testnet here.
 geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
 
 # Start geth with given config file. Here too the testnet must be specified.
 geth --goerli --config goerli.toml
-
 ```
 
 ## Finding peers
@@ -31,13 +27,10 @@ Geth continuously attempts to connect to other nodes on the network until it has
 A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnode` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
 
 ```shell
-
 geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pubkey3@ip3:port3
-
 ```
 
 There are scenarios where disabling the discovery process is useful, for example for running a local test node or an experimental test network with known, fixed nodes. This can be achieved by passing the `--nodiscover` flag to Geth at startup.
-
 
 ## Connectivity problems
 
@@ -47,7 +40,7 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - Some firewall configurations can prohibit UDP traffic. The static nodes feature or `admin.addPeer()` on the console can be used to configure connections manually.
 
-- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode.
+- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
@@ -58,13 +51,11 @@ The `net` module has two attributes that enable checking node connectivity from 
 
 
 ```javascript
-
 > net.listening
 true
 
 > net.peerCount
 4
-
 ```
 
 Functions in the `admin` module provide more information about the connected peers, including their IP address, port number, supported protocols etc. Calling `admin.peers` returns this information for all connected peers.
@@ -147,9 +138,7 @@ admin.addPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8
 It is sometimes desirable to cap the number of peers Geth will connect to in order to limit on the computational and bandwidth cost associated with running a node. By default, the limit is 50 peers, however, this can be updated by passing a value to `--maxpeers`:
 
 ```shell
-
 geth <otherflags> --maxpeers 15
-
 ```
 
 ## Trusted nodes
@@ -162,7 +151,6 @@ Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript con
 admin.addTrustedPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
 ```
 
-
 ## Summary
 
-Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks.
+Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks. Remember that to connect to a proof-of-stake network (e.g. Ethereum Mainnet, Goerli, Sepolia) a consensus client is also required.
