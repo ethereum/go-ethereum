@@ -88,7 +88,7 @@ func newShanghaiInstructionSet() JumpTable {
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
 	}
-	return newShanghaiInstructionSet()
+	return instructionSet
 }
 
 func newMergeInstructionSet() JumpTable {
