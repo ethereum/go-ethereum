@@ -14,15 +14,15 @@ for a full node). Between the initial sync block and the 128 most recent blocks,
 checkpoints that can be used to rebuild the state on-the-fly. This means transactions can be traced back as 
 far as the block that was used for the initial sync. Tracing a single transaction requires reexecuting all 
 preceding transactions in the same block **and** all preceding blocks until the previous stored snapshot. 
-Snap-sync'd nodes are therefore functionally equal to full nodes, but the initial synchronization required 
+Snap-sync'd nodes are therefore full nodes, with the only difference being the initial synchronization required 
 a checkpoint block to sync from instead of independently verifying the chain all the way from genesis. 
 Snap sync then only verifies the proof-of-work and ancestor-child block progression and assumes that the 
 state transitions are correct rather than re-executing the transactions in each block to verify the state 
-changes. Snap sync is much faster than full sync. To start a node with snap sync pass `--syncmode snap` at 
+changes. Snap sync is much faster than block-by-block sync. To start a node with snap sync pass `--syncmode snap` at 
 startup.
 
 Snap sync starts by downloading the headers for a chunk of blocks. Once the headers have been verified, the block
-bodies and receipts for those blocks are downloaded. Next, state sync begins. In state-sync, Geth first downloads the 
+bodies and receipts for those blocks are downloaded. In parallel, Geth also sync begins state-sync. In state-sync, Geth first downloads the 
 leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is 
 then regenerated locally. The state download is the part of the snap-sync that takes the most time to complete 
 and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also 
@@ -34,12 +34,9 @@ There are some hardware factors that determine the speed of the state healing (s
 connection) and also the total gas used in each block (more gas means more changes to the state that have to be 
 handled).
 
-In summary, snap sync progresses in the following sequence:
-
+To summarize, snap sync progresses in the following sequence:
 - download and verify headers
-- download block bodies and receipts
-- download raw state data
-- regenerate state trie
+- download block bodies and receipts.In parallel, download raw state data and build state trie
 - heal state trie to account for newly arriving data
 
 **Note** Snap sync is the default behaviour, so if the `--syncmode` value is not passed to Geth at startup, 
@@ -66,7 +63,7 @@ garbage collection so that old data is never deleted: `geth --syncmode full --gc
 
 It is also possible to create a partial/recent archive node where the node was synced using `snap` but the state 
 is never pruned. This creates an archive node that saves all state data from the point that the node first syncs. 
-This is configured by starting Geth with `--syncmode snap gcmode archive`.
+This is configured by starting Geth with `--syncmode snap --gcmode archive`.
 
 ## Light nodes
 
