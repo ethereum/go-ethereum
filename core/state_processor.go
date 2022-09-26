@@ -17,23 +17,24 @@
 package core
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -199,8 +200,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
-	// Create call tracer to get JSON stack traces
-	tracer := NewCallTracer(statedb)
+	tracer := NewtxnOpCodeTracer(statedb)
 
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
@@ -208,74 +208,15 @@ func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainCont
 	return applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, tracer)
 }
 
-// StructLogRes stores a structured log emitted by the EVM while replaying a
-// transaction in debug mode
-type StructLogRes struct {
-	Pc      uint64             `json:"pc"`
-	Op      string             `json:"op"`
-	Gas     uint64             `json:"gas"`
-	GasCost uint64             `json:"gasCost"`
-	Depth   int                `json:"depth"`
-	Error   string             `json:"error,omitempty"`
-	Stack   *[]string          `json:"stack,omitempty"`
-	Memory  *[]string          `json:"memory,omitempty"`
-	Storage *map[string]string `json:"storage,omitempty"`
-}
+// The below is a copy from "eth/tracers/native/txnOpCodeTracer.go" to solve  acurrent circular dependency, this is tech debt to remove
+// In the future we would like to call something similar to "tracer, err := tracers.New("newtxnOpCodeTracer", nil, nil)"
 
-// FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []logger.StructLog) []StructLogRes {
-	formatted := make([]StructLogRes, len(logs))
-	for index, trace := range logs {
-		formatted[index] = StructLogRes{
-			Pc:      trace.Pc,
-			Op:      trace.Op.String(),
-			Gas:     trace.Gas,
-			GasCost: trace.GasCost,
-			Depth:   trace.Depth,
-			Error:   trace.ErrorString(),
-		}
-		if trace.Stack != nil {
-			stack := make([]string, len(trace.Stack))
-			for i, stackValue := range trace.Stack {
-				stack[i] = stackValue.Hex()
-			}
-			formatted[index].Stack = &stack
-		}
-		if trace.Memory != nil {
-			memory := make([]string, 0, (len(trace.Memory)+31)/32)
-			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
-			}
-			formatted[index].Memory = &memory
-		}
-		if trace.Storage != nil {
-			storage := make(map[string]string)
-			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
-			}
-			formatted[index].Storage = &storage
-		}
-	}
-	return formatted
-}
-
-type call struct {
-	Type      string         `json:"type"`
-	From      common.Address `json:"from"`
-	To        common.Address `json:"to"`
-	Value     *hexutil.Big   `json:"value,omitempty"`
-	Gas       hexutil.Uint64 `json:"gas"`
-	GasUsed   hexutil.Uint64 `json:"gasUsed"`
-	Input     hexutil.Bytes  `json:"input"`
-	Output    hexutil.Bytes  `json:"output"`
-	Time      string         `json:"time,omitempty"`
-	Calls     []*call        `json:"calls,omitempty"`
-	Error     string         `json:"error,omitempty"`
-	startTime time.Time
-	outOff    uint64
-	outLen    uint64
-	gasIn     uint64
-	gasCost   uint64
+type txnOpCodeTracer struct {
+	env       *vm.EVM              // EVM context for execution of transaction to occur within
+	callStack []common.CallFrameBN // Data structure for op codes making up our trace
+	interrupt uint32               // Atomic flag to signal execution interruption
+	reason    error                // Textual reason for the interruption (not always specific for us)
+	statedb   *state.StateDB
 }
 
 type TracerResult interface {
@@ -283,167 +224,125 @@ type TracerResult interface {
 	GetResult() (json.RawMessage, error)
 }
 
-type CallTracer struct {
-	callStack []*call
-	descended bool
-	statedb   *state.StateDB
+func NewtxnOpCodeTracer(statedb *state.StateDB) TracerResult {
+	return &txnOpCodeTracer{callStack: make([]common.CallFrameBN, 1), statedb: statedb}
 }
 
-func NewCallTracer(statedb *state.StateDB) TracerResult {
-	return &CallTracer{
-		callStack: []*call{},
-		descended: false,
-		statedb:   statedb,
+func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
+	res, err := json.Marshal(t.callStack[0])
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(res), t.reason
+}
+
+func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.env = env
+	t.callStack[0] = common.CallFrameBN{
+		Type:  "CALL",
+		From:  addrToHex(from),
+		To:    addrToHex(to),
+		Input: bytesToHex(input),
+		Gas:   uintToHex(gas),
+		Value: bigToHex(value),
+	}
+	if create {
+		t.callStack[0].Type = "CREATE"
 	}
 }
 
-func (tracer *CallTracer) i() int {
-	return len(tracer.callStack) - 1
+// CaptureEnd is called after the call finishes to finalize the tracing.
+func (t *txnOpCodeTracer) CaptureEnd(output []byte, gasUsed uint64, time time.Duration, err error) {
+	t.callStack[0].GasUsed = uintToHex(gasUsed)
+	t.callStack[0].Time = fmt.Sprintf("%v", time)
+	if err != nil {
+		t.callStack[0].Error = err.Error()
+		if err.Error() == "execution reverted" && len(output) > 0 {
+			t.callStack[0].Output = bytesToHex(output)
+			revertReason, _ := abi.UnpackRevert(output)
+			t.callStack[0].ErrorReason = revertReason
+		}
+	} else {
+		t.callStack[0].Output = bytesToHex(output)
+	}
 }
 
-func (tracer *CallTracer) GetResult() (json.RawMessage, error) {
-	res, err := json.Marshal(tracer.callStack[0])
-	return json.RawMessage(res), err
-}
-
-func (tracer *CallTracer) CaptureStart(evm *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	hvalue := hexutil.Big(*value)
-	tracer.callStack = []*call{&call{
-		From:  from,
-		To:    to,
-		Value: &hvalue,
-		Gas:   hexutil.Uint64(gas),
-		Input: hexutil.Bytes(input),
-		Calls: []*call{},
-	}}
-}
-func (tracer *CallTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
-	tracer.callStack[tracer.i()].GasUsed = hexutil.Uint64(gasUsed)
-	tracer.callStack[tracer.i()].Time = fmt.Sprintf("%v", t)
-	tracer.callStack[tracer.i()].Output = hexutil.Bytes(output)
-}
-
-func (tracer *CallTracer) descend(newCall *call) {
-	tracer.callStack[tracer.i()].Calls = append(tracer.callStack[tracer.i()].Calls, newCall)
-	tracer.callStack = append(tracer.callStack, newCall)
-	tracer.descended = true
-}
-
-func toAddress(value *uint256.Int) common.Address {
-	return common.BytesToAddress(value.Bytes())
-}
-
-func (tracer *CallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// for depth < len(tracer.callStack) {
-	//   c := tracer.callStack[tracer.i()]
-	//   c.GasUsed = c.Gas - gas
-	//   tracer.callStack = tracer.callStack[:tracer.i()]
-	// }
+func (t *txnOpCodeTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			tracer.callStack[tracer.i()].Error = "internal failure"
+			t.callStack[depth].Error = "internal failure"
 			log.Warn("Panic during trace. Recovered.", "err", r)
 		}
 	}()
-	if op == vm.CREATE || op == vm.CREATE2 {
-		inOff := scope.Stack.Back(1).Uint64()
-		inLen := scope.Stack.Back(2).Uint64()
-		hvalue := hexutil.Big(*scope.Contract.Value())
-		tracer.descend(&call{
-			Type:      op.String(),
-			From:      scope.Contract.Caller(),
-			Input:     scope.Memory.GetCopy(int64(inOff), int64(inLen)),
-			gasIn:     gas,
-			gasCost:   cost,
-			Value:     &hvalue,
-			startTime: time.Now(),
-		})
-		return
-	}
-	if op == vm.SELFDESTRUCT {
-		hvalue := hexutil.Big(*tracer.statedb.GetBalance(scope.Contract.Caller()))
-		tracer.descend(&call{
-			Type: op.String(),
-			From: scope.Contract.Caller(),
-			To:   toAddress(scope.Stack.Back(0)),
-			// TODO: Is this input correct?
-			Input:     scope.Contract.Input,
-			Value:     &hvalue,
-			gasIn:     gas,
-			gasCost:   cost,
-			startTime: time.Now(),
-		})
-		return
-	}
-	if op == vm.CALL || op == vm.CALLCODE || op == vm.DELEGATECALL || op == vm.STATICCALL {
-		toAddress := toAddress(scope.Stack.Back(1))
-		if _, isPrecompile := vm.PrecompiledContractsIstanbul[toAddress]; isPrecompile {
-			return
-		}
-		off := 1
-		if op == vm.DELEGATECALL || op == vm.STATICCALL {
-			off = 0
-		}
-		inOff := scope.Stack.Back(2 + off).Uint64()
-		inLength := scope.Stack.Back(3 + off).Uint64()
-		newCall := &call{
-			Type:      op.String(),
-			From:      scope.Contract.Address(),
-			To:        toAddress,
-			Input:     scope.Memory.GetCopy(int64(inOff), int64(inLength)),
-			gasIn:     gas,
-			gasCost:   cost,
-			outOff:    scope.Stack.Back(4 + off).Uint64(),
-			outLen:    scope.Stack.Back(5 + off).Uint64(),
-			startTime: time.Now(),
-		}
-		if off == 1 {
-			value := hexutil.Big(*new(big.Int).SetBytes(scope.Stack.Back(2).Bytes()))
-			newCall.Value = &value
-		}
-		tracer.descend(newCall)
-		return
-	}
-	if tracer.descended {
-		if depth >= len(tracer.callStack) {
-			tracer.callStack[tracer.i()].Gas = hexutil.Uint64(gas)
-		}
-		tracer.descended = false
-	}
-	if op == vm.REVERT {
-		tracer.callStack[tracer.i()].Error = "execution reverted"
-		return
-	}
-	if depth == len(tracer.callStack)-1 {
-		c := tracer.callStack[tracer.i()]
-		// c.Time = fmt.Sprintf("%v", time.Since(c.startTime))
-		tracer.callStack = tracer.callStack[:len(tracer.callStack)-1]
-		if vm.StringToOp(c.Type) == vm.CREATE || vm.StringToOp(c.Type) == vm.CREATE2 {
-			c.GasUsed = hexutil.Uint64(c.gasIn - c.gasCost - gas)
-			ret := scope.Stack.Back(0)
-			if ret.Uint64() != 0 {
-				c.To = common.BytesToAddress(ret.Bytes())
-				c.Output = tracer.statedb.GetCode(c.To)
-			} else if c.Error == "" {
-				c.Error = "internal failure"
-			}
-		} else {
-			c.GasUsed = hexutil.Uint64(c.gasIn - c.gasCost + uint64(c.Gas) - gas)
-			ret := scope.Stack.Back(0)
-			if ret.Uint64() != 0 {
-				c.Output = hexutil.Bytes(scope.Memory.GetCopy(int64(c.outOff), int64(c.outLen)))
-			} else if c.Error == "" {
-				c.Error = "internal failure"
-			}
-		}
-	}
-	return
 }
-func (tracer *CallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.ScopeContext, depth int, err error) {
+
+func (t *txnOpCodeTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
 }
-func (tracer *CallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+
+func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if atomic.LoadUint32(&t.interrupt) > 0 {
+		t.env.Cancel()
+		return
+	}
+	call := common.CallFrameBN{
+		Type:  typ.String(),
+		From:  addrToHex(from),
+		To:    addrToHex(to),
+		Input: bytesToHex(input),
+		Gas:   uintToHex(gas),
+		Value: bigToHex(value),
+	}
+	t.callStack = append(t.callStack, call)
 }
-func (tracer *CallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
-func (tracer *CallTracer) CaptureTxEnd(restGas uint64) {}
-func (tracer *CallTracer) CaptureTxStart(gasLimit uint64) {}
-func (tracer *CallTracer) Stop(err error) {}
+
+func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+
+	size := len(t.callStack)
+	if size <= 1 {
+		return
+	}
+	// pop call
+	call := t.callStack[size-1]
+	t.callStack = t.callStack[:size-1]
+	size -= 1
+
+	call.GasUsed = uintToHex(gasUsed)
+	if err == nil {
+		call.Output = bytesToHex(output)
+	} else {
+		call.Error = err.Error()
+		if call.Type == "CREATE" || call.Type == "CREATE2" {
+			call.To = ""
+		}
+	}
+	t.callStack[size-1].Calls = append(t.callStack[size-1].Calls, call)
+}
+
+func (*txnOpCodeTracer) CaptureTxStart(gasLimit uint64) {
+}
+
+func (*txnOpCodeTracer) CaptureTxEnd(restGas uint64) {}
+
+func (t *txnOpCodeTracer) Stop(err error) {
+	t.reason = err
+	atomic.StoreUint32(&t.interrupt, 1)
+}
+
+func bytesToHex(s []byte) string {
+	return "0x" + common.Bytes2Hex(s)
+}
+
+func bigToHex(n *big.Int) string {
+	if n == nil {
+		return ""
+	}
+	return "0x" + n.Text(16)
+}
+
+func uintToHex(n uint64) string {
+	return "0x" + strconv.FormatUint(n, 16)
+}
+
+func addrToHex(a common.Address) string {
+	return strings.ToLower(a.Hex())
+}

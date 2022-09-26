@@ -18,45 +18,22 @@ func init() {
 	register("txnOpCodeTracer", newtxnOpCodeTracer)
 }
 
-type callFrameBN struct {
-	Type        string        `json:"type"`
-	From        string        `json:"from"`
-	To          string        `json:"to,omitempty"`
-	Value       string        `json:"value,omitempty"`
-	Gas         string        `json:"gas"`
-	GasUsed     string        `json:"gasUsed"`
-	Input       string        `json:"input"`
-	Output      string        `json:"output,omitempty"`
-	Error       string        `json:"error,omitempty"`
-	ErrorReason string        `json:"errorReason,omitempty"`
-	Calls       []callFrameBN `json:"calls,omitempty"`
-
-	// Added fields from 'callFrame' in 'call.go'
-	gasIn   uint64
-	gasCost uint64
-	Time    string `json:"time,omitempty"`
-
-	// TODO: Investigate precompiles usage, could reduce latency as they are "those are just fancy opcodes" - 4byte.go
-	// activePrecompiles []common.Address // Updated on CaptureStart based on given rules
-
-}
-
 // txnOpCodeTracer is a go implementation of the Tracer interface which
 // only returns a restricted trace of a transaction consisting of transaction
 // op codes and relevant gas data.
 // This is intended for Blocknative usage.
 type txnOpCodeTracer struct {
-	env       *vm.EVM       // EVM context for execution of transaction to occur within
-	callStack []callFrameBN // Data structure for op codes making up our trace
-	interrupt uint32        // Atomic flag to signal execution interruption
-	reason    error         // Textual reason for the interruption (not always specific for us)
+	env       *vm.EVM              // EVM context for execution of transaction to occur within
+	callStack []common.CallFrameBN // Data structure for op codes making up our trace
+	interrupt uint32               // Atomic flag to signal execution interruption
+	reason    error                // Textual reason for the interruption (not always specific for us)
 }
 
 // newtxnOpCodeTracer returns a new txnOpCodeTracer tracer.
 func newtxnOpCodeTracer(ctx *tracers.Context, ctor json.RawMessage) (tracers.Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &txnOpCodeTracer{callStack: make([]callFrameBN, 1)}, nil
+	return &txnOpCodeTracer{callStack: make([]common.CallFrameBN, 1)}, nil
 }
 
 // GetResult returns an empty json object.
@@ -81,7 +58,7 @@ func (t *txnOpCodeTracer) GetResult() (json.RawMessage, error) {
 func (t *txnOpCodeTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	// This is the initial call
-	t.callStack[0] = callFrameBN{
+	t.callStack[0] = common.CallFrameBN{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
@@ -153,7 +130,7 @@ func (t *txnOpCodeTracer) CaptureEnter(typ vm.OpCode, from common.Address, to co
 	}
 
 	// Apart from the starting call detected by CaptureStart, here we track every new transaction opcode
-	call := callFrameBN{
+	call := common.CallFrameBN{
 		Type:  typ.String(),
 		From:  addrToHex(from),
 		To:    addrToHex(to),

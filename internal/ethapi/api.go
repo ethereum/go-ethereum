@@ -2063,7 +2063,6 @@ type CallBundleArgs struct {
 	BaseFee    *big.Int          `json:"baseFee"`
 }
 
-//
 // CallBundle will simulate a bundle of transactions on top of
 // the most recent block. Partially follows flashbots spec v0.5.
 func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
@@ -2073,18 +2072,24 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
+	// Start a timeout trigger for the execution
 	timeoutMilliSeconds := int64(5000)
 	if args.Timeout != nil {
 		timeoutMilliSeconds = *args.Timeout
 	}
 	timeout := time.Millisecond * time.Duration(timeoutMilliSeconds)
+
+	// Get state at current block number
+	// If we want the "pending" blocknumber we would call rpc.BlockNumber(-2)
 	blockNumberRPC := rpc.BlockNumber(-1)
 	state, parent, err := s.b.StateAndHeaderByNumber(ctx, blockNumberRPC)
 
+	// Exit if we cannot find the requested state to use
 	if state == nil || err != nil {
 		return nil, err
 	}
 
+	// Configure defaults for processing a state
 	timestamp := parent.Time + 1
 	if args.Timestamp != nil {
 		timestamp = *args.Timestamp
@@ -2102,9 +2107,10 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		gasLimit = *args.GasLimit
 	}
 	var baseFee *big.Int
-	// Assume bn simulaton occur after london hardfork
 
 	baseFee = misc.CalcBaseFee(s.b.ChainConfig(), parent)
+
+	// Create a block header for our wanted block
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     big.NewInt(parent.Number.Int64()),
@@ -2114,6 +2120,7 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		Coinbase:   coinbase,
 		BaseFee:    baseFee,
 	}
+
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -2126,20 +2133,24 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
+	// Create a vmconfig with no options, we add the trcer later
 	vmconfig := vm.Config{}
 
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 
+	// Create a results structure for returning array of trace results
 	results := []map[string]interface{}{}
 
+	// Init gasFees variabel
 	var totalGasUsed uint64
 	gasFees := new(big.Int)
 
 	// RPC Call gas cap
 	globalGasCap := s.b.RPCGasCap()
 
+	// Now we iterate through argument transactions and apply each message to state and collect trace results as they happen
 	for i, tx := range args.Txs {
 		// Since its a txCall we'll just prepare the
 		// state with a random hash
@@ -2148,11 +2159,13 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 		// New random hash since its a call
 		state.Prepare(randomHash, i)
 
+		// Convert the transaction into a "Message type" which the core evm can understand
 		msg, err := tx.ToMessage(globalGasCap, header.BaseFee)
 		if err != nil {
 			return nil, err
 		}
 
+		// Apply transaction to state and collect traceResult
 		receipt, result, traceResult, err := core.ApplyUnsignedTransactionWithResult(s.b.ChainConfig(), s.chain, &coinbase, gp, state, header, msg, &header.GasUsed, vmconfig)
 		if err != nil {
 			return nil, fmt.Errorf("err: %w; txhash %s", err, tx.From)
