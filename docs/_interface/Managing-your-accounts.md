@@ -1,48 +1,22 @@
 ---
-title: Managing Your Accounts
-sort_key: B
+title: Account Management
+sort_key: C
 ---
 
-**WARNING**
-Remember your password. 
+It is recommended to use the external key manager Clef for interacting with Geth because it can be run from secure external devices and has additional security benefits such as the ability to sign transactions according to custom rules. Instructions for setting up and using Clef can be found on the [Clef page](../clef/tutorial). However, Geth also has its own built-in account management tools that are more convenient and secure enough for many use-cases. This page will describe how to manage accounts using Geth's built in tools. The command line is considered first and then managing accounts from the Javascript console is considered in a [separate section](#accounts-in-the-javascript-console).
 
-If you lose the password you use to encrypt your account, you will not be able to access that account.
-Repeat: It is NOT possible to access your account without a password and there is no _forgot my password_ option here. Do not forget it.
 
-The ethereum CLI `geth` provides account management via the `account` command:
+## Account command
+
+Interacting with accounts is achieved using Geth's `account` command:
 
 ```
-$ geth account <command> [options...] [arguments...]
+geth account <command> [options...] [arguments...]
 ```
 
-Manage accounts lets you create new accounts, list all existing accounts, import a private
-key into a new account, migrate to newest key format and change your password.
+The account command enables the user to create new accounts, list existing accounts, import private keys into a new account, update key formats and update the passwords that lock each account. In interactive mode, the user is prompted for passwords in the console when the `account` functions are invoked, whereas in non-interactive mode passwords to unlock accounts are saved to text files whose path is passed to Geth at startup. Non-interactive mode is only intended for use on private networks or known safe environments.
 
-It supports interactive mode, when you are prompted for password as well as
-non-interactive mode where passwords are supplied via a given password file.
-Non-interactive mode is only meant for scripted use on test networks or known safe
-environments.
-
-Make sure you remember the password you gave when creating a new account (with new, update
-or import). Without it you are not able to unlock your account.
-
-Note that exporting your key in unencrypted format is NOT supported.
-
-Keys are stored under `<DATADIR>/keystore`. Make sure you backup your keys regularly! See
-[DATADIR backup & restore](../install-and-build/backup-restore)
-for more information. If a custom datadir and keystore option are given the keystore
-option takes preference over the datadir option.
-
-The newest format of the keyfiles is: `UTC--<created_at UTC ISO8601>--<address hex>`. The
-order of accounts when listing, is lexicographic, but as a consequence of the timestamp
-format, it is actually order of creation
-
-It is safe to transfer the entire directory or the individual keys therein between
-ethereum nodes. Note that in case you are adding keys to your node from a different node,
-the order of accounts may change. So make sure you do not rely or change the index in your
-scripts or code snippets.
-
-And again. **DO NOT FORGET YOUR PASSWORD**
+The `account` subcommands are: 
 
 ```
 COMMANDS:
@@ -52,7 +26,8 @@ COMMANDS:
      import  Import a private key into a new account
 ```
 
-You can get info about subcommands by `geth account <command> --help`.
+Information about the subcommands can be displayed in the terminal using `geth account <command> --help`. For example, for the `list` subcommand:
+
 ```
 $ geth account list --help
 list [command options] [arguments...]
@@ -60,49 +35,110 @@ list [command options] [arguments...]
 Print a short summary of all accounts
 
 OPTIONS:
-  --datadir "/home/bas/.ethereum"  Data directory for the databases and keystore
-  --keystore                       Directory for the keystore (default = inside the datadir)
+  --datadir "/home/.ethereum"  Data directory for the databases and keystore
+  --keystore                   Directory for the keystore (default = inside the datadir)
 ```
 
-Accounts can also be managed via the [Javascript Console](../interface/javascript-console)
 
-## Examples
-### Interactive use
+## Creating new accounts
 
-#### creating an account 
+New accounts can be created using `account new`. This generates a new key pair and adds them to the `keystore` directory in the `datadir`.  To create a new account in the default data directory:
 
-```
+
+```shell
 $ geth account new
+```
+
+This returns the following to the terminal:
+
+```terminal
 Your new account is locked with a password. Please give a password. Do not forget this password.
 Passphrase:
 Repeat Passphrase:
 Address: {168bc315a2ee09042d83d7c5811b533620531f67}
 ```
 
-#### Listing accounts in a custom keystore directory
+It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
+{% include note.html content=" If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**" %}
+
+The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
+
+`UTC--2022-05-19T12-34-36.47413510Z--0b85e5a13e118466159b1e1b6a4234e5f9f784bb`
+
+
+## Listing Accounts
+
+Listing all existing accounts is achieved using the `account list` command. If the keystore is located anywhere other than the default location its path should be included with the `keystore` flag. For example, if the datadir is `some-dir`:
+
+```shell
+geth account list --keystore some-dir/keystore
 ```
-$ geth account list --keystore /tmp/mykeystore/
-Account #0: {5afdd78bdacb56ab1dad28741ea2a0e47fe41331} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-27.437847599Z--5afdd78bdacb56ab1dad28741ea2a0e47fe41331
-Account #1: {9acb9ff906641a434803efb474c96a837756287f} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-52.180688336Z--9acb9ff906641a434803efb474c96a837756287f
 
+This command returns the following to the terminal for a keystore with two files:
+
+```terminal
+Account 0: {5afdd78bdacb56ab1dad28741ea2a0e47fe41331} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-27.437847599Z--5afdd78bdacb56ab1dad28741ea2a0e47fe41331
+Account 1: {9acb9ff906641a434803efb474c96a837756287f} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-52.180688336Z--9acb9ff906641a434803efb474c96a837756287f
 ```
 
-#### Import private key into a node with a custom datadir
+The ordering of accounts when they are listed is lexicographic, but is effectively chronological based on time of creation due to the timestamp in the file name. It is safe to transfer the entire `keystore` directory or individual key files between Ethereum nodes. This is important because when accounts are added from other nodes the order of accounts in the keystore may change. It is therefore important not to rely on account indexes in scripts or code snippets.
 
+
+## Importing accounts
+
+### Import a keyfile
+
+It is also possible to create a new account by importing a private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. Geth requires the private key to be stored as a file which contains the private key as unencrypted canonical elliptic curve bytes encoded into hex (i.e. plain text key without leading 0x). The new account is then saved in encrypted format, protected by a passphrase the user provides on request. As always, this passphrase must be securely and safely backed up - there is no way to retrieve or reset it if it is forgotten!
+
+```shell
+$ geth account import --datadir /some-dir ./keyfile
 ```
-$ geth account import --datadir /someOtherEthDataDir ./key.prv
-The new account will be encrypted with a passphrase.
+
+The following information will be displayed in the terminal, indicating a successful import:
+
+```terminal
 Please enter a passphrase now.
 Passphrase:
 Repeat Passphrase:
 Address: {7f444580bfef4b9bc7e14eb7fb2a029336b07c9d}
 ```
 
-#### Account update
+This import/export process is not necessary for transferring accounts between Geth instances because the key files can simply be copied directly from one keystore to another.
 
+It is also possible to import an account in non-interactive mode by saving the account password as plaintext in a `.txt` file and passing its path with the `--password` flag on startup. 
+
+```shell
+geth account import --password path/password.txt path/keyfile
 ```
-$ geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b
+In this case, it is important to ensure the password file is not readable by anyone but the intended user. This can be achieved by changing the file permissions. On Linux, the following commands update the file permissions so only the current user has access:
+
+```shell
+chmod 700 /path/to/password
+cat > /path/to/password
+<type password here>
+```
+
+### Import a presale wallet
+
+Assuming the password is known, importing a presale wallet is very easy. The `wallet import` commands are used, passing the path to the wallet.
+
+```shell
+geth wallet import /path/presale.wallet
+```
+
+
+## Updating accounts
+
+The `account update` subcommand is used to unlock an account and migrate it to the newest format. This is useful for accounts that may have been created in a format that has since been deprecated. The same command can be used to update the account password. The current password and account address are needed in order to update the account, as follows:
+
+```shell
+geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b
+```
+
+The following will be returned to the terminal:
+
+```terminal
 Unlocking account a94f5374fce5edbc8e2a8697c15331677e6ebf0b | Attempt 1/3
 Passphrase:
 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
@@ -113,240 +149,110 @@ Repeat Passphrase:
 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
 ```
 
-### Non-interactive use 
+Alternatively, in non-interactive mode the path to a password file containing the account password in unencrypted plaintext can be passed with the `--password` flag:
 
-You supply a plaintext password file as argument to the `--password` flag. The data in the
-file consists of the raw characters of the password, followed by a single newline.
-
-**Note**: Supplying the password directly as part of the command line is not recommended,
-but you can always use shell trickery to get round this restriction.
-
-```
-$ geth account new --password /path/to/password 
-
-$ geth account import  --datadir /someOtherEthDataDir --password /path/to/anotherpassword ./key.prv
+```shell
+geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/password.txt
 ```
 
-# Creating accounts
+Updating the account replaces the original file with a new one - this means the original file is no longer available after it has been updated.
 
-## Creating a new account
 
-```
-$ geth account new
-$ geth account new --password /path/to/passwdfile
-$ geth account new --password <(echo $mypassword)
+## Unlocking accounts
 
-```
+In Geth, accounts are locked unless they are explicitly unlocked. If an account is intended to be used by apps connecting to Geth via RPC then it can be unlocked in non-interactive mode by passing the `--unlock` flag with a comma-separated list of account addresses (or keystore indexes) to unlock. This unlocks the accounts for one session only. Including the `--unlock` flag without any account addresses defaults to unlocking the first account in the keystore. 
 
-Creates a new account and prints the address.
-
-On the console, use:
-
-```
-> personal.newAccount()
-... you will be prompted for a password ...
-
-or
-
-> personal.newAccount("passphrase")
-
+```shell
+geth <other commands> --unlock 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
 ```
 
-The account is saved in encrypted format. You **must** remember this passphrase to unlock
-your account in the future.
+Geth will start and prompt the user to input the account password in the terminal. Alternatively, the user can provide a password as a text file and pass its path to `--password`:
 
-For non-interactive use the passphrase can be specified with the `--password` flag:
-
-```
-geth account new --password <passwordfile> 
+```shell
+geth <other commands> --unlock 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/password.txt
 ```
 
-Note, this is meant to be used for testing only, it is a bad idea to save your
-password to file or expose in any other way.
+{% include note.html content=" By default, account **unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
 
-## Creating an account by importing a private key
 
-```
-    geth account import <keyfile>
-```
+## Accounts in the Javascript console
 
-Imports an unencrypted private key from `<keyfile>` and creates a new account and prints
-the address.
+Account management can also be achieved in the Javascript console attached to a running Geth instance. Assuming Geth is already running, in a new terminal attach a Javascript console using the `geth.ipc` file. This file can be found in the data directory. Assuming the data directory is named `data` the console can be started using:
 
-The keyfile is assumed to contain an unencrypted private key as canonical EC raw bytes
-encoded into hex.
-
-The account is saved in encrypted format, you are prompted for a passphrase.
-
-You must remember this passphrase to unlock your account in the future.
-
-For non-interactive use the passphrase can be specified with the `--password` flag:
-
-```
-geth account import --password <passwordfile> <keyfile>
+```shell
+geth attach data/geth.ipc
 ```
 
-**Note**: Since you can directly copy your encrypted accounts to another ethereum
-instance, this import/export mechanism is not needed when you transfer an account between
-nodes.
+### New accounts
 
-**Warning:** when you copy keys into an existing node's keystore, the order of accounts
-you are used to may change. Therefore you make sure you either do not rely on the account
-order or doublecheck and update the indexes used in your scripts.
+New accounts can be generated using the Javascript console using `personal.newAccount()`. A new password is requested in the console and successful account creation is confirmed by the new account address being displayed.
 
-**Warning:** If you use the password flag with a password file, best to make sure the file
-is not readable or even listable for anyone but you. You achieve this with:
-
-```
-touch /path/to/password 
-chmod 700 /path/to/password
-cat > /path/to/password
->I type my pass here^D
+```shell
+personal.newAccount()
 ```
 
-## Updating an existing account
+Accounts can also be created by importing private keys directly in the Javascript console. The private key is passed as an unencrypted hex-encoded string to `personal.importRawKey()` along with a passphrase that will be used to encrypt the key. A new key file will be generated from the private key and saved to the keystore.
 
-You can update an existing account on the command line with the `update` subcommand with
-the account address or index as parameter. You can specify multiple accounts at once.
-
-```
-geth account update 5afdd78bdacb56ab1dad28741ea2a0e47fe41331 9acb9ff906641a434803efb474c96a837756287f
-geth account update 0 1 2
+```shell
+personal.importRawKey("hexstringkey", "password")
 ```
 
-The account is saved in the newest version in encrypted format, you are prompted
-for a passphrase to unlock the account and another to save the updated file.
+### Listing accounts
 
-This same command can therefore be used to migrate an account of a deprecated
-format to the newest format or change the password for an account.
-
-After a successful update, all previous formats/versions of that same key are removed!
-
-# Importing your presale wallet
-
-Importing your presale wallet is very easy. If you remember your password that is:
+The `accounts` function in the `eth` namespace can be used to list the accounts that currently exist in the keystore.:
 
 ```
-geth wallet import /path/to/my/presale.wallet
+eth.accounts
 ```
 
-will prompt for your password and imports your ether presale account. It can be used
-non-interactively with the --password option taking a passwordfile as argument containing
-the wallet password in cleartext.
-
-# Listing accounts and checking balances
-
-### Listing your current accounts
-
-From the command line, call the CLI with:
+or alternatively the same is achieved using:
 
 ```
-$ geth account list
-Account #0: {5afdd78bdacb56ab1dad28741ea2a0e47fe41331} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-27.437847599Z--5afdd78bdacb56ab1dad28741ea2a0e47fe41331
-Account #1: {9acb9ff906641a434803efb474c96a837756287f} keystore:///tmp/mykeystore/UTC--2017-04-28T08-46-52.180688336Z--9acb9ff906641a434803efb474c96a837756287f
+personal.listAccounts
 ```
 
-to list your accounts in order of creation. 
+This returns an array of account addresses to the terminal.
 
-**Note**:
-This order can change if you copy keyfiles from other nodes, so make sure you either do not rely on indexes or make sure if you copy keys you check and update your account indexes in your scripts. 
 
-When using the console:
-```
-> eth.accounts
-["0x5afdd78bdacb56ab1dad28741ea2a0e47fe41331", "0x9acb9ff906641a434803efb474c96a837756287f"]
-```
+### Unlocking accounts
 
-or via RPC:
-```
-# Request
-$ curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' -H 'Content-type: application/json' http://127.0.0.1:8545
-
-# Result
-{
-  "id":1,
-  "jsonrpc": "2.0",
-  "result": ["0x5afdd78bdacb56ab1dad28741ea2a0e47fe41331", "0x9acb9ff906641a434803efb474c96a837756287f"]
-}
-```
-
-If you want to use an account non-interactively, you need to unlock it. You can do this on
-the command line with the `--unlock` option which takes a comma separated list of accounts
-(in hex or index) as argument so you can unlock the accounts programmatically for one
-session. This is useful if you want to use your account from Dapps via RPC. `--unlock `
-will unlock the first account. This is useful when you created your account
-programmatically, you do not need to know the actual account to unlock it.
-
-Create account and start node with account unlocked:
-```
-geth account new --password <(echo this is not secret!) 
-geth --password <(echo this is not secret!) --unlock primary --rpccorsdomain localhost --verbosity 6 2>> geth.log 
-```
-
-Instead of the account address, you can use integer indexes which refers to the address
-position in the account listing (and corresponds to order of creation)
-
-The command line allows you to unlock multiple accounts. In this case the argument to
-unlock is a comma delimited list of accounts addresses or indexes.
+To unlock an account, the `personal.unlockAccount` function can be used:
 
 ```
-geth --unlock "0x407d73d8a49eeb85d32cf465507dd71d507100c1,0,5,e470b1a7d2c9c5c6f03bbaa8fa20db6d404a0c32"
+personal.unlockAccount(eth.accounts[1])
 ```
 
-If this construction is used non-interactively, your password file will need to contain
-the respective passwords for the accounts in question, one per line.
+The account passphrase is requested:
 
-On the console you can also unlock accounts (one at a time) for a duration (in seconds).
-
-```
-personal.unlockAccount(address, "password", 300)
-```
-
-Note that we do NOT recommend using the password argument here, since the console history
-is logged, so you may compromise your account. You have been warned.
-
-### Checking account balances
-
-To check your the etherbase account balance:
-```
-> web3.fromWei(eth.getBalance(eth.coinbase), "ether")
-6.5
-```
-
-Print all balances with a JavaScript function:
-```
-function checkAllBalances() {
-    var totalBal = 0;
-    for (var acctNum in eth.accounts) {
-        var acct = eth.accounts[acctNum];
-        var acctBal = web3.fromWei(eth.getBalance(acct), "ether");
-        totalBal += parseFloat(acctBal);
-        console.log("  eth.accounts[" + acctNum + "]: \t" + acct + " \tbalance: " + acctBal + " ether");
-    }
-    console.log("  Total balance: " + totalBal + " ether");
-};
-```
-That can then be executed with:
-```
-> checkAllBalances();
-  eth.accounts[0]: 0xd1ade25ccd3d550a7eb532ac759cac7be09c2719 	balance: 63.11848 ether
-  eth.accounts[1]: 0xda65665fc30803cb1fb7e6d86691e20b1826dee0 	balance: 0 ether
-  eth.accounts[2]: 0xe470b1a7d2c9c5c6f03bbaa8fa20db6d404a0c32 	balance: 1 ether
-  eth.accounts[3]: 0xf4dd5c3794f1fd0cdc0327a83aa472609c806e99 	balance: 6 ether
-```
-
-Since this function will disappear after restarting geth, it can be helpful to store
-commonly used functions to be recalled later. The
-[loadScript](../interface/javascript-console)
-function makes this very easy.
-
-First, save the `checkAllBalances()` function definition to a file on your computer. For
-example, `/Users/username/gethload.js`. Then load the file from the interactive console:
-
-```
-> loadScript("/Users/username/gethload.js")
+```terminal
+Unlock account 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
+Passphrase:
 true
 ```
 
-The file will modify your JavaScript environment as if you has typed the commands
-manually. Feel free to experiment!
+This unlocked account can now be used to sign and send transactions. it is also possible to pass the passphrase as an argument to `personal.unlockAccount()` along with a duration after which the accout will automatically re-lock (in seconds), as follows:
+
+```shell
+personal.unlockAccount(eth.accounts[1], "passphrase", 60)
+```
+
+This unlocks the account for 60 seconds. However, this is not recommended because the command history is logged by the Javascript console which could compromise the security of the account. An unlocked account can be manually re-locked using `personal.lockAccount()`, passing the address as the sole argument.
+
+
+### Unlocking for transactions
+
+Sending transactions from the Javascript console also requires the sender account to be unlocked. There are two ways to send transactions: `eth.sendTransaction` and `personal.sendTransaction`. The difference between these two functions is that `eth.sendTransaction` requires the account to be unlocked globally, at the node level (i.e., by unlocking it on the command line at the start of the Geth session). On the other hand, `personal.sendTransaction` takes a passphrase argument that unlocks the account temporarily in order to sign the transaction, then locks it again immediately afterwards. For example, to send 5 ether between two accounts in the keystore:
+
+```shell
+var tx = {from: eth.accounts[1], to: eth.accounts[2], value: web3.toWei(5, "ether")}
+
+# this requires global account unlock for eth.accounts[1]
+eth.sendTransaction(tx)
+
+# this unlocks eth.accounts[1] temporarily just to send the transaction
+personal.sendTransaction(tx, "password")
+```
+
+## Summary
+
+This page has demonstrated how to use Geth's built-in account management tools, both on the command line and in the Javascript console. Accounts are stored encrypted by a password. It is critical that the account passwords and the keystore directory are safely and securely backed up.
