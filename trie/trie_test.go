@@ -468,7 +468,6 @@ func runRandTest(rt randTest) bool {
 					if !bytes.Equal(blob, got) {
 						rt[i].err = fmt.Errorf("prevalue mismatch for 0x%x, got 0x%x want 0x%x", path, got, blob)
 						panic(rt[i].err)
-						return false
 					}
 				}
 				for path, prev := range nodes.deletes {

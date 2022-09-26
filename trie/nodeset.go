@@ -35,15 +35,18 @@ type memoryNode struct {
 // memoryNodeSize is the raw size of a memoryNode data structure without any
 // node data included. It's an approximate size, but should be a lot better
 // than not counting them.
+// nolint:unused
 var memoryNodeSize = int(reflect.TypeOf(memoryNode{}).Size())
 
 // memorySize returns the total memory size used by this node.
+// nolint:unused
 func (n *memoryNode) memorySize(key int) int {
 	return int(n.size) + memoryNodeSize + key
 }
 
 // rlp returns the raw rlp encoded blob of the cached trie node, either directly
 // from the cache, or by regenerating it from the collapsed node.
+// nolint:unused
 func (n *memoryNode) rlp() []byte {
 	if node, ok := n.node.(rawNode); ok {
 		return node
@@ -53,6 +56,7 @@ func (n *memoryNode) rlp() []byte {
 
 // obj returns the decoded and expanded trie node, either directly from the cache,
 // or by regenerating it from the rlp encoded blob.
+// nolint:unused
 func (n *memoryNode) obj() node {
 	if node, ok := n.node.(rawNode); ok {
 		return mustDecodeNode(n.hash[:], node)
@@ -67,12 +71,14 @@ type nodeWithPrev struct {
 }
 
 // unwrap returns the internal memoryNode object.
+// nolint:unused
 func (n *nodeWithPrev) unwrap() *memoryNode {
 	return n.memoryNode
 }
 
 // memorySize returns the total memory size used by this node. It overloads
 // the function in memoryNode by counting the size of previous value as well.
+// nolint: unused
 func (n *nodeWithPrev) memorySize(key int) int {
 	return n.memoryNode.memorySize(key) + len(n.prev)
 }
