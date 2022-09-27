@@ -164,10 +164,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	)
 
-	// Iterate loading the different stats and updating the meters
-	for i := 1; ; i++ {
-		now := i % 2
-		prev := (i - 1) % 2
+	// Iterate loading the different stats and updating the meters.
+	now, prev := 0, 1
+	for ; ; now, prev = prev, now {
 
 		ReadCPUStats(&cpuStats[now])
 		cpuSysLoad.Update((cpuStats[now].GlobalTime - cpuStats[prev].GlobalTime) / refreshFreq)
