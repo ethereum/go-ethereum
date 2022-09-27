@@ -1178,11 +1178,13 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		"timestamp":        hexutil.Uint64(head.Time),
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
-		"excessBlobs":      hexutil.Uint64(head.ExcessBlobs),
 	}
 
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+	if head.ExcessBlobs != nil {
+		result["excessBlobs"] = (*hexutil.Uint64)(head.ExcessBlobs)
 	}
 
 	return result

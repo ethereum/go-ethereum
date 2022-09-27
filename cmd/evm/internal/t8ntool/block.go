@@ -54,7 +54,7 @@ type header struct {
 	MixDigest   common.Hash       `json:"mixHash"`
 	Nonce       *types.BlockNonce `json:"nonce"`
 	BaseFee     *big.Int          `json:"baseFeePerGas" rlp:"optional"`
-	ExcessBlobs uint64            `json:"excessBlobs"   rlp:"optional"`
+	ExcessBlobs *uint64           `json:"excessBlobs"   rlp:"optional"`
 }
 
 type headerMarshaling struct {

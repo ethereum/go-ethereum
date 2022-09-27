@@ -65,9 +65,11 @@ type ExecutableDataV1 struct {
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
 	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
 	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
-	ExcessBlobs   uint64         `json:"excessBlobs"   gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
+
+	// New in EIP-4844
+	ExcessBlobs *uint64 `json:"excessBlobs"   gencodec:"optional"`
 }
 
 // JSON type overrides for executableData.
@@ -77,7 +79,7 @@ type executableDataMarshaling struct {
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
 	BaseFeePerGas *hexutil.Big
-	ExcessBlobs   hexutil.Uint64
+	ExcessBlobs   *hexutil.Uint64
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes

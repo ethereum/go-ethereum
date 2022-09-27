@@ -63,7 +63,7 @@ type Genesis struct {
 	GasUsed     uint64      `json:"gasUsed"`
 	ParentHash  common.Hash `json:"parentHash"`
 	BaseFee     *big.Int    `json:"baseFeePerGas"`
-	ExcessBlobs uint64      `json:"excessBlobs"`
+	ExcessBlobs *uint64     `json:"excessBlobs"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -190,7 +190,7 @@ type genesisSpecMarshaling struct {
 	Number      math.HexOrDecimal64
 	Difficulty  *math.HexOrDecimal256
 	BaseFee     *math.HexOrDecimal256
-	ExcessBlobs math.HexOrDecimal64
+	ExcessBlobs *math.HexOrDecimal64
 	Alloc       map[common.UnprefixedAddress]GenesisAccount
 }
 
@@ -371,19 +371,18 @@ func (g *Genesis) ToBlock() *types.Block {
 		panic(err)
 	}
 	head := &types.Header{
-		Number:      new(big.Int).SetUint64(g.Number),
-		Nonce:       types.EncodeNonce(g.Nonce),
-		Time:        g.Timestamp,
-		ParentHash:  g.ParentHash,
-		Extra:       g.ExtraData,
-		GasLimit:    g.GasLimit,
-		GasUsed:     g.GasUsed,
-		BaseFee:     g.BaseFee,
-		ExcessBlobs: g.ExcessBlobs,
-		Difficulty:  g.Difficulty,
-		MixDigest:   g.Mixhash,
-		Coinbase:    g.Coinbase,
-		Root:        root,
+		Number:     new(big.Int).SetUint64(g.Number),
+		Nonce:      types.EncodeNonce(g.Nonce),
+		Time:       g.Timestamp,
+		ParentHash: g.ParentHash,
+		Extra:      g.ExtraData,
+		GasLimit:   g.GasLimit,
+		GasUsed:    g.GasUsed,
+		BaseFee:    g.BaseFee,
+		Difficulty: g.Difficulty,
+		MixDigest:  g.Mixhash,
+		Coinbase:   g.Coinbase,
+		Root:       root,
 	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
@@ -391,11 +390,20 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+	if g.Config != nil {
+		if g.Config.IsLondon(common.Big0) {
+			if g.BaseFee != nil {
+				head.BaseFee = g.BaseFee
+			} else {
+				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+			}
+		}
+		if g.Config.IsSharding(common.Big0) {
+			if g.ExcessBlobs != nil {
+				head.ExcessBlobs = g.ExcessBlobs
+			} else {
+				head.ExcessBlobs = new(uint64)
+			}
 		}
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))

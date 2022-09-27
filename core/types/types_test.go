@@ -82,7 +82,7 @@ func benchRLP(b *testing.B, encode bool) {
 				Time:        555,
 				Extra:       make([]byte, 32),
 				BaseFee:     big.NewInt(10000000000),
-				ExcessBlobs: 2,
+				ExcessBlobs: new(uint64),
 			},
 		},
 		{

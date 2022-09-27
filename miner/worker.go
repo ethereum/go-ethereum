@@ -1012,7 +1012,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Initialize the prestate excess_blobs field used during state transition
 	if w.chainConfig.IsSharding(parent.Number()) {
-		header.ExcessBlobs = parent.Header().ExcessBlobs
+		var excessBlobs uint64
+		if parentExcessBlobs := parent.Header().ExcessBlobs; parentExcessBlobs != nil {
+			excessBlobs = *parentExcessBlobs
+		}
+		header.SetExcessBlobs(excessBlobs)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {

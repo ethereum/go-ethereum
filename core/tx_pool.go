@@ -1017,8 +1017,16 @@ func (pool *TxPool) filterInvalidTxsLocked(txs []*types.Transaction, errs []erro
 // filterInvalidBlobTxsLocked marks all blob txs (if any) with an error if the blobs or kzg commitments are invalid
 func (pool *TxPool) filterInvalidBlobTxsLocked(txs []*types.Transaction, errs []error) {
 	for i, tx := range txs {
+		if errs[i] != nil {
+			continue
+		}
 		// all blobs within the tx can still be batched together
-		errs[i] = tx.VerifyBlobs()
+		err := tx.VerifyBlobs()
+		if err != nil {
+			log.Trace("Discarding blob transaction", "hash", tx.Hash(), "err", err)
+			invalidTxMeter.Mark(1)
+			errs[i] = err
+		}
 	}
 }
 
@@ -1390,7 +1398,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
-	pool.currentExcessBlobs = newHead.ExcessBlobs
+	if newHead.ExcessBlobs != nil {
+		pool.currentExcessBlobs = *newHead.ExcessBlobs
+	}
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))

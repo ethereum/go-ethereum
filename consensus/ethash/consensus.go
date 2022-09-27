@@ -306,6 +306,14 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
+	if !chain.Config().IsSharding(header.Number) {
+		if header.ExcessBlobs != nil {
+			return fmt.Errorf("invalid excessBlobs before fork: have %d, expected 'nil'", *header.ExcessBlobs)
+		}
+	} else if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-4844 attributes.
+		return err
+	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
@@ -601,8 +609,10 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
-		header.ExcessBlobs = misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs)))
+	if chain.Config().IsSharding(header.Number) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessBlobs(misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs))))
+		}
 	}
 }
 
@@ -638,7 +648,9 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
-	enc = append(enc, header.ExcessBlobs)
+	if header.ExcessBlobs != nil {
+		enc = append(enc, header.ExcessBlobs)
+	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash

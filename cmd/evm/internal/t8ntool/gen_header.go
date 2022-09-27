@@ -34,7 +34,7 @@ func (h header) MarshalJSON() ([]byte, error) {
 		MixDigest   common.Hash           `json:"mixHash"`
 		Nonce       *types.BlockNonce     `json:"nonce"`
 		BaseFee     *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
-		ExcessBlobs uint64                `json:"excessBlobs"   rlp:"optional"`
+		ExcessBlobs *uint64               `json:"excessBlobs"   rlp:"optional"`
 	}
 	var enc header
 	enc.ParentHash = h.ParentHash
@@ -135,7 +135,7 @@ func (h *header) UnmarshalJSON(input []byte) error {
 		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}
 	if dec.ExcessBlobs != nil {
-		h.ExcessBlobs = *dec.ExcessBlobs
+		h.ExcessBlobs = dec.ExcessBlobs
 	}
 	return nil
 }

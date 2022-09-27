@@ -78,6 +78,11 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
+// SetExcessBlobs sets the excess_blobs field of the generated block.
+func (b *BlockGen) SetExcessBlobs(excessBlobs uint64) {
+	b.header.SetExcessBlobs(excessBlobs)
+}
+
 // AddTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
@@ -133,6 +138,15 @@ func (b *BlockGen) Number() *big.Int {
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
+}
+
+// ExcessBlobs returns the EIP-4844 excess blobs of the block being generated.
+func (b *BlockGen) ExcessBlobs() *uint64 {
+	v := new(uint64)
+	if b.header.ExcessBlobs != nil {
+		*v = *b.header.ExcessBlobs
+	}
+	return v
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a

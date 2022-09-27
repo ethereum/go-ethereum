@@ -262,8 +262,19 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(common.Big1) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify the header's EIP-1559 attributes.
-	return misc.VerifyEip1559Header(chain.Config(), parent, header)
+	if chain.Config().IsLondon(header.Number) {
+		// Verify the header's EIP-1559 attributes.
+		if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+			return err
+		}
+	}
+	if chain.Config().IsSharding(header.Number) {
+		// Verify the header's EIP-4844 attributes.
+		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // verifyHeaders is similar to verifyHeader, but verifies a batch of headers
@@ -332,8 +343,10 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
-	if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
-		header.ExcessBlobs = misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs)))
+	if chain.Config().IsSharding(header.Number) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessBlobs(misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs))))
+		}
 	}
 }
 

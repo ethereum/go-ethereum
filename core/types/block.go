@@ -89,7 +89,7 @@ type Header struct {
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
 	// ExcessBlobs was added by EIP-4844 and is ignored in legacy headers.
-	ExcessBlobs uint64 `json:"excessBlobs" rlp:"optional"`
+	ExcessBlobs *uint64 `json:"excessBlobs" rlp:"optional"`
 
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
@@ -107,8 +107,16 @@ type headerMarshaling struct {
 	Time        hexutil.Uint64
 	Extra       hexutil.Bytes
 	BaseFee     *hexutil.Big
-	ExcessBlobs hexutil.Uint64
+	ExcessBlobs *hexutil.Uint64
 	Hash        common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+}
+
+// SetExcessBlobs sets the excess_blobs field in the header
+func (h *Header) SetExcessBlobs(v uint64) {
+	if h.ExcessBlobs == nil {
+		h.ExcessBlobs = new(uint64)
+	}
+	*h.ExcessBlobs = v
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -323,6 +331,9 @@ func CopyHeader(h *Header) *Header {
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
+	if h.ExcessBlobs != nil {
+		cpy.SetExcessBlobs(*h.ExcessBlobs)
+	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
@@ -395,7 +406,12 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-func (b *Block) ExcessBlobs() uint64 { return b.header.ExcessBlobs }
+func (b *Block) ExcessBlobs() *uint64 {
+	if b.header.ExcessBlobs == nil {
+		return nil
+	}
+	return b.header.ExcessBlobs
+}
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

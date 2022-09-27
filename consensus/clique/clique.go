@@ -345,6 +345,14 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
+	if !chain.Config().IsSharding(header.Number) {
+		if header.ExcessBlobs != nil {
+			return fmt.Errorf("invalid excessBlobs before fork: have %d, want <nil>", *header.ExcessBlobs)
+		}
+	} else if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
+		// Verify the header's EIP-4844 attributes.
+		return err
+	}
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
 	if err != nil {
@@ -568,8 +576,10 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
-	if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
-		header.ExcessBlobs = misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs)))
+	if chain.Config().IsSharding(header.Number) {
+		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
+			header.SetExcessBlobs(misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs))))
+		}
 	}
 }
 
@@ -746,7 +756,9 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
-	enc = append(enc, header.ExcessBlobs)
+	if header.ExcessBlobs != nil {
+		enc = append(enc, header.ExcessBlobs)
+	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
 	}

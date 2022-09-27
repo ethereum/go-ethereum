@@ -389,7 +389,11 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		EIP2028:   pool.istanbul,
 		EIP4844:   pool.eip4844,
 	}
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), header.ExcessBlobs, tx.To() == nil, rules)
+	var excessBlobs uint64
+	if header.ExcessBlobs != nil {
+		excessBlobs = *header.ExcessBlobs
+	}
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), excessBlobs, tx.To() == nil, rules)
 	if err != nil {
 		return err
 	}

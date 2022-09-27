@@ -17,6 +17,7 @@
 package misc
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -25,7 +26,11 @@ import (
 
 // CalcExcessBlobTransactions calculates the number of blobs above the target
 func CalcExcessBlobTransactions(parent *types.Header, blobs uint64) uint64 {
-	adjusted := parent.ExcessBlobs + blobs
+	var excessBlobs uint64
+	if parent.ExcessBlobs != nil {
+		excessBlobs = *parent.ExcessBlobs
+	}
+	adjusted := excessBlobs + blobs
 	if adjusted < params.TargetBlobsPerBlock {
 		return 0
 	}
@@ -40,10 +45,19 @@ func FakeExponential(num uint64, denom uint64) uint64 {
 		(uint64(math.Pow(float64(fractional), 2))*cofactor)/denom)/(denom*3)
 }
 
+// CountBlobs returns the number of blob transactions in txs
 func CountBlobs(txs []*types.Transaction) int {
 	var count int
 	for _, tx := range txs {
 		count += len(tx.DataHashes())
 	}
 	return count
+}
+
+// VerifyEip4844Header verifies that the header is not malformed
+func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Header) error {
+	if header.ExcessBlobs == nil {
+		return fmt.Errorf("header is missing excessBlobs")
+	}
+	return nil
 }
