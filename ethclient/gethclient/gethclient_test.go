@@ -331,12 +331,12 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 }
 
 func TestCodeOverride(t *testing.T) {
-	marshalled, err := json.Marshal(toOverrideMap(&map[common.Address]OverrideAccount{
+	overrides := map[common.Address]OverrideAccount{
 		common.Address{0xaa}: OverrideAccount{},
-		common.Address{0xbb}: OverrideAccount{
-			Code: []byte{1},
-		},
-	}))
+		common.Address{0xbb}: OverrideAccount{Code: []byte{}},
+		common.Address{0xcc}: OverrideAccount{Code: []byte{1}},
+	}
+	marshalled, err := json.Marshal(toOverrideMap(&overrides))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -344,21 +344,22 @@ func TestCodeOverride(t *testing.T) {
 	if err = json.Unmarshal(marshalled, &accounts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if account, ok := accounts[common.Address{0xaa}]; !ok {
-		t.Fatal("missing account")
-	} else if account.Code != nil {
-		t.Fatalf("code wrong, should be nil, is %v", account.Code)
-	}
-
-	if account, ok := accounts[common.Address{0xbb}]; !ok {
-		t.Fatal("missing account")
-	} else {
-		if account.Code == nil {
-			t.Fatal("code wrong, expect non-nil")
+	for k, v := range overrides {
+		account, ok := accounts[k]
+		if !ok {
+			t.Fatalf("missing account %v", k)
+		}
+		if v.Code == nil {
+			if account.Code != nil {
+				t.Fatalf("code wrong, should be nil, is %v", account.Code)
+			}
+			continue
+		}
+		if v.Code != nil && account.Code == nil {
+			t.Fatalf("code wrong, should be non-nil %v", k)
 		}
 		have := []byte((*account.Code))
-		want := []byte{1}
+		want := v.Code
 		if !bytes.Equal(have, want) {
 			t.Fatalf("code wrong, have %x, want %x", have, want)
 		}
