@@ -159,9 +159,9 @@ func (s *stateObject) getTrie(db Database) Trie {
 		}
 		if s.trie == nil {
 			var err error
-			s.trie, err = db.OpenStorageTrie(s.addrHash, s.data.Root)
+			s.trie, err = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
 			if err != nil {
-				s.trie, _ = db.OpenStorageTrie(s.addrHash, common.Hash{})
+				s.trie, _ = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, common.Hash{})
 				s.setError(fmt.Errorf("can't create storage trie: %v", err))
 			}
 		}

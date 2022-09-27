@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -60,8 +59,13 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			key = key[1:]
 			nodes = append(nodes, n)
 		case hashNode:
+			// Retrieve the specified node from the underlying node reader.
+			// trie.resolveAndTrack is not used since in that function the
+			// loaded blob will be tracked, while it's not required here since
+			// all loaded nodes won't be linked to trie at all and track nodes
+			// may lead to out-of-memory issue.
 			var err error
-			tn, err = t.resolveHash(n, prefix)
+			tn, err = t.reader.node(prefix, common.BytesToHash(n))
 			if err != nil {
 				log.Error("Unhandled trie error in Trie.Prove", "err", err)
 				return err
@@ -559,7 +563,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, db: NewDatabase(rawdb.NewMemoryDatabase())}
+	tr := &Trie{root: root, reader: newEmptyReader()}
 	if empty {
 		tr.root = nil
 	}
