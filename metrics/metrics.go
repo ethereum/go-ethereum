@@ -7,7 +7,6 @@ package metrics
 
 import (
 	"os"
-	"runtime"
 	"runtime/metrics"
 	"runtime/pprof"
 	"strings"
@@ -67,6 +66,8 @@ type runtimeValues struct {
 	HeapFree     uint64
 	HeapReleased uint64
 	HeapUnused   uint64
+
+	Goroutines uint64
 }
 
 var runtimeSamples = []metrics.Sample{
@@ -77,6 +78,7 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/memory/classes/heap/free:bytes"},
 	{Name: "/memory/classes/heap/released:bytes"},
 	{Name: "/memory/classes/heap/unused:bytes"},
+	{Name: "/sched/goroutines:goroutines"},
 }
 
 func readRuntimeMetrics(v *runtimeValues) {
@@ -101,6 +103,8 @@ func readRuntimeMetrics(v *runtimeValues) {
 			v.HeapReleased = s.Value.Uint64()
 		case "/memory/classes/heap/unused:bytes":
 			v.HeapUnused = s.Value.Uint64()
+		case "/sched/goroutines:goroutines":
+			v.Goroutines = s.Value.Uint64()
 		}
 	}
 }
@@ -162,33 +166,32 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {
-		location1 := i % 2
-		location2 := (i - 1) % 2
+		now := i % 2
+		prev := (i - 1) % 2
 
-		ReadCPUStats(&cpuStats[location1])
-
-		cpuSysLoad.Update((cpuStats[location1].GlobalTime - cpuStats[location2].GlobalTime) / refreshFreq)
-		cpuSysWait.Update((cpuStats[location1].GlobalWait - cpuStats[location2].GlobalWait) / refreshFreq)
-		cpuProcLoad.Update((cpuStats[location1].LocalTime - cpuStats[location2].LocalTime) / refreshFreq)
+		ReadCPUStats(&cpuStats[now])
+		cpuSysLoad.Update((cpuStats[now].GlobalTime - cpuStats[prev].GlobalTime) / refreshFreq)
+		cpuSysWait.Update((cpuStats[now].GlobalWait - cpuStats[prev].GlobalWait) / refreshFreq)
+		cpuProcLoad.Update((cpuStats[now].LocalTime - cpuStats[prev].LocalTime) / refreshFreq)
 
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
-		cpuGoroutines.Update(int64(runtime.NumGoroutine()))
 
-		readRuntimeMetrics(&memstats[location1])
-		memAllocs.Mark(int64(memstats[location1].GCAllocBytes - memstats[location2].GCAllocBytes))
-		memFrees.Mark(int64(memstats[location1].GCFreedBytes - memstats[location2].GCFreedBytes))
-		memPauses.Update(memstats[location1].GCPauses)
-		memHeld.Update(int64(memstats[location1].MemTotal - memstats[location1].HeapFree - memstats[location1].HeapReleased))
-		memUsed.Update(int64(memstats[location1].MemTotal))
+		readRuntimeMetrics(&memstats[now])
+		cpuGoroutines.Update(int64(memstats[now].Goroutines))
+		memAllocs.Mark(int64(memstats[now].GCAllocBytes - memstats[prev].GCAllocBytes))
+		memFrees.Mark(int64(memstats[now].GCFreedBytes - memstats[prev].GCFreedBytes))
+		memPauses.Update(memstats[now].GCPauses)
+		memUsed.Update(int64(memstats[now].MemTotal - memstats[now].HeapFree - memstats[now].HeapReleased))
+		memHeld.Update(int64(memstats[now].MemTotal))
 
-		if ReadDiskStats(&diskstats[location1]) == nil {
-			diskReads.Mark(diskstats[location1].ReadCount - diskstats[location2].ReadCount)
-			diskReadBytes.Mark(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
-			diskWrites.Mark(diskstats[location1].WriteCount - diskstats[location2].WriteCount)
-			diskWriteBytes.Mark(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
+		if ReadDiskStats(&diskstats[now]) == nil {
+			diskReads.Mark(diskstats[now].ReadCount - diskstats[prev].ReadCount)
+			diskReadBytes.Mark(diskstats[now].ReadBytes - diskstats[prev].ReadBytes)
+			diskWrites.Mark(diskstats[now].WriteCount - diskstats[prev].WriteCount)
+			diskWriteBytes.Mark(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 
-			diskReadBytesCounter.Inc(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
-			diskWriteBytesCounter.Inc(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
+			diskReadBytesCounter.Inc(diskstats[now].ReadBytes - diskstats[prev].ReadBytes)
+			diskWriteBytesCounter.Inc(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 		}
 		time.Sleep(refresh)
 	}
