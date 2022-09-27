@@ -60,7 +60,9 @@ var threadCreateProfile = pprof.Lookup("threadcreate")
 type runtimeValues struct {
 	GCPauses     float64
 	GCAllocBytes uint64
+	GCAllocObj   uint64
 	GCFreedBytes uint64
+	GCFreedObj   uint64
 
 	MemTotal     uint64
 	HeapFree     uint64
@@ -73,7 +75,9 @@ type runtimeValues struct {
 var runtimeSamples = []metrics.Sample{
 	{Name: "/gc/pauses:seconds"}, // Histogram
 	{Name: "/gc/heap/allocs:bytes"},
+	{Name: "/gc/heap/allocs:objects"},
 	{Name: "/gc/heap/frees:bytes"},
+	{Name: "/gc/heap/frees:objects"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
 	{Name: "/memory/classes/heap/released:bytes"},
@@ -91,9 +95,17 @@ func readRuntimeMetrics(v *runtimeValues) {
 			if s.Value.Kind() == metrics.KindUint64 {
 				v.GCAllocBytes = s.Value.Uint64()
 			}
+		case "/gc/heap/allocs:objects":
+			if s.Value.Kind() == metrics.KindUint64 {
+				v.GCAllocObj = s.Value.Uint64()
+			}
 		case "/gc/heap/frees:bytes":
 			if s.Value.Kind() == metrics.KindUint64 {
 				v.GCFreedBytes = s.Value.Uint64()
+			}
+		case "/gc/heap/frees:objects":
+			if s.Value.Kind() == metrics.KindUint64 {
+				v.GCFreedObj = s.Value.Uint64()
 			}
 		case "/memory/classes/total:bytes":
 			v.MemTotal = s.Value.Uint64()
@@ -177,8 +189,8 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 		readRuntimeMetrics(&memstats[now])
 		cpuGoroutines.Update(int64(memstats[now].Goroutines))
-		memAllocs.Mark(int64(memstats[now].GCAllocBytes - memstats[prev].GCAllocBytes))
-		memFrees.Mark(int64(memstats[now].GCFreedBytes - memstats[prev].GCFreedBytes))
+		memAllocs.Mark(int64(memstats[now].GCAllocObj - memstats[prev].GCAllocObj))
+		memFrees.Mark(int64(memstats[now].GCFreedObj - memstats[prev].GCFreedObj))
 		memPauses.Update(memstats[now].GCPauses)
 		memUsed.Update(int64(memstats[now].MemTotal - memstats[now].HeapFree - memstats[now].HeapReleased))
 		memHeld.Update(int64(memstats[now].MemTotal))
