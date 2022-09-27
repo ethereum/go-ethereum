@@ -130,7 +130,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 	var (
 		cpuStats  = make([]CPUStats, 2)
 		diskstats = make([]DiskStats, 2)
-		memstats  = make([]runtimeValues, 2)
+		memstats  runtimeValues
 	)
 
 	// Define the various metrics to collect
@@ -141,9 +141,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuThreads    = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
 
-		memPauses = GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
-		memAllocs = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
-		memFrees  = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
+		memPauses = GetOrRegisterGaugeFloat64("system/memory/pauses", DefaultRegistry)
+		memAllocs = GetOrRegisterGaugeFloat64("system/memory/allocs", DefaultRegistry)
+		memFrees  = GetOrRegisterGaugeFloat64("system/memory/frees", DefaultRegistry)
 		memHeld   = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
 		memUsed   = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
 
@@ -169,14 +169,12 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
 		cpuGoroutines.Update(int64(runtime.NumGoroutine()))
 
-		readRuntimeMetrics(&memstats[location1])
-
-		memPauses.Mark(int64(memstats[location1].GCPauses - memstats[location2].GCPauses))
-		memAllocs.Mark(int64(memstats[location1].GCAllocs - memstats[location2].GCAllocs))
-		memFrees.Mark(int64(memstats[location1].GCFrees - memstats[location2].GCFrees))
-
-		memHeld.Update(int64(memstats[location1].MemTotal - memstats[location1].HeapFree - memstats[location1].HeapReleased))
-		memUsed.Update(int64(memstats[location1].MemTotal))
+		readRuntimeMetrics(&memstats)
+		memPauses.Update(memstats.GCPauses)
+		memAllocs.Update(memstats.GCAllocs)
+		memFrees.Update(memstats.GCFrees)
+		memHeld.Update(int64(memstats.MemTotal - memstats.HeapFree - memstats.HeapReleased))
+		memUsed.Update(int64(memstats.MemTotal))
 
 		if ReadDiskStats(&diskstats[location1]) == nil {
 			diskReads.Mark(diskstats[location1].ReadCount - diskstats[location2].ReadCount)
