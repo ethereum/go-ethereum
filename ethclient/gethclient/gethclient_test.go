@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -35,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -331,25 +331,17 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 }
 
 func TestCodeOverride(t *testing.T) {
-	mapAcc := make(map[common.Address]OverrideAccount)
-	mapAcc[common.Address{0xaa}] = OverrideAccount{}
-	mapAcc[common.Address{0xbb}] = OverrideAccount{
-		Code: []byte{1},
-	}
-	marshalled, err := json.Marshal(toOverrideMap(&mapAcc))
+	marshalled, err := json.Marshal(toOverrideMap(&map[common.Address]OverrideAccount{
+		common.Address{0xaa}: OverrideAccount{},
+		common.Address{0xbb}: OverrideAccount{
+			Code: []byte{1},
+		},
+	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	type overrideAccount struct {
-		Nonce     hexutil.Uint64              `json:"nonce"`
-		Code      hexutil.Bytes               `json:"code"`
-		Balance   *hexutil.Big                `json:"balance"`
-		State     map[common.Hash]common.Hash `json:"state"`
-		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
-	}
-	var accounts map[common.Address]*overrideAccount
-	err = json.Unmarshal(marshalled, &accounts)
-	if err != nil {
+	var accounts map[common.Address]*ethapi.OverrideAccount
+	if err = json.Unmarshal(marshalled, &accounts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -361,7 +353,14 @@ func TestCodeOverride(t *testing.T) {
 
 	if account, ok := accounts[common.Address{0xbb}]; !ok {
 		t.Fatal("missing account")
-	} else if have, want := account.Code, []byte{1}; !bytes.Equal(have, want) {
-		t.Fatalf("code wrong, have %x, want %x", have, want)
+	} else {
+		if account.Code == nil {
+			t.Fatal("code wrong, expect non-nil")
+		}
+		have := []byte((*account.Code))
+		want := []byte{1}
+		if !bytes.Equal(have, want) {
+			t.Fatalf("code wrong, have %x, want %x", have, want)
+		}
 	}
 }
