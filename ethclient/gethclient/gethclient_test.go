@@ -19,6 +19,7 @@ package gethclient
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -320,5 +321,55 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	mapAcc[testAddr] = override
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOverrideAccountMarshal(t *testing.T) {
+	om := map[common.Address]OverrideAccount{
+		common.Address{0x11}: OverrideAccount{
+			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+			Nonce: 0,
+		},
+		common.Address{0xaa}: OverrideAccount{
+			Nonce: 5,
+		},
+		common.Address{0xbb}: OverrideAccount{
+			Code: []byte{1},
+		},
+		common.Address{0xcc}: OverrideAccount{
+			// 'code', 'balance', 'state' should be set when input is
+			// a non-nil but empty value.
+			Code:    []byte{},
+			Balance: big.NewInt(0),
+			State:   map[common.Hash]common.Hash{},
+			// For 'stateDiff' the behavior is different, empty map
+			// is ignored because it makes no difference.
+			StateDiff: map[common.Hash]common.Hash{},
+		},
+	}
+
+	marshalled, err := json.MarshalIndent(&om, "", "  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := `{
+  "0x1100000000000000000000000000000000000000": {},
+  "0xaa00000000000000000000000000000000000000": {
+    "nonce": "0x5"
+  },
+  "0xbb00000000000000000000000000000000000000": {
+    "code": "0x01"
+  },
+  "0xcc00000000000000000000000000000000000000": {
+    "code": "0x",
+    "balance": "0x0",
+    "state": {}
+  }
+}`
+
+	if string(marshalled) != expected {
+		t.Error("wrong output:", string(marshalled))
+		t.Error("want:", expected)
 	}
 }
