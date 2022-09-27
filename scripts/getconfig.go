@@ -445,27 +445,42 @@ func updateArgsAdd(args []string) []string {
 	return args
 }
 
-func handleGRPC(args []string, updatedArgs []string) []string {
+func handlePrometheus(args []string, updatedArgs []string) []string {
 	var newUpdatedArgs []string
 
-	var addr string
+	mAddr := ""
+	mPort := ""
 
-	var port string
+	pAddr := ""
+	pPort := ""
 
 	newUpdatedArgs = append(newUpdatedArgs, updatedArgs...)
 
 	for i, val := range args {
-		if strings.Contains(val, "pprof.addr") && strings.Contains(val, "-") {
-			addr = args[i+1]
+		if strings.Contains(val, "metrics.addr") && strings.HasPrefix(val, "-") {
+			mAddr = args[i+1]
 		}
 
-		if strings.Contains(val, "pprof.port") && strings.Contains(val, "-") {
-			port = args[i+1]
+		if strings.Contains(val, "metrics.port") && strings.HasPrefix(val, "-") {
+			mPort = args[i+1]
+		}
+
+		if strings.Contains(val, "pprof.addr") && strings.HasPrefix(val, "-") {
+			pAddr = args[i+1]
+		}
+
+		if strings.Contains(val, "pprof.port") && strings.HasPrefix(val, "-") {
+			pPort = args[i+1]
 		}
 	}
 
-	newUpdatedArgs = append(newUpdatedArgs, "--grpc.addr")
-	newUpdatedArgs = append(newUpdatedArgs, addr+":"+port)
+	if mAddr != "" && mPort != "" {
+		newUpdatedArgs = append(newUpdatedArgs, "--metrics.prometheus-addr")
+		newUpdatedArgs = append(newUpdatedArgs, mAddr+":"+mPort)
+	} else if pAddr != "" && pPort != "" {
+		newUpdatedArgs = append(newUpdatedArgs, "--metrics.prometheus-addr")
+		newUpdatedArgs = append(newUpdatedArgs, pAddr+":"+pPort)
+	}
 
 	return newUpdatedArgs
 }
@@ -658,7 +673,7 @@ func main() {
 	outOfDateFlags := checkFlag(allFlags, flagsToCheck)
 	updatedArgs := updateArgsClean(args, outOfDateFlags)
 	updatedArgs = updateArgsAdd(updatedArgs)
-	updatedArgs = handleGRPC(args, updatedArgs)
+	updatedArgs = handlePrometheus(args, updatedArgs)
 
 	if temp == notYet {
 		updatedArgs = append(updatedArgs, ignoreForNow...)

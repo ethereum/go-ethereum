@@ -479,8 +479,8 @@ func DefaultConfig() *Config {
 		Telemetry: &TelemetryConfig{
 			Enabled:               false,
 			Expensive:             false,
-			PrometheusAddr:        "",
-			OpenCollectorEndpoint: "",
+			PrometheusAddr:        "127.0.0.1:7071",
+			OpenCollectorEndpoint: "127.0.0.1:4317",
 			InfluxDB: &InfluxDBConfig{
 				V1Enabled:    false,
 				Endpoint:     "",
@@ -996,8 +996,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 	}
 
 	if c.P2P.NoDiscover {
-		// Disable networking, for now, we will not even allow incomming connections
-		cfg.P2P.MaxPeers = 0
+		// Disable peer discovery
 		cfg.P2P.NoDiscovery = true
 	}
 

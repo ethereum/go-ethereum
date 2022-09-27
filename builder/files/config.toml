@@ -96,8 +96,8 @@ syncmode = "full"
 [telemetry]
   metrics = true
   # expensive = false
-  prometheus-addr = "127.0.0.1:7071"
-  # opencollector-endpoint = ""
+  # prometheus-addr = "127.0.0.1:7071"
+  # opencollector-endpoint = "127.0.0.1:4317"
   # [telemetry.influx]
     # influxdb = false
     # endpoint = ""
