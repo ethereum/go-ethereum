@@ -988,7 +988,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	result, err := core.ApplyMessage(evm, msg, gp)
 	if err != nil {
-		return nil, err
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
 	if err := vmError(); err != nil {
 		return nil, err
@@ -998,9 +998,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if evm.Cancelled() {
 		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
-	if err != nil {
-		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
-	}
+
 	return result, nil
 }
 
