@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -330,38 +329,50 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func TestCodeOverride(t *testing.T) {
-	overrides := map[common.Address]OverrideAccount{
-		common.Address{0xaa}: OverrideAccount{},
-		common.Address{0xbb}: OverrideAccount{Code: []byte{}},
-		common.Address{0xcc}: OverrideAccount{Code: []byte{1}},
+func TestOverrideAccountMarshal(t *testing.T) {
+	om := map[common.Address]OverrideAccount{
+		common.Address{0x11}: OverrideAccount{},
+		common.Address{0xaa}: OverrideAccount{
+			Nonce: 5,
+		},
+		common.Address{0xbb}: OverrideAccount{
+			Code: []byte{1},
+		},
+		common.Address{0xcc}: OverrideAccount{
+			// This one checks that 'code' is set when
+			// the input is a non-nil but empty slice.
+			Code: []byte{},
+		},
+		common.Address{0xdd}: OverrideAccount{
+			// This one checks that 'state' is set
+			// when the input is a non-nil but empty map.
+			State: map[common.Hash]common.Hash{},
+		},
 	}
-	marshalled, err := json.Marshal(toOverrideMap(&overrides))
+
+	marshalled, err := json.MarshalIndent(&om, "", "  ")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	var accounts map[common.Address]*ethapi.OverrideAccount
-	if err = json.Unmarshal(marshalled, &accounts); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for k, v := range overrides {
-		account, ok := accounts[k]
-		if !ok {
-			t.Fatalf("missing account %v", k)
-		}
-		if v.Code == nil {
-			if account.Code != nil {
-				t.Fatalf("code wrong, should be nil, is %v", account.Code)
-			}
-			continue
-		}
-		if v.Code != nil && account.Code == nil {
-			t.Fatalf("code wrong, should be non-nil %v", k)
-		}
-		have := []byte((*account.Code))
-		want := v.Code
-		if !bytes.Equal(have, want) {
-			t.Fatalf("code wrong, have %x, want %x", have, want)
-		}
+
+	expected := `{
+  "0x1100000000000000000000000000000000000000": {},
+  "0xaa00000000000000000000000000000000000000": {
+    "nonce": "0x5"
+  },
+  "0xbb00000000000000000000000000000000000000": {
+    "code": "0x01"
+  },
+  "0xcc00000000000000000000000000000000000000": {
+    "code": "0x"
+  },
+  "0xdd00000000000000000000000000000000000000": {
+    "state": {}
+  }
+}`
+
+	if string(marshalled) != expected {
+		t.Error("wrong output:", string(marshalled))
+		t.Error("want:", expected)
 	}
 }

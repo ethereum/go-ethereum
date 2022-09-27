@@ -19,6 +19,7 @@ package gethclient
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
 	"runtime"
 	"runtime/debug"
@@ -118,15 +119,6 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 	return &result, err
 }
 
-// OverrideAccount specifies the state of an account to be overridden.
-type OverrideAccount struct {
-	Nonce     uint64                      `json:"nonce"`
-	Code      []byte                      `json:"code"`
-	Balance   *big.Int                    `json:"balance"`
-	State     map[common.Hash]common.Hash `json:"state"`
-	StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
-}
-
 // CallContract executes a message call transaction, which is directly executed in the VM
 // of the node, but never mined into the blockchain.
 //
@@ -141,7 +133,7 @@ func (ec *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockN
 	var hex hexutil.Bytes
 	err := ec.c.CallContext(
 		ctx, &hex, "eth_call", toCallArg(msg),
-		toBlockNumArg(blockNumber), toOverrideMap(overrides),
+		toBlockNumArg(blockNumber), overrides,
 	)
 	return hex, err
 }
@@ -210,31 +202,34 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
-func toOverrideMap(overrides *map[common.Address]OverrideAccount) interface{} {
-	if overrides == nil {
-		return nil
-	}
-	type overrideAccount struct {
-		Nonce     hexutil.Uint64              `json:"nonce"`
-		Code      string                      `json:"code,omitempty"`
-		Balance   *hexutil.Big                `json:"balance"`
-		State     map[common.Hash]common.Hash `json:"state"`
-		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
-	}
-	result := make(map[common.Address]overrideAccount)
+// OverrideAccount specifies the state of an account to be overridden.
+type OverrideAccount struct {
+	Nonce     uint64                      `json:"nonce"`
+	Code      []byte                      `json:"code"`
+	Balance   *big.Int                    `json:"balance"`
+	State     map[common.Hash]common.Hash `json:"state"`
+	StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
+}
 
-	for addr, override := range *overrides {
-		var code string
-		if override.Code != nil {
-			code = hexutil.Encode(override.Code)
-		}
-		result[addr] = overrideAccount{
-			Nonce:     hexutil.Uint64(override.Nonce),
-			Code:      code,
-			Balance:   (*hexutil.Big)(override.Balance),
-			State:     override.State,
-			StateDiff: override.StateDiff,
-		}
+func (a OverrideAccount) MarshalJSON() ([]byte, error) {
+	type acc struct {
+		Nonce     hexutil.Uint64              `json:"nonce,omitempty"`
+		Code      string                      `json:"code,omitempty"`
+		Balance   *hexutil.Big                `json:"balance,omitempty"`
+		State     interface{}                 `json:"state,omitempty"`
+		StateDiff map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
 	}
-	return &result
+
+	m := acc{
+		Nonce:     hexutil.Uint64(a.Nonce),
+		Balance:   (*hexutil.Big)(a.Balance),
+		StateDiff: a.StateDiff,
+	}
+	if a.Code != nil {
+		m.Code = hexutil.Encode(a.Code)
+	}
+	if a.State != nil {
+		m.State = a.State
+	}
+	return json.Marshal(m)
 }
