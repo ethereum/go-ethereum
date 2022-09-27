@@ -85,7 +85,7 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/sched/goroutines:goroutines"},
 }
 
-func readRuntimeMetrics(v *runtimeStats) {
+func readRuntimeStats(v *runtimeStats) {
 	metrics.Read(runtimeSamples)
 	for _, s := range runtimeSamples {
 		switch s.Name {
@@ -188,7 +188,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
 
-		readRuntimeMetrics(&rstats[now])
+		readRuntimeStats(&rstats[now])
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
 		memAllocs.Mark(int64(rstats[now].GCAllocObj - rstats[prev].GCAllocObj))
 		memFrees.Mark(int64(rstats[now].GCFreedObj - rstats[prev].GCFreedObj))
