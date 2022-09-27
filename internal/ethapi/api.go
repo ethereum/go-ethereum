@@ -1149,9 +1149,9 @@ func (s *BlockChainAPI) BatchCall(ctx context.Context, config BatchCallConfig) (
 		if err != nil {
 			return nil, err
 		}
-		// If the result contains a revert reason, try to unpack and return it.
+		// If the result contains a revert reason, try to unpack it.
 		if len(result.Revert()) > 0 {
-			return nil, newRevertError(result)
+			result.Err = newRevertError(result)
 		}
 		results = append(results, CallResult{Return: result.Return(), Error: result.Err})
 	}
