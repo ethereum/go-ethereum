@@ -2479,15 +2479,13 @@ func TestTransactionIndices(t *testing.T) {
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	height := uint64(128)
-	genDb, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), int(height), func(i int, block *BlockGen) {
+	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 128, func(i int, block *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
 		block.AddTx(tx)
 	})
-	blocks2, _ := GenerateChain(gspec.Config, blocks[len(blocks)-1], ethash.NewFaker(), genDb, 10, nil)
 
 	check := func(tail *uint64, chain *BlockChain) {
 		stored := rawdb.ReadTxIndexTail(chain.db)
@@ -2522,43 +2520,19 @@ func TestTransactionIndices(t *testing.T) {
 			}
 		}
 	}
-	frdir := t.TempDir()
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-	if err != nil {
-		t.Fatalf("failed to create temp freezer db: %v", err)
-	}
-	// Import all blocks into ancient db
-	l := uint64(0)
-	chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	headers := make([]*types.Header, len(blocks))
-	for i, block := range blocks {
-		headers[i] = block.Header()
-	}
-	if n, err := chain.InsertHeaderChain(headers, 0); err != nil {
-		t.Fatalf("failed to insert header %d: %v", n, err)
-	}
-	if n, err := chain.InsertReceiptChain(blocks, receipts, 128); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-	chain.Stop()
-	ancientDb.Close()
-
 	// Init block chain with external ancients, check all needed indices has been indexed.
 	limit := []uint64{0, 32, 64, 128}
 	for _, l := range limit {
-		ancientDb, err = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-		if err != nil {
-			t.Fatalf("failed to create temp freezer db: %v", err)
-		}
+		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
+		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
+
 		l := l
-		chain, err = NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
+		chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
-		time.Sleep(50 * time.Millisecond) // Wait for indices initialisation
+		chain.indexBlocks(rawdb.ReadTxIndexTail(ancientDb), 128, make(chan struct{}))
+
 		var tail uint64
 		if l != 0 {
 			tail = uint64(128) - l + 1
@@ -2569,23 +2543,23 @@ func TestTransactionIndices(t *testing.T) {
 	}
 
 	// Reconstruct a block chain which only reserves HEAD-64 tx indices
-	ancientDb, err = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
-	if err != nil {
-		t.Fatalf("failed to create temp freezer db: %v", err)
-	}
+	ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	defer ancientDb.Close()
 
+	rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
 	limit = []uint64{0, 64 /* drop stale */, 32 /* shorten history */, 64 /* extend history */, 0 /* restore all */}
-	tails := []uint64{0, 67 /* 130 - 64 + 1 */, 100 /* 131 - 32 + 1 */, 69 /* 132 - 64 + 1 */, 0}
-	for i, l := range limit {
+	for _, l := range limit {
 		l := l
-		chain, err = NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
+		chain, err := NewBlockChain(ancientDb, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, &l)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}
-		chain.InsertChain(blocks2[i : i+1]) // Feed chain a higher block to trigger indices updater.
-		time.Sleep(50 * time.Millisecond)   // Wait for indices initialisation
-		check(&tails[i], chain)
+		var tail uint64
+		if l != 0 {
+			tail = uint64(128) - l + 1
+		}
+		chain.indexBlocks(rawdb.ReadTxIndexTail(ancientDb), 128, make(chan struct{}))
+		check(&tail, chain)
 		chain.Stop()
 	}
 }
