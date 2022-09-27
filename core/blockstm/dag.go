@@ -74,13 +74,19 @@ func BuildDAG(deps TxnInputOutput) (d DAG) {
 func (d DAG) Report(out func(string)) {
 	roots := make([]int, 0)
 	rootIds := make([]string, 0)
+	rootIdMap := make(map[int]string, len(d.GetRoots()))
 
 	for k, i := range d.GetRoots() {
 		roots = append(roots, i.(int))
-		rootIds = append(rootIds, k)
+		rootIdMap[i.(int)] = k
 	}
 
 	sort.Ints(roots)
+
+	for _, i := range roots {
+		rootIds = append(rootIds, rootIdMap[i])
+	}
+
 	fmt.Println(roots)
 
 	makeStrs := func(ints []int) (ret []string) {
