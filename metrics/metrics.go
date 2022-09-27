@@ -173,9 +173,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 		memPauses.Mark(int64(memstats[location1].GCPauses - memstats[location2].GCPauses))
 		memAllocs.Mark(int64(memstats[location1].GCAllocs - memstats[location2].GCAllocs))
-		memFrees.Mark(int64(memstats[location1].GCAllocs - memstats[location2].GCAllocs))
+		memFrees.Mark(int64(memstats[location1].GCFrees - memstats[location2].GCFrees))
 
-		memHeld.Update(int64(memstats[location1].MemTotal - memstats[location1].HeapReleased))
+		memHeld.Update(int64(memstats[location1].MemTotal - memstats[location1].HeapFree - memstats[location1].HeapReleased))
 		memUsed.Update(int64(memstats[location1].MemTotal))
 
 		if ReadDiskStats(&diskstats[location1]) == nil {
