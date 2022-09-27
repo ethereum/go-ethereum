@@ -332,8 +332,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 func TestOverrideAccountMarshal(t *testing.T) {
 	om := map[common.Address]OverrideAccount{
 		common.Address{0x11}: OverrideAccount{
-			// Zero-valued nonce is not overrideden, but simply dropped
-			// by the encoder.
+			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
 		common.Address{0xaa}: OverrideAccount{
@@ -343,19 +342,14 @@ func TestOverrideAccountMarshal(t *testing.T) {
 			Code: []byte{1},
 		},
 		common.Address{0xcc}: OverrideAccount{
-			// This one checks that 'code' is set when
-			// the input is a non-nil but empty slice.
-			Code: []byte{},
-		},
-		common.Address{0xdd}: OverrideAccount{
-			// This one checks that 'state' is set
-			// when the input is a non-nil but empty map.
-			State: map[common.Hash]common.Hash{},
-		},
-		common.Address{0xee}: OverrideAccount{
-			// This one checks that 'balance' is set
-			// when the input is a non-nil but zero integer.
+			// 'code', 'balance', 'state' should be set when input is
+			// a non-nil but empty value.
+			Code:    []byte{},
 			Balance: big.NewInt(0),
+			State:   map[common.Hash]common.Hash{},
+			// For 'stateDiff' the behavior is different, empty map
+			// is ignored because it makes no difference.
+			StateDiff: map[common.Hash]common.Hash{},
 		},
 	}
 
@@ -373,13 +367,9 @@ func TestOverrideAccountMarshal(t *testing.T) {
     "code": "0x01"
   },
   "0xcc00000000000000000000000000000000000000": {
-    "code": "0x"
-  },
-  "0xdd00000000000000000000000000000000000000": {
+    "code": "0x",
+    "balance": "0x0",
     "state": {}
-  },
-  "0xee00000000000000000000000000000000000000": {
-    "balance": "0x0"
   }
 }`
 
