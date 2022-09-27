@@ -204,11 +204,25 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 
 // OverrideAccount specifies the state of an account to be overridden.
 type OverrideAccount struct {
-	Nonce     uint64                      `json:"nonce"`
-	Code      []byte                      `json:"code"`
-	Balance   *big.Int                    `json:"balance"`
-	State     map[common.Hash]common.Hash `json:"state"`
-	StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
+	// Nonce sets nonce of the account. Note: the nonce override will only
+	// be applied when it is set to a non-zero value.
+	Nonce uint64
+
+	// Code sets the contract code. The override will be applied
+	// when the code is non-nil, i.e. setting empty code is possible
+	// using an empty slice.
+	Code []byte
+
+	// Balance sets the account balance.
+	Balance *big.Int
+
+	// State sets the complete storage. The override will be applied
+	// when the given map is non-nil. Using an empty map overrides the
+	// contract storage to be empty.
+	State map[common.Hash]common.Hash
+
+	// StateDiff allows overriding individual storage slots.
+	StateDiff map[common.Hash]common.Hash
 }
 
 func (a OverrideAccount) MarshalJSON() ([]byte, error) {
@@ -220,16 +234,16 @@ func (a OverrideAccount) MarshalJSON() ([]byte, error) {
 		StateDiff map[common.Hash]common.Hash `json:"stateDiff,omitempty"`
 	}
 
-	m := acc{
+	output := acc{
 		Nonce:     hexutil.Uint64(a.Nonce),
 		Balance:   (*hexutil.Big)(a.Balance),
 		StateDiff: a.StateDiff,
 	}
 	if a.Code != nil {
-		m.Code = hexutil.Encode(a.Code)
+		output.Code = hexutil.Encode(a.Code)
 	}
 	if a.State != nil {
-		m.State = a.State
+		output.State = a.State
 	}
-	return json.Marshal(m)
+	return json.Marshal(output)
 }
