@@ -232,25 +232,26 @@ func (tx *minimalTx) EncodeRLP(w io.Writer) error {
 // a view over a regular transactions slice, to RLP decode/encode the transactions all the minimal way
 type extBlockTxs []*Transaction
 
-func (txs extBlockTxs) DecodeRLP(s *rlp.Stream) error {
+func (txs *extBlockTxs) DecodeRLP(s *rlp.Stream) error {
 	// we need generics to do this nicely...
 	var out []*minimalTx
-	for i, tx := range txs {
+	for i, tx := range *txs {
 		out[i] = (*minimalTx)(tx)
 	}
 	if err := s.Decode(&out); err != nil {
 		return fmt.Errorf("failed to decode list of minimal txs: %v", err)
 	}
-	txs = make([]*Transaction, len(out))
+	rawtxs := make([]*Transaction, len(out))
 	for i, tx := range out {
-		txs[i] = (*Transaction)(tx)
+		rawtxs[i] = (*Transaction)(tx)
 	}
+	*txs = rawtxs
 	return nil
 }
 
-func (txs extBlockTxs) EncodeRLP(w io.Writer) error {
-	out := make([]*minimalTx, len(txs))
-	for i, tx := range txs {
+func (txs *extBlockTxs) EncodeRLP(w io.Writer) error {
+	out := make([]*minimalTx, len(*txs))
+	for i, tx := range *txs {
 		out[i] = (*minimalTx)(tx)
 	}
 	return rlp.Encode(w, &out)
@@ -259,7 +260,7 @@ func (txs extBlockTxs) EncodeRLP(w io.Writer) error {
 // "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header *Header
-	Txs    extBlockTxs
+	Txs    *extBlockTxs
 	Uncles []*Header
 }
 
@@ -331,17 +332,17 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	eb := extblock{Txs: new(extBlockTxs)}
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
-	for i, tx := range eb.Txs {
+	for i, tx := range *eb.Txs {
 		if tx.wrapData != nil {
 			return fmt.Errorf("transactions in blocks must not contain wrap-data, tx %d is bad", i)
 		}
 	}
-	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, []*Transaction(eb.Txs)
+	b.header, b.uncles, b.transactions = eb.Header, eb.Uncles, []*Transaction(*eb.Txs)
 	b.size.Store(common.StorageSize(rlp.ListSize(size)))
 	return nil
 }
@@ -350,7 +351,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header: b.header,
-		Txs:    (extBlockTxs)(b.transactions),
+		Txs:    (*extBlockTxs)(&b.transactions),
 		Uncles: b.uncles,
 	})
 }

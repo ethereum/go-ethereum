@@ -135,7 +135,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		Timestamp:     fakeBlock.Time(),
 		ExtraData:     fakeBlock.Extra(),
 		BaseFeePerGas: fakeBlock.BaseFee(),
-		Blobs:         fakeBlock.ExcessBlobs(),
+		ExcessBlobs:   fakeBlock.ExcessBlobs(),
 		BlockHash:     fakeBlock.Hash(),
 		Transactions:  encodeTransactions(fakeBlock.Transactions()),
 	})
