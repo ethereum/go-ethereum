@@ -217,8 +217,8 @@ type OverrideAccount struct {
 	Balance *big.Int
 
 	// State sets the complete storage. The override will be applied
-	// when the given map is non-nil. Using an empty map overrides the
-	// contract storage to be empty.
+	// when the given map is non-nil. Using an empty map wipes the
+	// entire contract storage during the call.
 	State map[common.Hash]common.Hash
 
 	// StateDiff allows overriding individual storage slots.
