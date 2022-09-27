@@ -348,6 +348,11 @@ func TestOverrideAccountMarshal(t *testing.T) {
 			// when the input is a non-nil but empty map.
 			State: map[common.Hash]common.Hash{},
 		},
+		common.Address{0xee}: OverrideAccount{
+			// This one checks that 'balance' is set
+			// when the input is a non-nil but zero integer.
+			Balance: big.NewInt(0),
+		},
 	}
 
 	marshalled, err := json.MarshalIndent(&om, "", "  ")
@@ -368,6 +373,9 @@ func TestOverrideAccountMarshal(t *testing.T) {
   },
   "0xdd00000000000000000000000000000000000000": {
     "state": {}
+  },
+  "0xee00000000000000000000000000000000000000": {
+    "balance": "0x0"
   }
 }`
 
