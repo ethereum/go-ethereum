@@ -137,12 +137,6 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
-		}, {
-			"testCodeOverride",
-			func(t *testing.T) { testCodeOverride(t) },
-		}, {
-			"testNoCodeOverride",
-			func(t *testing.T) { testNoCodeOverride(t) },
 		},
 	}
 	t.Parallel()
@@ -336,77 +330,38 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testNoCodeOverride(t *testing.T) {
-	override := OverrideAccount{}
-
+func TestCodeOverride(t *testing.T) {
 	mapAcc := make(map[common.Address]OverrideAccount)
-	mapAcc[testAddr] = override
-
-	encoded := toOverrideMap(&mapAcc)
-
+	mapAcc[common.Address{0xaa}] = OverrideAccount{}
+	mapAcc[common.Address{0xbb}] = OverrideAccount{
+		Code: []byte{1},
+	}
+	marshalled, err := json.Marshal(toOverrideMap(&mapAcc))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	type overrideAccount struct {
 		Nonce     hexutil.Uint64              `json:"nonce"`
-		Code      []byte                      `json:"code"`
+		Code      hexutil.Bytes               `json:"code"`
 		Balance   *hexutil.Big                `json:"balance"`
 		State     map[common.Hash]common.Hash `json:"state"`
 		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
 	}
-
 	var accounts map[common.Address]*overrideAccount
-	marshalled, err := json.Marshal(encoded)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
 	err = json.Unmarshal(marshalled, &accounts)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	account := accounts[testAddr]
-	if account == nil {
-		t.Fatal("Empty account retrieved")
+	if account, ok := accounts[common.Address{0xaa}]; !ok {
+		t.Fatal("missing account")
+	} else if account.Code != nil {
+		t.Fatalf("code wrong, should be nil, is %v", account.Code)
 	}
 
-	if account.Code != nil {
-		t.Fatal("Code should be empty")
-	}
-}
-
-func testCodeOverride(t *testing.T) {
-	override := OverrideAccount{}
-	override.Code = []byte{1}
-
-	mapAcc := make(map[common.Address]OverrideAccount)
-	mapAcc[testAddr] = override
-
-	encoded := toOverrideMap(&mapAcc)
-
-	type overrideAccount struct {
-		Nonce     hexutil.Uint64              `json:"nonce"`
-		Code      []byte                      `json:"code"`
-		Balance   *hexutil.Big                `json:"balance"`
-		State     map[common.Hash]common.Hash `json:"state"`
-		StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
-	}
-
-	var accounts map[common.Address]*overrideAccount
-	marshalled, err := json.Marshal(encoded)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	err = json.Unmarshal(marshalled, &accounts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	account := accounts[testAddr]
-	if account == nil {
-		t.Fatal("Empty account retrieved")
-	}
-
-	if account.Code == nil {
-		t.Fatal("Code should not be empty")
+	if account, ok := accounts[common.Address{0xbb}]; !ok {
+		t.Fatal("missing account")
+	} else if have, want := account.Code, []byte{1}; !bytes.Equal(have, want) {
+		t.Fatalf("code wrong, have %x, want %x", have, want)
 	}
 }
