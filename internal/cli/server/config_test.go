@@ -108,9 +108,6 @@ func TestConfigLoadFile(t *testing.T) {
 
 		assert.Equal(t, config, &Config{
 			DataDir: "./data",
-			RequiredBlocks: map[string]string{
-				"a": "b",
-			},
 			P2P: &P2PConfig{
 				MaxPeers: 30,
 			},

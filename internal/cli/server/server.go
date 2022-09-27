@@ -305,6 +305,8 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 			}
 		}()
 
+		log.Info("Enabling metrics export to prometheus", "path", fmt.Sprintf("http://%s/debug/metrics/prometheus", config.PrometheusAddr))
+
 	}
 
 	if config.OpenCollectorEndpoint != "" {
@@ -346,6 +348,8 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 		// set the tracer
 		s.tracer = tracerProvider
+
+		log.Info("Open collector tracing started", "address", config.OpenCollectorEndpoint)
 	}
 
 	return nil

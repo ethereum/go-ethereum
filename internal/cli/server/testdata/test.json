@@ -1,8 +1,5 @@
 {
   "datadir": "./data",
-  "requiredblocks": {
-      "a": "b"
-  },
   "p2p": {
       "maxpeers": 30
   },
