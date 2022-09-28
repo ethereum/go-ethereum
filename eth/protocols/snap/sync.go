@@ -615,6 +615,8 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		}
 	}()
 	defer s.report(true)
+	// commit any trie- and bytecode-healing data.
+	defer s.commitHealer(true)
 
 	// Whether sync completed or not, disregard any future packets
 	defer func() {
@@ -2154,14 +2156,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 			log.Error("Invalid trienode processed", "hash", hash, "err", err)
 		}
 	}
-	batch := s.db.NewBatch()
-	if err := s.healer.scheduler.Commit(batch); err != nil {
-		log.Error("Failed to commit healing data", "err", err)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist healing data", "err", err)
-	}
-	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
+	s.commitHealer(false)
 
 	// Calculate the processing rate of one filled trie node
 	rate := float64(fills) / (float64(time.Since(start)) / float64(time.Second))
@@ -2208,6 +2203,20 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	}
 }
 
+func (s *Syncer) commitHealer(force bool) {
+	if !force && s.healer.scheduler.MemSize() < ethdb.IdealBatchSize {
+		return
+	}
+	batch := s.db.NewBatch()
+	if err := s.healer.scheduler.Commit(batch); err != nil {
+		log.Error("Failed to commit healing data", "err", err)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to persist healing data", "err", err)
+	}
+	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
+}
+
 // processBytecodeHealResponse integrates an already validated bytecode response
 // into the healer tasks.
 func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
@@ -2234,14 +2243,7 @@ func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 			log.Error("Invalid bytecode processed", "hash", hash, "err", err)
 		}
 	}
-	batch := s.db.NewBatch()
-	if err := s.healer.scheduler.Commit(batch); err != nil {
-		log.Error("Failed to commit healing data", "err", err)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist healing data", "err", err)
-	}
-	log.Debug("Persisted set of healing data", "type", "bytecode", "bytes", common.StorageSize(batch.ValueSize()))
+	s.commitHealer(false)
 }
 
 // forwardAccountTask takes a filled account task and persists anything available
