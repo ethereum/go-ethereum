@@ -714,6 +714,9 @@ func decodeHash(s string) (common.Hash, error) {
 	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("hex string invalid")
