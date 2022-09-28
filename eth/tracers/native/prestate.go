@@ -65,7 +65,7 @@ type prestateTracer struct {
 }
 
 type prestateTracerConfig struct {
-	CollectPost bool `json:"collectPost"` // If true, prestate tracer will collect pre and post states
+	DiffMode bool `json:"diffMode"` // If true, this tracer will return all diff states
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
@@ -109,14 +109,14 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	t.pre[from].Balance = fromBal
 	t.pre[from].Nonce--
 
-	if create && t.config.CollectPost {
+	if create && t.config.DiffMode {
 		t.created[to] = true
 	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if t.create && !t.config.CollectPost {
+	if t.create && !t.config.DiffMode {
 		// Exclude created contract.
 		delete(t.pre, t.to)
 	}
@@ -133,8 +133,8 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
 		t.lookupStorage(caller, slot)
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
-		refundAddr := common.Address(stackData[stackLen-1].Bytes20())
-		t.lookupAccount(refundAddr)
+		addr := common.Address(stackData[stackLen-1].Bytes20())
+		t.lookupAccount(addr)
 		if op == vm.SELFDESTRUCT {
 			t.deleted[caller] = true
 		}
@@ -176,7 +176,7 @@ func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
 }
 
 func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
-	if !t.config.CollectPost {
+	if !t.config.DiffMode {
 		return
 	}
 
@@ -240,7 +240,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	var res []byte
 	var err error
-	if t.config.CollectPost {
+	if t.config.DiffMode {
 		res, err = json.Marshal(struct {
 			Pre  state `json:"pre"`
 			Post state `json:"post"`
