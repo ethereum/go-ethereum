@@ -363,8 +363,9 @@ func (o *unhandledWrapper) SetWriteDeadline(t time.Time) error { return nil }
 func kcpStatsDump(snmp *kcp.Snmp) {
 	header := snmp.Header()
 	for i, value := range snmp.ToSlice() {
-		fmt.Printf("%s: %s\n", header[i], value)
+		fmt.Printf("%s: %s,", header[i], value)
 	}
+	fmt.Println("")
 }
 
 type downloadWriter struct {
@@ -395,6 +396,9 @@ func (w *downloadWriter) Write(buf []byte) (int, error) {
 		}
 		fmt.Print(pct, "%")
 		w.lastpct = pct
+		if pct == 100 {
+			fmt.Println("")
+		}
 	}
 	return n, err
 }
