@@ -411,7 +411,7 @@ func (q *queue) stats() []interface{} {
 	}
 }
 
-// Reserve1SkeletonHeader reserves a single skeleton headers for the given peer, skipping any
+// Reserve1SkeletonHeader reserves a single skeleton header for the given peer, skipping any
 // previously failed batches.
 func (q *queue) Reserve1SkeletonHeader(p *peerConnection) *fetchRequest {
 	q.lock.Lock()
