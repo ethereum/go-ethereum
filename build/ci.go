@@ -680,10 +680,12 @@ func doDebianSource(cmdline []string) {
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
 	srcdepfetch.Env = append(srcdepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	srcdepfetch.Env = append(srcdepfetch.Env, "GOMODCACHE=")
 	build.MustRun(srcdepfetch)
 
 	cidepfetch := tc.Go("run", "./build/ci.go")
 	cidepfetch.Env = append(cidepfetch.Env, "GOPATH="+filepath.Join(*workdir, "modgopath"))
+	cidepfetch.Env = append(srcdepfetch.Env, "GOMODCACHE=")
 	cidepfetch.Run() // Command fails, don't care, we only need the deps to start it
 
 	// Create Debian packages and upload them.
