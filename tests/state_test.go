@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -184,12 +185,14 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.Error(err)
 				return
 			}
+			var rules = config.Rules(new(big.Int), false)
+
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
 			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
 
 			var baseFee *big.Int
-			if config.IsLondon(new(big.Int)) {
+			if rules.IsLondon {
 				baseFee = t.json.Env.BaseFee
 				if baseFee == nil {
 					// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
@@ -230,17 +233,40 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
 				nil, 0)
 
+			var (
+				gasUsed uint64
+				elapsed uint64
+				refund  uint64
+			)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				// Execute the message.
 				snapshot := statedb.Snapshot()
-				_, _, err = evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
+				if rules.IsBerlin {
+					statedb.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+				}
+				b.StartTimer()
+				start := time.Now()
+
+				// Execute the message.
+				_, leftOverGas, err := evm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
 				if err != nil {
 					b.Error(err)
 					return
 				}
+
+				b.StopTimer()
+				elapsed += uint64(time.Since(start))
+				refund += statedb.GetRefund()
+				gasUsed += msg.Gas() - leftOverGas
+
 				statedb.RevertToSnapshot(snapshot)
 			}
+			if elapsed < 1 {
+				elapsed = 1
+			}
+			// Keep it as uint64, multiply 100 to get two digit float later
+			mgasps := (100 * 1000 * (gasUsed - refund)) / elapsed
+			b.ReportMetric(float64(mgasps)/100, "mgas/s")
 		})
 	}
 }
