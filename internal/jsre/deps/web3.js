@@ -3719,8 +3719,14 @@ var inputTraceFormatter = function (config) {
     if (config !== undefined && Object.keys(config).length > 0) {
         var validParams = collectTraceConfigFields().split(",");
         var copied = {};
-        for (var field in config) copied[field.toLowerCase()] = config[field];
-        for (var i=0; i<validParams.length; i++) if (copied[validParams[i]] !== undefined) delete copied[validParams[i]];
+        for (var field in config) {
+            copied[field.toLowerCase()] = config[field];
+        }
+        for (var i=0; i<validParams.length; i++) {
+            if (copied[validParams[i]] !== undefined) {
+                delete copied[validParams[i]];
+            }
+        }
         if (Object.keys(copied).length != 0) {
             var unknownFields = [];
             for (var field in copied) unknownFields.push('"' + field + '"');

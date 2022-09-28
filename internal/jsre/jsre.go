@@ -82,7 +82,7 @@ func New(assetPath string, output io.Writer) *JSRE {
 	}
 	go re.runEventLoop()
 	re.Set("loadScript", MakeCallback(re.vm, re.loadScript))
-	re.Set("collectTraceConfigFields", MakeCallback(re.vm, re.collectTraceConifgFields))
+	re.Set("collectTraceConfigFields", MakeCallback(re.vm, re.collectTraceConfigFields))
 	re.Set("inspect", re.prettyPrintJS)
 	return re
 }
@@ -343,10 +343,9 @@ func compileAndRun(vm *goja.Runtime, filename string, src string) (goja.Value, e
 	return vm.RunProgram(script)
 }
 
-func (re *JSRE) collectTraceConifgFields(empty Call) (goja.Value, error) {
-	configObj := tracers.TraceConfig{}
+func (re *JSRE) collectTraceConfigFields(empty Call) (goja.Value, error) {
 	var fields []string
-	for _, field := range reflect.VisibleFields(reflect.TypeOf(configObj)) {
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(tracers.TraceConfig{})) {
 		if !field.Anonymous {
 			fields = append(fields, strings.ToLower(field.Name))
 		}
