@@ -1,0 +1,7 @@
+FROM golang:v1.19.1
+
+# The repo checkout is mounted to /source.
+WORKDIR /source
+
+# Prevent git error because the owner of /source does not exist in the Docker container.
+RUN git config --global --add safe.directory /source

@@ -12,5 +12,3 @@ WORKDIR /source
 
 # Prevent git error because the owner of /source does not exist in the Docker container.
 RUN git config --global --add safe.directory /source
-
-ENTRYPOINT build/bot/ppa-build.sh
