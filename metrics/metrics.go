@@ -84,17 +84,17 @@ var runtimeSamples = []metrics.Sample{
 func readRuntimeStats(v *runtimeStats) {
 	metrics.Read(runtimeSamples)
 	for _, s := range runtimeSamples {
+		if s.Value.Kind() == metrics.KindBad {
+			continue // skip invalid/unknown metrics
+		}
+
 		switch s.Name {
 		case "/gc/pauses:seconds":
-			v.GCPauses = medianBucket(s.Value.Float64Histogram())
+			v.GCPauses = median(s.Value.Float64Histogram())
 		case "/gc/heap/allocs:bytes":
-			if s.Value.Kind() == metrics.KindUint64 {
-				v.GCAllocBytes = s.Value.Uint64()
-			}
+			v.GCAllocBytes = s.Value.Uint64()
 		case "/gc/heap/frees:bytes":
-			if s.Value.Kind() == metrics.KindUint64 {
-				v.GCFreedBytes = s.Value.Uint64()
-			}
+			v.GCFreedBytes = s.Value.Uint64()
 		case "/memory/classes/total:bytes":
 			v.MemTotal = s.Value.Uint64()
 		case "/memory/classes/heap/free:bytes":
@@ -109,9 +109,8 @@ func readRuntimeStats(v *runtimeStats) {
 	}
 }
 
-// medianBucket gives the median of a histogram.
-// This is taken from the runtime/metrics example code.
-func medianBucket(h *metrics.Float64Histogram) float64 {
+// median gives an approximation of the median value of a histogram.
+func median(h *metrics.Float64Histogram) float64 {
 	total := uint64(0)
 	for _, count := range h.Counts {
 		total += count
