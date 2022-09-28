@@ -61,7 +61,7 @@ func TestPrestateTracer(t *testing.T) {
 }
 
 func TestPrestateWithCollectPostTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_collect_post", t, func() interface{} { return new(prePostStateTrace) })
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t, func() interface{} { return new(prePostStateTrace) })
 }
 
 func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typeBuilder func() interface{}) {
