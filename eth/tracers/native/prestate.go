@@ -39,10 +39,10 @@ func init() {
 type state = map[common.Address]*account
 
 type account struct {
-	Balance *big.Int                    `json:"balance"`
-	Nonce   uint64                      `json:"nonce"`
-	Code    []byte                      `json:"code"`
-	Storage map[common.Hash]common.Hash `json:"storage"`
+	Balance *big.Int                    `json:"balance,omitempty"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 }
 
 type accountMarshaling struct {
