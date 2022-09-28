@@ -645,6 +645,7 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 	// Return any non-satisfied requests to the pool
 	if req.From > 0 {
 		taskQueue.Push(req.From, -int64(req.From))
+		// the invariant is that req.From > 0(for headers) and len(req.Headers) > 0(for bodies and receipts) can't both be true
 		return 1
 	}
 	for _, header := range req.Headers {
