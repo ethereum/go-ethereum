@@ -17,3 +17,8 @@ RUN git config --global --add safe.directory /source
 ENV GOPATH=/cache/go
 ENV GOCACHE=/cache/go/cache
 ENV GOMODCACHE=/cache/go/modcache
+
+# Some tools need HOME, create it in /tmp because that's the only location the build
+# user can write to outside of /source and /cache.
+RUN mkdir /tmp/home && chmod 777 /tmp/home
+ENV HOME=/tmp/home
