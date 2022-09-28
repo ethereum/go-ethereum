@@ -191,9 +191,9 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		newNonce := t.env.StateDB.GetNonce(addr)
 		newCode := t.env.StateDB.GetCode(addr)
 
-		if newBalance.Cmp(t.pre[addr].Balance) == 0 {
+		if newBalance.Cmp(t.pre[addr].Balance) != 0 {
 			modified = true
-			t.post[addr].Balance = newBalance
+			postAccount.Balance = newBalance
 		}
 		if newNonce != t.pre[addr].Nonce {
 			modified = true
@@ -201,7 +201,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 		}
 		if !bytes.Equal(newCode, t.pre[addr].Code) {
 			modified = true
-			t.post[addr].Code = newCode
+			postAccount.Code = newCode
 		}
 
 		for key, val := range state.Storage {
@@ -229,7 +229,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s.Balance == "0x0" && len(s.Storage) == 0 && s.Code == "0x" {
+		if s := t.pre[a]; s.Balance.Cmp(big.NewInt(0)) == 0 && len(s.Storage) == 0 && len(s.Code) == 0 {
 			delete(t.pre, a)
 		}
 	}
