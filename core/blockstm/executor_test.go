@@ -117,7 +117,7 @@ func (t *testExecTask) Execute(mvh *MVHashMap, incarnation int) error {
 	}
 
 	if deps != -1 {
-		return ErrExecAbortError{deps}
+		return ErrExecAbortError{deps, fmt.Errorf("Dependency error")}
 	}
 
 	return nil
@@ -151,6 +151,10 @@ func (t *testExecTask) Settle() {}
 
 func (t *testExecTask) Sender() common.Address {
 	return t.sender
+}
+
+func (t *testExecTask) Hash() common.Hash {
+	return common.BytesToHash([]byte(fmt.Sprintf("%d", t.txIdx)))
 }
 
 func randTimeGenerator(min time.Duration, max time.Duration) func(txIdx int, opIdx int) time.Duration {

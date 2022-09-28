@@ -19,7 +19,6 @@ package core
 import (
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -106,7 +105,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
 
 		if task.result == nil || err != nil {
-			return blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex()}
+			return blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex(), OriginError: err}
 		}
 
 		reads := task.statedb.MVReadMap()
@@ -127,7 +126,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	}
 
 	if task.statedb.HadInvalidRead() || err != nil {
-		err = blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex()}
+		err = blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex(), OriginError: err}
 		return
 	}
 
@@ -150,6 +149,10 @@ func (task *ExecutionTask) MVFullWriteList() []blockstm.WriteDescriptor {
 
 func (task *ExecutionTask) Sender() common.Address {
 	return task.sender
+}
+
+func (task *ExecutionTask) Hash() common.Hash {
+	return task.tx.Hash()
 }
 
 func (task *ExecutionTask) Settle() {
@@ -342,14 +345,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, nil, 0, err
 	}
 
-	statedb.Finalise(p.config.IsEIP158(blockNumber))
-
-	start := time.Now()
-
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
-
-	fmt.Println("Finalize time of parallel execution:", time.Since(start))
 
 	return receipts, allLogs, *usedGas, nil
 }

@@ -23,6 +23,7 @@ type ExecTask interface {
 	MVReadList() []ReadDescriptor
 	MVWriteList() []WriteDescriptor
 	MVFullWriteList() []WriteDescriptor
+	Hash() common.Hash
 	Sender() common.Address
 	Settle()
 }
@@ -48,7 +49,8 @@ func (ev *ExecVersionView) Execute() (er ExecResult) {
 }
 
 type ErrExecAbortError struct {
-	Dependency int
+	Dependency  int
+	OriginError error
 }
 
 func (e ErrExecAbortError) Error() string {
@@ -308,12 +310,33 @@ func (pe *ParallelExecutor) Prepare() {
 	}
 }
 
+func (pe *ParallelExecutor) Close(wait bool) {
+	close(pe.chTasks)
+	close(pe.chSpeculativeTasks)
+
+	if wait {
+		pe.workerWg.Wait()
+	}
+
+	close(pe.chResults)
+
+	if wait {
+		pe.settleWg.Wait()
+	}
+
+	close(pe.chSettle)
+}
+
 // nolint: gocognit
-func (pe *ParallelExecutor) Step(res ExecResult) (result ParallelExecutionResult, err error) {
+func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResult, err error) {
 	tx := res.ver.TxnIndex
 
-	if _, ok := res.err.(ErrExecAbortError); res.err != nil && !ok {
-		err = res.err
+	if abortErr, ok := res.err.(ErrExecAbortError); ok && abortErr.OriginError != nil && pe.skipCheck[tx] {
+		// If the transaction failed when we know it should not fail, this means the transaction itself is
+		// bad (e.g. wrong nonce), and we should exit the execution immediately
+		err = fmt.Errorf("could not apply tx %d [%v]: %w", tx, pe.tasks[tx].Hash(), abortErr.OriginError)
+		pe.Close(false)
+
 		return
 	}
 
@@ -440,12 +463,7 @@ func (pe *ParallelExecutor) Step(res ExecResult) (result ParallelExecutionResult
 	if pe.validateTasks.countComplete() == len(pe.tasks) && pe.execTasks.countComplete() == len(pe.tasks) {
 		log.Debug("blockstm exec summary", "execs", pe.cntExec, "success", pe.cntSuccess, "aborts", pe.cntAbort, "validations", pe.cntTotalValidations, "failures", pe.cntValidationFail, "#tasks/#execs", fmt.Sprintf("%.2f%%", float64(len(pe.tasks))/float64(pe.cntExec)*100))
 
-		close(pe.chTasks)
-		close(pe.chSpeculativeTasks)
-		pe.workerWg.Wait()
-		close(pe.chResults)
-		pe.settleWg.Wait()
-		close(pe.chSettle)
+		pe.Close(true)
 
 		var dag DAG
 
@@ -469,12 +487,8 @@ func (pe *ParallelExecutor) Step(res ExecResult) (result ParallelExecutionResult
 	}
 
 	// Send speculative tasks
-	for pe.execTasks.minPending() != -1 || len(pe.execTasks.inProgress) == 0 {
+	for pe.execTasks.minPending() != -1 {
 		nextTx := pe.execTasks.takeNextPending()
-
-		if nextTx == -1 {
-			nextTx = pe.execTasks.takeNextPending()
-		}
 
 		if nextTx != -1 {
 			pe.cntExec++
@@ -502,7 +516,7 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	for range pe.chResults {
 		res := pe.resultQueue.Pop().(ExecResult)
 
-		result, err = pe.Step(res)
+		result, err = pe.Step(&res)
 
 		if err != nil {
 			return result, err
@@ -521,7 +535,5 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 }
 
 func ExecuteParallel(tasks []ExecTask, profile bool) (result ParallelExecutionResult, err error) {
-	return executeParallelWithCheck(tasks, profile, func(pe *ParallelExecutor) error {
-		return nil
-	})
+	return executeParallelWithCheck(tasks, profile, nil)
 }
