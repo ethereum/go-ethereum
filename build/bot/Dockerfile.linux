@@ -1,4 +1,4 @@
-FROM golang:v1.19.1
+FROM golang:1.19.1
 
 # The repo checkout is mounted to /source.
 WORKDIR /source
