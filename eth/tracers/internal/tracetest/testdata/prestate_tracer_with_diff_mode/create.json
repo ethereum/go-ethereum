@@ -59,13 +59,11 @@
     "pre": {
       "0x2a65aca4d5fc5b5c859090a6c34d164135398226": {
         "balance": "0x9fb6b81e112638b886",
-        "nonce": 217865,
-        "code": "0x"
+        "nonce": 217865
       },
       "0xf0c5cef39b17c213cfe090a46b8c7760ffb7928a": {
         "balance": "0x15b6828e22bb12188",
-        "nonce": 747,
-        "code": "0x"
+        "nonce": 747
       }
     },
     "post": {

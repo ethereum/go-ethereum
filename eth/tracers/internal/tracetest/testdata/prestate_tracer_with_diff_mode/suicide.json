@@ -87,13 +87,11 @@
       },
       "0x2a65aca4d5fc5b5c859090a6c34d164135398226": {
         "balance": "0x326601cc6cf364f6b9",
-        "nonce": 12122,
-        "code": "0x"
+        "nonce": 12122
       },
       "0xd3cda913deb6f67967b99d67acdfa1712c293601": {
         "balance": "0x1ff0509d9d6821e26",
-        "nonce": 138,
-        "code": "0x"
+        "nonce": 138
       }
     },
     "post": {

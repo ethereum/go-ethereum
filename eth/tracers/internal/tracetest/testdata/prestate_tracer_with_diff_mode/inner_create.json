@@ -207,8 +207,7 @@
     "pre": {
       "0x2a65aca4d5fc5b5c859090a6c34d164135398226": {
         "balance": "0x98e1c608601c2496b2",
-        "nonce": 218916,
-        "code": "0x"
+        "nonce": 218916
       },
       "0x6c8f2a135f6ed072de4503bd7c4999a1a17f824b": {
         "balance": "0x0",
@@ -303,13 +302,11 @@
       },
       "0xb834e3edfc1a927bdcecb67a9d0eccbd752a5bb3": {
         "balance": "0xffe9b09a5c474dca",
-        "nonce": 975,
-        "code": "0x"
+        "nonce": 975
       },
       "0xd3cda913deb6f67967b99d67acdfa1712c293601": {
         "balance": "0x4f5807198e238f13e",
-        "nonce": 283,
-        "code": "0x"
+        "nonce": 283
       }
     },
     "post": {
