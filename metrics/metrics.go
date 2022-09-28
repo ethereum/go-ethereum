@@ -60,9 +60,7 @@ var threadCreateProfile = pprof.Lookup("threadcreate")
 type runtimeStats struct {
 	GCPauses     float64
 	GCAllocBytes uint64
-	GCAllocObj   uint64
 	GCFreedBytes uint64
-	GCFreedObj   uint64
 
 	MemTotal     uint64
 	HeapFree     uint64
@@ -73,11 +71,9 @@ type runtimeStats struct {
 }
 
 var runtimeSamples = []metrics.Sample{
-	{Name: "/gc/pauses:seconds"}, // Histogram
+	{Name: "/gc/pauses:seconds"}, // histogram
 	{Name: "/gc/heap/allocs:bytes"},
-	{Name: "/gc/heap/allocs:objects"},
 	{Name: "/gc/heap/frees:bytes"},
-	{Name: "/gc/heap/frees:objects"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
 	{Name: "/memory/classes/heap/released:bytes"},
@@ -95,17 +91,9 @@ func readRuntimeStats(v *runtimeStats) {
 			if s.Value.Kind() == metrics.KindUint64 {
 				v.GCAllocBytes = s.Value.Uint64()
 			}
-		case "/gc/heap/allocs:objects":
-			if s.Value.Kind() == metrics.KindUint64 {
-				v.GCAllocObj = s.Value.Uint64()
-			}
 		case "/gc/heap/frees:bytes":
 			if s.Value.Kind() == metrics.KindUint64 {
 				v.GCFreedBytes = s.Value.Uint64()
-			}
-		case "/gc/heap/frees:objects":
-			if s.Value.Kind() == metrics.KindUint64 {
-				v.GCFreedObj = s.Value.Uint64()
 			}
 		case "/memory/classes/total:bytes":
 			v.MemTotal = s.Value.Uint64()
@@ -157,18 +145,16 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 	// Define the various metrics to collect
 	var (
-		cpuSysLoad    = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
-		cpuSysWait    = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
-		cpuProcLoad   = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
-		cpuThreads    = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
-		cpuGoroutines = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
-
-		memPauses = GetOrRegisterGaugeFloat64("system/memory/pauses", DefaultRegistry)
-		memAllocs = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
-		memFrees  = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
-		memHeld   = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
-		memUsed   = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
-
+		cpuSysLoad            = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
+		cpuSysWait            = GetOrRegisterGauge("system/cpu/syswait", DefaultRegistry)
+		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
+		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
+		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
+		memPauses             = GetOrRegisterGaugeFloat64("system/memory/pauses", DefaultRegistry)
+		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
+		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
+		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
+		memUsed               = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
 		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
 		diskReadBytes         = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
 		diskReadBytesCounter  = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
@@ -180,31 +166,34 @@ func CollectProcessMetrics(refresh time.Duration) {
 	// Iterate loading the different stats and updating the meters.
 	now, prev := 0, 1
 	for ; ; now, prev = prev, now {
-
+		// CPU
 		ReadCPUStats(&cpustats[now])
 		cpuSysLoad.Update((cpustats[now].GlobalTime - cpustats[prev].GlobalTime) / refreshFreq)
 		cpuSysWait.Update((cpustats[now].GlobalWait - cpustats[prev].GlobalWait) / refreshFreq)
 		cpuProcLoad.Update((cpustats[now].LocalTime - cpustats[prev].LocalTime) / refreshFreq)
 
+		// Threads
 		cpuThreads.Update(int64(threadCreateProfile.Count()))
 
+		// Go runtime metrics
 		readRuntimeStats(&rstats[now])
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
-		memAllocs.Mark(int64(rstats[now].GCAllocObj - rstats[prev].GCAllocObj))
-		memFrees.Mark(int64(rstats[now].GCFreedObj - rstats[prev].GCFreedObj))
+		memAllocs.Mark(int64(rstats[now].GCAllocBytes - rstats[prev].GCAllocBytes))
+		memFrees.Mark(int64(rstats[now].GCFreedBytes - rstats[prev].GCFreedBytes))
 		memPauses.Update(rstats[now].GCPauses)
 		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
 		memHeld.Update(int64(rstats[now].MemTotal))
 
+		// Disk
 		if ReadDiskStats(&diskstats[now]) == nil {
 			diskReads.Mark(diskstats[now].ReadCount - diskstats[prev].ReadCount)
 			diskReadBytes.Mark(diskstats[now].ReadBytes - diskstats[prev].ReadBytes)
 			diskWrites.Mark(diskstats[now].WriteCount - diskstats[prev].WriteCount)
 			diskWriteBytes.Mark(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
-
 			diskReadBytesCounter.Inc(diskstats[now].ReadBytes - diskstats[prev].ReadBytes)
 			diskWriteBytesCounter.Inc(diskstats[now].WriteBytes - diskstats[prev].WriteBytes)
 		}
+
 		time.Sleep(refresh)
 	}
 }
