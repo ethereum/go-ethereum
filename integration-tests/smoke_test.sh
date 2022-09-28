@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
+balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.coinbase)))'")
 
 delay=600
 
@@ -9,7 +9,7 @@ echo "Wait ${delay} seconds for state-sync..."
 sleep $delay
 
 
-balance=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
+balance=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.coinbase)))'")
 
 if ! [[ "$balance" =~ ^[0-9]+$ ]]; then
     echo "Something is wrong! Can't find the balance of first account in bor network."
