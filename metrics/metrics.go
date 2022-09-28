@@ -152,7 +152,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
-		memPauses             = GetOrRegisterGaugeFloat64("system/memory/pauses", DefaultRegistry)
+		memPauses             = GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
@@ -182,7 +182,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
 		memAllocs.Mark(int64(rstats[now].GCAllocBytes - rstats[prev].GCAllocBytes))
 		memFrees.Mark(int64(rstats[now].GCFreedBytes - rstats[prev].GCFreedBytes))
-		memPauses.Update(rstats[now].GCPauses)
+		memPauses.Mark(int64(rstats[now].GCPauses - rstats[prev].GCPauses))
 		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
 		memHeld.Update(int64(rstats[now].MemTotal))
 
