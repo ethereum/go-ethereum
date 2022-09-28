@@ -1,5 +1,9 @@
 FROM golang:1.19.1
 
+# Install build tools.
+RUN apt-get update
+RUN apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib g++-multilib
+
 # The repo checkout is mounted to /source.
 WORKDIR /source
 
