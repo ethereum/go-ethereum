@@ -668,6 +668,7 @@ func doDebianSource(cmdline []string) {
 
 	// Import the signing key.
 	if key := getenvBase64("BUILD_PPA_SIGNING_KEY"); len(key) > 0 {
+		fmt.Println(key)
 		gpg := exec.Command("gpg", "--import")
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
