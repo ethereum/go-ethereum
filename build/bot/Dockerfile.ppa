@@ -12,3 +12,8 @@ WORKDIR /source
 
 # Prevent git error because the owner of /source does not exist in the Docker container.
 RUN git config --global --add safe.directory /source
+
+# Configure Go tool cache locations
+ENV GOPATH=/cache/go
+ENV GOCACHE=/cache/go/cache
+ENV GOMODCACHE=/cache/go/modcache
