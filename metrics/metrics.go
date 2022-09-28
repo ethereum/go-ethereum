@@ -84,8 +84,11 @@ var runtimeSamples = []metrics.Sample{
 func readRuntimeStats(v *runtimeStats) {
 	metrics.Read(runtimeSamples)
 	for _, s := range runtimeSamples {
+		// Skip invalid/unknown metrics. This is needed because some metrics
+		// are unavailable in older Go versions, and attempting to read a 'bad'
+		// metric panics.
 		if s.Value.Kind() == metrics.KindBad {
-			continue // skip invalid/unknown metrics
+			continue
 		}
 
 		switch s.Name {
