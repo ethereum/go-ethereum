@@ -411,9 +411,9 @@ func (q *queue) stats() []interface{} {
 	}
 }
 
-// ReserveHeaders reserves a set of headers for the given peer, skipping any
+// Reserve1SkeletonHeader reserves a single skeleton headers for the given peer, skipping any
 // previously failed batches.
-func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
+func (q *queue) Reserve1SkeletonHeader(p *peerConnection) *fetchRequest {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -424,7 +424,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 	}
 	// Retrieve a batch of hashes, skipping previously failed ones
 	send, skip := uint64(0), []uint64{}
-	for send == 0 && !q.headerTaskQueue.Empty() {
+	for !q.headerTaskQueue.Empty() {
 		from, _ := q.headerTaskQueue.Pop()
 		if q.headerPeerMiss[p.id] != nil {
 			if _, ok := q.headerPeerMiss[p.id][from.(uint64)]; ok {
@@ -433,6 +433,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 			}
 		}
 		send = from.(uint64)
+		break
 	}
 	// Merge all the skipped batches back
 	for _, from := range skip {
