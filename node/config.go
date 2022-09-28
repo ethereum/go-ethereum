@@ -193,9 +193,7 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
-	staticNodesWarning     bool
-	trustedNodesWarning    bool
-	oldGethResourceWarning bool
+	oldGethResourceWarning sync.Once
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
@@ -340,7 +338,9 @@ func (c *Config) ResolvePath(path string) string {
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
 			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, false, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+				c.oldGethResourceWarning.Do(func() {
+					log.Warn("Using deprecated resource file, please move this file to the 'geth' subdirectory of datadir.", "file", oldpath)
+				})
 			}
 			return oldpath
 		}
@@ -396,12 +396,12 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 // CheckLegacyFiles inspects the datadir for signs of legacy static-nodes
 // and trusted-nodes files. If they exist it raises an error.
 func (c *Config) checkLegacyFiles() {
-	c.checkLegacyFile(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
-	c.checkLegacyFile(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
+	c.checkLegacyFile(c.ResolvePath(datadirStaticNodes))
+	c.checkLegacyFile(c.ResolvePath(datadirTrustedNodes))
 }
 
 // checkLegacyFile will only raise an error if a file at the given path exists.
-func (c *Config) checkLegacyFile(w *bool, path string) {
+func (c *Config) checkLegacyFile(path string) {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return
@@ -409,7 +409,19 @@ func (c *Config) checkLegacyFile(w *bool, path string) {
 	if _, err := os.Stat(path); err != nil {
 		return
 	}
-	c.warnOnce(w, true, "Ignoring deprecated node list file %s. Please use the TOML config file instead.", path)
+	logger := c.Logger
+	if logger == nil {
+		logger = log.Root()
+	}
+	switch fname := filepath.Base(path); fname {
+	case "static-nodes.json":
+		log.Error("The static-nodes.json file is deprecated and ignored. Use P2P.StaticNodes in config.toml instead.")
+	case "trusted-nodes.json":
+		log.Error("The trusted-nodes.json file is deprecated and ignored. Use P2P.TruestdNodes in config.toml instead.")
+	default:
+		// We shouldn't wind up here, but better print something just in case.
+		log.Error("Ignoring deprecated file.", "file", path)
+	}
 }
 
 // KeyDirConfig determines the settings for keydirectory
@@ -455,25 +467,4 @@ func getKeyStoreDir(conf *Config) (string, bool, error) {
 	}
 
 	return keydir, isEphemeral, nil
-}
-
-var warnLock sync.Mutex
-
-func (c *Config) warnOnce(w *bool, err bool, format string, args ...interface{}) {
-	warnLock.Lock()
-	defer warnLock.Unlock()
-
-	if *w {
-		return
-	}
-	l := c.Logger
-	if l == nil {
-		l = log.Root()
-	}
-	if err {
-		l.Error(fmt.Sprintf(format, args...))
-	} else {
-		l.Warn(fmt.Sprintf(format, args...))
-	}
-	*w = true
 }
