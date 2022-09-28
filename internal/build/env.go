@@ -92,7 +92,7 @@ func Env() Environment {
 			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == "True",
 		}
 
-	case os.Getenv("CI") == "true" && os.Getenv("ETH_BUILDBOT") == "true":
+	case os.Getenv("BUILD_ETH_BUILDBOT") == "true":
 		// For buildbot, the branch variable is the branch OR tag, and
 		// we can distinguish them by the git refspec.
 		var branch, tag string
