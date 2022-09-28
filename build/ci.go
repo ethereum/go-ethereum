@@ -57,6 +57,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
@@ -660,6 +661,9 @@ func doDebianSource(cmdline []string) {
 	*workdir = makeWorkdir(*workdir)
 	env := build.Env()
 	tc := new(build.GoToolchain)
+
+	spew.Dump(env)
+
 	maybeSkipArchive(env)
 
 	// Import the signing key.
