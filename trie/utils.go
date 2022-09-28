@@ -50,45 +50,43 @@ func newTracer() *tracer {
 	}
 }
 
-/*
 // onRead tracks the newly loaded trie node and caches the rlp-encoded blob internally.
 // Don't change the value outside of function since it's not deep-copied.
-func (t *tracer) onRead(key []byte, val []byte) {
+func (t *tracer) onRead(path []byte, val []byte) {
 	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return
 	}
-	t.origin[string(key)] = val
+	t.origin[string(path)] = val
 }
-*/
 
 // onInsert tracks the newly inserted trie node. If it's already in the deletion set
 // (resurrected node), then just wipe it from the deletion set as the "untouched".
-func (t *tracer) onInsert(key []byte) {
+func (t *tracer) onInsert(path []byte) {
 	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return
 	}
-	if _, present := t.delete[string(key)]; present {
-		delete(t.delete, string(key))
+	if _, present := t.delete[string(path)]; present {
+		delete(t.delete, string(path))
 		return
 	}
-	t.insert[string(key)] = struct{}{}
+	t.insert[string(path)] = struct{}{}
 }
 
 // onDelete tracks the newly deleted trie node. If it's already
 // in the addition set, then just wipe it from the addition set
 // as it's untouched.
-func (t *tracer) onDelete(key []byte) {
+func (t *tracer) onDelete(path []byte) {
 	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return
 	}
-	if _, present := t.insert[string(key)]; present {
-		delete(t.insert, string(key))
+	if _, present := t.insert[string(path)]; present {
+		delete(t.insert, string(path))
 		return
 	}
-	t.delete[string(key)] = struct{}{}
+	t.delete[string(path)] = struct{}{}
 }
 
 // insertList returns the tracked inserted trie nodes in list format.
@@ -98,8 +96,8 @@ func (t *tracer) insertList() [][]byte {
 		return nil
 	}
 	var ret [][]byte
-	for key := range t.insert {
-		ret = append(ret, []byte(key))
+	for path := range t.insert {
+		ret = append(ret, []byte(path))
 	}
 	return ret
 }
@@ -111,22 +109,37 @@ func (t *tracer) deleteList() [][]byte {
 		return nil
 	}
 	var ret [][]byte
-	for key := range t.delete {
-		ret = append(ret, []byte(key))
+	for path := range t.delete {
+		ret = append(ret, []byte(path))
 	}
 	return ret
 }
 
-/*
+// prevList returns the tracked node blobs in list format.
+func (t *tracer) prevList() ([][]byte, [][]byte) {
+	// Tracer isn't used right now, remove this check later.
+	if t == nil {
+		return nil, nil
+	}
+	var (
+		paths [][]byte
+		blobs [][]byte
+	)
+	for path, blob := range t.origin {
+		paths = append(paths, []byte(path))
+		blobs = append(blobs, blob)
+	}
+	return paths, blobs
+}
+
 // getPrev returns the cached original value of the specified node.
-func (t *tracer) getPrev(key []byte) []byte {
-	// Don't panic on uninitialized tracer, it's possible in testing.
+func (t *tracer) getPrev(path []byte) []byte {
+	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return nil
 	}
-	return t.origin[string(key)]
+	return t.origin[string(path)]
 }
-*/
 
 // reset clears the content tracked by tracer.
 func (t *tracer) reset() {

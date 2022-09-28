@@ -120,6 +120,7 @@ type ConsensusAPI struct {
 	lastNewPayloadLock   sync.Mutex
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
+	newPayloadLock sync.Mutex // Lock for the NewPayload method
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -142,15 +143,19 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:
-// If the method is called with an empty head block:
-// 		we return success, which can be used to check if the engine API is enabled
-// If the total difficulty was not reached:
-// 		we return INVALID
-// If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
-// We try to set our blockchain to the headBlock
-// If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+//
+// We try to set our blockchain to the headBlock.
+//
+// If the method is called with an empty head block: we return success, which can be used
+// to check if the engine API is enabled.
+//
+// If the total difficulty was not reached: we return INVALID.
+//
+// If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
+// if not we start a sync.
+//
+// If there are payloadAttributes: we try to assemble a block with the payloadAttributes
+// and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
@@ -338,6 +343,22 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
+	// The locking here is, strictly, not required. Without these locks, this can happen:
+	//
+	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
+	//      api.eth.BlockChain().InsertBlockWithoutSetHead, where it is blocked on
+	//      e.g database compaction.
+	// 2. The call times out on the CL layer, which issues another NewPayload (execdata-N) call.
+	//    Similarly, this also get stuck on the same place. Importantly, since the
+	//    first call has not gone through, the early checks for "do we already have this block"
+	//    will all return false.
+	// 3. When the db compaction ends, then N calls inserting the same payload are processed
+	//    sequentially.
+	// Hence, we use a lock here, to be sure that the previous call has finished before we
+	// check whether we already have the block locally.
+	api.newPayloadLock.Lock()
+	defer api.newPayloadLock.Unlock()
+
 	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {

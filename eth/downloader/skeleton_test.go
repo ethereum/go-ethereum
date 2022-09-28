@@ -803,7 +803,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		}
 
 		waitStart := time.Now()
-		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < time.Second; waitTime = waitTime * 2 {
+		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < 2*time.Second; waitTime = waitTime * 2 {
 			time.Sleep(waitTime)
 			// Check the post-init end state if it matches the required results
 			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
@@ -855,7 +855,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			return nil
 		}
 		waitStart = time.Now()
-		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < time.Second; waitTime = waitTime * 2 {
+		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < 2*time.Second; waitTime = waitTime * 2 {
 			time.Sleep(waitTime)
 			// Check the post-init end state if it matches the required results
 			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)

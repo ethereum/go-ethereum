@@ -20,31 +20,47 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
+
+//go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
 
 func init() {
 	register("callTracer", newCallTracer)
 }
 
 type callFrame struct {
-	Type    string      `json:"type"`
-	From    string      `json:"from"`
-	To      string      `json:"to,omitempty"`
-	Value   string      `json:"value,omitempty"`
-	Gas     string      `json:"gas"`
-	GasUsed string      `json:"gasUsed"`
-	Input   string      `json:"input"`
-	Output  string      `json:"output,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Calls   []callFrame `json:"calls,omitempty"`
+	Type    vm.OpCode      `json:"-"`
+	From    common.Address `json:"from"`
+	Gas     uint64         `json:"gas"`
+	GasUsed uint64         `json:"gasUsed"`
+	To      common.Address `json:"to,omitempty" rlp:"optional"`
+	Input   []byte         `json:"input" rlp:"optional"`
+	Output  []byte         `json:"output,omitempty" rlp:"optional"`
+	Error   string         `json:"error,omitempty" rlp:"optional"`
+	Calls   []callFrame    `json:"calls,omitempty" rlp:"optional"`
+	// Placed at end on purpose. The RLP will be decoded to 0 instead of
+	// nil if there are non-empty elements after in the struct.
+	Value *big.Int `json:"value,omitempty" rlp:"optional"`
+}
+
+func (f callFrame) TypeString() string {
+	return f.Type.String()
+}
+
+type callFrameMarshaling struct {
+	TypeString string `json:"type"`
+	Gas        hexutil.Uint64
+	GasUsed    hexutil.Uint64
+	Value      *hexutil.Big
+	Input      hexutil.Bytes
+	Output     hexutil.Bytes
 }
 
 type callTracer struct {
@@ -77,28 +93,29 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
 	t.callstack[0] = callFrame{
-		Type:  "CALL",
-		From:  addrToHex(from),
-		To:    addrToHex(to),
-		Input: bytesToHex(input),
-		Gas:   uintToHex(gas),
-		Value: bigToHex(value),
+		Type:  vm.CALL,
+		From:  from,
+		To:    to,
+		Input: common.CopyBytes(input),
+		Gas:   gas,
+		Value: value,
 	}
 	if create {
-		t.callstack[0].Type = "CREATE"
+		t.callstack[0].Type = vm.CREATE
 	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.callstack[0].GasUsed = uintToHex(gasUsed)
+	t.callstack[0].GasUsed = gasUsed
+	output = common.CopyBytes(output)
 	if err != nil {
 		t.callstack[0].Error = err.Error()
 		if err.Error() == "execution reverted" && len(output) > 0 {
-			t.callstack[0].Output = bytesToHex(output)
+			t.callstack[0].Output = output
 		}
 	} else {
-		t.callstack[0].Output = bytesToHex(output)
+		t.callstack[0].Output = output
 	}
 }
 
@@ -122,12 +139,12 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 	}
 
 	call := callFrame{
-		Type:  typ.String(),
-		From:  addrToHex(from),
-		To:    addrToHex(to),
-		Input: bytesToHex(input),
-		Gas:   uintToHex(gas),
-		Value: bigToHex(value),
+		Type:  typ,
+		From:  from,
+		To:    to,
+		Input: common.CopyBytes(input),
+		Gas:   gas,
+		Value: value,
 	}
 	t.callstack = append(t.callstack, call)
 }
@@ -147,13 +164,13 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack = t.callstack[:size-1]
 	size -= 1
 
-	call.GasUsed = uintToHex(gasUsed)
+	call.GasUsed = gasUsed
 	if err == nil {
-		call.Output = bytesToHex(output)
+		call.Output = common.CopyBytes(output)
 	} else {
 		call.Error = err.Error()
-		if call.Type == "CREATE" || call.Type == "CREATE2" {
-			call.To = ""
+		if call.Type == vm.CREATE || call.Type == vm.CREATE2 {
+			call.To = common.Address{}
 		}
 	}
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
@@ -180,23 +197,4 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 func (t *callTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
-}
-
-func bytesToHex(s []byte) string {
-	return "0x" + common.Bytes2Hex(s)
-}
-
-func bigToHex(n *big.Int) string {
-	if n == nil {
-		return ""
-	}
-	return "0x" + n.Text(16)
-}
-
-func uintToHex(n uint64) string {
-	return "0x" + strconv.FormatUint(n, 16)
-}
-
-func addrToHex(a common.Address) string {
-	return strings.ToLower(a.Hex())
 }

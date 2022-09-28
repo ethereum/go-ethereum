@@ -99,6 +99,7 @@ const (
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
 	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
@@ -280,7 +281,7 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to RANDOM post merge
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",

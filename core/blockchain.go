@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/syncx"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -67,6 +69,8 @@ var (
 	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
 	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
+
+	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
@@ -133,7 +137,8 @@ type CacheConfig struct {
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
 
-	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+	SnapshotNoBuild bool // Whether the background generation is allowed
+	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
 // defaultCacheConfig are the default caching values if none are specified by the
@@ -239,7 +244,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
-	for _, line := range strings.Split(chainConfig.String(), "\n") {
+	for _, line := range strings.Split(chainConfig.Description(), "\n") {
 		log.Info(line)
 	}
 	log.Info(strings.Repeat("-", 153))
@@ -397,7 +402,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			log.Warn("Enabling snapshot recovery", "chainhead", head.NumberU64(), "diskbase", *layer)
 			recover = true
 		}
-		bc.snaps, _ = snapshot.New(bc.db, bc.stateCache.TrieDB(), bc.cacheConfig.SnapshotLimit, head.Root(), !bc.cacheConfig.SnapshotWait, true, recover)
+		snapconfig := snapshot.Config{
+			CacheSize:  bc.cacheConfig.SnapshotLimit,
+			Recovery:   recover,
+			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
+			AsyncBuild: !bc.cacheConfig.SnapshotWait,
+		}
+		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.stateCache.TrieDB(), head.Root())
 	}
 
 	// Start future block processor.
@@ -728,10 +739,10 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x..]", hash[:4])
 	}
-	if _, err := trie.NewStateTrie(common.Hash{}, block.Root(), bc.stateCache.TrieDB()); err != nil {
-		return err
+	root := block.Root()
+	if !bc.HasState(root) {
+		return fmt.Errorf("non existent state [%x..]", root[:4])
 	}
-
 	// If all checks out, manually set the head block.
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
@@ -743,7 +754,7 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	// Destroy any existing state snapshot and regenerate it in the background,
 	// also resuming the normal maintenance of any previously paused snapshot.
 	if bc.snaps != nil {
-		bc.snaps.Rebuild(block.Root())
+		bc.snaps.Rebuild(root)
 	}
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
 	return nil
@@ -1741,8 +1752,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
 		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
 		snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Triedb commits are complete, we can mark them
 
-		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
+		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
 		blockInsertTimer.UpdateSince(start)
 
 		// Report the import stats before returning the various results
@@ -2000,21 +2012,6 @@ func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
 	return logs
 }
 
-// mergeLogs returns a merged log slice with specified sort order.
-func mergeLogs(logs [][]*types.Log, reverse bool) []*types.Log {
-	var ret []*types.Log
-	if reverse {
-		for i := len(logs) - 1; i >= 0; i-- {
-			ret = append(ret, logs[i]...)
-		}
-	} else {
-		for i := 0; i < len(logs); i++ {
-			ret = append(ret, logs[i]...)
-		}
-	}
-	return ret
-}
-
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the
 // blocks and inserts them to be part of the new canonical chain and accumulates
 // potential missing transactions and post an event about them.
@@ -2028,9 +2025,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		deletedTxs []common.Hash
 		addedTxs   []common.Hash
-
-		deletedLogs [][]*types.Log
-		rebirthLogs [][]*types.Log
 	)
 	// Reduce the longer chain to the same number as the shorter one
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
@@ -2039,12 +2033,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			oldChain = append(oldChain, oldBlock)
 			for _, tx := range oldBlock.Transactions() {
 				deletedTxs = append(deletedTxs, tx.Hash())
-			}
-
-			// Collect deleted logs for notification
-			logs := bc.collectLogs(oldBlock.Hash(), true)
-			if len(logs) > 0 {
-				deletedLogs = append(deletedLogs, logs)
 			}
 		}
 	} else {
@@ -2071,12 +2059,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldChain = append(oldChain, oldBlock)
 		for _, tx := range oldBlock.Transactions() {
 			deletedTxs = append(deletedTxs, tx.Hash())
-		}
-
-		// Collect deleted logs for notification
-		logs := bc.collectLogs(oldBlock.Hash(), true)
-		if len(logs) > 0 {
-			deletedLogs = append(deletedLogs, logs)
 		}
 		newChain = append(newChain, newBlock)
 
@@ -2151,28 +2133,42 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Crit("Failed to delete useless indexes", "err", err)
 	}
 
-	// Collect the logs
-	for i := len(newChain) - 1; i >= 1; i-- {
-		// Collect reborn logs due to chain reorg
-		logs := bc.collectLogs(newChain[i].Hash(), false)
-		if len(logs) > 0 {
-			rebirthLogs = append(rebirthLogs, logs)
+	// Send out events for logs from the old canon chain, and 'reborn'
+	// logs from the new canon chain. The number of logs can be very
+	// high, so the events are sent in batches of size around 512.
+
+	// Deleted logs + blocks:
+	var deletedLogs []*types.Log
+	for i := len(oldChain) - 1; i >= 0; i-- {
+		// Also send event for blocks removed from the canon chain.
+		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
+
+		// Collect deleted logs for notification
+		if logs := bc.collectLogs(oldChain[i].Hash(), true); len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs...)
+		}
+		if len(deletedLogs) > 512 {
+			bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+			deletedLogs = nil
 		}
 	}
-	// If any logs need to be fired, do it now. In theory we could avoid creating
-	// this goroutine if there are no events to fire, but realistcally that only
-	// ever happens if we're reorging empty blocks, which will only happen on idle
-	// networks where performance is not an issue either way.
 	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
+		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+	}
+
+	// New logs:
+	var rebirthLogs []*types.Log
+	for i := len(newChain) - 1; i >= 1; i-- {
+		if logs := bc.collectLogs(newChain[i].Hash(), false); len(logs) > 0 {
+			rebirthLogs = append(rebirthLogs, logs...)
+		}
+		if len(rebirthLogs) > 512 {
+			bc.logsFeed.Send(rebirthLogs)
+			rebirthLogs = nil
+		}
 	}
 	if len(rebirthLogs) > 0 {
-		bc.logsFeed.Send(mergeLogs(rebirthLogs, false))
-	}
-	if len(oldChain) > 0 {
-		for i := len(oldChain) - 1; i >= 0; i-- {
-			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
-		}
+		bc.logsFeed.Send(rebirthLogs)
 	}
 	return nil
 }
@@ -2391,24 +2387,32 @@ func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	rawdb.WriteBadBlock(bc.db, block)
+	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
+}
 
+// summarizeBadBlock returns a string summarizing the bad block and other
+// relevant information.
+func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *params.ChainConfig, err error) string {
 	var receiptString string
 	for i, receipt := range receipts {
-		receiptString += fmt.Sprintf("\t %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x\n",
+		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x",
 			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
 			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
 	}
-	log.Error(fmt.Sprintf(`
+	version, vcs := version.Info()
+	platform := fmt.Sprintf("%s %s %s %s", version, runtime.Version(), runtime.GOARCH, runtime.GOOS)
+	if vcs != "" {
+		vcs = fmt.Sprintf("\nVCS: %s", vcs)
+	}
+	return fmt.Sprintf(`
 ########## BAD BLOCK #########
-Chain config: %v
-
-Number: %v
-Hash: %#x
-%v
-
+Block: %v (%#x)
 Error: %v
+Platform: %v%v
+Chain config: %#v
+Receipts: %v
 ##############################
-`, bc.chainConfig, block.Number(), block.Hash(), receiptString, err))
+`, block.Number(), block.Hash(), err, platform, vcs, config, receiptString)
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local

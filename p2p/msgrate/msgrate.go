@@ -38,14 +38,6 @@ const measurementImpact = 0.1
 // to fetch more than some local stable value.
 const capacityOverestimation = 1.01
 
-// qosTuningPeers is the number of best peers to tune round trip times based on.
-// An Ethereum node doesn't need hundreds of connections to operate correctly,
-// so instead of lowering our download speed to the median of potentially many
-// bad nodes, we can target a smaller set of vey good nodes. At worse this will
-// result in less nodes to sync from, but that's still better than some hogging
-// the pipeline.
-const qosTuningPeers = 5
-
 // rttMinEstimate is the minimal round trip time to target requests for. Since
 // every request entails a 2 way latency + bandwidth + serving database lookups,
 // it should be generous enough to permit meaningful work to be done on top of
@@ -303,11 +295,15 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 	}
 	sort.Float64s(rtts)
 
-	median := rttMaxEstimate
-	if qosTuningPeers <= len(rtts) {
-		median = time.Duration(rtts[qosTuningPeers/2]) // Median of our best few peers
-	} else if len(rtts) > 0 {
-		median = time.Duration(rtts[len(rtts)/2]) // Median of all out connected peers
+	var median time.Duration
+	switch len(rtts) {
+	case 0:
+		median = rttMaxEstimate
+	case 1:
+		median = time.Duration(rtts[0])
+	default:
+		idx := int(math.Sqrt(float64(len(rtts))))
+		median = time.Duration(rtts[idx])
 	}
 	// Restrict the RTT into some QoS defaults, irrelevant of true RTT
 	if median < rttMinEstimate {

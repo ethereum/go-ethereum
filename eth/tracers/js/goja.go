@@ -33,6 +33,10 @@ import (
 	jsassets "github.com/ethereum/go-ethereum/eth/tracers/js/internal/tracers"
 )
 
+const (
+	memoryPadLimit = 1024 * 1024
+)
+
 var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
@@ -562,10 +566,15 @@ func (mo *memoryObj) slice(begin, end int64) ([]byte, error) {
 	if end < begin || begin < 0 {
 		return nil, fmt.Errorf("tracer accessed out of bound memory: offset %d, end %d", begin, end)
 	}
-	if mo.memory.Len() < int(end) {
-		return nil, fmt.Errorf("tracer accessed out of bound memory: available %d, offset %d, size %d", mo.memory.Len(), begin, end-begin)
+	mlen := mo.memory.Len()
+	if end-int64(mlen) > memoryPadLimit {
+		return nil, fmt.Errorf("tracer reached limit for padding memory slice: end %d, memorySize %d", end, mlen)
 	}
-	return mo.memory.GetCopy(begin, end-begin), nil
+	slice := make([]byte, end-begin)
+	end = min(end, int64(mo.memory.Len()))
+	ptr := mo.memory.GetPtr(begin, end-begin)
+	copy(slice[:], ptr[:])
+	return slice, nil
 }
 
 func (mo *memoryObj) GetUint(addr int64) goja.Value {
@@ -944,4 +953,11 @@ func (l *steplog) setupObject() *goja.Object {
 	o.Set("memory", l.memory.setupObject())
 	o.Set("contract", l.contract.setupObject())
 	return o
+}
+
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -105,7 +105,6 @@ func (BitCurve *BitCurve) IsOnCurve(x, y *big.Int) bool {
 	return x3.Cmp(y2) == 0
 }
 
-//TODO: double check if the function is okay
 // affineFromJacobian reverses the Jacobian transform. See the comment at the
 // top of the file.
 func (BitCurve *BitCurve) affineFromJacobian(x, y, z *big.Int) (xOut, yOut *big.Int) {

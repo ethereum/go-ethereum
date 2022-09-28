@@ -33,27 +33,44 @@ type leaf struct {
 // insertion order.
 type committer struct {
 	nodes       *NodeSet
+	tracer      *tracer
 	collectLeaf bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(owner common.Hash, collectLeaf bool) *committer {
+func newCommitter(owner common.Hash, tracer *tracer, collectLeaf bool) *committer {
 	return &committer{
 		nodes:       NewNodeSet(owner),
+		tracer:      tracer,
 		collectLeaf: collectLeaf,
 	}
 }
 
-// Commit collapses a node down into a hash node and inserts it into the database
+// Commit collapses a node down into a hash node and returns it along with
+// the modified nodeset.
 func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 	h, err := c.commit(nil, n)
 	if err != nil {
 		return nil, nil, err
 	}
+	// Some nodes can be deleted from trie which can't be captured by committer
+	// itself. Iterate all deleted nodes tracked by tracer and marked them as
+	// deleted only if they are present in database previously.
+	for _, path := range c.tracer.deleteList() {
+		// There are a few possibilities for this scenario(the node is deleted
+		// but not present in database previously), for example the node was
+		// embedded in the parent and now deleted from the trie. In this case
+		// it's noop from database's perspective.
+		val := c.tracer.getPrev(path)
+		if len(val) == 0 {
+			continue
+		}
+		c.nodes.markDeleted(path, val)
+	}
 	return h.(hashNode), c.nodes, nil
 }
 
-// commit collapses a node down into a hash node and inserts it into the database
+// commit collapses a node down into a hash node and returns it.
 func (c *committer) commit(path []byte, n node) (node, error) {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
@@ -75,11 +92,18 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 			}
 			collapsed.Val = childV
 		}
-		// The key needs to be copied, since we're delivering it to database
+		// The key needs to be copied, since we're adding it to the
+		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
+		}
+		// The short node now is embedded in its parent. Mark the node as
+		// deleted if it's present in database previously. It's equivalent
+		// as deletion from database's perspective.
+		if prev := c.tracer.getPrev(path); len(prev) != 0 {
+			c.nodes.markDeleted(path, prev)
 		}
 		return collapsed, nil
 	case *fullNode:
@@ -93,6 +117,12 @@ func (c *committer) commit(path []byte, n node) (node, error) {
 		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
+		}
+		// The full node now is embedded in its parent. Mark the node as
+		// deleted if it's present in database previously. It's equivalent
+		// as deletion from database's perspective.
+		if prev := c.tracer.getPrev(path); len(prev) != 0 {
+			c.nodes.markDeleted(path, prev)
 		}
 		return collapsed, nil
 	case hashNode:
@@ -134,17 +164,16 @@ func (c *committer) commitChildren(path []byte, n *fullNode) ([17]node, error) {
 	return children, nil
 }
 
-// store hashes the node n and if we have a storage layer specified, it writes
-// the key/value pair to it and tracks any node->child references as well as any
-// node->external trie references.
+// store hashes the node n and adds it to the modified nodeset. If leaf collection
+// is enabled, leaf nodes will be tracked in the modified nodeset as well.
 func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 
 	// This was not generated - must be a small node stored in the parent.
 	// In theory, we should check if the node is leaf here (embedded node
-	// usually is leaf node). But small value(less than 32bytes) is not
-	// our target(leaves in account trie only).
+	// usually is leaf node). But small value (less than 32bytes) is not
+	// our target (leaves in account trie only).
 	if hash == nil {
 		return n
 	}
@@ -160,7 +189,7 @@ func (c *committer) store(path []byte, n node) node {
 		}
 	)
 	// Collect the dirty node to nodeset for return.
-	c.nodes.add(string(path), mnode)
+	c.nodes.markUpdated(path, mnode, c.tracer.getPrev(path))
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
