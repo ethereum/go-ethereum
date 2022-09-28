@@ -65,7 +65,7 @@
   },
   "input": "0xf8e85e850ba43b7400830f42408080b89660606040527382effbaaaf28614e55b2ba440fb198e0e5789b0f600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908302179055505b600060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16ff5b600a80608c6000396000f30060606040526008565b001ca0340b21661e5bb85a46319a15f33a362e5c0f02faa7cdbf9c5808b2134da968eaa0226e6788f8c20e211d436ab7f6298ef32fa4c23a509eeeaac0880d115c17bc3f",
   "tracerConfig": {
-    "collectPost": true
+    "diffMode": true
   },
   "result": {
     "pre": {

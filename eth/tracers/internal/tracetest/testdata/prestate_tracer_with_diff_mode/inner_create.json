@@ -201,7 +201,7 @@
   },
   "input": "0xf86b8203cf850ba43b740083200b2094741467b251fca923d6229c4b439078b55dca233b8084614619541ca078293714f69a810356f1ee29dc686ec2ca3a0e5448e1ef6322c77369ebdd26c2a01c3836fa363548959554ee5360361be9db4aea9eb7c31f61550f0e9a10138adf",
   "tracerConfig": {
-    "collectPost": true
+    "diffMode": true
   },
   "result": {
     "pre": {

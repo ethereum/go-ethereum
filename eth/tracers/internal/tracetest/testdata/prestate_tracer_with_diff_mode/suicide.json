@@ -73,7 +73,7 @@
   },
   "input": "0xf86a818a850ba43b7400832d8a40942861bf89b6c640c79040d357c1e9513693ef5d3f808441c0e1b51ca0b8de64a9a04d699f5938efa5431ca7c80500f6accb329da43aadabd4eab84f17a035b969c198f694be991a2a5b287250e19e852efd0ccba30bd50707277bfbc9aa",
   "tracerConfig": {
-    "collectPost": true
+    "diffMode": true
   },
   "result": {
     "pre": {
