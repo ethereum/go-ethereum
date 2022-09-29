@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 )
 
 // newTestDatabase initializes the trie database with specified scheme.
@@ -27,9 +28,8 @@ func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
 	db := prepare(diskdb, nil)
 	if scheme == rawdb.HashScheme {
 		db.backend = hashdb.New(diskdb, db.cleans, mptResolver{})
+	} else {
+		db.backend = pathdb.New(diskdb, db.cleans, nil)
 	}
-	//} else {
-	//	db.backend = snap.New(diskdb, db.cleans, nil)
-	//}
 	return db
 }

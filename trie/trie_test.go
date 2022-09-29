@@ -76,9 +76,9 @@ func TestMissingRoot(t *testing.T) {
 
 func TestMissingNode(t *testing.T) {
 	testMissingNode(t, false, rawdb.HashScheme)
-	//testMissingNode(t, false, rawdb.PathScheme)
+	testMissingNode(t, false, rawdb.PathScheme)
 	testMissingNode(t, true, rawdb.HashScheme)
-	//testMissingNode(t, true, rawdb.PathScheme)
+	testMissingNode(t, true, rawdb.PathScheme)
 }
 
 func testMissingNode(t *testing.T, memonly bool, scheme string) {
@@ -457,9 +457,9 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 
 func runRandTest(rt randTest) bool {
 	var scheme = rawdb.HashScheme
-	//if rand.Intn(2) == 0 {
-	//	scheme = rawdb.PathScheme
-	//}
+	if rand.Intn(2) == 0 {
+		scheme = rawdb.PathScheme
+	}
 	var (
 		origin   = types.EmptyRootHash
 		triedb   = newTestDatabase(rawdb.NewMemoryDatabase(), scheme)

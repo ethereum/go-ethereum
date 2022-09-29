@@ -16,6 +16,8 @@
 
 package rawdb
 
+import "path/filepath"
+
 // The list of table names of chain freezer.
 const (
 	// ChainFreezerHeaderTable indicates the name of the freezer header table.
@@ -44,10 +46,30 @@ var chainFreezerNoSnappy = map[string]bool{
 	ChainFreezerDifficultyTable: true,
 }
 
+const (
+	// trieHistoryTableSize defines the maximum size of freezer data files.
+	trieHistoryTableSize = 2 * 1000 * 1000 * 1000
+
+	// trieHistoryTable indicates the name of the trie history table.
+	trieHistoryTable = "history"
+)
+
+// TrieHistoryFreezerNoSnappy configures whether compression is disabled for the ancient
+// trie histories
+var TrieHistoryFreezerNoSnappy = map[string]bool{
+	trieHistoryTable: false,
+}
+
 // The list of identifiers of ancient stores.
 var (
-	chainFreezerName = "chain" // the folder name of chain segment ancient store.
+	chainFreezerName       = "chain"       // the folder name of chain segment ancient store.
+	trieHistoryFreezerName = "triehistory" // the folder name of trie history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
-var freezers = []string{chainFreezerName}
+var freezers = []string{chainFreezerName, trieHistoryFreezerName}
+
+// NewTrieHistoryFreezer initializes the freezer for trie histories.
+func NewTrieHistoryFreezer(ancientDir string, readOnly bool) (*ResettableFreezer, error) {
+	return NewResettableFreezer(filepath.Join(ancientDir, trieHistoryFreezerName), "eth/db/triehistory", readOnly, trieHistoryTableSize, TrieHistoryFreezerNoSnappy)
+}

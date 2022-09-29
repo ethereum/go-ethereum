@@ -130,7 +130,7 @@ type iterationElement struct {
 // Tests that the node iterator indeed walks over the entire database contents.
 func TestNodeIteratorCoverage(t *testing.T) {
 	testNodeIteratorCoverage(t, rawdb.HashScheme)
-	//testNodeIteratorCoverage(t, rawdb.PathScheme)
+	testNodeIteratorCoverage(t, rawdb.PathScheme)
 }
 
 func testNodeIteratorCoverage(t *testing.T, scheme string) {
@@ -355,8 +355,8 @@ func TestIteratorNoDups(t *testing.T) {
 func TestIteratorContinueAfterError(t *testing.T) {
 	testIteratorContinueAfterError(t, false, rawdb.HashScheme)
 	testIteratorContinueAfterError(t, true, rawdb.HashScheme)
-	// testIteratorContinueAfterError(t, false, rawdb.PathScheme)
-	// testIteratorContinueAfterError(t, true, rawdb.PathScheme)
+	testIteratorContinueAfterError(t, false, rawdb.PathScheme)
+	testIteratorContinueAfterError(t, true, rawdb.PathScheme)
 }
 
 func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
@@ -461,8 +461,8 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
 func TestIteratorContinueAfterSeekError(t *testing.T) {
 	testIteratorContinueAfterSeekError(t, false, rawdb.HashScheme)
 	testIteratorContinueAfterSeekError(t, true, rawdb.HashScheme)
-	// testIteratorContinueAfterSeekError(t, false, rawdb.PathScheme)
-	// testIteratorContinueAfterSeekError(t, true, rawdb.PathScheme)
+	testIteratorContinueAfterSeekError(t, false, rawdb.PathScheme)
+	testIteratorContinueAfterSeekError(t, true, rawdb.PathScheme)
 }
 
 func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme string) {
@@ -534,7 +534,7 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 
 func TestIteratorNodeBlob(t *testing.T) {
 	testIteratorNodeBlob(t, rawdb.HashScheme)
-	//testIteratorNodeBlob(t, rawdb.PathScheme)
+	testIteratorNodeBlob(t, rawdb.PathScheme)
 }
 
 type loggingDb struct {
