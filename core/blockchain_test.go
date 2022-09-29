@@ -2523,7 +2523,8 @@ func TestTransactionIndices(t *testing.T) {
 	// Init block chain with external ancients, check all needed indices has been indexed.
 	limit := []uint64{0, 32, 64, 128}
 	for _, l := range limit {
-		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
+		frdir := t.TempDir()
+		ancientDb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
 		rawdb.WriteAncientBlocks(ancientDb, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
 
 		l := l
@@ -2540,6 +2541,7 @@ func TestTransactionIndices(t *testing.T) {
 		check(&tail, chain)
 		chain.Stop()
 		ancientDb.Close()
+		os.RemoveAll(frdir)
 	}
 
 	// Reconstruct a block chain which only reserves HEAD-64 tx indices
@@ -3937,7 +3939,8 @@ func TestTxIndexer(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
+		frdir := t.TempDir()
+		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), frdir, "", false)
 		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
 
 		// Index the initial blocks from ancient store
@@ -3957,5 +3960,8 @@ func TestTxIndexer(t *testing.T) {
 		chain.SetTxLookupLimit(0)
 		chain.indexBlocks(rawdb.ReadTxIndexTail(db), 128, make(chan struct{}))
 		verify(db, 0)
+
+		db.Close()
+		os.RemoveAll(frdir)
 	}
 }
