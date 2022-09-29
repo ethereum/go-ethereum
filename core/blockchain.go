@@ -298,6 +298,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if bc.empty() {
 		rawdb.InitDatabaseFromFreezer(bc.db)
 	}
+	var txIndexBlock uint64
+	frozen, _ := bc.db.Ancients()
+	if frozen > 0 {
+		txIndexBlock = frozen
+	}
 	// Load blockchain states from disk
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
@@ -433,7 +438,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bc.txLookupLimit = *txLookupLimit
 
 		bc.wg.Add(1)
-		go bc.maintainTxIndex()
+		go bc.maintainTxIndex(txIndexBlock)
 	}
 	return bc, nil
 }
@@ -2330,8 +2335,16 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 // The user can adjust the txlookuplimit value for each launch after sync,
 // Geth will automatically construct the missing indices or delete the extra
 // indices.
-func (bc *BlockChain) maintainTxIndex() {
+func (bc *BlockChain) maintainTxIndex(ancients uint64) {
 	defer bc.wg.Done()
+
+	if ancients > 0 && ancients > bc.txLookupLimit {
+		var from = uint64(0)
+		if bc.txLookupLimit != 0 {
+			from = ancients - bc.txLookupLimit
+		}
+		rawdb.IndexTransactions(bc.db, from, ancients, bc.quit)
+	}
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
