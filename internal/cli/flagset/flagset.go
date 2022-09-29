@@ -44,6 +44,15 @@ func (f *Flagset) Help() string {
 	return str + strings.Join(items, "\n\n")
 }
 
+func (f *Flagset) GetAllFlags() []string {
+	flags := []string{}
+	for _, flag := range f.flags {
+		flags = append(flags, flag.Name)
+	}
+
+	return flags
+}
+
 // MarkDown implements cli.MarkDown interface
 func (f *Flagset) MarkDown() string {
 	if len(f.flags) == 0 {

@@ -57,7 +57,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
 		Name:  "eth.requiredblocks",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
 		Value: &c.cliConfig.RequiredBlocks,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
