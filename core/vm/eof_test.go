@@ -35,6 +35,13 @@ var eof1ValidTests = []eof1Test{
 	{"EF0001010002020004000000AABBCCDD", 2, 4},
 	{"EF0001010005020002006000600100AABB", 5, 2},
 	{"EF00010100070200040060006001600200AABBCCDD", 7, 4},
+	{"EF000101000100FE", 1, 0},         // INVALID is defined and can be terminating
+	{"EF00010100050060006000F3", 5, 0}, // terminating with RETURN
+	{"EF00010100050060006000FD", 5, 0}, // terminating with REVERT
+	{"EF0001010003006000FF", 3, 0},     // terminating with SELFDESTRUCT
+	{"EF0001010022007F000000000000000000000000000000000000000000000000000000000000000000", 34, 0},     // PUSH32
+	{"EF0001010022007F0C0D0E0F1E1F2122232425262728292A2B2C2D2E2F494A4B4C4D4E4F5C5D5E5F00", 34, 0},     // undefined instructions inside push data
+	{"EF000101000102002000000C0D0E0F1E1F2122232425262728292A2B2C2D2E2F494A4B4C4D4E4F5C5D5E5F", 1, 32}, // undefined instructions inside data section
 }
 
 type eof1InvalidTest struct {
@@ -82,6 +89,21 @@ var eof1InvalidTests = []eof1InvalidTest{
 	{"EF0001010002020000006000", ErrEOF1EmptyDataSection.Error()},                           // 0 size data section
 	{"EF0001010002020004020004006000AABBCCDDAABBCCDD", ErrEOF1MultipleDataSections.Error()}, // two data sections
 	{"EF0001010002030004006000AABBCCDD", ErrEOF1UnknownSection.Error()},                     // section id = 3
+}
+
+var eof1InvalidInstructionsTests = []eof1InvalidTest{
+	// 0C is undefined instruction
+	{"EF0001010001000C", ErrEOF1UndefinedInstruction.Error()},
+	// EF is undefined instruction
+	{"EF000101000100EF", ErrEOF1UndefinedInstruction.Error()},
+	// ADDRESS is not a terminating instruction
+	{"EF00010100010030", ErrEOF1TerminatingInstructionMissing.Error()},
+	// PUSH1 without data
+	{"EF00010100010060", ErrEOF1TerminatingInstructionMissing.Error()},
+	// PUSH32 with 31 bytes of data
+	{"EF0001010020007F00000000000000000000000000000000000000000000000000000000000000", ErrEOF1TerminatingInstructionMissing.Error()},
+	// PUSH32 with 32 bytes of data and no terminating instruction
+	{"EF0001010021007F0000000000000000000000000000000000000000000000000000000000000000", ErrEOF1TerminatingInstructionMissing.Error()},
 }
 
 func TestHasEOFMagic(t *testing.T) {
@@ -154,6 +176,155 @@ func TestReadValidEOF1Header(t *testing.T) {
 		}
 		if header.dataSize != test.dataSize {
 			t.Errorf("code %v dataSize expected %v, got %v", test.code, test.dataSize, header.dataSize)
+		}
+	}
+}
+
+func TestValidateInstructions(t *testing.T) {
+	jt := &londonInstructionSet
+	for _, test := range eof1ValidTests {
+		code := common.Hex2Bytes(test.code)
+		header, err := readEOF1Header(code)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", test.code, err)
+		}
+
+		err = validateInstructions(code, &header, jt)
+		if err != nil {
+			t.Errorf("code %v instruction validation failure, error: %v", test.code, err)
+		}
+	}
+
+	for _, test := range eof1InvalidInstructionsTests {
+		code := common.Hex2Bytes(test.code)
+		header, err := readEOF1Header(code)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", test.code, err)
+		}
+
+		err = validateInstructions(code, &header, jt)
+		if err == nil {
+			t.Errorf("code %v expected to be invalid", test.code)
+		} else if err.Error() != test.error {
+			t.Errorf("code %v expected error: \"%v\" got error: \"%v\"", test.code, test.error, err.Error())
+		}
+	}
+}
+
+func TestValidateUndefinedInstructions(t *testing.T) {
+	jt := &londonInstructionSet
+	code := common.Hex2Bytes("EF0001010002000C00")
+	instrByte := &code[7]
+	for opcode := uint16(0); opcode <= 0xff; opcode++ {
+		if OpCode(opcode) >= PUSH1 && OpCode(opcode) <= PUSH32 {
+			continue
+		}
+
+		*instrByte = byte(opcode)
+		header, err := readEOF1Header(code)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", common.Bytes2Hex(code), err)
+		}
+
+		err = validateInstructions(code, &header, jt)
+		if jt[opcode].undefined {
+			if err == nil {
+				t.Errorf("opcode %v expected to be invalid", opcode)
+			} else if err != ErrEOF1UndefinedInstruction {
+				t.Errorf("opcode %v unxpected error: \"%v\"", opcode, err.Error())
+			}
+		} else {
+			if err != nil {
+				t.Errorf("code %v instruction validation failure, error: %v", common.Bytes2Hex(code), err)
+			}
+		}
+	}
+}
+
+func TestValidateTerminatingInstructions(t *testing.T) {
+	jt := &londonInstructionSet
+	code := common.Hex2Bytes("EF0001010001000C")
+	instrByte := &code[7]
+	for opcodeValue := uint16(0); opcodeValue <= 0xff; opcodeValue++ {
+		opcode := OpCode(opcodeValue)
+		if opcode >= PUSH1 && opcode <= PUSH32 {
+			continue
+		}
+		if jt[opcode].undefined {
+			continue
+		}
+		*instrByte = byte(opcode)
+		header, err := readEOF1Header(code)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", common.Bytes2Hex(code), err)
+		}
+		err = validateInstructions(code, &header, jt)
+
+		if opcode == STOP || opcode == RETURN || opcode == REVERT || opcode == INVALID || opcode == SELFDESTRUCT {
+			if err != nil {
+				t.Errorf("opcode %v expected to be valid terminating instruction", opcode)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("opcode %v expected to be invalid terminating instruction", opcode)
+			} else if err != ErrEOF1TerminatingInstructionMissing {
+				t.Errorf("opcode %v unexpected error: \"%v\"", opcode, err.Error())
+			}
+		}
+	}
+}
+
+func TestValidateTruncatedPush(t *testing.T) {
+	jt := &londonInstructionSet
+	zeroes := [33]byte{}
+	code := common.Hex2Bytes("EF0001010001000C")
+	for opcode := PUSH1; opcode <= PUSH32; opcode++ {
+		requiredBytes := opcode - PUSH1 + 1
+
+		// make code with truncated PUSH data
+		codeTruncatedPush := append(code, zeroes[:requiredBytes-1]...)
+		codeTruncatedPush[5] = byte(len(codeTruncatedPush) - 7)
+		codeTruncatedPush[7] = byte(opcode)
+
+		header, err := readEOF1Header(codeTruncatedPush)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", common.Bytes2Hex(code), err)
+		}
+		err = validateInstructions(codeTruncatedPush, &header, jt)
+		if err == nil {
+			t.Errorf("code %v has truncated PUSH, expected to be invalid", common.Bytes2Hex(codeTruncatedPush))
+		} else if err != ErrEOF1TerminatingInstructionMissing {
+			t.Errorf("code %v unexpected validation error: %v", common.Bytes2Hex(codeTruncatedPush), err)
+		}
+
+		// make code with full PUSH data but no terminating instruction in the end
+		codeNotTerminated := append(code, zeroes[:requiredBytes]...)
+		codeNotTerminated[5] = byte(len(codeNotTerminated) - 7)
+		codeNotTerminated[7] = byte(opcode)
+
+		header, err = readEOF1Header(codeNotTerminated)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", common.Bytes2Hex(codeNotTerminated), err)
+		}
+		err = validateInstructions(codeTruncatedPush, &header, jt)
+		if err == nil {
+			t.Errorf("code %v does not have terminating instruction, expected to be invalid", common.Bytes2Hex(codeNotTerminated))
+		} else if err != ErrEOF1TerminatingInstructionMissing {
+			t.Errorf("code %v unexpected validation error: %v", common.Bytes2Hex(codeNotTerminated), err)
+		}
+
+		// make valid code
+		codeValid := append(code, zeroes[:requiredBytes+1]...) // + 1 for terminating STOP
+		codeValid[5] = byte(len(codeValid) - 7)
+		codeValid[7] = byte(opcode)
+
+		header, err = readEOF1Header(codeValid)
+		if err != nil {
+			t.Errorf("code %v header validation failure, error: %v", common.Bytes2Hex(code), err)
+		}
+		err = validateInstructions(codeValid, &header, jt)
+		if err != nil {
+			t.Errorf("code %v instruction validation failure, error: %v", common.Bytes2Hex(code), err)
 		}
 	}
 }
