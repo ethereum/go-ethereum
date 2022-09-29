@@ -581,14 +581,34 @@ func (f *faucet) refresh(head *types.Header) error {
 
 // loop keeps waiting for interesting events and pushes them out to connected
 // websockets.
+
 func (f *faucet) loop() {
 	// Wait for chain events and push them to clients
 	heads := make(chan *types.Header, 16)
-	sub, err := f.client.SubscribeNewHead(context.Background(), heads)
-	if err != nil {
-		log.Crit("Failed to subscribe to head events", "err", err)
-	}
-	defer sub.Unsubscribe()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	var bestBlockNum uint64
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				num, err := f.client.BlockNumber(context.Background())
+				if err != nil {
+					log.Crit("Failed to get best block number", "blockNum", err)
+				}
+				if num == bestBlockNum {
+					continue
+				}
+				bestBlockNum = num
+				header, err := f.client.HeaderByNumber(context.Background(), big.NewInt(int64(bestBlockNum)))
+				if err != nil {
+					log.Crit("Failed to get block header by number", "blockHeader", err)
+				}
+				log.Info("New block head coming into header channel", "newHeader", bestBlockNum)
+				heads <- header
+			}
+		}
+	}()
 
 	// Start a goroutine to update the state from head notifications in the background
 	update := make(chan *types.Header)
