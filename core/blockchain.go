@@ -2307,6 +2307,19 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 				end = head + 1
 			}
 			rawdb.IndexTransactions(bc.db, 0, end, bc.quit)
+		} else if *tail == 0 {
+			end := head + 1
+			ancients, _ := bc.db.Ancients()
+			if ancients > 0 && ancients > bc.txLookupLimit {
+				var from = uint64(0)
+				if bc.txLookupLimit != 0 {
+					from = ancients - bc.txLookupLimit
+				}
+				if end > ancients {
+					end = ancients
+				}
+				rawdb.IndexTransactions(bc.db, from, end, bc.quit)
+			}
 		}
 		return
 	}
