@@ -50,6 +50,8 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
+	header EOF1Header
+
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
@@ -143,7 +145,7 @@ func (c *Contract) AsDelegate() *Contract {
 
 // GetOp returns the n'th element in the contract's byte array
 func (c *Contract) GetOp(n uint64) OpCode {
-	if n < uint64(len(c.Code)) {
+	if n < c.CodeEndOffset() {
 		return OpCode(c.Code[n])
 	}
 
@@ -177,18 +179,46 @@ func (c *Contract) Value() *big.Int {
 	return c.value
 }
 
+// IsLegacy returns true if contract is not EOF
+func (c *Contract) IsLegacy() bool {
+	// EOF1 doesn't allow contracts without code section
+	return c.header.codeSize == 0
+}
+
+// CodeBeginOffset returns starting offset of the code section
+func (c *Contract) CodeBeginOffset() uint64 {
+	if c.IsLegacy() {
+		return 0
+	}
+	return c.header.CodeBeginOffset()
+}
+
+// CodeEndOffset returns offset of the code section end
+func (c *Contract) CodeEndOffset() uint64 {
+	if c.IsLegacy() {
+		return uint64(len(c.Code))
+	}
+	return c.header.CodeEndOffset()
+}
+
 // SetCallCode sets the code of the contract and address of the backing data
 // object
-func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
+func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte, header *EOF1Header) {
 	c.Code = code
 	c.CodeHash = hash
 	c.CodeAddr = addr
+
+	c.header.codeSize = header.codeSize
+	c.header.dataSize = header.dataSize
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
 // In case hash is not provided, the jumpdest analysis will not be saved to the parent context
-func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash) {
+func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash, header *EOF1Header) {
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
+
+	c.header.codeSize = header.codeSize
+	c.header.dataSize = header.dataSize
 }

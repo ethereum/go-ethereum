@@ -142,3 +142,15 @@ func TestValidateEOF(t *testing.T) {
 		}
 	}
 }
+
+func TestReadValidEOF1Header(t *testing.T) {
+	for _, test := range eof1ValidTests {
+		header := readValidEOF1Header(common.Hex2Bytes(test.code))
+		if header.codeSize != test.codeSize {
+			t.Errorf("code %v codeSize expected %v, got %v", test.code, test.codeSize, header.codeSize)
+		}
+		if header.dataSize != test.dataSize {
+			t.Errorf("code %v dataSize expected %v, got %v", test.code, test.dataSize, header.dataSize)
+		}
+	}
+}

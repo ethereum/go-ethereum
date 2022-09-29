@@ -122,3 +122,30 @@ func validateEOF(code []byte) bool {
 	_, err := readEOF1Header(code)
 	return err == nil
 }
+
+// readValidEOF1Header parses EOF1-formatted code header, assuming that it is already validated
+func readValidEOF1Header(code []byte) EOF1Header {
+	var header EOF1Header
+	codeSizeOffset := 2 + eofMagicLen
+	header.codeSize = binary.BigEndian.Uint16(code[codeSizeOffset : codeSizeOffset+2])
+	if code[codeSizeOffset+2] == 2 {
+		dataSizeOffset := codeSizeOffset + 3
+		header.dataSize = binary.BigEndian.Uint16(code[dataSizeOffset : dataSizeOffset+2])
+	}
+	return header
+}
+
+// CodeBeginOffset returns starting offset of the code section
+func (header *EOF1Header) CodeBeginOffset() uint64 {
+	if header.dataSize == 0 {
+		// len(magic) + version + code_section_id + code_section_size + terminator
+		return uint64(5 + eofMagicLen)
+	}
+	// len(magic) + version + code_section_id + code_section_size + data_section_id + data_section_size + terminator
+	return uint64(8 + eofMagicLen)
+}
+
+// CodeEndOffset returns offset of the code section end
+func (header *EOF1Header) CodeEndOffset() uint64 {
+	return header.CodeBeginOffset() + uint64(header.codeSize)
+}
