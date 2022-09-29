@@ -117,6 +117,7 @@ type StateDB struct {
 	StorageHashes        time.Duration
 	StorageUpdates       time.Duration
 	StorageCommits       time.Duration
+	StorageDeletes       time.Duration
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
@@ -931,6 +932,19 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				}
 				updates, deleted := set.Size()
 				storageTrieNodesUpdated += updates
+				storageTrieNodesDeleted += deleted
+			}
+		} else {
+			// Account is deleted, nuke out the storage data as well.
+			set, err := obj.DeleteTrie(s.db)
+			if err != nil {
+				return common.Hash{}, err
+			}
+			if set != nil {
+				if err := nodes.Merge(set); err != nil {
+					return common.Hash{}, err
+				}
+				_, deleted := set.Size()
 				storageTrieNodesDeleted += deleted
 			}
 		}

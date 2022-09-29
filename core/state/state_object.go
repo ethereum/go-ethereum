@@ -395,6 +395,43 @@ func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
 	return nodes, err
 }
 
+// DeleteTrie the storage trie of the object from db.
+func (s *stateObject) DeleteTrie(db Database) (*trie.NodeSet, error) {
+	// Track the amount of time wasted on iterating and deleting the storage trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.db.StorageDeletes += time.Since(start) }(time.Now())
+	}
+	stTrie, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+	if err != nil {
+		return nil, err
+	}
+	// It can be an attack vector when iterating a huge contract. Stop collecting
+	// in case the accumulated nodes reach the threshold. It's fine to not clean
+	// up the dangling trie nodes since they are non-accessible dangling nodes
+	// anyway.
+	var (
+		paths [][]byte
+		blobs [][]byte
+		size  common.StorageSize
+		iter  = stTrie.NodeIterator(nil)
+	)
+	for iter.Next(true) {
+		if iter.Hash() == (common.Hash{}) {
+			continue
+		}
+		path, blob := common.CopyBytes(iter.Path()), common.CopyBytes(iter.NodeBlob())
+		paths = append(paths, path)
+		blobs = append(blobs, blob)
+
+		// Pretty arbitrary number, approximately 1GB as the threshold
+		size += common.StorageSize(len(path) + len(blob))
+		if size > 1073741824 {
+			return nil, nil
+		}
+	}
+	return trie.NewNodeSetWithDeletion(s.addrHash, paths, blobs), nil
+}
+
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
 func (s *stateObject) AddBalance(amount *big.Int) {
