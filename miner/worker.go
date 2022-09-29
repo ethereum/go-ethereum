@@ -1011,7 +1011,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 	}
 	// Initialize the prestate excess_blobs field used during state transition
-	if w.chainConfig.IsSharding(parent.Number()) {
+	if w.chainConfig.IsSharding(header.Number) {
+		// TODO(EIP-4844): Unit test this
 		var excessBlobs uint64
 		if parentExcessBlobs := parent.Header().ExcessBlobs; parentExcessBlobs != nil {
 			excessBlobs = *parentExcessBlobs
