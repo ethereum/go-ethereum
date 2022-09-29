@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -41,6 +42,9 @@ var (
 
 	// headFinalizedBlockKey tracks the latest known finalized block hash.
 	headFinalizedBlockKey = []byte("LastFinalized")
+
+	// headStateKey tracks the id of latest stored state(for path-based only).
+	headStateKey = []byte("LastState")
 
 	// lastPivotKey tracks the last pivot block used by fast sync (to reenable on sethead).
 	lastPivotKey = []byte("LastPivot")
@@ -68,6 +72,9 @@ var (
 
 	// skeletonSyncStatusKey tracks the skeleton sync status across restarts.
 	skeletonSyncStatusKey = []byte("SkeletonSyncStatus")
+
+	// triesJournalKey tracks the in-memory trie node layers across restarts.
+	triesJournalKey = []byte("TriesJournal")
 
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
@@ -103,6 +110,7 @@ var (
 	// Path-based trie node scheme.
 	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
 	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
+	stateLookupPrefix     = []byte("L") // stateLookupPrefix + state root -> state id
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
@@ -229,16 +237,6 @@ func IsCodeKey(key []byte) (bool, []byte) {
 	return false, nil
 }
 
-// configKey = configPrefix + hash
-func configKey(hash common.Hash) []byte {
-	return append(configPrefix, hash.Bytes()...)
-}
-
-// genesisStateSpecKey = genesisPrefix + hash
-func genesisStateSpecKey(hash common.Hash) []byte {
-	return append(genesisPrefix, hash.Bytes()...)
-}
-
 // accountTrieNodeKey = trieNodeAccountPrefix + nodePath.
 func accountTrieNodeKey(path []byte) []byte {
 	return append(trieNodeAccountPrefix, path...)
@@ -247,4 +245,68 @@ func accountTrieNodeKey(path []byte) []byte {
 // storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.
 func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
 	return append(append(trieNodeStoragePrefix, accountHash.Bytes()...), path...)
+}
+
+// IsLegacyTrieNode reports whether a provided database entry is a legacy trie
+// node. The characteristics of legacy trie node are:
+// - the key length is 32 bytes
+// - the key is the hash of val
+func IsLegacyTrieNode(key []byte, val []byte) bool {
+	if len(key) != common.HashLength {
+		return false
+	}
+	return bytes.Equal(key, crypto.Keccak256(val))
+}
+
+// IsAccountTrieNode reports whether a provided database entry is an account
+// trie node in path-based state scheme.
+func IsAccountTrieNode(key []byte) (bool, []byte) {
+	if !bytes.HasPrefix(key, trieNodeAccountPrefix) {
+		return false, nil
+	}
+	// The remaining key should only consist a hex node path
+	// whose length is in the range 0 to 64 (64 is excluded
+	// since leaves are always embedded in parent).
+	remain := key[len(trieNodeAccountPrefix):]
+	if len(remain) >= common.HashLength*2 {
+		return false, nil
+	}
+	return true, remain
+}
+
+// IsStorageTrieNode reports whether a provided database entry is a storage
+// trie node in path-based state scheme.
+func IsStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
+	if !bytes.HasPrefix(key, trieNodeStoragePrefix) {
+		return false, common.Hash{}, nil
+	}
+	// The remaining key consists of 2 parts:
+	// - 32 bytes account hash
+	// - hex node path whose length is in the range 0 to 64
+	remain := key[len(trieNodeStoragePrefix):]
+	if len(remain) < common.HashLength {
+		return false, common.Hash{}, nil
+	}
+	accountHash := common.BytesToHash(remain[:common.HashLength])
+	remain = remain[common.HashLength:]
+
+	if len(remain) >= common.HashLength*2 {
+		return false, common.Hash{}, nil
+	}
+	return true, accountHash, remain
+}
+
+// stateLookupKey = stateLookupPrefix + root (32 bytes)
+func stateLookupKey(root common.Hash) []byte {
+	return append(stateLookupPrefix, root.Bytes()...)
+}
+
+// configKey = configPrefix + hash
+func configKey(hash common.Hash) []byte {
+	return append(configPrefix, hash.Bytes()...)
+}
+
+// genesisStateSpecKey = genesisPrefix + hash
+func genesisStateSpecKey(hash common.Hash) []byte {
+	return append(genesisPrefix, hash.Bytes()...)
 }

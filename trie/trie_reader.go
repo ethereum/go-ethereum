@@ -35,13 +35,6 @@ type Reader interface {
 	NodeBlob(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 
-// NodeReader wraps all the necessary functions for accessing trie node.
-type NodeReader interface {
-	// GetReader returns a reader for accessing all trie nodes with provided
-	// state root. Nil is returned in case the state is not available.
-	GetReader(root common.Hash) Reader
-}
-
 // trieReader is a wrapper of the underlying node reader. It's not safe
 // for concurrent usage.
 type trieReader struct {

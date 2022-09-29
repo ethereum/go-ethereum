@@ -187,10 +187,10 @@ func (f *fuzzer) fuzz() int {
 		panic(err)
 	}
 	if nodes != nil {
-		dbA.Update(trie.NewWithNodeSet(nodes))
+		dbA.Update(rootA, common.Hash{}, trie.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false, nil)
+	dbA.Commit(rootA, false)
 
 	// Stacktrie requires sorted insertion
 	sort.Sort(vals)

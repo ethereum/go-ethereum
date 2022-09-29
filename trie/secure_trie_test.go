@@ -62,7 +62,7 @@ func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 	if err != nil {
 		panic(fmt.Errorf("failed to commit trie %v", err))
 	}
-	if err := triedb.Update(NewWithNodeSet(nodes)); err != nil {
+	if err := triedb.Update(root, common.Hash{}, NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	// Re-create the trie based on the new state
