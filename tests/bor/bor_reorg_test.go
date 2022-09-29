@@ -371,4 +371,14 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 	assert.NotEqual(t, blockHeaderVal2.Hash(), blockHeaderVal3.Hash())
 	assert.NotEqual(t, blockHeaderVal2.Time, blockHeaderVal3.Time)
 
+	author2, err := nodes[0].Engine().Author(blockHeaderVal2)
+	if err != nil {
+		log.Error("Error occured while fetching author", "err", err)
+	}
+	author3, err := nodes[1].Engine().Author(blockHeaderVal3)
+	if err != nil {
+		log.Error("Error occured while fetching author", "err", err)
+	}
+	assert.NotEqual(t, author2, author3)
+
 }
