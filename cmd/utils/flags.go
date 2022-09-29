@@ -983,7 +983,7 @@ var (
 	HttpHeaderFlag = &cli.StringSliceFlag{
 		Name:     "header",
 		Aliases:  []string{"H"},
-		Usage:    "Pass custom header(s) to server",
+		Usage:    "Pass custom headers to the RPC server wheng using --" + RemoteDBFlag.Name + " or the geth attach console.",
 		Category: flags.NetworkingCategory,
 	}
 )
