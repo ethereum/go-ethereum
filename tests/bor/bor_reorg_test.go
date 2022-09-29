@@ -347,93 +347,28 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 	}
 
 	time.Sleep(700 * time.Second)
-	// check block 10 miner ; expected author is node1 signer
-	//blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(128)
-	//blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(128)
-	//authorVal0, err := nodes[0].Engine().Author(blockHeaderVal0)
-	/*if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err := nodes[1].Engine().Author(blockHeaderVal1)
+
+	// Before the end of sprint
+	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(120)
+	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(120)
+	assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
+	assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
+
+	author0, err := nodes[0].Engine().Author(blockHeaderVal0)
 	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}*/
+		log.Error("Error occured while fetching author", "err", err)
+	}
+	author1, err := nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error occured while fetching author", "err", err)
+	}
+	assert.Equal(t, author0, author1)
 
-	// check both nodes have the same block 10
-	//assert.Equal(t, authorVal0, authorVal1)
-
+	// After the end of sprint
+	// FIXME: POS-845
 	blockHeaderVal2 := nodes[0].BlockChain().GetHeaderByNumber(130)
 	blockHeaderVal3 := nodes[1].BlockChain().GetHeaderByNumber(130)
+	assert.NotEqual(t, blockHeaderVal2.Hash(), blockHeaderVal3.Hash())
+	assert.NotEqual(t, blockHeaderVal2.Time, blockHeaderVal3.Time)
 
-	assert.Equal(t, blockHeaderVal2.Hash(), blockHeaderVal3.Hash())
-	assert.Equal(t, blockHeaderVal2.Time, blockHeaderVal3.Time)
-	// check node0 has block mined by node1
-	/*assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 11 miner ; expected author is node1 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(11)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(11)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 11
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 12 miner ; expected author is node1 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(12)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(12)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 12
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
-
-	// check block 17 miner ; expected author is node0 signer
-	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(17)
-	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(17)
-	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error in getting author", "err", err)
-	}
-
-	// check both nodes have the same block 17
-	assert.Equal(t, authorVal0, authorVal1)
-
-	// check node0 has block mined by node1
-	assert.Equal(t, authorVal0, nodes[0].AccountManager().Accounts()[0])
-
-	// check node1 has block mined by node1
-	assert.Equal(t, authorVal1, nodes[0].AccountManager().Accounts()[0])
-	*/
 }
