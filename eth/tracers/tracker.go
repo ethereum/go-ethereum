@@ -61,8 +61,8 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 	// it to the next state which is not used up.
 	if number == t.oldest {
 		var count int
-		for i := 0; i < len(t.used); i++ {
-			if !t.used[i] {
+		for _, used := range t.used {
+			if !used {
 				break
 			}
 			count += 1
