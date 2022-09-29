@@ -23,14 +23,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -523,15 +521,11 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			var stRoot common.Hash
 			// Storage slots requested, open the storage trie and retrieve from there
 			if snap == nil {
-				var account types.StateAccount
-				// We don't have the requested state snapshotted yet (or it is stale).
-				// We can look  up the account from the account trie instead.
-				blob, resolved, err := accTrie.TryGetNode(pathset[0])
-				loads += resolved // always account database reads, even for failures
-				if err != nil {
-					break
-				}
-				if err = rlp.DecodeBytes(blob, &account); err != nil {
+				// We don't have the requested state snapshotted yet (or it is stale),
+				// but can look up the account via the trie instead.
+				account, err := accTrie.TryGetAccountWithPreHashedKey(pathset[0])
+				loads += 8 // We don't know the exact cost of lookup, this is an estimate
+				if err != nil || account == nil {
 					break
 				}
 				stRoot = account.Root
