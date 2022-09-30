@@ -69,9 +69,10 @@ func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 // timeoutLoop deletes filters that reached the deadline.
 // It is started when the API is created.
 func (api *FilterAPI) timeoutLoop() {
-	var toUninstall *Subscription
 	for {
 		go func(id rpc.ID) {
+			var toUninstall *Subscription
+
 			api.filtersMu.Lock()
 			if f, ok := api.filters[id]; ok {
 				toUninstall = f.s
@@ -85,7 +86,6 @@ func (api *FilterAPI) timeoutLoop() {
 			if toUninstall != nil {
 				toUninstall.Unsubscribe()
 			}
-			toUninstall = nil
 		}(<-api.sys.deadlineCh)
 	}
 }
