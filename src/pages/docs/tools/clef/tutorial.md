@@ -204,7 +204,7 @@ For most users, manually confirming every transaction is the right way to use Cl
 For example, well defined rules such as:
 
 - Auto-approve transactions with Uniswap v2, with value between 0.1 and 0.5 ETH per 24h period
-- Auto-approve transactions to address `0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3` as long as gas < 44k and gasPrice < 80Gwei can be encoded and intepreted by Clef's built-in ruleset engine.
+- Auto-approve transactions to address `0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3` as long as gas < 44k and gasPrice < 80Gwei can be encoded and interpreted by Clef's built-in ruleset engine.
 
 ### Rule files
 
@@ -507,7 +507,7 @@ More examples, including a ruleset for a rate-limited window, are available on t
 
 ## Under the hood
 
-The examples on this page have provided step-by-step instructions for verious operations using Clef. However, they have not provided much detail as to what is happening under the hood. This section will provide some more details about how Clef organizes itself locally.
+The examples on this page have provided step-by-step instructions for various operations using Clef. However, they have not provided much detail as to what is happening under the hood. This section will provide some more details about how Clef organizes itself locally.
 
 Initializing Clef with a master password and providing an account password to `clef setpw` and attesting a ruleset creates the following files in the directory `~/.clef/` (this path is independent of the paths provided to `--keystore` and `--configdir` on startup):
 

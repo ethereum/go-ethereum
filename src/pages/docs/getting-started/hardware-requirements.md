@@ -22,7 +22,6 @@ There are future updates to Ethereum that will reduce the amount of disk space r
 
 As well as storage capacity, Geth nodes rely on fast read and write operations. This means HDDs and cheaper HDDS struggle to sync the blockchain. There is a list of SSD models that can and cannot sync Geth in this [Github Gist](https://gist.github.com/yorickdowne/f3a3e79a573bf35767cd002cc977b038).
 
-
 ## Bandwidth
 
 It is important to have a stable and reliable internet connection, especially for running a validator because downtime can result in missed rewards or penalties. It is recommended to have at least 25Mbps download speed to run a node. Running a node also requires a lot of data to be uploaded and downloaded so it is better to use a ISP that does not have a capped data allowance.

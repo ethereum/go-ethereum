@@ -196,15 +196,15 @@ Solidity is a high-level language that makes code executable by the Ethereum vir
 
 In a web browser, open <https://remix.ethereum.org>. This opens an online smart contract development environment. On the left-hand side of the screen there is a side-bar menu that toggles between several toolboxes that are displayed in a vertical panel. On the right hand side of the screen there is an editor and a terminal. This layout is similar to the default layout of many other IDEs such as [VSCode](https://code.visualstudio.com/). The contract defined in the previous section, `Storage.sol` is already available in the `Contracts` directory in Remix. It can be opened and reviewed in the editor.
 
-![Remix](/images/remix.png)
+![Remix](/images/docs/remix.png)
 
 The Solidity logo is present as an icon in the Remix side-bar. Clicking this icon opens the Solidity compiler wizard. This can be used to compile `Storage.sol` ready. With `Solidity.sol` open in the editor window, simply click the `Compile 1_Storage.sol` button. A green tick will appear next to the Solidity icon to confirm that the contract has compiled successfully. This means the contract bytecode is available.
 
-![Remix-compiler](/images/remix-compiler.png)
+![Remix-compiler](/images/docs/remix-compiler.png)
 
 Below the Solidity icon is a fourth icon that includes the Ethereum logo. Clicking this opens the Deploy menu. In this menu, Remix can be configured to connect to the local Geth node. In the drop-down menu labelled `ENVIRONMENT`, select `Injected Web3`. This will open an information pop-up with instructions for configuring Geth - these can be ignored as they were completed earlier in this tutorial. However, at the bottom of this pop-up is a box labelled `Web3 Provider Endpoint`. This should be set to Geth's 8545 port on `localhost` (`127.0.0.1:8545`). Click OK. The `ACCOUNT` field should automatically populate with the address of the account created earlier using the Geth Javascript console.
 
-![Remix-deploy](/images/remix-deploy.png)
+![Remix-deploy](/images/docs/remix-deploy.png)
 
 To deploy `Storage.sol`, click `DEPLOY`.
 
@@ -224,7 +224,7 @@ The contract is now deployed on a local testnet version of the Etheruem blockcha
 
 After deploying the contract in Remix, the `Deployed Contracts` tab in the sidebar automatically populates with the public functions exposed by `Storage.sol`. To send a value to the contract storage, type a number in the field adjacent to the `store` button, then click the button.
 
-![Remix-func](/images/remix-func.png)
+![Remix-func](/images/docs/remix-func.png)
 
 In the Geth terminal, the following logs confirm that the transaction was successful (the actual values will vary from the example below):
 
