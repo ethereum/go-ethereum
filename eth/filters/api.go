@@ -61,37 +61,29 @@ func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
 	}
-	go api.timeoutLoop(system.cfg.Timeout)
+	go api.timeoutLoop()
 
 	return api
 }
 
-// timeoutLoop runs at the interval set by 'timeout' and deletes filters
-// that have not been recently used. It is started when the API is created.
-func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
-	var toUninstall []*Subscription
-	ticker := time.NewTicker(timeout)
-	defer ticker.Stop()
+// timeoutLoop deletes filters that reached the deadline.
+// It is started when the API is created.
+func (api *FilterAPI) timeoutLoop() {
+	var toUninstall *Subscription
 	for {
-		<-ticker.C
+		id := <-api.sys.deadlineCh
+		fmt.Println(id, "timeout!")
+
 		api.filtersMu.Lock()
-		for id, f := range api.filters {
-			select {
-			case <-f.deadline.C:
-				toUninstall = append(toUninstall, f.s)
-				delete(api.filters, id)
-			default:
-				continue
-			}
-		}
+		f := api.filters[id]
+		toUninstall = f.s
+		delete(api.filters, id)
 		api.filtersMu.Unlock()
 
 		// Unsubscribes are processed outside the lock to avoid the following scenario:
 		// event loop attempts broadcasting events to still active filters while
 		// Unsubscribe is waiting for it to process the uninstall request.
-		for _, s := range toUninstall {
-			s.Unsubscribe()
-		}
+		toUninstall.Unsubscribe()
 		toUninstall = nil
 	}
 }
@@ -105,10 +97,11 @@ func (api *FilterAPI) NewPendingTransactionFilter() rpc.ID {
 	var (
 		pendingTxs   = make(chan []common.Hash)
 		pendingTxSub = api.events.SubscribePendingTxs(pendingTxs)
+		deadline     = time.NewTimer(api.timeout)
 	)
 
 	api.filtersMu.Lock()
-	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, deadline: time.NewTimer(api.timeout), hashes: make([]common.Hash, 0), s: pendingTxSub}
+	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, deadline: deadline, hashes: make([]common.Hash, 0), s: pendingTxSub}
 	api.filtersMu.Unlock()
 
 	go func() {
@@ -120,6 +113,10 @@ func (api *FilterAPI) NewPendingTransactionFilter() rpc.ID {
 					f.hashes = append(f.hashes, ph...)
 				}
 				api.filtersMu.Unlock()
+			case <-deadline.C:
+				deadline.Stop()
+				api.sys.deadlineCh <- pendingTxSub.ID
+				return
 			case <-pendingTxSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, pendingTxSub.ID)
@@ -173,10 +170,11 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 	var (
 		headers   = make(chan *types.Header)
 		headerSub = api.events.SubscribeNewHeads(headers)
+		deadline  = time.NewTimer(api.timeout)
 	)
 
 	api.filtersMu.Lock()
-	api.filters[headerSub.ID] = &filter{typ: BlocksSubscription, deadline: time.NewTimer(api.timeout), hashes: make([]common.Hash, 0), s: headerSub}
+	api.filters[headerSub.ID] = &filter{typ: BlocksSubscription, deadline: deadline, hashes: make([]common.Hash, 0), s: headerSub}
 	api.filtersMu.Unlock()
 
 	go func() {
@@ -188,6 +186,10 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 					f.hashes = append(f.hashes, h.Hash())
 				}
 				api.filtersMu.Unlock()
+			case <-deadline.C:
+				deadline.Stop()
+				api.sys.deadlineCh <- headerSub.ID
+				return
 			case <-headerSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, headerSub.ID)
@@ -284,14 +286,18 @@ type FilterCriteria ethereum.FilterQuery
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
-	logs := make(chan []*types.Log)
+	var (
+		logs     = make(chan []*types.Log)
+		deadline = time.NewTimer(api.timeout)
+	)
+
 	logsSub, err := api.events.SubscribeLogs(ethereum.FilterQuery(crit), logs)
 	if err != nil {
 		return "", err
 	}
 
 	api.filtersMu.Lock()
-	api.filters[logsSub.ID] = &filter{typ: LogsSubscription, crit: crit, deadline: time.NewTimer(api.timeout), logs: make([]*types.Log, 0), s: logsSub}
+	api.filters[logsSub.ID] = &filter{typ: LogsSubscription, crit: crit, deadline: deadline, logs: make([]*types.Log, 0), s: logsSub}
 	api.filtersMu.Unlock()
 
 	go func() {
@@ -303,6 +309,10 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 					f.logs = append(f.logs, l...)
 				}
 				api.filtersMu.Unlock()
+			case <-deadline.C:
+				deadline.Stop()
+				api.sys.deadlineCh <- logsSub.ID
+				return
 			case <-logsSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, logsSub.ID)
@@ -403,12 +413,13 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	defer api.filtersMu.Unlock()
 
 	if f, found := api.filters[id]; found {
-		if !f.deadline.Stop() {
-			// timer expired but filter is not yet removed in timeout loop
-			// receive timer value and reset timer
-			<-f.deadline.C
+		// If timer expired but filter is not yet removed in timeout loop,
+		// just returns values.
+		//
+		// Reset only if the timer is alive.
+		if f.deadline.Stop() {
+			f.deadline.Reset(api.timeout)
 		}
-		f.deadline.Reset(api.timeout)
 
 		switch f.typ {
 		case PendingTransactionsSubscription, BlocksSubscription:

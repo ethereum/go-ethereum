@@ -76,6 +76,8 @@ type FilterSystem struct {
 	backend   Backend
 	logsCache *lru.Cache
 	cfg       *Config
+
+	deadlineCh chan rpc.ID
 }
 
 // NewFilterSystem creates a filter system.
@@ -87,9 +89,10 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 		panic(err)
 	}
 	return &FilterSystem{
-		backend:   backend,
-		logsCache: cache,
-		cfg:       &config,
+		backend:    backend,
+		logsCache:  cache,
+		cfg:        &config,
+		deadlineCh: make(chan rpc.ID),
 	}
 }
 
