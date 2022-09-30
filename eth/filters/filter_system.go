@@ -77,7 +77,7 @@ type FilterSystem struct {
 	logsCache *lru.Cache
 	cfg       *Config
 
-	deadlineCh chan rpc.ID
+	deadlineCh chan rpc.ID // deadlineCh detects that the filter is exceed deadline.
 }
 
 // NewFilterSystem creates a filter system.
