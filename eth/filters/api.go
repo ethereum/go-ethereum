@@ -71,20 +71,19 @@ func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 func (api *FilterAPI) timeoutLoop() {
 	var toUninstall *Subscription
 	for {
-		id := <-api.sys.deadlineCh
-		fmt.Println(id, "timeout!")
+		go func(id rpc.ID) {
+			api.filtersMu.Lock()
+			f := api.filters[id]
+			toUninstall = f.s
+			delete(api.filters, id)
+			api.filtersMu.Unlock()
 
-		api.filtersMu.Lock()
-		f := api.filters[id]
-		toUninstall = f.s
-		delete(api.filters, id)
-		api.filtersMu.Unlock()
-
-		// Unsubscribes are processed outside the lock to avoid the following scenario:
-		// event loop attempts broadcasting events to still active filters while
-		// Unsubscribe is waiting for it to process the uninstall request.
-		toUninstall.Unsubscribe()
-		toUninstall = nil
+			// Unsubscribes are processed outside the lock to avoid the following scenario:
+			// event loop attempts broadcasting events to still active filters while
+			// Unsubscribe is waiting for it to process the uninstall request.
+			toUninstall.Unsubscribe()
+			toUninstall = nil
+		}(<-api.sys.deadlineCh)
 	}
 }
 
