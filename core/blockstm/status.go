@@ -128,7 +128,7 @@ func (m *taskStatusManager) addDependencies(blocker int, dependent int) bool {
 		// Blocker has already completed
 		delete(curblockers, blocker)
 
-		return false
+		return len(curblockers) > 0
 	}
 
 	if _, ok := m.dependency[blocker]; !ok {
