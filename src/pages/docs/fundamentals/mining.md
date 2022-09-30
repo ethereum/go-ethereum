@@ -3,7 +3,7 @@ title: Proof-of-work mining with Ethash
 description: Introduction to proof-of-work mining with Geth
 ---
 
-{% include note.html content=" Proof-of-work mining is **no longer used to secure Ethereum Mainnet**. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet. %}
+{% include note.html content=" Proof-of-work mining is **no longer used to secure Ethereum Mainnet**. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet." %}
 
 Blockchains grow when nodes add blocks and distribute them to their peers. Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomyl selects a node to produce each block. Under proof-of-work, however, block producers are selected by competition. The node that computes a certain value that can only be found using repeated random guesses wins the right to propose the next block. Only if a node can demonstrate that they have calculated this value, and therefore expended energy, will their block be accepted by other nodes. This secures the network. This process of creating blocks and securing them using proof-of-work is known as "mining".
 
