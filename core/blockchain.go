@@ -2294,7 +2294,7 @@ func (bc *BlockChain) indexBlocks(tail *uint64, head uint64, done chan struct{})
 			from = head - bc.txLookupLimit + 1
 		}
 		rawdb.IndexTransactions(bc.db, from, head+1, bc.quit)
-		rawdb.WriteTxIndexTail(bc.db, 0)
+		rawdb.WriteTxIndexTail(bc.db, from)
 		return
 	}
 	// The tail flag is existent, but the whole chain is required to be indexed.
