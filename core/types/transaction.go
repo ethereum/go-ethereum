@@ -508,6 +508,10 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 	// Initialize a price and received time based heap with the head transactions
 	heads := make(TxByPriceAndTime, 0, len(txs))
 	for from, accTxs := range txs {
+		if len(accTxs) == 0 {
+			continue
+		}
+
 		acc, _ := Sender(signer, accTxs[0])
 		wrapped, err := NewTxWithMinerFee(accTxs[0], baseFee)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
@@ -548,6 +552,10 @@ func (t *TransactionsByPriceAndNonce) Shift() {
 		}
 	}
 	heap.Pop(&t.heads)
+}
+
+func (t *TransactionsByPriceAndNonce) GetTxs() int {
+	return len(t.txs)
 }
 
 // Pop removes the best transaction, *not* replacing it with the next one from
