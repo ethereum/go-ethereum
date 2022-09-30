@@ -1,9 +1,9 @@
 OLD Geth website URLS,Equivalent NEW website URLs,Relative path to markdown file,Notes
 https://geth.ethereum.org/,https://geth.ethereum.org,src/pages/homepage,will be react page
 https://geth.ethereum.org/downloads/,https://geth.ethereum.org/downloads,src/pages/downloads,will be react page
-https://geth.ethereum.org/docs/,https://geth.ethereum.org/docs,src/pages/docs,n/a
-https://geth.ethereum.org/docs/getting-started,https://geth.ethereum.org/docs/getting_started,src/pages/docs/getting_started/getting_started.md,n/a
-https://geth.ethereum.org/docs/getting-started/geth-and-clef,https://geth.ethereum.org/docs/getting_started_with_clef.md,src/pages/docs/getting_started/getting-started-with-clef.md,n/a
+https://geth.ethereum.org/docs/,https://geth.ethereum.org/docs,src/pages/docs/index.md,n/a
+https://geth.ethereum.org/docs/getting-started,https://geth.ethereum.org/docs/getting_started/getting-started,src/pages/docs/getting_started/getting_started.md,n/a
+https://geth.ethereum.org/docs/getting-started/geth-and-clef,https://geth.ethereum.org/docs/getting_started_with_clef,src/pages/docs/getting_started/getting-started-with-clef.md,n/a
 https://geth.ethereum.org/docs/getting-started/dev-mode,https://geth.ethereum.org/docs/developers/geth-developers/dev-mode,src/pages/docs/developers/geth-developer/dev-mode.md,n/a
 https://geth.ethereum.org/docs/install-and-build/installing-geth,https://geth.ethereum.org/docs/getting_started/install-geth,src/pages/docs/getting_started/backup-restore.md,n/a
 https://geth.ethereum.org/docs/install-and-build/backup-restore,https://geth.ethereum.org/docs/getting_started/backup-restore,src/pages/docs/getting_started/installing-geth.md,n/a
@@ -53,6 +53,8 @@ https://geth.ethereum.org/docs/clef/rules,https://geth.ethereum.org/docs/tools/c
 https://geth.ethereum.org/docs/clef/setup,https://geth.ethereum.org/docs/tools/clef/setup,src/pages/docs/tools/clef/setup.md,n/a
 https://geth.ethereum.org/docs/clef/apis,https://geth.ethereum.org/docs/tools/clef/apis,src/pages/docs/tools/clef/apis.md,n/a
 https://geth.ethereum.org/docs/clef/datatypes,https://geth.ethereum.org/docs/tools/clef/datatypes,src/pages/docs/tools/clef/datatypes.md,n/a
+https://geth.ethereum.org/docs/interface/sync-modes,https://geth.ethereum.org/docs/interface/sync-modes,src/pages/docs/fundamentals/sync-modes.md,n/a
+https://geth.ethereum.org/docs/interface/hardware,https://geth.ethereum.org/docs/interface/getting_started/hardware-requirements.md,,
 https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json,https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json,src/pages/docs/vulnerabilities/vulnerabilities.json,must be served at original URL
 https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json.minisig,https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json.minisig,src/pages/docs/vulnerabilities/vulnerabilities.json.minisig,must be served at original URL
 https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.md,https://geth.ethereum.org/docs/developers/geth-developers/discloures,src/pages/docs/developers/geth-developers/disclosures,moved to /docs and renamed
