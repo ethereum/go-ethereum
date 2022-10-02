@@ -76,3 +76,47 @@ resource "aws_route_table_association" "devnet_route_table_association" {
   subnet_id      = aws_subnet.devnet_subnet.id
   route_table_id = aws_route_table.devnet_route_table.id
 }
+
+resource "aws_default_security_group" "devnet_xdcnode_security_group" {
+  vpc_id = aws_vpc.devnet_vpc.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = -1
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "TfDevnetNode"
+  }
+}
+
+resource "aws_security_group" "devnet_efs_security_group" {
+  name = "TfDevnetEfsSecurityGroup"
+  description = "Allow HTTP in and out of devnet EFS"
+  vpc_id = aws_vpc.devnet_vpc.id
+
+  ingress {
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "TCP"
+    security_groups = [aws_default_security_group.devnet_xdcnode_security_group.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "TfDevnetEfs"
+  }
+}
