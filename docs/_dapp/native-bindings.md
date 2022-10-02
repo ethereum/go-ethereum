@@ -557,7 +557,7 @@ feature. However, using public testnets as a backend does not lend itself well t
 *automated unit testing*. Therefore, Geth also implements a *simulated blockchain* 
 that can be set as a backend to native contracts the same way as a live RPC backend, using the 
 command `backends.NewSimulatedBackend(genesisAccounts)`. The code snippet below shows how this
-can be used as a backend in a Go applicatioon.
+can be used as a backend in a Go application.
 
 ```go
 package main
