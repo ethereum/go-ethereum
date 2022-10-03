@@ -476,10 +476,9 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
-	var (
-		api = NewConsensusAPI(ethservice)
-	)
+
 	// invalid ttd
+	api := NewConsensusAPI(ethservice)
 	config := beacon.TransitionConfigurationV1{
 		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
 		TerminalBlockHash:       common.Hash{},
@@ -812,10 +811,8 @@ func TestInvalidBloom(t *testing.T) {
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(100)
-	fmt.Println(genesis.Config.TerminalTotalDifficulty)
 	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
-	fmt.Println(genesis.Config.TerminalTotalDifficulty)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
