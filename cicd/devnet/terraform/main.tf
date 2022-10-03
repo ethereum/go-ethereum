@@ -150,3 +150,19 @@ resource "aws_iam_role_policy_attachment" "devnet_xdc_ecs_tasks_execution_role" 
   role       = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.name
   policy_arn = each.value
 }
+
+# EFS
+resource "aws_efs_file_system" "devnet_efs" {
+   creation_token = "efs"
+   performance_mode = "generalPurpose"
+   throughput_mode = "bursting"
+   encrypted = "true"
+   tags = {
+       Name = "TfDevnetEfs"
+   }
+ }
+
+resource "aws_efs_mount_target" "alpha" {
+  file_system_id = aws_efs_file_system.devnet_efs.id
+  subnet_id      = aws_subnet.devnet_subnet.id
+}
