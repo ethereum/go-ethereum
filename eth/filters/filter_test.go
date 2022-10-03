@@ -170,6 +170,9 @@ func TestFilters(t *testing.T) {
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
+	// Set block 998 as Finalized (-3)
+	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
+
 	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 
 	logs, _ := filter.Logs(context.Background())
@@ -219,6 +222,34 @@ func TestFilters(t *testing.T) {
 	}
 
 	filter = sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
+
+	logs, _ = filter.Logs(context.Background())
+	if len(logs) != 0 {
+		t.Error("expected 0 log, got", len(logs))
+	}
+
+	filter = sys.NewRangeFilter(-1, -1, nil, nil)
+
+	logs, _ = filter.Logs(context.Background())
+	if len(logs) != 1 {
+		t.Error("expected 1 log, got", len(logs))
+	}
+
+	filter = sys.NewRangeFilter(-3, -1, nil, nil)
+
+	logs, _ = filter.Logs(context.Background())
+	if len(logs) != 2 {
+		t.Error("expected 2 log, got", len(logs))
+	}
+
+	filter = sys.NewRangeFilter(-3, -3, nil, nil)
+
+	logs, _ = filter.Logs(context.Background())
+	if len(logs) != 1 {
+		t.Error("expected 1 log, got", len(logs))
+	}
+
+	filter = sys.NewRangeFilter(-1, -3, nil, nil)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {

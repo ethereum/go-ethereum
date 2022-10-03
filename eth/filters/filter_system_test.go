@@ -65,6 +65,13 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 			return nil, nil
 		}
 		num = *number
+	} else if blockNr == rpc.FinalizedBlockNumber {
+		hash = rawdb.ReadFinalizedBlockHash(b.db)
+		number := rawdb.ReadHeaderNumber(b.db, hash)
+		if number == nil {
+			return nil, nil
+		}
+		num = *number
 	} else {
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
