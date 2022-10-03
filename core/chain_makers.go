@@ -141,10 +141,10 @@ func (b *BlockGen) BaseFee() *big.Int {
 }
 
 // ExcessBlobs returns the EIP-4844 excess blobs of the block being generated.
-func (b *BlockGen) ExcessBlobs() *uint64 {
-	v := new(uint64)
+func (b *BlockGen) ExcessBlobs() uint64 {
+	var v uint64
 	if b.header.ExcessBlobs != nil {
-		*v = *b.header.ExcessBlobs
+		v = *b.header.ExcessBlobs
 	}
 	return v
 }
