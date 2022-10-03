@@ -25,7 +25,7 @@ This process of creating blocks and securing them using proof-of-work is known
 as "mining".
 
 Much more information about mining, including details about the specific algorithm 
-("Ethash") used by Ethereum nodes is available on [ethereum.org](http://ethereum.org).
+("Ethash") used by Ethereum nodes is available on [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash).
 
 ## CPU vs GPU
 
