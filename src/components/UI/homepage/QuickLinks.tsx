@@ -12,12 +12,12 @@ export const QuickLinks: FC = () => {
           // TODO: move text style to theme
           as='h2'
           fontFamily='"JetBrains Mono", monospace'
-          fontWeight={400}
-          fontSize='28px'
-          lineHeight='37px'
-          letterSpacing='0.04em'
+          fontWeight={700}
+          fontSize='2.125rem'
+          lineHeight='auto'
+          letterSpacing='3%'
           // TODO: move to theme colors
-          color='#1D242C'
+          color='#1d242c'
         >
           Quick Links
         </Heading>
