@@ -76,3 +76,77 @@ resource "aws_route_table_association" "devnet_route_table_association" {
   subnet_id      = aws_subnet.devnet_subnet.id
   route_table_id = aws_route_table.devnet_route_table.id
 }
+
+resource "aws_default_security_group" "devnet_xdcnode_security_group" {
+  vpc_id = aws_vpc.devnet_vpc.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = -1
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "TfDevnetNode"
+  }
+}
+
+resource "aws_security_group" "devnet_efs_security_group" {
+  name = "TfDevnetEfsSecurityGroup"
+  description = "Allow HTTP in and out of devnet EFS"
+  vpc_id = aws_vpc.devnet_vpc.id
+
+  ingress {
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "TCP"
+    security_groups = [aws_default_security_group.devnet_xdcnode_security_group.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name = "TfDevnetEfs"
+  }
+}
+
+# IAM policies
+
+data "aws_iam_policy_document" "xdc_ecs_tasks_execution_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+# Create the role
+resource "aws_iam_role" "devnet_xdc_ecs_tasks_execution_role" {
+  name               = "devnet-xdc-ecs-task-execution-role"
+  assume_role_policy = "${data.aws_iam_policy_document.xdc_ecs_tasks_execution_role.json}"
+}
+
+# Attached the AWS managed policies to the new role
+resource "aws_iam_role_policy_attachment" "devnet_xdc_ecs_tasks_execution_role" {
+  for_each = toset([
+    "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess", 
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+    "arn:aws:iam::aws:policy/AmazonElasticFileSystemsUtils"
+  ])
+  role       = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.name
+  policy_arn = each.value
+}
