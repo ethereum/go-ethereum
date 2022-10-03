@@ -97,6 +97,10 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 		encode func(*Receipt) ([]byte, error)
 	}{
 		{
+			"ReceiptForStorage",
+			encodeAsReceiptForStorage,
+		},
+		{
 			"StoredReceiptRLP",
 			encodeAsStoredReceiptRLP,
 		},
@@ -168,6 +172,10 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 			}
 		})
 	}
+}
+
+func encodeAsReceiptForStorage(want *Receipt) ([]byte, error) {
+	return rlp.EncodeToBytes((*ReceiptForStorage)(want))
 }
 
 func encodeAsStoredReceiptRLP(want *Receipt) ([]byte, error) {
