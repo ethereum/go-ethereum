@@ -107,10 +107,6 @@ func TestGethClient(t *testing.T) {
 		test func(t *testing.T)
 	}{
 		{
-			"TestAccessList",
-			func(t *testing.T) { testAccessList(t, client) },
-		},
-		{
 			"TestGetProof",
 			func(t *testing.T) { testGetProof(t, client) },
 		}, {
@@ -132,8 +128,15 @@ func TestGethClient(t *testing.T) {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
 		},
+		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
+		// one block. The `testAcessList` fails if the miner has not yet created a
+		// new pending-block after the import event.
+		// Hence: this test should be last, execute the tests serially.
+		{
+			"TestAccessList",
+			func(t *testing.T) { testAccessList(t, client) },
+		},
 	}
-	t.Parallel()
 	for _, tt := range tests {
 		t.Run(tt.name, tt.test)
 	}
