@@ -382,7 +382,7 @@ func (api *LightAPI) LatestCheckpoint() ([4]string, error) {
 	return res, nil
 }
 
-// GetLocalCheckpoint returns the specific local checkpoint package.
+// GetCheckpoint returns the specific local checkpoint package.
 //
 // The checkpoint package consists of 3 strings:
 //

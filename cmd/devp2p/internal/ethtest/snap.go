@@ -121,7 +121,7 @@ type stRangesTest struct {
 	expSlots int
 }
 
-// TestSnapGetStorageRange various forms of GetStorageRanges requests.
+// TestSnapGetStorageRanges various forms of GetStorageRanges requests.
 func (s *Suite) TestSnapGetStorageRanges(t *utesting.T) {
 	var (
 		ffHash    = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")

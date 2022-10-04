@@ -36,12 +36,12 @@ var mockerList = map[string]func(net *Network, quit chan struct{}, nodeCount int
 	"boot":          boot,
 }
 
-// Lookup a mocker by its name, returns the mockerFn
+// LookupMocker looks a mocker by its name, returns the mockerFn
 func LookupMocker(mockerType string) func(net *Network, quit chan struct{}, nodeCount int) {
 	return mockerList[mockerType]
 }
 
-// Get a list of mockers (keys of the map)
+// GetMockerList returns a list of mockers (keys of the map)
 // Useful for frontend to build available mocker selection
 func GetMockerList() []string {
 	list := make([]string, 0, len(mockerList))
