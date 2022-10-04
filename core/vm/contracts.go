@@ -389,9 +389,9 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	case base.Cmp(common.Big1) == 0:
 		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
 		v = base.Mod(base, mod).Bytes()
-	case mod.Bit(0) == 0:
-		// Modulo is even
-		v = math.FastExp(base, exp, mod).Bytes()
+	//case mod.Bit(0) == 0:
+	//	// Modulo is even
+	//	v = math.FastExp(base, exp, mod).Bytes()
 	default:
 		// Modulo is odd
 		v = base.Exp(base, exp, mod).Bytes()
