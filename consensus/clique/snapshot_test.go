@@ -377,8 +377,17 @@ func TestClique(t *testing.T) {
 			failure: errRecentlySigned,
 		},
 	}
+	var toStop *core.BlockChain
+	defer func() {
+		if toStop != nil {
+			toStop.Stop()
+		}
+	}()
 	// Run through the scenarios and test them
 	for i, tt := range tests {
+		if toStop != nil {
+			toStop.Stop()
+		}
 		// Create the account pool and generate the initial set of signers
 		accounts := newTesterAccountPool()
 
@@ -454,6 +463,7 @@ func TestClique(t *testing.T) {
 			t.Errorf("test %d: failed to create test chain: %v", i, err)
 			continue
 		}
+		toStop = chain
 		failed := false
 		for j := 0; j < len(batches)-1; j++ {
 			if k, err := chain.InsertChain(batches[j]); err != nil {

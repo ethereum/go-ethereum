@@ -62,7 +62,7 @@ func TestFeeHistory(t *testing.T) {
 		oracle := NewOracle(backend, config)
 
 		first, reward, baseFee, ratio, err := oracle.FeeHistory(context.Background(), c.count, c.last, c.percent)
-
+		backend.chain.Stop()
 		expReward := c.expCount
 		if len(c.percent) == 0 {
 			expReward = 0
