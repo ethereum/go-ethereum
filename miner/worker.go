@@ -80,6 +80,7 @@ const (
 var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
+	errMaxBlobsReached            = errors.New("reached max number of blobs per block")
 )
 
 // environment is the worker's current environment and holds all
@@ -98,6 +99,7 @@ type environment struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   map[common.Hash]*types.Header
+	numBlobs int
 }
 
 // copy creates a deep copy of environment.
@@ -825,6 +827,11 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
+	txBlobCount := len(tx.DataHashes())
+	if env.numBlobs+txBlobCount > params.MaxBlobsPerBlock {
+		return nil, errMaxBlobsReached
+	}
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
@@ -832,6 +839,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
+	env.numBlobs += txBlobCount
 
 	return receipt.Logs, nil
 }
@@ -918,6 +926,11 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
+
+		case errors.Is(err, errMaxBlobsReached):
+			// Shift, as the next tx from the account may not contain blobs
+			log.Trace("Skipping blob transaction. Reached max number of blobs in current context", "sender", from, "numBlobs", len(tx.DataHashes()))
+			txs.Shift()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
