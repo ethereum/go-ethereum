@@ -70,9 +70,10 @@ func (t *stateTracker) releaseState(number uint64, release StateReleaseFunc) {
 		t.oldest += uint64(count)
 		copy(t.used, t.used[count:])
 
-		// The tail of t.used is left unchanged. It will be overwritten
-		// by the following states anyway.
-
+		// Clean up the array tail since they are useless now.
+		for i := t.limit - count; i < t.limit; i++ {
+			t.used[i] = false
+		}
 		// Fire the signal to all waiters that oldest marker is updated.
 		t.cond.Broadcast()
 	}

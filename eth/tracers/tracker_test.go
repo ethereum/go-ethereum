@@ -16,7 +16,11 @@
 
 package tracers
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+	"time"
+)
 
 func TestTracker(t *testing.T) {
 	var cases = []struct {
@@ -61,4 +65,107 @@ func TestTracker(t *testing.T) {
 			t.Fatalf("Unexpected head want %d got %d", c.expHead, head)
 		}
 	}
+
+	var calls = []struct {
+		number  uint64
+		expUsed []bool
+		expHead uint64
+	}{
+		// Release the first one, update the oldest flag
+		{
+			number:  0,
+			expUsed: []bool{false, false, false, false, false},
+			expHead: 1,
+		},
+		// Release the second one, oldest shouldn't be updated
+		{
+			number:  2,
+			expUsed: []bool{false, true, false, false, false},
+			expHead: 1,
+		},
+		// Release the forth one, oldest shouldn't be updated
+		{
+			number:  4,
+			expUsed: []bool{false, true, false, true, false},
+			expHead: 1,
+		},
+		// Release the first one, the first two should all be cleaned,
+		// and the remaining flags should all be left-shifted.
+		{
+			number:  1,
+			expUsed: []bool{false, true, false, false, false},
+			expHead: 3,
+		},
+		// Release the first one, the first two should all be cleaned
+		{
+			number:  3,
+			expUsed: []bool{false, false, false, false, false},
+			expHead: 5,
+		},
+	}
+	tracker := newStateTracker(5, 0) // limit = 5, oldest = 0
+	for _, call := range calls {
+		tracker.releaseState(call.number, nil)
+		tracker.lock.RLock()
+		if !reflect.DeepEqual(tracker.used, call.expUsed) {
+			t.Fatalf("Unexpected used array")
+		}
+		if tracker.oldest != call.expHead {
+			t.Fatalf("Unexpected head")
+		}
+		tracker.lock.RUnlock()
+	}
+}
+
+func TestTrackerWait(t *testing.T) {
+	var (
+		tracker = newStateTracker(5, 0) // limit = 5, oldest = 0
+		result  = make(chan error, 1)
+		doCall  = func(number uint64) {
+			go func() {
+				result <- tracker.wait(number)
+			}()
+		}
+		checkNoWait = func() {
+			select {
+			case <-result:
+				return
+			case <-time.NewTimer(time.Second).C:
+				t.Fatal("No signal fired")
+			}
+		}
+		checkWait = func() {
+			select {
+			case <-result:
+				t.Fatal("Unexpected signal")
+			case <-time.NewTimer(time.Millisecond * 100).C:
+			}
+		}
+	)
+	// States [0, 5) should all be available
+	doCall(0)
+	checkNoWait()
+
+	doCall(4)
+	checkNoWait()
+
+	// State 5 is not available
+	doCall(5)
+	checkWait()
+
+	// States [1, 6) are available
+	tracker.releaseState(0, nil)
+	checkNoWait()
+
+	// States [1, 6) are available
+	doCall(7)
+	checkWait()
+
+	// States [2, 7) are available
+	tracker.releaseState(1, nil)
+	checkWait()
+
+	// States [3, 8) are available
+	tracker.releaseState(2, nil)
+	checkNoWait()
 }
