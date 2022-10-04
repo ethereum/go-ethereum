@@ -82,12 +82,10 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 		return fmt.Errorf("extra field is 0 length")
 	}
 	switch b[0] {
-	case 1:
-		return fmt.Errorf("consensus version 1 is not applicable for decoding extra fields")
 	case 2:
 		return rlp.DecodeBytes(b[1:], val)
 	default:
-		return fmt.Errorf("consensus version %d is not defined", b[0])
+		return fmt.Errorf("consensus version %d is not defined, or this block is v1 block", b[0])
 	}
 }
 

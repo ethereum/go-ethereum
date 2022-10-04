@@ -55,7 +55,7 @@ var (
 	}
 	DevnetXDPoSV2Config = &V2{
 		SwitchBlock:          big.NewInt(7060500),
-		CertThreshold:        6,
+		CertThreshold:        4,
 		TimeoutSyncThreshold: 5,
 		TimeoutPeriod:        10,
 		WaitPeriod:           5,
@@ -256,12 +256,14 @@ func (c *XDPoSConfig) String() string {
 	return "XDPoS"
 }
 
-/**
-ConsensusVersion will return the consensus version to use for the provided block number. The returned int represent its version
-TODO: It's a dummy value for now until the 2.0 consensus engine is fully implemented.
-*/
-func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int) string {
+func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, skipExtraCheck bool) string {
 	if c.V2 != nil && c.V2.SwitchBlock != nil && num.Cmp(c.V2.SwitchBlock) > 0 {
+		if skipExtraCheck {
+			return ConsensusEngineVersion2
+		}
+		if len(extraByte) == 0 || extraByte[0] != 2 {
+			return ConsensusEngineVersion1
+		}
 		return ConsensusEngineVersion2
 	}
 	return ConsensusEngineVersion1

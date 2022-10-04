@@ -65,6 +65,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// Verify this is truely a v2 block first
 	quorumCert, round, _, err := x.getExtraFields(header)
 	if err != nil {
+		log.Warn("[verifyHeader] decode extra field error", "err", err)
 		return utils.ErrInvalidV2Extra
 	}
 	if round <= quorumCert.ProposedBlockInfo.Round {

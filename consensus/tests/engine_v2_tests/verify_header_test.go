@@ -60,7 +60,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	assert.Equal(t, consensus.ErrFutureBlock, err)
 
 	invalidQcBlock := blockchain.GetBlockByNumber(902).Header()
-	invalidQcBlock.Extra = []byte{}
+	invalidQcBlock.Extra = []byte{2}
 	err = adaptor.VerifyHeader(blockchain, invalidQcBlock, true)
 	assert.Equal(t, utils.ErrInvalidV2Extra, err)
 
