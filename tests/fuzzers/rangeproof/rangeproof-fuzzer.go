@@ -179,6 +179,7 @@ func (f *fuzzer) fuzz() int {
 	return ok
 }
 
+// Fuzz is the fuzzing entryy-point.
 // The function must return
 //
 //   - 1 if the fuzzer should increase priority of the

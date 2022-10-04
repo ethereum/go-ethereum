@@ -66,7 +66,7 @@ func (f *fuzzer) readBool() bool {
 	return f.read(1)[0]&0x1 == 0
 }
 
-// The function must return
+// Fuzz function must return
 //
 //   - 1 if the fuzzer should increase priority of the
 //     given input during subsequent fuzzing (for example, the input is lexically

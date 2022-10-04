@@ -214,7 +214,7 @@ func (t *jsTracer) CaptureTxStart(gasLimit uint64) {
 	t.gasLimit = gasLimit
 }
 
-// CaptureTxStart implements the Tracer interface and is invoked at the end of
+// CaptureTxEnd implements the Tracer interface and is invoked at the end of
 // transaction processing.
 func (t *jsTracer) CaptureTxEnd(restGas uint64) {}
 

@@ -124,7 +124,7 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 	return item, index, stale, throttle, nil
 }
 
-// hasCompletedItems returns true if there are processable items available
+// HasCompletedItems returns true if there are processable items available
 // this method is cheaper than countCompleted
 func (r *resultStore) HasCompletedItems() bool {
 	r.lock.RLock()

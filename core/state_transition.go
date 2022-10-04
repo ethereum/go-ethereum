@@ -31,6 +31,8 @@ import (
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
+// StateTransition represents a state transition.
+//
 // The State Transitioning Model
 //
 // A state transition is a change made when a transaction is applied to the current world
