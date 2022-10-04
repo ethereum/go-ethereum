@@ -69,7 +69,7 @@ More information on this can be found in the documentation for each consensus cl
 ## Validators
 
 
-Validators are responsible for securing the Ethereum blockchain. Validators are node oeprators that have staked at least 
+Validators are responsible for securing the Ethereum blockchain. Validators are node operators that have staked at least 
 32 ETH into a deposit contract and run validator software. Each of the consensus clients have their own validator software 
 that is described in detail in their respective documentation. The easiest way to handle staking and validator key generation 
 is to use the Ethereum Foundation [Staking Launchpad][launchpad-link].
