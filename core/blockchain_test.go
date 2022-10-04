@@ -681,7 +681,7 @@ func TestHeadersInsertNonceError(t *testing.T) { testInsertNonceError(t, false) 
 func TestBlocksInsertNonceError(t *testing.T)  { testInsertNonceError(t, true) }
 
 func testInsertNonceError(t *testing.T, full bool) {
-	for i := 1; i < 25 && !t.Failed(); i++ {
+	doTest := func(i int) {
 		// Create a pristine chain and database
 		genDb, _, blockchain, err := newCanonical(ethash.NewFaker(), 0, full)
 		if err != nil {
@@ -729,6 +729,9 @@ func testInsertNonceError(t *testing.T, full bool) {
 				}
 			}
 		}
+	}
+	for i := 1; i < 25 && !t.Failed(); i++ {
+		doTest(i)
 	}
 }
 
