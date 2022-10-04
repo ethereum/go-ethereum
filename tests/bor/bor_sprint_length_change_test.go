@@ -1,17 +1,18 @@
-//go:build integration
-
 package bor
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"gotest.tools/assert"
@@ -186,7 +187,36 @@ var keys_21val = []string{"f8e385ea69ddaf460d062ec2748d04e6e126a0c873a5fdf6fbbda
 	"3d557344e389159c233da56a390c55457aac2298ca9249f7cfe5ef5ed7c5aaf3",
 	"f643453ff10b2a547e906791a5a2962ff83998251ff65ce4771bcaea374e80b8"}
 
-func TestSprintDependantReorgs(t *testing.T) {
+func TestSprintLengthReorg(t *testing.T) {
+	reorgsLengthTests := []map[string]uint64{
+		{
+			"reorgLength": 10,
+			"validator":   0,
+			"startBlock":  16,
+		},
+		// {
+		// 	"reorgLength": 20,
+		// 	"validator":   0,
+		// 	"startBlock":  16,
+		// },
+		// {
+		// 	"reorgLength": 30,
+		// 	"validator":   0,
+		// 	"startBlock":  16,
+		// },
+		// {
+		// 	"reorgLength": 10,
+		// 	"validator":   0,
+		// 	"startBlock":  196,
+		// },
+	}
+	for _, tt := range reorgsLengthTests {
+		SetupValidatorsAndTest(tt)
+	}
+}
+
+func SetupValidatorsAndTest(t map[string]uint64) {
+	fmt.Println("0------ tests")
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
@@ -202,6 +232,7 @@ func TestSprintDependantReorgs(t *testing.T) {
 	var (
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
+		stacks []*node.Node
 	)
 
 	pkeys_21val := make([]*ecdsa.PrivateKey, len(keys_21val))
@@ -209,7 +240,7 @@ func TestSprintDependantReorgs(t *testing.T) {
 		pkeys_21val[i], _ = crypto.HexToECDSA(key)
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 21; i++ {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := InitMiner(genesis, pkeys_21val[i], true)
 		if err != nil {
@@ -225,6 +256,7 @@ func TestSprintDependantReorgs(t *testing.T) {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
 	}
@@ -237,17 +269,44 @@ func TestSprintDependantReorgs(t *testing.T) {
 		}
 	}
 
+	chain2HeadCh := make(chan core.Chain2HeadEvent, 64)
+	nodes[1].BlockChain().SubscribeChain2HeadEvent(chain2HeadCh)
+
 	for {
+		blockHeaderVal0 := nodes[t["validator"]].BlockChain().CurrentHeader()
 
-		// for block 0 to 7, the primary validator is node0
-		// for block 8 to 15, the primary validator is node1
-		// for block 16 to 19, the primary validator is node0
-		// for block 20 to 23, the primary validator is node1
-		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
-
-		if blockHeaderVal0.Number.Uint64() == 24 {
-			break
+		if blockHeaderVal0.Number.Uint64() == t["startBlock"] {
+			for _, enode := range enodes {
+				stacks[t["validator"]].Server().RemovePeer(enode)
+			}
 		}
+		if blockHeaderVal0.Number.Uint64() == t["startBlock"]+t["reorgLength"]+1 {
+			for _, enode := range enodes {
+				stacks[t["validator"]].Server().AddPeer(enode)
+			}
+		}
+	}
+	select {
+	case ev := <-chain2HeadCh:
+		fmt.Println("---------------")
+		fmt.Printf("%+v", ev)
 
+		// if len(ev.NewChain) != len(expect.Added) {
+		// 	t.Fatal("Newchain and Added Array Size don't match")
+		// }
+		// if len(ev.OldChain) != len(expect.Removed) {
+		// 	t.Fatal("Oldchain and Removed Array Size don't match")
+		// }
+
+		// for j := 0; j < len(ev.OldChain); j++ {
+		// 	if ev.OldChain[j].Hash() != expect.Removed[j] {
+		// 		t.Fatal("Oldchain hashes Do Not Match")
+		// 	}
+		// }
+		// for j := 0; j < len(ev.NewChain); j++ {
+		// 	if ev.NewChain[j].Hash() != expect.Added[j] {
+		// 		t.Fatalf("Newchain hashes Do Not Match %s %s", ev.NewChain[j].Hash(), expect.Added[j])
+		// 	}
+		// }
 	}
 }
