@@ -75,14 +75,17 @@ func NewLedgerHub() (*Hub, error) {
 		0x0000, /* Ledger Blue */
 		0x0001, /* Ledger Nano S */
 		0x0004, /* Ledger Nano X */
+		0x0005, /* Ledger Nano S Plus */
 
 		// Upcoming product IDs: https://www.ledger.com/2019/05/17/windows-10-update-sunsetting-u2f-tunnel-transport-for-ledger-devices/
 		0x0015, /* HID + U2F + WebUSB Ledger Blue */
 		0x1015, /* HID + U2F + WebUSB Ledger Nano S */
 		0x4015, /* HID + U2F + WebUSB Ledger Nano X */
+		0x5015, /* HID + U2F + WebUSB Ledger Nano S Plus */
 		0x0011, /* HID + WebUSB Ledger Blue */
 		0x1011, /* HID + WebUSB Ledger Nano S */
 		0x4011, /* HID + WebUSB Ledger Nano X */
+		0x5011, /* HID + WebUSB Ledger Nano S Plus */
 	}, 0xffa0, 0, newLedgerDriver)
 }
 
