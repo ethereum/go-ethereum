@@ -417,7 +417,7 @@ func (c *Config) checkLegacyFile(path string) {
 	case "static-nodes.json":
 		logger.Error("The static-nodes.json file is deprecated and ignored. Use P2P.StaticNodes in config.toml instead.")
 	case "trusted-nodes.json":
-		logger.Error("The trusted-nodes.json file is deprecated and ignored. Use P2P.TruestdNodes in config.toml instead.")
+		logger.Error("The trusted-nodes.json file is deprecated and ignored. Use P2P.TrustedNodes in config.toml instead.")
 	default:
 		// We shouldn't wind up here, but better print something just in case.
 		logger.Error("Ignoring deprecated file.", "file", path)
