@@ -348,8 +348,14 @@ func checkNoDroppedTx(pe *ParallelExecutor) error {
 func runParallel(t *testing.T, tasks []ExecTask, validation PropertyCheck) time.Duration {
 	t.Helper()
 
+	profile := false
+
 	start := time.Now()
-	_, err := executeParallelWithCheck(tasks, false, validation)
+	result, err := executeParallelWithCheck(tasks, profile, validation)
+
+	if result.Deps != nil && profile {
+		result.Deps.Report(*result.Stats, func(str string) { fmt.Println(str) })
+	}
 
 	assert.NoError(t, err, "error occur during parallel execution")
 

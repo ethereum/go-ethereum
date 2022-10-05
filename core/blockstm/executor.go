@@ -123,7 +123,7 @@ func (pq *SafePriorityQueue) Len() int {
 
 type ParallelExecutionResult struct {
 	TxIO  *TxnInputOutput
-	Stats *[][]uint64
+	Stats *map[int]ExecutionStat
 	Deps  *DAG
 }
 
@@ -133,8 +133,9 @@ const numSpeculativeProcs = 8
 type ParallelExecutor struct {
 	tasks []ExecTask
 
-	// Stores the execution statistics for each task
-	stats      [][]uint64
+	// Stores the execution statistics for the last incarnation of each task
+	stats map[int]ExecutionStat
+
 	statsMutex sync.Mutex
 
 	// Channel for tasks that should be prioritized
@@ -202,12 +203,20 @@ type ParallelExecutor struct {
 	workerWg sync.WaitGroup
 }
 
+type ExecutionStat struct {
+	TxIdx       int
+	Incarnation int
+	Start       uint64
+	End         uint64
+	Worker      int
+}
+
 func NewParallelExecutor(tasks []ExecTask, profile bool) *ParallelExecutor {
 	numTasks := len(tasks)
 
 	pe := &ParallelExecutor{
 		tasks:              tasks,
-		stats:              make([][]uint64, numTasks),
+		stats:              make(map[int]ExecutionStat, numTasks),
 		chTasks:            make(chan ExecVersionView, numTasks),
 		chSpeculativeTasks: make(chan struct{}, numTasks),
 		chSettle:           make(chan int, numTasks),
@@ -272,10 +281,14 @@ func (pe *ParallelExecutor) Prepare() {
 				if pe.profile {
 					end := time.Since(pe.begin)
 
-					stat := []uint64{uint64(res.ver.TxnIndex), uint64(res.ver.Incarnation), uint64(start), uint64(end), uint64(procNum)}
-
 					pe.statsMutex.Lock()
-					pe.stats = append(pe.stats, stat)
+					pe.stats[res.ver.TxnIndex] = ExecutionStat{
+						TxIdx:       res.ver.TxnIndex,
+						Incarnation: res.ver.Incarnation,
+						Start:       uint64(start),
+						End:         uint64(end),
+						Worker:      procNum,
+					}
 					pe.statsMutex.Unlock()
 				}
 			}

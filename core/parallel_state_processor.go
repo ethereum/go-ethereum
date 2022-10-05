@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -247,6 +249,8 @@ func (task *ExecutionTask) Settle() {
 	*task.allLogs = append(*task.allLogs, receipt.Logs...)
 }
 
+var parallelizabilityTimer = metrics.NewRegisteredTimer("block/parallelizability", nil)
+
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
@@ -314,7 +318,25 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	backupStateDB := statedb.Copy()
-	_, err := blockstm.ExecuteParallel(tasks, false)
+
+	profile := false
+	result, err := blockstm.ExecuteParallel(tasks, profile)
+
+	if err == nil && profile {
+		_, weight := result.Deps.LongestPath(*result.Stats)
+
+		serialWeight := uint64(0)
+
+		for i := 0; i < len(result.Deps.GetVertices()); i++ {
+			serialWeight += (*result.Stats)[i].End - (*result.Stats)[i].Start
+		}
+
+		parallelizabilityTimer.Update(time.Duration(serialWeight * 100 / weight))
+
+		log.Info("Parallelizability", "Average (%)", parallelizabilityTimer.Mean())
+
+		log.Info("Parallelizability", "Histogram (%)", parallelizabilityTimer.Percentiles([]float64{0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 0.999, 0.9999}))
+	}
 
 	for _, task := range tasks {
 		task := task.(*ExecutionTask)
