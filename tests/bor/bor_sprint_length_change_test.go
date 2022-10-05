@@ -1,5 +1,3 @@
-//go:build integration
-
 package bor
 
 import (
@@ -32,10 +30,10 @@ import (
 
 var (
 	// addr1 = 0x71562b71999873DB5b286dF957af199Ec94617F7
-	pkey1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	pkey12, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	// addr2 = 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
-	pkey2, _ = crypto.HexToECDSA("9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3")
-	keys     = []*ecdsa.PrivateKey{pkey1, pkey2}
+	pkey22, _ = crypto.HexToECDSA("9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3")
+	keys2     = []*ecdsa.PrivateKey{pkey12, pkey22}
 )
 
 // Sprint length change tests
@@ -59,7 +57,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	)
 	for i := 0; i < 2; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner1(genesis, keys[i], true)
+		stack, ethBackend, err := InitMiner1(genesis, keys2[i], true)
 		if err != nil {
 			panic(err)
 		}
@@ -187,109 +185,39 @@ func TestSprintLengths(t *testing.T) {
 
 var keys_21val = []map[string]string{
 	{
-		"address":  "0x387d24252f81Ef0d2F33c344986644a5acC794A2",
-		"priv_key": "f8e385ea69ddaf460d062ec2748d04e6e126a0c873a5fdf6fbbda3e39dfc3e62",
-		"pub_key":  "0x04b0c1c59b85bf89ee1f24a034feb7f25937996d0d2c36dfde188d643138d79a50a6c1f30dff9b5b74334afb387f287842dfb17f95263ffec4eac38ebba939d513",
+		"address":  "0x73E033779C9030D4528d86FbceF5B02e97488921",
+		"priv_key": "61eb51cf8936309151ab7b931841ea033b6a09931f6a100b464fbbd74f3e0bd7",
+		"pub_key":  "0x04f9a5e9bf76b45ac58f1b018ccba4b83b3531010cdadf42174c18a9db9879ef1dcb5d1254ce834bc108b110cd8d0186ed69a0387528a142bdb5936faf58bf98c9",
 	},
 	{
-		"address":  "0xA73335dA992875cF74359D966bBa2f4471CE1Cb7",
-		"priv_key": "7362912aca5664bdbba8ba39ca98a91aee51c232c67f60be2d043d2d9c39fa32",
-		"pub_key":  "0x044647e004cace245444a575065d56709f3bdaafba2aba0bbfb545fc8857f4259ec27f815a79b4edf1d421729a1a19d26d0b3efc2b6a32d1ef02f29bea0f55ca19",
+		"address":  "0x5C3E1B893B9315a968fcC6bce9EB9F7d8E22edB3",
+		"priv_key": "c19fac8e538447124ad2408d9fbaeda2bb686fee763dca7a6bab58ea12442413",
+		"pub_key":  "0x0495421933eda03dcc37f9186c24e255b569513aefae71e96d55d0db3df17502e24e86297b01a167fab9ce1174f06ee3110510ac242e39218bd964de5b345edbd6",
 	},
 	{
-		"address":  "0x54FA823e70Dcd10a735F4202602A895D5978c27C",
-		"priv_key": "0fec87e66604e7224c49f3513d28db9606fa1d1f38d5321b0c929b5d42caca1e",
-		"pub_key":  "0x04a86d9c85f0f42f5e612d0c261e5fcc3d6195a8e372eaa52368ad4ac55d30ac0ec6457c2fd27e41898bff823489c7c2951a0769c34d477813319f824c5fa4b4c4",
+		"address":  "0xb005bc07015170266Bd430f3EC1322938603be20",
+		"priv_key": "17cd9b38c2b3a639c7d97ccbf2bb6c7140ab8f625aec4c249bc8e4cfd3bf9a96",
+		"pub_key":  "0x04435a70d343aa569e6f3386c73e39a1aa6f88c30e5943baedda9618b55cc944a2de1d114aff6d0e9fa002bebc780b04ef6c1b8a06bbf0d41c10d1efa55390f198",
 	},
 	{
-		"address":  "0xf630f2C51e17bECf5190Bc95B5211CdDB6848559",
-		"priv_key": "06dd8c1acd2279b65fe209731866bcbd716b91de6df1a4237f9fa367d07432e5",
-		"pub_key":  "0x0450ed3533599f0cc9f06843c6e512911e96c5238ef9b9cf7e1d1c8f00923774e8573f84c93068cc667f60d4c2c0f253b7ebd2ed6552abfe8dd05c792fe90c6c21",
+		"address":  "0xA464DC4810Bc79B956810759e314d85BcE35cD1c",
+		"priv_key": "3efcf3f7014a6257f4a443119851414111820c681b27525dab3f35e72e28e51e",
+		"pub_key":  "0x040180920306bf598ea050e258f2c7e50804a77a64f5a11705e08d18ee71eb0a80fafc95d0a42b92371ded042edda16c1f0b5f2fef7c4113ad66c59a71c29d977e",
 	},
 	{
-		"address":  "0x0b02C2957AfA5Bc02CE7ADC2d973D4d0A5d67Aa8",
-		"priv_key": "996a1f17a05c40fa78434f7c556c84db1f8498c8e229f70ef91612116c8be38e",
-		"pub_key":  "0x0432dcee2dbea82250e850652986327d5d260c611de4897704384d13957232839f1fbbba4dc0533462e25db72e023382bfd947c0a09698fa9d3ceae51091e0a581",
+		"address":  "0xE8d02Da3dFeeB3e755472D95D666BD6821D92129",
+		"priv_key": "45c9ef66361a2283cef14184f128c41949103b791aa622ead3c0bc844648b835",
+		"pub_key":  "0x04a14651ddc80467eb589d72d95153fa695e4cb2e4bb99edeb912e840d309d61313b6f4676081b099f29e6598ecf98cb7b44bb862d019920718b558f27ba94ca51",
 	},
 	{
-		"address":  "0x1BE1047566F230C21Edae22446713e7087a9e81C",
-		"priv_key": "e5a45caa09c247f4e8ccbca6d65fadf2ab30e089fb23675ec479a6500345b755",
-		"pub_key":  "0x04585a0a04b62449351c4aef5c7e78c331d1123d5e4e2621346f1257c0c98347b30dd64d9973ae4a12fd006599da1400520324adeceafbe4c67c9a87d08b2d232b",
+		"address":  "0xF93B54Cf36E917f625B48e1e3C9F93BC2344Fb06",
+		"priv_key": "93788a1305605808df1f9a96b5e1157da191680cf08bc15e077138f517563cd5",
+		"pub_key":  "0x045eee11dceccd9cccc371ca3d96d74c848e785223f1e5df4d1a7f08efdfeb90bd8f0035342a9c26068cf6c7ab395ca3ceea555541325067fc187c375390efa57d",
 	},
 	{
-		"address":  "0x316679E22D8acf5955e2562a4ABf54feC109D1ed",
-		"priv_key": "e91619a3a7e0d019655c15d6e4e50cf4cbdf3082422c180cddfecbe2e662c55d",
-		"pub_key":  "0x04f69cf0b77fc139453060bc7a047697dd0efd3eeb1a408f529cd524d349fd0e9cfcc01b53a250477640de4f1287729ea947b3ad474cc44223669379a12e5caf66",
-	},
-	{
-		"address":  "0x51ecFbE68aa337c720E6f17041CA6044d0958493",
-		"priv_key": "afcd70258935c56b9f488ce8691e91467af30cbbf09b505d8b82fa0063eede50",
-		"pub_key":  "0x04d2bc21f71f869dd7243fda7465a021918ede8fd6e25740eec4cacd703bfb480aad9a684bacf8079d9f4c11e79921312b2b11ee32c87c862a71fc9ac97be5be2f",
-	},
-	{
-		"address":  "0x40E910D1bcBD0DACEF856594E02b176Be3EE736b",
-		"priv_key": "fe8073957e8452e1e4d4d2493c54944dc738aee6800d69ed87d9df6e1eee5edc",
-		"pub_key":  "0x0407d9666bdf36432e2edeba744e7115d3618a88d9c304d52b1121b9eceb9a3d13f653b97240ea688eb80d688c84c3995c831db27a0ffba9303216fc742190869f",
-	},
-	{
-		"address":  "0x3594Cbcdd629A59ce16B581F7Bf6eA1E49F8F634",
-		"priv_key": "3987d9f9183363debbc9556c01f00a3ee3cf57648495a242e57181a779179fdd",
-		"pub_key":  "0x04de350843bd0e41f3671e99b16b05a867d598242cd92020d82eeb3bbc1143243e3ae81755d12fef0f5e5c24278e9ebd3c675d9c17dbff928dc916284de58bd44a",
-	},
-	{
-		"address":  "0x5F2CbdEE214AFeF14608A724559C870Df5636463",
-		"priv_key": "5a9ccbba1821843726a558ef10623b0871503852b7c1285f21f6842ad828f14f",
-		"pub_key":  "0x045c6813c956abc2dd006cb5492693878380ca26f9af6eba415112a09f387cd1dcc383cab12dfc811d1f6b6be603e89b066d6d43c95622b4857ba7717a9c11eb6d",
-	},
-	{
-		"address":  "0x39539B6E7dEfa23482bEB77f3559a9413d861676",
-		"priv_key": "a5c3c7579ca6a3dc0bd1bd2947f471273c443d776e3446bfb34c494bcaac2611",
-		"pub_key":  "0x0458b3d8fb3166c39b0f4d6c9239763b2ceaf1e2be63c23787978508e7747193adbfbe7333bd082b8f36260c47c49129f406bf35f31051a7906c95f7149780d23f",
-	},
-	{
-		"address":  "0x433929e706F85F7a5b7e95c21043b221B18351b9",
-		"priv_key": "bbab31856297e3bc4c583d850f8f5fddf77547ace374cdc50253e163da69a05d",
-		"pub_key":  "0x04a45bfa6d2854a0276b62c7f4da4ae619110ce88b273ce7d365013df6a79c3441435a4eddd5eb07c7e2fb26779d46114fdabd5536e99aeadb39552c6750691273",
-	},
-	{
-		"address":  "0xd0aeeB8CB9a457F6b6d2279eb48057291E65b442",
-		"priv_key": "80aa9f29d1f7f99bf0b73a6efcae1b42f4b9064a21a9b6fa74efcfef7cee6ef8",
-		"pub_key":  "0x0453f38c0d286abfc4f38bf44775be92c4adfd33397c5aa9790467584f5591d8eae9cc7569b8e40b0e15105b00ce28a680935c6e91f57a42924fe18dff0b785b8c",
-	},
-	{
-		"address":  "0x909721f84066AB0C8FBf6E1309818A461D1C2881",
-		"priv_key": "f433996a400752ee245599870fe23eb85231b0c4b6a2e33e4204b17dce0c481e",
-		"pub_key":  "0x0410e5bfd3e42d228552c049c2b0af15bbfe73fbb5c7909280aa841d3eae24bfe5d17bc538def2c04c5e8c23c2ad9417578d96664b688a70de0e59b9aa9d3d9118",
-	},
-	{
-		"address":  "0xf96A0EC13f0E3FEa25270925b0Ffb0896857F366",
-		"priv_key": "625e57139db8afb3748f175c67747f2fc562244bf78ed63d0de449cff1deccad",
-		"pub_key":  "0x046c6dbfb92754f2a1ad40ef3b9845d93376a96fcb0e94ffb86675faafbd175e6f159a3a0f940ea3ba7393cdc48e78642a7e2ed76a7bd6e33e106449d1f6f8da7f",
-	},
-	{
-		"address":  "0xCd297859cAC13Fb4CCa55Fd2C591EBF035EBfbD9",
-		"priv_key": "ce3ebb26a76728c8650bc0b0f611ede6bf8f6befeeb3757fa24bb69ff1bdaff8",
-		"pub_key":  "0x0437147a7da1db2995b003da1cec8d894914b6df03cbc433492d1bf2b8065e5828807b50731d02c47d666f5225368bf58509dedae9ac472cf7e7baf111b1723568",
-	},
-	{
-		"address":  "0xf6A1A2D64B3835AC821aCC07275cd5F4FfF00a1F",
-		"priv_key": "7050d73354b4995410e88db7cf2f5fea5f5db2affcf0fe2b84ca16da36cf15fc",
-		"pub_key":  "0x04d78f6716c606b384a951d56cbd90097e58170dc4e73d0cccb6b61ee60a9728128041c013acd10e41b2158a18462b1471bd5d1506e777969163e37c39a0e78d10",
-	},
-	{
-		"address":  "0xc6F92b3C655DE61c9B0178600617e6F5E5a0fa7E",
-		"priv_key": "620964f9a20384e9fb1108df8f4f13a14ff88b093b2354e92a57ea21b9b4e6e7",
-		"pub_key":  "0x0438a76bd6ba6303768eac466b946807946a70afc29230181b7fada1629e149b4302d9208b08324cff6e232d8a92f6b74d3af941300c15dea3f30ee0d40f8d4fd8",
-	},
-	{
-		"address":  "0x63ccD7e06399e4360993Fe5aD27dFd3DeE54b1cD",
-		"priv_key": "3d557344e389159c233da56a390c55457aac2298ca9249f7cfe5ef5ed7c5aaf3",
-		"pub_key":  "0x043bcf3f87fb96e8e3bc1174e9f79abd9f64fc7ddb413f031cd32abe75c6d79e0a4c099e2e8648a47a83cb1c43ca58a60538d7051fa972c2e2967541f7dbfed1fa",
-	},
-	{
-		"address":  "0x09fa9bc378B41029C2858f9Cc2Ef8a1707DC38c9",
-		"priv_key": "f643453ff10b2a547e906791a5a2962ff83998251ff65ce4771bcaea374e80b8",
-		"pub_key":  "0x040bbd3813f194b106c385ee03b7d2b9512d582ec8d25613612976ed6b4e5bfa98d2b8b075f18d49deae4dcef55c5698e631c0ea390c6bdbe983d6510e3aef83c5",
+		"address":  "0x751eC4877450B8a4D652d0D70197337FC38a42e6",
+		"priv_key": "6e7f48d012c9c0baadbdc88af32521e2e477fd6898a9b65e6abe19fd6652cb2e",
+		"pub_key":  "0x0479db4c0b757bf0e5d9b8954b078ab7c0e91d6c19697904d23d07ea4853c8584382de91174929ba5c598214b8a991471ae051458ea787cdc15a4e435a55ef8059",
 	},
 }
 
@@ -297,7 +225,7 @@ func TestSprintLengthReorg(t *testing.T) {
 	reorgsLengthTests := []map[string]uint64{
 		{
 			"reorgLength": 10,
-			"startBlock":  16,
+			"startBlock":  4,
 		},
 		// {
 		// 	"reorgLength": 20,
@@ -321,11 +249,11 @@ func TestSprintLengthReorg(t *testing.T) {
 }
 
 func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis1(t, nil, "./testdata/genesis_21val.json")
+	genesis := InitGenesis1(t, nil, "./testdata/genesis_7val.json")
 
 	var (
 		nodes  []*eth.Ethereum
@@ -369,13 +297,18 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 	chain2HeadCh := make(chan core.Chain2HeadEvent, 64)
 	primaryProducerIndex := 0
 	subscribedNodeIndex := 0
-
+	nodes[subscribedNodeIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadCh)
 	for {
 
 		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
-		author, _ := nodes[0].Engine().Author(blockHeaderVal0)
+		log.Warn("Current block", "number", blockHeaderVal0.Number, "hash", blockHeaderVal0.Hash())
 
 		if blockHeaderVal0.Number.Uint64() == tt["startBlock"] {
+			author, _ := nodes[0].Engine().Author(blockHeaderVal0)
+
+			log.Warn("Current block", "number", blockHeaderVal0.Number, "hash", blockHeaderVal0.Hash(), "author", author)
+			fmt.Printf("\n------%+v, %+v-----\n", blockHeaderVal0.Number.Uint64(), tt["startBlock"])
+
 			for index, signerdata := range keys_21val {
 				if strings.EqualFold(signerdata["address"], author.String()) {
 					primaryProducerIndex = index
@@ -387,15 +320,18 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 			if primaryProducerIndex == 0 {
 				subscribedNodeIndex = 1
 			}
-			nodes[subscribedNodeIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadCh)
+
 			fmt.Println("----------------- startBlock", tt["startBlock"])
+
 		}
+
 		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+1 {
 			for _, enode := range enodes {
 				stacks[primaryProducerIndex].Server().AddPeer(enode)
 			}
 			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+1)
 		}
+
 		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+2 {
 			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+2)
 			break
@@ -403,8 +339,11 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 
 		select {
 		case ev := <-chain2HeadCh:
-			fmt.Printf("\n---------------\n%+v\n---------------\n", ev)
+			fmt.Println(4)
+			fmt.Printf("\n---------------\n%+v\n---------------\n", ev.NewChain[0].Header().Number.Uint64())
 
+		default:
+			time.Sleep(500 * time.Millisecond)
 			// if len(ev.NewChain) != len(expect.Added) {
 			// 	t.Fatal("Newchain and Added Array Size don't match")
 			// }
