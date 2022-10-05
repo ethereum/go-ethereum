@@ -106,8 +106,8 @@ func (api *FilterAPI) NewPendingTransactionFilter() rpc.ID {
 	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, deadline: deadline, hashes: make([]common.Hash, 0), s: pendingTxSub}
 	api.filtersMu.Unlock()
 
-	defer deadline.Stop()
 	go func() {
+		defer deadline.Stop()
 		for {
 			select {
 			case ph := <-pendingTxs:
@@ -179,8 +179,8 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 	api.filters[headerSub.ID] = &filter{typ: BlocksSubscription, deadline: deadline, hashes: make([]common.Hash, 0), s: headerSub}
 	api.filtersMu.Unlock()
 
-	defer deadline.Stop()
 	go func() {
+		defer deadline.Stop()
 		for {
 			select {
 			case h := <-headers:
@@ -302,8 +302,8 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	api.filters[logsSub.ID] = &filter{typ: LogsSubscription, crit: crit, deadline: deadline, logs: make([]*types.Log, 0), s: logsSub}
 	api.filtersMu.Unlock()
 
-	defer deadline.Stop()
 	go func() {
+		defer deadline.Stop()
 		for {
 			select {
 			case l := <-logs:
