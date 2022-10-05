@@ -45,7 +45,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "syncmode",
-		Usage:   `Blockchain sync mode ("fast", "full", or "snap")`,
+		Usage:   `Blockchain sync mode (only "full" sync supported)`,
 		Value:   &c.cliConfig.SyncMode,
 		Default: c.cliConfig.SyncMode,
 	})
@@ -62,9 +62,15 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "snapshot",
-		Usage:   `Disables/Enables the snapshot-database mode (default = true)`,
+		Usage:   `Enables the snapshot-database mode (default = true)`,
 		Value:   &c.cliConfig.Snapshot,
 		Default: c.cliConfig.Snapshot,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.logs",
+		Usage:   `Enables bor log retrieval (default = false)`,
+		Value:   &c.cliConfig.BorLogs,
+		Default: c.cliConfig.BorLogs,
 	})
 
 	// heimdall
