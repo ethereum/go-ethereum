@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -193,7 +192,7 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
-	oldGethResourceWarning sync.Once
+	oldGethResourceWarning bool
 
 	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
 	AllowUnprotectedTxs bool `toml:",omitempty"`
@@ -337,10 +336,9 @@ func (c *Config) ResolvePath(path string) string {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
-			if warn {
-				c.oldGethResourceWarning.Do(func() {
-					log.Warn("Using deprecated resource file, please move this file to the 'geth' subdirectory of datadir.", "file", oldpath)
-				})
+			if warn && !c.oldGethResourceWarning {
+				c.oldGethResourceWarning = true
+				log.Warn("Using deprecated resource file, please move this file to the 'geth' subdirectory of datadir.", "file", oldpath)
 			}
 			return oldpath
 		}
