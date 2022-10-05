@@ -225,7 +225,7 @@ func TestSprintLengthReorg(t *testing.T) {
 	reorgsLengthTests := []map[string]uint64{
 		{
 			"reorgLength": 10,
-			"startBlock":  4,
+			"startBlock":  23,
 		},
 		// {
 		// 	"reorgLength": 20,
@@ -296,11 +296,15 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 	}
 	chain2HeadCh := make(chan core.Chain2HeadEvent, 64)
 	primaryProducerIndex := 0
-	subscribedNodeIndex := 0
+	subscribedNodeIndex := 2
 	nodes[subscribedNodeIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadCh)
+	stacks[1].Server().NoDiscovery = true
+
 	for {
 
 		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
+		peers := stacks[1].Server().Peers()
+		log.Warn("Peers", "peers length", len(peers))
 		log.Warn("Current block", "number", blockHeaderVal0.Number, "hash", blockHeaderVal0.Hash())
 
 		if blockHeaderVal0.Number.Uint64() == tt["startBlock"] {
@@ -312,10 +316,12 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 			for index, signerdata := range keys_21val {
 				if strings.EqualFold(signerdata["address"], author.String()) {
 					primaryProducerIndex = index
+					log.Warn("Primary producer", "index", primaryProducerIndex)
 				}
 			}
+			stacks[1].Server().MaxPeers = 0
 			for _, enode := range enodes {
-				stacks[primaryProducerIndex].Server().RemovePeer(enode)
+				stacks[1].Server().RemovePeer(enode)
 			}
 			if primaryProducerIndex == 0 {
 				subscribedNodeIndex = 1
@@ -325,22 +331,44 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 
 		}
 
+		if blockHeaderVal0.Number.Uint64() >= tt["startBlock"] && blockHeaderVal0.Number.Uint64() < tt["startBlock"]+tt["reorgLength"] {
+			// stacks[1].Server().NoDiscovery = true
+			// stacks[1].Server().MaxPeers = 0
+			for _, enode := range enodes {
+				stacks[1].Server().RemovePeer(enode)
+			}
+		}
+
 		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+1 {
+			stacks[1].Server().NoDiscovery = false
+			stacks[1].Server().MaxPeers = 100
+
 			for _, enode := range enodes {
 				stacks[primaryProducerIndex].Server().AddPeer(enode)
 			}
 			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+1)
 		}
 
-		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+2 {
-			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+2)
+		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+50 {
+			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+50)
 			break
 		}
 
 		select {
 		case ev := <-chain2HeadCh:
-			fmt.Println(4)
+			fmt.Println("##############")
 			fmt.Printf("\n---------------\n%+v\n---------------\n", ev.NewChain[0].Header().Number.Uint64())
+			var newAuthor common.Address
+			var oldAuthor common.Address
+			if len(ev.NewChain) > 0 {
+				newAuthor, _ = nodes[0].Engine().Author(ev.NewChain[0].Header())
+			}
+			if len(ev.OldChain) > 0 {
+				oldAuthor, _ = nodes[0].Engine().Author(ev.OldChain[0].Header())
+			}
+			fmt.Printf("\n---------------\nOld Author : %+v :::: New Author : %+v\n---------------\n", oldAuthor, newAuthor)
+			fmt.Printf("\n---------------\n%+v\n---------------\n", ev)
+			fmt.Println("##############")
 
 		default:
 			time.Sleep(500 * time.Millisecond)
