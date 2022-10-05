@@ -10,15 +10,15 @@ These documentation pages are intended to help users download, install and use G
 
 ## Where to go from here
 
-First, [download](/pages/downloads) and [install](/pages/docs/getting-started/installing-geth.md) Geth.
+First, make sure you have sufficient [hardware](/pages/docs/getting-started/hardware-requirements.md), then [download](/pages/downloads) and [install](/pages/docs/getting-started/installing-geth.md) Geth. Make sure you are familiar with the [security considerations](/pages/docs/fundamentals/security.md) and have your firewall set up.
 
 If you are just starting out with Geth, head to the [Getting started](src/pages/docs/getting-started/getting-started.md) page. That page guides a new user through some basic functions of Geth such as creating and securing accounts and making a transaction using Geth's built-in account tools.
 
-A more secure but slightly more complicated setup is to use an external signer instead of Geth's built-in account manager. We have a [getting started](src/pages/docs/getting-started/getting-started-with-clef.md) guide for that too.
+A more secure but slightly more advanced setup is to use an external signer instead of Geth's built-in account manager. We have a [getting started](src/pages/docs/getting-started/getting-started-with-clef.md) guide for that too.
 
 Then, it is recommended to read the material in the [Fundamentals](src/pages/docs/fundamentals) section - these pages will help build a foundational understanding of how Geth works from a user perspective and under the hood.
 
-More advanced topics are also available - explore using the sidebar!
+More advanced topics are also available - explore them using the sidebar!
 
 ## Developers and contributors
 
