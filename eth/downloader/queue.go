@@ -887,7 +887,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	if accepted > 0 {
 		return accepted, fmt.Errorf("partial failure: %v", failure)
 	}
-	return accepted, fmt.Errorf("%w: %v", failure, errStaleDelivery)
+	return accepted, fmt.Errorf("%w: %v", errStaleDelivery, failure)
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound
