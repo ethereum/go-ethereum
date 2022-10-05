@@ -63,6 +63,8 @@ type testBackend struct {
 	relHook func() // Hook is invoked when the requested state is released
 }
 
+// testBackend creates a new test backend. OBS: After test is done, teardown must be
+// invoked in order to release associated resources.
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
 	backend := &testBackend{
 		chainConfig: gspec.Config,
@@ -137,6 +139,11 @@ func (b *testBackend) ChainDb() ethdb.Database {
 	return b.chaindb
 }
 
+// teardown releases the associated resources.
+func (b *testBackend) teardown() {
+	b.chain.Stop()
+}
+
 func (b *testBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error) {
 	statedb, err := b.chain.StateAt(block.Root())
 	if err != nil {
@@ -205,7 +212,7 @@ func TestTraceCall(t *testing.T) {
 		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 		b.AddTx(tx)
 	})
-	defer backend.chain.Stop()
+	defer backend.teardown()
 	api := NewAPI(backend)
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber

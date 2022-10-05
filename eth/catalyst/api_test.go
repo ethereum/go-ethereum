@@ -123,6 +123,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
 		} else {
 			testErr = nil
+			break
 		}
 	}
 	if testErr != nil {
