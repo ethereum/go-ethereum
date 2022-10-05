@@ -1,3 +1,4 @@
+export * from './DownloadsHero';
 export * from './Gopher';
 export * from './HomeHero';
 export * from './HomeSection';
