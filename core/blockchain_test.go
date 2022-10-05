@@ -3647,7 +3647,7 @@ func TestSetCanonical(t *testing.T) {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	defer chain.Stop()
-	
+
 	if n, err := chain.InsertChain(canon); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
