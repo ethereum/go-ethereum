@@ -345,7 +345,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	header.Root = state.IntermediateRoot(true)
 	if chain.Config().IsSharding(header.Number) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
-			header.SetExcessBlobs(misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs))))
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		}
 	}
 }

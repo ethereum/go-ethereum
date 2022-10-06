@@ -75,14 +75,14 @@ func benchRLP(b *testing.B, encode bool) {
 		{
 			"protodanksharding-header",
 			&Header{
-				Difficulty:  big.NewInt(10000000000),
-				Number:      big.NewInt(1000),
-				GasLimit:    8_000_000,
-				GasUsed:     8_000_000,
-				Time:        555,
-				Extra:       make([]byte, 32),
-				BaseFee:     big.NewInt(10000000000),
-				ExcessBlobs: new(uint64),
+				Difficulty:    big.NewInt(10000000000),
+				Number:        big.NewInt(1000),
+				GasLimit:      8_000_000,
+				GasUsed:       8_000_000,
+				Time:          555,
+				Extra:         make([]byte, 32),
+				BaseFee:       big.NewInt(10000000000),
+				ExcessDataGas: big.NewInt(0),
 			},
 		},
 		{

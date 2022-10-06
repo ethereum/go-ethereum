@@ -38,10 +38,10 @@ type ChainContext interface {
 // NewEVMBlockContext creates a new context for use in the EVM.
 func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
-		beneficiary common.Address
-		baseFee     *big.Int
-		random      *common.Hash
-		excessBlobs uint64
+		beneficiary   common.Address
+		baseFee       *big.Int
+		random        *common.Hash
+		excessDataGas *big.Int
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -56,21 +56,21 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
-	if header.ExcessBlobs != nil {
-		excessBlobs = *header.ExcessBlobs
+	if header.ExcessDataGas != nil {
+		excessDataGas = new(big.Int).Set(header.ExcessDataGas)
 	}
 	return vm.BlockContext{
-		CanTransfer: CanTransfer,
-		Transfer:    Transfer,
-		GetHash:     GetHashFn(header, chain),
-		Coinbase:    beneficiary,
-		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
-		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
-		ExcessBlobs: excessBlobs,
-		GasLimit:    header.GasLimit,
-		Random:      random,
+		CanTransfer:   CanTransfer,
+		Transfer:      Transfer,
+		GetHash:       GetHashFn(header, chain),
+		Coinbase:      beneficiary,
+		BlockNumber:   new(big.Int).Set(header.Number),
+		Time:          new(big.Int).SetUint64(header.Time),
+		Difficulty:    new(big.Int).Set(header.Difficulty),
+		BaseFee:       baseFee,
+		ExcessDataGas: excessDataGas,
+		GasLimit:      header.GasLimit,
+		Random:        random,
 	}
 }
 

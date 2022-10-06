@@ -69,7 +69,7 @@ type ExecutableDataV1 struct {
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 
 	// New in EIP-4844
-	ExcessBlobs *uint64 `json:"excessBlobs"   gencodec:"optional"`
+	ExcessDataGas *big.Int `json:"excessBlobs"   gencodec:"optional"`
 }
 
 // JSON type overrides for executableData.
@@ -79,7 +79,7 @@ type executableDataMarshaling struct {
 	GasUsed       hexutil.Uint64
 	Timestamp     hexutil.Uint64
 	BaseFeePerGas *hexutil.Big
-	ExcessBlobs   *hexutil.Uint64
+	ExcessDataGas *hexutil.Big
 	ExtraData     hexutil.Bytes
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
@@ -169,22 +169,22 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
 	header := &types.Header{
-		ParentHash:  params.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    params.FeeRecipient,
-		Root:        params.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: params.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(params.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      new(big.Int).SetUint64(params.Number),
-		GasLimit:    params.GasLimit,
-		GasUsed:     params.GasUsed,
-		Time:        params.Timestamp,
-		BaseFee:     params.BaseFeePerGas,
-		ExcessBlobs: params.ExcessBlobs,
-		Extra:       params.ExtraData,
-		MixDigest:   params.Random,
+		ParentHash:    params.ParentHash,
+		UncleHash:     types.EmptyUncleHash,
+		Coinbase:      params.FeeRecipient,
+		Root:          params.StateRoot,
+		TxHash:        types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:   params.ReceiptsRoot,
+		Bloom:         types.BytesToBloom(params.LogsBloom),
+		Difficulty:    common.Big0,
+		Number:        new(big.Int).SetUint64(params.Number),
+		GasLimit:      params.GasLimit,
+		GasUsed:       params.GasUsed,
+		Time:          params.Timestamp,
+		BaseFee:       params.BaseFeePerGas,
+		ExcessDataGas: params.ExcessDataGas,
+		Extra:         params.ExtraData,
+		MixDigest:     params.Random,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
@@ -206,7 +206,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		GasLimit:      block.GasLimit(),
 		GasUsed:       block.GasUsed(),
 		BaseFeePerGas: block.BaseFee(),
-		ExcessBlobs:   block.ExcessBlobs(),
+		ExcessDataGas: block.ExcessDataGas(),
 		Timestamp:     block.Time(),
 		ReceiptsRoot:  block.ReceiptHash(),
 		LogsBloom:     block.Bloom().Bytes(),

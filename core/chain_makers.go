@@ -78,9 +78,9 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
-// SetExcessBlobs sets the excess_blobs field of the generated block.
-func (b *BlockGen) SetExcessBlobs(excessBlobs uint64) {
-	b.header.SetExcessBlobs(excessBlobs)
+// SetExcessDataGas sets the excess_blobs field of the generated block.
+func (b *BlockGen) SetExcessDataGas(excessDataGas *big.Int) {
+	b.header.SetExcessDataGas(excessDataGas)
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -140,11 +140,11 @@ func (b *BlockGen) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-// ExcessBlobs returns the EIP-4844 excess blobs of the block being generated.
-func (b *BlockGen) ExcessBlobs() uint64 {
-	var v uint64
-	if b.header.ExcessBlobs != nil {
-		v = *b.header.ExcessBlobs
+// ExcessDataGas returns the EIP-4844 excess_data_gas of the block being generated.
+func (b *BlockGen) ExcessDataGas() *big.Int {
+	v := new(big.Int)
+	if b.header.ExcessDataGas != nil {
+		v.Set(b.header.ExcessDataGas)
 	}
 	return v
 }

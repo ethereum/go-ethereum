@@ -1023,14 +1023,14 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
 	}
-	// Initialize the prestate excess_blobs field used during state transition
+	// Initialize the prestate excess_data_gas field used during state transition
 	if w.chainConfig.IsSharding(header.Number) {
 		// TODO(EIP-4844): Unit test this
-		var excessBlobs uint64
-		if parentExcessBlobs := parent.Header().ExcessBlobs; parentExcessBlobs != nil {
-			excessBlobs = *parentExcessBlobs
+		excessDataGas := new(big.Int)
+		if parentExcessDataGas := parent.Header().ExcessDataGas; parentExcessDataGas != nil {
+			excessDataGas.Set(parentExcessDataGas)
 		}
-		header.SetExcessBlobs(excessBlobs)
+		header.SetExcessDataGas(excessDataGas)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {

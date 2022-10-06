@@ -147,7 +147,7 @@ func Transaction(ctx *cli.Context) error {
 			EIP2028:   chainConfig.IsIstanbul(new(big.Int)),
 			EIP4844:   chainConfig.IsSharding(new(big.Int)),
 		}
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), 0, tx.To() == nil, rules); err != nil {
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue

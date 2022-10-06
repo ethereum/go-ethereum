@@ -161,6 +161,12 @@ const (
 	// Fixed cost for sending a data blob.
 	BlobGas uint64 = 120000
 
+	MaxDataGasPerBlock   = 1 << 21
+	DataGasPerBlob       = 1 << 17
+	MaxDataBlobsPerBlock = MaxDataGasPerBlock / DataGasPerBlob
+
+	TargetDataGasPerBlock = 1 << 20
+
 	MaxBlobsPerTx                 = 2
 	MaxBlobsPerBlock              = 16
 	TargetBlobsPerBlock           = 8

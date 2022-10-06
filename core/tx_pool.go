@@ -255,10 +255,10 @@ type TxPool struct {
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
 	eip4844  bool // Fork indicator whether we are using EIP-4844 type transactions.
 
-	currentState       *state.StateDB // Current state in the blockchain head
-	pendingNonces      *txNoncer      // Pending state tracking virtual nonces
-	currentMaxGas      uint64         // Current gas limit for transaction caps
-	currentExcessBlobs uint64         // Current block excess_blobs
+	currentState         *state.StateDB // Current state in the blockchain head
+	pendingNonces        *txNoncer      // Pending state tracking virtual nonces
+	currentMaxGas        uint64         // Current gas limit for transaction caps
+	currentExcessDataGas *big.Int       // Current block excess_data_gas
 
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
@@ -294,22 +294,23 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.LatestSigner(chainconfig),
-		pending:         make(map[common.Address]*txList),
-		queue:           make(map[common.Address]*txList),
-		beats:           make(map[common.Address]time.Time),
-		all:             newTxLookup(),
-		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
-		initDoneCh:      make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		config:               config,
+		chainconfig:          chainconfig,
+		chain:                chain,
+		signer:               types.LatestSigner(chainconfig),
+		pending:              make(map[common.Address]*txList),
+		queue:                make(map[common.Address]*txList),
+		beats:                make(map[common.Address]time.Time),
+		all:                  newTxLookup(),
+		chainHeadCh:          make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:           make(chan *txpoolResetRequest),
+		reqPromoteCh:         make(chan *accountSet),
+		queueTxEventCh:       make(chan *types.Transaction),
+		reorgDoneCh:          make(chan chan struct{}),
+		reorgShutdownCh:      make(chan struct{}),
+		initDoneCh:           make(chan struct{}),
+		gasPrice:             new(big.Int).SetUint64(config.PriceLimit),
+		currentExcessDataGas: new(big.Int),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -664,13 +665,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		EIP2028:   pool.istanbul,
 		EIP4844:   pool.eip4844,
 	}
-	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), pool.currentExcessBlobs, tx.To() == nil, rules)
+	intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
 	if err != nil {
 		return err
 	}
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
+	// TODO: Handle & Check DataGas limits
 	if tx.IsIncomplete() {
 		return ErrMissingWrapData
 	}
@@ -1398,8 +1400,8 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.currentState = statedb
 	pool.pendingNonces = newTxNoncer(statedb)
 	pool.currentMaxGas = newHead.GasLimit
-	if newHead.ExcessBlobs != nil {
-		pool.currentExcessBlobs = *newHead.ExcessBlobs
+	if newHead.ExcessDataGas != nil {
+		pool.currentExcessDataGas.Set(newHead.ExcessDataGas)
 	}
 
 	// Inject any transactions discarded due to reorgs

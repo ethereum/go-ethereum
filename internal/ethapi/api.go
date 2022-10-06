@@ -885,14 +885,14 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number      *hexutil.Big
-	Difficulty  *hexutil.Big
-	Time        *hexutil.Big
-	GasLimit    *hexutil.Uint64
-	Coinbase    *common.Address
-	Random      *common.Hash
-	BaseFee     *hexutil.Big
-	ExcessBlobs *hexutil.Uint64
+	Number        *hexutil.Big
+	Difficulty    *hexutil.Big
+	Time          *hexutil.Big
+	GasLimit      *hexutil.Uint64
+	Coinbase      *common.Address
+	Random        *common.Hash
+	BaseFee       *hexutil.Big
+	ExcessDataGas *hexutil.Big
 }
 
 // Apply overrides the given header fields into the given block context.
@@ -921,8 +921,8 @@ func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if diff.BaseFee != nil {
 		blockCtx.BaseFee = diff.BaseFee.ToInt()
 	}
-	if diff.ExcessBlobs != nil {
-		blockCtx.ExcessBlobs = uint64(*diff.ExcessBlobs)
+	if diff.ExcessDataGas != nil {
+		blockCtx.ExcessDataGas = diff.BaseFee.ToInt()
 	}
 }
 
@@ -1184,8 +1184,8 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
-	if head.ExcessBlobs != nil {
-		result["excessBlobs"] = (*hexutil.Uint64)(head.ExcessBlobs)
+	if head.ExcessDataGas != nil {
+		result["excessDataGas"] = (*hexutil.Big)(head.ExcessDataGas)
 	}
 
 	return result

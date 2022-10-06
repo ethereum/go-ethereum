@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/misc"
+	//	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -125,7 +125,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, blobCount int, blockExcessBlobs uint64, isContractCreation bool, rules IntrinsicGasChainRules) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, rules IntrinsicGasChainRules) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && rules.Homestead {
@@ -162,14 +162,11 @@ func IntrinsicGas(data []byte, accessList types.AccessList, blobCount int, block
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
-	if rules.EIP4844 {
-		gas += uint64(blobCount) * getBlobGas(blockExcessBlobs)
-	}
+	// TODO
+	//if rules.EIP4844 {
+	//gas += uint64(blobCount) * getBlobGas(blockExcessBlobs)
+	//}
 	return gas, nil
-}
-
-func getBlobGas(blockExcessBlobs uint64) uint64 {
-	return misc.FakeExponential(blockExcessBlobs, params.GasPriceUpdateFractionPerBlob)
 }
 
 // NewStateTransition initialises and returns a new state transition object.
@@ -325,7 +322,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		EIP4844:   rules.IsSharding,
 	}
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), len(st.msg.DataHashes()), st.evm.Context.ExcessBlobs, contractCreation, intrinsicGasRules)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, intrinsicGasRules)
 	if err != nil {
 		return nil, err
 	}

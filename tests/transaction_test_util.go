@@ -61,7 +61,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			EIP2028:   isIstanbul,
 			EIP4844:   isSharding,
 		}
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), len(tx.DataHashes()), 0, tx.To() == nil, rules)
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -3913,7 +3913,7 @@ func TestDataBlobTxs(t *testing.T) {
 
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
-		b.SetExcessBlobs(0)
+		b.SetExcessDataGas(new(big.Int))
 		msg := types.BlobTxMessage{
 			Nonce: 0,
 			Gas:   500000,

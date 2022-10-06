@@ -346,8 +346,8 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		return err
 	}
 	if !chain.Config().IsSharding(header.Number) {
-		if header.ExcessBlobs != nil {
-			return fmt.Errorf("invalid excessBlobs before fork: have %d, want <nil>", *header.ExcessBlobs)
+		if header.ExcessDataGas != nil {
+			return fmt.Errorf("invalid excessDataGas before fork: have %v, want <nil>", header.ExcessDataGas)
 		}
 	} else if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-4844 attributes.
@@ -578,7 +578,7 @@ func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	header.UncleHash = types.CalcUncleHash(nil)
 	if chain.Config().IsSharding(header.Number) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
-			header.SetExcessBlobs(misc.CalcExcessBlobTransactions(parent, uint64(misc.CountBlobs(txs))))
+			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		}
 	}
 }
@@ -756,8 +756,8 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}
-	if header.ExcessBlobs != nil {
-		enc = append(enc, header.ExcessBlobs)
+	if header.ExcessDataGas != nil {
+		enc = append(enc, header.ExcessDataGas)
 	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())

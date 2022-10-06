@@ -88,8 +88,8 @@ type Header struct {
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
-	// ExcessBlobs was added by EIP-4844 and is ignored in legacy headers.
-	ExcessBlobs *uint64 `json:"excessBlobs" rlp:"optional"`
+	// ExcessDataGas was added by EIP-4844 and is ignored in legacy headers.
+	ExcessDataGas *big.Int `json:"excessDataGas" rlp:"optional"`
 
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
@@ -100,23 +100,23 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty  *hexutil.Big
-	Number      *hexutil.Big
-	GasLimit    hexutil.Uint64
-	GasUsed     hexutil.Uint64
-	Time        hexutil.Uint64
-	Extra       hexutil.Bytes
-	BaseFee     *hexutil.Big
-	ExcessBlobs *hexutil.Uint64
-	Hash        common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty    *hexutil.Big
+	Number        *hexutil.Big
+	GasLimit      hexutil.Uint64
+	GasUsed       hexutil.Uint64
+	Time          hexutil.Uint64
+	Extra         hexutil.Bytes
+	BaseFee       *hexutil.Big
+	ExcessDataGas *hexutil.Big
+	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
-// SetExcessBlobs sets the excess_blobs field in the header
-func (h *Header) SetExcessBlobs(v uint64) {
-	if h.ExcessBlobs == nil {
-		h.ExcessBlobs = new(uint64)
+// SetExcessDataGas sets the excess_data_gas field in the header
+func (h *Header) SetExcessDataGas(v *big.Int) {
+	h.ExcessDataGas = new(big.Int)
+	if v != nil {
+		h.ExcessDataGas.Set(v)
 	}
-	*h.ExcessBlobs = v
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -331,8 +331,8 @@ func CopyHeader(h *Header) *Header {
 	if h.BaseFee != nil {
 		cpy.BaseFee = new(big.Int).Set(h.BaseFee)
 	}
-	if h.ExcessBlobs != nil {
-		cpy.SetExcessBlobs(*h.ExcessBlobs)
+	if h.ExcessDataGas != nil {
+		cpy.SetExcessDataGas(h.ExcessDataGas)
 	}
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
@@ -406,11 +406,11 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-func (b *Block) ExcessBlobs() *uint64 {
-	if b.header.ExcessBlobs == nil {
+func (b *Block) ExcessDataGas() *big.Int {
+	if b.header.ExcessDataGas == nil {
 		return nil
 	}
-	return b.header.ExcessBlobs
+	return new(big.Int).Set(b.header.ExcessDataGas)
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }

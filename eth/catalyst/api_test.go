@@ -691,22 +691,22 @@ func setBlockhash(data *beacon.ExecutableDataV1) *beacon.ExecutableDataV1 {
 	number := big.NewInt(0)
 	number.SetUint64(data.Number)
 	header := &types.Header{
-		ParentHash:  data.ParentHash,
-		UncleHash:   types.EmptyUncleHash,
-		Coinbase:    data.FeeRecipient,
-		Root:        data.StateRoot,
-		TxHash:      types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash: data.ReceiptsRoot,
-		Bloom:       types.BytesToBloom(data.LogsBloom),
-		Difficulty:  common.Big0,
-		Number:      number,
-		GasLimit:    data.GasLimit,
-		GasUsed:     data.GasUsed,
-		Time:        data.Timestamp,
-		BaseFee:     data.BaseFeePerGas,
-		ExcessBlobs: data.ExcessBlobs,
-		Extra:       data.ExtraData,
-		MixDigest:   data.Random,
+		ParentHash:    data.ParentHash,
+		UncleHash:     types.EmptyUncleHash,
+		Coinbase:      data.FeeRecipient,
+		Root:          data.StateRoot,
+		TxHash:        types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
+		ReceiptHash:   data.ReceiptsRoot,
+		Bloom:         types.BytesToBloom(data.LogsBloom),
+		Difficulty:    common.Big0,
+		Number:        number,
+		GasLimit:      data.GasLimit,
+		GasUsed:       data.GasUsed,
+		Time:          data.Timestamp,
+		BaseFee:       data.BaseFeePerGas,
+		ExcessDataGas: data.ExcessDataGas,
+		Extra:         data.ExtraData,
+		MixDigest:     data.Random,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	data.BlockHash = block.Hash()

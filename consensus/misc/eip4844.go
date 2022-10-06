@@ -18,31 +18,41 @@ package misc
 
 import (
 	"fmt"
-	"math"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// CalcExcessBlobTransactions calculates the number of blobs above the target
-func CalcExcessBlobTransactions(parent *types.Header, blobs uint64) uint64 {
-	var excessBlobs uint64
-	if parent.ExcessBlobs != nil {
-		excessBlobs = *parent.ExcessBlobs
+// CalcExcessDataGas implements calc_excess_data_gas from EIP-4844
+func CalcExcessDataGas(parentExcessDataGas *big.Int, newBlobs int) *big.Int {
+	excessDataGas := new(big.Int)
+	if parentExcessDataGas != nil {
+		excessDataGas.Set(parentExcessDataGas)
 	}
-	adjusted := excessBlobs + blobs
-	if adjusted < params.TargetBlobsPerBlock {
-		return 0
+	consumedGas := big.NewInt(params.DataGasPerBlob)
+	consumedGas.Mul(consumedGas, big.NewInt(int64(newBlobs)))
+
+	excessDataGas.Add(excessDataGas, consumedGas)
+	targetGas := big.NewInt(params.TargetDataGasPerBlock)
+	if excessDataGas.Cmp(targetGas) < 0 {
+		return new(big.Int)
 	}
-	return adjusted - params.TargetBlobsPerBlock
+	return new(big.Int).Set(excessDataGas.Sub(excessDataGas, targetGas))
 }
 
-// FakeExponential approximates 2 ** (num / denom)
-func FakeExponential(num uint64, denom uint64) uint64 {
-	cofactor := uint64(math.Exp2(float64(num / denom)))
-	fractional := num % denom
-	return cofactor + (fractional*cofactor*2+
-		(uint64(math.Pow(float64(fractional), 2))*cofactor)/denom)/(denom*3)
+// FakeExponential approximates factor * e ** (num / denom) using a taylor expansion
+// as described in the EIP-4844 spec.
+func FakeExponential(factor, num, denom *big.Int) *big.Int {
+	output := new(big.Int)
+	numAccum := new(big.Int).Mul(factor, denom)
+	for i := 1; numAccum.Sign() > 0; i++ {
+		output.Add(output, numAccum)
+		numAccum.Mul(numAccum, num)
+		iBig := big.NewInt(int64(i))
+		numAccum.Div(numAccum, iBig.Mul(iBig, denom))
+	}
+	return output.Div(output, denom)
 }
 
 // CountBlobs returns the number of blob transactions in txs
@@ -56,8 +66,8 @@ func CountBlobs(txs []*types.Transaction) int {
 
 // VerifyEip4844Header verifies that the header is not malformed
 func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Header) error {
-	if header.ExcessBlobs == nil {
-		return fmt.Errorf("header is missing excessBlobs")
+	if header.ExcessDataGas == nil {
+		return fmt.Errorf("header is missing excessDataGas")
 	}
 	return nil
 }
