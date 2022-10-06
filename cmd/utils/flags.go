@@ -864,6 +864,12 @@ var (
 		Value:    flags.DirectoryString("."),
 		Category: flags.APICategory,
 	}
+	HttpHeaderFlag = &cli.StringSliceFlag{
+		Name:     "header",
+		Aliases:  []string{"H"},
+		Usage:    "Pass custom headers to the RPC server when using --" + RemoteDBFlag.Name + " or the geth attach console. This flag can be given multiple times.",
+		Category: flags.APICategory,
+	}
 
 	// Gas price oracle settings
 	GpoBlocksFlag = &cli.IntFlag{
@@ -984,13 +990,6 @@ var (
 		Usage:    "InfluxDB organization name (v2 only)",
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
-	}
-
-	HttpHeaderFlag = &cli.StringSliceFlag{
-		Name:     "header",
-		Aliases:  []string{"H"},
-		Usage:    "Pass custom headers to the RPC server wheng using --" + RemoteDBFlag.Name + " or the geth attach console.",
-		Category: flags.NetworkingCategory,
 	}
 )
 

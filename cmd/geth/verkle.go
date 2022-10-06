@@ -38,7 +38,6 @@ var (
 	verkleCommand = &cli.Command{
 		Name:        "verkle",
 		Usage:       "A set of experimental verkle tree management commands",
-		Category:    "MISCELLANEOUS COMMANDS",
 		Description: "",
 		Subcommands: []*cli.Command{
 			{
