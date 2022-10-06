@@ -21,10 +21,8 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
-	"unicode"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,61 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-
-	// Force-load native and js packages, to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
-
-// To generate a new callTracer test, copy paste the makeTest method below into
-// a Geth console and call it with a transaction hash you which to export.
-
-/*
-// makeTest generates a callTracer test by running a prestate reassembled and a
-// call trace run, assembling all the gathered information into a test case.
-var makeTest = function(tx, rewind) {
-  // Generate the genesis block from the block, transaction and prestate data
-  var block   = eth.getBlock(eth.getTransaction(tx).blockHash);
-  var genesis = eth.getBlock(block.parentHash);
-
-  delete genesis.gasUsed;
-  delete genesis.logsBloom;
-  delete genesis.parentHash;
-  delete genesis.receiptsRoot;
-  delete genesis.sha3Uncles;
-  delete genesis.size;
-  delete genesis.transactions;
-  delete genesis.transactionsRoot;
-  delete genesis.uncles;
-
-  genesis.gasLimit  = genesis.gasLimit.toString();
-  genesis.number    = genesis.number.toString();
-  genesis.timestamp = genesis.timestamp.toString();
-
-  genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer", rewind: rewind});
-  for (var key in genesis.alloc) {
-    genesis.alloc[key].nonce = genesis.alloc[key].nonce.toString();
-  }
-  genesis.config = admin.nodeInfo.protocols.eth.config;
-
-  // Generate the call trace and produce the test input
-  var result = debug.traceTransaction(tx, {tracer: "callTracer", rewind: rewind});
-  delete result.time;
-
-  console.log(JSON.stringify({
-    genesis: genesis,
-    context: {
-      number:     block.number.toString(),
-      difficulty: block.difficulty,
-      timestamp:  block.timestamp.toString(),
-      gasLimit:   block.gasLimit.toString(),
-      miner:      block.miner,
-    },
-    input:  eth.getRawTransaction(tx),
-    result: result,
-  }, null, 2));
-}
-*/
 
 type callContext struct {
 	Number     math.HexOrDecimal64   `json:"number"`
@@ -204,7 +148,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to unmarshal trace result: %v", err)
 			}
 
-			if !jsonEqual(ret, test.Result) {
+			if !jsonEqual(ret, test.Result, new(callTrace), new(callTrace)) {
 				// uncomment this for easier debugging
 				//have, _ := json.MarshalIndent(ret, "", " ")
 				//want, _ := json.MarshalIndent(test.Result, "", " ")
@@ -215,32 +159,6 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 	}
 }
 
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
-// comparison
-func jsonEqual(x, y interface{}) bool {
-	xTrace := new(callTrace)
-	yTrace := new(callTrace)
-	if xj, err := json.Marshal(x); err == nil {
-		json.Unmarshal(xj, xTrace)
-	} else {
-		return false
-	}
-	if yj, err := json.Marshal(y); err == nil {
-		json.Unmarshal(yj, yTrace)
-	} else {
-		return false
-	}
-	return reflect.DeepEqual(xTrace, yTrace)
-}
-
-// camel converts a snake cased input string into a camel cased output.
-func camel(str string) string {
-	pieces := strings.Split(str, "_")
-	for i := 1; i < len(pieces); i++ {
-		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
-	}
-	return strings.Join(pieces, "")
-}
 func BenchmarkTracers(b *testing.B) {
 	files, err := os.ReadDir(filepath.Join("testdata", "call_tracer"))
 	if err != nil {
@@ -386,7 +304,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	wantStr := `{"type":"CALL","from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","to":"0x00000000000000000000000000000000deadbeef","value":"0x0","gas":"0x7148","gasUsed":"0x2d0","input":"0x","output":"0x","calls":[{"type":"CALL","from":"0x00000000000000000000000000000000deadbeef","to":"0x00000000000000000000000000000000000000ff","value":"0x0","gas":"0x6cbf","gasUsed":"0x0","input":"0x","output":"0x"}]}`
 	want := new(callTrace)
 	json.Unmarshal([]byte(wantStr), want)
-	if !jsonEqual(have, want) {
+	if !jsonEqual(have, want, new(callTrace), new(callTrace)) {
 		t.Error("have != want")
 	}
 }
