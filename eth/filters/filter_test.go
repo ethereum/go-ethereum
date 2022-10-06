@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -170,58 +171,66 @@ func TestFilters(t *testing.T) {
 		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
-	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	// Set block 998 as Finalized (-3)
+	rawdb.WriteFinalizedBlockHash(db, chain[998].Hash())
 
+	filter := sys.NewRangeFilter(0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, _ := filter.Logs(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 1 {
-		t.Error("expected 1 log, got", len(logs))
-	}
-	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
-		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
-	}
-
-	filter = sys.NewRangeFilter(990, -1, []common.Address{addr}, [][]common.Hash{{hash3}})
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 1 {
-		t.Error("expected 1 log, got", len(logs))
-	}
-	if len(logs) > 0 && logs[0].Topics[0] != hash3 {
-		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
-	}
-
-	filter = sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}})
-
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 2 {
-		t.Error("expected 2 log, got", len(logs))
-	}
-
-	failHash := common.BytesToHash([]byte("fail"))
-	filter = sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{failHash}})
-
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 0 {
-		t.Error("expected 0 log, got", len(logs))
-	}
-
-	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = sys.NewRangeFilter(0, -1, []common.Address{failAddr}, nil)
-
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 0 {
-		t.Error("expected 0 log, got", len(logs))
-	}
-
-	filter = sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{failHash}, {hash1}})
-
-	logs, _ = filter.Logs(context.Background())
-	if len(logs) != 0 {
-		t.Error("expected 0 log, got", len(logs))
+	for i, tc := range []struct {
+		f          *Filter
+		wantHashes []common.Hash
+	}{
+		{
+			sys.NewRangeFilter(900, 999, []common.Address{addr}, [][]common.Hash{{hash3}}),
+			[]common.Hash{hash3},
+		}, {
+			sys.NewRangeFilter(990, -1, []common.Address{addr}, [][]common.Hash{{hash3}}),
+			[]common.Hash{hash3},
+		}, {
+			sys.NewRangeFilter(1, 10, nil, [][]common.Hash{{hash1, hash2}}),
+			[]common.Hash{hash1, hash2},
+		}, {
+			sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}}),
+			nil,
+		}, {
+			sys.NewRangeFilter(0, -1, []common.Address{common.BytesToAddress([]byte("failmenow"))}, nil),
+			nil,
+		}, {
+			sys.NewRangeFilter(0, -1, nil, [][]common.Hash{{common.BytesToHash([]byte("fail"))}, {hash1}}),
+			nil,
+		}, {
+			sys.NewRangeFilter(-1, -1, nil, nil), []common.Hash{hash4},
+		}, {
+			sys.NewRangeFilter(-3, -1, nil, nil), []common.Hash{hash3, hash4},
+		}, {
+			sys.NewRangeFilter(-3, -3, nil, nil), []common.Hash{hash3},
+		}, {
+			sys.NewRangeFilter(-1, -3, nil, nil), nil,
+		}, {
+			sys.NewRangeFilter(-4, -1, nil, nil), nil,
+		}, {
+			sys.NewRangeFilter(-4, -4, nil, nil), nil,
+		}, {
+			sys.NewRangeFilter(-1, -4, nil, nil), nil,
+		},
+	} {
+		logs, _ := tc.f.Logs(context.Background())
+		var haveHashes []common.Hash
+		for _, l := range logs {
+			haveHashes = append(haveHashes, l.Topics[0])
+		}
+		if have, want := len(haveHashes), len(tc.wantHashes); have != want {
+			t.Fatalf("test %d, have %d logs, want %d", i, have, want)
+		}
+		if len(haveHashes) == 0 {
+			continue
+		}
+		if !reflect.DeepEqual(tc.wantHashes, haveHashes) {
+			t.Fatalf("test %d, have %v want %v", i, haveHashes, tc.wantHashes)
+		}
 	}
 }
