@@ -3,11 +3,9 @@ package bor
 import (
 	"crypto/ecdsa"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +47,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis1(t, faucets, "./testdata/genesis_sprint_length_change.json")
+	genesis := InitGenesisWithSprint(t, faucets, "./testdata/genesis_sprint_length_change.json", 32)
 
 	var (
 		nodes  []*eth.Ethereum
@@ -224,8 +222,10 @@ var keys_21val = []map[string]string{
 func TestSprintLengthReorg(t *testing.T) {
 	reorgsLengthTests := []map[string]uint64{
 		{
-			"reorgLength": 10,
-			"startBlock":  23,
+			"reorgLength": 5,
+			"startBlock":  5,
+			"sprintSize":  32,
+			"faultyNode":  1, // node 1(index) is primary validator of the first sprint
 		},
 		// {
 		// 	"reorgLength": 20,
@@ -244,16 +244,28 @@ func TestSprintLengthReorg(t *testing.T) {
 		// },
 	}
 	for _, tt := range reorgsLengthTests {
-		SetupValidatorsAndTest(t, tt)
+		observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD := SetupValidatorsAndTest(t, tt)
+
+		if observerNewChainLength > 0 {
+			log.Warn("Observer", "New Chain length", observerNewChainLength, "Old Chain length", observerOldChainLength)
+		}
+		if faultyNewChainLength > 0 {
+			log.Warn("Faulty", "New Chain length", faultyNewChainLength, "Old Chain length", faultyOldChainLength)
+		}
+
+		log.Warn("Valid Reorg", "Valid Reorg", validReorg, "Old TD", oldTD, "New TD", newTD)
+
+		// reorg should be valid :: New TD > Old TD
+		assert.Equal(t, validReorg, true)
 	}
 }
 
-func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
+func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64, uint64, uint64, bool, *big.Int, *big.Int) {
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis1(t, nil, "./testdata/genesis_7val.json")
+	genesis := InitGenesisWithSprint(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"])
 
 	var (
 		nodes  []*eth.Ethereum
@@ -294,101 +306,124 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) {
 			panic(err)
 		}
 	}
-	chain2HeadCh := make(chan core.Chain2HeadEvent, 64)
-	primaryProducerIndex := 0
-	subscribedNodeIndex := 2
-	nodes[subscribedNodeIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadCh)
-	stacks[1].Server().NoDiscovery = true
+
+	chain2HeadChObserver := make(chan core.Chain2HeadEvent, 64)
+	chain2HeadChFaulty := make(chan core.Chain2HeadEvent, 64)
+
+	var observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength uint64
+	var validReorg bool // if true, the newchain TD > oldchain TD
+
+	faultyProducerIndex := tt["faultyNode"] // node causing reorg :: faulty ::
+	subscribedNodeIndex := 5                // node on different partition, produces 7th sprint but our testcase does not run till 7th sprint. :: observer ::
+
+	nodes[subscribedNodeIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadChObserver)
+	nodes[faultyProducerIndex].BlockChain().SubscribeChain2HeadEvent(chain2HeadChFaulty)
+
+	stacks[faultyProducerIndex].Server().NoDiscovery = true
 
 	for {
 
-		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
-		peers := stacks[1].Server().Peers()
-		log.Warn("Peers", "peers length", len(peers))
-		log.Warn("Current block", "number", blockHeaderVal0.Number, "hash", blockHeaderVal0.Hash())
+		blockHeaderObserver := nodes[subscribedNodeIndex].BlockChain().CurrentHeader()
+		blockHeaderFaulty := nodes[faultyProducerIndex].BlockChain().CurrentHeader()
 
-		if blockHeaderVal0.Number.Uint64() == tt["startBlock"] {
-			author, _ := nodes[0].Engine().Author(blockHeaderVal0)
+		log.Warn("Current Observer block", "number", blockHeaderObserver.Number, "hash", blockHeaderObserver.Hash())
+		log.Warn("Current Faulty block", "number", blockHeaderFaulty.Number, "hash", blockHeaderFaulty.Hash())
 
-			log.Warn("Current block", "number", blockHeaderVal0.Number, "hash", blockHeaderVal0.Hash(), "author", author)
-			fmt.Printf("\n------%+v, %+v-----\n", blockHeaderVal0.Number.Uint64(), tt["startBlock"])
-
-			for index, signerdata := range keys_21val {
-				if strings.EqualFold(signerdata["address"], author.String()) {
-					primaryProducerIndex = index
-					log.Warn("Primary producer", "index", primaryProducerIndex)
-				}
-			}
-			stacks[1].Server().MaxPeers = 0
+		if blockHeaderFaulty.Number.Uint64() == tt["startBlock"] {
+			stacks[faultyProducerIndex].Server().MaxPeers = 0
 			for _, enode := range enodes {
-				stacks[1].Server().RemovePeer(enode)
-			}
-			if primaryProducerIndex == 0 {
-				subscribedNodeIndex = 1
-			}
-
-			fmt.Println("----------------- startBlock", tt["startBlock"])
-
-		}
-
-		if blockHeaderVal0.Number.Uint64() >= tt["startBlock"] && blockHeaderVal0.Number.Uint64() < tt["startBlock"]+tt["reorgLength"] {
-			// stacks[1].Server().NoDiscovery = true
-			// stacks[1].Server().MaxPeers = 0
-			for _, enode := range enodes {
-				stacks[1].Server().RemovePeer(enode)
+				stacks[faultyProducerIndex].Server().RemovePeer(enode)
 			}
 		}
 
-		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+1 {
-			stacks[1].Server().NoDiscovery = false
-			stacks[1].Server().MaxPeers = 100
-
+		if blockHeaderObserver.Number.Uint64() >= tt["startBlock"] && blockHeaderObserver.Number.Uint64() < tt["startBlock"]+tt["reorgLength"] {
 			for _, enode := range enodes {
-				stacks[primaryProducerIndex].Server().AddPeer(enode)
+				stacks[faultyProducerIndex].Server().RemovePeer(enode)
 			}
-			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+1)
 		}
 
-		if blockHeaderVal0.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+50 {
-			fmt.Println("----------------- endblock", tt["startBlock"]+tt["reorgLength"]+50)
-			break
+		if blockHeaderObserver.Number.Uint64() == tt["startBlock"]+tt["reorgLength"]+1 {
+			stacks[faultyProducerIndex].Server().NoDiscovery = false
+			stacks[faultyProducerIndex].Server().MaxPeers = 100
+
+			for _, enode := range enodes {
+				stacks[faultyProducerIndex].Server().AddPeer(enode)
+			}
+
 		}
 
 		select {
-		case ev := <-chain2HeadCh:
-			fmt.Println("##############")
-			fmt.Printf("\n---------------\n%+v\n---------------\n", ev.NewChain[0].Header().Number.Uint64())
-			var newAuthor common.Address
-			var oldAuthor common.Address
-			if len(ev.NewChain) > 0 {
-				newAuthor, _ = nodes[0].Engine().Author(ev.NewChain[0].Header())
+		case ev := <-chain2HeadChObserver:
+
+			var newAuthor, oldAuthor common.Address
+			var newTD, oldTD *big.Int
+
+			if ev.Type == core.Chain2HeadReorgEvent {
+				if len(ev.NewChain) > 0 {
+					newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
+					newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					if newTD == nil {
+						newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					}
+
+				}
+
+				if len(ev.OldChain) > 0 {
+					oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
+					oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
+					if oldTD == nil {
+						oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					}
+				}
+
+				log.Warn("Observer Reorg", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
+				if newTD.Cmp(oldTD) == 1 {
+					validReorg = true
+				}
+				if len(ev.OldChain) > 1 {
+					observerOldChainLength = uint64(len(ev.OldChain))
+					observerNewChainLength = uint64(len(ev.NewChain))
+					return observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD
+				}
 			}
-			if len(ev.OldChain) > 0 {
-				oldAuthor, _ = nodes[0].Engine().Author(ev.OldChain[0].Header())
+
+		case ev := <-chain2HeadChFaulty:
+
+			var newAuthor, oldAuthor common.Address
+			var newTD, oldTD *big.Int
+
+			if ev.Type == core.Chain2HeadReorgEvent {
+				if len(ev.NewChain) > 0 {
+					newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
+					newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					if newTD == nil {
+						newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					}
+				}
+
+				if len(ev.OldChain) > 0 {
+					oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
+					oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
+					if oldTD == nil {
+						oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
+					}
+				}
+
+				log.Warn("Reorg on Faulty Node", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
+				log.Warn("Reorg on Faulty Node", "newTD", newTD, "oldTD", oldTD)
+				if newTD.Cmp(oldTD) == 1 {
+					validReorg = true
+				}
+				if len(ev.OldChain) > 1 {
+					faultyOldChainLength = uint64(len(ev.OldChain))
+					faultyNewChainLength = uint64(len(ev.NewChain))
+					return observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD
+				}
 			}
-			fmt.Printf("\n---------------\nOld Author : %+v :::: New Author : %+v\n---------------\n", oldAuthor, newAuthor)
-			fmt.Printf("\n---------------\n%+v\n---------------\n", ev)
-			fmt.Println("##############")
 
 		default:
 			time.Sleep(500 * time.Millisecond)
-			// if len(ev.NewChain) != len(expect.Added) {
-			// 	t.Fatal("Newchain and Added Array Size don't match")
-			// }
-			// if len(ev.OldChain) != len(expect.Removed) {
-			// 	t.Fatal("Oldchain and Removed Array Size don't match")
-			// }
 
-			// for j := 0; j < len(ev.OldChain); j++ {
-			// 	if ev.OldChain[j].Hash() != expect.Removed[j] {
-			// 		t.Fatal("Oldchain hashes Do Not Match")
-			// 	}
-			// }
-			// for j := 0; j < len(ev.NewChain); j++ {
-			// 	if ev.NewChain[j].Hash() != expect.Added[j] {
-			// 		t.Fatalf("Newchain hashes Do Not Match %s %s", ev.NewChain[j].Hash(), expect.Added[j])
-			// 	}
-			// }
 		}
 	}
 
@@ -452,7 +487,7 @@ func InitMiner1(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdal
 	return stack, ethBackend, err
 }
 
-func InitGenesis1(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string) *core.Genesis {
+func InitGenesisWithSprint(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
 
 	// sprint size = 8 in genesis
 	genesisData, err := ioutil.ReadFile(fileLocation)
@@ -468,6 +503,7 @@ func InitGenesis1(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string
 
 	genesis.Config.ChainID = big.NewInt(15001)
 	genesis.Config.EIP150Hash = common.Hash{}
+	genesis.Config.Bor.Sprint["0"] = sprintSize
 
 	return genesis
 }
