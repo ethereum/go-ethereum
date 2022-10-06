@@ -393,7 +393,7 @@ func (n *Node) startRPC() error {
 	}
 	var (
 		servers   []*httpServer
-		open, all = n.GetAPIs()
+		open, all = n.getAPIs()
 	)
 
 	initHttp := func(server *httpServer, apis []rpc.API, port int) error {
@@ -417,7 +417,7 @@ func (n *Node) startRPC() error {
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
 		}
-		if err := server.enableWS(n.rpcAPIs, wsConfig{
+		if err := server.enableWS(apis, wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
 			prefix:  n.config.WSPathPrefix,
@@ -570,9 +570,9 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
-// GetAPIs return two sets of APIs, both the ones that do not require
+// getAPIs return two sets of APIs, both the ones that do not require
 // authentication, and the complete set
-func (n *Node) GetAPIs() (unauthenticated, all []rpc.API) {
+func (n *Node) getAPIs() (unauthenticated, all []rpc.API) {
 	for _, api := range n.rpcAPIs {
 		if !api.Authenticated {
 			unauthenticated = append(unauthenticated, api)
