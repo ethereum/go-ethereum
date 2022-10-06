@@ -1,14 +1,22 @@
 import {
+  Button,
   Code,
   Link,
   ListItem,
   Stack,
+  Table,
+  Th,
+  Tr,
   Text,
   UnorderedList,
 } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 
 import { DownloadsHero, DownloadsSection } from '../components/UI/downloads';
+
+import {
+  GETH_REPO_URL
+} from '../constants'
 
 
 const DownloadsPage: NextPage = ({}) => {
@@ -62,7 +70,6 @@ const DownloadsPage: NextPage = ({}) => {
               <Link
                 href={''}
                 isExternal
-                textDecoration='underline'
                 color='#11866f'
                 _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
                 _focus={{
@@ -76,6 +83,147 @@ const DownloadsPage: NextPage = ({}) => {
               </Link>{' '}
               Signatures for details).
             </Text>
+          </Stack>
+        </DownloadsSection>
+
+        <DownloadsSection sectionTitle='Stable releases'>
+          <Stack p={4} borderBottom='2px solid #11866f'>
+            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+              These are the current and previous stable releases of go-ethereum, updated automatically when a new version is tagged in our{' '}
+              <Link
+                href={GETH_REPO_URL}
+                isExternal
+                color='#11866f'
+                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
+                _focus={{
+                  color: '#11866f',
+                  boxShadow: '0 0 0 1px #11866f !important',
+                  textDecoration: 'none'
+                }}
+                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+              >
+                GitHub repository.
+              </Link>
+            </Text>
+          </Stack>
+
+          <Stack p={4} borderBottom='2px solid #11866f'>
+            <Text>TABLE</Text>
+          </Stack>
+
+          <Stack sx={{ mt: '0 !important' }}>
+            <Button
+              color='#11866f'
+              bg='#d7f5ef'
+              _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
+              _focus={{
+                textDecoration: 'none',
+                bg: '#11866f',
+                color: '#f0f2e2',
+                boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+              }}
+              _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
+              h={'100%'}
+            >
+              <Text
+                fontFamily='"JetBrains Mono", monospace'
+                // TODO: move to theme colors
+                fontWeight={700}
+                textTransform='uppercase'
+                textAlign='center'
+                p={4}
+              >
+                SHOW OLDER RELEASES
+              </Text>
+            </Button>
+          </Stack>
+        </DownloadsSection>
+
+        <DownloadsSection sectionTitle='Develop builds'>
+          <Stack p={4} borderBottom='2px solid #11866f'>
+            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+              These are the develop snapshots of go-ethereum, updated automatically when a new commit is pushed into our{' '}
+              <Link
+                href={GETH_REPO_URL}
+                isExternal
+                color='#11866f'
+                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
+                _focus={{
+                  color: '#11866f',
+                  boxShadow: '0 0 0 1px #11866f !important',
+                  textDecoration: 'none'
+                }}
+                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+              >
+                GitHub repository.
+              </Link>
+            </Text>
+          </Stack>
+
+          <Stack p={4} borderBottom='2px solid #11866f'>
+            <Text>TABLE</Text>
+          </Stack>
+
+          <Stack sx={{ mt: '0 !important' }}>
+            <Button
+              color='#11866f'
+              bg='#d7f5ef'
+              _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
+              _focus={{
+                textDecoration: 'none',
+                bg: '#11866f',
+                color: '#f0f2e2',
+                boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+              }}
+              _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
+              h={'100%'}
+            >
+              <Text
+                fontFamily='"JetBrains Mono", monospace'
+                // TODO: move to theme colors
+                fontWeight={700}
+                textTransform='uppercase'
+                textAlign='center'
+                p={4}
+              >
+                SHOW OLDER RELEASES
+              </Text>
+            </Button>
+          </Stack>
+        </DownloadsSection>
+
+        <DownloadsSection sectionTitle='OpenPGP Signatures'>
+          <Stack p={4} borderBottom='2px solid #11866f'>
+            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+              All the binaries available from this page are signed via our build server PGP keys:
+            </Text>
+          </Stack>
+
+          <Stack p={4}>
+            <Table>
+              <Tr>
+                <Th>
+                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
+                    Build Server
+                  </Text>
+                </Th>
+                <Th>
+                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
+                    UniqueID
+                  </Text>
+                </Th>
+                <Th>
+                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
+                    OpenPGP Key
+                  </Text>
+                </Th>
+                <Th>
+                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
+                    Fingerprint
+                  </Text>
+                </Th>
+              </Tr>
+            </Table>
           </Stack>
         </DownloadsSection>
 
