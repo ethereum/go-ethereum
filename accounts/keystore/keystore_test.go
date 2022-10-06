@@ -222,10 +222,7 @@ func waitForKsUpdating(t *testing.T, ks *KeyStore, wantStatus bool, maxTime time
 	t.Helper()
 	// Wait max 250 ms, then return false
 	for t0 := time.Now(); time.Since(t0) < maxTime; {
-		ks.mu.RLock()
-		updating := ks.updating
-		ks.mu.RUnlock()
-		if updating == wantStatus {
+		if ks.isUpdating() == wantStatus {
 			return true
 		}
 		time.Sleep(25 * time.Millisecond)
@@ -242,11 +239,8 @@ func TestWalletNotifierLifecycle(t *testing.T) {
 
 	// Ensure that the notification updater is not running yet
 	time.Sleep(250 * time.Millisecond)
-	ks.mu.RLock()
-	updating := ks.updating
-	ks.mu.RUnlock()
 
-	if updating {
+	if ks.isUpdating() {
 		t.Errorf("wallet notifier running without subscribers")
 	}
 	// Subscribe to the wallet feed and ensure the updater boots up
@@ -267,10 +261,8 @@ func TestWalletNotifierLifecycle(t *testing.T) {
 	}
 	// Check that it is still running
 	time.Sleep(250 * time.Millisecond)
-	ks.mu.RLock()
-	updating = ks.updating
-	ks.mu.RUnlock()
-	if !updating {
+
+	if !ks.isUpdating() {
 		t.Fatal("event notifier stopped prematurely")
 	}
 	// Unsubscribe the last one and ensure the updater terminates eventually.

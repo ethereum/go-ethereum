@@ -58,10 +58,7 @@ func waitWatcherStart(ks *KeyStore) bool {
 	}
 	// The watcher should start, and then exit.
 	for t0 := time.Now(); time.Since(t0) < 1*time.Second; time.Sleep(100 * time.Millisecond) {
-		ks.cache.mu.Lock()
-		watchOk := ks.cache.watcher.runEnded || ks.cache.watcher.running
-		ks.cache.mu.Unlock()
-		if watchOk {
+		if ks.cache.watcherStarted() {
 			return true
 		}
 	}
