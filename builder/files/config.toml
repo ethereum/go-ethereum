@@ -10,6 +10,7 @@ datadir = "/var/lib/bor/data"
 syncmode = "full"
 # gcmode = "full"
 # snapshot = true
+# "bor.logs" = false
 # ethstats = ""
 
 # ["eth.requiredblocks"]

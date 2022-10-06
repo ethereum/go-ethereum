@@ -16,17 +16,21 @@ The ```bor server``` command runs the Bor client.
 
 - ```config```: File for the config file
 
-- ```syncmode```: Blockchain sync mode ("fast", "full", or "snap")
+- ```syncmode```: Blockchain sync mode (only "full" sync supported)
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive")
 
-- ```requiredblocks```: Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
+- ```eth.requiredblocks```: Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
-- ```snapshot```: Disables/Enables the snapshot-database mode (default = true)
+- ```snapshot```: Enables the snapshot-database mode (default = true)
+
+- ```bor.logs```: Enables bor log retrieval (default = false)
 
 - ```bor.heimdall```: URL of Heimdall service
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose)
+
+- ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
