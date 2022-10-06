@@ -316,29 +316,30 @@ func (alv AccessListView) HashTreeRoot(hFn tree.HashFn) tree.Root {
 }
 
 type BlobTxMessage struct {
-	ChainID    Uint256View
-	Nonce      Uint64View
-	GasTipCap  Uint256View // a.k.a. maxPriorityFeePerGas
-	GasFeeCap  Uint256View // a.k.a. maxFeePerGas
-	Gas        Uint64View
-	To         AddressOptionalSSZ // nil means contract creation
-	Value      Uint256View
-	Data       TxDataView
-	AccessList AccessListView
+	ChainID          Uint256View
+	Nonce            Uint64View
+	GasTipCap        Uint256View // a.k.a. maxPriorityFeePerGas
+	GasFeeCap        Uint256View // a.k.a. maxFeePerGas
+	Gas              Uint64View
+	To               AddressOptionalSSZ // nil means contract creation
+	Value            Uint256View
+	Data             TxDataView
+	AccessList       AccessListView
+	MaxFeePerDataGas Uint256View
 
 	BlobVersionedHashes VersionedHashesView
 }
 
 func (tx *BlobTxMessage) Deserialize(dr *codec.DecodingReader) error {
-	return dr.Container(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.BlobVersionedHashes)
+	return dr.Container(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.MaxFeePerDataGas, &tx.BlobVersionedHashes)
 }
 
 func (tx *BlobTxMessage) Serialize(w *codec.EncodingWriter) error {
-	return w.Container(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.BlobVersionedHashes)
+	return w.Container(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.MaxFeePerDataGas, &tx.BlobVersionedHashes)
 }
 
 func (tx *BlobTxMessage) ByteLength() uint64 {
-	return codec.ContainerLength(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.BlobVersionedHashes)
+	return codec.ContainerLength(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.MaxFeePerDataGas, &tx.BlobVersionedHashes)
 }
 
 func (tx *BlobTxMessage) FixedLength() uint64 {
@@ -346,7 +347,7 @@ func (tx *BlobTxMessage) FixedLength() uint64 {
 }
 
 func (tx *BlobTxMessage) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.HashTreeRoot(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.BlobVersionedHashes)
+	return hFn.HashTreeRoot(&tx.ChainID, &tx.Nonce, &tx.GasTipCap, &tx.GasFeeCap, &tx.Gas, &tx.To, &tx.Value, &tx.Data, &tx.AccessList, &tx.MaxFeePerDataGas, &tx.BlobVersionedHashes)
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -361,6 +362,7 @@ func (tx *BlobTxMessage) copy() *BlobTxMessage {
 		Value:               tx.Value,
 		Data:                common.CopyBytes(tx.Data),
 		AccessList:          make([]AccessTuple, len(tx.AccessList)),
+		MaxFeePerDataGas:    tx.MaxFeePerDataGas,
 		BlobVersionedHashes: make([]common.Hash, len(tx.BlobVersionedHashes)),
 	}
 	copy(cpy.AccessList, tx.AccessList)
@@ -416,18 +418,19 @@ func u256ToBig(v *Uint256View) *big.Int {
 }
 
 // accessors for innerTx.
-func (stx *SignedBlobTx) txType() byte              { return BlobTxType }
-func (stx *SignedBlobTx) chainID() *big.Int         { return u256ToBig(&stx.Message.ChainID) }
-func (stx *SignedBlobTx) accessList() AccessList    { return AccessList(stx.Message.AccessList) }
-func (stx *SignedBlobTx) dataHashes() []common.Hash { return stx.Message.BlobVersionedHashes }
-func (stx *SignedBlobTx) data() []byte              { return stx.Message.Data }
-func (stx *SignedBlobTx) gas() uint64               { return uint64(stx.Message.Gas) }
-func (stx *SignedBlobTx) gasFeeCap() *big.Int       { return u256ToBig(&stx.Message.GasFeeCap) }
-func (stx *SignedBlobTx) gasTipCap() *big.Int       { return u256ToBig(&stx.Message.GasTipCap) }
-func (stx *SignedBlobTx) gasPrice() *big.Int        { return u256ToBig(&stx.Message.GasFeeCap) }
-func (stx *SignedBlobTx) value() *big.Int           { return u256ToBig(&stx.Message.Value) }
-func (stx *SignedBlobTx) nonce() uint64             { return uint64(stx.Message.Nonce) }
-func (stx *SignedBlobTx) to() *common.Address       { return (*common.Address)(stx.Message.To.Address) }
+func (stx *SignedBlobTx) txType() byte               { return BlobTxType }
+func (stx *SignedBlobTx) chainID() *big.Int          { return u256ToBig(&stx.Message.ChainID) }
+func (stx *SignedBlobTx) accessList() AccessList     { return AccessList(stx.Message.AccessList) }
+func (stx *SignedBlobTx) dataHashes() []common.Hash  { return stx.Message.BlobVersionedHashes }
+func (stx *SignedBlobTx) data() []byte               { return stx.Message.Data }
+func (stx *SignedBlobTx) gas() uint64                { return uint64(stx.Message.Gas) }
+func (stx *SignedBlobTx) gasFeeCap() *big.Int        { return u256ToBig(&stx.Message.GasFeeCap) }
+func (stx *SignedBlobTx) gasTipCap() *big.Int        { return u256ToBig(&stx.Message.GasTipCap) }
+func (stx *SignedBlobTx) maxFeePerDataGas() *big.Int { return u256ToBig(&stx.Message.MaxFeePerDataGas) }
+func (stx *SignedBlobTx) gasPrice() *big.Int         { return u256ToBig(&stx.Message.GasFeeCap) }
+func (stx *SignedBlobTx) value() *big.Int            { return u256ToBig(&stx.Message.Value) }
+func (stx *SignedBlobTx) nonce() uint64              { return uint64(stx.Message.Nonce) }
+func (stx *SignedBlobTx) to() *common.Address        { return (*common.Address)(stx.Message.To.Address) }
 
 func (stx *SignedBlobTx) rawSignatureValues() (v, r, s *big.Int) {
 	return big.NewInt(int64(stx.Signature.V)), u256ToBig(&stx.Signature.R), u256ToBig(&stx.Signature.S)

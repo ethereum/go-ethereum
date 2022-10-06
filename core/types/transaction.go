@@ -102,7 +102,7 @@ type TxWrapData interface {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by DynamicFeeTx, LegacyTx and AccessListTx.
+// This is implemented by DynamicFeeTx, LegacyTx, AccessListTx & SignedBlobTx.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -115,6 +115,7 @@ type TxData interface {
 	gasPrice() *big.Int
 	gasTipCap() *big.Int
 	gasFeeCap() *big.Int
+	maxFeePerDataGas() *big.Int
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -384,6 +385,11 @@ func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.g
 
 // GasFeeCap returns the fee cap per gas of the transaction.
 func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
+// MaxFeePerDataGas returns the max_fee_per_data_gas value for the transaction
+func (tx *Transaction) MaxFeePerDataGas() *big.Int {
+	return new(big.Int).Set(tx.inner.maxFeePerDataGas())
+}
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }

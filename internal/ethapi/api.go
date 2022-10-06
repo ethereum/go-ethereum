@@ -228,6 +228,7 @@ func (s *TxPoolAPI) Inspect() map[string]map[string]map[string]string {
 
 	// Define a formatter to flatten a transaction into a string
 	var format = func(tx *types.Transaction) string {
+		// TODO: handle data gas for txs with blobs (EIP-4844)
 		if to := tx.To(); to != nil {
 			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
 		}
@@ -1264,6 +1265,7 @@ type RPCTransaction struct {
 	Value               *hexutil.Big      `json:"value"`
 	Type                hexutil.Uint64    `json:"type"`
 	Accesses            *types.AccessList `json:"accessList,omitempty"`
+	MaxFeePerDataGas    *hexutil.Big      `json:"maxFeePerDataGas,omitempty"`
 	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
 	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
 	V                   *hexutil.Big      `json:"v"`
@@ -1313,6 +1315,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		result.MaxFeePerDataGas = (*hexutil.Big)(tx.MaxFeePerDataGas())
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
 			// price = min(tip, gasFeeCap - baseFee) + baseFee
