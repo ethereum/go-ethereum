@@ -92,12 +92,21 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams)
-	if err != nil {
-		t.Fatalf("error producing block, err=%v", err)
+	// This test is a bit time-sensitive, the miner needs to pick up on the
+	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
+	var testErr error
+	for retries := 2; retries > 0; retries-- {
+		if execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams); err != nil {
+			t.Fatalf("error producing block, err=%v", err)
+		} else if have, want := len(execData.Transactions), 1; have != want {
+			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+		} else {
+			testErr = nil
+			break
+		}
 	}
-	if len(execData.Transactions) != 1 {
-		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	if testErr != nil {
+		t.Fatal(testErr)
 	}
 }
 
@@ -113,12 +122,21 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams)
-	if err != nil {
-		t.Fatalf("error producing block, err=%v", err)
+	// This test is a bit time-sensitive, the miner needs to pick up on the
+	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
+	var testErr error
+	for retries := 2; retries > 0; retries-- {
+		if execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams); err != nil {
+			t.Fatalf("error producing block, err=%v", err)
+		} else if have, want := len(execData.Transactions), blocks[9].Transactions().Len(); have != want {
+			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+		} else {
+			testErr = nil
+			break
+		}
 	}
-	if len(execData.Transactions) != blocks[9].Transactions().Len() {
-		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	if testErr != nil {
+		t.Fatal(testErr)
 	}
 }
 

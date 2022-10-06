@@ -75,7 +75,6 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	for i := int64(0); i < params.DAOForkExtraRange.Int64(); i++ {
 		// Create a pro-fork block, and try to feed into the no-fork chain
 		bc, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, congspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-		defer bc.Stop()
 
 		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -87,6 +86,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit contra-fork head for expansion: %v", err)
 		}
+		bc.Stop()
 		blocks, _ = GenerateChain(&proConf, conBc.CurrentBlock(), ethash.NewFaker(), genDb, 1, func(i int, gen *BlockGen) {})
 		if _, err := conBc.InsertChain(blocks); err == nil {
 			t.Fatalf("contra-fork chain accepted pro-fork block: %v", blocks[0])
@@ -98,7 +98,6 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		}
 		// Create a no-fork block, and try to feed into the pro-fork chain
 		bc, _ = NewBlockChain(rawdb.NewMemoryDatabase(), nil, progspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-		defer bc.Stop()
 
 		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -110,6 +109,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		if err := bc.stateCache.TrieDB().Commit(bc.CurrentHeader().Root, true, nil); err != nil {
 			t.Fatalf("failed to commit pro-fork head for expansion: %v", err)
 		}
+		bc.Stop()
 		blocks, _ = GenerateChain(&conConf, proBc.CurrentBlock(), ethash.NewFaker(), genDb, 1, func(i int, gen *BlockGen) {})
 		if _, err := proBc.InsertChain(blocks); err == nil {
 			t.Fatalf("pro-fork chain accepted contra-fork block: %v", blocks[0])
