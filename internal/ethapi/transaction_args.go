@@ -42,6 +42,7 @@ type TransactionArgs struct {
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	MaxFeePerDataGas     *hexutil.Big    `json:"maxFeePerGas"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
 
@@ -224,9 +225,10 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 		gas = globalGasCap
 	}
 	var (
-		gasPrice  *big.Int
-		gasFeeCap *big.Int
-		gasTipCap *big.Int
+		gasPrice         *big.Int
+		gasFeeCap        *big.Int
+		gasTipCap        *big.Int
+		maxFeePerDataGas *big.Int
 	)
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
@@ -257,6 +259,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
 			}
 		}
+		if args.MaxFeePerDataGas != nil {
+			maxFeePerDataGas = args.MaxFeePerDataGas.ToInt()
+		}
 	}
 	value := new(big.Int)
 	if args.Value != nil {
@@ -272,7 +277,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	if args.Blobs != nil {
 		fakeDataHashes = make([]common.Hash, len(args.Blobs))
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, data, accessList, fakeDataHashes, true)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, gasFeeCap, gasTipCap, maxFeePerDataGas, data, accessList, fakeDataHashes, true)
 	return msg, nil
 }
 
