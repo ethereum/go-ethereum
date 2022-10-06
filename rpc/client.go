@@ -716,3 +716,7 @@ func (c *Client) read(codec ServerCodec) {
 		c.readOp <- readOp{msgs, batch}
 	}
 }
+
+func (c *Client) IsHTTP() bool {
+	return c.isHTTP
+}
