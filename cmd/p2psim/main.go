@@ -100,14 +100,8 @@ var (
 	}
 )
 
-var (
-	// Git information set by linker when building with ci.go.
-	gitCommit string
-	gitDate   string
-)
-
 func main() {
-	app := flags.NewApp(gitCommit, gitDate, "devp2p simulation command-line client")
+	app := flags.NewApp("devp2p simulation command-line client")
 	app.Flags = []cli.Flag{
 		apiFlag,
 	}

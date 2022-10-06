@@ -153,7 +153,7 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 	}
 }
 
-// SetCapacityRaiseThreshold sets a threshold value used for raising capFactor.
+// SetCapacityLimits sets a threshold value used for raising capFactor.
 // Either if the difference between total allowed and connected capacity is less
 // than this threshold or if their ratio is less than capacityRaiseThresholdRatio
 // then capFactor is allowed to slowly raise.

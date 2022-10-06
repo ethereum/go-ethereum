@@ -29,8 +29,11 @@ import (
 var (
 	// Common encoded values.
 	// These are useful when implementing EncodeRLP.
+
+	// EmptyString is the encoding of an empty string.
 	EmptyString = []byte{0x80}
-	EmptyList   = []byte{0xC0}
+	// EmptyList is the encoding of an empty list.
+	EmptyList = []byte{0xC0}
 )
 
 var ErrNegativeBigInt = errors.New("rlp: cannot encode negative big.Int")

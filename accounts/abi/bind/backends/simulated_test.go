@@ -1377,3 +1377,23 @@ func TestCommitReturnValue(t *testing.T) {
 		t.Error("Could not retrieve the just created block (side-chain)")
 	}
 }
+
+// TestAdjustTimeAfterFork ensures that after a fork, AdjustTime uses the pending fork
+// block's parent rather than the canonical head's parent.
+func TestAdjustTimeAfterFork(t *testing.T) {
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	sim := simTestBackend(testAddr)
+	defer sim.Close()
+
+	sim.Commit() // h1
+	h1 := sim.blockchain.CurrentHeader().Hash()
+	sim.Commit() // h2
+	sim.Fork(context.Background(), h1)
+	sim.AdjustTime(1 * time.Second)
+	sim.Commit()
+
+	head := sim.blockchain.CurrentHeader()
+	if head.Number == common.Big2 && head.ParentHash != h1 {
+		t.Errorf("failed to build block on fork")
+	}
+}

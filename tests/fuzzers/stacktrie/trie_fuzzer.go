@@ -113,6 +113,7 @@ func (k kvs) Swap(i, j int) {
 	k[j], k[i] = k[i], k[j]
 }
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
 //
 //   - 1 if the fuzzer should increase priority of the

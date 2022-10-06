@@ -447,7 +447,7 @@ func (pool *TxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	return nil
 }
 
-// AddTransactions adds all valid transactions to the pool and passes them to
+// AddBatch adds all valid transactions to the pool and passes them to
 // the tx relay backend
 func (pool *TxPool) AddBatch(ctx context.Context, txs []*types.Transaction) {
 	pool.mu.Lock()

@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -118,6 +117,7 @@ func Generate(input []byte) randTest {
 	return steps
 }
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
 //
 //   - 1 if the fuzzer should increase priority of the
@@ -170,7 +170,7 @@ func runRandTest(rt randTest) error {
 					return err
 				}
 			}
-			newtr, err := trie.New(common.Hash{}, hash, triedb)
+			newtr, err := trie.New(trie.TrieID(hash), triedb)
 			if err != nil {
 				return err
 			}
