@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -299,6 +301,27 @@ func TestValidatorWentOffline(t *testing.T) {
 
 // TODO: Need to find a better name
 func TestForkWithTwoNodeNet(t *testing.T) {
+
+	cases := []struct {
+		sprint    uint64
+		blockTime map[string]uint64
+	}{
+		{
+			sprint: 128,
+			blockTime: map[string]uint64{
+				"0":   5,
+				"128": 2,
+				"256": 8,
+			},
+		},
+		{
+			sprint: 64,
+			blockTime: map[string]uint64{
+				"0":  5,
+				"64": 2,
+			},
+		},
+	}
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
@@ -309,76 +332,97 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := initGenesis2(t, faucets)
+	genesis := initGenesis(t, faucets)
 
-	var (
-		stacks []*node.Node
-		nodes  []*eth.Ethereum
-		enodes []*enode.Node
-	)
+	for _, test := range cases {
+		genesis.Config.Bor.Sprint = test.sprint
+		genesis.Config.Bor.Period = test.blockTime
 
-	for i := 0; i < 2; i++ {
-		// Start the node and wait until it's up
-		stack, ethBackend, err := initMiner(genesis, keys[i])
+		var (
+			stacks []*node.Node
+			nodes  []*eth.Ethereum
+			enodes []*enode.Node
+		)
+
+		for i := 0; i < 2; i++ {
+			// Start the node and wait until it's up
+			stack, ethBackend, err := initMiner(genesis, keys[i])
+			if err != nil {
+				panic(err)
+			}
+			defer stack.Close()
+
+			for stack.Server().NodeInfo().Ports.Listener == 0 {
+				time.Sleep(250 * time.Millisecond)
+			}
+			// Connect the node to all the previous ones
+			for _, n := range enodes {
+				stack.Server().AddPeer(n)
+			}
+			// Start tracking the node and its enode
+			stacks = append(stacks, stack)
+			nodes = append(nodes, ethBackend)
+			enodes = append(enodes, stack.Server().Self())
+		}
+
+		// Iterate over all the nodes and start mining
+		time.Sleep(3 * time.Second)
+		for _, node := range nodes {
+			if err := node.StartMining(1); err != nil {
+				panic(err)
+			}
+		}
+
+		var wg sync.WaitGroup
+		blockHeaders := make([]*types.Header, 2)
+
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+
+			go func(i int) {
+				defer wg.Done()
+				for {
+					blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint + 1)
+					if blockHeaders[i] != nil {
+						break
+					}
+				}
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Before the end of sprint
+		blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint - 1)
+		blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint - 1)
+		assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
+		assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
+
+		author0, err := nodes[0].Engine().Author(blockHeaderVal0)
 		if err != nil {
-			panic(err)
+			log.Error("Error occured while fetching author", "err", err)
 		}
-		defer stack.Close()
-
-		for stack.Server().NodeInfo().Ports.Listener == 0 {
-			time.Sleep(250 * time.Millisecond)
+		author1, err := nodes[1].Engine().Author(blockHeaderVal1)
+		if err != nil {
+			log.Error("Error occured while fetching author", "err", err)
 		}
-		// Connect the node to all the previous ones
-		for _, n := range enodes {
-			stack.Server().AddPeer(n)
+		assert.Equal(t, author0, author1)
+
+		// After the end of sprint
+		// FIXME: POS-845
+		assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+		assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
+
+		author2, err := nodes[0].Engine().Author(blockHeaders[0])
+		if err != nil {
+			log.Error("Error occured while fetching author", "err", err)
 		}
-		// Start tracking the node and its enode
-		stacks = append(stacks, stack)
-		nodes = append(nodes, ethBackend)
-		enodes = append(enodes, stack.Server().Self())
-	}
-
-	// Iterate over all the nodes and start mining
-	time.Sleep(3 * time.Second)
-	for _, node := range nodes {
-		if err := node.StartMining(1); err != nil {
-			panic(err)
+		author3, err := nodes[1].Engine().Author(blockHeaders[1])
+		if err != nil {
+			log.Error("Error occured while fetching author", "err", err)
 		}
-	}
+		assert.NotEqual(t, author2, author3)
 
-	time.Sleep(700 * time.Second)
-
-	// Before the end of sprint
-	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(120)
-	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(120)
-	assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
-	assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
-
-	author0, err := nodes[0].Engine().Author(blockHeaderVal0)
-	if err != nil {
-		log.Error("Error occured while fetching author", "err", err)
 	}
-	author1, err := nodes[1].Engine().Author(blockHeaderVal1)
-	if err != nil {
-		log.Error("Error occured while fetching author", "err", err)
-	}
-	assert.Equal(t, author0, author1)
-
-	// After the end of sprint
-	// FIXME: POS-845
-	blockHeaderVal2 := nodes[0].BlockChain().GetHeaderByNumber(130)
-	blockHeaderVal3 := nodes[1].BlockChain().GetHeaderByNumber(130)
-	assert.NotEqual(t, blockHeaderVal2.Hash(), blockHeaderVal3.Hash())
-	assert.NotEqual(t, blockHeaderVal2.Time, blockHeaderVal3.Time)
-
-	author2, err := nodes[0].Engine().Author(blockHeaderVal2)
-	if err != nil {
-		log.Error("Error occured while fetching author", "err", err)
-	}
-	author3, err := nodes[1].Engine().Author(blockHeaderVal3)
-	if err != nil {
-		log.Error("Error occured while fetching author", "err", err)
-	}
-	assert.NotEqual(t, author2, author3)
 
 }
