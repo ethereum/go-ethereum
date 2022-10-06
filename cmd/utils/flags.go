@@ -867,7 +867,7 @@ var (
 	HttpHeaderFlag = &cli.StringSliceFlag{
 		Name:     "header",
 		Aliases:  []string{"H"},
-		Usage:    "Pass custom headers to the RPC server wheng using --" + RemoteDBFlag.Name + " or the geth attach console.",
+		Usage:    "Pass custom headers to the RPC server wheng using --" + RemoteDBFlag.Name + " or the geth attach console. This flag can be given multiple times.",
 		Category: flags.APICategory,
 	}
 
