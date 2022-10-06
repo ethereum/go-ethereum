@@ -862,7 +862,7 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 // OBS! It is generally recommended to use the Stop method!
 // This method has been exposed to allow tests to stop the blockchain while simulating
 // a crash.
-func (bc *BlockChain) stop() {
+func (bc *BlockChain) stopWithoutSaving() {
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}
@@ -887,7 +887,8 @@ func (bc *BlockChain) stop() {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
-	bc.stop()
+	bc.stopWithoutSaving()
+
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	var snapBase common.Hash
 	if bc.snaps != nil {
