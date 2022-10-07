@@ -717,6 +717,6 @@ func (c *Client) read(codec ServerCodec) {
 	}
 }
 
-func (c *Client) IsHTTP() bool {
-	return c.isHTTP
+func (c *Client) SupportsSubscription() bool {
+	return !c.isHTTP
 }

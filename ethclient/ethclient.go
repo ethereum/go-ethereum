@@ -588,8 +588,8 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
-func (ec *Client) IsHTTP() bool {
-	return ec.c.IsHTTP()
+func (ec *Client) SupportsSubscription() bool {
+	return ec.c.SupportsSubscription()
 }
 
 func toBlockNumArg(number *big.Int) string {
