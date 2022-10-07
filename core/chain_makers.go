@@ -78,7 +78,7 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
-// SetExcessDataGas sets the excess_blobs field of the generated block.
+// SetExcessDataGas sets the excess_data_gas field of the generated block.
 func (b *BlockGen) SetExcessDataGas(excessDataGas *big.Int) {
 	b.header.SetExcessDataGas(excessDataGas)
 }

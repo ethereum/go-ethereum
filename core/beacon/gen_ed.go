@@ -30,7 +30,7 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
 		BlockHash     common.Hash     `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
-		ExcessDataGas *hexutil.Big    `json:"excessBlobs"   gencodec:"optional"`
+		ExcessDataGas *hexutil.Big    `json:"excessDataGas" gencodec:"optional"`
 	}
 	var enc ExecutableDataV1
 	enc.ParentHash = e.ParentHash
@@ -73,7 +73,7 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
 		BlockHash     *common.Hash    `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
-		ExcessDataGas *hexutil.Big    `json:"excessBlobs"   gencodec:"optional"`
+		ExcessDataGas *hexutil.Big    `json:"excessDataGas" gencodec:"optional"`
 	}
 	var dec ExecutableDataV1
 	if err := json.Unmarshal(input, &dec); err != nil {

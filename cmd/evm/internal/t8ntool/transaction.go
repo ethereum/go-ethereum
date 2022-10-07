@@ -138,9 +138,9 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
-		// Check intrinsic gas assuming no excess blobs
-		// NOTE: We set excess_blobs prestate to zero. So this may not accurately compute the
-		// intrinsic gas unless the tool is updated to take in an excess_blobs parameter.
+		// Check intrinsic gas assuming no excess data gas
+		// NOTE: We set excess_data_gas prestate to zero. So this may not accurately compute the
+		// intrinsic gas unless the tool is updated to take in an excess_data_gas parameter.
 
 		rules := core.IntrinsicGasChainRules{
 			Homestead: chainConfig.IsHomestead(new(big.Int)),

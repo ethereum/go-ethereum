@@ -69,7 +69,7 @@ type ExecutableDataV1 struct {
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 
 	// New in EIP-4844
-	ExcessDataGas *big.Int `json:"excessBlobs"   gencodec:"optional"`
+	ExcessDataGas *big.Int `json:"excessDataGas" gencodec:"optional"`
 }
 
 // JSON type overrides for executableData.
