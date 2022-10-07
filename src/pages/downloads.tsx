@@ -232,6 +232,8 @@ const DownloadsPage: NextPage = ({}) => {
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
               You can import the build server public keys by grabbing the individual keys directly from the keyserver network:
             </Text>
+
+            {/* TODO: These keys depends on the binary */}
             <Code p={4}>
               gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC
             </Code>
@@ -242,6 +244,7 @@ const DownloadsPage: NextPage = ({}) => {
               Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:
             </Text>
 
+            {/* TODO: Thees are developer keys, do we need to change? */}
             <Code p={4}>
               gpg --recv-keys E058A81C  05A5DDF0 1CCB7DD2
             </Code>
@@ -252,6 +255,7 @@ const DownloadsPage: NextPage = ({}) => {
               From the download listings above you should see a link both to the downloadable archives as well as detached signature files. To verify the authenticity of any downloaded data, grab both files and then run:
             </Text>
 
+            {/* TODO: These keys depends on the binary */}
             <Code p={4}>
               gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc
             </Code>
