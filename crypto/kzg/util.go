@@ -23,7 +23,8 @@ func initDomain() {
 	exp := new(big.Int).Div(new(big.Int).Sub(BLSModulus, big.NewInt(1)), width)
 	rootOfUnity := new(big.Int).Exp(primitiveRoot, exp, BLSModulus)
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		// We reverse the index as specified in https://github.com/ethereum/consensus-specs/pull/3011
+		// We reverse the bits of the index as specified in https://github.com/ethereum/consensus-specs/pull/3011
+		// This effectively permutes the order of the elements in Domain
 		reversedIndex := reverseBits(uint64(i), params.FieldElementsPerBlob)
 		Domain[i] = new(big.Int).Exp(rootOfUnity, big.NewInt(int64(reversedIndex)), BLSModulus)
 		_ = BigToFr(&DomainFr[i], Domain[i])

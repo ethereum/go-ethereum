@@ -176,15 +176,13 @@ func isPowerOfTwo(value uint64) bool {
 // Reverse `order` bits of integer n
 func reverseBits(n, order uint64) uint64 {
 	if !isPowerOfTwo(order) {
-		panic("The length of l must be a power of two.")
+		panic("Order must be a power of two.")
 	}
 
 	return bits.Reverse64(n) >> (65 - bits.Len64(order))
 }
 
-// Return a copy with bit-reversed permutation. This operation is idempotent.
-// The input and output are a sequence of generic type `T` objects.
-// l is the setup lagrange or the roots of unity
+// Return a copy of the input array permuted by bit-reversing the indexes.
 func bitReversalPermutation(l []bls.G1Point) []bls.G1Point {
 	out := make([]bls.G1Point, len(l))
 
