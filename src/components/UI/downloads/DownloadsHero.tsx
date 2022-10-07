@@ -37,7 +37,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           letterSpacing='5%'
           color='brand.light.body'
         >
-          Download Go Ethereum
+          Download go-ethereum
         </Heading>
 
         <Text
