@@ -116,26 +116,6 @@ func initGenesis(t *testing.T, faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func initGenesis2(t *testing.T, faucets []*ecdsa.PrivateKey) *core.Genesis {
-
-	// sprint size = 128 in genesis
-	genesisData, err := ioutil.ReadFile("./testdata/genesis3.json")
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	genesis := &core.Genesis{}
-
-	if err := json.Unmarshal(genesisData, genesis); err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	genesis.Config.ChainID = big.NewInt(15001)
-	genesis.Config.EIP150Hash = common.Hash{}
-
-	return genesis
-}
-
 func TestValidatorWentOffline(t *testing.T) {
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
@@ -299,12 +279,14 @@ func TestValidatorWentOffline(t *testing.T) {
 
 }
 
-// TODO: Need to find a better name
-func TestForkWithTwoNodeNet(t *testing.T) {
+func TestForkWithBlockTime(t *testing.T) {
 
 	cases := []struct {
-		sprint    uint64
-		blockTime map[string]uint64
+		sprint        uint64
+		blockTime     map[string]uint64
+		change        uint64
+		producerDelay uint64
+		forkExpected  bool
 	}{
 		{
 			sprint: 128,
@@ -313,6 +295,9 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 				"128": 2,
 				"256": 8,
 			},
+			change:        2,
+			producerDelay: 8,
+			forkExpected:  false,
 		},
 		{
 			sprint: 64,
@@ -320,6 +305,19 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 				"0":  5,
 				"64": 2,
 			},
+			change:        1,
+			producerDelay: 5,
+			forkExpected:  false,
+		},
+		{
+			sprint: 16,
+			blockTime: map[string]uint64{
+				"0":  2,
+				"64": 5,
+			},
+			change:        4,
+			producerDelay: 4,
+			forkExpected:  true,
 		},
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
@@ -337,6 +335,8 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 	for _, test := range cases {
 		genesis.Config.Bor.Sprint = test.sprint
 		genesis.Config.Bor.Period = test.blockTime
+		genesis.Config.Bor.BackupMultiplier = test.blockTime
+		genesis.Config.Bor.ProducerDelay = test.producerDelay
 
 		var (
 			stacks []*node.Node
@@ -382,7 +382,7 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 			go func(i int) {
 				defer wg.Done()
 				for {
-					blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint + 1)
+					blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint*test.change + 10)
 					if blockHeaders[i] != nil {
 						break
 					}
@@ -409,10 +409,6 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 		assert.Equal(t, author0, author1)
 
 		// After the end of sprint
-		// FIXME: POS-845
-		assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
-		assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
-
 		author2, err := nodes[0].Engine().Author(blockHeaders[0])
 		if err != nil {
 			log.Error("Error occured while fetching author", "err", err)
@@ -421,8 +417,16 @@ func TestForkWithTwoNodeNet(t *testing.T) {
 		if err != nil {
 			log.Error("Error occured while fetching author", "err", err)
 		}
-		assert.NotEqual(t, author2, author3)
 
+		if test.forkExpected {
+			assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+			assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
+			assert.NotEqual(t, author2, author3)
+		} else {
+			assert.Equal(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+			assert.Equal(t, blockHeaders[0].Time, blockHeaders[1].Time)
+			assert.Equal(t, author2, author3)
+		}
 	}
 
 }
