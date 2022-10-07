@@ -3,17 +3,12 @@ import {
   Tabs,
   TabList,
   Tab,
-  Table,
-  Tbody,
-  Thead,
-  Tr,
-  Th,
-  Td,
-  TableContainer,
   Text,
   TabPanel,
   TabPanels,
 } from '@chakra-ui/react';
+
+import { DataTable } from '../DataTable'
 
 export const DownloadsTable = () => {
   return (
@@ -126,84 +121,59 @@ export const DownloadsTable = () => {
         </TabList>
         <TabPanels>
           <TabPanel>
-            <TableContainer>
-              <Table variant='unstyled'>
-                <Thead>
-                  <Tr>
-                    <Th
-                      textTransform='none'
-                      p={0}
-                      minW={'130.5px'}
-                    >
-                      <Text
-                        fontFamily='"JetBrains Mono", monospace'
-                        fontWeight={700}
-                        fontSize='md'
-                        color='#868b87'
-                      >
-                        Release
-                      </Text>
-                    </Th>
-                    <Th
-                      textTransform='none'
-                      p={0}
-                      minW={'130.5px'}
-                    >
-                      <Text
-                        fontFamily='"JetBrains Mono", monospace'
-                        fontWeight={700}
-                        fontSize='md'
-                        color='#868b87'
-                      >
-                        Commit
-                      </Text>
-                    </Th>
-                    <Th
-                      textTransform='none'
-                      p={0}
-                      minW={'130.5px'}
-                    >
-                      <Text
-                        fontFamily='"JetBrains Mono", monospace'
-                        fontWeight={700}
-                        fontSize='md'
-                        color='#868b87'
-                      >
-                        Kind
-                      </Text>
-                    </Th>
-                    <Th
-                      textTransform='none'
-                      p={0}
-                      minW={'130.5px'}
-                    >
-                      <Text
-                        fontFamily='"JetBrains Mono", monospace'
-                        fontWeight={700}
-                        fontSize='md'
-                        color='#868b87'
-                      >
-                        Arch
-                      </Text>
-                    </Th>
-                    <Th
-                      textTransform='none'
-                      p={0}
-                      minW={'130.5px'}
-                    >
-                      <Text
-                        fontFamily='"JetBrains Mono", monospace'
-                        fontWeight={700}
-                        fontSize='md'
-                        color='#868b87'
-                      >
-                        Size
-                      </Text>
-                    </Th>
-                  </Tr>
-                </Thead>
-              </Table>
-            </TableContainer>
+            <DataTable
+              columnHeaders={[
+                'Release',
+                'Commit',
+                'Kind',
+                'Arch',
+                'Size'
+              ]}
+            />
+          </TabPanel>
+          <TabPanel>
+            <DataTable
+              columnHeaders={[
+                'Release',
+                'Commit',
+                'Kind',
+                'Arch',
+                'Size'
+              ]}
+            />
+          </TabPanel>
+          <TabPanel>
+            <DataTable
+              columnHeaders={[
+                'Release',
+                'Commit',
+                'Kind',
+                'Arch',
+                'Size'
+              ]}
+            />
+          </TabPanel>
+          <TabPanel>
+            <DataTable
+              columnHeaders={[
+                'Release',
+                'Commit',
+                'Kind',
+                'Arch',
+                'Size'
+              ]}
+            />
+          </TabPanel>
+          <TabPanel>
+            <DataTable
+              columnHeaders={[
+                'Release',
+                'Commit',
+                'Kind',
+                'Arch',
+                'Size'
+              ]}
+            />
           </TabPanel>
         </TabPanels>
       </Tabs>

@@ -17,6 +17,7 @@ import {
   DownloadsSection,
   DownloadsTable,
 } from '../components/UI/downloads';
+import { DataTable } from '../components/UI/DataTable';
 
 import {
   GETH_REPO_URL
@@ -200,30 +201,14 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
           <Stack p={4}>
-            <Table>
-              <Tr>
-                <Th>
-                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
-                    Build Server
-                  </Text>
-                </Th>
-                <Th>
-                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
-                    UniqueID
-                  </Text>
-                </Th>
-                <Th>
-                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
-                    OpenPGP Key
-                  </Text>
-                </Th>
-                <Th>
-                  <Text fontFamily='"Inter", sans-serif' lineHeight='26px' color="#8F8F8F">
-                    Fingerprint
-                  </Text>
-                </Th>
-              </Tr>
-            </Table>
+            <DataTable
+              columnHeaders={[
+                'Build Server',
+                'UniqueID',
+                'OpenPGP Key',
+                'Fingerprint'
+              ]}
+            />
           </Stack>
         </DownloadsSection>
 
