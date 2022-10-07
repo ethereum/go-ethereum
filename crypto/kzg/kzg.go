@@ -259,12 +259,8 @@ func init() {
 	}
 
 	kzgSetupG2 = parsedSetup.SetupG2
-
-	// TODO: Load KZG_SETUP_LAGRANGE, and put it in bit-reversal permutation
 	kzgSetupLagrange = bitReversalPermutation(parsedSetup.SetupLagrange)
-
 	KzgSetupG1 = parsedSetup.SetupG1
 
-	// Creates ROOTS_OF_UNITY, bit-reversal permutation also needs to happen here
 	initDomain()
 }
