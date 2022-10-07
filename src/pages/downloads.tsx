@@ -12,7 +12,11 @@ import {
 } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 
-import { DownloadsHero, DownloadsSection } from '../components/UI/downloads';
+import {
+  DownloadsHero,
+  DownloadsSection,
+  DownloadsTable,
+} from '../components/UI/downloads';
 
 import {
   GETH_REPO_URL
@@ -107,9 +111,7 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text>TABLE</Text>
-          </Stack>
+          <DownloadsTable />
 
           <Stack sx={{ mt: '0 !important' }}>
             <Button
@@ -160,9 +162,7 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text>TABLE</Text>
-          </Stack>
+          <DownloadsTable />
 
           <Stack sx={{ mt: '0 !important' }}>
             <Button
