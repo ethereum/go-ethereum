@@ -23,9 +23,11 @@ func initDomain() {
 	exp := new(big.Int).Div(new(big.Int).Sub(BLSModulus, big.NewInt(1)), width)
 	rootOfUnity := new(big.Int).Exp(primitiveRoot, exp, BLSModulus)
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
+		// TODO: We also need to do bitReversalPermutation here!
 		Domain[i] = new(big.Int).Exp(rootOfUnity, big.NewInt(int64(i)), BLSModulus)
 		_ = BigToFr(&DomainFr[i], Domain[i])
 	}
+
 }
 
 func MatrixLinComb(vectors [][]bls.Fr, scalars []bls.Fr) []bls.Fr {

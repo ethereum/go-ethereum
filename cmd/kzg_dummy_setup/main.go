@@ -41,6 +41,8 @@ func main() {
 	var trusted_setup = JSONTrustedSetup{}
 	trusted_setup.SetupG1 = kzg_setup_g1
 	trusted_setup.SetupG2 = kzg_setup_g2
+
+	// TODO: BitReversalPermutation here!
 	trusted_setup.SetupLagrange = kzg_setup_lagrange
 
 	json_trusted_setup, _ := json.Marshal(trusted_setup)
