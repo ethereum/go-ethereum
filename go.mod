@@ -85,6 +85,8 @@ require (
 	pgregory.net/rapid v0.4.8
 )
 
+require github.com/orcaman/concurrent-map/v2 v2.0.0 // indirect
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.21.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.3 // indirect
