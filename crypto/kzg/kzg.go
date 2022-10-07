@@ -170,12 +170,12 @@ func VerifyBlobsLegacy(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 
 // Check if `value` is a power of two integer.
 func isPowerOfTwo(value uint64) bool {
-	return value > 0 && (value & (value - 1) == 0);
+	return value > 0 && (value&(value-1) == 0)
 }
 
 // Reverse `order` bits of integer n
 func reverseBits(n, order uint64) uint64 {
-	if (!isPowerOfTwo(order)) {
+	if !isPowerOfTwo(order) {
 		panic("The length of l must be a power of two.")
 	}
 
