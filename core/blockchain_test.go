@@ -3923,6 +3923,8 @@ func TestDataBlobTxs(t *testing.T) {
 		msg.Nonce = view.Uint64View(0)
 		msg.GasFeeCap.SetFromBig(newGwei(5))
 		msg.GasTipCap.SetFromBig(big.NewInt(2))
+		msg.MaxFeePerDataGas.SetFromBig(big.NewInt(params.MinDataGasPrice))
+		// TODO: Add test case for max data fee too low
 		msg.BlobVersionedHashes = []common.Hash{one, two}
 		txdata := &types.SignedBlobTx{Message: msg}
 

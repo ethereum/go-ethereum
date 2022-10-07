@@ -378,7 +378,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
+	// cost == V + GP * GL + DGP * DG
 	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
 	}
@@ -389,7 +389,6 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		EIP2028:   pool.istanbul,
 		EIP4844:   pool.eip4844,
 	}
-	// TODO: Check DataGas
 	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
 	if err != nil {
 		return err

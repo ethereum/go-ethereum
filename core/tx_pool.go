@@ -54,7 +54,7 @@ const (
 
 	// txWrapDataMax is the maximum size for the additional wrapper data,
 	// enough to encode a blob-transaction wrapper data (48 bytes for commitment, 4 for offset, 48 for a commitment)
-	txWrapDataMax = 4 + 4 + params.MaxBlobsPerTx*(params.FieldElementsPerBlob*32+48)
+	txWrapDataMax = 4 + 4 + params.MaxBlobsPerBlock*(params.FieldElementsPerBlob*32+48)
 )
 
 var (

@@ -46,7 +46,7 @@ func BenchmarkVerifyBlobsWithoutKZGProof(b *testing.B) {
 }
 
 func BenchmarkVerifyBlobs(b *testing.B) {
-	blobs := make([]types.Blob, params.MaxBlobsPerTx)
+	blobs := make([]types.Blob, params.MaxBlobsPerBlock)
 	var commitments []types.KZGCommitment
 	var hashes []common.Hash
 	for i := 0; i < len(blobs); i++ {
@@ -139,7 +139,7 @@ func BenchmarkVerifyMultiple(b *testing.B) {
 				var blobs []types.Blob
 				var commitments []types.KZGCommitment
 				var hashes []common.Hash
-				for i := 0; i < params.MaxBlobsPerTx; i++ {
+				for i := 0; i < params.MaxBlobsPerBlock; i++ {
 					var blobElements types.Blob
 					blob := randomBlob()
 					for j := range blob {
@@ -211,7 +211,7 @@ func BenchmarkBatchVerifyWithoutKZGProofs(b *testing.B) {
 			for i := 0; i < siz; i++ {
 				var blobs [][]bls.Fr
 				var commitments []*bls.G1Point
-				for i := 0; i < params.MaxBlobsPerTx; i++ {
+				for i := 0; i < params.MaxBlobsPerBlock; i++ {
 					blob := randomBlob()
 					blobs = append(blobs, blob)
 					commitments = append(commitments, kzg.BlobToKzg(blob))

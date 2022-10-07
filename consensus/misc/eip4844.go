@@ -71,3 +71,8 @@ func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Heade
 	}
 	return nil
 }
+
+// GetDataGasPrice implements get_data_gas_price from EIP-4844
+func GetDataGasPrice(excessDataGas *big.Int) *big.Int {
+	return FakeExponential(big.NewInt(params.MinDataGasPrice), excessDataGas, big.NewInt(params.DataGasPriceUpdateFraction))
+}

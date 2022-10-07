@@ -481,7 +481,7 @@ func (b *BlobTxWrapData) verifyVersionedHash(inner TxData) error {
 	if !ok {
 		return fmt.Errorf("expected signed blob tx, got %T", inner)
 	}
-	if a, b := len(blobTx.Message.BlobVersionedHashes), params.MaxBlobsPerTx; a > b {
+	if a, b := len(blobTx.Message.BlobVersionedHashes), params.MaxBlobsPerBlock; a > b {
 		return fmt.Errorf("too many blobs in blob tx, got %d, expected no more than %d", a, b)
 	}
 	if a, b := len(b.BlobKzgs), len(b.Blobs); a != b {

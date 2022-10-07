@@ -158,20 +158,14 @@ const (
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
 
-	// Fixed cost for sending a data blob.
-	BlobGas uint64 = 120000
-
-	MaxDataGasPerBlock   = 1 << 21
-	DataGasPerBlob       = 1 << 17
-	MaxDataBlobsPerBlock = MaxDataGasPerBlock / DataGasPerBlob
-
-	TargetDataGasPerBlock = 1 << 20
-
-	MaxBlobsPerTx                 = 2
-	MaxBlobsPerBlock              = 16
-	TargetBlobsPerBlock           = 8
-	FieldElementsPerBlob          = 4096 // each field element is 32 bytes
-	GasPriceUpdateFractionPerBlob = 64
+	// stuff from EIP-4844
+	FieldElementsPerBlob       = 4096 // each field element is 32 bytes
+	MaxDataGasPerBlock         = 1 << 21
+	DataGasPerBlob             = 1 << 17
+	TargetDataGasPerBlock      = 1 << 20
+	MinDataGasPrice            = 10e8
+	DataGasPriceUpdateFraction = 8902606
+	MaxBlobsPerBlock           = MaxDataGasPerBlock / DataGasPerBlob
 
 	BlobVerificationGas      uint64 = 1800000
 	BlobCommitmentVersionKZG uint8  = 0x01

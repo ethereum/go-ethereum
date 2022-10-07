@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
-	//	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -72,6 +72,7 @@ type Message interface {
 	GasPrice() *big.Int
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
+	MaxFeePerDataGas() *big.Int
 	Gas() uint64
 	Value() *big.Int
 
@@ -162,25 +163,22 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
-	// TODO
-	//if rules.EIP4844 {
-	//gas += uint64(blobCount) * getBlobGas(blockExcessBlobs)
-	//}
 	return gas, nil
 }
 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:        gp,
-		evm:       evm,
-		msg:       msg,
-		gasPrice:  msg.GasPrice(),
-		gasFeeCap: msg.GasFeeCap(),
-		gasTipCap: msg.GasTipCap(),
-		value:     msg.Value(),
-		data:      msg.Data(),
-		state:     evm.StateDB,
+		gp:               gp,
+		evm:              evm,
+		msg:              msg,
+		gasPrice:         msg.GasPrice(),
+		gasFeeCap:        msg.GasFeeCap(),
+		gasTipCap:        msg.GasTipCap(),
+		maxFeePerDataGas: msg.MaxFeePerDataGas(),
+		value:            msg.Value(),
+		data:             msg.Data(),
+		state:            evm.StateDB,
 	}
 }
 
@@ -206,12 +204,25 @@ func (st *StateTransition) to() common.Address {
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
 	mgval = mgval.Mul(mgval, st.gasPrice)
-	balanceCheck := mgval
-	if st.gasFeeCap != nil {
-		balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
-		balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
-		balanceCheck.Add(balanceCheck, st.value)
+
+	dgval := new(big.Int)
+	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+		// add in fee for eip-4844 data blobs if any
+		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), st.dataGasUsed())
 	}
+
+	balanceCheck := new(big.Int)
+	if st.gasFeeCap == nil {
+		balanceCheck.Set(mgval)
+	} else {
+		balanceCheck.Add(st.value, dgval)
+		// EIP-1559 mandates that the sender has enough balance to cover not just actual fee but
+		// the max gas fee, so we compute this upper bound rather than use mgval here.
+		maxGasFee := new(big.Int).SetUint64(st.msg.Gas())
+		maxGasFee.Mul(maxGasFee, st.gasFeeCap)
+		balanceCheck.Add(balanceCheck, maxGasFee)
+	}
+
 	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
@@ -219,8 +230,9 @@ func (st *StateTransition) buyGas() error {
 		return err
 	}
 	st.gas += st.msg.Gas()
-
 	st.initialGas = st.msg.Gas()
+
+	mgval.Add(mgval, dgval) // both regular gas fee and data gas fee need to be deducted
 	st.state.SubBalance(st.msg.From(), mgval)
 	return nil
 }
@@ -270,6 +282,13 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
+	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
+		if dataGasPrice.Cmp(st.maxFeePerDataGas) > 0 {
+			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v", ErrMaxFeePerDataGas,
+				st.msg.From().Hex(), st.maxFeePerDataGas, dataGasPrice)
+		}
+	}
 	return st.buyGas()
 }
 
@@ -291,7 +310,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// applying the message. The rules include these clauses
 	//
 	// 1. the nonce of the message caller is correct
-	// 2. caller has enough balance to cover transaction fee(gaslimit * gasprice)
+	// 2. caller has enough balance to cover:
+	//       Legacy tx: fee(gaslimit * gasprice)
+	//       EIP-1559 tx: tx.value + max-fee(gaslimit * gascap + datagas * datagasprice)
 	// 3. the amount of gas required is available in the block
 	// 4. the purchased gas is enough to cover intrinsic usage
 	// 5. there is no overflow when calculating intrinsic gas
@@ -401,4 +422,14 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+func (st *StateTransition) dataGasUsed() *big.Int {
+	dataGas := new(big.Int)
+	l := int64(len(st.msg.DataHashes()))
+	if l != 0 {
+		dataGas.SetInt64(l)
+		dataGas.Mul(dataGas, big.NewInt(params.DataGasPerBlob))
+	}
+	return dataGas
 }

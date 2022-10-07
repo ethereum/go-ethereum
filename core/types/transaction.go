@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -403,11 +404,25 @@ func (tx *Transaction) To() *common.Address {
 	return copyAddressPtr(tx.inner.to())
 }
 
-// Cost returns gas * gasPrice + value.
+// Cost returns (gas * gasPrice) + (DataGas() * maxDataFeePerGas) + value.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
+	dataGasFee := tx.DataGas()
+	dataGasFee.Mul(dataGasFee, tx.MaxFeePerDataGas())
+	total.Add(total, dataGasFee)
 	return total
+}
+
+// DataGas implements get_total_data_gas from EIP-4844
+func (tx *Transaction) DataGas() *big.Int {
+	r := new(big.Int)
+	l := int64(len(tx.DataHashes()))
+	if l != 0 {
+		r.SetInt64(l)
+		r.Mul(r, big.NewInt(params.DataGasPerBlob))
+	}
+	return r
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.

@@ -819,6 +819,7 @@ func (m callMsg) To() *common.Address          { return m.CallMsg.To }
 func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
 func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
 func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
+func (m callMsg) MaxFeePerDataGas() *big.Int   { return m.CallMsg.MaxFeePerDataGas }
 func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
 func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
