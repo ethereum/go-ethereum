@@ -3,7 +3,16 @@ import {
   Tabs,
   TabList,
   Tab,
+  Table,
+  Tbody,
+  Thead,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
   Text,
+  TabPanel,
+  TabPanels,
 } from '@chakra-ui/react';
 
 export const DownloadsTable = () => {
@@ -22,6 +31,7 @@ export const DownloadsTable = () => {
               bg: '#11866f',
               color: '#f0f2e2',
             }}
+            borderRight='2px solid #11866f'
           >
             <Text
               fontFamily='"JetBrains Mono", monospace'
@@ -29,6 +39,7 @@ export const DownloadsTable = () => {
               fontWeight={700}
               textTransform='uppercase'
               textAlign='center'
+              fontSize='sm'
             >
               LINUX
             </Text>
@@ -40,6 +51,7 @@ export const DownloadsTable = () => {
               bg: '#11866f',
               color: '#f0f2e2',
             }}
+            borderRight='2px solid #11866f'
           >
             <Text
               fontFamily='"JetBrains Mono", monospace'
@@ -47,6 +59,7 @@ export const DownloadsTable = () => {
               fontWeight={700}
               textTransform='uppercase'
               textAlign='center'
+              fontSize='sm'
             >
               MACOS
             </Text>
@@ -58,6 +71,7 @@ export const DownloadsTable = () => {
               bg: '#11866f',
               color: '#f0f2e2',
             }}
+            borderRight='2px solid #11866f'
           >
             <Text
               fontFamily='"JetBrains Mono", monospace'
@@ -65,6 +79,7 @@ export const DownloadsTable = () => {
               fontWeight={700}
               textTransform='uppercase'
               textAlign='center'
+              fontSize='sm'
             >
               WINDOWS
             </Text>
@@ -76,6 +91,7 @@ export const DownloadsTable = () => {
               bg: '#11866f',
               color: '#f0f2e2',
             }}
+            borderRight='2px solid #11866f'
           >
             <Text
               fontFamily='"JetBrains Mono", monospace'
@@ -83,6 +99,7 @@ export const DownloadsTable = () => {
               fontWeight={700}
               textTransform='uppercase'
               textAlign='center'
+              fontSize='sm'
             >
               IOS
             </Text>
@@ -101,13 +118,95 @@ export const DownloadsTable = () => {
               fontWeight={700}
               textTransform='uppercase'
               textAlign='center'
+              fontSize='sm'
             >
               ANDROID
             </Text>
           </Tab>
         </TabList>
+        <TabPanels>
+          <TabPanel>
+            <TableContainer>
+              <Table variant='unstyled'>
+                <Thead>
+                  <Tr>
+                    <Th
+                      textTransform='none'
+                      p={0}
+                      minW={'130.5px'}
+                    >
+                      <Text
+                        fontFamily='"JetBrains Mono", monospace'
+                        fontWeight={700}
+                        fontSize='md'
+                        color='#868b87'
+                      >
+                        Release
+                      </Text>
+                    </Th>
+                    <Th
+                      textTransform='none'
+                      p={0}
+                      minW={'130.5px'}
+                    >
+                      <Text
+                        fontFamily='"JetBrains Mono", monospace'
+                        fontWeight={700}
+                        fontSize='md'
+                        color='#868b87'
+                      >
+                        Commit
+                      </Text>
+                    </Th>
+                    <Th
+                      textTransform='none'
+                      p={0}
+                      minW={'130.5px'}
+                    >
+                      <Text
+                        fontFamily='"JetBrains Mono", monospace'
+                        fontWeight={700}
+                        fontSize='md'
+                        color='#868b87'
+                      >
+                        Kind
+                      </Text>
+                    </Th>
+                    <Th
+                      textTransform='none'
+                      p={0}
+                      minW={'130.5px'}
+                    >
+                      <Text
+                        fontFamily='"JetBrains Mono", monospace'
+                        fontWeight={700}
+                        fontSize='md'
+                        color='#868b87'
+                      >
+                        Arch
+                      </Text>
+                    </Th>
+                    <Th
+                      textTransform='none'
+                      p={0}
+                      minW={'130.5px'}
+                    >
+                      <Text
+                        fontFamily='"JetBrains Mono", monospace'
+                        fontWeight={700}
+                        fontSize='md'
+                        color='#868b87'
+                      >
+                        Size
+                      </Text>
+                    </Th>
+                  </Tr>
+                </Thead>
+              </Table>
+            </TableContainer>
+          </TabPanel>
+        </TabPanels>
       </Tabs>
-      <Text>Test</Text>
     </Stack>
   )
 }
