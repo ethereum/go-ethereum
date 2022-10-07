@@ -17,6 +17,7 @@
 package core
 
 import (
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -47,11 +48,11 @@ func newStatePrefetcher(config *params.ChainConfig, bc *BlockChain, engine conse
 // Prefetch processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb, but any changes are discarded. The
 // only goal is to pre-cache transaction signatures and state trie nodes.
-func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
+func (p *statePrefetcher) Prefetch(block *types.Block, excessDataGas *big.Int, statedb *state.StateDB, cfg vm.Config, interrupt *uint32) {
 	var (
 		header       = block.Header()
-		gaspool      = new(GasPool).AddGas(block.GasLimit())
-		blockContext = NewEVMBlockContext(header, p.bc, nil)
+		gaspool      = new(GasPool).AddGas(block.GasLimit()).AddDataGas(params.MaxDataGasPerBlock)
+		blockContext = NewEVMBlockContext(header, excessDataGas, p.bc, nil)
 		evm          = vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 		signer       = types.MakeSigner(p.config, header.Number)
 	)

@@ -95,11 +95,12 @@ type environment struct {
 	gasPool   *core.GasPool  // available gas used to pack transactions
 	coinbase  common.Address
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	uncles   map[common.Hash]*types.Header
-	numBlobs int
+	header        *types.Header
+	excessDataGas *big.Int
+	txs           []*types.Transaction
+	receipts      []*types.Receipt
+	uncles        map[common.Hash]*types.Header
+	numBlobs      int
 }
 
 // copy creates a deep copy of environment.
@@ -783,6 +784,15 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+
+	// Initialize the prestate excess_data_gas field used during state transition
+	if w.chainConfig.IsSharding(header.Number) {
+		// TODO(EIP-4844): Unit test this
+		env.excessDataGas = new(big.Int)
+		if parentExcessDataGas := parent.Header().ExcessDataGas; parentExcessDataGas != nil {
+			env.excessDataGas.Set(parentExcessDataGas)
+		}
+	}
 	return env, nil
 }
 
@@ -832,7 +842,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 		return nil, errMaxBlobsReached
 	}
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, env.excessDataGas, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return nil, err
@@ -847,7 +857,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interrupt *int32) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
-		env.gasPool = new(core.GasPool).AddGas(gasLimit)
+		env.gasPool = new(core.GasPool).AddGas(gasLimit).AddDataGas(params.MaxDataGasPerBlock)
 	}
 	var coalescedLogs []*types.Log
 
@@ -1022,15 +1032,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
 		}
-	}
-	// Initialize the prestate excess_data_gas field used during state transition
-	if w.chainConfig.IsSharding(header.Number) {
-		// TODO(EIP-4844): Unit test this
-		excessDataGas := new(big.Int)
-		if parentExcessDataGas := parent.Header().ExcessDataGas; parentExcessDataGas != nil {
-			excessDataGas.Set(parentExcessDataGas)
-		}
-		header.SetExcessDataGas(excessDataGas)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {

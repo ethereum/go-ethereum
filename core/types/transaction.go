@@ -414,7 +414,8 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
-// DataGas implements get_total_data_gas from EIP-4844
+// DataGas implements get_total_data_gas from EIP-4844. While this returns a big.Int for
+// convenience, it should never exceed math.MaxUint64.
 func (tx *Transaction) DataGas() *big.Int {
 	r := new(big.Int)
 	l := int64(len(tx.DataHashes()))

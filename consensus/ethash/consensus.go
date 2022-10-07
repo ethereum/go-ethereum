@@ -612,6 +612,8 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	if chain.Config().IsSharding(header.Number) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
+		} else {
+			header.SetExcessDataGas(new(big.Int))
 		}
 	}
 }

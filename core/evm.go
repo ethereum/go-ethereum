@@ -36,12 +36,15 @@ type ChainContext interface {
 }
 
 // NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+//
+// excessDataGas must be set to the excessDataGas value from the *parent* block header, and can be
+// nil if the parent block is not of EIP-4844 type. It is read only.
+func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
-		beneficiary   common.Address
-		baseFee       *big.Int
-		random        *common.Hash
-		excessDataGas *big.Int
+		beneficiary common.Address
+		baseFee     *big.Int
+		random      *common.Hash
+		edg         *big.Int
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -56,8 +59,8 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
-	if header.ExcessDataGas != nil {
-		excessDataGas = new(big.Int).Set(header.ExcessDataGas)
+	if excessDataGas != nil {
+		edg = new(big.Int).Set(excessDataGas)
 	}
 	return vm.BlockContext{
 		CanTransfer:   CanTransfer,
@@ -68,7 +71,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		Time:          new(big.Int).SetUint64(header.Time),
 		Difficulty:    new(big.Int).Set(header.Difficulty),
 		BaseFee:       baseFee,
-		ExcessDataGas: excessDataGas,
+		ExcessDataGas: edg,
 		GasLimit:      header.GasLimit,
 		Random:        random,
 	}

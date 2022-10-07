@@ -28,7 +28,11 @@ func TestFakeExponential(t *testing.T) {
 		factor, num, denom int64
 		want               int64
 	}{
-		{1, 2, 1, 6}, // approximate 7.389
+		// When num==0 the return value should always equal the value of factor
+		{1, 0, 1, 1},
+		{38493, 0, 1000, 38493},
+		{0, 1234, 2345, 0}, // should be 0
+		{1, 2, 1, 6},       // approximate 7.389
 		{1, 4, 2, 6},
 		{1, 3, 1, 16}, // approximate 20.09
 		{1, 6, 2, 18},

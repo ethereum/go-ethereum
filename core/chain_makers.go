@@ -58,7 +58,7 @@ func (b *BlockGen) SetCoinbase(addr common.Address) {
 		panic("coinbase can only be set once")
 	}
 	b.header.Coinbase = addr
-	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
+	b.gasPool = new(GasPool).AddGas(b.header.GasLimit).AddDataGas(params.MaxDataGasPerBlock)
 }
 
 // SetExtra sets the extra data field of the generated block.
@@ -76,11 +76,6 @@ func (b *BlockGen) SetNonce(nonce types.BlockNonce) {
 // ethash tests, please use OffsetTime, which implicitly recalculates the diff.
 func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
-}
-
-// SetExcessDataGas sets the excess_data_gas field of the generated block.
-func (b *BlockGen) SetExcessDataGas(excessDataGas *big.Int) {
-	b.header.SetExcessDataGas(excessDataGas)
 }
 
 // AddTx adds a transaction to the generated block. If no coinbase has
@@ -108,7 +103,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, b.parent.Header().ExcessDataGas, tx, &b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -138,15 +133,6 @@ func (b *BlockGen) Number() *big.Int {
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
-}
-
-// ExcessDataGas returns the EIP-4844 excess_data_gas of the block being generated.
-func (b *BlockGen) ExcessDataGas() *big.Int {
-	v := new(big.Int)
-	if b.header.ExcessDataGas != nil {
-		v.Set(b.header.ExcessDataGas)
-	}
-	return v
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a

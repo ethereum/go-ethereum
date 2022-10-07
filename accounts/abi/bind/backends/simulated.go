@@ -642,7 +642,14 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	msg := callMsg{call}
 
 	txContext := core.NewEVMTxContext(msg)
-	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
+
+	var excessDataGas *big.Int
+	// Get the last block header
+	ph := b.blockchain.GetHeaderByHash(block.ParentHash())
+	if ph != nil {
+		excessDataGas = ph.ExcessDataGas
+	}
+	evmContext := core.NewEVMBlockContext(block.Header(), excessDataGas, b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})

@@ -212,10 +212,13 @@ func (b *testWorkerBackend) newRandomBlobTx(chainID *big.Int, nonce uint64) *typ
 	gasPrice := big.NewInt(10 * params.InitialBaseFee).Uint64()
 	txData := &types.SignedBlobTx{
 		Message: types.BlobTxMessage{
-			ChainID:             view.Uint256View(*uint256.NewInt(chainID.Uint64())),
-			Nonce:               view.Uint64View(nonce),
-			Gas:                 view.Uint64View(testGas),
-			GasFeeCap:           view.Uint256View(*uint256.NewInt(gasPrice)),
+			ChainID:   view.Uint256View(*uint256.NewInt(chainID.Uint64())),
+			Nonce:     view.Uint64View(nonce),
+			Gas:       view.Uint64View(testGas),
+			GasFeeCap: view.Uint256View(*uint256.NewInt(gasPrice)),
+			// fee per data gas needs to be higher than the minimum because this test produces more than one
+			// block and the latter one has non-zero excessDataGas
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(params.MinDataGasPrice * 2)),
 			GasTipCap:           view.Uint256View(*uint256.NewInt(gasPrice)),
 			Value:               view.Uint256View(*uint256.NewInt(1000)),
 			To:                  types.AddressOptionalSSZ{Address: (*types.AddressSSZ)(&testUserAddress)},
