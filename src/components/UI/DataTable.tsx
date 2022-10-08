@@ -5,20 +5,39 @@ import {
   Th,
   TableContainer,
   Text,
+  Tbody,
+  Td,
 } from '@chakra-ui/react';
 import { FC } from 'react';
 
 interface Props {
   columnHeaders: string[]
+  data: any
 }
 
 export const DataTable: FC<Props> = ({
-  columnHeaders
+  columnHeaders,
+  data,
 }) => {
   return (
-    <TableContainer>
-      <Table variant='unstyled'>
-        <Thead>
+    <TableContainer
+      css={{
+        "&::-webkit-scrollbar": {
+          background: "#d7f5ef",
+          borderTop: '2px solid #11866f',
+          height: 18
+        },
+        "&::-webkit-scrollbar-thumb": {
+          background: "#11866f",
+        },
+      }}
+      p={4}
+    >
+      <Table
+        variant='unstyled'
+      >
+        <Thead
+        >
           <Tr>
             {
               columnHeaders.map((columnHeader, idx) => {
@@ -43,6 +62,30 @@ export const DataTable: FC<Props> = ({
             }
           </Tr>
         </Thead>
+        <Tbody>
+          {
+            data.map((item: any, idx: number) => {
+              return (
+                <Tr
+                  key={idx}
+                >
+                  {
+                    columnHeaders.map((columnHeader, idx) => {
+                      return (
+                        <Td
+                          key={idx}
+                          px={0}
+                        >
+                          {item[columnHeader.toLowerCase()]}
+                        </Td>
+                      )
+                    })
+                  }
+                </Tr>
+              )
+            })
+          }
+        </Tbody>
       </Table>
     </TableContainer>
   )

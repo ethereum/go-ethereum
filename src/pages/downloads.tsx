@@ -4,9 +4,6 @@ import {
   Link,
   ListItem,
   Stack,
-  Table,
-  Th,
-  Tr,
   Text,
   UnorderedList,
 } from '@chakra-ui/react';
@@ -200,7 +197,7 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          <Stack p={4}>
+          {/* <Stack p={4}>
             <DataTable
               columnHeaders={[
                 'Build Server',
@@ -209,7 +206,7 @@ const DownloadsPage: NextPage = ({}) => {
                 'Fingerprint'
               ]}
             />
-          </Stack>
+          </Stack> */}
         </DownloadsSection>
 
         <DownloadsSection sectionTitle='Importing keys and verifying builds'>

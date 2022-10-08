@@ -10,6 +10,8 @@ import {
 
 import { DataTable } from '../DataTable'
 
+import { testDownloadData } from '../../../data/test/download-testdata'
+
 export const DownloadsTable = () => {
   return (
     <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid #11866f'>
@@ -120,59 +122,69 @@ export const DownloadsTable = () => {
           </Tab>
         </TabList>
         <TabPanels>
-          <TabPanel>
+          <TabPanel p={0}>
             <DataTable
               columnHeaders={[
                 'Release',
                 'Commit',
                 'Kind',
                 'Arch',
-                'Size'
+                'Size',
+                'Published'
               ]}
+              data={testDownloadData}
             />
           </TabPanel>
-          <TabPanel>
+          <TabPanel p={0}>
             <DataTable
               columnHeaders={[
                 'Release',
                 'Commit',
                 'Kind',
                 'Arch',
-                'Size'
+                'Size',
+                'Published'
               ]}
+              data={testDownloadData}
             />
           </TabPanel>
-          <TabPanel>
+          <TabPanel p={0}>
             <DataTable
               columnHeaders={[
                 'Release',
                 'Commit',
                 'Kind',
                 'Arch',
-                'Size'
+                'Size',
+                'Published'
               ]}
+              data={testDownloadData}
             />
           </TabPanel>
-          <TabPanel>
+          <TabPanel p={0}>
             <DataTable
               columnHeaders={[
                 'Release',
                 'Commit',
                 'Kind',
                 'Arch',
-                'Size'
+                'Size',
+                'Published'
               ]}
+              data={testDownloadData}
             />
           </TabPanel>
-          <TabPanel>
+          <TabPanel p={0}>
             <DataTable
               columnHeaders={[
                 'Release',
                 'Commit',
                 'Kind',
                 'Arch',
-                'Size'
+                'Size',
+                'Published'
               ]}
+              data={testDownloadData}
             />
           </TabPanel>
         </TabPanels>
