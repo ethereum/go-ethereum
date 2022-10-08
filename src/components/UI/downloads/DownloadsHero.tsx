@@ -148,14 +148,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           <Link
             href={releaseNotesURL}
             isExternal
-            color='brand.light.primary'
-            _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
-            _focus={{
-              color: 'brand.light.primary',
-              boxShadow: 'linkBoxShadow',
-              textDecoration: 'none'
-            }}
-            _pressed={{ color: 'brand.light.secondary', textDecorationColor: 'brand.light.secondary' }}
+            variant='href'
           >
             Release notes for {currentBuildName} {currentBuildVersion}
           </Link>

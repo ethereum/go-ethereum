@@ -19,7 +19,11 @@ export const DownloadsTable: FC<Props> = ({
   data
 }) => {
   return (
-    <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid #11866f'>
+    <Stack
+      sx={{ mt: '0 !important' }}
+      borderBottom='2px solid'
+      borderColor='brand.light.primary'
+    >
       <Tabs variant='unstyled'>
         <TabList
           color='brand.light.primary'

@@ -1,5 +1,4 @@
 import {
-  Button,
   Code,
   Link,
   ListItem,
@@ -45,6 +44,7 @@ const DownloadsPage: NextPage = ({}) => {
           imgSrc='/images/pages/gopher-home-side-desktop.svg'
           imgAltText='Gopher facing right'
           sectionTitle='Specific Versions'
+          id='specificversions'
         >
           <Stack p={4}>
             <Text textStyle='quick-link-text'>
@@ -72,16 +72,8 @@ const DownloadsPage: NextPage = ({}) => {
             <Text textStyle='quick-link-text'>
               Please select your desired platform from the lists below and download your bundle of choice. Please be aware that the MD5 checksums are provided by our binary hosting platform (Azure Blobstore) to help check for download errors. For security guarantees please verify any downloads via the attached PGP signature files (see{' '}
               <Link
-                href={''}
-                isExternal
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
-                _focus={{
-                  color: '#11866f',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                href={'#pgpsignatures'}
+                variant='href'
               >
                 OpenPGP
               </Link>{' '}
@@ -90,21 +82,14 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
         </DownloadsSection>
 
-        <DownloadsSection sectionTitle='Stable releases'>
-          <Stack p={4} borderBottom='2px solid #11866f'>
+        <DownloadsSection sectionTitle='Stable releases' id='stablereleases'>
+          <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
             <Text textStyle='quick-link-text'>
               These are the current and previous stable releases of go-ethereum, updated automatically when a new version is tagged in our{' '}
               <Link
                 href={GETH_REPO_URL}
                 isExternal
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
-                _focus={{
-                  color: '#11866f',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                variant='href'
               >
                 GitHub repository.
               </Link>
@@ -130,21 +115,14 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
         </DownloadsSection>
 
-        <DownloadsSection sectionTitle='Develop builds'>
-          <Stack p={4} borderBottom='2px solid #11866f'>
+        <DownloadsSection sectionTitle='Develop builds' id='developbuilds'>
+          <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
             <Text textStyle='quick-link-text'>
               These are the develop snapshots of go-ethereum, updated automatically when a new commit is pushed into our{' '}
               <Link
                 href={GETH_REPO_URL}
                 isExternal
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
-                _focus={{
-                  color: '#11866f',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                variant='href'
               >
                 GitHub repository.
               </Link>
@@ -170,8 +148,8 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
         </DownloadsSection>
 
-        <DownloadsSection sectionTitle='OpenPGP Signatures'>
-          <Stack p={4} borderBottom='2px solid #11866f'>
+        <DownloadsSection sectionTitle='OpenPGP Signatures' id='pgpsignatures'>
+          <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
             <Text textStyle='quick-link-text'>
               All the binaries available from this page are signed via our build server PGP keys:
             </Text>
@@ -189,8 +167,8 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack> */}
         </DownloadsSection>
 
-        <DownloadsSection sectionTitle='Importing keys and verifying builds'>
-          <Stack p={4} borderBottom='2px solid #11866f'>
+        <DownloadsSection sectionTitle='Importing keys and verifying builds' id='importingkeys'>
+          <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
             <Text textStyle='quick-link-text'>
               You can import the build server public keys by grabbing the individual keys directly from the keyserver network:
             </Text>
@@ -201,7 +179,7 @@ const DownloadsPage: NextPage = ({}) => {
             </Code>
           </Stack>
 
-          <Stack p={4} borderBottom='2px solid #11866f'>
+          <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
             <Text textStyle='quick-link-text'>
               Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:
             </Text>

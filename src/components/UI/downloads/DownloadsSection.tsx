@@ -3,6 +3,7 @@ import { FC } from 'react';
 
 interface Props {
   children?: React.ReactNode;
+  id: string;
   imgSrc?: string;
   imgAltText?: string;
   sectionTitle: string
@@ -13,9 +14,10 @@ export const DownloadsSection: FC<Props> = ({
   imgSrc,
   imgAltText,
   sectionTitle,
+  id
 }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary'>
+    <Stack border='2px solid' borderColor='brand.light.primary' id={id}>
       {!!imgSrc && (
         <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
           {/* TODO: use NextImage */}
