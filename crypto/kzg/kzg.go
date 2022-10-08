@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/bits"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -165,7 +166,37 @@ func VerifyBlobsLegacy(commitments []*bls.G1Point, blobs [][]bls.Fr) error {
 	return nil
 }
 
-// ComputeProof returns KZG Proof of polynomial in evaluation form at point z
+// Bit-reversal permutation helper functions
+
+// Check if `value` is a power of two integer.
+func isPowerOfTwo(value uint64) bool {
+	return value > 0 && (value&(value-1) == 0)
+}
+
+// Reverse `order` bits of integer n
+func reverseBits(n, order uint64) uint64 {
+	if !isPowerOfTwo(order) {
+		panic("Order must be a power of two.")
+	}
+
+	return bits.Reverse64(n) >> (65 - bits.Len64(order))
+}
+
+// Return a copy of the input array permuted by bit-reversing the indexes.
+func bitReversalPermutation(l []bls.G1Point) []bls.G1Point {
+	out := make([]bls.G1Point, len(l))
+
+	order := uint64(len(l))
+
+	for i := range l {
+		out[i] = l[reverseBits(uint64(i), order)]
+	}
+
+	return out
+}
+
+// Compute KZG proof at point `z` with `polynomial` being in evaluation form.
+// compute_kzg_proof from the EIP-4844 spec.
 func ComputeProof(eval []bls.Fr, z *bls.Fr) (*bls.G1Point, error) {
 	if len(eval) != params.FieldElementsPerBlob {
 		return nil, errors.New("invalid eval polynomial for proof")
@@ -226,7 +257,7 @@ func init() {
 	}
 
 	kzgSetupG2 = parsedSetup.SetupG2
-	kzgSetupLagrange = parsedSetup.SetupLagrange
+	kzgSetupLagrange = bitReversalPermutation(parsedSetup.SetupLagrange)
 	KzgSetupG1 = parsedSetup.SetupG1
 
 	initDomain()
