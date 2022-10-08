@@ -26,7 +26,7 @@ const HomePage: NextPage = ({}) => {
             imgSrc='/images/pages/gopher-home-front.svg'
             imgAltText='Gopher greeting'
             sectionTitle='What is Geth'
-            buttonLabel='Get started with Geth'
+            linkLabel='Get started with Geth'
             buttonHref={`${DOCS_PAGE}/getting-started`}
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
@@ -100,7 +100,7 @@ const HomePage: NextPage = ({}) => {
             imgSrc='/images/pages/glyph-home-light.svg'
             imgAltText='Ethereum glyph'
             sectionTitle='What is Ethereum'
-            buttonLabel='Learn more on Ethereum.org'
+            linkLabel='Learn more on Ethereum.org'
             buttonHref={ETHEREUM_ORG_URL}
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
@@ -115,7 +115,7 @@ const HomePage: NextPage = ({}) => {
             imgSrc='/images/pages/gopher-home-nodes.svg'
             imgAltText='Gopher staring at nodes'
             sectionTitle='Why run a node?'
-            buttonLabel='Read more about running a node'
+            linkLabel='Read more about running a node'
             buttonHref={ETHEREUM_ORG_RUN_A_NODE_URL}
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
@@ -132,7 +132,7 @@ const HomePage: NextPage = ({}) => {
           {/* SECTION:Contribute to Geth */}
           <HomeSection
             sectionTitle='Contribute to Geth'
-            buttonLabel='Read our contribution guidelines'
+            linkLabel='Read our contribution guidelines'
             buttonHref={CONTRIBUTING_PAGE}
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
@@ -165,7 +165,7 @@ const HomePage: NextPage = ({}) => {
           {/* SECTION: About the Team */}
           <HomeSection
             sectionTitle='About the Team'
-            buttonLabel='Read more about the Ethereum Foundation'
+            linkLabel='Read more about the Ethereum Foundation'
             buttonHref={ETHEREUM_FOUNDATION_URL}
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>

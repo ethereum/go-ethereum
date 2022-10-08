@@ -1,12 +1,13 @@
 import { extendTheme } from '@chakra-ui/react';
 
 import { colors, sizes } from './foundations';
-import { Button } from './components';
+import { Button, Link } from './components';
 
 const overrides = {
   colors,
   components: {
-    Button
+    Button,
+    Link
   },
   sizes,
   styles: {
@@ -16,7 +17,6 @@ const overrides = {
       }
     })
   },
-  // TODO: fix textStyles
   textStyles: {
     h1: {
       fontFamily: '"JetBrains Mono", monospace',
@@ -46,6 +46,20 @@ const overrides = {
       color: 'yellow.50',
       fontWeight: 700,
       textTransform: 'uppercase'
+    },
+    'quick-link-text': {
+      fontFamily: '"Inter", sans-serif',
+      lineHeight: '26px'
+    },
+    'quick-link-label': {
+      fontFamily: '"JetBrains Mono", monospace',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      textAlign: 'center',
+      color: 'brand.light.primary',
+      _groupHover: { color: 'yellow.50' },
+      _groupActive: { color: 'yellow.50' },
+      _groupFocus: { color: 'yellow.50' }
     },
     'hero-text-small': {
       fontSize: '13px',
