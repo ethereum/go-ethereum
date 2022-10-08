@@ -6,8 +6,8 @@ import { CONTRIBUTING_PAGE, DOCS_PAGE, FAQ_PAGE } from '../../../constants';
 
 export const QuickLinks: FC = () => {
   return (
-    <Stack border='2px solid #11866f'>
-      <Stack p={4} borderBottom='2px solid #11866f'>
+    <Stack border='2px solid' borderColor='brand.light.primary'>
+      <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
         <Heading
           // TODO: move text style to theme
           as='h2'
@@ -16,8 +16,7 @@ export const QuickLinks: FC = () => {
           fontSize='1.5rem'
           lineHeight='auto'
           letterSpacing='4%'
-          // TODO: move to theme colors
-          color='#1d242c'
+          color='brand.light.body'
         >
           Quick Links
         </Heading>
@@ -25,7 +24,11 @@ export const QuickLinks: FC = () => {
 
       <Grid templateColumns='repeat(2, 1fr)' sx={{ mt: '0 !important' }}>
         {/* get started */}
-        <GridItem borderRight='2px solid #11866f' borderBottom='2px solid #11866f'>
+        <GridItem
+          borderRight='2px solid'
+          borderBottom='2px solid'
+          borderColor='brand.light.primary'
+        >
           <Stack p={4} h='100%'>
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
               Don&apos;t know where to start?
@@ -36,20 +39,24 @@ export const QuickLinks: FC = () => {
             </Text>
           </Stack>
         </GridItem>
-        <GridItem borderBottom='2px solid #11866f'>
+        <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
           <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='#d7f5ef'
-                _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
+                bg='green.50'
+                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
                 _focus={{
                   textDecoration: 'none',
-                  bg: '#11866f',
-                  color: '#f0f2e2',
+                  bg: 'brand.light.primary',
+                  color: 'yellow.50',
                   boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
                 }}
-                _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
+                _active={{
+                  textDecoration: 'none',
+                  bg: 'brand.light.secondary',
+                  color: 'yellow.50'
+                }}
                 justifyContent='center'
                 h='100%'
                 p={4}
@@ -60,10 +67,10 @@ export const QuickLinks: FC = () => {
                   fontWeight={700}
                   textTransform='uppercase'
                   textAlign='center'
-                  color='#11866f'
-                  _groupHover={{ color: '#f0f2e2' }}
-                  _groupActive={{ color: '#f0f2e2' }}
-                  _groupFocus={{ color: '#f0f2e2' }}
+                  color='brand.light.primary'
+                  _groupHover={{ color: 'yellow.50' }}
+                  _groupActive={{ color: 'yellow.50' }}
+                  _groupFocus={{ color: 'yellow.50' }}
                 >
                   Get started
                 </Text>
@@ -73,7 +80,11 @@ export const QuickLinks: FC = () => {
         </GridItem>
 
         {/* faq */}
-        <GridItem borderRight='2px solid #11866f' borderBottom='2px solid #11866f'>
+        <GridItem
+          borderRight='2px solid'
+          borderBottom='2px solid'
+          borderColor='brand.light.primary'
+        >
           <Stack p={4} h='100%'>
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
               Have doubts?
@@ -84,13 +95,13 @@ export const QuickLinks: FC = () => {
             </Text>
           </Stack>
         </GridItem>
-        <GridItem borderBottom='2px solid #11866f'>
+        <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
           <NextLink href={FAQ_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='#d7f5ef'
-                _hover={{ textDecoration: 'none', bg: '#11866F', color: '#f0f2e2' }}
+                bg='green.50'
+                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
                 justifyContent='center'
                 h='100%'
                 p={4}
@@ -101,8 +112,8 @@ export const QuickLinks: FC = () => {
                   fontWeight={700}
                   textTransform='uppercase'
                   textAlign='center'
-                  color='#11866f'
-                  _groupHover={{ color: '#f0f2e2' }}
+                  color='brand.light.primary'
+                  _groupHover={{ color: 'yellow.50' }}
                 >
                   Go to the FAQ
                 </Text>
@@ -112,7 +123,7 @@ export const QuickLinks: FC = () => {
         </GridItem>
 
         {/* how to contribute */}
-        <GridItem borderRight='2px solid #11866f'>
+        <GridItem borderRight='2px solid' borderColor='brand.light.primary'>
           <Stack p={4} h='100%'>
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
               Want to know how to contribute?
@@ -128,20 +139,20 @@ export const QuickLinks: FC = () => {
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='#d7f5ef'
-                _hover={{ textDecoration: 'none', bg: '#11866F', color: '#f0f2e2' }}
+                bg='green.50'
+                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
                 justifyContent='center'
                 h='100%'
                 p={4}
               >
                 <Text
                   fontFamily='"JetBrains Mono", monospace'
-                  // TODO: move to theme colors
+                  // TODO: move to text style
                   fontWeight={700}
                   textTransform='uppercase'
                   textAlign='center'
-                  color='#11866f'
-                  _groupHover={{ color: '#f0f2e2' }}
+                  color='brand.light.primary'
+                  _groupHover={{ color: 'yellow.50' }}
                 >
                   How to contribute
                 </Text>

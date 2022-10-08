@@ -39,28 +39,11 @@ export const HomeHero: FC = () => {
         alignItems={{ base: 'center', md: 'flex-start' }}
       >
         <Flex direction='column' alignItems='center' mr={{ md: 6 }}>
-          {/* TODO: define button variants */}
           <NextLink href={DOWNLOADS_PAGE} passHref>
-            {/* TODO: update text */}
-            <Button
-              as='a'
-              py='8px'
-              px='32px'
-              borderRadius={0}
-              width={{ base: '188px', md: 'auto' }}
-              // TODO: move to theme colors
-              bg='brand.light.primary'
-              _hover={{ bg: 'brand.light.secondary' }}
-              _focus={{
-                bg: 'brand.light.primary',
-                boxShadow: 'inset 0 0 0 2px #06fece !important'
-              }}
-              _active={{ borderTop: '4px solid', borderColor: 'green.200', pt: '4px' }}
-              mb={1}
-            >
+            <Button variant='primary' as='a' mb={1}>
               <Text
+                // TODO: move to textstyles
                 fontFamily='"JetBrains Mono", monospace'
-                // TODO: move to theme colors
                 color='yellow.50'
                 fontWeight={700}
                 textTransform='uppercase'
@@ -76,23 +59,12 @@ export const HomeHero: FC = () => {
         </Flex>
 
         <Flex direction='column' alignItems='center'>
-          {/* TODO: define button variants */}
           <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
-            <Button
-              as='a'
-              py='8px'
-              px='32px'
-              borderRadius={0}
-              bg='#11866F'
-              _hover={{ bg: '#25453f' }}
-              _focus={{ bg: '#11866f', boxShadow: 'inset 0 0 0 2px #06fece !important' }}
-              _active={{ borderTop: '4px solid #06fece', pt: '4px' }}
-              mb={1}
-            >
+            <Button variant='primary' as='a' mb={1}>
               <Text
+                // TODO: move to textstyles
                 fontFamily='"JetBrains Mono", monospace'
-                // TODO: move to theme colors
-                color='#F0F2E2'
+                color='yellow.50'
                 fontWeight={700}
                 textTransform='uppercase'
               >

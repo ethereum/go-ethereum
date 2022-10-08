@@ -20,15 +20,20 @@ export const HomeSection: FC<Props> = ({
   children
 }) => {
   return (
-    <Stack border='2px solid #11866f'>
+    <Stack border='2px solid' borderColor='brand.light.primary'>
       {!!imgSrc && (
-        <Stack alignItems='center' p={4} borderBottom='2px solid #11866f'>
+        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
           {/* TODO: use NextImage */}
           <Image src={imgSrc} alt={imgAltText} />
         </Stack>
       )}
 
-      <Stack p={4} borderBottom='2px solid #11866f' sx={{ mt: '0 !important' }}>
+      <Stack
+        p={4}
+        borderBottom='2px solid'
+        borderColor='brand.light.primary'
+        sx={{ mt: '0 !important' }}
+      >
         <Heading
           // TODO: move text style to theme
           as='h2'
@@ -37,30 +42,35 @@ export const HomeSection: FC<Props> = ({
           fontSize='1.5rem'
           lineHeight='auto'
           letterSpacing='4%'
-          // TODO: move to theme colors
-          color='#1d242c'
+          color='brand.light.body'
         >
           {sectionTitle}
         </Heading>
       </Stack>
 
-      <Stack p={4} spacing={4} borderBottom='2px solid #11866f' sx={{ mt: '0 !important' }}>
+      <Stack
+        p={4}
+        spacing={4}
+        borderBottom='2px solid'
+        borderColor='brand.light.primary'
+        sx={{ mt: '0 !important' }}
+      >
         {children}
       </Stack>
 
       <Stack sx={{ mt: '0 !important' }}>
         <NextLink href={buttonHref} passHref>
           <Link
-            color='#11866f'
-            bg='#d7f5ef'
-            _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
+            color='brand.light.primary'
+            bg='green.50'
+            _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
             _focus={{
               textDecoration: 'none',
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
               boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
             }}
-            _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
+            _active={{ textDecoration: 'none', bg: 'brand.light.secondary', color: 'yellow.50' }}
             isExternal={buttonHref.startsWith('http')}
           >
             <Text
