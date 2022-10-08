@@ -294,7 +294,8 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
-	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+	usesDataGas := len(st.msg.DataHashes()) != 0
+	if usesDataGas && st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
 		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.maxFeePerDataGas) > 0 {
 			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
