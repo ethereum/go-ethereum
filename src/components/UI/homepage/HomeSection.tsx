@@ -51,7 +51,7 @@ export const HomeSection: FC<Props> = ({
 
       <Stack sx={{ mt: '0 !important' }}>
         <NextLink href={buttonHref} passHref>
-          <Link variant='secondary' isExternal={buttonHref.startsWith('http')}>
+          <Link variant='button-link-secondary' isExternal={buttonHref.startsWith('http')}>
             <Text textStyle='home-section-link-label'>{linkLabel}</Text>
           </Link>
         </NextLink>

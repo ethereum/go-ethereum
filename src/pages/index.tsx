@@ -31,41 +31,11 @@ const HomePage: NextPage = ({}) => {
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
               Geth (go-ethereum) is a{' '}
-              <Link
-                href='https://go.dev/'
-                isExternal
-                textDecoration='underline'
-                color='brand.light.primary'
-                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
-                _focus={{
-                  color: 'brand.light.primary',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{
-                  color: 'brand.light.secondary',
-                  textDecorationColor: 'brand.light.secondary'
-                }}
-              >
+              <Link href='https://go.dev/' isExternal variant='light'>
                 Go
               </Link>{' '}
               implementation of{' '}
-              <Link
-                href={ETHEREUM_ORG_URL}
-                isExternal
-                textDecoration='underline'
-                color='brand.light.primary'
-                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
-                _focus={{
-                  color: 'brand.light.primary',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{
-                  color: 'brand.light.secondary',
-                  textDecorationColor: 'brand.light.secondary'
-                }}
-              >
+              <Link href={ETHEREUM_ORG_URL} isExternal variant='light'>
                 Ethereum
               </Link>{' '}
               - a gateway into the decentralized web.
@@ -139,22 +109,7 @@ const HomePage: NextPage = ({}) => {
               We welcome contributions from anyone on the internet, and are grateful for even the
               smallest of fixes! If you&apos;d like to contribute to the Geth source code, please
               fork the{' '}
-              <Link
-                href={GETH_REPO_URL}
-                isExternal
-                textDecoration='underline'
-                color='brand.light.primary'
-                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
-                _focus={{
-                  color: 'brand.light.primary',
-                  boxShadow: '0 0 0 1px #11866f !important',
-                  textDecoration: 'none'
-                }}
-                _pressed={{
-                  color: 'brand.light.secondary',
-                  textDecorationColor: 'brand.light.secondary'
-                }}
-              >
+              <Link href={GETH_REPO_URL} isExternal variant='light'>
                 Github repository
               </Link>
               , fix, commit and send a pull request for the maintainers to review and merge into the
