@@ -7,12 +7,17 @@ import {
   TabPanel,
   TabPanels,
 } from '@chakra-ui/react';
+import { FC } from 'react';
 
 import { DataTable } from '../DataTable'
 
-import { testDownloadData } from '../../../data/test/download-testdata'
+interface Props {
+  data: any
+}
 
-export const DownloadsTable = () => {
+export const DownloadsTable: FC<Props> = ({
+  data
+}) => {
   return (
     <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid #11866f'>
       <Tabs variant='unstyled'>
@@ -132,7 +137,7 @@ export const DownloadsTable = () => {
                 'Size',
                 'Published'
               ]}
-              data={testDownloadData}
+              data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
@@ -145,7 +150,7 @@ export const DownloadsTable = () => {
                 'Size',
                 'Published'
               ]}
-              data={testDownloadData}
+              data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
@@ -158,7 +163,7 @@ export const DownloadsTable = () => {
                 'Size',
                 'Published'
               ]}
-              data={testDownloadData}
+              data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
@@ -171,7 +176,7 @@ export const DownloadsTable = () => {
                 'Size',
                 'Published'
               ]}
-              data={testDownloadData}
+              data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
@@ -184,7 +189,7 @@ export const DownloadsTable = () => {
                 'Size',
                 'Published'
               ]}
-              data={testDownloadData}
+              data={data}
             />
           </TabPanel>
         </TabPanels>

@@ -20,6 +20,8 @@ import {
   GETH_REPO_URL
 } from '../constants'
 
+import { testDownloadData } from '../data/test/download-testdata'
+
 
 const DownloadsPage: NextPage = ({}) => {
   return (
@@ -109,7 +111,8 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          <DownloadsTable />
+          {/* TODO: swap test data for real data */}
+          <DownloadsTable data={testDownloadData}/>
 
           <Stack sx={{ mt: '0 !important' }}>
             <Button
@@ -160,7 +163,8 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          <DownloadsTable />
+         {/* TODO: swap for real data */}
+          <DownloadsTable data={testDownloadData} />
 
           <Stack sx={{ mt: '0 !important' }}>
             <Button
