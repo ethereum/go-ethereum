@@ -6,7 +6,7 @@ interface Props {
   imgSrc?: string;
   imgAltText?: string;
   sectionTitle: string;
-  buttonLabel: string;
+  linkLabel: string;
   buttonHref: string;
   children?: React.ReactNode;
 }
@@ -15,7 +15,7 @@ export const HomeSection: FC<Props> = ({
   imgSrc,
   imgAltText,
   sectionTitle,
-  buttonLabel,
+  linkLabel,
   buttonHref,
   children
 }) => {
@@ -51,29 +51,8 @@ export const HomeSection: FC<Props> = ({
 
       <Stack sx={{ mt: '0 !important' }}>
         <NextLink href={buttonHref} passHref>
-          <Link
-            color='brand.light.primary'
-            bg='green.50'
-            _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
-            _focus={{
-              textDecoration: 'none',
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-              boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
-            }}
-            _active={{ textDecoration: 'none', bg: 'brand.light.secondary', color: 'yellow.50' }}
-            isExternal={buttonHref.startsWith('http')}
-          >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              p={4}
-            >
-              {buttonLabel}
-            </Text>
+          <Link variant='secondary' isExternal={buttonHref.startsWith('http')}>
+            <Text textStyle='home-section-link-label'>{linkLabel}</Text>
           </Link>
         </NextLink>
       </Stack>

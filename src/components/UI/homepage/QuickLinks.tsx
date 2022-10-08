@@ -21,13 +21,11 @@ export const QuickLinks: FC = () => {
           borderColor='brand.light.primary'
         >
           <Stack p={4} h='100%'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
+            <Text textStyle='quick-link-text' mb={-1}>
               Don&apos;t know where to start?
             </Text>
 
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
-              We can help.
-            </Text>
+            <Text textStyle='quick-link-text'>We can help.</Text>
           </Stack>
         </GridItem>
         <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
@@ -52,19 +50,7 @@ export const QuickLinks: FC = () => {
                 h='100%'
                 p={4}
               >
-                <Text
-                  fontFamily='"JetBrains Mono", monospace'
-                  // TODO: move to theme colors
-                  fontWeight={700}
-                  textTransform='uppercase'
-                  textAlign='center'
-                  color='brand.light.primary'
-                  _groupHover={{ color: 'yellow.50' }}
-                  _groupActive={{ color: 'yellow.50' }}
-                  _groupFocus={{ color: 'yellow.50' }}
-                >
-                  Get started
-                </Text>
+                <Text textStyle='quick-link-label'>Get started</Text>
               </Stack>
             </Link>
           </NextLink>
@@ -77,13 +63,11 @@ export const QuickLinks: FC = () => {
           borderColor='brand.light.primary'
         >
           <Stack p={4} h='100%'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
+            <Text textStyle='quick-link-text' mb={-1}>
               Have doubts?
             </Text>
 
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
-              Check the FAQ section in the documentation.
-            </Text>
+            <Text textStyle='quick-link-text'>Check the FAQ section in the documentation.</Text>
           </Stack>
         </GridItem>
         <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
@@ -93,21 +77,22 @@ export const QuickLinks: FC = () => {
                 data-group
                 bg='green.50'
                 _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
+                _focus={{
+                  textDecoration: 'none',
+                  bg: 'brand.light.primary',
+                  color: 'yellow.50',
+                  boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+                }}
+                _active={{
+                  textDecoration: 'none',
+                  bg: 'brand.light.secondary',
+                  color: 'yellow.50'
+                }}
                 justifyContent='center'
                 h='100%'
                 p={4}
               >
-                <Text
-                  fontFamily='"JetBrains Mono", monospace'
-                  // TODO: move to theme colors
-                  fontWeight={700}
-                  textTransform='uppercase'
-                  textAlign='center'
-                  color='brand.light.primary'
-                  _groupHover={{ color: 'yellow.50' }}
-                >
-                  Go to the FAQ
-                </Text>
+                <Text textStyle='quick-link-label'>Go to the FAQ</Text>
               </Stack>
             </Link>
           </NextLink>
@@ -116,13 +101,11 @@ export const QuickLinks: FC = () => {
         {/* how to contribute */}
         <GridItem borderRight='2px solid' borderColor='brand.light.primary'>
           <Stack p={4} h='100%'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px' mb={-1}>
+            <Text textStyle='quick-link-text' mb={-1}>
               Want to know how to contribute?
             </Text>
 
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
-              Get more information in the documentation.
-            </Text>
+            <Text textStyle='quick-link-text'>Get more information in the documentation.</Text>
           </Stack>
         </GridItem>
         <GridItem>
@@ -132,21 +115,22 @@ export const QuickLinks: FC = () => {
                 data-group
                 bg='green.50'
                 _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
+                _focus={{
+                  textDecoration: 'none',
+                  bg: 'brand.light.primary',
+                  color: 'yellow.50',
+                  boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+                }}
+                _active={{
+                  textDecoration: 'none',
+                  bg: 'brand.light.secondary',
+                  color: 'yellow.50'
+                }}
                 justifyContent='center'
                 h='100%'
                 p={4}
               >
-                <Text
-                  fontFamily='"JetBrains Mono", monospace'
-                  // TODO: move to text style
-                  fontWeight={700}
-                  textTransform='uppercase'
-                  textAlign='center'
-                  color='brand.light.primary'
-                  _groupHover={{ color: 'yellow.50' }}
-                >
-                  How to contribute
-                </Text>
+                <Text textStyle='quick-link-label'>How to contribute</Text>
               </Stack>
             </Link>
           </NextLink>
