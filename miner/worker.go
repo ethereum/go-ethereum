@@ -100,7 +100,6 @@ type environment struct {
 	txs           []*types.Transaction
 	receipts      []*types.Receipt
 	uncles        map[common.Hash]*types.Header
-	numBlobs      int
 }
 
 // copy creates a deep copy of environment.
@@ -837,11 +836,6 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	txBlobCount := len(tx.DataHashes())
-	if env.numBlobs+txBlobCount > params.MaxBlobsPerBlock {
-		return nil, errMaxBlobsReached
-	}
-
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, env.excessDataGas, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
@@ -849,7 +843,6 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
-	env.numBlobs += txBlobCount
 
 	return receipt.Logs, nil
 }

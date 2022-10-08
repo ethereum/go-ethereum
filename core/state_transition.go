@@ -294,7 +294,8 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
-	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+	usesDataGas := len(st.msg.DataHashes()) != 0
+	if usesDataGas && st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
 		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.maxFeePerDataGas) > 0 {
 			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
@@ -386,7 +387,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
-	// TODO: Also refund datagas if tx is rejected
+	// Note that unlike regular gas, data fee gas is not refunded if the tx is reverted, per
+	// EIP-4844 spec.
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)

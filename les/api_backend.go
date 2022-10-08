@@ -179,11 +179,19 @@ func (b *LesApiBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, excessDataGas *big.Int, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	if vmConfig == nil {
 		vmConfig = new(vm.Config)
 	}
 	txContext := core.NewEVMTxContext(msg)
+	var excessDataGas *big.Int
+	ph, err := b.HeaderByHash(ctx, header.ParentHash)
+	if err != nil {
+		return nil, state.Error, err
+	}
+	if ph != nil {
+		excessDataGas = ph.ExcessDataGas
+	}
 	context := core.NewEVMBlockContext(header, excessDataGas, b.eth.blockchain, nil)
 	return vm.NewEVM(context, txContext, state, b.eth.chainConfig, *vmConfig), state.Error, nil
 }
