@@ -21,7 +21,8 @@ import {
 } from '../constants'
 
 import { testDownloadData } from '../data/test/download-testdata'
-
+import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
+import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
 const DownloadsPage: NextPage = ({}) => {
   const [amountStableReleases, updateAmountStables] = useState(10)
@@ -163,7 +164,8 @@ const DownloadsPage: NextPage = ({}) => {
             </Text>
           </Stack>
 
-          {/* <Stack p={4}>
+          {/* TODO: swap for real data */}
+          <Stack>
             <DataTable
               columnHeaders={[
                 'Build Server',
@@ -171,8 +173,22 @@ const DownloadsPage: NextPage = ({}) => {
                 'OpenPGP Key',
                 'Fingerprint'
               ]}
+              data={pgpBuildTestData}
             />
-          </Stack> */}
+          </Stack>
+
+          {/* TODO: swap for real data */}
+          <Stack>
+            <DataTable
+              columnHeaders={[
+                'Developer',
+                'Unique ID',
+                'OpenPGP Key',
+                'Fingerprint'
+              ]}
+              data={pgpDeveloperTestData}
+            />
+          </Stack>
         </DownloadsSection>
 
         <DownloadsSection sectionTitle='Importing keys and verifying builds' id='importingkeys'>
