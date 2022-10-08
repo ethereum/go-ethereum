@@ -1,4 +1,4 @@
-import { Grid, GridItem, Heading, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -8,18 +8,9 @@ export const QuickLinks: FC = () => {
   return (
     <Stack border='2px solid' borderColor='brand.light.primary'>
       <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
-        <Heading
-          // TODO: move text style to theme
-          as='h2'
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={400}
-          fontSize='1.5rem'
-          lineHeight='auto'
-          letterSpacing='4%'
-          color='brand.light.body'
-        >
+        <Box as='h2' textStyle='h2'>
           Quick Links
-        </Heading>
+        </Box>
       </Stack>
 
       <Grid templateColumns='repeat(2, 1fr)' sx={{ mt: '0 !important' }}>

@@ -1,4 +1,4 @@
-import { Box, Button, Flex, Heading, Stack, Text } from '@chakra-ui/react';
+import { Box, Button, Flex, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -8,28 +8,16 @@ export const HomeHero: FC = () => {
   return (
     <Stack border='2px solid' borderColor='brand.light.primary' px={4} py={{ base: 8, md: 5 }}>
       <Box mb={4}>
-        <Heading
-          as='h1' // TODO: move text style to theme
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={700}
-          fontSize='2.75rem'
-          lineHeight='3.375rem'
-          letterSpacing='5%'
-          color='brand.light.body'
+        <Box
+          as='h1'
+          textStyle='h1'
           mb={{ base: 2, md: 4 }}
           textAlign={{ base: 'center', md: 'left' }}
         >
           go-ethereum
-        </Heading>
+        </Box>
 
-        <Text
-          // TODO: move text style to theme
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={700}
-          lineHeight='21px'
-          letterSpacing='0.05em'
-          textAlign={{ base: 'center', md: 'left' }}
-        >
+        <Text textStyle='homepage-description'>
           Official Go implementation of the Ethereum protocol
         </Text>
       </Box>
@@ -41,15 +29,7 @@ export const HomeHero: FC = () => {
         <Flex direction='column' alignItems='center' mr={{ md: 6 }}>
           <NextLink href={DOWNLOADS_PAGE} passHref>
             <Button variant='primary' as='a' mb={1}>
-              <Text
-                // TODO: move to textstyles
-                fontFamily='"JetBrains Mono", monospace'
-                color='yellow.50'
-                fontWeight={700}
-                textTransform='uppercase'
-              >
-                Download
-              </Text>
+              <Text textStyle='homepage-primary-label'>Download</Text>
             </Button>
           </NextLink>
 
@@ -61,15 +41,7 @@ export const HomeHero: FC = () => {
         <Flex direction='column' alignItems='center'>
           <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
             <Button variant='primary' as='a' mb={1}>
-              <Text
-                // TODO: move to textstyles
-                fontFamily='"JetBrains Mono", monospace'
-                color='yellow.50'
-                fontWeight={700}
-                textTransform='uppercase'
-              >
-                Documentation
-              </Text>
+              <Text textStyle='homepage-primary-label'>Documentation</Text>
             </Button>
           </NextLink>
 

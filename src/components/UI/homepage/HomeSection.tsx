@@ -1,4 +1,4 @@
-import { Heading, Image, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Image, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -34,18 +34,9 @@ export const HomeSection: FC<Props> = ({
         borderColor='brand.light.primary'
         sx={{ mt: '0 !important' }}
       >
-        <Heading
-          // TODO: move text style to theme
-          as='h2'
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={400}
-          fontSize='1.5rem'
-          lineHeight='auto'
-          letterSpacing='4%'
-          color='brand.light.body'
-        >
+        <Box as='h2' textStyle='h2'>
           {sectionTitle}
-        </Heading>
+        </Box>
       </Stack>
 
       <Stack
