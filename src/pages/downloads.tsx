@@ -7,6 +7,7 @@ import {
   UnorderedList,
 } from '@chakra-ui/react';
 import type { NextPage } from 'next';
+import { useState } from 'react'
 
 import {
   DownloadsHero,
@@ -23,6 +24,9 @@ import { testDownloadData } from '../data/test/download-testdata'
 
 
 const DownloadsPage: NextPage = ({}) => {
+  const [amountStableReleases, updateAmountStables] = useState(10)
+  const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(10)
+
   return (
     <>
      {/* TODO: add PageMetadata */}
@@ -97,10 +101,12 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
           {/* TODO: swap test data for real data */}
-          <DownloadsTable data={testDownloadData}/>
+          <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)}/>
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='secondary'>
+            <Link as='button' variant='secondary' onClick={() => {
+              updateAmountStables(amountStableReleases+10)
+            }}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 // TODO: move to theme colors
@@ -130,10 +136,12 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
          {/* TODO: swap for real data */}
-          <DownloadsTable data={testDownloadData} />
+          <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='secondary'>
+            <Link as='button' variant='secondary' onClick={() => {
+              updateAmountDevelopBuilds(amountDevelopBuilds+10)
+            }}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 // TODO: move to theme colors
