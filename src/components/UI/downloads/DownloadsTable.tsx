@@ -22,27 +22,21 @@ export const DownloadsTable: FC<Props> = ({
     <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid #11866f'>
       <Tabs variant='unstyled'>
         <TabList
-          color='#11866f'
-          bg='#d7f5ef'
-          borderBottom='2px solid #11866f'
+          color='brand.light.primary'
+          bg='green.50'
         >
           <Tab
             w={'20%'}
             p={4}
             _selected={{
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
             }}
-            borderRight='2px solid #11866f'
+            borderRight='2px solid'
+            borderBottom='2px solid'
+            borderColor='brand.light.primary'
           >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              fontSize='sm'
-            >
+            <Text textStyle='download-tab-label'>
               LINUX
             </Text>
           </Tab>
@@ -50,19 +44,14 @@ export const DownloadsTable: FC<Props> = ({
             w={'20%'}
             p={4}
             _selected={{
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
             }}
-            borderRight='2px solid #11866f'
+            borderRight='2px solid'
+            borderBottom='2px solid'
+            borderColor='brand.light.primary'
           >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              fontSize='sm'
-            >
+            <Text textStyle='download-tab-label'>
               MACOS
             </Text>
           </Tab>
@@ -70,19 +59,14 @@ export const DownloadsTable: FC<Props> = ({
             w={'20%'}
             p={4}
             _selected={{
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
             }}
-            borderRight='2px solid #11866f'
+            borderRight='2px solid'
+            borderBottom='2px solid'
+            borderColor='brand.light.primary'
           >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              fontSize='sm'
-            >
+            <Text textStyle='download-tab-label'>
               WINDOWS
             </Text>
           </Tab>
@@ -90,19 +74,14 @@ export const DownloadsTable: FC<Props> = ({
             w={'20%'}
             p={4}
             _selected={{
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
             }}
-            borderRight='2px solid #11866f'
+            borderRight='2px solid'
+            borderBottom='2px solid'
+            borderColor='brand.light.primary'
           >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              fontSize='sm'
-            >
+            <Text textStyle='download-tab-label'>
               IOS
             </Text>
           </Tab>
@@ -110,18 +89,13 @@ export const DownloadsTable: FC<Props> = ({
             w={'20%'}
             p={4}
             _selected={{
-              bg: '#11866f',
-              color: '#f0f2e2',
+              bg: 'brand.light.primary',
+              color: 'yellow.50',
             }}
+            borderBottom='2px solid'
+            borderColor='brand.light.primary'
           >
-            <Text
-              fontFamily='"JetBrains Mono", monospace'
-              // TODO: move to theme colors
-              fontWeight={700}
-              textTransform='uppercase'
-              textAlign='center'
-              fontSize='sm'
-            >
+            <Text textStyle='download-tab-label'>
               ANDROID
             </Text>
           </Tab>

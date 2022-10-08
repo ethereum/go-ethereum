@@ -1,6 +1,6 @@
 import { extendTheme } from '@chakra-ui/react';
 
-import { colors, sizes } from './foundations';
+import { colors, shadows, sizes } from './foundations';
 import { Button, Link } from './components';
 
 const overrides = {
@@ -9,6 +9,7 @@ const overrides = {
     Button,
     Link
   },
+  shadows,
   sizes,
   styles: {
     global: () => ({
@@ -64,6 +65,19 @@ const overrides = {
     'hero-text-small': {
       fontSize: '13px',
       fontFamily: '"Inter", sans-serif'
+    },
+    'downloads-button-label': {
+      fontFamily:'"JetBrains Mono", monospace',
+      color:'yellow.50',
+      fontSize:'xs',
+      textTransform:'uppercase',
+    },
+    'download-tab-label': {
+      fontFamily: '"JetBrains Mono", monospace',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      textAlign: 'center',
+      fontSize: 'sm',
     },
     // TODO: refactor w/ semantic tokens for light/dark mode
     'link-light': {},

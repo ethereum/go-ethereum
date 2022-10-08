@@ -47,29 +47,29 @@ const DownloadsPage: NextPage = ({}) => {
           sectionTitle='Specific Versions'
         >
           <Stack p={4}>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               If you&apos;re looking for a specific release, operating system or architecture, below you will find:
             </Text>
 
             <UnorderedList px={4}>
               <ListItem>
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   All stable and develop builds of Geth and tools
                 </Text>
               </ListItem>
               <ListItem>
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Archives for non-primary processor architectures
                 </Text>
               </ListItem>
               <ListItem>
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Android library archives and iOS XCode frameworks
                 </Text>
               </ListItem>
             </UnorderedList>
 
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               Please select your desired platform from the lists below and download your bundle of choice. Please be aware that the MD5 checksums are provided by our binary hosting platform (Azure Blobstore) to help check for download errors. For security guarantees please verify any downloads via the attached PGP signature files (see{' '}
               <Link
                 href={''}
@@ -92,7 +92,7 @@ const DownloadsPage: NextPage = ({}) => {
 
         <DownloadsSection sectionTitle='Stable releases'>
           <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               These are the current and previous stable releases of go-ethereum, updated automatically when a new version is tagged in our{' '}
               <Link
                 href={GETH_REPO_URL}
@@ -115,19 +115,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData}/>
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Button
-              color='#11866f'
-              bg='#d7f5ef'
-              _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
-              _focus={{
-                textDecoration: 'none',
-                bg: '#11866f',
-                color: '#f0f2e2',
-                boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
-              }}
-              _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
-              h={'100%'}
-            >
+            <Link as='button' variant='secondary'>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 // TODO: move to theme colors
@@ -138,13 +126,13 @@ const DownloadsPage: NextPage = ({}) => {
               >
                 SHOW OLDER RELEASES
               </Text>
-            </Button>
+            </Link>
           </Stack>
         </DownloadsSection>
 
         <DownloadsSection sectionTitle='Develop builds'>
           <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               These are the develop snapshots of go-ethereum, updated automatically when a new commit is pushed into our{' '}
               <Link
                 href={GETH_REPO_URL}
@@ -167,19 +155,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData} />
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Button
-              color='#11866f'
-              bg='#d7f5ef'
-              _hover={{ textDecoration: 'none', bg: '#11866f', color: '#f0f2e2' }}
-              _focus={{
-                textDecoration: 'none',
-                bg: '#11866f',
-                color: '#f0f2e2',
-                boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
-              }}
-              _active={{ textDecoration: 'none', bg: '#25453f', color: '#f0f2e2' }}
-              h={'100%'}
-            >
+            <Link as='button' variant='secondary'>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 // TODO: move to theme colors
@@ -190,13 +166,13 @@ const DownloadsPage: NextPage = ({}) => {
               >
                 SHOW OLDER RELEASES
               </Text>
-            </Button>
+            </Link>
           </Stack>
         </DownloadsSection>
 
         <DownloadsSection sectionTitle='OpenPGP Signatures'>
           <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               All the binaries available from this page are signed via our build server PGP keys:
             </Text>
           </Stack>
@@ -215,7 +191,7 @@ const DownloadsPage: NextPage = ({}) => {
 
         <DownloadsSection sectionTitle='Importing keys and verifying builds'>
           <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               You can import the build server public keys by grabbing the individual keys directly from the keyserver network:
             </Text>
 
@@ -226,7 +202,7 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
           <Stack p={4} borderBottom='2px solid #11866f'>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:
             </Text>
 
@@ -237,7 +213,7 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
           <Stack p={4}>
-            <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+            <Text textStyle='quick-link-text'>
               From the download listings above you should see a link both to the downloadable archives as well as detached signature files. To verify the authenticity of any downloaded data, grab both files and then run:
             </Text>
 

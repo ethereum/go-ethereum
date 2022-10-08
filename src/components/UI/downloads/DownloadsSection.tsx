@@ -1,4 +1,4 @@
-import { Heading, Image, Stack } from '@chakra-ui/react';
+import { Box, Image, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
 interface Props {
@@ -15,28 +15,23 @@ export const DownloadsSection: FC<Props> = ({
   sectionTitle,
 }) => {
   return (
-    <Stack border='2px solid #11866F'>
+    <Stack border='2px solid' borderColor='brand.light.primary'>
       {!!imgSrc && (
-        <Stack alignItems='center' p={4} borderBottom='2px solid #11866f'>
+        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
           {/* TODO: use NextImage */}
           <Image src={imgSrc} alt={imgAltText} />
         </Stack>
       )}
 
-      <Stack p={4} borderBottom='2px solid #11866f' sx={{ mt: '0 !important' }}>
-        <Heading
-          // TODO: move text style to theme
-          as='h2'
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={400}
-          fontSize='1.5rem'
-          lineHeight='auto'
-          letterSpacing='4%'
-          // TODO: move to theme colors
-          color='#1d242c'
-        >
+      <Stack
+        p={4}
+        borderBottom='2px solid'
+        borderColor='brand.light.primary'
+        sx={{ mt: '0 !important' }}
+      >
+        <Box as='h2' textStyle='h2'>
           {sectionTitle}
-        </Heading>
+        </Box>
       </Stack>
 
       <Stack spacing={4}>
