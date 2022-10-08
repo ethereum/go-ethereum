@@ -205,34 +205,46 @@ func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.Gas())
 	mgval = mgval.Mul(mgval, st.gasPrice)
 
+	// compute data fee for eip-4844 data blobs if any
 	dgval := new(big.Int)
+	var dataGasUsed uint64
 	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
-		// add in fee for eip-4844 data blobs if any
-		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), st.dataGasUsed())
+		dgu := st.dataGasUsed()
+		if !dgu.IsUint64() {
+			return fmt.Errorf("data gas usage overflow: address %v have %v", st.msg.From().Hex(), dgu)
+		}
+		dataGasUsed = dgu.Uint64()
+		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), dgu)
 	}
 
-	balanceCheck := new(big.Int)
+	// perform the required user balance checks
+	balanceRequired := new(big.Int)
 	if st.gasFeeCap == nil {
-		balanceCheck.Set(mgval)
+		balanceRequired.Set(mgval)
 	} else {
-		balanceCheck.Add(st.value, dgval)
+		balanceRequired.Add(st.value, dgval)
 		// EIP-1559 mandates that the sender has enough balance to cover not just actual fee but
 		// the max gas fee, so we compute this upper bound rather than use mgval here.
 		maxGasFee := new(big.Int).SetUint64(st.msg.Gas())
 		maxGasFee.Mul(maxGasFee, st.gasFeeCap)
-		balanceCheck.Add(balanceCheck, maxGasFee)
+		balanceRequired.Add(balanceRequired, maxGasFee)
 	}
-
-	if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+	if have, want := st.state.GetBalance(st.msg.From()), balanceRequired; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 	}
+
+	// perform gas pool accounting
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
 	}
 	st.gas += st.msg.Gas()
 	st.initialGas = st.msg.Gas()
+	if err := st.gp.SubDataGas(dataGasUsed); err != nil {
+		return err
+	}
 
-	mgval.Add(mgval, dgval) // both regular gas fee and data gas fee need to be deducted
+	// deduct the total gas fee (regular + data) from the sender's balance
+	mgval.Add(mgval, dgval)
 	st.state.SubBalance(st.msg.From(), mgval)
 	return nil
 }
@@ -285,8 +297,9 @@ func (st *StateTransition) preCheck() error {
 	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
 		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.maxFeePerDataGas) > 0 {
-			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v", ErrMaxFeePerDataGas,
-				st.msg.From().Hex(), st.maxFeePerDataGas, dataGasPrice)
+			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
+				ErrMaxFeePerDataGas,
+				st.msg.From().Hex(), st.maxFeePerDataGas, dataGasPrice, st.evm.Context.ExcessDataGas)
 		}
 	}
 	return st.buyGas()
@@ -373,6 +386,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
+	// TODO: Also refund datagas if tx is rejected
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)
@@ -380,6 +394,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// After EIP-3529: refunds are capped to gasUsed / 5
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
+
 	effectiveTip := st.gasPrice
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))

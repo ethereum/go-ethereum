@@ -1656,7 +1656,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
-					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)
+					bc.prefetcher.Prefetch(followup, parent.ExcessDataGas, throwaway, bc.vmConfig, &followupInterrupt)
 
 					blockPrefetchExecuteTimer.Update(time.Since(start))
 					if atomic.LoadUint32(interrupt) == 1 {
@@ -1668,7 +1668,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		// Process block using the parent state as reference point
 		substart := time.Now()
-		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, parent.ExcessDataGas, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

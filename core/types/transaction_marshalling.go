@@ -50,6 +50,7 @@ type txJSON struct {
 	AccessList *AccessList  `json:"accessList,omitempty"`
 
 	// Blob transaction fields:
+	MaxFeePerDataGas    *hexutil.Big  `json:"maxFeePerDataGas,omitempty"`
 	BlobVersionedHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
 	Blobs               Blobs         `json:"blobs,omitempty"`
 	BlobKzgs            BlobKzgs      `json:"blobKzgs,omitempty"`
@@ -117,6 +118,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(v)
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
+		enc.MaxFeePerDataGas = (*hexutil.Big)(u256ToBig(&tx.Message.MaxFeePerDataGas))
 		enc.BlobVersionedHashes = tx.Message.BlobVersionedHashes
 		if t.wrapData != nil {
 			enc.Blobs = t.wrapData.blobs()
@@ -346,6 +348,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			if err := sanityCheckSignature(big.NewInt(int64(itx.Signature.V)), u256ToBig(&itx.Signature.R), u256ToBig(&itx.Signature.S), false); err != nil {
 				return err
 			}
+		}
+		itx.Message.MaxFeePerDataGas.SetFromBig((*big.Int)(dec.MaxFeePerDataGas))
+		if dec.MaxFeePerDataGas == nil {
+			return errors.New("missing required field 'maxFeePerDataGas' for txdata")
 		}
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
 		// A BlobTx may not contain data

@@ -127,11 +127,12 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 			logged = time.Now()
 		}
 		// Retrieve the next block to regenerate and process it
+		excessDataGas := current.Header().ExcessDataGas
 		next := current.NumberU64() + 1
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+		_, _, _, err := eth.blockchain.Processor().Process(current, excessDataGas, statedb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
@@ -184,14 +185,14 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		context := core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, eth.blockchain, nil)
 		if idx == txIndex {
 			return msg, context, statedb, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
 		statedb.Prepare(tx.Hash(), idx)
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()).AddDataGas(tx.DataGas().Uint64())); err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state

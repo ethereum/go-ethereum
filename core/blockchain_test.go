@@ -156,11 +156,12 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			}
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.stateCache, nil)
+		parent := blockchain.GetBlockByHash(block.ParentHash())
+		statedb, err := state.New(parent.Root(), blockchain.stateCache, nil)
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		receipts, _, usedGas, err := blockchain.processor.Process(block, parent.Header().ExcessDataGas, statedb, vm.Config{})
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -3913,7 +3914,6 @@ func TestDataBlobTxs(t *testing.T) {
 
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
-		b.SetExcessDataGas(new(big.Int))
 		msg := types.BlobTxMessage{
 			Nonce: 0,
 			Gas:   500000,

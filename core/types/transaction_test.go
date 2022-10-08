@@ -544,6 +544,7 @@ func TestBlobTransactionMinimalCodec(t *testing.T) {
 			GasFeeCap:           view.Uint256View(*uint256.NewInt(10)),
 			AccessList:          AccessListView(accesses),
 			BlobVersionedHashes: VersionedHashesView{common.HexToHash("0x01624652859a6e98ffc1608e2af0147ca4e86e1ce27672d8d3f3c9d4ffd6ef7e")},
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(10000000)),
 		},
 	}
 	tx, err := SignNewTx(key, signer, txdata)

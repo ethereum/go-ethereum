@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -273,7 +274,16 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			// Fetch and execute the next block trace tasks
 			for task := range tasks {
 				signer := types.MakeSigner(api.backend.ChainConfig(), task.block.Number())
-				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(localctx), nil)
+				var excessDataGas *big.Int
+				parent, err := api.backend.BlockByHash(ctx, task.block.ParentHash())
+				if err != nil {
+					log.Warn("Tracing failed, could not lookup parent for block", task.block.NumberU64(), "err", err)
+					break
+				}
+				if parent != nil {
+					excessDataGas = parent.Header().ExcessDataGas
+				}
+				blockCtx := core.NewEVMBlockContext(task.block.Header(), excessDataGas, api.chainContext(localctx), nil)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
@@ -523,7 +533,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		roots              []common.Hash
 		signer             = types.MakeSigner(api.backend.ChainConfig(), block.Number())
 		chainConfig        = api.backend.ChainConfig()
-		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		vmctx              = core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	for i, tx := range block.Transactions() {
@@ -597,7 +607,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
 		go func() {
-			blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+			blockCtx := core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, api.chainContext(ctx), nil)
 			defer pend.Done()
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
@@ -618,7 +628,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	// Feed the transactions into the tracers and return
 	var failed error
-	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	blockCtx := core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, api.chainContext(ctx), nil)
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
@@ -686,7 +696,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		dumps       []string
 		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number())
 		chainConfig = api.backend.ChainConfig()
-		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		vmctx       = core.NewEVMBlockContext(block.Header(), parent.Header().ExcessDataGas, api.chainContext(ctx), nil)
 		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
@@ -841,7 +851,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if err != nil {
 		return nil, err
 	}
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	var excessDataGas *big.Int
+	parent, err := api.backend.BlockByHash(ctx, block.ParentHash())
+	if err != nil {
+		return nil, err
+	}
+	if parent != nil {
+		excessDataGas = parent.Header().ExcessDataGas
+	}
+	vmctx := core.NewEVMBlockContext(block.Header(), excessDataGas, api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
 		if err := config.StateOverrides.Apply(statedb); err != nil {
