@@ -64,7 +64,7 @@ func (gp *GasPool) AddDataGas(amount uint64) *GasPool {
 // error otherwise.
 func (gp *GasPool) SubDataGas(amount uint64) error {
 	if gp.dataGas < amount {
-		return ErrGasLimitReached
+		return ErrDataGasLimitReached
 	}
 	gp.dataGas -= amount
 	return nil

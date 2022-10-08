@@ -953,15 +953,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, err
 	}
-	var excessDataGas *big.Int
-	ph, err := b.HeaderByHash(ctx, header.ParentHash)
-	if err != nil {
-		return nil, err
-	}
-	if ph != nil {
-		excessDataGas = ph.ExcessDataGas
-	}
-	evm, vmError, err := b.GetEVM(ctx, msg, state, header, excessDataGas, &vm.Config{NoBaseFee: true})
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
 		return nil, err
 	}
@@ -1454,15 +1446,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
-		var excessDataGas *big.Int
-		ph, err := b.HeaderByHash(ctx, header.ParentHash)
-		if err != nil {
-			return nil, 0, nil, err
-		}
-		if ph != nil {
-			excessDataGas = ph.ExcessDataGas
-		}
-		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, excessDataGas, &config)
+		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
 		if err != nil {
 			return nil, 0, nil, err
 		}

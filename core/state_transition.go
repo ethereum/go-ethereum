@@ -387,7 +387,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 
-	// TODO: Also refund datagas if tx is rejected
+	// Note that unlike regular gas, data fee gas is not refunded if the tx is reverted, per
+	// EIP-4844 spec.
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)
