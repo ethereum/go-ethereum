@@ -7,6 +7,7 @@ export const colors = {
     }
   },
   green: {
+    50: '#d7f5ef',
     200: '#06fece'
   },
   yellow: {

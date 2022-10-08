@@ -35,14 +35,17 @@ const HomePage: NextPage = ({}) => {
                 href='https://go.dev/'
                 isExternal
                 textDecoration='underline'
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
+                color='brand.light.primary'
+                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
                 _focus={{
-                  color: '#11866f',
+                  color: 'brand.light.primary',
                   boxShadow: '0 0 0 1px #11866f !important',
                   textDecoration: 'none'
                 }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                _pressed={{
+                  color: 'brand.light.secondary',
+                  textDecorationColor: 'brand.light.secondary'
+                }}
               >
                 Go
               </Link>{' '}
@@ -51,14 +54,17 @@ const HomePage: NextPage = ({}) => {
                 href={ETHEREUM_ORG_URL}
                 isExternal
                 textDecoration='underline'
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
+                color='brand.light.primary'
+                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
                 _focus={{
-                  color: '#11866f',
+                  color: 'brand.light.primary',
                   boxShadow: '0 0 0 1px #11866f !important',
                   textDecoration: 'none'
                 }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                _pressed={{
+                  color: 'brand.light.secondary',
+                  textDecorationColor: 'brand.light.secondary'
+                }}
               >
                 Ethereum
               </Link>{' '}
@@ -137,14 +143,17 @@ const HomePage: NextPage = ({}) => {
                 href={GETH_REPO_URL}
                 isExternal
                 textDecoration='underline'
-                color='#11866f'
-                _hover={{ color: '#1d242c', textDecorationColor: '#1d242c' }}
+                color='brand.light.primary'
+                _hover={{ color: 'brand.light.body', textDecorationColor: 'brand.light.body' }}
                 _focus={{
-                  color: '#11866f',
+                  color: 'brand.light.primary',
                   boxShadow: '0 0 0 1px #11866f !important',
                   textDecoration: 'none'
                 }}
-                _pressed={{ color: '#25453f', textDecorationColor: '#25453f' }}
+                _pressed={{
+                  color: 'brand.light.secondary',
+                  textDecorationColor: 'brand.light.secondary'
+                }}
               >
                 Github repository
               </Link>

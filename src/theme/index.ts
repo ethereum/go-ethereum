@@ -1,16 +1,18 @@
 import { extendTheme } from '@chakra-ui/react';
 
 import { colors, sizes } from './foundations';
+import { Button } from './components';
 
 const overrides = {
   colors,
-  components: {},
+  components: {
+    Button
+  },
   sizes,
   styles: {
     global: () => ({
       body: {
-        // TODO: move color to theme colors
-        bg: '#f0f2e2'
+        bg: 'yellow.50'
       }
     })
   },
