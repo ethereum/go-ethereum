@@ -75,6 +75,7 @@ export const DataTable: FC<Props> = ({
                         <Td
                           key={idx}
                           px={0}
+                          pr={2}
                         >
                           {item[columnHeader.toLowerCase()]}
                         </Td>

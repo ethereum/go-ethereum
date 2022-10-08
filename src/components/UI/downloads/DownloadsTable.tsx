@@ -113,7 +113,9 @@ export const DownloadsTable: FC<Props> = ({
                 'Kind',
                 'Arch',
                 'Size',
-                'Published'
+                'Published',
+                'Signature',
+                'Checksum (MD5)'
               ]}
               data={data}
             />
@@ -126,7 +128,9 @@ export const DownloadsTable: FC<Props> = ({
                 'Kind',
                 'Arch',
                 'Size',
-                'Published'
+                'Published',
+                'Signature',
+                'Checksum (MD5)'
               ]}
               data={data}
             />
@@ -139,7 +143,9 @@ export const DownloadsTable: FC<Props> = ({
                 'Kind',
                 'Arch',
                 'Size',
-                'Published'
+                'Published',
+                'Signature',
+                'Checksum (MD5)'
               ]}
               data={data}
             />
@@ -152,7 +158,9 @@ export const DownloadsTable: FC<Props> = ({
                 'Kind',
                 'Arch',
                 'Size',
-                'Published'
+                'Published',
+                'Signature',
+                'Checksum (MD5)'
               ]}
               data={data}
             />
@@ -165,7 +173,9 @@ export const DownloadsTable: FC<Props> = ({
                 'Kind',
                 'Arch',
                 'Size',
-                'Published'
+                'Published',
+                'Signature',
+                'Checksum (MD5)'
               ]}
               data={data}
             />
