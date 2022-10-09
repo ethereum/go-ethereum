@@ -35,7 +35,7 @@ There are two ways that this can be achieved: integrated via Qubes or integrated
 
 Qubes provides a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request to another qube. The OS then asks the user if the call is permitted.
 
-![Example](/images/qrexec-example.png)
+![Example](/images/docs/qrexec-example.png)
 
 A policy-file can be created to allow such interaction. On the `target` domain, a service is invoked which can read the `stdin` from the `client` qube.
 
@@ -43,7 +43,7 @@ This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented.
 
 ##### Server
 
-![Clef via qrexec](/images/clef_qubes_qrexec.png)
+![Clef via qrexec](/images/docs/clef_qubes_qrexec.png)
 
 On the `target` qubes, we need to define the RPC service.
 
@@ -122,11 +122,11 @@ $ cat newaccnt.json| qrexec-client-vm debian-work qubes.Clefsign
 
 A dialog should pop up first to allow the IPC call:
 
-![one](/images/qubes_newaccount-1.png)
+![one](/images/docs/qubes_newaccount-1.png)
 
 Followed by a GTK-dialog to approve the operation:
 
-![two](/images/qubes_newaccount-2.png)
+![two](/images/docs/qubes_newaccount-2.png)
 
 To test the full flow, start the client wrapper on the `client` qube:
 
@@ -165,7 +165,7 @@ However, it comes with a couple of drawbacks:
 
 The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible from other qubes.
 
-![Clef via http](/images/clef_qubes_http.png)
+![Clef via http](/images/docs/clef_qubes_http.png)
 
 ## USBArmory
 

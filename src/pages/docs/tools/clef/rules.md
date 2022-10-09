@@ -23,7 +23,7 @@ This page will explain how rules are implemented in Clef and how best to manage 
 
 The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves any requests that meet the conditions defined in a set of authenticated rule files. This prevents the user from having to manually approve or reject every request - instead they can define common patterns in a rule file and abstract that task away to the ruleset engine. The general architecture is as follows:
 
-![Clef ruleset logic](/images/images/clef_ruleset.png)
+![Clef ruleset logic](/images/docs/clef_ruleset.png)
 
 When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/content/docs/tools/Clef/apis.md). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/content/docs/tools/Clef/apis.md). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 

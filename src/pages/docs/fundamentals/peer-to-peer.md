@@ -12,7 +12,7 @@ These testnets started as proof-of-work and proof-of-authority testnets, but the
 
 **Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
-```shell 
+```shell
 # Generate desired config file. You must specify testnet here.
 geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
 
@@ -22,7 +22,7 @@ geth --goerli --config goerli.toml
 
 ## Finding peers
 
-Geth continuously attempts to connect to other nodes on the network until it has enough peers. If UPnP (Universal Plug and Play) is enabled at the router or Ethereum is run on an Internet-facing server, it will also accept connections from other nodes. Geth finds peers using the [discovery protocol](https://ethereum.org/en/developers/docs/networking-layer/#discovery). In the discovery protocol, nodes exchange connectivity details and then establish sessions ([RLPx](https://github.com/ethereum/devp2p/blob/master/rlpx.md)). If the nodes support compatible sub-protocols they can start exchanging Ethereum data [on the wire](https://ethereum.org/en/developers/docs/networking-layer/#wire-protocol). 
+Geth continuously attempts to connect to other nodes on the network until it has enough peers. If UPnP (Universal Plug and Play) is enabled at the router or Ethereum is run on an Internet-facing server, it will also accept connections from other nodes. Geth finds peers using the [discovery protocol](https://ethereum.org/en/developers/docs/networking-layer/#discovery). In the discovery protocol, nodes exchange connectivity details and then establish sessions ([RLPx](https://github.com/ethereum/devp2p/blob/master/rlpx.md)). If the nodes support compatible sub-protocols they can start exchanging Ethereum data [on the wire](https://ethereum.org/en/developers/docs/networking-layer/#wire-protocol).
 
 A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnode` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
 
@@ -44,11 +44,9 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
-
 ## Checking Connectivity
 
 The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
-
 
 ```javascript
 > net.listening
@@ -110,7 +108,6 @@ The `admin` module also includes functions for gathering information about the l
 
 It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
 
-
 ## Static nodes
 
 Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
@@ -130,7 +127,9 @@ Ensure the other lines in `config.toml` are also set correctly before starting G
 Static nodes can also be added at runtime in the Javascript console by passing an enode address to `admin.addPeer()`:
 
 ```javascript
-admin.addPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
+admin.addPeer(
+  'enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303'
+);
 ```
 
 ## Peer limit
@@ -148,7 +147,9 @@ Trusted nodes can be added to `config.toml` in the same way as for static nodes.
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
 ```javascript
-admin.addTrustedPeer("enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303")
+admin.addTrustedPeer(
+  'enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303'
+);
 ```
 
 ## Summary

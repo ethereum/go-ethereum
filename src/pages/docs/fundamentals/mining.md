@@ -5,20 +5,19 @@ description: Introduction to proof-of-work mining with Geth
 
 {% include note.html content=" Proof-of-work mining is no longer used to secure Ethereum Mainnet. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet." %}
 
-Blockchains grow when individual nodes create valid blocks and distribute them to their peers who check the blocks and add them to their own local databases. 
-Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomly selects a node to produce each block. 
+Blockchains grow when individual nodes create valid blocks and distribute them to their peers who check the blocks and add them to their own local databases.
+Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomly selects a node to produce each block.
 
 Ethereum wasn't always secured this way. Originally, a proof-of-work based consensus mechanism was used instead. Under proof-of-work, block producers are not selected randomly in each slot. Instead they compete for the right to add a block. The node that is fastest to compute a certain value that can only be found using brute force calculations is the one that gets to add a block. Only if a node can demonstrate that they have calculated this value, and therefore expended energy, will their block be accepted by other nodes. This process of creating blocks and securing them using proof-of-work is known as "mining".
 
-Much more information about mining, including details about the specific algorithm 
+Much more information about mining, including details about the specific algorithm
 ("Ethash") used by Ethereum nodes is available on [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash).
 
 ## CPU vs GPU
 
 Ethereum mining used an algorithm called ["Ethash"](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash). Geth includes a CPU miner which runs Ethash within the Geth process. Everything required to mine on a CPU is bundled with Geth. However, to mine using GPUs an additional piece of third-party software is required. The most commonly used GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
 
-Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain,meaning block rewards will not be recognized by the main network. 
-
+Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain,meaning block rewards will not be recognized by the main network.
 
 ## GPU Mining
 
@@ -27,7 +26,6 @@ Regardless of the mining method, the blockchain must be fully synced before mini
 The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer Github](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
 
 ### Using Ethminer with Geth
-
 
 An account to receive block rewards must first be defined. The address of the account is all that is required to start mining - the mining rewards will be credited to that address. This can be an existing address or one that is newly created by Geth. More detailed instructions on creating and importing accounts are available on the [Account Management](/docs/interface/managing-your-accounts) page.
 
@@ -93,10 +91,9 @@ Benchmarking on platform: { "platform": "NVIDIA CUDA", "device": "GeForce GTX 75
 Benchmarking on platform: { "platform": "Apple", "device": "Intel(R) Xeon(R) CPU E5-1620 v2 @ 3.70GHz", "version": "OpenCL 1.2 " }
 ```
 
-Note that the Geth command `miner.hashrate` only works for CPU mining - it always reports zero for GPU mining. To check the GPU mining hashrate, check the logs `ethminer` displays to its terminal. 
+Note that the Geth command `miner.hashrate` only works for CPU mining - it always reports zero for GPU mining. To check the GPU mining hashrate, check the logs `ethminer` displays to its terminal.
 
 More verbose logs can be configured using `-v` and a value between 0-9. The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions/84002/memory-hard-vs-memory-bound-functions) and requires a large dataset to be loaded into memory. Each GPU requires 4-5 GB of RAM. The error message `Error GPU mining. GPU memory fragmentation?` indicates that there is insufficient memory available.
-
 
 ## CPU Mining with Geth
 
@@ -109,10 +106,10 @@ geth --mine --miner.threads=4
 CPU mining can also be started and stopped at runtime using the [console](/docs/interface/javascript-console). The command `miner.start` takes an optional parameter for the number of miner threads.
 
 ```js
-miner.start(8)
- true
-miner.stop()
- true
+miner.start(8);
+true;
+miner.stop();
+true;
 ```
 
 Note that mining only makes sense if you are in sync with the network (since you mine on top of the consensus block). Therefore the blockchain downloader/synchroniser will delay mining until syncing is complete, and after that mining automatically starts unless you cancel with `miner.stop()`.
@@ -157,22 +154,20 @@ It is also possible to check which blocks were mined by a particular miner (addr
 function minedBlocks(lastn, addr) {
   addrs = [];
   if (!addr) {
-    addr = eth.coinbase
+    addr = eth.coinbase;
   }
-  limit = eth.blockNumber - lastn
+  limit = eth.blockNumber - lastn;
   for (i = eth.blockNumber; i >= limit; i--) {
     if (eth.getBlock(i).miner == addr) {
-        addrs.push(i)
+      addrs.push(i);
     }
   }
-  return addrs
+  return addrs;
 }
 
 // scans the last 1000 blocks and returns the blocknumbers of blocks mined by your coinbase
 // (more precisely blocks the mining reward for which is sent to your coinbase).
-minedBlocks(1000, eth.coinbase)
-[352708, 352655, 352559]
-
+minedBlocks(1000, eth.coinbase)[(352708, 352655, 352559)];
 ```
 
 The etherbase balance will fluctuate if a mined block is re-org'd out of the canonical chain. This means that when the local Geth node includes the mined block

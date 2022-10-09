@@ -7,7 +7,6 @@ A Geth node continually reports messages to the console allowing users to monito
 
 Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth Github](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-descrining that they do not require additional explanation.
 
-
 ## Configuring log messages
 
 Log messages are displayed to the console by default. The messages can be tuned to be more or less detailed by passing `--verbosity` and a value between 0 and 6 to Geth at startup:
@@ -20,6 +19,7 @@ Log messages are displayed to the console by default. The messages can be tuned 
 4 = debug (all info plus additional messages for debugging)
 5 = detail (all info plus detailed debugging messages)
 ```
+
 The default is `--verbosity 3`.
 
 Log messages can also be redirected so they are saved to a text file instead of being displayed in the console. In Linux the syntax `>> <path> 2>&1` redirects both `stdout` and `stderr` messages to `<path>`. For example:
@@ -36,12 +36,13 @@ When Geth starts up it immediately reports a fairly long page of configuration d
 ```
 MESSAGE_TYPE [MONTH-DAY][TIME] MESSAGE VALUE
 ```
+
 Where `MESSAGE_TYPE` can be `INFO`, `WARN`, `ERROR` or `DEBUG`. These tags categorize log messages according to their purpose. `INFO` messages inform the user about Geth's current configuration and status. `WARN` messages are for alerting the user to details that affect the way Geth is running. `ERROR` messages are for alerting the user to problems. `DEBUG` is for messages that are relevant to troubleshooting or for developers working on Geth.
 
 The messages displayed on startup break down as follows:
 
 ```
-INFO [10-04|10:20:52.028] Starting Geth on Ethereum mainnet... 
+INFO [10-04|10:20:52.028] Starting Geth on Ethereum mainnet...
 INFO [10-04|10:20:52.028] Bumping default cache on mainnet         provided=1024 updated=4096
 INFO [10-04|10:20:52.030] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [10-04|10:20:52.031] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
@@ -52,47 +53,46 @@ INFO [10-04|10:20:52.128] Opened ancient database                  database=/hom
 INFO [10-04|10:20:52.129] Disk storage enabled for ethash caches   dir=/home/go-ethereum/devnet/geth/ethash count=3
 INFO [10-04|10:20:52.129] Disk storage enabled for ethash DAGs     dir=/home/.ethash                        count=2
 INFO [10-04|10:20:52.129] Initialising Ethereum protocol           network=1 dbversion=<nil>
-INFO [10-04|10:20:52.129] Writing default main-net genesis block 
+INFO [10-04|10:20:52.129] Writing default main-net genesis block
 INFO [10-04|10:20:52.372] Persisted trie from memory database      nodes=12356 size=1.78MiB time=21.535537ms gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
 ```
 
-The logs above show the user that the node is connecting to Ethereum Mainnet and some low level configuration details. The cache size is bumped to the Mainnet default (4096). The maximum peer count is the highest number of peers this node is allowed to connect to and can be used to control the bandwidth requirements of the node. Logs relating to `ethash` are out of date since Ethereum moved to proof-of-stake based consensus and can safely be ignored. 
-
+The logs above show the user that the node is connecting to Ethereum Mainnet and some low level configuration details. The cache size is bumped to the Mainnet default (4096). The maximum peer count is the highest number of peers this node is allowed to connect to and can be used to control the bandwidth requirements of the node. Logs relating to `ethash` are out of date since Ethereum moved to proof-of-stake based consensus and can safely be ignored.
 
 ```
---------------------------------------------------------------------------------------------------------------------------------------------------------- 
-INFO [10-04|10:20:52.386] Chain ID:  1 (mainnet) 
-INFO [10-04|10:20:52.386] Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work) 
-INFO [10-04|10:20:52.386]  
-INFO [10-04|10:20:52.386] Pre-Merge hard forks: 
-INFO [10-04|10:20:52.386]  - Homestead:                   1150000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md) 
-INFO [10-04|10:20:52.386]  - DAO Fork:                    1920000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md) 
-INFO [10-04|10:20:52.386]  - Tangerine Whistle (EIP 150): 2463000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md) 
-INFO [10-04|10:20:52.386]  - Spurious Dragon/1 (EIP 155): 2675000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md) 
-INFO [10-04|10:20:52.386]  - Spurious Dragon/2 (EIP 158): 2675000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md) 
-INFO [10-04|10:20:52.386]  - Byzantium:                   4370000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/byzantium.md) 
-INFO [10-04|10:20:52.386]  - Constantinople:              7280000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md) 
-INFO [10-04|10:20:52.386]  - Petersburg:                  7280000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md) 
-INFO [10-04|10:20:52.386]  - Istanbul:                    9069000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md) 
-INFO [10-04|10:20:52.387]  - Muir Glacier:                9200000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md) 
-INFO [10-04|10:20:52.387]  - Berlin:                      12244000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md) 
-INFO [10-04|10:20:52.387]  - London:                      12965000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md) 
-INFO [10-04|10:20:52.387]  - Arrow Glacier:               13773000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md) 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+INFO [10-04|10:20:52.386] Chain ID:  1 (mainnet)
+INFO [10-04|10:20:52.386] Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)
+INFO [10-04|10:20:52.386]
+INFO [10-04|10:20:52.386] Pre-Merge hard forks:
+INFO [10-04|10:20:52.386]  - Homestead:                   1150000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md)
+INFO [10-04|10:20:52.386]  - DAO Fork:                    1920000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/dao-fork.md)
+INFO [10-04|10:20:52.386]  - Tangerine Whistle (EIP 150): 2463000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md)
+INFO [10-04|10:20:52.386]  - Spurious Dragon/1 (EIP 155): 2675000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)
+INFO [10-04|10:20:52.386]  - Spurious Dragon/2 (EIP 158): 2675000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md)
+INFO [10-04|10:20:52.386]  - Byzantium:                   4370000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/byzantium.md)
+INFO [10-04|10:20:52.386]  - Constantinople:              7280000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md)
+INFO [10-04|10:20:52.386]  - Petersburg:                  7280000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md)
+INFO [10-04|10:20:52.386]  - Istanbul:                    9069000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md)
+INFO [10-04|10:20:52.387]  - Muir Glacier:                9200000  (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md)
+INFO [10-04|10:20:52.387]  - Berlin:                      12244000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md)
+INFO [10-04|10:20:52.387]  - London:                      12965000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md)
+INFO [10-04|10:20:52.387]  - Arrow Glacier:               13773000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)
 INFO [10-04|10:20:52.387]  - Gray Glacier:                15050000 (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)
 ```
 
 The above block of messages are related to past Ethereum hard forks. The names are the names of the hard forks and the numbers are the blocks at which the hard fork occurs. This means that blocks with numbers that exceed these values have the configuration required by that hard fork. The specification of each hard fork is available at the provided links (and more information is available on [ethereum.org](https://ethereum.org/en/history/)). The message `Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)` indicates that the node requires a Beacon node to follow the canonical chain - Geth cannot participate in consensus on its own.
 
 ```
-INFO [10-04|10:20:52.387] Merge configured: 
-INFO [10-04|10:20:52.387]  - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md 
-INFO [10-04|10:20:52.387]  - Network known to be merged: true 
-INFO [10-04|10:20:52.387]  - Total terminal difficulty:  58750000000000000000000 
-INFO [10-04|10:20:52.387]  - Merge netsplit block:       <nil> 
-INFO [10-04|10:20:52.387] 
-INFO [10-04|10:20:52.388] Chain post-merge, sync via beacon client 
+INFO [10-04|10:20:52.387] Merge configured:
+INFO [10-04|10:20:52.387]  - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md
+INFO [10-04|10:20:52.387]  - Network known to be merged: true
+INFO [10-04|10:20:52.387]  - Total terminal difficulty:  58750000000000000000000
+INFO [10-04|10:20:52.387]  - Merge netsplit block:       <nil>
+INFO [10-04|10:20:52.387]
+INFO [10-04|10:20:52.388] Chain post-merge, sync via beacon client
 WARN [10-04|10:20:52.388] Engine API enabled                       protocol=eth
---------------------------------------------------------------------------------------------------------------------------------------------------------- 
+---------------------------------------------------------------------------------------------------------------------------------------------------------
 ```
 
 The messages above relate to [The Merge](https://ethereum.org/en/upgrades/merge/). The Merge was Ethereum's transition from proof-of-work to proof-of-stake based consensus. In Geth, The Merge came in the form of the Paris hard fork which was triggered at a [terminal total difficulty](https://ethereum.org/en/glossary/#terminal-total-difficulty) of 58750000000000000000000 instead of a preconfigured block number like previous hard forks. The hard fork specification is linked in the log message. The message `network known to be merged: true` indicates that the node is following a chain that has passed the terminal total difficulty and undergone the Paris hard fork. Since September 15 2022 this will always be true for nodes on Ethereum Mainnet (and the merged testnets Sepolia and Goerli). The warning `Engine API enabled` informs the user that Geth is exposing the set of API methods required for communication with a consensus client.
@@ -114,10 +114,9 @@ INFO [10-04|10:21:03.100] Looking for peers                        peercount=0 t
 
 The logs above relate to Geth starting up its peer-to-peer components and seeking other nodes to connect to. The long address reported to `Started P2P networking` is the nodes own enode address. The `IPC Endpoint` is the location of the node's IPC file that can be used to connect a Javascript console. There is a log message confirming that a JWT secret was generated and reporting its path. This is required to authenticate communication between Geth and the consensus client. There are also messages here reporting on the HTTP server that can be used to send requests to Geth. There should be two HTTP servers - one for interacting with Geth (defaults to `localhost:8545`) and one for communication with the consensus client (defaults to `localhost:8551`).
 
-
 ### Syncing
 
-The default for Geth is to sync in snap mode. This requires a block header to be provided to Geth by the consensus client. The header is then used as a target to sync to. Geth requests block headers from its peers that are parents of the target until there is a continuous chain of sequential headers of sufficient length. Then, Geth requests block bodies and receipts for each header and simultaneously starts downloading state data. This state data is stored in the form of a [Patricia Merkle Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/). Only the leaves of the trie are downloaded, the full trie structure is then locally regenerated from the leaves up. Meanwhile, the blockchain continues to progress and the target header is updated. This means some of the regenerated state data needs to be updated. This is known as *healing*.
+The default for Geth is to sync in snap mode. This requires a block header to be provided to Geth by the consensus client. The header is then used as a target to sync to. Geth requests block headers from its peers that are parents of the target until there is a continuous chain of sequential headers of sufficient length. Then, Geth requests block bodies and receipts for each header and simultaneously starts downloading state data. This state data is stored in the form of a [Patricia Merkle Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/). Only the leaves of the trie are downloaded, the full trie structure is then locally regenerated from the leaves up. Meanwhile, the blockchain continues to progress and the target header is updated. This means some of the regenerated state data needs to be updated. This is known as _healing_.
 
 Assuming Geth has a synced consensus client and some peers it will start importing headers, block bodies and receipts. The log messages for data downloading look as follows:
 
@@ -140,7 +139,7 @@ INFO [09-06|01:31:59.910] Resuming state snapshot generation root=bc64d4..fc1edd
 There are other log messages that are commonly seen during syncing. For example:
 
 ```sh
-WARN [09-28|11:06:01.363] Snapshot extension registration failed 
+WARN [09-28|11:06:01.363] Snapshot extension registration failed
 ```
 
 This warning is nothing to worry about - it is reporting a configuration mismatch between the node and a peer. It does not mean syncing is stalling or failing, it simply results in the peer being dropped and replaced.
@@ -151,7 +150,6 @@ INFO [10-03|15:34:01.336] Forkchoice requested sync to new head    number=15,670
 ```
 
 The message above indicates that the fork choice algorithm, which is run by the consensus client, has identified a new target Geth should sync up to. This redirects the sync to prevent syncing to an outdated target and is a natural part of syncing a live blockchain.
-
 
 ## Transaction logs
 
@@ -165,7 +163,7 @@ Other user actions have similar log messages that are displayed to the console.
 
 ## Common warnings
 
-There are many warnings that can be emitted by Geth as part of its normal operation. However, some are asked about especially frequently on the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU) channel.  
+There are many warnings that can be emitted by Geth as part of its normal operation. However, some are asked about especially frequently on the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU) channel.
 
 ```sh
 WARN [10-03|18:00:40.413] Unexpected trienode heal packet          peer=9f0e8fbf         reqid=6,915,308,639,612,522,441

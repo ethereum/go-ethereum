@@ -1,10 +1,23 @@
 import { extendTheme } from '@chakra-ui/react';
 
-import { breakpoints, sizes } from './foundations';
+import { colors, sizes, textStyles } from './foundations';
+import { Button, Link } from './components';
 
 const overrides = {
-  breakpoints,
-  sizes
+  colors,
+  components: {
+    Button,
+    Link
+  },
+  sizes,
+  styles: {
+    global: () => ({
+      body: {
+        bg: 'yellow.50'
+      }
+    })
+  },
+  textStyles
 };
 
 export default extendTheme(overrides);
