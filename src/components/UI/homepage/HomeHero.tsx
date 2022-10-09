@@ -39,7 +39,7 @@ export const HomeHero: FC = () => {
         </Flex>
 
         <Flex direction='column' alignItems='center'>
-          <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
+          <NextLink href={DOCS_PAGE} passHref>
             <Button variant='primary' as='a' mb={1}>
               <Text textStyle='homepage-primary-label'>Documentation</Text>
             </Button>
