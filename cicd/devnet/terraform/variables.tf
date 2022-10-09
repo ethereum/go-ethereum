@@ -11,7 +11,7 @@ variable "devnet_node_kyes" {
     Note: No `n` is allowed in the node name
   **/
   default = {
-    xdc-1 = {
+    xdc1 = {
       pk  = "3efdb44088929167487da052125162b48d8d54fe8f7b7db11b5d5cc3b9a1c14b",
       isChaosNode = false # This is a placeholder, config not supported yet
     }

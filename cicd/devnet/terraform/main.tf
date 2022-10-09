@@ -34,6 +34,7 @@ terraform {
 resource "aws_vpc" "devnet_vpc" {
   cidr_block = "10.0.0.0/16"
   instance_tenancy = "default"
+  enable_dns_hostnames = true
   
   tags = {
     Name = "TfDevnetVpc"
@@ -149,4 +150,14 @@ resource "aws_iam_role_policy_attachment" "devnet_xdc_ecs_tasks_execution_role" 
   ])
   role       = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.name
   policy_arn = each.value
+}
+
+# Logs
+resource "aws_cloudwatch_log_group" "devnet_cloud_watch_group" {
+  for_each = var.devnet_node_kyes
+  name = "tf-${each.key}"
+  retention_in_days = 14 # Logs are only kept for 14 days
+  tags = {
+    Name = "TfDevnetCloudWatchGroup${each.key}"
+  }
 }
