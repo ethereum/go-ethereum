@@ -1,6 +1,6 @@
 export const Link = {
   variants: {
-    secondary: {
+    'button-link-secondary': {
       color: 'brand.light.primary',
       bg: 'green.50',
       _hover: { textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' },
@@ -27,6 +27,20 @@ export const Link = {
         color: 'brand.light.secondary',
         textDecorationColor: 'brand.light.secondary'
       }
-    }
+    },
+    light: {
+      textDecoration: 'underline',
+      color: 'brand.light.primary',
+      _hover: { color: 'brand.light.body', textDecorationColor: 'brand.light.body' },
+      _focus: {
+        color: 'brand.light.primary',
+        boxShadow: '0 0 0 1px #11866f !important',
+        textDecoration: 'none'
+      },
+      _pressed: {
+        color: 'brand.light.secondary',
+        textDecorationColor: 'brand.light.secondary'
+      }
+    },
   }
 };
