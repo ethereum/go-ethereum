@@ -42,7 +42,3 @@ Here are more resources for a deeper understanding of Geth and related topics.
 [Péter at DevCon 2: Import Geth in Go](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
 [Péter at dotGo 2016: Immutability in Go](https://www.youtube.com/watch?v=fNUx4jHTaIc)
-
-## Listen
-
-Podcasts relating to Geth will be posted here!
