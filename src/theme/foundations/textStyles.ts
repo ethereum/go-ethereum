@@ -53,6 +53,12 @@ export const textStyles = {
     fontSize: '13px',
     fontFamily: '"Inter", sans-serif'
   },
+  'footer-text': {
+    fontFamily: '"Inter", sans-serif',
+    lineHeight: '22px',
+    fontWeight: 400,
+    fontSize: '12px'
+  },
   // TODO: refactor w/ semantic tokens for light/dark mode
   'link-light': {},
   // TODO: refactor w/ semantic tokens for light/dark mode

@@ -9,4 +9,5 @@ export const ETHEREUM_ORG_URL = 'https://ethereum.org';
 export const ETHEREUM_ORG_RUN_A_NODE_URL = 'https://ethereum.org/en/run-a-node/';
 export const ETHEREUM_FOUNDATION_URL = 'https://ethereum.foundation';
 export const GETH_REPO_URL = 'https://github.com/ethereum/go-ethereum';
+export const GETH_TWITTER_URL = 'https://twitter.com/go_ethereum';
 export const GO_URL = 'https://go.dev/';
