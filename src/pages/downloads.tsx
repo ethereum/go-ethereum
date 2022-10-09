@@ -170,7 +170,7 @@ const DownloadsPage: NextPage = ({}) => {
             <DataTable
               columnHeaders={[
                 'Build Server',
-                'UniqueID',
+                'Unique ID',
                 'OpenPGP Key',
                 'Fingerprint'
               ]}
