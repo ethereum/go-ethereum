@@ -9,7 +9,8 @@ import {
   ETHEREUM_FOUNDATION_URL,
   ETHEREUM_ORG_RUN_A_NODE_URL,
   ETHEREUM_ORG_URL,
-  GETH_REPO_URL
+  GETH_REPO_URL,
+  GO_URL,
 } from '../constants';
 
 const HomePage: NextPage = ({}) => {
@@ -31,7 +32,7 @@ const HomePage: NextPage = ({}) => {
           >
             <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
               Geth (go-ethereum) is a{' '}
-              <Link href='https://go.dev/' isExternal variant='light'>
+              <Link href={GO_URL} isExternal variant='light'>
                 Go
               </Link>{' '}
               implementation of{' '}
