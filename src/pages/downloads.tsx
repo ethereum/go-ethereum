@@ -17,6 +17,7 @@ import {
 import { DataTable } from '../components/UI/DataTable';
 
 import {
+  DEFAULT_BUILD_AMOUNT_TO_SHOW,
   GETH_REPO_URL
 } from '../constants'
 
@@ -25,8 +26,8 @@ import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
 import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
 const DownloadsPage: NextPage = ({}) => {
-  const [amountStableReleases, updateAmountStables] = useState(10)
-  const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(10)
+  const [amountStableReleases, updateAmountStables] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW)
+  const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW)
 
   return (
     <>
@@ -105,7 +106,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)}/>
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='secondary' onClick={() => {
+            <Link as='button' variant='button-link-secondary' onClick={() => {
               updateAmountStables(amountStableReleases+10)
             }}>
               <Text
@@ -140,7 +141,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='secondary' onClick={() => {
+            <Link as='button' variant='button-link-secondary' onClick={() => {
               updateAmountDevelopBuilds(amountDevelopBuilds+10)
             }}>
               <Text

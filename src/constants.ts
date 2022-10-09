@@ -9,3 +9,6 @@ export const ETHEREUM_ORG_URL = 'https://ethereum.org';
 export const ETHEREUM_ORG_RUN_A_NODE_URL = 'https://ethereum.org/en/run-a-node/';
 export const ETHEREUM_FOUNDATION_URL = 'https://ethereum.foundation';
 export const GETH_REPO_URL = 'https://github.com/ethereum/go-ethereum';
+
+// Downloads
+export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 10;
