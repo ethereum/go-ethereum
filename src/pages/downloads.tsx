@@ -165,7 +165,7 @@ const DownloadsPage: NextPage = ({}) => {
           </Stack>
 
           {/* TODO: swap for real data */}
-          <Stack>
+          <Stack  borderBottom='2px solid' borderColor='brand.light.primary'>
             <DataTable
               columnHeaders={[
                 'Build Server',
