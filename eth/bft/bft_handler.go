@@ -174,9 +174,11 @@ func (b *Bfter) Stop() {
 	close(b.quit)
 }
 func (b *Bfter) loop() {
+	log.Info("BFT Loop Start")
 	for {
 		select {
 		case <-b.quit:
+			log.Warn("BFT Loop Close")
 			return
 		case obj := <-b.broadcastCh:
 			switch v := obj.(type) {

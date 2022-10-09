@@ -22,11 +22,10 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 	// Hook scans for bad masternodes and decide to penalty them
 	adaptor.EngineV2.HookPenalty = func(chain consensus.ChainReader, number *big.Int, currentHash common.Hash, candidates []common.Address) ([]common.Address, error) {
 		start := time.Now()
-		listBlockHash := make([]common.Hash, chain.Config().XDPoS.Epoch)
-
+		listBlockHash := []common.Hash{}
 		// get list block hash & stats total created block
 		statMiners := make(map[common.Address]int)
-		listBlockHash[0] = currentHash
+		listBlockHash = append(listBlockHash, currentHash)
 		parentNumber := number.Uint64() - 1
 		parentHash := currentHash
 
@@ -63,9 +62,10 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			} else {
 				statMiners[miner] = 1
 			}
-			parentHash = parentHeader.ParentHash
-			listBlockHash[i] = parentHash
 			parentNumber--
+			parentHash = parentHeader.ParentHash
+			listBlockHash = append(listBlockHash, parentHash)
+			log.Debug("[HookPenalty] listBlockHash", "i", i, "len", len(listBlockHash), "parentHash", parentHash, "parentNumber", parentNumber)
 		}
 
 		// add list not miner to penalties
@@ -109,35 +109,34 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			startRange = len(listBlockHash) - 1
 		}
 		for i := startRange; i >= 0; i-- {
-			if len(penComebacks) > 0 {
-				blockNumber := number.Uint64() - uint64(i) - 1
-				bhash := listBlockHash[i]
-				if blockNumber%common.MergeSignRange == 0 {
-					mapBlockHash[bhash] = true
-				}
-				signData, ok := adaptor.GetCachedSigningTxs(bhash)
-				if !ok {
-					block := chain.GetBlock(bhash, blockNumber)
-					txs := block.Transactions()
-					signData = adaptor.CacheSigningTxs(bhash, txs)
-				}
-				txs := signData.([]*types.Transaction)
-				// Check signer signed?
-				for _, tx := range txs {
-					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-					from := *tx.From()
-					if mapBlockHash[blkHash] {
-						for j, addr := range penComebacks {
-							if from == addr {
-								// Remove it from dupSigners.
-								penComebacks = append(penComebacks[:j], penComebacks[j+1:]...)
-								break
-							}
+			if len(penComebacks) == 0 {
+				break
+			}
+			blockNumber := number.Uint64() - uint64(i) - 1
+			bhash := listBlockHash[i]
+			if blockNumber%common.MergeSignRange == 0 {
+				mapBlockHash[bhash] = true
+			}
+			signData, ok := adaptor.GetCachedSigningTxs(bhash)
+			if !ok {
+				block := chain.GetBlock(bhash, blockNumber)
+				txs := block.Transactions()
+				signData = adaptor.CacheSigningTxs(bhash, txs)
+			}
+			txs := signData.([]*types.Transaction)
+			// Check signer signed?
+			for _, tx := range txs {
+				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+				from := *tx.From()
+				if mapBlockHash[blkHash] {
+					for j, addr := range penComebacks {
+						if from == addr {
+							// Remove it from dupSigners.
+							penComebacks = append(penComebacks[:j], penComebacks[j+1:]...)
+							break
 						}
 					}
 				}
-			} else {
-				break
 			}
 		}
 
