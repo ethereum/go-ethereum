@@ -111,7 +111,6 @@ const DownloadsPage: NextPage = ({}) => {
             }}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
-                // TODO: move to theme colors
                 fontWeight={700}
                 textTransform='uppercase'
                 textAlign='center'
@@ -146,7 +145,6 @@ const DownloadsPage: NextPage = ({}) => {
             }}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
-                // TODO: move to theme colors
                 fontWeight={700}
                 textTransform='uppercase'
                 textAlign='center'
@@ -209,7 +207,7 @@ const DownloadsPage: NextPage = ({}) => {
               Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:
             </Text>
 
-            {/* TODO: Thees are developer keys, do we need to change? */}
+            {/* TODO: These are developer keys, do we need to change? */}
             <Code p={4}>
               gpg --recv-keys E058A81C  05A5DDF0 1CCB7DD2
             </Code>

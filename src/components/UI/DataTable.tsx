@@ -21,8 +21,7 @@ export const DataTable: FC<Props> = ({
 }) => {
   return (
     <TableContainer
-      // TODO: Work on firefox implementation of scrollbar styles
-      // Note: This wont work on safari, we are ok with this.
+      // Note: This wont work on firefox, we are ok with this.
       css={{
         "&::-webkit-scrollbar": {
           borderTop: '2px solid #11866f',
@@ -32,13 +31,11 @@ export const DataTable: FC<Props> = ({
           background: "#11866f",
         },
       }}
-      p={4}
+      pt={4}
+      pb={4}
     >
-      <Table
-        variant='unstyled'
-      >
-        <Thead
-        >
+      <Table variant='unstyled'>
+        <Thead>
           <Tr>
             {
               columnHeaders.map((columnHeader, idx) => {
@@ -46,8 +43,8 @@ export const DataTable: FC<Props> = ({
                   <Th
                     key={idx}
                     textTransform='none'
-                    p={0}
                     minW={'130.5px'}
+                    px={4}
                   >
                     <Text
                       fontFamily='"JetBrains Mono", monospace'
@@ -69,10 +66,9 @@ export const DataTable: FC<Props> = ({
               return (
                 <Tr
                   key={idx}
-                  // TODO: Full width for hover
-                  // TODO: Add fade in animation on hover
                   // TODO: Get new background color from nuno for hover
-                  _hover={{background: 'green.50'}}
+                  transition={'all 0.5s'}
+                  _hover={{background: 'green.50', transition: 'all 0.5s'}}
                 >
                   {
                     columnHeaders.map((columnHeader, idx) => {
@@ -80,8 +76,8 @@ export const DataTable: FC<Props> = ({
                       return (
                         <Td
                           key={idx}
-                          px={0}
-                          pr={8}
+                          px={4}
+                          fontSize='13px'
                         >
                           {item[columnHeader.toLowerCase()]}
                         </Td>
