@@ -17,8 +17,8 @@ resource "aws_efs_mount_target" "devnet_efs_efs_mount_target" {
 }
 
 resource "aws_efs_access_point" "devnet_efs_access_point" {
-  file_system_id = aws_efs_file_system.devnet_efs.id
   for_each = var.devnet_node_kyes
+  file_system_id = aws_efs_file_system.devnet_efs.id
   root_directory {
     path = "/${each.key}/database"
     creation_info {
@@ -34,6 +34,6 @@ resource "aws_efs_access_point" "devnet_efs_access_point" {
   }
   
   tags = {
-       Name = "TfDevnetEfsAccessPoint-${each.key}"
+       Name = "TfDevnetEfsAccessPoint${each.key}"
    }
 }
