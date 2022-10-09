@@ -1,6 +1,10 @@
 sudo: required
 language: go
 go_import_path: github.com/XinFinOrg/XDPoSChain
+branches:
+  only:
+  - master
+  - dev-upgrade
 
 env:
   global:
