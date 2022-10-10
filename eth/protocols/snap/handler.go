@@ -139,7 +139,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 	start := time.Now()
-	// Track the emount of time it takes to serve the request and run the handler
+	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
@@ -343,7 +343,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		req.Bytes = softResponseLimit
 	}
 	// TODO(karalabe): Do we want to enforce > 0 accounts and 1 account if origin is set?
-	// TODO(karalabe):   - Logging locally is not ideal as remote faulst annoy the local user
+	// TODO(karalabe):   - Logging locally is not ideal as remote faults annoy the local user
 	// TODO(karalabe):   - Dropping the remote peer is less flexible wrt client bugs (slow is better than non-functional)
 
 	// Calculate the hard limit at which to abort, even if mid storage trie

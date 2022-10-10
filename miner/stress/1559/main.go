@@ -169,7 +169,7 @@ func makeTransaction(nonce uint64, privKey *ecdsa.PrivateKey, signer types.Signe
 	if baseFee == nil {
 		baseFee = new(big.Int).SetInt64(int64(rand.Int31()))
 	}
-	// Generate the feecap, 75% valid feecap and 25% unguaranted.
+	// Generate the feecap, 75% valid feecap and 25% unguaranteed.
 	var gasFeeCap *big.Int
 	if rand.Intn(4) == 0 {
 		rand.Read(buf)

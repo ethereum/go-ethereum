@@ -70,7 +70,7 @@ const (
 	// and waste round trip times. If it's too high, we're capping responses and
 	// waste bandwidth.
 	//
-	// Depoyed bytecodes are currently capped at 24KB, so the minimum request
+	// Deployed bytecodes are currently capped at 24KB, so the minimum request
 	// size should be maxRequestSize / 24K. Assuming that most contracts do not
 	// come close to that, requesting 4x should be a good approximation.
 	maxCodeRequestCount = maxRequestSize / (24 * 1024) * 4
@@ -87,8 +87,8 @@ const (
 	trienodeHealRateMeasurementImpact = 0.005
 
 	// minTrienodeHealThrottle is the minimum divisor for throttling trie node
-	// heal requests to avoid overloading the local node and exessively expanding
-	// the state trie bedth wise.
+	// heal requests to avoid overloading the local node and excessively expanding
+	// the state trie breadth wise.
 	minTrienodeHealThrottle = 1
 
 	// maxTrienodeHealThrottle is the maximum divisor for throttling trie node

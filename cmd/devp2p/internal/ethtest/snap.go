@@ -90,7 +90,7 @@ func (s *Suite) TestSnapGetAccountRange(t *utesting.T) {
 		{4000, s.chain.RootAt(0), zero, ffHash, 0, zero, zero},
 		// A 127 block old stateroot, expected to be served
 		{4000, s.chain.RootAt(999 - 127), zero, ffHash, 77, firstKey, common.HexToHash("0xe4c6fdef5dd4e789a2612390806ee840b8ec0fe52548f8b4efe41abb20c37aac")},
-		// A root which is not actually an account root, but a storage orot
+		// A root which is not actually an account root, but a storage root
 		{4000, storageRoot, zero, ffHash, 0, zero, zero},
 
 		// And some non-sensical requests

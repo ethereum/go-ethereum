@@ -2158,7 +2158,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	stages := []string{"pending", "queued"}
 	for _, stage := range stages {
 		// Since state is empty, 0 nonce txs are "executable" and can go
-		// into pending immediately. 2 nonce txs are "happed
+		// into pending immediately. 2 nonce txs are "gapped"
 		nonce := uint64(0)
 		if stage == "queued" {
 			nonce = 2

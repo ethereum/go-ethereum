@@ -86,7 +86,7 @@ func (ap *testerAccountPool) sign(header *types.Header, signer string) {
 	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
-// testerVote represents a single block signed by a parcitular account, where
+// testerVote represents a single block signed by a particular account, where
 // the account may or may not have cast a Clique vote.
 type testerVote struct {
 	signer     string

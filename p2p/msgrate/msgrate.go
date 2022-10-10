@@ -73,7 +73,7 @@ const rttMinConfidence = 0.1
 const ttlScaling = 3
 
 // ttlLimit is the maximum timeout allowance to prevent reaching crazy numbers
-// if some unforeseen network events shappen. As much as we try to hone in on
+// if some unforeseen network events happen. As much as we try to hone in on
 // the most optimal values, it doesn't make any sense to go above a threshold,
 // even if everything is slow and screwy.
 const ttlLimit = time.Minute
@@ -92,9 +92,9 @@ const tuningImpact = 0.25
 
 // Tracker estimates the throughput capacity of a peer with regard to each data
 // type it can deliver. The goal is to dynamically adjust request sizes to max
-// out network throughput without overloading either the peer or th elocal node.
+// out network throughput without overloading either the peer or the local node.
 //
-// By tracking in real time the latencies and bandiwdths peers exhibit for each
+// By tracking in real time the latencies and bandwidths peers exhibit for each
 // packet type, it's possible to prevent overloading by detecting a slowdown on
 // one type when another type is pushed too hard.
 //
@@ -214,7 +214,7 @@ type Trackers struct {
 	// confidence represents the probability that the estimated roundtrip value
 	// is the real one across all our peers. The confidence value is used as an
 	// impact factor of new measurements on old estimates. As our connectivity
-	// stabilizes, this value gravitates towards 1, new measurements havinng
+	// stabilizes, this value gravitates towards 1, new measurements having
 	// almost no impact. If there's a large peer churn and few peers, then new
 	// measurements will impact it more. The confidence is increased with every
 	// packet and dropped with every new connection.
@@ -316,7 +316,7 @@ func (t *Trackers) medianRoundTrip() time.Duration {
 }
 
 // MeanCapacities returns the capacities averaged across all the added trackers.
-// The purpos of the mean capacities are to initialize a new peer with some sane
+// The purpose of the mean capacities are to initialize a new peer with some sane
 // starting values that it will hopefully outperform. If the mean overshoots, the
 // peer will be cut back to minimal capacity and given another chance.
 func (t *Trackers) MeanCapacities() map[uint64]float64 {

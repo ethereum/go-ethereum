@@ -122,7 +122,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typ
 			if _, err = st.TransitionDb(); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			// Retrieve the trace result and compare against the etalon
+			// Retrieve the trace result and compare against the expected
 			res, err := tracer.GetResult()
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
