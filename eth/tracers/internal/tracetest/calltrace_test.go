@@ -103,7 +103,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
-			if err := rlp.DecodeBytes(common.FromHex(test.Input), tx); err != nil {
+			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 				t.Fatalf("failed to parse testcase input: %v", err)
 			}
 			// Configure a blockchain with the given prestate
