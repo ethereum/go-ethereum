@@ -9,6 +9,11 @@ import {
 } from '@chakra-ui/react';
 import { FC } from 'react';
 
+import {
+  DOWNLOAD_TABS,
+  DOWNLOAD_TAB_COLUMN_HEADERS
+} from '../../../constants'
+
 import { DataTable } from '../DataTable'
 
 interface Props {
@@ -29,154 +34,61 @@ export const DownloadsTable: FC<Props> = ({
           color='brand.light.primary'
           bg='green.50'
         >
-          <Tab
-            w={'20%'}
-            p={4}
-            _selected={{
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-            }}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
-          >
-            <Text textStyle='download-tab-label'>
-              LINUX
-            </Text>
-          </Tab>
-          <Tab
-            w={'20%'}
-            p={4}
-            _selected={{
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-            }}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
-          >
-            <Text textStyle='download-tab-label'>
-              MACOS
-            </Text>
-          </Tab>
-          <Tab
-            w={'20%'}
-            p={4}
-            _selected={{
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-            }}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
-          >
-            <Text textStyle='download-tab-label'>
-              WINDOWS
-            </Text>
-          </Tab>
-          <Tab
-            w={'20%'}
-            p={4}
-            _selected={{
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-            }}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
-          >
-            <Text textStyle='download-tab-label'>
-              IOS
-            </Text>
-          </Tab>
-          <Tab
-            w={'20%'}
-            p={4}
-            _selected={{
-              bg: 'brand.light.primary',
-              color: 'yellow.50',
-            }}
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
-          >
-            <Text textStyle='download-tab-label'>
-              ANDROID
-            </Text>
-          </Tab>
+          {
+            DOWNLOAD_TABS.map((tab, idx) => {
+              return (
+                <Tab
+                  key={idx}
+                  w={'20%'}
+                  p={4}
+                  _selected={{
+                    bg: 'brand.light.primary',
+                    color: 'yellow.50',
+                  }}
+                  borderBottom='2px solid'
+                  borderRight={
+                    idx === (DOWNLOAD_TABS.length - 1)
+                      ?'none'
+                      :'2px solid'
+                  }
+                  borderColor='brand.light.primary'
+                >
+                  <Text textStyle='download-tab-label'>
+                    {tab}
+                  </Text>
+                </Tab>
+              )
+            })
+          }
         </TabList>
         <TabPanels>
           <TabPanel p={0}>
             <DataTable
-              columnHeaders={[
-                'Release',
-                'Commit',
-                'Kind',
-                'Arch',
-                'Size',
-                'Published',
-                'Signature',
-                'Checksum (MD5)'
-              ]}
+              columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS}
               data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
-              columnHeaders={[
-                'Release',
-                'Commit',
-                'Kind',
-                'Arch',
-                'Size',
-                'Published',
-                'Signature',
-                'Checksum (MD5)'
-              ]}
+              columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS}
               data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
-              columnHeaders={[
-                'Release',
-                'Commit',
-                'Kind',
-                'Arch',
-                'Size',
-                'Published',
-                'Signature',
-                'Checksum (MD5)'
-              ]}
+              columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS}
               data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
-              columnHeaders={[
-                'Release',
-                'Commit',
-                'Kind',
-                'Arch',
-                'Size',
-                'Published',
-                'Signature',
-                'Checksum (MD5)'
-              ]}
+              columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS}
               data={data}
             />
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
-              columnHeaders={[
-                'Release',
-                'Commit',
-                'Kind',
-                'Arch',
-                'Size',
-                'Published',
-                'Signature',
-                'Checksum (MD5)'
-              ]}
+              columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS}
               data={data}
             />
           </TabPanel>

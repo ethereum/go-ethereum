@@ -18,6 +18,8 @@ import { DataTable } from '../components/UI/DataTable';
 
 import {
   DEFAULT_BUILD_AMOUNT_TO_SHOW,
+  DOWNLOAD_OPENPGP_BUILD_HEADERS,
+  DOWNLOAD_OPENPGP_DEVELOPER_HEADERS,
   GETH_REPO_URL
 } from '../constants'
 
@@ -79,7 +81,7 @@ const DownloadsPage: NextPage = ({}) => {
               Please select your desired platform from the lists below and download your bundle of choice. Please be aware that the MD5 checksums are provided by our binary hosting platform (Azure Blobstore) to help check for download errors. For security guarantees please verify any downloads via the attached PGP signature files (see{' '}
               <Link
                 href={'#pgpsignatures'}
-                variant='href'
+                variant='light'
               >
                 OpenPGP
               </Link>{' '}
@@ -95,7 +97,7 @@ const DownloadsPage: NextPage = ({}) => {
               <Link
                 href={GETH_REPO_URL}
                 isExternal
-                variant='href'
+                variant='light'
               >
                 GitHub repository.
               </Link>
@@ -116,7 +118,7 @@ const DownloadsPage: NextPage = ({}) => {
                 textAlign='center'
                 p={4}
               >
-                SHOW OLDER RELEASES
+                Show older releases
               </Text>
             </Link>
           </Stack>
@@ -129,7 +131,7 @@ const DownloadsPage: NextPage = ({}) => {
               <Link
                 href={GETH_REPO_URL}
                 isExternal
-                variant='href'
+                variant='light'
               >
                 GitHub repository.
               </Link>
@@ -150,7 +152,7 @@ const DownloadsPage: NextPage = ({}) => {
                 textAlign='center'
                 p={4}
               >
-                SHOW OLDER RELEASES
+                Show older releases
               </Text>
             </Link>
           </Stack>
@@ -166,12 +168,7 @@ const DownloadsPage: NextPage = ({}) => {
           {/* TODO: swap for real data */}
           <Stack  borderBottom='2px solid' borderColor='brand.light.primary'>
             <DataTable
-              columnHeaders={[
-                'Build Server',
-                'Unique ID',
-                'OpenPGP Key',
-                'Fingerprint'
-              ]}
+              columnHeaders={DOWNLOAD_OPENPGP_BUILD_HEADERS}
               data={pgpBuildTestData}
             />
           </Stack>
@@ -179,12 +176,7 @@ const DownloadsPage: NextPage = ({}) => {
           {/* TODO: swap for real data */}
           <Stack>
             <DataTable
-              columnHeaders={[
-                'Developer',
-                'Unique ID',
-                'OpenPGP Key',
-                'Fingerprint'
-              ]}
+              columnHeaders={DOWNLOAD_OPENPGP_DEVELOPER_HEADERS}
               data={pgpDeveloperTestData}
             />
           </Stack>

@@ -2,7 +2,7 @@ import { Box, Image, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
 interface Props {
-  children?: React.ReactNode;
+  children: React.ReactNode;
   id: string;
   imgSrc?: string;
   imgAltText?: string;
