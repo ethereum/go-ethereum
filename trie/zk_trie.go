@@ -162,11 +162,8 @@ func (t *ZkTrie) TryDelete(key []byte) error {
 		return nil
 	}
 
-	zeroBt := common.Hash{}
-	// FIXME: delete should not be implemented as Update(0)
-	return t.tree.TryUpdate(k.Bytes(), zeroBt[:])
-	//kPreimage := smt.NewByte32FromBytesPadding(key)
-	//return t.tree.DeleteWord(kPreimage)
+	// FIXME: when tryDelete get more solid test, use it instead
+	return t.tree.tryDeleteLite(zkt.NewHashFromBigInt(k))
 }
 
 // GetKey returns the preimage of a hashed key that was

@@ -14,7 +14,9 @@ type opIterator interface {
 }
 
 type opOrderer interface {
+	readonly(bool)
 	absorb(*types.AccountWrapper)
+	absorbStorage(*types.AccountWrapper, *types.StorageWrapper)
 	end_absorb() opIterator
 }
 
@@ -33,11 +35,31 @@ func (ops *iterateOp) next() *types.AccountWrapper {
 }
 
 type simpleOrderer struct {
-	savedOp []*types.AccountWrapper
+	readOnly int
+	savedOp  []*types.AccountWrapper
+}
+
+func (od *simpleOrderer) SavedOp() []*types.AccountWrapper { return od.savedOp }
+
+func (od *simpleOrderer) readonly(mode bool) {
+	if mode {
+		od.readOnly += 1
+	} else if od.readOnly == 0 {
+		panic("unexpected readonly mode stack pop")
+	} else {
+		od.readOnly -= 1
+	}
 }
 
 func (od *simpleOrderer) absorb(st *types.AccountWrapper) {
+	if od.readOnly > 0 {
+		return
+	}
 	od.savedOp = append(od.savedOp, st)
+}
+
+func (od *simpleOrderer) absorbStorage(st *types.AccountWrapper, _ *types.StorageWrapper) {
+	od.absorb(st)
 }
 
 func (od *simpleOrderer) end_absorb() opIterator {
@@ -69,6 +91,15 @@ func (opss *multiOpIterator) next() *types.AccountWrapper {
 }
 
 type rwTblOrderer struct {
+	readOnly         int
+	readOnlySnapshot struct {
+		accounts map[string]*types.AccountWrapper
+		storages map[string]map[string]*types.StorageWrapper
+	}
+	initedData map[common.Address]*types.AccountWrapper
+
+	// help to track all accounts being touched, and provide the
+	// completed account status for storage updating
 	traced map[string]*types.AccountWrapper
 
 	opAccNonce    map[string]*types.AccountWrapper
@@ -77,30 +108,36 @@ type rwTblOrderer struct {
 	opStorage     map[string]map[string]*types.StorageWrapper
 }
 
-func newRWTblOrderer(inited map[common.Address]*types.StateAccount) *rwTblOrderer {
+func NewSimpleOrderer() *simpleOrderer { return &simpleOrderer{} }
 
-	traced := make(map[string]*types.AccountWrapper)
+func NewRWTblOrderer(inited map[common.Address]*types.StateAccount) *rwTblOrderer {
 
+	initedAcc := make(map[common.Address]*types.AccountWrapper)
 	for addr, data := range inited {
 		if data == nil {
-			continue
+			initedAcc[addr] = &types.AccountWrapper{
+				Address: addr,
+				Balance: (*hexutil.Big)(big.NewInt(0)),
+			}
+		} else {
+			bl := data.Balance
+			if bl == nil {
+				bl = big.NewInt(0)
+			}
+
+			initedAcc[addr] = &types.AccountWrapper{
+				Address:  addr,
+				Nonce:    data.Nonce,
+				Balance:  (*hexutil.Big)(bl),
+				CodeHash: common.BytesToHash(data.CodeHash),
+			}
 		}
 
-		bl := data.Balance
-		if bl == nil {
-			bl = big.NewInt(0)
-		}
-
-		traced[addr.String()] = &types.AccountWrapper{
-			Address:  addr,
-			Nonce:    data.Nonce,
-			Balance:  (*hexutil.Big)(bl),
-			CodeHash: common.BytesToHash(data.CodeHash),
-		}
 	}
 
 	return &rwTblOrderer{
-		traced:        traced,
+		initedData:    initedAcc,
+		traced:        make(map[string]*types.AccountWrapper),
 		opAccNonce:    make(map[string]*types.AccountWrapper),
 		opAccBalance:  make(map[string]*types.AccountWrapper),
 		opAccCodeHash: make(map[string]*types.AccountWrapper),
@@ -108,16 +145,101 @@ func newRWTblOrderer(inited map[common.Address]*types.StateAccount) *rwTblOrdere
 	}
 }
 
+func (od *rwTblOrderer) readonly(mode bool) {
+	if mode {
+		if od.readOnly == 0 {
+			od.readOnlySnapshot.accounts = make(map[string]*types.AccountWrapper)
+			od.readOnlySnapshot.storages = make(map[string]map[string]*types.StorageWrapper)
+		}
+		od.readOnly += 1
+	} else if od.readOnly == 0 {
+		panic("unexpected readonly mode stack pop")
+	} else {
+		od.readOnly -= 1
+		if od.readOnly == 0 {
+			for addrS, st := range od.readOnlySnapshot.accounts {
+				od.absorb(st)
+				if m, existed := od.readOnlySnapshot.storages[addrS]; existed {
+					for _, stg := range m {
+						st.Storage = stg
+						od.absorbStorage(st, nil)
+					}
+				}
+			}
+		}
+	}
+}
+
+func (od *rwTblOrderer) absorbStorage(st *types.AccountWrapper, before *types.StorageWrapper) {
+	if st.Storage == nil {
+		panic("do not call absorbStorage ")
+	}
+
+	od.absorb(st)
+	addrStr := st.Address.String()
+
+	if stg := st.Storage; stg != nil {
+		m, existed := od.opStorage[addrStr]
+		if !existed {
+			m = make(map[string]*types.StorageWrapper)
+			od.opStorage[addrStr] = m
+		}
+
+		// key must be unified into 32 bytes
+		keyBytes := hexutil.MustDecode(stg.Key)
+		keyStr := common.BytesToHash(keyBytes).String()
+
+		// trace every "touched" status for readOnly
+		if od.readOnly > 0 {
+			m, existed := od.readOnlySnapshot.storages[addrStr]
+			if !existed {
+				m = make(map[string]*types.StorageWrapper)
+				od.readOnlySnapshot.storages[addrStr] = m
+			}
+			if _, hashTraced := m[keyStr]; !hashTraced {
+				if before != nil {
+					m[keyStr] = before
+				} else {
+					m[keyStr] = stg
+				}
+
+			}
+		}
+
+		m[keyStr] = stg
+	}
+
+}
+
 func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
+
+	initedRef, existed := od.initedData[st.Address]
+	if !existed {
+		panic("encounter unprepared status")
+	}
 
 	addrStr := st.Address.String()
 
-	start, existed := od.traced[addrStr]
-	if !existed {
-		start = &types.AccountWrapper{
+	// trace every "touched" status for readOnly
+	if od.readOnly > 0 {
+		snapShot, existed := od.traced[addrStr]
+		if !existed {
+			snapShot = initedRef
+		}
+
+		if _, hasTraced := od.readOnlySnapshot.accounts[addrStr]; !hasTraced {
+			od.readOnlySnapshot.accounts[addrStr] = copyAccountState(snapShot)
+		}
+	}
+
+	if isDeletedAccount(st) {
+		// for account delete, made a safer data for status
+		st = &types.AccountWrapper{
+			Address: st.Address,
 			Balance: (*hexutil.Big)(big.NewInt(0)),
 		}
 	}
+
 	od.traced[addrStr] = st
 
 	// notice there would be at least one entry for all 3 fields when accessing an address
@@ -128,8 +250,8 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 
 	if traced, existed := od.opAccNonce[addrStr]; !existed {
 		traced = copyAccountState(st)
-		traced.Balance = start.Balance
-		traced.CodeHash = start.CodeHash
+		traced.Balance = initedRef.Balance
+		traced.CodeHash = initedRef.CodeHash
 		traced.Storage = nil
 		od.opAccNonce[addrStr] = traced
 	} else {
@@ -138,7 +260,7 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 
 	if traced, existed := od.opAccBalance[addrStr]; !existed {
 		traced = copyAccountState(st)
-		traced.CodeHash = start.CodeHash
+		traced.CodeHash = initedRef.CodeHash
 		traced.Storage = nil
 		od.opAccBalance[addrStr] = traced
 	} else {
@@ -156,17 +278,6 @@ func (od *rwTblOrderer) absorb(st *types.AccountWrapper) {
 		traced.CodeHash = st.CodeHash
 	}
 
-	if stg := st.Storage; stg != nil {
-		m, existed := od.opStorage[addrStr]
-		if !existed {
-			m = make(map[string]*types.StorageWrapper)
-			od.opStorage[addrStr] = m
-		}
-
-		// key must be unified into 32 bytes
-		keyBytes := hexutil.MustDecode(stg.Key)
-		m[common.BytesToHash(keyBytes).String()] = stg
-	}
 }
 
 func (od *rwTblOrderer) end_absorb() opIterator {
@@ -184,6 +295,7 @@ func (od *rwTblOrderer) end_absorb() opIterator {
 	var iterStorage []*types.AccountWrapper
 
 	for _, addrStr := range sortedAddrs {
+
 		if v, existed := od.opAccNonce[addrStr]; existed {
 			iterNonce = append(iterNonce, v)
 		}

@@ -444,76 +444,6 @@ func (mt *ZkTrieImpl) GetLeafNodeByWord(kPreimage *zkt.Byte32) (*Node, error) {
 	return n, err
 }
 
-/*
-// Update function updates the value of a specified key in the ZkTrieImpl, and updates
-// the path from the leaf to the Root with the new values,and returns the
-// CircomProcessorProof.
-func (mt *ZkTrieImpl) Update(k, v *big.Int, kPreimage *zkt.Byte32, vPreimage []byte) error {
-	// verify that the ZkTrieImpl is writable
-	if !mt.writable {
-		return ErrNotWritable
-	}
-
-	// verify that k & are valid and fit inside the Finite Field.
-	if !cryptoUtils.CheckBigIntInField(k) {
-		return errors.New("Key not inside the Finite Field")
-	}
-	if !cryptoUtils.CheckBigIntInField(v) {
-		return errors.New("Key not inside the Finite Field")
-	}
-
-	kHash := zkt.NewHashFromBigInt(k)
-	vHash := zkt.NewHashFromBigInt(v)
-	path := getPath(mt.maxLevels, kHash[:])
-
-	nextKey := mt.rootKey
-	siblings := []*zkt.Hash{}
-	for i := 0; i < mt.maxLevels; i++ {
-		n, err := mt.GetNode(nextKey)
-		if err != nil {
-			return err
-		}
-		switch n.Type {
-		case NodeTypeEmpty:
-			return ErrKeyNotFound
-		case NodeTypeLeaf:
-			if bytes.Equal(kHash[:], n.NodeKey[:]) {
-				// update leaf and upload to the root
-				newNodeLeaf := NewNodeLeaf(kHash, vHash, kPreimage, vPreimage)
-				_, err := mt.updateNode(newNodeLeaf)
-				if err != nil {
-					return err
-				}
-				newRootKey, err :=
-					mt.recalculatePathUntilRoot(path, newNodeLeaf, siblings)
-				if err != nil {
-					return err
-				}
-				mt.rootKey = newRootKey
-				err = mt.dbInsert(dbKeyRootNode, DBEntryTypeRoot, mt.rootKey[:])
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-			return ErrKeyNotFound
-		case NodeTypeMiddle:
-			if path[i] {
-				nextKey = n.ChildR
-				siblings = append(siblings, n.ChildL)
-			} else {
-				nextKey = n.ChildL
-				siblings = append(siblings, n.ChildR)
-			}
-		default:
-			return ErrInvalidNodeFound
-		}
-	}
-
-	return ErrKeyNotFound
-}
-*/
-
 // Deprecated: only for testing
 func (mt *ZkTrieImpl) UpdateWord(kPreimage, vPreimage *zkt.Byte32) error {
 	k, err := kPreimage.Hash()
@@ -589,6 +519,57 @@ func (mt *ZkTrieImpl) UpdateVarWord(kPreimage *zkt.Byte32, vHash *big.Int, vPrei
 }
 */
 
+// only update the corresponding leaf for
+func (mt *ZkTrieImpl) tryDeleteLite(kHash *zkt.Hash) error {
+	// verify that the ZkTrieImpl is writable
+	if !mt.writable {
+		return ErrNotWritable
+	}
+
+	// verify that k is valid and fit inside the Finite Field.
+	if !cryptoUtils.CheckBigIntInField(kHash.BigInt()) {
+		return errors.New("Key not inside the Finite Field")
+	}
+
+	path := getPath(mt.maxLevels, kHash[:])
+
+	nextKey := mt.rootKey
+	siblings := []*zkt.Hash{}
+	for i := 0; i < mt.maxLevels; i++ {
+		n, err := mt.GetNode(nextKey)
+		if err != nil {
+			return err
+		}
+		switch n.Type {
+		case NodeTypeEmpty:
+			return ErrKeyNotFound
+		case NodeTypeLeaf:
+			if bytes.Equal(kHash[:], n.NodeKey[:]) {
+				// remove and go up with the sibling
+				newRootKey, err := mt.recalculatePathUntilRoot(path, NewNodeEmpty(), siblings)
+				if err != nil {
+					return err
+				}
+				mt.rootKey = newRootKey
+				return mt.dbInsert(dbKeyRootNode, DBEntryTypeRoot, mt.rootKey[:])
+			}
+			return ErrKeyNotFound
+		case NodeTypeMiddle:
+			if path[i] {
+				nextKey = n.ChildR
+				siblings = append(siblings, n.ChildL)
+			} else {
+				nextKey = n.ChildL
+				siblings = append(siblings, n.ChildR)
+			}
+		default:
+			return ErrInvalidNodeFound
+		}
+	}
+
+	return ErrKeyNotFound
+}
+
 // Delete removes the specified Key from the ZkTrieImpl and updates the path
 // from the deleted key to the Root with the new values.  This method removes
 // the key from the ZkTrieImpl, but does not remove the old nodes from the
@@ -643,6 +624,23 @@ func (mt *ZkTrieImpl) tryDelete(kHash *zkt.Hash) error {
 	}
 
 	return ErrKeyNotFound
+}
+
+// Delete removes the specified Key from the ZkTrieImpl and updates the path
+// from the deleted key to the Root with the new values.  This method removes
+// the key from the ZkTrieImpl, but does not remove the old nodes from the
+// key-value database; this means that if the tree is accessed by an old Root
+// where the key was not deleted yet, the key will still exist. If is desired
+// to remove the key-values from the database that are not under the current
+// Root, an option could be to dump all the leafs (using mt.DumpLeafs) and
+// import them in a new ZkTrieImpl in a new database (using
+// mt.ImportDumpedLeafs), but this will lose all the Root history of the
+// ZkTrieImpl
+// Delete removes any existing value for key from the trie.
+func (t *ZkTrieImpl) Delete(key []byte) {
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+	}
 }
 
 // TryDelete removes any existing value for key from the trie.

@@ -15,8 +15,8 @@ var (
 		CALLCODE:     {traceToAddressCode, traceLastNAddressCode(1), traceContractAccount, traceLastNAddressAccount(1)}, // contract account is the caller, stack.nth_last(1) is the callee's address
 		DELEGATECALL: {traceToAddressCode, traceLastNAddressCode(1)},
 		STATICCALL:   {traceToAddressCode, traceLastNAddressCode(1), traceLastNAddressAccount(1)},
-		CREATE:       {}, // sender is already recorded in ExecutionResult, callee is recorded in CaptureEnter&CaptureExit
-		CREATE2:      {}, // sender is already recorded in ExecutionResult, callee is recorded in CaptureEnter&CaptureExit
+		CREATE:       {}, // caller is already recorded in ExtraData.Caller, callee is recorded in CaptureEnter&CaptureExit
+		CREATE2:      {}, // caller is already recorded in ExtraData.Caller, callee is recorded in CaptureEnter&CaptureExit
 		SLOAD:        {}, // trace storage in `captureState` instead of here, to handle `l.cfg.DisableStorage` flag
 		SSTORE:       {}, // trace storage in `captureState` instead of here, to handle `l.cfg.DisableStorage` flag
 		SELFDESTRUCT: {traceContractAccount, traceLastNAddressAccount(0)},

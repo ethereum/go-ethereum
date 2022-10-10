@@ -124,6 +124,9 @@ type ExtraData struct {
 	// STATICCALL: [stack.nth_last(1) (i.e. callee) address’s account,
 	//					  callee contract address's account (before called)]
 	StateList []*AccountWrapper `json:"proofList,omitempty"`
+	// The status of caller, it would be captured twice:
+	// 1. before execution and 2. updated in CaptureEnter (for CALL/CALLCODE it duplicated with StateList[0])
+	Caller []*AccountWrapper `json:"caller,omitempty"`
 }
 
 type AccountWrapper struct {

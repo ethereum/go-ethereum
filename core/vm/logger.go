@@ -280,6 +280,12 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 			}
 		}
 	}
+	// for each "calling" op, pick the caller's state
+	switch op {
+	case CALL, CALLCODE, STATICCALL, DELEGATECALL, CREATE, CREATE2:
+		extraData := structlog.getOrInitExtraData()
+		extraData.Caller = append(extraData.Caller, getWrappedAccountForAddr(l, scope.Contract.Address()))
+	}
 
 	structlog.RefundCounter = l.env.StateDB.GetRefund()
 	l.logs = append(l.logs, structlog)
@@ -323,6 +329,10 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 	// append extraData part for the log, capture the account status (the nonce / balance has been updated in capture enter)
 	wrappedStatus := getWrappedAccountForAddr(l, to)
 	theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
+	// finally we update the caller's status (it is possible that nonce and balance being updated)
+	if len(theLog.ExtraData.Caller) == 1 {
+		theLog.ExtraData.Caller = append(theLog.ExtraData.Caller, getWrappedAccountForAddr(l, from))
+	}
 }
 
 // in CaptureExit phase, a CREATE has its target address's code being set and queryable
