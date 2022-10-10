@@ -146,9 +146,8 @@ type FairMix struct {
 }
 
 type mixSource struct {
-	it      Iterator
-	next    chan *Node
-	timeout time.Duration
+	it   Iterator
+	next chan *Node
 }
 
 // NewFairMix creates a mixer.
@@ -175,7 +174,7 @@ func (m *FairMix) AddSource(it Iterator) {
 		return
 	}
 	m.wg.Add(1)
-	source := &mixSource{it, make(chan *Node), m.timeout}
+	source := &mixSource{it, make(chan *Node)}
 	m.sources = append(m.sources, source)
 	go m.runSource(m.closed, source)
 }
@@ -218,13 +217,11 @@ func (m *FairMix) Next() bool {
 		case n, ok := <-source.next:
 			if ok {
 				m.cur = n
-				source.timeout = m.timeout
 				return true
 			}
 			// This source has ended.
 			m.deleteSource(source)
 		case <-timeout:
-			source.timeout /= 2
 			return m.nextFromAny()
 		}
 	}
