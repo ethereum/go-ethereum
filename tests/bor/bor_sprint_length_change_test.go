@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -219,44 +220,49 @@ var keys_21val = []map[string]string{
 	},
 }
 
-func TestSprintLengthReorg(t *testing.T) {
-	reorgsLengthTests := []map[string]uint64{
-		{
-			"reorgLength": 5,
-			"startBlock":  5,
-			"sprintSize":  32,
-			"faultyNode":  1, // node 1(index) is primary validator of the first sprint
-		},
-		// {
-		// 	"reorgLength": 20,
-		// 	"validator":   0,
-		// 	"startBlock":  16,
-		// },
-		// {
-		// 	"reorgLength": 30,
-		// 	"validator":   0,
-		// 	"startBlock":  16,
-		// },
-		// {
-		// 	"reorgLength": 10,
-		// 	"validator":   0,
-		// 	"startBlock":  196,
-		// },
+func getTestSprintLengthReorgCases(t *testing.T) []map[string]uint64 {
+	sprintSizes := []uint64{4, 8, 16, 32, 64}
+	faultyNode := uint64(1)
+	reorgsLengthTests := make([]map[string]uint64, 100)
+	for j := 0; j < len(sprintSizes); j++ {
+		for i := 0; i < 20; i++ {
+			rand.Seed(time.Now().UnixNano())
+			minReorg := 1
+			maxReorg := int(3*sprintSizes[j] - 1)
+			minStartBlock := 1
+			maxStartBlock := int(sprintSizes[j])
+			reorgsLengthTests[i*j+i] = map[string]uint64{
+				"reorgLength": uint64(rand.Intn(maxReorg-minReorg+1) + minReorg),
+				"startBlock":  uint64(rand.Intn(maxStartBlock-minStartBlock+1) + minStartBlock),
+				"sprintSize":  sprintSizes[j],
+				"faultyNode":  faultyNode, // node 1(index) is primary validator of the first sprint
+			}
+		}
 	}
-	for _, tt := range reorgsLengthTests {
-		observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD := SetupValidatorsAndTest(t, tt)
+	return reorgsLengthTests
+}
 
-		if observerNewChainLength > 0 {
-			log.Warn("Observer", "New Chain length", observerNewChainLength, "Old Chain length", observerOldChainLength)
-		}
-		if faultyNewChainLength > 0 {
-			log.Warn("Faulty", "New Chain length", faultyNewChainLength, "Old Chain length", faultyOldChainLength)
-		}
+func TestSprintLengthReorg(t *testing.T) {
+	reorgsLengthTests := getTestSprintLengthReorgCases(t)
+	for index, tt := range reorgsLengthTests {
+		log.Warn("------------ Case", "No", index)
+		_, _, faultyNewChainLength, faultyOldChainLength, validReorg, _, _ := SetupValidatorsAndTest(t, tt)
 
-		log.Warn("Valid Reorg", "Valid Reorg", validReorg, "Old TD", oldTD, "New TD", newTD)
+		// observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD := SetupValidatorsAndTest(t, tt)
+
+		// if observerNewChainLength > 0 {
+		// 	log.Warn("Observer", "New Chain length", observerNewChainLength, "Old Chain length", observerOldChainLength)
+		// }
+		// if faultyNewChainLength > 0 {
+		// 	log.Warn("Faulty", "New Chain length", faultyNewChainLength, "Old Chain length", faultyOldChainLength)
+		// }
+
+		// log.Warn("Valid Reorg", "Valid Reorg", validReorg, "Old TD", oldTD, "New TD", newTD)
 
 		// reorg should be valid :: New TD > Old TD
 		assert.Equal(t, validReorg, true)
+
+		log.Warn("------------ Results", "Reorg Length", tt["reorgLength"], "Start Block", tt["startBlock"], "Sprint Size", tt["sprintSize"], "Faulty Node", tt["faultyNode"], "Final Reorg Length", faultyOldChainLength, "Final Reorg Length", faultyNewChainLength)
 	}
 }
 
@@ -326,8 +332,8 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 		blockHeaderObserver := nodes[subscribedNodeIndex].BlockChain().CurrentHeader()
 		blockHeaderFaulty := nodes[faultyProducerIndex].BlockChain().CurrentHeader()
 
-		log.Warn("Current Observer block", "number", blockHeaderObserver.Number, "hash", blockHeaderObserver.Hash())
-		log.Warn("Current Faulty block", "number", blockHeaderFaulty.Number, "hash", blockHeaderFaulty.Hash())
+		// log.Warn("Current Observer block", "number", blockHeaderObserver.Number, "hash", blockHeaderObserver.Hash())
+		// log.Warn("Current Faulty block", "number", blockHeaderFaulty.Number, "hash", blockHeaderFaulty.Hash())
 
 		if blockHeaderFaulty.Number.Uint64() == tt["startBlock"] {
 			stacks[faultyProducerIndex].Server().MaxPeers = 0
@@ -355,12 +361,12 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 		select {
 		case ev := <-chain2HeadChObserver:
 
-			var newAuthor, oldAuthor common.Address
+			// var newAuthor, oldAuthor common.Address
 			var newTD, oldTD *big.Int
 
 			if ev.Type == core.Chain2HeadReorgEvent {
 				if len(ev.NewChain) > 0 {
-					newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
+					// newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
 					newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
 					if newTD == nil {
 						newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
@@ -369,14 +375,14 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 				}
 
 				if len(ev.OldChain) > 0 {
-					oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
+					// oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
 					oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
 					if oldTD == nil {
 						oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
 					}
 				}
 
-				log.Warn("Observer Reorg", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
+				// log.Warn("Observer Reorg", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
 				if newTD.Cmp(oldTD) == 1 {
 					validReorg = true
 				}
@@ -389,12 +395,12 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 
 		case ev := <-chain2HeadChFaulty:
 
-			var newAuthor, oldAuthor common.Address
+			// var newAuthor, oldAuthor common.Address
 			var newTD, oldTD *big.Int
 
 			if ev.Type == core.Chain2HeadReorgEvent {
 				if len(ev.NewChain) > 0 {
-					newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
+					// newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
 					newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
 					if newTD == nil {
 						newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
@@ -402,15 +408,15 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 				}
 
 				if len(ev.OldChain) > 0 {
-					oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
+					// oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
 					oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
 					if oldTD == nil {
 						oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
 					}
 				}
 
-				log.Warn("Reorg on Faulty Node", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
-				log.Warn("Reorg on Faulty Node", "newTD", newTD, "oldTD", oldTD)
+				// log.Warn("Reorg on Faulty Node", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
+				// log.Warn("Reorg on Faulty Node", "newTD", newTD, "oldTD", oldTD)
 				if newTD.Cmp(oldTD) == 1 {
 					validReorg = true
 				}
