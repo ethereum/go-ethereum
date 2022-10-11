@@ -434,7 +434,7 @@ func handleGetProofs(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 					continue
 				}
 			}
-			// Prove the user's request from the account or stroage trie
+			// Prove the user's request from the account or storage trie
 			if err := trie.Prove(request.Key, request.FromLevel, nodes); err != nil {
 				p.Log().Warn("Failed to prove state request", "block", header.Number, "hash", header.Hash(), "err", err)
 				continue

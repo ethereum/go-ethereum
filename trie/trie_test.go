@@ -609,7 +609,7 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 }
 
 // Benchmarks the trie hashing. Since the trie caches the result of any operation,
-// we cannot use b.N as the number of hashing rouns, since all rounds apart from
+// we cannot use b.N as the number of hashing rounds, since all rounds apart from
 // the first one will be NOOP. As such, we'll use b.N as the number of account to
 // insert into the trie before measuring the hashing.
 // BenchmarkHash-6   	  288680	      4561 ns/op	     682 B/op	       9 allocs/op
@@ -644,7 +644,7 @@ func BenchmarkHash(b *testing.B) {
 }
 
 // Benchmarks the trie Commit following a Hash. Since the trie caches the result of any operation,
-// we cannot use b.N as the number of hashing rouns, since all rounds apart from
+// we cannot use b.N as the number of hashing rounds, since all rounds apart from
 // the first one will be NOOP. As such, we'll use b.N as the number of account to
 // insert into the trie before measuring the hashing.
 func BenchmarkCommitAfterHash(b *testing.B) {

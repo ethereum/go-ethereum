@@ -469,7 +469,7 @@ func (h *priceHeap) Pop() interface{} {
 }
 
 // txPricedList is a price-sorted heap to allow operating on transactions pool
-// contents in a price-incrementing way. It's built opon the all transactions
+// contents in a price-incrementing way. It's built upon the all transactions
 // in txpool but only interested in the remote part. It means only remote transactions
 // will be considered for tracking, sorting, eviction, etc.
 //

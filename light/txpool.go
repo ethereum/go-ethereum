@@ -182,7 +182,7 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 	}
 	// If some transactions have been mined, write the needed data to disk and update
 	if list != nil {
-		// Retrieve all the receipts belonging to this block and write the loopup table
+		// Retrieve all the receipts belonging to this block and write the lookup table
 		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
 			return err
 		}

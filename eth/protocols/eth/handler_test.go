@@ -335,7 +335,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
-		// Collect the hashes to request, and the response to expectva
+		// Collect the hashes to request, and the response to expect
 		var (
 			hashes []common.Hash
 			bodies []*BlockBody

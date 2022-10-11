@@ -394,7 +394,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 	g[addr] = genesisAccount
 }
 
-// saveFile marshalls the object to the given file
+// saveFile marshals the object to the given file
 func saveFile(baseDir, filename string, data interface{}) error {
 	b, err := json.MarshalIndent(data, "", " ")
 	if err != nil {

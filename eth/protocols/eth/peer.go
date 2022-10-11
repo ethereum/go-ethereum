@@ -188,7 +188,7 @@ func (p *Peer) markTransaction(hash common.Hash) {
 // not be managed directly.
 //
 // The reasons this is public is to allow packages using this protocol to write
-// tests that directly send messages without having to do the asyn queueing.
+// tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.Transactions) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {

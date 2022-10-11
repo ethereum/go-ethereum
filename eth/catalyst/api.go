@@ -105,7 +105,7 @@ type ConsensusAPI struct {
 	//     problematic, so we will only track the head chain segment of a bad
 	//     chain to allow discarding progressing bad chains and side chains,
 	//     without tracking too much bad data.
-	invalidBlocksHits map[common.Hash]int           // Emhemeral cache to track invalid blocks and their hit count
+	invalidBlocksHits map[common.Hash]int           // Ephemeral cache to track invalid blocks and their hit count
 	invalidTipsets    map[common.Hash]*types.Header // Ephemeral cache to track invalid tipsets and their bad ancestor
 	invalidLock       sync.Mutex                    // Protects the invalid maps from concurrent access
 

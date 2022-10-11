@@ -95,7 +95,7 @@ func Info() (version, vcs string) {
 // versionInfo returns version information for the currently executing
 // implementation.
 //
-// Depending on how the code is instansiated, it returns different amounts of
+// Depending on how the code is instantiated, it returns different amounts of
 // information. If it is unable to determine which module is related to our
 // package it falls back to the hardcoded values in the params package.
 func versionInfo(info *debug.BuildInfo) string {

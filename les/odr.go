@@ -119,7 +119,7 @@ func (h peerByTxHistory) Less(i, j int) bool {
 func (h peerByTxHistory) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 const (
-	maxTxStatusRetry      = 3 // The maximum retrys will be made for tx status request.
+	maxTxStatusRetry      = 3 // The maximum retries will be made for tx status request.
 	maxTxStatusCandidates = 5 // The maximum les servers the tx status requests will be sent to.
 )
 
