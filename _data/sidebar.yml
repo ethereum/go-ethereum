@@ -10,6 +10,7 @@ How to use:
   - Contract Tutorial: /docs/Contract-Tutorial
 Interface Documentation:
   - Command Line Options: /docs/Command-Line-Options
+  - Bash Autocomplete: /docs/Bash-Autocomplete
   - JavaScript Console: /docs/JavaScript-Console
   - Management API: /docs/Management-APIs
   - JSON-RPC server: https://github.com/ethereum/wiki/wiki/JSON-RPC

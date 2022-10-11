@@ -11,11 +11,10 @@ layout: default
       {% unless frontdoc %}
         {% assign frontdoc = collection.docs[0] %}
       {% endunless %}
-      {% capture target %}{% include link.html url=frontdoc.url %}{% endcapture %}
+      {% assign docs_by_sort_key = collection.docs | group_by:"sort_key" | sort:"name", "last" %}
       <div class="list-group">
-        <a class="list-group-item active" href="{{ target |strip }}">{{ collection.caption }}</a>
+        <a class="list-group-item active" href="{{ docs_by_sort_key[0].items[0].url }}">{{ collection.caption }}</a>
         {% if page.collection == collection.label  %}
-          {% assign docs_by_sort_key = collection.docs | group_by:"sort_key" | sort:"name", "last" %}
           {% for group in docs_by_sort_key %}
             {% assign docs_sorted = group.items | sort:"title" %}
             {% for doc in docs_sorted %}
