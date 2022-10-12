@@ -30,22 +30,22 @@ func (c ChainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
 }
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.
-type callmsg struct {
+type Callmsg struct {
 	ethereum.CallMsg
 }
 
-func (m callmsg) From() common.Address { return m.CallMsg.From }
-func (m callmsg) Nonce() uint64        { return 0 }
-func (m callmsg) CheckNonce() bool     { return false }
-func (m callmsg) To() *common.Address  { return m.CallMsg.To }
-func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
-func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
-func (m callmsg) Data() []byte         { return m.CallMsg.Data }
+func (m Callmsg) From() common.Address { return m.CallMsg.From }
+func (m Callmsg) Nonce() uint64        { return 0 }
+func (m Callmsg) CheckNonce() bool     { return false }
+func (m Callmsg) To() *common.Address  { return m.CallMsg.To }
+func (m Callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
+func (m Callmsg) Gas() uint64          { return m.CallMsg.Gas }
+func (m Callmsg) Value() *big.Int      { return m.CallMsg.Value }
+func (m Callmsg) Data() []byte         { return m.CallMsg.Data }
 
 // get system message
-func GetSystemMessage(toAddress common.Address, data []byte) callmsg {
-	return callmsg{
+func GetSystemMessage(toAddress common.Address, data []byte) Callmsg {
+	return Callmsg{
 		ethereum.CallMsg{
 			From:     systemAddress,
 			Gas:      math.MaxUint64 / 2,
@@ -59,7 +59,7 @@ func GetSystemMessage(toAddress common.Address, data []byte) callmsg {
 
 // apply message
 func ApplyMessage(
-	msg callmsg,
+	msg Callmsg,
 	state *state.StateDB,
 	header *types.Header,
 	chainConfig *params.ChainConfig,
@@ -90,4 +90,32 @@ func ApplyMessage(
 	gasUsed := initialGas - gasLeft
 
 	return gasUsed, nil
+
+}
+
+func ApplyBorMessage(vmenv vm.EVM, msg Callmsg) (*core.ExecutionResult, error) {
+
+	initialGas := msg.Gas()
+
+	// Apply the transaction to the current state (included in the env)
+	ret, gasLeft, err := vmenv.Call(
+		vm.AccountRef(msg.From()),
+		*msg.To(),
+		msg.Data(),
+		msg.Gas(),
+		msg.Value(),
+	)
+	// Update the state with pending changes
+	if err != nil {
+		vmenv.StateDB.Finalise(true)
+	}
+
+	gasUsed := initialGas - gasLeft
+
+	return &core.ExecutionResult{
+		UsedGas:    gasUsed,
+		Err:        err,
+		ReturnData: ret,
+	}, nil
+
 }
