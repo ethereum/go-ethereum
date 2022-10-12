@@ -106,7 +106,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typ
 					Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
 					Difficulty:  (*big.Int)(test.Context.Difficulty),
 					GasLimit:    uint64(test.Context.GasLimit),
-					BaseFee:     big.NewInt(params.InitialBaseFee),
+					BaseFee:    test.Genesis.BaseFee,
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
