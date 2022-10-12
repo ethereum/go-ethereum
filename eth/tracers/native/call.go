@@ -56,6 +56,28 @@ func (f callFrame) TypeString() string {
 	return f.Type.String()
 }
 
+func (f *callFrame) capture(output []byte, err error) {
+	output = common.CopyBytes(output)
+	if err == nil {
+		f.Output = output
+		return
+	}
+	f.Error = err.Error()
+	if f.Type == vm.CREATE || f.Type == vm.CREATE2 {
+		f.To = common.Address{}
+	}
+	if !errors.Is(err, vm.ErrExecutionReverted) || len(output) == 0 {
+		return
+	}
+	f.Output = output
+	if len(output) < 4 {
+		return
+	}
+	if unpacked, err := abi.UnpackRevert(output); err == nil {
+		f.Revertal = unpacked
+	}
+}
+
 type callFrameMarshaling struct {
 	TypeString string `json:"type"`
 	Gas        hexutil.Uint64
@@ -110,22 +132,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	output = common.CopyBytes(output)
-	if err == nil {
-		t.callstack[0].Output = output
-		return
-	}
-	t.callstack[0].Error = err.Error()
-	if !errors.Is(err, vm.ErrExecutionReverted) || len(output) == 0 {
-		return
-	}
-	t.callstack[0].Output = output
-	if len(output) < 4 {
-		return
-	}
-	if unpacked, err := abi.UnpackRevert(output); err == nil {
-		t.callstack[0].Revertal = unpacked
-	}
+	t.callstack[0].capture(output, err)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -174,14 +181,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size -= 1
 
 	call.GasUsed = gasUsed
-	if err == nil {
-		call.Output = common.CopyBytes(output)
-	} else {
-		call.Error = err.Error()
-		if call.Type == vm.CREATE || call.Type == vm.CREATE2 {
-			call.To = common.Address{}
-		}
-	}
+	call.capture(output, err)
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
