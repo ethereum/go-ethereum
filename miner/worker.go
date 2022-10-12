@@ -918,6 +918,19 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	var coalescedLogs []*types.Log
 
+	initialGasLimit := env.gasPool.Gas()
+	initialTxs := txs.GetTxs()
+	var breakCause string
+
+	defer func() {
+		log.Warn("commitTransactions-stats",
+			"initialTxsCount", initialTxs,
+			"initialGasLimit", initialGasLimit,
+			"resultTxsCount", txs.GetTxs(),
+			"resultGapPool", env.gasPool.Gas(),
+			"exitCause", breakCause)
+	}()
+
 	for {
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -937,16 +950,19 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 					inc:   true,
 				}
 			}
+			breakCause = "interrupt"
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+			breakCause = "Not enough gas for further transactions"
 			break
 		}
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
+			breakCause = "all transactions has been included"
 			break
 		}
 		// Error may be ignored here. The error has already been checked
