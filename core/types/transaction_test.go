@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -170,14 +171,14 @@ func TestEIP2930Signer(t *testing.T) {
 			t.Errorf("test %d: wrong sig hash: got %x, want %x", i, sigHash, test.wantSignerHash)
 		}
 		sender, err := Sender(test.signer, test.tx)
-		if err != test.wantSenderErr {
+		if !errors.Is(err, test.wantSenderErr) {
 			t.Errorf("test %d: wrong Sender error %q", i, err)
 		}
 		if err == nil && sender != keyAddr {
 			t.Errorf("test %d: wrong sender address %x", i, sender)
 		}
 		signedTx, err := SignTx(test.tx, test.signer, key)
-		if err != test.wantSignErr {
+		if !errors.Is(err, test.wantSignErr) {
 			t.Fatalf("test %d: wrong SignTx error %q", i, err)
 		}
 		if signedTx != nil {
