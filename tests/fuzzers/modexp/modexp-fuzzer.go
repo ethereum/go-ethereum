@@ -25,12 +25,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+// Fuzz is the fuzzing entry-point.
 // The function must return
-// 1 if the fuzzer should increase priority of the
-//    given input during subsequent fuzzing (for example, the input is lexically
-//    correct and was parsed successfully);
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0  otherwise
+//
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
+//
 // other values are reserved for future use.
 func Fuzz(input []byte) int {
 	if len(input) <= 96 {
