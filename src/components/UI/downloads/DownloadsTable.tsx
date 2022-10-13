@@ -38,7 +38,7 @@ export const DownloadsTable: FC<Props> = ({
             DOWNLOAD_TABS.map((tab, idx) => {
               return (
                 <Tab
-                  key={idx}
+                  key={tab}
                   w={'20%'}
                   p={4}
                   _selected={{

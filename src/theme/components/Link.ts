@@ -25,6 +25,6 @@ export const Link = {
         color: 'brand.light.secondary',
         textDecorationColor: 'brand.light.secondary'
       }
-    },
+    }
   }
 };

@@ -56,10 +56,10 @@ export const DownloadsHero: FC<DownloadsHero> = ({
         </Text>
 
         {
-          Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string, idx) => {
+          Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
             return (
               <NextLink
-                key={idx}
+                key={key}
                 href={DOWNLOAD_HEADER_BUTTONS[key].buildURL}
                 passHref
               >

@@ -27,9 +27,17 @@ import { testDownloadData } from '../data/test/download-testdata'
 import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
 import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
-const DownloadsPage: NextPage = ({}) => {
+const DownloadsPage: NextPage = () => {
   const [amountStableReleases, updateAmountStables] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW)
   const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW)
+
+  const showMoreStableReleases = () => {
+    updateAmountStables(amountStableReleases+10)
+  }
+
+  const showMoreDevelopBuilds = () => {
+    updateAmountDevelopBuilds(amountDevelopBuilds+10)
+  }
 
   return (
     <>
@@ -108,9 +116,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)}/>
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='button-link-secondary' onClick={() => {
-              updateAmountStables(amountStableReleases+10)
-            }}>
+            <Link as='button' variant='button-link-secondary' onClick={showMoreStableReleases}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 fontWeight={700}
@@ -142,9 +148,7 @@ const DownloadsPage: NextPage = ({}) => {
           <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
 
           <Stack sx={{ mt: '0 !important' }}>
-            <Link as='button' variant='button-link-secondary' onClick={() => {
-              updateAmountDevelopBuilds(amountDevelopBuilds+10)
-            }}>
+            <Link as='button' variant='button-link-secondary' onClick={showMoreDevelopBuilds}>
               <Text
                 fontFamily='"JetBrains Mono", monospace'
                 fontWeight={700}
