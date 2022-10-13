@@ -329,7 +329,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return genesis
 }
 
-func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Message, error) {
+func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
 	// Derive sender from private key if present.
 	var from common.Address
 	if len(tx.PrivateKey) > 0 {
@@ -397,7 +397,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (core.Messa
 		return nil, fmt.Errorf("no gas price provided")
 	}
 
-	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
+	msg := core.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
 		tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, false)
 	return msg, nil
 }

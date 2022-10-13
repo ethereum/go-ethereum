@@ -55,7 +55,7 @@ var emptyCodeHash = crypto.Keccak256Hash(nil)
 //  6. Derive new state root
 type StateTransition struct {
 	gp         *GasPool
-	msg        Message
+	msg        *Message
 	gas        uint64
 	gasPrice   *big.Int
 	gasFeeCap  *big.Int
@@ -65,23 +65,6 @@ type StateTransition struct {
 	data       []byte
 	state      vm.StateDB
 	evm        *vm.EVM
-}
-
-// Message represents a message sent to a contract.
-type Message interface {
-	From() common.Address
-	To() *common.Address
-
-	GasPrice() *big.Int
-	GasFeeCap() *big.Int
-	GasTipCap() *big.Int
-	Gas() uint64
-	Value() *big.Int
-
-	Nonce() uint64
-	IsFake() bool
-	Data() []byte
-	AccessList() types.AccessList
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -179,7 +162,7 @@ func toWordSize(size uint64) uint64 {
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:        gp,
 		evm:       evm,
@@ -200,7 +183,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, error) {
+func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
