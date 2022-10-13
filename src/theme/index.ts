@@ -1,6 +1,6 @@
 import { extendTheme } from '@chakra-ui/react';
 
-import { colors, sizes, textStyles } from './foundations';
+import { colors, shadows, sizes, textStyles } from './foundations';
 import { Button, Link } from './components';
 
 const overrides = {
@@ -9,6 +9,7 @@ const overrides = {
     Button,
     Link
   },
+  shadows,
   sizes,
   styles: {
     global: () => ({
