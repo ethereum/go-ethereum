@@ -447,6 +447,23 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	return backend.Handle(peer, ann)
 }
 
+func handleNewPooledTransactionHashes68(backend Backend, msg Decoder, peer *Peer) error {
+	// New transaction announcement arrived, make sure we have
+	// a valid and fresh chain to handle them
+	if !backend.AcceptTxs() {
+		return nil
+	}
+	ann := new(NewPooledTransactionHashesPacket68)
+	if err := msg.Decode(ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// Schedule all the unknown hashes for retrieval
+	for _, hash := range ann.Hashes {
+		peer.markTransaction(hash)
+	}
+	return backend.Handle(peer, ann)
+}
+
 func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket66
