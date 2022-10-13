@@ -101,6 +101,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	}
 	defer timeout.Stop()
 
+	head := d.blockchain.CurrentBlock()
+	ourTD := d.blockchain.GetTd(head.Hash(), head.NumberU64())
+
 	// Track the timed-out but not-yet-answered requests separately. We want to
 	// keep tracking which peers are busy (potentially overloaded), so removing
 	// all trace of a timed out request is not good. We also can't just cancel
@@ -142,6 +145,10 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				caps  []int
 			)
 			for _, peer := range d.peers.AllPeers() {
+				_, peerTD := peer.peer.Head()
+				if peerTD.Cmp(ourTD) <= 0 {
+					continue
+				}
 				pending, stale := pending[peer.id], stales[peer.id]
 				if pending == nil && stale == nil {
 					idles = append(idles, peer)
