@@ -308,6 +308,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 					}
 
 					var res interface{}
+
 					var err error
 
 					if stateSyncPresent && i == len(txs)-1 {
@@ -528,9 +529,8 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 }
 
 func prepareCallMessage(msg core.Message) statefull.Callmsg {
-
 	return statefull.Callmsg{
-		ethereum.CallMsg{
+		CallMsg: ethereum.CallMsg{
 			From:       msg.From(),
 			To:         msg.To(),
 			Gas:        msg.Gas(),
@@ -541,7 +541,6 @@ func prepareCallMessage(msg core.Message) statefull.Callmsg {
 			Data:       msg.Data(),
 			AccessList: msg.AccessList(),
 		}}
-
 }
 
 // IntermediateRoots executes a block (bad- or canon- or side-), and returns a list
@@ -577,6 +576,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
+
 	txs, stateSyncPresent := api.getAllBlockTransactions(ctx, block)
 	for i, tx := range txs {
 		var (
@@ -585,6 +585,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
 		statedb.Prepare(tx.Hash(), i)
+
 		if stateSyncPresent && i == len(txs)-1 {
 			callmsg := prepareCallMessage(msg)
 
@@ -598,7 +599,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 				// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
 				return roots, nil
 			}
-
 		} else {
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 				log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
@@ -677,7 +677,9 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 					TxIndex:   task.index,
 					TxHash:    txs[task.index].Hash(),
 				}
+
 				var res interface{}
+
 				var err error
 				if stateSyncPresent && task.index == len(txs)-1 {
 					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config, true)
@@ -793,6 +795,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			canon = false
 		}
 	}
+
 	txs, stateSyncPresent := api.getAllBlockTransactions(ctx, block)
 	for i, tx := range txs {
 		// Prepare the trasaction for un-traced execution
@@ -828,9 +831,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.Prepare(tx.Hash(), i)
+
 		if stateSyncPresent && i == len(txs)-1 {
 			callmsg := prepareCallMessage(msg)
 			_, err = statefull.ApplyBorMessage(*vmenv, callmsg)
+
 			if writer != nil {
 				writer.Flush()
 			}
@@ -910,6 +915,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		TxIndex:   int(index),
 		TxHash:    hash,
 	}
+
 	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config, borTx)
 }
 
@@ -964,6 +970,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 			Reexec:  config.Reexec,
 		}
 	}
+
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig, borTx)
 }
 
@@ -1011,12 +1018,12 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 
 	var result *core.ExecutionResult
+
 	if borTx {
 		callmsg := prepareCallMessage(message)
 		if result, err = statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}
-
 	} else {
 		result, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
 		if err != nil {
