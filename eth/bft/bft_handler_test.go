@@ -333,7 +333,7 @@ func TestTooFarTimeout(t *testing.T) {
 	verifyCounter := uint32(0)
 	handlerCounter := uint32(0)
 	broadcastCounter := uint32(0)
-	targetTimeout := 0
+	targetTimeout := 1
 
 	tester.bfter.consensus.verifyTimeout = func(consensus.ChainReader, *types.Timeout) (bool, error) {
 		atomic.AddUint32(&verifyCounter, 1)
@@ -349,9 +349,9 @@ func TestTooFarTimeout(t *testing.T) {
 		atomic.AddUint32(&broadcastCounter, 1)
 	}
 
-	tester.bfter.chainHeight = func() uint64 { return 2400 }
+	tester.bfter.chainHeight = func() uint64 { return 7175258 }
 
-	timeoutMsg := &types.Timeout{GapNumber: 450}
+	timeoutMsg := &types.Timeout{GapNumber: 7173450}
 
 	err := tester.bfter.Timeout(peerID, timeoutMsg)
 	if err != nil {

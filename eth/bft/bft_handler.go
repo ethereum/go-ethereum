@@ -113,7 +113,9 @@ func (b *Bfter) Timeout(peer string, timeout *types.Timeout) error {
 	log.Debug("Receive Timeout", "timeout", timeout)
 
 	gapNum := timeout.GapNumber
-	if dist := int64(gapNum) - int64(b.chainHeight()); dist < -int64(b.epoch)*2 || dist > int64(b.epoch)*2 { // times 2 is to avoid cross epoch case, ex: timeout block between 901 to 1799, gapnumber is 450
+
+	// dist times 3, ex: timeout message's gap number is based on block and find out it's epoch switch number, then mod 900 then minus 450
+	if dist := int64(gapNum) - int64(b.chainHeight()); dist < -int64(b.epoch)*3 || dist > int64(b.epoch)*3 {
 		log.Debug("Discarded propagated timeout, too far away", "peer", peer, "gapNumber", gapNum, "hash", timeout.Hash, "distance", dist)
 		return nil
 	}
