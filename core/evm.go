@@ -44,7 +44,6 @@ func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain Chai
 		beneficiary common.Address
 		baseFee     *big.Int
 		random      *common.Hash
-		edg         *big.Int
 	)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
@@ -59,8 +58,11 @@ func NewEVMBlockContext(header *types.Header, excessDataGas *big.Int, chain Chai
 	if header.Difficulty.Cmp(common.Big0) == 0 {
 		random = &header.MixDigest
 	}
+	// In the event excessDataGas is nil (which happens if the parent block is pre-sharding),
+	// we bootstrap BlockContext.ExcessDataGas with the zero value.
+	edg := new(big.Int)
 	if excessDataGas != nil {
-		edg = new(big.Int).Set(excessDataGas)
+		edg.Set(excessDataGas)
 	}
 	return vm.BlockContext{
 		CanTransfer:   CanTransfer,
