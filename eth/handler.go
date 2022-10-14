@@ -849,8 +849,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			pm.lendingpool.AddRemotes(txs)
 		}
 	case msg.Code == VoteMsg:
-		// VoteMsg arrived, make sure we have a valid and fresh chain to handle them
-		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+		if pm.downloader.Synchronising() {
 			break
 		}
 
@@ -868,8 +867,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TimeoutMsg:
-		// TimeoutMsg arrived, make sure we have a valid and fresh chain to handle them
-		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+		if pm.downloader.Synchronising() {
 			break
 		}
 
@@ -888,8 +886,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == SyncInfoMsg:
-		// SyncInfoMsg arrived, make sure we have a valid and fresh chain to handle them
-		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+		if pm.downloader.Synchronising() {
 			break
 		}
 
