@@ -64,10 +64,11 @@ func Fuzz(input []byte) int {
 		// Modulo 0 is undefined, return zero
 		return -1
 	}
+	preBase, preExp, preMod := new(big.Int).Set(base), new(big.Int).Set(exp), new(big.Int).Set(mod)
 	var a = math.FastExp(new(big.Int).Set(base), new(big.Int).Set(exp), new(big.Int).Set(mod))
 	var b = base.Exp(base, exp, mod)
 	if a.Cmp(b) != 0 {
-		panic(fmt.Sprintf("Inequality %x != %x", a, b))
+		panic(fmt.Sprintf("Inequality\n %#x ^ %#x mod %#x \n have %#x\n want %#x", preBase, preExp, preMod, a, b))
 	}
 	return 1
 }
