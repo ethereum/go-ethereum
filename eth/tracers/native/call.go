@@ -19,6 +19,7 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -36,6 +37,12 @@ func init() {
 	register("callTracer", newCallTracer)
 }
 
+type callLog struct {
+	Address common.Address `json:"address" `
+	Topics  []common.Hash  `json:"topics" `
+	Data    []byte         `json:"data,omitempty" rlp:"optional"`
+}
+
 type callFrame struct {
 	Type     vm.OpCode      `json:"-"`
 	From     common.Address `json:"from"`
@@ -47,6 +54,7 @@ type callFrame struct {
 	Error    string         `json:"error,omitempty" rlp:"optional"`
 	Revertal string         `json:"revertReason,omitempty"`
 	Calls    []callFrame    `json:"calls,omitempty" rlp:"optional"`
+	Logs     []callLog      `json:"logs,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value *big.Int `json:"value,omitempty" rlp:"optional"`
@@ -76,6 +84,7 @@ type callTracer struct {
 
 type callTracerConfig struct {
 	OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
+	WithLog     bool `json:"withLog"`     // If true, call tracer will collect event logs
 }
 
 // newCallTracer returns a native go tracer which tracks
@@ -130,10 +139,46 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	switch op {
+	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
+		fmt.Printf("[%d] is log CaptureState op: %s\n", depth, op)
+	}
+	if !t.config.WithLog {
+		return
+	}
+	switch op {
+	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
+		var size int
+		if op == vm.LOG0 {
+			size = 0
+		} else if op == vm.LOG1 {
+			size = 1
+		} else if op == vm.LOG2 {
+			size = 2
+		} else if op == vm.LOG3 {
+			size = 3
+		} else if op == vm.LOG4 {
+			size = 4
+		}
+
+		topics := make([]common.Hash, size)
+		// stack := scope.Stack
+		// mStart, mSize := stack.Pop(), stack.Pop()
+		// // _, _ = stack.Pop(), stack.Pop()
+		// for i := 0; i < size; i++ {
+		// 	addr := stack.Pop()
+		// 	topics[i] = addr.Bytes32()
+		// }
+		//
+		// d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		log := callLog{Address: scope.Contract.Address(), Topics: topics}
+		fmt.Printf("log: %+v\n", log)
+		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *callTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *callTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
