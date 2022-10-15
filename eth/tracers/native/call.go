@@ -139,40 +139,28 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	switch op {
-	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
-		fmt.Printf("[%d] is log CaptureState op: %s\n", depth, op)
-	}
 	if !t.config.WithLog {
 		return
 	}
 	switch op {
 	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
-		var size int
-		if op == vm.LOG0 {
-			size = 0
-		} else if op == vm.LOG1 {
-			size = 1
-		} else if op == vm.LOG2 {
-			size = 2
-		} else if op == vm.LOG3 {
-			size = 3
-		} else if op == vm.LOG4 {
-			size = 4
-		}
+		size := int(op - vm.LOG0)
 
 		topics := make([]common.Hash, size)
-		// stack := scope.Stack
-		// mStart, mSize := stack.Pop(), stack.Pop()
-		// // _, _ = stack.Pop(), stack.Pop()
-		// for i := 0; i < size; i++ {
-		// 	addr := stack.Pop()
-		// 	topics[i] = addr.Bytes32()
-		// }
-		//
-		// d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
-		log := callLog{Address: scope.Contract.Address(), Topics: topics}
-		fmt.Printf("log: %+v\n", log)
+		stack := scope.Stack
+		stackData := stack.Data()
+		mStart := stackData[len(stackData)-1]
+		stackData = stackData[:len(stackData)-1]
+		mSize := stackData[len(stackData)-1]
+		for i := 0; i < size; i++ {
+			topic := stackData[len(stackData)-1]
+			stackData = stackData[:len(stackData)-1]
+			topics[i] = common.Hash(topic.Bytes32())
+		}
+
+		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: d}
+		fmt.Printf("[%d] is log CaptureState op: %s\n", depth, op)
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
 	}
 }
