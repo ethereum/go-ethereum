@@ -2250,8 +2250,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Data
 	if !ctx.Bool(SnapshotFlag.Name) {
 		cache.SnapshotLimit = 0 // Disabled
 	}
-	// Disable snapshot generation/wiping by default
-	cache.SnapshotNoBuild = true
+	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
+	// Enable snapshot generation/wiping by default
+	cache.SnapshotNoBuild = false
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
