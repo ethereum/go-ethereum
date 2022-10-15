@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
@@ -37,8 +38,8 @@ func init() {
 }
 
 type callLog struct {
-	Address common.Address `json:"address" `
-	Topics  []common.Hash  `json:"topics" `
+	Address common.Address `json:"address"`
+	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
 }
 
@@ -145,15 +146,19 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
 		size := int(op - vm.LOG0)
 
-		topics := make([]common.Hash, size)
 		stack := scope.Stack
 		stackData := stack.Data()
-		mStart := stackData[len(stackData)-1]
-		stackData = stackData[:len(stackData)-1]
-		mSize := stackData[len(stackData)-1]
-		for i := 0; i < size; i++ {
-			topic := stackData[len(stackData)-1]
+		stackPop := func() uint256.Int {
+			ret := stackData[len(stackData)-1]
 			stackData = stackData[:len(stackData)-1]
+			return ret
+		}
+
+		mStart := stackPop()
+		mSize := stackPop()
+		topics := make([]common.Hash, size)
+		for i := 0; i < size; i++ {
+			topic := stackPop()
 			topics[i] = common.Hash(topic.Bytes32())
 		}
 
