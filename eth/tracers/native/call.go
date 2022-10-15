@@ -19,7 +19,6 @@ package native
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -40,7 +39,7 @@ func init() {
 type callLog struct {
 	Address common.Address `json:"address" `
 	Topics  []common.Hash  `json:"topics" `
-	Data    []byte         `json:"data,omitempty" rlp:"optional"`
+	Data    hexutil.Bytes  `json:"data"`
 }
 
 type callFrame struct {
@@ -158,9 +157,8 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 			topics[i] = common.Hash(topic.Bytes32())
 		}
 
-		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
-		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: d}
-		fmt.Printf("[%d] is log CaptureState op: %s\n", depth, op)
+		data := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
 	}
 }
