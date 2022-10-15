@@ -46,6 +46,13 @@ type callContext struct {
 	Miner      common.Address        `json:"miner"`
 }
 
+// callLog is the result of LOG opCode
+type callLog struct {
+	Address common.Address `json:"address"`
+	Topics  []common.Hash  `json:"topics"`
+	Data    hexutil.Bytes  `json:"data"`
+}
+
 // callTrace is the result of a callTracer run.
 type callTrace struct {
 	From     common.Address  `json:"from"`
@@ -58,6 +65,7 @@ type callTrace struct {
 	Revertal string          `json:"revertReason,omitempty"`
 	Calls    []callTrace     `json:"calls,omitempty"`
 	Value    *hexutil.Big    `json:"value,omitempty"`
+	Logs     []callLog       `json:"logs,omitempty"`
 	// Gencodec adds overridden fields at the end
 	Type string `json:"type"`
 }
@@ -79,6 +87,10 @@ func TestCallTracerLegacy(t *testing.T) {
 
 func TestCallTracerNative(t *testing.T) {
 	testCallTracer("callTracer", "call_tracer", t)
+}
+
+func TestCallTracerNativeWithLog(t *testing.T) {
+	testCallTracer("callTracer", "call_tracer_withLog", t)
 }
 
 func testCallTracer(tracerName string, dirPath string, t *testing.T) {
