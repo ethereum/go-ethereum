@@ -657,7 +657,7 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.Pay
 	if err != nil {
 		return nil, err
 	}
-	return payload.ResolveFull(), nil
+	return payload.ResolveFull().ExecutionPayload, nil
 }
 
 func TestEmptyBlocks(t *testing.T) {
@@ -899,7 +899,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	data := *payload.Resolve()
+	data := *payload.Resolve().ExecutionPayload
 	resp2, err := api.NewPayloadV1(data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
@@ -1039,12 +1039,12 @@ func TestWithdrawals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if execData.StateRoot != parent.Root {
-		t.Fatalf("mismatch state roots (got: %s, want: %s)", execData.StateRoot, blocks[8].Root())
+	if execData.ExecutionPayload.StateRoot != parent.Root {
+		t.Fatalf("mismatch state roots (got: %s, want: %s)", execData.ExecutionPayload.StateRoot, blocks[8].Root())
 	}
 
 	// 10: verify locally built block
-	if status, err := api.NewPayloadV2(*execData); err != nil {
+	if status, err := api.NewPayloadV2(*execData.ExecutionPayload); err != nil {
 		t.Fatalf("error validating payload: %v", err)
 	} else if status.Status != beacon.VALID {
 		t.Fatalf("invalid payload")
@@ -1054,7 +1054,7 @@ func TestWithdrawals(t *testing.T) {
 	aa := common.Address{0xaa}
 	bb := common.Address{0xbb}
 	params = beacon.PayloadAttributes{
-		Timestamp: execData.Timestamp + 5,
+		Timestamp: execData.ExecutionPayload.Timestamp + 5,
 		Withdrawals: []*types.Withdrawal{
 			{
 				Index:   0,
@@ -1068,7 +1068,7 @@ func TestWithdrawals(t *testing.T) {
 			},
 		},
 	}
-	fcState.HeadBlockHash = execData.BlockHash
+	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
 	_, err = api.ForkchoiceUpdatedV2(fcState, &params)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
@@ -1085,21 +1085,21 @@ func TestWithdrawals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if status, err := api.NewPayloadV2(*execData); err != nil {
+	if status, err := api.NewPayloadV2(*execData.ExecutionPayload); err != nil {
 		t.Fatalf("error validating payload: %v", err)
 	} else if status.Status != beacon.VALID {
 		t.Fatalf("invalid payload")
 	}
 
 	// 11: set block as head.
-	fcState.HeadBlockHash = execData.BlockHash
+	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
 	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 
 	// 11: verify withdrawals were processed.
-	db, _, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.Number))
+	db, _, err := ethservice.APIBackend.StateAndHeaderByNumber(context.Background(), rpc.BlockNumber(execData.ExecutionPayload.Number))
 	if err != nil {
 		t.Fatalf("unable to load db: %v", err)
 	}
