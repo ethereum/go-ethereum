@@ -352,11 +352,11 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return data.ExecutionPayload, nil
 }
 
 // GetPayloadV2 returns a cached payload by id.
-func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutableData, error) {
+func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutableDataV2, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID)
 	if data == nil {

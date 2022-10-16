@@ -75,6 +75,11 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
+type ExecutableDataV2 struct {
+	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+}
+
 type PayloadStatusV1 struct {
 	Status          string       `json:"status"`
 	LatestValidHash *common.Hash `json:"latestValidHash"`
@@ -197,8 +202,8 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block) *ExecutableData {
-	return &ExecutableData{
+func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutableDataV2 {
+	data := &ExecutableData{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
 		FeeRecipient:  block.Coinbase(),
@@ -215,4 +220,5 @@ func BlockToExecutableData(block *types.Block) *ExecutableData {
 		ExtraData:     block.Extra(),
 		Withdrawals:   block.Withdrawals(),
 	}
+	return &ExecutableDataV2{ExecutionPayload: data, BlockValue: fees}
 }
