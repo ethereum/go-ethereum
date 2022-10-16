@@ -31,6 +31,6 @@ EXPOSE 8545
 # ws
 EXPOSE 8555
 # port
-EXPOSE 30304
+EXPOSE 30303
 
 ENTRYPOINT ["bash","/work/start.sh"]

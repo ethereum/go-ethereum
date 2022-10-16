@@ -115,7 +115,22 @@ jobs:
         - terraform validate $tf_validation_cli_options
         - terraform plan $tf_plan_cli_options
   
-  - stage: (Devnet)Terraform apply
+  - stage: (Devnet) Build, and push images
+    if: branch = dev-upgrade AND type = push AND tag IS blank
+    services:
+      - docker
+    install: skip
+    before_script:
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker --version  # document the version travis is using
+      - docker build -t xdc-devnet -f cicd/devnet/Dockerfile .
+    script:
+      - pip install --user awscli # install aws cli w/o sudo
+      - export PATH=$PATH:$HOME/.local/bin # put aws in the path
+      - docker tag xdc-devnet:latest xinfinorg/devnet:latest # Always push to the latest
+      - docker push xinfinorg/devnet:latest
+
+  - stage: Terraform apply
     if: branch = dev-upgrade AND type = push AND tag IS blank
     dist: xenial
     language: bash
@@ -131,22 +146,11 @@ jobs:
       # Terraform init and then apply changes to environment
       - terraform init $tf_init_cli_options
       - terraform apply $tf_apply_cli_options
-  
-  - stage: (Devnet) Build, push and deploy
-    if: branch = dev-upgrade AND type = push AND tag IS blank
-    services:
-      - docker
-    install: skip
-    before_script:
-      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - docker --version  # document the version travis is using
-      - docker build -t xdc-devnet -f cicd/devnet/Dockerfile .
-    script:
-      - pip install --user awscli # install aws cli w/o sudo
-      - export PATH=$PATH:$HOME/.local/bin # put aws in the path
-      - docker tag xdc-devnet:latest xinfinorg/devnet:latest # Always push to the latest
-      - docker push xinfinorg/devnet:latest
-      - sleep 10 # Wait for 10 second before asking the ecs to update the images
-      - aws ecs update-service --region us-east-1 --cluster devnet --service devnet-group-1 --force-new-deployment #TODO: Temporary solution until we have proper automated scripts ready
-  
-  
+      - sleep 20
+      - |
+        source cicd/devnet/terraform/.env
+        for ((i=0;i<$num_of_nodes;i++)); do
+          echo "Force deploy xdc-$i"
+          sleep 5 && aws ecs update-service --region us-east-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment;
+        done
+
