@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"math/big"
 	"sync"
 	"time"
 
@@ -76,8 +77,8 @@ func (tester *FullSyncTester) Start() error {
 					return
 				}
 				// Shoot out consensus events in order to trigger syncing.
-				data := beacon.BlockToExecutableData(tester.block)
-				tester.api.NewPayloadV1(*data)
+				data := beacon.BlockToExecutableData(tester.block, big.NewInt(0))
+				tester.api.NewPayloadV1(*data.ExecutionPayload)
 				tester.api.ForkchoiceUpdatedV1(beacon.ForkchoiceStateV1{
 					HeadBlockHash:      tester.block.Hash(),
 					SafeBlockHash:      tester.block.Hash(),
