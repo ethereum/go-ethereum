@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -159,10 +158,12 @@ func TestDBFetchStore(t *testing.T) {
 	if err := db.UpdateNode(node); err != nil {
 		t.Errorf("node: failed to update: %v", err)
 	}
-	if stored := db.Node(node.ID()); stored == nil {
-		t.Errorf("node: not found")
-	} else if !reflect.DeepEqual(stored, node) {
-		t.Errorf("node: data mismatch: have %v, want %v", stored, node)
+	stored := db.Node(node.ID())
+	if stored == nil {
+		t.Fatal("node: not found")
+	}
+	if stored.String() != node.String() {
+		t.Fatalf("node: data mismatch: have %v, want %v", stored, node)
 	}
 }
 

@@ -64,6 +64,113 @@ func TestPythonInterop(t *testing.T) {
 	}
 }
 
+// This test checks TCP/UDP address determination.
+func TestNodeAddr(t *testing.T) {
+	type addrTest struct {
+		attr []enr.Entry
+
+		// expected values
+		UDP     int
+		TCP     int
+		IP      string
+		UDPAddr string
+		TCPAddr string
+	}
+
+	tests := []addrTest{
+		// "ip" key only.
+		{
+			attr: []enr.Entry{
+				enr.IP{123, 4, 1, 1},
+			},
+			IP: "123.4.1.1",
+		},
+		// "udp" key only
+		{
+			attr: []enr.Entry{
+				enr.UDP(2000),
+			},
+			UDP: 2000,
+		},
+		// "ip" + "udp" port number.
+		{
+			attr: []enr.Entry{
+				enr.IP{123, 4, 1, 1},
+				enr.UDP(2000),
+			},
+			IP:      "123.4.1.1",
+			UDP:     2000,
+			UDPAddr: "123.4.1.1:2000",
+		},
+		// weird case: IPv4 address + "udp6" port given.
+		{
+			attr: []enr.Entry{
+				enr.IP{123, 4, 1, 1},
+				enr.UDP6(2000),
+			},
+			IP: "123.4.1.1",
+		},
+		// "ip6" with both "udp" and "udp6" keys.
+		{
+			attr: []enr.Entry{
+				enr.IP{0x20, 0x1, 0xd, 0xb8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+				enr.UDP(2000),
+				enr.UDP6(2006),
+			},
+			IP:      "2001:db8::1",
+			UDP:     2000,
+			UDPAddr: "[2001:db8::1]:2006",
+		},
+		// "ip6" + "udp" key only.
+		{
+			attr: []enr.Entry{
+				enr.IP{0x20, 0x1, 0xd, 0xb8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+				enr.UDP(2000),
+			},
+			IP:      "2001:db8::1",
+			UDP:     2000,
+			UDPAddr: "[2001:db8::1]:2000",
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			var r enr.Record
+			for _, attr := range test.attr {
+				r.Set(attr)
+			}
+			n := SignNull(&r, ID{})
+
+			var ip, udpaddr, tcpaddr string
+			if n.IP() != nil {
+				ip = n.IP().String()
+			}
+			if n.UDPAddr() != nil {
+				udpaddr = n.UDPAddr().String()
+			}
+			if n.TCPAddr() != nil {
+				tcpaddr = n.TCPAddr().String()
+			}
+
+			if ip != test.IP {
+				t.Errorf("IP() == %q, want %q", ip, test.IP)
+			}
+			if udpaddr != test.UDPAddr {
+				t.Errorf("UDPAddr() == %q, want %q", udpaddr, test.UDPAddr)
+			}
+			if tcpaddr != test.TCPAddr {
+				t.Errorf("TCPAddr() == %q, want %q", tcpaddr, test.TCPAddr)
+			}
+			if n.UDP() != test.UDP {
+				t.Errorf("UDP() == %d, want %d", n.UDP(), test.UDP)
+			}
+			if n.TCP() != test.TCP {
+				t.Errorf("TCP() == %d, want %d", n.TCP(), test.TCP)
+			}
+		})
+	}
+}
+
 func TestHexID(t *testing.T) {
 	ref := ID{0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
 	id1 := HexID("0x00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")

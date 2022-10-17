@@ -25,6 +25,7 @@ import (
 	"math/bits"
 	"net"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,8 +35,18 @@ var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded reco
 
 // Node represents a host on the network.
 type Node struct {
-	r  enr.Record
-	id ID
+	r    enr.Record
+	id   ID
+	addr atomic.Value // *addrCache
+}
+
+type addrCache struct {
+	ip4  enr.IPv4
+	ip6  enr.IPv6
+	udp  enr.UDP
+	udp6 enr.UDP6
+	tcp  enr.TCP
+	tcp6 enr.TCP6
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -99,33 +110,78 @@ func (n *Node) Load(k enr.Entry) error {
 	return n.r.Load(k)
 }
 
+func (n *Node) cachedAddr() *addrCache {
+	v := n.addr.Load()
+	if v == nil {
+		var cache addrCache
+		n.r.Load(&cache.ip4)
+		n.r.Load(&cache.ip6)
+		n.r.Load(&cache.udp)
+		n.r.Load(&cache.udp6)
+		n.r.Load(&cache.tcp)
+		n.r.Load(&cache.tcp6)
+		n.addr.Store(&cache)
+		return &cache
+	}
+	return v.(*addrCache)
+}
+
 // IP returns the IP address of the node. This prefers IPv4 addresses.
 func (n *Node) IP() net.IP {
-	var (
-		ip4 enr.IPv4
-		ip6 enr.IPv6
-	)
-	if n.Load(&ip4) == nil {
-		return net.IP(ip4)
+	cache := n.cachedAddr()
+	if cache.ip4 != nil {
+		return net.IP(cache.ip4)
 	}
-	if n.Load(&ip6) == nil {
-		return net.IP(ip6)
+	if cache.ip6 != nil {
+		return net.IP(cache.ip6)
 	}
 	return nil
 }
 
 // UDP returns the UDP port of the node.
 func (n *Node) UDP() int {
-	var port enr.UDP
-	n.Load(&port)
-	return int(port)
+	return int(n.cachedAddr().udp)
 }
 
 // TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
-	var port enr.TCP
-	n.Load(&port)
-	return int(port)
+	return int(n.cachedAddr().tcp)
+}
+
+// UDPAddr returns the node's UDP address.
+// The return value is non-nil if the node has a valid IP/port pair in its record.
+func (n *Node) UDPAddr() *net.UDPAddr {
+	a := n.cachedAddr()
+	if a.ip4 != nil && a.udp != 0 {
+		return &net.UDPAddr{IP: net.IP(a.ip4), Port: int(a.udp)}
+	}
+	if a.ip6 != nil {
+		if a.udp6 != 0 {
+			return &net.UDPAddr{IP: net.IP(a.ip6), Port: int(a.udp6)}
+		}
+		if a.udp != 0 {
+			return &net.UDPAddr{IP: net.IP(a.ip6), Port: int(a.udp)}
+		}
+	}
+	return nil
+}
+
+// TCPAddr returns the node's TCP address.
+// The return value is non-nil if the node has a valid IP/port pair in its record.
+func (n *Node) TCPAddr() *net.TCPAddr {
+	addr := n.cachedAddr()
+	if addr.ip4 != nil && addr.tcp != 0 {
+		return &net.TCPAddr{IP: net.IP(addr.ip4), Port: int(addr.tcp)}
+	}
+	if addr.ip6 != nil {
+		if addr.tcp6 != 0 {
+			return &net.TCPAddr{IP: net.IP(addr.ip6), Port: int(addr.tcp6)}
+		}
+		if addr.tcp != 0 {
+			return &net.TCPAddr{IP: net.IP(addr.ip6), Port: int(addr.tcp)}
+		}
+	}
+	return nil
 }
 
 // Pubkey returns the secp256k1 public key of the node, if present.
