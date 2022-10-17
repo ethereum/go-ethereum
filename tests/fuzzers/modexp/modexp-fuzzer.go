@@ -21,8 +21,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
+	big2 "github.com/holiman/big"
 )
 
 // Fuzz is the fuzzing entry-point.
@@ -56,18 +56,22 @@ func Fuzz(input []byte) int {
 	input = input[96:]
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base  = new(big.Int).SetBytes(getData(input, 0, baseLen))
+		exp   = new(big.Int).SetBytes(getData(input, baseLen, expLen))
+		mod   = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base2 = new(big2.Int).SetBytes(getData(input, 0, baseLen))
+		exp2  = new(big2.Int).SetBytes(getData(input, baseLen, expLen))
+		mod2  = new(big2.Int).SetBytes(getData(input, baseLen+expLen, modLen))
 	)
 	if mod.BitLen() == 0 {
 		// Modulo 0 is undefined, return zero
 		return -1
 	}
 	preBase, preExp, preMod := new(big.Int).Set(base), new(big.Int).Set(exp), new(big.Int).Set(mod)
-	var a = math.FastExp(new(big.Int).Set(base), new(big.Int).Set(exp), new(big.Int).Set(mod))
-	var b = base.Exp(base, exp, mod)
-	if a.Cmp(b) != 0 {
+	var a = new(big2.Int).Exp(base2, exp2, mod2).String()
+
+	var b = base.Exp(base, exp, mod).String()
+	if a != b {
 		panic(fmt.Sprintf("Inequality\n %#x ^ %#x mod %#x \n have %#x\n want %#x", preBase, preExp, preMod, a, b))
 	}
 	return 1

@@ -3,6 +3,8 @@ package math
 import (
 	"math/big"
 	"testing"
+
+	big2 "github.com/holiman/big"
 )
 
 // TestFastModexp tests some cases found during fuzzing.
@@ -17,13 +19,16 @@ func TestFastModexp(t *testing.T) {
 		{"5", "1435700818", "72"},
 	} {
 		var (
-			base, _ = new(big.Int).SetString(tc.base, 0)
-			exp, _  = new(big.Int).SetString(tc.exp, 0)
-			mod, _  = new(big.Int).SetString(tc.mod, 0)
+			base, _  = new(big.Int).SetString(tc.base, 0)
+			exp, _   = new(big.Int).SetString(tc.exp, 0)
+			mod, _   = new(big.Int).SetString(tc.mod, 0)
+			base2, _ = new(big2.Int).SetString(tc.base, 0)
+			exp2, _  = new(big2.Int).SetString(tc.exp, 0)
+			mod2, _  = new(big2.Int).SetString(tc.mod, 0)
 		)
-		var a = FastExp(new(big.Int).Set(base), new(big.Int).Set(exp), new(big.Int).Set(mod))
-		var b = new(big.Int).Exp(base, exp, mod)
-		if a.Cmp(b) != 0 {
+		var a = new(big2.Int).Exp(base2, exp2, mod2).String()
+		var b = new(big.Int).Exp(base, exp, mod).String()
+		if a != b {
 			t.Errorf("test %d: %#x ^ %#x mod %#x \n have %#x\n want %#x", i, base, exp, mod, a, b)
 		}
 	}
