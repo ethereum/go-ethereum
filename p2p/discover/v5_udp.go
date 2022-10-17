@@ -586,8 +586,7 @@ func (t *UDPv5) sendCall(c *callV5) {
 		delete(t.activeCallByAuth, c.nonce)
 	}
 
-	addr := &net.UDPAddr{IP: c.node.IP(), Port: c.node.UDP()}
-	newNonce, _ := t.send(c.node.ID(), addr, c.packet, c.challenge)
+	newNonce, _ := t.send(c.node.ID(), c.node.UDPAddr(), c.packet, c.challenge)
 	c.nonce = newNonce
 	t.activeCallByAuth[newNonce] = c
 	t.startResponseTimeout(c)
