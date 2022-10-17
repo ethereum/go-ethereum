@@ -219,7 +219,7 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 				if want == nil {
 					test.t.Fatalf("unexpected node in response: %v", n)
 				}
-				if !reflect.DeepEqual(record, want) {
+				if !record.Equal(want) {
 					test.t.Fatalf("wrong record in response: %v", n)
 				}
 				delete(nodeSet, n.ID())
@@ -318,7 +318,7 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !reflect.DeepEqual(response, nodes) {
+	if !nodesEqual(wrapNodes(response), wrapNodes(nodes)) {
 		t.Fatalf("wrong nodes in response")
 	}
 

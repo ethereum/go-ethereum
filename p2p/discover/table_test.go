@@ -319,7 +319,7 @@ func TestTable_addVerifiedNode(t *testing.T) {
 
 	// Verify bucket content:
 	bcontent := []*node{n1, n2}
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+	if !nodesEqual(tab.bucket(n1.ID()).entries, bcontent) {
 		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
 	}
 
@@ -331,7 +331,7 @@ func TestTable_addVerifiedNode(t *testing.T) {
 
 	// Check that bucket is updated correctly.
 	newBcontent := []*node{newn2, n1}
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, newBcontent) {
+	if !nodesEqual(tab.bucket(n1.ID()).entries, newBcontent) {
 		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
 	}
 	checkIPLimitInvariant(t, tab)
@@ -351,7 +351,7 @@ func TestTable_addSeenNode(t *testing.T) {
 
 	// Verify bucket content:
 	bcontent := []*node{n1, n2}
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+	if !nodesEqual(tab.bucket(n1.ID()).entries, bcontent) {
 		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
 	}
 
@@ -362,7 +362,7 @@ func TestTable_addSeenNode(t *testing.T) {
 	tab.addSeenNode(newn2)
 
 	// Check that bucket content is unchanged.
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+	if !nodesEqual(tab.bucket(n1.ID()).entries, bcontent) {
 		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
 	}
 	checkIPLimitInvariant(t, tab)
@@ -391,7 +391,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 
 	tab.doRevalidate(make(chan struct{}, 1))
 	intable := tab.getNode(id)
-	if !reflect.DeepEqual(intable, n2) {
+	if !intable.Equal(n2) {
 		t.Fatalf("table contains old record with seq %d, want seq %d", intable.Seq(), n2.Seq())
 	}
 }

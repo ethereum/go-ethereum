@@ -350,7 +350,7 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	select {
 	case result := <-resultc:
 		want := append(list[:2], list[3:]...)
-		if !reflect.DeepEqual(result, want) {
+		if !nodesEqual(result, want) {
 			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, want)
 		}
 	case err := <-errc:
@@ -489,7 +489,7 @@ func TestUDPv4_EIP868(t *testing.T) {
 		if err != nil {
 			t.Fatalf("invalid record: %v", err)
 		}
-		if !reflect.DeepEqual(n, wantNode) {
+		if !n.Equal(wantNode) {
 			t.Fatalf("wrong node in ENRResponse: %v", n)
 		}
 	})

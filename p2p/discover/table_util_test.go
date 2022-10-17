@@ -114,6 +114,26 @@ func fillTable(tab *Table, nodes []*node) {
 	}
 }
 
+// nodesEqual reports whether two slices of nodes have the same content.
+func nodesEqual(ns1, ns2 []*node) bool {
+	if len(ns1) != len(ns2) {
+		return false
+	}
+	for i, node1 := range ns1 {
+		node2 := ns2[i]
+		if !node1.Node.Equal(&node2.Node) {
+			return false
+		}
+		if !node2.addedAt.Equal(node2.addedAt) {
+			return false
+		}
+		if node1.livenessChecks != node2.livenessChecks {
+			return false
+		}
+	}
+	return true
+}
+
 type pingRecorder struct {
 	mu           sync.Mutex
 	dead, pinged map[enode.ID]bool
