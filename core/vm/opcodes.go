@@ -70,11 +70,11 @@ const (
 const (
 	KECCAK256 OpCode = 0x20
 	// these really should be arithmetic ops but I ran out of free opcodes
-	SETMODMAX  OpCode = 0x21
-	ADDMODMAX  OpCode = 0x22
-	SUBMODMAX  OpCode = 0x23
-	MULMONTMAX OpCode = 0x24
-	TOMONTMAX  OpCode = 0x25
+	SETMODX  OpCode = 0x21
+	ADDMODX  OpCode = 0x22
+	SUBMODX  OpCode = 0x23
+	MULMONTX OpCode = 0x24
+	TOMONTX  OpCode = 0x25
 )
 
 // 0x30 range - closure state.
@@ -248,9 +248,11 @@ var opCodeToString = map[OpCode]string{
 	EQ:         "EQ",
 	ISZERO:     "ISZERO",
 	SIGNEXTEND: "SIGNEXTEND",
-	SETMODMAX:  "SETMODMAX",
-	ADDMODMAX:  "ADDMODMAX",
-	MULMONTMAX: "MULMONTMAX",
+	SETMODX:    "SETMODX",
+	ADDMODX:    "ADDMODX",
+	SUBMODX:    "SUBMODX",
+	MULMONTX:   "MULMONTX",
+	TOMONTX:    "TOMONTX",
 
 	// 0x10 range - bit ops.
 	AND:    "AND",

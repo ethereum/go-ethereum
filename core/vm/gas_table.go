@@ -441,7 +441,7 @@ func gasSelfdestruct(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64
 	return gas, nil
 }
 
-func gasSetModMAX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasSetModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	mod_offset := scope.Stack.Back(0).Uint64()
 	mod_limb_count := scope.Stack.Back(1).Uint64()
 
@@ -471,16 +471,16 @@ func gasEVMMAXArith(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64,
 	return costFn(), nil
 }
 
-func gasAddModMAX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasAddModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
 }
-func gasSubModMAX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasSubModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
 }
-func gasMulMontMAX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasMulMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
 }
-func gasToMontMAX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	if scope.EVMMAXField == nil {
 		return 0, ErrOutOfGas
 	}

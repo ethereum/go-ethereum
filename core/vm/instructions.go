@@ -81,7 +81,7 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	return nil, nil
 }
 
-func opSetModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	mod_limbs_stack := scope.Stack.pop()
 	mod_offset_stack := scope.Stack.pop()
 	mod_limbs := mod_limbs_stack.Uint64()
@@ -97,7 +97,7 @@ func opSetModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	return nil, nil
 }
 
-func opAddModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opAddModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
@@ -114,7 +114,7 @@ func opAddModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	return nil, nil
 }
 
-func opSubModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSubModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
@@ -131,7 +131,7 @@ func opSubModMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	return nil, nil
 }
 
-func opMulMontMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
 	x_offset := uint64(scope.Contract.Code[*pc+2]) * 8
 	y_offset := uint64(scope.Contract.Code[*pc+3]) * 8
@@ -158,7 +158,7 @@ func uint64_array_to_le_bytes(val []uint64) []byte {
 	return res
 }
 
-func opToMontMAX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
