@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"math/big"
 
+	zktrie "github.com/scroll-tech/zktrie/trie"
+	zkt "github.com/scroll-tech/zktrie/types"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	zkt "github.com/scroll-tech/go-ethereum/core/types/zktrie"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/trie"
@@ -39,10 +41,10 @@ func addressToKey(addr common.Address) *zkt.Hash {
 }
 
 //resume the proof bytes into db and return the leaf node
-func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *trie.Node {
+func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *zktrie.Node {
 	for _, buf := range proof {
 
-		n, err := trie.DecodeSMTProof(buf)
+		n, err := zktrie.DecodeSMTProof(buf)
 		if err != nil {
 			log.Warn("decode proof string fail", "error", err)
 		} else if n != nil {
@@ -53,7 +55,7 @@ func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *trie.Node {
 				//notice: must consistent with trie/merkletree.go
 				bt := k[:]
 				db.Put(bt, buf)
-				if n.Type == trie.NodeTypeLeaf || n.Type == trie.NodeTypeEmpty {
+				if n.Type == zktrie.NodeTypeLeaf || n.Type == zktrie.NodeTypeEmpty {
 					return n
 				}
 			}
@@ -68,14 +70,14 @@ func resumeProofs(proof []hexutil.Bytes, db *memorydb.Database) *trie.Node {
 // whole path in sequence, from root to leaf
 func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 
-	var lastNode *trie.Node
+	var lastNode *zktrie.Node
 	keyPath := big.NewInt(0)
 	path.KeyPathPart = (*hexutil.Big)(keyPath)
 
 	keyCounter := big.NewInt(1)
 
 	for _, buf := range proof {
-		n, err := trie.DecodeSMTProof(buf)
+		n, err := zktrie.DecodeSMTProof(buf)
 		if err != nil {
 			log.Warn("decode proof string fail", "error", err)
 		} else if n != nil {
@@ -105,9 +107,9 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 				keyCounter.Mul(keyCounter, big.NewInt(2))
 			}
 			switch n.Type {
-			case trie.NodeTypeMiddle:
+			case zktrie.NodeTypeMiddle:
 				lastNode = n
-			case trie.NodeTypeLeaf:
+			case zktrie.NodeTypeLeaf:
 				vhash, _ := n.ValueKey()
 				path.Leaf = &SMTPathNode{
 					//here we just return the inner represent of hash (little endian, reversed byte order to common hash)
@@ -125,7 +127,7 @@ func decodeProofForMPTPath(proof proofList, path *SMTPath) {
 				}
 
 				return
-			case trie.NodeTypeEmpty:
+			case zktrie.NodeTypeEmpty:
 				return
 			default:
 				panic(fmt.Errorf("unknown node type %d", n.Type))
@@ -158,7 +160,7 @@ func NewZkTrieProofWriter(storage *types.StorageTrace) (*zktrieProofWriter, erro
 	for addrs, proof := range storage.Proofs {
 		if n := resumeProofs(proof, underlayerDb); n != nil {
 			addr := common.HexToAddress(addrs)
-			if n.Type == trie.NodeTypeEmpty {
+			if n.Type == zktrie.NodeTypeEmpty {
 				accounts[addr] = nil
 			} else if acc, err := types.UnmarshalStateAccount(n.Data()); err == nil {
 				if bytes.Equal(n.NodeKey[:], addressToKey(addr)[:]) {
@@ -371,7 +373,8 @@ func (w *zktrieProofWriter) traceAccountUpdate(addr common.Address, updateAccDat
 	}
 
 	var proof proofList
-	if err := w.tracingZktrie.Prove(addr.Bytes32(), 0, &proof); err != nil {
+	s_key, _ := zkt.ToSecureKeyBytes(addr.Bytes())
+	if err := w.tracingZktrie.Prove(s_key.Bytes(), 0, &proof); err != nil {
 		return nil, fmt.Errorf("prove BEFORE state for <%x> fail: %s", addr.Bytes(), err)
 	}
 
@@ -412,7 +415,7 @@ func (w *zktrieProofWriter) traceAccountUpdate(addr common.Address, updateAccDat
 	}
 
 	proof = proofList{}
-	if err := w.tracingZktrie.Prove(addr.Bytes32(), 0, &proof); err != nil {
+	if err := w.tracingZktrie.Prove(s_key.Bytes(), 0, &proof); err != nil {
 		return nil, fmt.Errorf("prove AFTER state fail: %s", err)
 	}
 
@@ -465,7 +468,8 @@ func (w *zktrieProofWriter) traceStorageUpdate(addr common.Address, key, value [
 	}
 
 	var storageBeforeProof, storageAfterProof proofList
-	if err := trie.Prove(storeKey.Bytes(), 0, &storageBeforeProof); err != nil {
+	s_key, _ := zkt.ToSecureKeyBytes(storeKey.Bytes())
+	if err := trie.Prove(s_key.Bytes(), 0, &storageBeforeProof); err != nil {
 		return nil, fmt.Errorf("prove BEFORE storage state fail: %s", err)
 	}
 
@@ -488,7 +492,7 @@ func (w *zktrieProofWriter) traceStorageUpdate(addr common.Address, key, value [
 		}
 	}
 
-	if err := trie.Prove(storeKey.Bytes(), 0, &storageAfterProof); err != nil {
+	if err := trie.Prove(s_key.Bytes(), 0, &storageAfterProof); err != nil {
 		return nil, fmt.Errorf("prove AFTER storage state fail: %s", err)
 	}
 	decodeProofForMPTPath(storageAfterProof, statePath[1])
@@ -561,10 +565,7 @@ func (w *zktrieProofWriter) HandleNewState(accountState *types.AccountWrapper) (
 			return nil, fmt.Errorf("update account state %s fail: %s", accountState.Address, err)
 		}
 
-		hash, err := zkt.NewHashFromBytes(stateRoot[:])
-		if err != nil {
-			return nil, fmt.Errorf("malform of state root in account %s", accountState.Address)
-		}
+		hash := zkt.NewHashFromBytes(stateRoot[:])
 		out.CommonStateRoot = hash[:]
 		return out, nil
 	}

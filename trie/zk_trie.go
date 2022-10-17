@@ -18,49 +18,50 @@ package trie
 
 import (
 	"fmt"
-	"math/big"
+
+	zktrie "github.com/scroll-tech/zktrie/trie"
+	zkt "github.com/scroll-tech/zktrie/types"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	zkt "github.com/scroll-tech/go-ethereum/core/types/zktrie"
+	"github.com/scroll-tech/go-ethereum/crypto/poseidon"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 )
 
-// ZkTrie wraps a trie with key hashing. In a secure trie, all
-// access operations hash the key using keccak256. This prevents
-// calling code from creating long chains of nodes that
-// increase the access time.
-//
-// Contrary to a regular trie, a ZkTrie can only be created with
-// New and must have an attached database. The database also stores
-// the preimage of each key.
-//
-// ZkTrie is not safe for concurrent use.
+var magicHash []byte = []byte("THIS IS THE MAGIC INDEX FOR ZKTRIE")
+
+// wrap zktrie for trie interface
 type ZkTrie struct {
-	tree *ZkTrieImpl
+	*zktrie.ZkTrie
+	db *ZktrieDatabase
+}
+
+func init() {
+	zkt.InitHashScheme(poseidon.HashFixed)
+}
+
+func santiyCheckByte32Key(b []byte) {
+	if len(b) != 32 && len(b) != 20 {
+		panic(fmt.Errorf("do not support length except for 120bit and 256bit now. data: %v len: %v", b, len(b)))
+	}
 }
 
 // NewSecure creates a trie
 // SecureBinaryTrie bypasses all the buffer mechanism in *Database, it directly uses the
 // underlying diskdb
 func NewZkTrie(root common.Hash, db *ZktrieDatabase) (*ZkTrie, error) {
-	rootHash, err := zkt.NewHashFromBytes(root.Bytes())
+	tr, err := zktrie.NewZkTrie(*zkt.NewByte32FromBytes(root.Bytes()), db)
 	if err != nil {
 		return nil, err
 	}
-	tree, err := NewZkTrieImplWithRoot((db), rootHash, 256)
-	if err != nil {
-		return nil, err
-	}
-	return &ZkTrie{
-		tree: tree,
-	}, nil
+	return &ZkTrie{tr, db}, nil
 }
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *ZkTrie) Get(key []byte) []byte {
+	santiyCheckByte32Key(key)
 	res, err := t.TryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
@@ -68,45 +69,12 @@ func (t *ZkTrie) Get(key []byte) []byte {
 	return res
 }
 
-// TryGet returns the value for key stored in the trie.
-// The value bytes must not be modified by the caller.
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *ZkTrie) TryGet(key []byte) ([]byte, error) {
-	word := zkt.NewByte32FromBytesPaddingZero(key)
-	k, err := word.Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	return t.tree.TryGet(k.Bytes())
-}
-
-// TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
-// possible to use keybyte-encoding as the path might contain odd nibbles.
-func (t *ZkTrie) TryGetNode(path []byte) ([]byte, int, error) {
-	panic("unimplemented")
-}
-
-func (t *ZkTrie) updatePreimage(preimage []byte, hashField *big.Int) {
-	db := t.tree.db.db
-	if db.preimages != nil { // Ugly direct check but avoids the below write lock
-		db.lock.Lock()
-		// we must copy the input key
-		db.insertPreimage(common.BytesToHash(hashField.Bytes()), common.CopyBytes(preimage))
-		db.lock.Unlock()
-	}
-}
-
 // TryUpdateAccount will abstract the write of an account to the
 // secure trie.
 func (t *ZkTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	keyPreimage := zkt.NewByte32FromBytesPaddingZero(key)
-	k, err := keyPreimage.Hash()
-	if err != nil {
-		return err
-	}
-	t.updatePreimage(key, k)
-	return t.tree.TryUpdateAccount(k.Bytes(), acc)
+	santiyCheckByte32Key(key)
+	value, flag := acc.MarshalFields()
+	return t.ZkTrie.TryUpdate(key, flag, value)
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -121,49 +89,19 @@ func (t *ZkTrie) Update(key, value []byte) {
 	}
 }
 
-// TryUpdate associates key with value in the trie. Subsequent calls to
-// Get will return value. If value has length zero, any existing value
-// is deleted from the trie and calls to Get will return nil.
-//
-// The value bytes must not be modified by the caller while they are
-// stored in the trie.
-//
-// If a node was not found in the database, a MissingNodeError is returned.
-//
 // NOTE: value is restricted to length of bytes32.
+// we override the underlying zktrie's TryUpdate method
 func (t *ZkTrie) TryUpdate(key, value []byte) error {
-	keyPreimage := zkt.NewByte32FromBytesPaddingZero(key)
-	k, err := keyPreimage.Hash()
-	if err != nil {
-		return err
-	}
-	t.updatePreimage(key, k)
-	return t.tree.TryUpdate(k.Bytes(), value)
+	santiyCheckByte32Key(key)
+	return t.ZkTrie.TryUpdate(key, 1, []zkt.Byte32{*zkt.NewByte32FromBytes(value)})
 }
 
 // Delete removes any existing value for key from the trie.
 func (t *ZkTrie) Delete(key []byte) {
+	santiyCheckByte32Key(key)
 	if err := t.TryDelete(key); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
-}
-
-// TryDelete removes any existing value for key from the trie.
-// If a node was not found in the database, a MissingNodeError is returned.
-func (t *ZkTrie) TryDelete(key []byte) error {
-	keyPreimage := zkt.NewByte32FromBytesPaddingZero(key)
-	k, err := keyPreimage.Hash()
-	if err != nil {
-		return err
-	}
-
-	//mitigate the create-delete issue: do not delete unexisted key
-	if r := t.tree.Get(k.Bytes()); r == nil {
-		return nil
-	}
-
-	// FIXME: when tryDelete get more solid test, use it instead
-	return t.tree.tryDeleteLite(zkt.NewHashFromBigInt(k))
 }
 
 // GetKey returns the preimage of a hashed key that was
@@ -175,7 +113,7 @@ func (t *ZkTrie) GetKey(kHashBytes []byte) []byte {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 
-	return t.tree.db.db.preimage(common.BytesToHash(k.Bytes()))
+	return t.db.db.preimage(common.BytesToHash(k.Bytes()))
 
 }
 
@@ -194,19 +132,13 @@ func (t *ZkTrie) Commit(LeafCallback) (common.Hash, int, error) {
 // database and can be used even if the trie doesn't have one.
 func (t *ZkTrie) Hash() common.Hash {
 	var hash common.Hash
-	hash.SetBytes(t.tree.rootKey.Bytes())
+	hash.SetBytes(t.ZkTrie.Hash())
 	return hash
 }
 
 // Copy returns a copy of SecureBinaryTrie.
 func (t *ZkTrie) Copy() *ZkTrie {
-	cpy, err := NewZkTrieImplWithRoot(t.tree.db, t.tree.rootKey, t.tree.maxLevels)
-	if err != nil {
-		panic("clone trie failed")
-	}
-	return &ZkTrie{
-		tree: cpy,
-	}
+	return &ZkTrie{t.ZkTrie.Copy(), t.db}
 }
 
 // NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
@@ -241,18 +173,13 @@ func (t *ZkTrie) NodeIterator(start []byte) NodeIterator {
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
 func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
-	word := zkt.NewByte32FromBytesPaddingZero(key)
-	k, err := word.Hash()
-	if err != nil {
-		return err
-	}
-	err = t.tree.prove(zkt.NewHashFromBigInt(k), fromLevel, func(n *Node) error {
+	err := t.ZkTrie.Prove(key, fromLevel, func(n *zktrie.Node) error {
 		key, err := n.Key()
 		if err != nil {
 			return err
 		}
 
-		if n.Type == NodeTypeLeaf {
+		if n.Type == zktrie.NodeTypeLeaf {
 			preImage := t.GetKey(n.NodeKey.Bytes())
 			if len(preImage) > 0 {
 				n.KeyPreimage = &zkt.Byte32{}
@@ -260,7 +187,7 @@ func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter)
 				//return fmt.Errorf("key preimage not found for [%x] ref %x", n.NodeKey.Bytes(), k.Bytes())
 			}
 		}
-		return proofDb.Put(key.Bytes(), n.Value())
+		return proofDb.Put(key[:], n.Value())
 	})
 	if err != nil {
 		return err
@@ -268,5 +195,39 @@ func (t *ZkTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter)
 
 	// we put this special kv pair in db so we can distinguish the type and
 	// make suitable Proof
-	return proofDb.Put(magicHash, magicSMTBytes)
+	return proofDb.Put(magicHash, zktrie.ProofMagicBytes())
+}
+
+// VerifyProof checks merkle proofs. The given proof must contain the value for
+// key in a trie with the given root hash. VerifyProof returns an error if the
+// proof contains invalid trie nodes or the wrong value.
+func VerifyProofSMT(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader) (value []byte, err error) {
+
+	h := zkt.NewHashFromBytes(rootHash.Bytes())
+	k, err := zkt.ToSecureKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, n, err := zktrie.BuildZkTrieProof(h, k, len(key)*8, func(key *zkt.Hash) (*zktrie.Node, error) {
+		buf, _ := proofDb.Get(key[:])
+		if buf == nil {
+			return nil, zktrie.ErrKeyNotFound
+		}
+		n, err := zktrie.NewNodeFromBytes(buf)
+		return n, err
+	})
+
+	if err != nil {
+		// do not contain the key
+		return nil, err
+	} else if !proof.Existence {
+		return nil, nil
+	}
+
+	if zktrie.VerifyProofZkTrie(h, proof, n) {
+		return n.Data(), nil
+	} else {
+		return nil, fmt.Errorf("bad proof node %v", proof)
+	}
 }

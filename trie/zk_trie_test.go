@@ -24,8 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	zkt "github.com/scroll-tech/zktrie/types"
+
 	"github.com/scroll-tech/go-ethereum/common"
-	zkt "github.com/scroll-tech/go-ethereum/core/types/zktrie"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 )
 
