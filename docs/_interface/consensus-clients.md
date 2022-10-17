@@ -24,7 +24,7 @@ to `<datadir>/geth/jwtsecret` by default but can also be created and saved to a 
 self-generated and provided to Geth by passing the file path to `--authrpc.jwtsecret`. The `jwtsecret` file 
 is required by both Geth and the consensus client.
 
-The authorization must then be applied to a specific address/port. This is achievd by passing an address to
+The authorization must then be applied to a specific address/port. This is achieved by passing an address to
 `--authrpc.addr` and a port number to `--authrpc.port`. It is also safe to provide either `localhost` or a wildcard
 `*` to `--authrpc.vhosts` so that incoming requests from virtual hosts are accepted by Geth because it only 
 applies to the port authenticated using `jwtsecret`. 
