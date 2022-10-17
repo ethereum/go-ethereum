@@ -597,7 +597,7 @@ func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
 			if !ok {
 				return fmt.Errorf("attempt to dial unexpected node %v", req.n.ID())
 			}
-			if req.n.String() != want.String() {
+			if !req.n.Equal(want) {
 				return fmt.Errorf("ENR of dialed node %v does not match test", req.n.ID())
 			}
 			delete(waitset, req.n.ID())
