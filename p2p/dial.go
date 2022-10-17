@@ -492,7 +492,7 @@ func (t *dialTask) run(d *dialScheduler) {
 }
 
 func (t *dialTask) needResolve() bool {
-	return t.flags&staticDialedConn != 0 && t.dest.IP() == nil
+	return t.flags&staticDialedConn != 0 && t.dest.TCPAddr() == nil
 }
 
 // resolve attempts to find the current endpoint for the destination
@@ -524,7 +524,7 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
-	d.log.Debug("Resolved node", "id", t.dest.ID(), "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
+	d.log.Debug("Resolved node", "id", t.dest.ID(), "addr", t.dest.TCPAddr())
 	return true
 }
 
@@ -535,13 +535,13 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", t.dest.TCPAddr(), "conn", t.flags, "err", cleanupDialErr(err))
 		return &dialError{err}
 	}
-	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
+	mfd := newMeteredConn(fd, false, dest.TCPAddr())
 	return d.setupFunc(mfd, t.flags, dest)
 }
 
 func (t *dialTask) String() string {
 	id := t.dest.ID()
-	return fmt.Sprintf("%v %x %v:%d", t.flags, id[:8], t.dest.IP(), t.dest.TCP())
+	return fmt.Sprintf("%v %x %v", t.flags, id[:8], t.dest.TCPAddr())
 }
 
 func cleanupDialErr(err error) error {
