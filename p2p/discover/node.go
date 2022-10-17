@@ -21,7 +21,6 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"math/big"
-	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -86,10 +85,6 @@ func unwrapNodes(ns []*node) []*enode.Node {
 		result[i] = unwrapNode(n)
 	}
 	return result
-}
-
-func (n *node) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 }
 
 func (n *node) String() string {

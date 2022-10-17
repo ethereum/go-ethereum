@@ -306,7 +306,7 @@ func (tab *Table) loadSeedNodes() {
 	for i := range seeds {
 		seed := seeds[i]
 		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
-		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
+		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.Node.UDPAddr(), "age", age)
 		tab.addSeenNode(seed)
 	}
 }
@@ -329,7 +329,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	if last.Seq() < remoteSeq {
 		n, err := tab.net.RequestENR(unwrapNode(last))
 		if err != nil {
-			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.addr(), "err", err)
+			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.UDPAddr(), "err", err)
 		} else {
 			last = &node{Node: *n, addedAt: last.addedAt, livenessChecks: last.livenessChecks}
 		}

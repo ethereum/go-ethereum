@@ -291,7 +291,7 @@ func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
 	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
 	ekey := v4wire.Pubkey(targetKey)
 	it := newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
-		return t.findnode(n.ID(), n.addr(), ekey)
+		return t.findnode(n.ID(), n.Node.UDPAddr(), ekey)
 	})
 	return it
 }
