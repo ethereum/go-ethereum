@@ -305,6 +305,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "Cache",
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "cache.triesinmemory",
+		Usage:   "Number of block states (tries) to keep in memory (default = 128)",
+		Value:   &c.cliConfig.Cache.TriesInMemory,
+		Default: c.cliConfig.Cache.TriesInMemory,
+		Group:   "Cache",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "txlookuplimit",
 		Usage:   "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
 		Value:   &c.cliConfig.Cache.TxLookupLimit,
