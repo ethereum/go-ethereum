@@ -404,21 +404,28 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err != nil {
 		return nil, err
 	}
-	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
+
+	addr := c.node.UDPAddr()
+	if addr == nil {
+		return nil, errors.New("no UDP address information")
+	}
+	if err := netutil.CheckRelayIP(c.node.IP(), addr.IP); err != nil {
 		return nil, err
 	}
-	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+	if t.netrestrict != nil && !t.netrestrict.Contains(addr.IP) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
-	if c.node.UDP() <= 1024 {
+	if addr.Port <= 1024 {
 		return nil, errLowPort
 	}
+
 	if distances != nil {
 		nd := enode.LogDist(c.node.ID(), node.ID())
 		if !containsUint(uint(nd), distances) {
 			return nil, errors.New("does not match any requested distance")
 		}
 	}
+
 	if _, ok := seen[node.ID()]; ok {
 		return nil, fmt.Errorf("duplicate record")
 	}
