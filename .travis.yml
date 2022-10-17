@@ -148,7 +148,7 @@ jobs:
       - terraform apply $tf_apply_cli_options
       - sleep 20
       - |
-        source cicd/devnet/terraform/.env
+        source .env
         for ((i=0;i<$num_of_nodes;i++)); do
           echo "Force deploy xdc-$i"
           sleep 5 && aws ecs update-service --region us-east-1 --cluster devnet-xdcnode-cluster --service ecs-service-xdc$i --force-new-deployment;
