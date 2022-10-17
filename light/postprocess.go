@@ -102,8 +102,6 @@ var (
 	errNoTrustedCht       = errors.New("no trusted canonical hash trie")
 	errNoTrustedBloomTrie = errors.New("no trusted bloom trie")
 	errNoHeader           = errors.New("header not found")
-	chtPrefix             = []byte("chtRootV2-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-	ChtTablePrefix        = "cht-"
 )
 
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
@@ -116,7 +114,7 @@ type ChtNode struct {
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	data, _ := db.Get(append(append(chtPrefix, encNumber[:]...), sectionHead.Bytes()...))
+	data, _ := db.Get(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...))
 	return common.BytesToHash(data)
 }
 
@@ -124,7 +122,7 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(chtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	db.Put(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // ChtIndexerBackend implements core.ChainIndexerBackend.
@@ -140,7 +138,7 @@ type ChtIndexerBackend struct {
 
 // NewChtIndexer creates a Cht chain indexer
 func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64, disablePruning bool) *core.ChainIndexer {
-	trieTable := rawdb.NewTable(db, ChtTablePrefix)
+	trieTable := rawdb.NewTable(db, string(rawdb.ChtTablePrefix))
 	backend := &ChtIndexerBackend{
 		diskdb:         db,
 		odr:            odr,
@@ -149,7 +147,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64, dis
 		sectionSize:    size,
 		disablePruning: disablePruning,
 	}
-	return core.NewChainIndexer(db, rawdb.NewTable(db, "chtIndexV2-"), backend, size, confirms, time.Millisecond*100, "cht")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, string(rawdb.ChtIndexTablePrefix)), backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
@@ -249,7 +247,7 @@ func (c *ChtIndexerBackend) Commit() error {
 			}
 		}
 		for it.Next() {
-			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
+			trimmed := bytes.TrimPrefix(it.Key(), rawdb.ChtTablePrefix)
 			if len(trimmed) == common.HashLength {
 				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
 					batch.Delete(trimmed)
@@ -311,16 +309,11 @@ func (c *ChtIndexerBackend) Prune(threshold uint64) error {
 	return nil
 }
 
-var (
-	bloomTriePrefix      = []byte("bltRoot-") // bloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
-	BloomTrieTablePrefix = "blt-"
-)
-
 // GetBloomTrieRoot reads the BloomTrie root associated to the given section from the database
 func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	data, _ := db.Get(append(append(bloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...))
+	data, _ := db.Get(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...))
 	return common.BytesToHash(data)
 }
 
@@ -328,7 +321,7 @@ func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.H
 func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(bloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	db.Put(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // BloomTrieIndexerBackend implements core.ChainIndexerBackend
@@ -347,7 +340,7 @@ type BloomTrieIndexerBackend struct {
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
 func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uint64, disablePruning bool) *core.ChainIndexer {
-	trieTable := rawdb.NewTable(db, BloomTrieTablePrefix)
+	trieTable := rawdb.NewTable(db, string(rawdb.BloomTrieTablePrefix))
 	backend := &BloomTrieIndexerBackend{
 		diskdb:         db,
 		odr:            odr,
@@ -359,7 +352,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 	}
 	backend.bloomTrieRatio = size / parentSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, rawdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, string(rawdb.BloomTrieIndexPrefix)), backend, size, 0, time.Millisecond*100, "bloomtrie")
 }
 
 // fetchMissingNodes tries to retrieve the last entries of the latest trusted bloom trie from the
@@ -500,7 +493,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			}
 		}
 		for it.Next() {
-			trimmed := bytes.TrimPrefix(it.Key(), []byte(BloomTrieTablePrefix))
+			trimmed := bytes.TrimPrefix(it.Key(), rawdb.BloomTrieTablePrefix)
 			if len(trimmed) == common.HashLength {
 				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
 					batch.Delete(trimmed)
