@@ -18,7 +18,9 @@
       "period": {
         "0": 2
       },
-      "producerDelay": 6,
+      "producerDelay": {
+        "0": 6
+      },
       "sprint": {
         "0": 64
       },

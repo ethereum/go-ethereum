@@ -186,7 +186,7 @@ func CalcProducerDelay(number uint64, succession int, c *params.BorConfig) uint6
 	// That is to allow time for block propagation in the last sprint
 	delay := c.CalculatePeriod(number)
 	if number%c.CalculateSprint(number) == 0 {
-		delay = c.ProducerDelay
+		delay = c.CalculateProducerDelay(number)
 	}
 
 	if succession > 0 {

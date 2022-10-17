@@ -278,7 +278,9 @@ var (
 			Period: map[string]uint64{
 				"0": 2,
 			},
-			ProducerDelay: 6,
+			ProducerDelay: map[string]uint64{
+				"0": 6,
+			},
 			Sprint: map[string]uint64{
 				"0": 64,
 			},
@@ -312,7 +314,9 @@ var (
 			Period: map[string]uint64{
 				"0": 1,
 			},
-			ProducerDelay: 3,
+			ProducerDelay: map[string]uint64{
+				"0": 3,
+			},
 			Sprint: map[string]uint64{
 				"0": 32,
 			},
@@ -350,7 +354,9 @@ var (
 				"0":        2,
 				"25275000": 5,
 			},
-			ProducerDelay: 6,
+			ProducerDelay: map[string]uint64{
+				"0": 6,
+			},
 			Sprint: map[string]uint64{
 				"0": 64,
 			},
@@ -396,7 +402,9 @@ var (
 			Period: map[string]uint64{
 				"0": 2,
 			},
-			ProducerDelay: 6,
+			ProducerDelay: map[string]uint64{
+				"0": 6,
+			},
 			Sprint: map[string]uint64{
 				"0": 64,
 			},
@@ -560,7 +568,7 @@ func (c *CliqueConfig) String() string {
 // BorConfig is the consensus engine configs for Matic bor based sealing.
 type BorConfig struct {
 	Period                   map[string]uint64      `json:"period"`                   // Number of seconds between blocks to enforce
-	ProducerDelay            uint64                 `json:"producerDelay"`            // Number of seconds delay between two producer interval
+	ProducerDelay            map[string]uint64      `json:"producerDelay"`            // Number of seconds delay between two producer interval
 	Sprint                   map[string]uint64      `json:"sprint"`                   // Epoch length to proposer
 	BackupMultiplier         map[string]uint64      `json:"backupMultiplier"`         // Backup multiplier to determine the wiggle time
 	ValidatorContract        string                 `json:"validatorContract"`        // Validator set contract
@@ -574,6 +582,10 @@ type BorConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (b *BorConfig) String() string {
 	return "bor"
+}
+
+func (c *BorConfig) CalculateProducerDelay(number uint64) uint64 {
+	return c.calculateBorConfigHelper(c.ProducerDelay, number)
 }
 
 func (c *BorConfig) CalculateSprint(number uint64) uint64 {
