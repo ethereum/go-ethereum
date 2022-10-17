@@ -230,6 +230,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if cacheConfig == nil {
 		cacheConfig = DefaultCacheConfig
 	}
+
 	if cacheConfig.TriesInMemory <= 0 {
 		cacheConfig.TriesInMemory = 128
 	}
