@@ -105,6 +105,14 @@ func (n *Node) Incomplete() bool {
 	return n.IP() == nil
 }
 
+// Equal checks for equality with the given node.
+func (n *Node) Equal(other *Node) bool {
+	if n == nil || other == nil {
+		return n == other
+	}
+	return n.r.Equal(&other.r)
+}
+
 // Load retrieves an entry from the underlying record.
 func (n *Node) Load(k enr.Entry) error {
 	return n.r.Load(k)

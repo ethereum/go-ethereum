@@ -96,6 +96,26 @@ type pair struct {
 	v rlp.RawValue
 }
 
+// Equal reports whether a record is equal to the given record.
+func (r *Record) Equal(other *Record) bool {
+	if r == nil || other == nil {
+		return r == other
+	}
+	if r.raw != nil && other.raw != nil {
+		return bytes.Equal(r.raw, other.raw)
+	}
+	if r.seq != other.seq || !bytes.Equal(r.signature, other.signature) || len(r.pairs) != len(other.pairs) {
+		return false
+	}
+	for i, p := range r.pairs {
+		otherp := other.pairs[i]
+		if p.k != otherp.k || !bytes.Equal(p.v, otherp.v) {
+			return false
+		}
+	}
+	return true
+}
+
 // Seq returns the sequence number.
 func (r *Record) Seq() uint64 {
 	return r.seq

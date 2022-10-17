@@ -161,8 +161,7 @@ func TestDBFetchStore(t *testing.T) {
 	stored := db.Node(node.ID())
 	if stored == nil {
 		t.Fatal("node: not found")
-	}
-	if stored.String() != node.String() {
+	} else if !stored.Equal(node) {
 		t.Fatalf("node: data mismatch: have %v, want %v", stored, node)
 	}
 }
