@@ -1,16 +1,18 @@
 data template_file devnet_container_definition {
-  for_each = var.devnet_node_kyes
+  for_each = local.devnetNodeKyes
   template = "${file("${path.module}/container-definition.tpl")}"
 
   vars = {
     xdc_environment = "devnet"
-    private_keys = "${each.value.pk}",
+    node_name = "${each.key}"
+    private_keys = "${each.value.pk}"
     cloudwatch_group = "tf-${each.key}"
+    log_level = "${local.logLevel}"
   }
 }
 
 resource "aws_ecs_task_definition" "devnet_task_definition_group" {
-  for_each = var.devnet_node_kyes
+  for_each = local.devnetNodeKyes
   
   family = "devnet-${each.key}"
   requires_compatibilities = ["FARGATE"]
@@ -38,4 +40,44 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   tags = {
        Name = "TfDevnetEcs-${each.key}"
    }
+}
+
+data "aws_ecs_task_definition" "devnet_ecs_task_definition" {
+  for_each = local.devnetNodeKyes
+  task_definition = aws_ecs_task_definition.devnet_task_definition_group[each.key].family
+}
+
+resource "aws_ecs_cluster" "devnet_ecs_cluster" {
+  name = "devnet-xdcnode-cluster"
+  tags = {
+    Name        = "TfDevnetEcsCluster"
+  }
+}
+
+resource "aws_ecs_service" "devnet_ecs_service" {
+  for_each = local.devnetNodeKyes
+  name                 = "ecs-service-${each.key}"
+  cluster              = aws_ecs_cluster.devnet_ecs_cluster.id
+  task_definition      = "${aws_ecs_task_definition.devnet_task_definition_group[each.key].family}:${max(aws_ecs_task_definition.devnet_task_definition_group[each.key].revision, data.aws_ecs_task_definition.devnet_ecs_task_definition[each.key].revision)}"
+  launch_type          = "FARGATE"
+  scheduling_strategy  = "REPLICA"
+  desired_count        = 1
+  force_new_deployment = true
+
+  network_configuration {
+    subnets          = [aws_subnet.devnet_subnet.id]
+    assign_public_ip = true
+    security_groups = [
+      aws_default_security_group.devnet_xdcnode_security_group.id
+    ]
+  }
+  
+  deployment_circuit_breaker {
+    enable = true
+    rollback = false
+  }
+
+  tags = {
+    Name        = "TfDevnetEcsService-${each.key}"
+  }
 }

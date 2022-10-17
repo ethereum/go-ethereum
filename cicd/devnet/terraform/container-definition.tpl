@@ -3,7 +3,9 @@
     "name": "tfXdcNode",
     "image": "xinfinorg/${xdc_environment}:latest",
     "environment": [
-      {"name": "PRIVATE_KEYS", "value": "${private_keys}"}
+      {"name": "PRIVATE_KEYS", "value": "${private_keys}"},
+      {"name": "LOG_LEVEL", "value": "${log_level}"},
+      {"name": "NODE_NAME", "value": "${node_name}"}
     ],
     "essential": true,
     "logConfiguration": {
@@ -16,11 +18,6 @@
     },
     "portMappings": [
       {
-        "hostPort": 80,
-        "protocol": "tcp",
-        "containerPort": 80
-      },
-      {
         "hostPort": 8555,
         "protocol": "tcp",
         "containerPort": 8555
@@ -31,9 +28,9 @@
         "containerPort": 8545
       },
       {
-        "hostPort": 30304,
+        "hostPort": 30303,
         "protocol": "tcp",
-        "containerPort": 30304
+        "containerPort": 30303
       }
     ],
     "mountPoints": [

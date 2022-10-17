@@ -13,24 +13,6 @@ provider "aws" {
   region  = "us-east-1"
 }
 
-# This bucket had to be created before you can run the terraform init
-resource "aws_s3_bucket" "terraform_s3_bucket" {
-  bucket = "terraform-devnet-bucket"
-  versioning {
-    enabled = true
-  }
-}
-
-# Bucket need to be created first. If first time run terraform init, need to comment out the below section
-terraform {
-  backend "s3" {
-    bucket = "terraform-devnet-bucket"
-    key    = "tf/terraform.tfstate"
-    region = "us-east-1"
-    encrypt = true
-  }
-}
-
 resource "aws_vpc" "devnet_vpc" {
   cidr_block = "10.0.0.0/16"
   instance_tenancy = "default"
@@ -99,31 +81,7 @@ resource "aws_default_security_group" "devnet_xdcnode_security_group" {
   }
 }
 
-resource "aws_security_group" "devnet_efs_security_group" {
-  name = "TfDevnetEfsSecurityGroup"
-  description = "Allow HTTP in and out of devnet EFS"
-  vpc_id = aws_vpc.devnet_vpc.id
-
-  ingress {
-    from_port   = 2049
-    to_port     = 2049
-    protocol    = "TCP"
-    security_groups = [aws_default_security_group.devnet_xdcnode_security_group.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = {
-    Name = "TfDevnetEfs"
-  }
-}
-
 # IAM policies
-
 data "aws_iam_policy_document" "xdc_ecs_tasks_execution_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -154,7 +112,8 @@ resource "aws_iam_role_policy_attachment" "devnet_xdc_ecs_tasks_execution_role" 
 
 # Logs
 resource "aws_cloudwatch_log_group" "devnet_cloud_watch_group" {
-  for_each = var.devnet_node_kyes
+  for_each = local.devnetNodeKyes
+
   name = "tf-${each.key}"
   retention_in_days = 14 # Logs are only kept for 14 days
   tags = {
