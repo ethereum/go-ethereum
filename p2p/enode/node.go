@@ -107,8 +107,8 @@ func (n *Node) Incomplete() bool {
 
 // Equal checks for equality with the given node.
 func (n *Node) Equal(other *Node) bool {
-	if n == nil || other == nil {
-		return n == other
+	if n == other {
+		return true
 	}
 	return n.r.Equal(&other.r)
 }

@@ -96,10 +96,10 @@ type pair struct {
 	v rlp.RawValue
 }
 
-// Equal reports whether a record is equal to the given record.
+// Equal checks for equality with the given record.
 func (r *Record) Equal(other *Record) bool {
-	if r == nil || other == nil {
-		return r == other
+	if r == other {
+		return true
 	}
 	if r.raw != nil && other.raw != nil {
 		return bytes.Equal(r.raw, other.raw)
