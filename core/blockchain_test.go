@@ -1681,7 +1681,7 @@ func TestTrieForkGC(t *testing.T) {
 		}
 	}
 	// Dereference all the recent tries and ensure no past trie is left in
-	for i := 0; i < int(DefaultCacheConfig.TriesInMemory); i++ {
+	for i := 0; i < int(chain.cacheConfig.TriesInMemory); i++ {
 		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
 		chain.stateCache.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
@@ -1737,7 +1737,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
 
-	for i, block := range competitor[:len(competitor)-int(DefaultCacheConfig.TriesInMemory)] {
+	for i, block := range competitor[:len(competitor)-int(chain.cacheConfig.TriesInMemory)] {
 		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: competing chain state missing", i)
 		}
@@ -1993,9 +1993,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - int(DefaultCacheConfig.TriesInMemory) - 1
+	lastPrunedIndex := len(blocks) - int(chain.cacheConfig.TriesInMemory) - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
-	firstNonPrunedBlock := blocks[len(blocks)-int(DefaultCacheConfig.TriesInMemory)]
+	firstNonPrunedBlock := blocks[len(blocks)-int(chain.cacheConfig.TriesInMemory)]
 
 	// Verify pruning of lastPrunedBlock
 	if chain.HasBlockAndState(lastPrunedBlock.Hash(), lastPrunedBlock.NumberU64()) {
@@ -2866,7 +2866,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	lastPrunedIndex := len(blocks) - int(DefaultCacheConfig.TriesInMemory) - 1
+	lastPrunedIndex := len(blocks) - int(chain.cacheConfig.TriesInMemory) - 1
 	lastPrunedBlock := blocks[lastPrunedIndex]
 
 	// Verify pruning of lastPrunedBlock
@@ -2874,7 +2874,7 @@ func TestSideImportPrunedBlocks(t *testing.T) {
 		t.Errorf("Block %d not pruned", lastPrunedBlock.NumberU64())
 	}
 
-	firstNonPrunedBlock := blocks[len(blocks)-int(DefaultCacheConfig.TriesInMemory)]
+	firstNonPrunedBlock := blocks[len(blocks)-int(chain.cacheConfig.TriesInMemory)]
 	// Verify firstNonPrunedBlock is not pruned
 	if !chain.HasBlockAndState(firstNonPrunedBlock.Hash(), firstNonPrunedBlock.NumberU64()) {
 		t.Errorf("Block %d pruned", firstNonPrunedBlock.NumberU64())
