@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -598,7 +597,7 @@ func (d *dialTestDialer) waitForDials(nodes []*enode.Node) error {
 			if !ok {
 				return fmt.Errorf("attempt to dial unexpected node %v", req.n.ID())
 			}
-			if !reflect.DeepEqual(req.n, want) {
+			if req.n.String() != want.String() {
 				return fmt.Errorf("ENR of dialed node %v does not match test", req.n.ID())
 			}
 			delete(waitset, req.n.ID())

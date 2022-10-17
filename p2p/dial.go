@@ -64,11 +64,7 @@ type tcpDialer struct {
 }
 
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
-	return t.d.DialContext(ctx, "tcp", nodeAddr(dest).String())
-}
-
-func nodeAddr(n *enode.Node) net.Addr {
-	return &net.TCPAddr{IP: n.IP(), Port: n.TCP()}
+	return t.d.DialContext(ctx, "tcp", dest.TCPAddr().String())
 }
 
 // checkDial errors:
@@ -536,7 +532,7 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
-		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
+		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", t.dest.TCPAddr(), "conn", t.flags, "err", cleanupDialErr(err))
 		return &dialError{err}
 	}
 	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
