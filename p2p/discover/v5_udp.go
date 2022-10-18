@@ -405,7 +405,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 		return nil, err
 	}
 
-	addr := c.node.UDPAddr()
+	addr := node.UDPAddr()
 	if addr == nil {
 		return nil, errors.New("no UDP address information")
 	}
