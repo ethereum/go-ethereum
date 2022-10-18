@@ -195,36 +195,43 @@ func TestProducerDelay(t *testing.T) {
 }
 
 var keys_21val = []map[string]string{
+	// 2
 	{
 		"address":  "0x73E033779C9030D4528d86FbceF5B02e97488921",
 		"priv_key": "61eb51cf8936309151ab7b931841ea033b6a09931f6a100b464fbbd74f3e0bd7",
 		"pub_key":  "0x04f9a5e9bf76b45ac58f1b018ccba4b83b3531010cdadf42174c18a9db9879ef1dcb5d1254ce834bc108b110cd8d0186ed69a0387528a142bdb5936faf58bf98c9",
 	},
+	// 1
 	{
 		"address":  "0x5C3E1B893B9315a968fcC6bce9EB9F7d8E22edB3",
 		"priv_key": "c19fac8e538447124ad2408d9fbaeda2bb686fee763dca7a6bab58ea12442413",
 		"pub_key":  "0x0495421933eda03dcc37f9186c24e255b569513aefae71e96d55d0db3df17502e24e86297b01a167fab9ce1174f06ee3110510ac242e39218bd964de5b345edbd6",
 	},
+	// 5
 	{
 		"address":  "0xb005bc07015170266Bd430f3EC1322938603be20",
 		"priv_key": "17cd9b38c2b3a639c7d97ccbf2bb6c7140ab8f625aec4c249bc8e4cfd3bf9a96",
 		"pub_key":  "0x04435a70d343aa569e6f3386c73e39a1aa6f88c30e5943baedda9618b55cc944a2de1d114aff6d0e9fa002bebc780b04ef6c1b8a06bbf0d41c10d1efa55390f198",
 	},
+	// 4
 	{
 		"address":  "0xA464DC4810Bc79B956810759e314d85BcE35cD1c",
 		"priv_key": "3efcf3f7014a6257f4a443119851414111820c681b27525dab3f35e72e28e51e",
 		"pub_key":  "0x040180920306bf598ea050e258f2c7e50804a77a64f5a11705e08d18ee71eb0a80fafc95d0a42b92371ded042edda16c1f0b5f2fef7c4113ad66c59a71c29d977e",
 	},
+	// 6
 	{
 		"address":  "0xE8d02Da3dFeeB3e755472D95D666BD6821D92129",
 		"priv_key": "45c9ef66361a2283cef14184f128c41949103b791aa622ead3c0bc844648b835",
 		"pub_key":  "0x04a14651ddc80467eb589d72d95153fa695e4cb2e4bb99edeb912e840d309d61313b6f4676081b099f29e6598ecf98cb7b44bb862d019920718b558f27ba94ca51",
 	},
+	// 7
 	{
 		"address":  "0xF93B54Cf36E917f625B48e1e3C9F93BC2344Fb06",
 		"priv_key": "93788a1305605808df1f9a96b5e1157da191680cf08bc15e077138f517563cd5",
 		"pub_key":  "0x045eee11dceccd9cccc371ca3d96d74c848e785223f1e5df4d1a7f08efdfeb90bd8f0035342a9c26068cf6c7ab395ca3ceea555541325067fc187c375390efa57d",
 	},
+	// 3
 	{
 		"address":  "0x751eC4877450B8a4D652d0D70197337FC38a42e6",
 		"priv_key": "6e7f48d012c9c0baadbdc88af32521e2e477fd6898a9b65e6abe19fd6652cb2e",
@@ -237,7 +244,7 @@ func getTestSprintLengthReorgCases(t *testing.T) []map[string]uint64 {
 	faultyNode := uint64(1)
 	reorgsLengthTests := make([]map[string]uint64, 0)
 	for i := uint64(0); i < uint64(len(sprintSizes)); i++ {
-		maxReorgLength := sprintSizes[i] * 3
+		maxReorgLength := sprintSizes[i] * 5
 		for j := uint64(3); j <= maxReorgLength; j++ {
 			maxStartBlock := sprintSizes[i] - 1
 			for k := sprintSizes[i] / 2; k <= maxStartBlock; k++ {
