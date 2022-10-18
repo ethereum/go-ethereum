@@ -9,6 +9,7 @@ import (
 	_log "log"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -240,28 +241,33 @@ var keys_21val = []map[string]string{
 }
 
 func getTestSprintLengthReorgCases(t *testing.T) []map[string]uint64 {
-	sprintSizes := []uint64{8, 16, 32, 64}
-	faultyNode := uint64(1)
+	sprintSizes := []uint64{64, 32, 16, 8}
+	faultyNodes := []uint64{1, 0}
 	reorgsLengthTests := make([]map[string]uint64, 0)
 	for i := uint64(0); i < uint64(len(sprintSizes)); i++ {
-		maxReorgLength := sprintSizes[i] * 5
-		for j := uint64(3); j <= maxReorgLength; j++ {
+		maxReorgLength := sprintSizes[i] * 4
+		for j := uint64(3); j <= maxReorgLength; j = j + 4 {
 			maxStartBlock := sprintSizes[i] - 1
-			for k := sprintSizes[i] / 2; k <= maxStartBlock; k++ {
-				reorgsLengthTest := map[string]uint64{
-					"reorgLength": j,
-					"startBlock":  k,
-					"sprintSize":  sprintSizes[i],
-					"faultyNode":  faultyNode, // node 1(index) is primary validator of the first sprint
+			for k := sprintSizes[i] / 2; k <= maxStartBlock; k = k + 4 {
+				for l := uint64(0); l < uint64(len(faultyNodes)); l++ {
+					if j+k < sprintSizes[i] {
+						continue
+					}
+					reorgsLengthTest := map[string]uint64{
+						"reorgLength": j,
+						"startBlock":  k,
+						"sprintSize":  sprintSizes[i],
+						"faultyNode":  faultyNodes[l], // node 1(index) is primary validator of the first sprint
+					}
+					reorgsLengthTests = append(reorgsLengthTests, reorgsLengthTest)
 				}
-				reorgsLengthTests = append(reorgsLengthTests, reorgsLengthTest)
 			}
 		}
 	}
 	// reorgsLengthTests := []map[string]uint64{
 	// 	{
-	// 		"reorgLength": 13,
-	// 		"startBlock":  1,
+	// 		"reorgLength": 3,
+	// 		"startBlock":  7,
 	// 		"sprintSize":  8,
 	// 		"faultyNode":  1,
 	// 	},
@@ -298,11 +304,22 @@ func TestSprintLengthReorg(t *testing.T) {
 	w.Write([]string{"Induced Reorg Length", "Start Block", "Sprint Size", "Disconnected Node Id", "Disconnected Node Id's Reorg Length", "Observer Node Id's Reorg Length"})
 	w.Flush()
 
+	var wg sync.WaitGroup
 	for index, tt := range reorgsLengthTests {
-		r1, r2, r3, r4, r5, r6 := SprintLengthReorgIndividual(t, index, tt)
-		w.Write([]string{fmt.Sprint(r1), fmt.Sprint(r2), fmt.Sprint(r3), fmt.Sprint(r4), fmt.Sprint(r5), fmt.Sprint(r6)})
-		w.Flush()
+		if index%4 == 0 {
+			wg.Wait()
+		}
+		wg.Add(1)
+		go SprintLengthReorgIndividualHelper(t, index, tt, w, &wg)
 	}
+
+}
+
+func SprintLengthReorgIndividualHelper(t *testing.T, index int, tt map[string]uint64, w *csv.Writer, wg *sync.WaitGroup) {
+	r1, r2, r3, r4, r5, r6 := SprintLengthReorgIndividual(t, index, tt)
+	w.Write([]string{fmt.Sprint(r1), fmt.Sprint(r2), fmt.Sprint(r3), fmt.Sprint(r4), fmt.Sprint(r5), fmt.Sprint(r6)})
+	w.Flush()
+	(*wg).Done()
 }
 
 func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64) {
