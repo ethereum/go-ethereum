@@ -105,5 +105,4 @@ const header = `Please answer these questions before submitting your issue. Than
  
 #### What did you see instead?
  
-#### System details
-`
+#### System details`
