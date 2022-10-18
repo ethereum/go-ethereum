@@ -445,11 +445,11 @@ func gasSetModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 	mod_offset := scope.Stack.Back(0).Uint64()
 	mod_limb_count := scope.Stack.Back(1).Uint64()
 
-	if mod_offset+mod_limb_count*8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || uint(mod_limb_count) > params.EVMMAXMaxLimbCount {
+	if mod_offset+mod_limb_count*8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 {
 		return 0, ErrOutOfGas
 	}
 
-	return scope.EVMMAXField.SetModCost, nil
+	return 1, nil
 }
 
 // TODO create a separate gas class for EVMMAX ops as they are 'constant' in price
@@ -471,26 +471,33 @@ func gasEVMMAXArith(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64,
 	return costFn(), nil
 }
 
+func max(x, y byte) byte {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 func gasAddModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
 }
 func gasSubModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
 }
 func gasMulMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return scope.EVMMAXField.AddModCost })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
 }
 func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	if scope.EVMMAXField == nil {
 		return 0, ErrOutOfGas
 	}
 
-	z_offset := scope.Contract.Code[pc+1]
-	x_offset := scope.Contract.Code[pc+2]
-	if uint64(max(x_offset, z_offset))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	output_offset := scope.Stack.Back(0).Bytes()[0]
+	input_offset := scope.Stack.Back(1).Bytes()[0]
+	if uint64(max(input_offset, output_offset))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
 
-	return scope.EVMMAXField.MulMontCost, nil
+	return 1, nil
 }

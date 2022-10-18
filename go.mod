@@ -40,7 +40,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.2.0
-	github.com/jwasinger/mont-arith v0.0.0-20220816060920-21890eeb532b
+	github.com/jwasinger/mont-arith v0.0.0-20221018033223-868425c4f501
 	github.com/karalabe/usb v0.0.2
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-isatty v0.0.12
@@ -105,5 +105,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/jwasinger/mont-arith => /home/jared/projects/evmmax-lite/mont-arith

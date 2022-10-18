@@ -82,10 +82,11 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 }
 
 func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	mod_limbs_stack := scope.Stack.pop()
 	mod_offset_stack := scope.Stack.pop()
-	mod_limbs := mod_limbs_stack.Uint64()
+	mod_limbs_stack := scope.Stack.pop()
+
 	mod_offset := mod_offset_stack.Uint64()
+	mod_limbs := mod_limbs_stack.Uint64()
 
 	mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_limbs)*8)
 	modLimbs := mont_arith.IntToLimbs(mont_arith.LEBytesToInt(mod_bytes), uint(mod_limbs))
@@ -98,11 +99,12 @@ func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opAddModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
+	elemSize := scope.EVMMAXField.ElementSize
 
-	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
-	x_offset := uint64(scope.Contract.Code[*pc+2]) * 8
-	y_offset := uint64(scope.Contract.Code[*pc+3]) * 8
+	out_offset := uint64(scope.Contract.Code[*pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[*pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[*pc+3]) * elemSize
+	*pc += 3
 
 	out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
 	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
@@ -115,11 +117,12 @@ func opAddModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opSubModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
+	elemSize := scope.EVMMAXField.ElementSize
 
-	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
-	x_offset := uint64(scope.Contract.Code[*pc+2]) * 8
-	y_offset := uint64(scope.Contract.Code[*pc+3]) * 8
+	out_offset := uint64(scope.Contract.Code[*pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[*pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[*pc+3]) * elemSize
+	*pc += 3
 
 	out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
 	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
@@ -132,13 +135,16 @@ func opSubModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
-	x_offset := uint64(scope.Contract.Code[*pc+2]) * 8
-	y_offset := uint64(scope.Contract.Code[*pc+3]) * 8
+	elemSize := scope.EVMMAXField.ElementSize
 
-	out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(scope.EVMMAXField.ElementSize))
-	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(scope.EVMMAXField.ElementSize))
-	y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(scope.EVMMAXField.ElementSize))
+	out_offset := uint64(scope.Contract.Code[*pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[*pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[*pc+3]) * elemSize
+	*pc += 3
+
+	out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
+	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
+	y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(elemSize))
 
 	if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, x_bytes, y_bytes); err != nil {
 		return nil, ErrOutOfGas
@@ -159,12 +165,12 @@ func uint64_array_to_le_bytes(val []uint64) []byte {
 }
 
 func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
+	elemSize := scope.EVMMAXField.ElementSize
 
-	out_offset := uint64(scope.Contract.Code[*pc+1]) * 8
-	input_offset := uint64(scope.Contract.Code[*pc+2]) * 8
+	output_offset := uint64(scope.Stack.Back(0).Bytes()[0]) * elemSize
+	input_offset := uint64(scope.Stack.Back(1).Bytes()[0]) * elemSize
 
-	out_bytes := scope.Memory.GetPtr(int64(out_offset), int64(elemSize))
+	out_bytes := scope.Memory.GetPtr(int64(output_offset), int64(elemSize))
 	input_bytes := scope.Memory.GetPtr(int64(input_offset), int64(elemSize))
 	r_squared_bytes := uint64_array_to_le_bytes(scope.EVMMAXField.RSquared())
 
@@ -269,18 +275,14 @@ func opAddmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if z.IsZero() {
 		z.Clear()
 	} else {
-		//fmt.Printf("Addmod %s * %s mod %s = ", x.String(), y.String(), z.String())
 		z.AddMod(&x, &y, z)
-		//fmt.Printf("%s\n", z.String())
 	}
 	return nil, nil
 }
 
 func opMulmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.peek()
-	//fmt.Printf("Mulmod %s * %s mod %s = ", x.String(), y.String(), z.String())
 	z.MulMod(&x, &y, z)
-	//fmt.Printf("%s\n", z.String())
 	return nil, nil
 }
 

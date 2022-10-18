@@ -263,6 +263,8 @@ github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7V
 github.com/jung-kurt/gofpdf v1.0.3-0.20190309125859-24315acbbda5/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
 github.com/jwasinger/mont-arith v0.0.0-20220816060920-21890eeb532b h1:28qLc0ORl37RduM8MpxngzLU2/BDURc6oAZM7AKFcO4=
 github.com/jwasinger/mont-arith v0.0.0-20220816060920-21890eeb532b/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
+github.com/jwasinger/mont-arith v0.0.0-20221018033223-868425c4f501 h1:pDf3JMdUMZKM3xA76BI1L4B3sJRMOUE5MW7U70ZiZBE=
+github.com/jwasinger/mont-arith v0.0.0-20221018033223-868425c4f501/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
 github.com/jwilder/encoding v0.0.0-20170811194829-b4e1701a28ef/go.mod h1:Ct9fl0F6iIOGgxJ5npU/IUOhOhqlVrGjyIZc8/MagT0=
 github.com/karalabe/usb v0.0.2 h1:M6QQBNxF+CQ8OFvxrT90BA0qBOXymndZnk5q235mFc4=
 github.com/karalabe/usb v0.0.2/go.mod h1:Od972xHfMJowv7NGVDiWVxk2zxnWgjLlJzE+F4F7AGU=

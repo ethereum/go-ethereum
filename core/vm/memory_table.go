@@ -112,18 +112,11 @@ func memoryLog(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
 	return calcMemSize64(stack.Back(0), stack.Back(1))
 }
 
-func max(x, y byte) byte {
-	if x > y {
-		return x
-	}
-	return y
-}
-
+/*
 func memoryEVMMAXArith(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
 	if scope.EVMMAXField == nil {
 		return ErrOutOfGas, 0, false
 	}
-	params_offsets := scope.Stack.peek()
 	elemSize := uint64(scope.EVMMAXField.NumLimbs) * 8
 
 	out_offset := byte(params_offsets[0] >> 16)
@@ -147,3 +140,4 @@ func memoryToMontX(stack *Stack, scope *ScopeContext) (error, uint64, bool) {
 
 	return nil, max_offset + elemSize, false
 }
+*/
