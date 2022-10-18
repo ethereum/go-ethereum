@@ -8,4 +8,4 @@ numOfNonValidators: 0
 ethURL: http://ganache:9545
 devnetType: docker
 borDockerBuildContext: "../../bor"
-heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#v0.3.0-dev"
+heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#develop"

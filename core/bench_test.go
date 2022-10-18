@@ -162,7 +162,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 
 // genUncles generates blocks with two uncle headers.
 func genUncles(i int, gen *BlockGen) {
-	if i >= 6 {
+	if i >= 7 {
 		b2 := gen.PrevBlock(i - 6).Header()
 		b2.Extra = []byte("foo")
 		gen.AddUncle(b2)

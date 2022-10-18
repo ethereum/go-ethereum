@@ -62,8 +62,11 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gcmode,optional" toml:"gcmode,optional"`
 
-	// Snapshot disables/enables the snapshot database mode
+	// Snapshot enables the snapshot database mode
 	Snapshot bool `hcl:"snapshot,optional" toml:"snapshot,optional"`
+
+	// BorLogs enables bor log retrieval
+	BorLogs bool `hcl:"bor.logs,optional" toml:"bor.logs,optional"`
 
 	// Ethstats is the address of the ethstats server to send telemetry
 	Ethstats string `hcl:"ethstats,optional" toml:"ethstats,optional"`
@@ -420,6 +423,7 @@ func DefaultConfig() *Config {
 		SyncMode: "full",
 		GcMode:   "full",
 		Snapshot: true,
+		BorLogs:  false,
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
@@ -649,6 +653,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.NetworkId = c.chain.NetworkId
 		n.Genesis = c.chain.Genesis
 	}
+
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
@@ -881,6 +886,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		}
 	}
 
+	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
 
 	return &n, nil
