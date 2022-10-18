@@ -233,7 +233,6 @@ var keys_21val = []map[string]string{
 }
 
 func getTestSprintLengthReorgCases(t *testing.T) []map[string]uint64 {
-	// sprintSizes := []uint64{64}
 	sprintSizes := []uint64{8, 16, 32, 64}
 	faultyNode := uint64(1)
 	reorgsLengthTests := make([]map[string]uint64, 0)
@@ -252,29 +251,31 @@ func getTestSprintLengthReorgCases(t *testing.T) []map[string]uint64 {
 			}
 		}
 	}
+	// reorgsLengthTests := []map[string]uint64{
+	// 	{
+	// 		"reorgLength": 13,
+	// 		"startBlock":  1,
+	// 		"sprintSize":  8,
+	// 		"faultyNode":  1,
+	// 	},
+	// }
 	return reorgsLengthTests
 }
 
-func SprintLengthReorgIndividual(t *testing.T, index int, tt map[string]uint64) (uint64, uint64, uint64, uint64, uint64, uint64, *big.Int, *big.Int) {
+func SprintLengthReorgIndividual(t *testing.T, index int, tt map[string]uint64) (uint64, uint64, uint64, uint64, uint64, uint64) {
 	t.Helper()
 
-	// log.Warn("Case ----- ", "Index", index, "InducedReorgLength", tt["reorgLength"], "BlockStart", tt["startBlock"], "SprintSize", tt["sprintSize"], "DisconnectedNode", tt["faultyNode"])
-	// observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD := SetupValidatorsAndTest(t, tt)
-	_, observerOldChainLength, _, faultyOldChainLength, _, oldTD, newTD := SetupValidatorsAndTest(t, tt)
+	log.Warn("Case ----- ", "Index", index, "InducedReorgLength", tt["reorgLength"], "BlockStart", tt["startBlock"], "SprintSize", tt["sprintSize"], "DisconnectedNode", tt["faultyNode"])
+	observerOldChainLength, faultyOldChainLength := SetupValidatorsAndTest(t, tt)
 
-	// if observerNewChainLength > 0 {
-	// 	log.Warn("Observer", "New Chain length", observerNewChainLength, "Old Chain length", observerOldChainLength)
-	// }
-	// if faultyNewChainLength > 0 {
-	// 	log.Warn("Faulty", "New Chain length", faultyNewChainLength, "Old Chain length", faultyOldChainLength)
-	// }
+	if observerOldChainLength > 0 {
+		log.Warn("Observer", "Old Chain length", observerOldChainLength)
+	}
+	if faultyOldChainLength > 0 {
+		log.Warn("Faulty", "Old Chain length", faultyOldChainLength)
+	}
 
-	// log.Warn("Valid Reorg", "Valid Reorg", validReorg, "Old TD", oldTD, "New TD", newTD)
-
-	// reorg should be valid :: New TD > Old TD
-	// assert.Equal(t, validReorg, true)
-
-	return tt["reorgLength"], tt["startBlock"], tt["sprintSize"], tt["faultyNode"], faultyOldChainLength, observerOldChainLength, oldTD, newTD
+	return tt["reorgLength"], tt["startBlock"], tt["sprintSize"], tt["faultyNode"], faultyOldChainLength, observerOldChainLength
 }
 
 func TestSprintLengthReorg(t *testing.T) {
@@ -287,17 +288,17 @@ func TestSprintLengthReorg(t *testing.T) {
 	}
 
 	w := csv.NewWriter(f)
-	w.Write([]string{"Induced Reorg Length", "Start Block", "Sprint Size", "Disconnected Node Id", "Disconnected Node Id's Reorg Length", "Observer Node Id's Reorg Length", "Old Chain TD", "New Chain TD"})
+	w.Write([]string{"Induced Reorg Length", "Start Block", "Sprint Size", "Disconnected Node Id", "Disconnected Node Id's Reorg Length", "Observer Node Id's Reorg Length"})
 	w.Flush()
 
 	for index, tt := range reorgsLengthTests {
-		r1, r2, r3, r4, r5, r6, r7, r8 := SprintLengthReorgIndividual(t, index, tt)
-		w.Write([]string{fmt.Sprint(r1), fmt.Sprint(r2), fmt.Sprint(r3), fmt.Sprint(r4), fmt.Sprint(r5), fmt.Sprint(r6), fmt.Sprint(r7), fmt.Sprint(r8)})
+		r1, r2, r3, r4, r5, r6 := SprintLengthReorgIndividual(t, index, tt)
+		w.Write([]string{fmt.Sprint(r1), fmt.Sprint(r2), fmt.Sprint(r3), fmt.Sprint(r4), fmt.Sprint(r5), fmt.Sprint(r6)})
 		w.Flush()
 	}
 }
 
-func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64, uint64, uint64, bool, *big.Int, *big.Int) {
+func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64) {
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
@@ -348,9 +349,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 	chain2HeadChObserver := make(chan core.Chain2HeadEvent, 64)
 	chain2HeadChFaulty := make(chan core.Chain2HeadEvent, 64)
 
-	var observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength uint64
-
-	var validReorg bool // if true, the newchain TD > oldchain TD
+	var observerOldChainLength, faultyOldChainLength uint64
 
 	faultyProducerIndex := tt["faultyNode"] // node causing reorg :: faulty ::
 	subscribedNodeIndex := 5                // node on different partition, produces 7th sprint but our testcase does not run till 7th sprint. :: observer ::
@@ -396,76 +395,19 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 
 		select {
 		case ev := <-chain2HeadChObserver:
-			// var newAuthor, oldAuthor common.Address
-			var newTD, oldTD *big.Int
-
 			if ev.Type == core.Chain2HeadReorgEvent {
-				if len(ev.NewChain) > 0 {
-					nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
-					// newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
-					newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					if newTD == nil {
-						newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					}
-				}
-
-				if len(ev.OldChain) > 0 {
-					nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
-					// oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
-					oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
-					if oldTD == nil {
-						oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					}
-				}
-
-				// log.Warn("Observer Reorg", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
-				// log.Warn("Reorgs lengths", "old chain length", len(ev.OldChain), "new chain length", len(ev.NewChain))
-				if newTD.Cmp(oldTD) == 1 {
-					validReorg = true
-				}
 
 				if len(ev.OldChain) > 1 {
 					observerOldChainLength = uint64(len(ev.OldChain))
-					observerNewChainLength = uint64(len(ev.NewChain))
-
-					return observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD
+					return observerOldChainLength, 0
 				}
 			}
 
 		case ev := <-chain2HeadChFaulty:
-			// var newAuthor, oldAuthor common.Address
-			var newTD, oldTD *big.Int
-
 			if ev.Type == core.Chain2HeadReorgEvent {
-				if len(ev.NewChain) > 0 {
-					nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
-					// newAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.NewChain[0].Header())
-					newTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					if newTD == nil {
-						newTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					}
-				}
-
-				if len(ev.OldChain) > 0 {
-					nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
-					// oldAuthor, _ = nodes[subscribedNodeIndex].Engine().Author(ev.OldChain[0].Header())
-					oldTD = nodes[faultyProducerIndex].BlockChain().GetTd(ev.OldChain[0].Hash(), ev.OldChain[0].NumberU64())
-					if oldTD == nil {
-						oldTD = nodes[subscribedNodeIndex].BlockChain().GetTd(ev.NewChain[0].Hash(), ev.NewChain[0].NumberU64())
-					}
-				}
-
-				// log.Warn("Reorg on Faulty Node", "newAuthor", newAuthor, "oldAuthor", oldAuthor)
-				// log.Warn("Reorg on Faulty Node", "newTD", newTD, "oldTD", oldTD)
-				if newTD.Cmp(oldTD) == 1 {
-					validReorg = true
-				}
-
 				if len(ev.OldChain) > 1 {
 					faultyOldChainLength = uint64(len(ev.OldChain))
-					faultyNewChainLength = uint64(len(ev.NewChain))
-
-					return observerNewChainLength, observerOldChainLength, faultyNewChainLength, faultyOldChainLength, validReorg, oldTD, newTD
+					return 0, faultyOldChainLength
 				}
 			}
 
@@ -474,7 +416,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64,
 		}
 	}
 
-	return 0, 0, 0, 0, false, big.NewInt(0), big.NewInt(0)
+	return 0, 0
 }
 
 func InitMiner1(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
