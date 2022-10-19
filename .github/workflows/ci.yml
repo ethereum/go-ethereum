@@ -98,13 +98,13 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.18.x
+            go-version: 1.19.x
 
         - name: Checkout matic-cli
           uses: actions/checkout@v3
           with:
             repository: maticnetwork/matic-cli
-            ref: arpit/mergev0.3.0
+            ref: mardizzone/revert
             path: matic-cli
 
         - name: Install dependencies on Linux
