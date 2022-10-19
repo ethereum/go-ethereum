@@ -481,7 +481,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 			},
 			// Deliver the middle transaction requested, the one before which
 			// should be dropped and the one after re-requested.
-			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true}, // This depends on the deterministic random
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[1]}, direct: true}, // This depends on the deterministic random
 			isScheduled{
 				tracking: map[string][]common.Hash{
 					"A": {testTxsHashes[2]},
@@ -785,7 +785,8 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 					"A": hashes,
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashes[1643 : 1643+maxTxRetrievals],
+					//"A": hashes[1643 : 1643+maxTxRetrievals],
+					"A": hashes[:maxTxRetrievals],
 				},
 			},
 		},
@@ -804,6 +805,7 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 	for i := 0; i < maxTxAnnounces+1; i++ {
 		hashesB = append(hashesB, common.Hash{0x02, byte(i / 256), byte(i % 256)})
 	}
+
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
 			return NewTxFetcher(
@@ -833,8 +835,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": hashesB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 			// Ensure that adding even one more hash results in dropping the hash
@@ -851,8 +853,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": hashesB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 		},
