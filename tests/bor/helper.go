@@ -428,7 +428,7 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall
 	return stack, ethBackend, err
 }
 
-func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string) *core.Genesis {
+func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
 
 	// sprint size = 8 in genesis
 	genesisData, err := ioutil.ReadFile(fileLocation)
@@ -444,6 +444,7 @@ func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string)
 
 	genesis.Config.ChainID = big.NewInt(15001)
 	genesis.Config.EIP150Hash = common.Hash{}
+	genesis.Config.Bor.Sprint["0"] = sprintSize
 
 	return genesis
 }

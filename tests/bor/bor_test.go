@@ -59,7 +59,7 @@ func TestValidatorWentOffline(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json")
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
 
 	var (
 		stacks []*node.Node
