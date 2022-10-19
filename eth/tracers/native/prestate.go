@@ -45,8 +45,8 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 }
 
-func (a *account) isExists() bool {
-	return a.Balance.Sign() > 0 || len(a.Storage) > 0 || len(a.Code) > 0
+func (a *account) empty() bool {
+	return a.Nonce == 0 && a.Balance.Sign() == 0 && len(a.Code) == 0 && len(a.Storage) == 0
 }
 
 type accountMarshaling struct {
@@ -125,11 +125,9 @@ func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 	}
 
 	if t.create {
-		if s := t.pre[t.to]; s != nil {
-			if !s.isExists() {
-				// Exclude newly created contract.
-				delete(t.pre, t.to)
-			}
+		if s := t.pre[t.to]; s != nil && s.empty() {
+			// Exclude newly created contract.
+			delete(t.pre, t.to)
 		}
 	}
 }
@@ -241,10 +239,8 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil {
-			if !s.isExists() {
-				delete(t.pre, a)
-			}
+		if s := t.pre[a]; s != nil && s.empty() {
+			delete(t.pre, a)
 		}
 	}
 }
