@@ -70,8 +70,6 @@ type stateObject struct {
 	data     types.StateAccount
 	db       *StateDB
 
-	transientStorage Storage
-
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -113,14 +111,13 @@ func newObject(db *StateDB, address common.Address, data types.StateAccount) *st
 		data.Root = emptyRoot
 	}
 	return &stateObject{
-		db:               db,
-		address:          address,
-		addrHash:         crypto.Keccak256Hash(address[:]),
-		data:             data,
-		transientStorage: make(Storage),
-		originStorage:    make(Storage),
-		pendingStorage:   make(Storage),
-		dirtyStorage:     make(Storage),
+		db:             db,
+		address:        address,
+		addrHash:       crypto.Keccak256Hash(address[:]),
+		data:           data,
+		originStorage:  make(Storage),
+		pendingStorage: make(Storage),
+		dirtyStorage:   make(Storage),
 	}
 }
 
@@ -288,32 +285,6 @@ func (s *stateObject) setState(key, value common.Hash) {
 	s.dirtyStorage[key] = value
 }
 
-func (s *stateObject) SetTransientState(key, value common.Hash) {
-	prev := s.GetTransientState(key)
-	if prev == value {
-		return
-	}
-
-	s.db.journal.append(transientStorageChange{
-		account:  &s.address,
-		key:      key,
-		prevalue: prev,
-	})
-	s.setTransientState(key, value)
-}
-
-func (s *stateObject) setTransientState(key, value common.Hash) {
-	s.transientStorage[key] = value
-}
-
-func (s *stateObject) GetTransientState(key common.Hash) common.Hash {
-	return s.getTransientState(key)
-}
-
-func (s *stateObject) getTransientState(key common.Hash) common.Hash {
-	return s.transientStorage[key]
-}
-
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise(prefetch bool) {
@@ -329,9 +300,6 @@ func (s *stateObject) finalise(prefetch bool) {
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
-	}
-	if len(s.transientStorage) > 0 {
-		s.transientStorage = make(Storage)
 	}
 }
 
@@ -474,7 +442,6 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.suicided = s.suicided
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
-	stateObject.transientStorage = s.transientStorage.Copy()
 	return stateObject
 }
 

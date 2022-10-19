@@ -219,7 +219,7 @@ func (ch storageChange) dirtied() *common.Address {
 }
 
 func (ch transientStorageChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setTransientState(ch.key, ch.prevalue)
+	s.setTransientState(*ch.account, ch.key, ch.prevalue)
 }
 
 func (ch transientStorageChange) dirtied() *common.Address {

@@ -102,6 +102,9 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList *accessList
 
+	// Transient storage
+	transientStorage transientStorage
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -146,6 +149,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		accessList:          newAccessList(),
+		transientStorage:    newTransientStorage(),
 		hasher:              crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
@@ -453,18 +457,26 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 }
 
 func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash) {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetTransientState(key, value)
+	prev := s.GetTransientState(addr, key)
+	if prev == value {
+		return
 	}
+
+	s.journal.append(transientStorageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+
+	s.setTransientState(addr, key, value)
+}
+
+func (s *StateDB) setTransientState(addr common.Address, key, value common.Hash) {
+	s.transientStorage.Set(addr, key, value)
 }
 
 func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.GetTransientState(key)
-	}
-	return common.Hash{}
+	return s.transientStorage.Get(addr, key)
 }
 
 //
@@ -722,6 +734,8 @@ func (s *StateDB) Copy() *StateDB {
 	// However, it doesn't cost us much to copy an empty list, so we do it anyway
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
+
+	state.transientStorage = s.transientStorage.Copy()
 
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not

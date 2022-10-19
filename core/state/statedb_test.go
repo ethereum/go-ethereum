@@ -974,16 +974,8 @@ func TestStateDBTransientStorage(t *testing.T) {
 	value := common.Hash{0x02}
 	addr := common.Address{}
 
-	// the state object does not exist, should be a noop
 	state.SetTransientState(addr, key, value)
-	if exp, got := 0, state.journal.length(); exp != got {
-		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
-	}
-	// create the state object so that setting transient state
-	// actually happens
-	state.CreateAccount(addr)
-	state.SetTransientState(addr, key, value)
-	if exp, got := 2, state.journal.length(); exp != got {
+	if exp, got := 1, state.journal.length(); exp != got {
 		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
 	}
 	// the retrieved value should equal what was set
@@ -993,7 +985,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 
 	// revert the transient state being set and then check that the
 	// value is now the empty hash
-	state.journal.revert(state, 1)
+	state.journal.revert(state, 0)
 	if got, exp := state.GetTransientState(addr, key), (common.Hash{}); exp != got {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, exp)
 	}

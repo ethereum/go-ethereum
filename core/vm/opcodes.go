@@ -117,8 +117,6 @@ const (
 	GAS      OpCode = 0x5a
 	JUMPDEST OpCode = 0x5b
 	PUSH0    OpCode = 0x5f
-	TLOAD    OpCode = 0xb3
-	TSTORE   OpCode = 0xb4
 )
 
 // 0x60 range - pushes.
@@ -219,6 +217,12 @@ const (
 	REVERT       OpCode = 0xfd
 	INVALID      OpCode = 0xfe
 	SELFDESTRUCT OpCode = 0xff
+)
+
+// 0xb0 range.
+const (
+	TLOAD  OpCode = 0xb3
+	TSTORE OpCode = 0xb4
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice.
@@ -374,6 +378,10 @@ var opCodeToString = map[OpCode]string{
 	LOG2:   "LOG2",
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
+
+	// 0xb0 range.
+	TLOAD:  "TLOAD",
+	TSTORE: "TSTORE",
 
 	// 0xf0 range.
 	CREATE:       "CREATE",
