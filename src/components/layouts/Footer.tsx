@@ -13,36 +13,38 @@ import {
 export const Footer: FC = () => {
   return (
     <Stack mt={4} border='2px solid' borderColor='brand.light.primary'>
-      <Grid templateColumns='repeat(2, 1fr)' sx={{ mt: '0 !important' }}>
+      <Grid templateColumns='repeat(2, 1fr)' sx={{ mt: '-2px !important' }}>
         <GridItem
           borderRight='2px solid'
           borderBottom='2px solid'
           borderColor='brand.light.primary'
-        >
-          <Stack
-            p={4}
+          color='brand.light.primary'
             _hover={{
               textDecoration: 'none',
               bg: 'brand.light.primary',
               color: 'yellow.50 !important'
             }}
-          >
-            <NextLink href={DOWNLOADS_PAGE} passHref>
-              <Link _hover={{ textDecoration: 'none' }}>
-                <Text textStyle='quick-link-label'>DOWNLOADS</Text>
-              </Link>
-            </NextLink>
-          </Stack>
+        >
+          <NextLink href={DOWNLOADS_PAGE} passHref>
+            <Link _hover={{ textDecoration: 'none' }}>
+              <Text textStyle='home-section-link-label'>DOWNLOADS</Text>
+            </Link>
+          </NextLink>
         </GridItem>
 
         <GridItem
           borderBottom='2px solid'
           borderColor='brand.light.primary'
-          p={4}
+          color='brand.light.primary'
+            _hover={{
+              textDecoration: 'none',
+              bg: 'brand.light.primary',
+              color: 'yellow.50 !important'
+            }}
         >
           <NextLink href={DOCS_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
-              <Text textStyle='quick-link-label'>DOCUMENTATION</Text>
+              <Text textStyle='home-section-link-label'>DOCUMENTATION</Text>
             </Link>
           </NextLink>
         </GridItem>
@@ -54,6 +56,11 @@ export const Footer: FC = () => {
           borderBottom='2px solid'
           borderColor='brand.light.primary'
           alignItems="center"
+          _hover={{
+            textDecoration: 'none',
+            bg: 'brand.light.primary',
+            color: 'yellow.50 !important'
+          }}
         >
           <Stack alignItems='center' p={4}>
             <NextLink href={GETH_TWITTER_URL} passHref>
@@ -69,6 +76,11 @@ export const Footer: FC = () => {
           borderBottom='2px solid'
           borderColor='brand.light.primary'
           alignItems="center"
+          _hover={{
+            textDecoration: 'none',
+            bg: 'brand.light.primary',
+            color: 'yellow.50 !important'
+          }}
         >
           <Stack alignItems='center' p={4}>
             <NextLink href={GETH_DISCORD_URL} passHref>
@@ -83,6 +95,11 @@ export const Footer: FC = () => {
           borderBottom='2px solid'
           borderColor='brand.light.primary'
           alignItems="center"
+          _hover={{
+            textDecoration: 'none',
+            bg: 'brand.light.primary',
+            color: 'yellow.50 !important'
+          }}
         >
           <Stack alignItems='center' p={4}>
             <NextLink href={GETH_REPO_URL} passHref>
