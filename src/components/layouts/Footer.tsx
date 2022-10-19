@@ -2,7 +2,13 @@ import { Grid, GridItem, Image, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
-import { DOCS_PAGE, DOWNLOADS_PAGE, GETH_TWITTER_URL } from '../../constants'
+import {
+  DOCS_PAGE,
+  DOWNLOADS_PAGE,
+  GETH_DISCORD_URL,
+  GETH_REPO_URL,
+  GETH_TWITTER_URL
+} from '../../constants'
 
 export const Footer: FC = () => {
   return (
@@ -65,7 +71,11 @@ export const Footer: FC = () => {
           alignItems="center"
         >
           <Stack alignItems='center' p={4}>
-            <Image src="/images/pages/discord.svg" alt="Discord logo" />
+            <NextLink href={GETH_DISCORD_URL} passHref>
+              <Link isExternal>
+                <Image src="/images/pages/discord.svg" alt="Discord logo" />
+              </Link>
+            </NextLink>
           </Stack>
         </GridItem>
 
@@ -75,7 +85,11 @@ export const Footer: FC = () => {
           alignItems="center"
         >
           <Stack alignItems='center' p={4}>
-            <Image src="/images/pages/github.svg" alt="GitHub logo" />
+            <NextLink href={GETH_REPO_URL} passHref>
+              <Link isExternal>
+                <Image src="/images/pages/github.svg" alt="GitHub logo" />
+              </Link>
+            </NextLink>
           </Stack>
         </GridItem>
       </Grid>
