@@ -3906,13 +3906,19 @@ func TestDataBlobTxs(t *testing.T) {
 		}
 	)
 
-	gspec.Config.BerlinBlock = common.Big0
-	gspec.Config.LondonBlock = common.Big0
-	gspec.Config.ShardingForkBlock = common.Big0
+	// We test the transition from non-sharding to sharding
+	// Genesis (block 0): AllEthhashProtocolChanges
+	// Block 1          : ""
+	// Block 2          : Sharding
+	gspec.Config.ShardingForkBlock = common.Big2
 	genesis := gspec.MustCommit(db)
 	signer := types.LatestSigner(gspec.Config)
 
-	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 2, func(i int, b *BlockGen) {
+		if i == 0 {
+			// i==0 is a non-sharding block
+			return
+		}
 		b.SetCoinbase(common.Address{1})
 		msg := types.BlobTxMessage{
 			Nonce: 0,
