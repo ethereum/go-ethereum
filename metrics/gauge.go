@@ -28,9 +28,28 @@ func NewGauge() Gauge {
 	return &StandardGauge{0}
 }
 
+// NewMeterForced constructs a new StandardGauge no matter
+// the global switch is enabled or not.
+func NewGaugeForced() Gauge {
+	return &StandardGauge{0}
+}
+
 // NewRegisteredGauge constructs and registers a new StandardGauge.
 func NewRegisteredGauge(name string, r Registry) Gauge {
 	c := NewGauge()
+	if nil == r {
+		r = DefaultRegistry
+	}
+	r.Register(name, c)
+	return c
+}
+
+// NewRegisteredGaugeForced constructs and registers a new StandardGauge
+// and launches a goroutine no matter the global switch is enabled or not.
+// Be sure to unregister the meter from the registry once it is of no use to
+// allow for garbage collection.
+func NewRegisteredGaugeForced(name string, r Registry) Gauge {
+	c := NewGaugeForced()
 	if nil == r {
 		r = DefaultRegistry
 	}

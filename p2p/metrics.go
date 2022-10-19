@@ -36,11 +36,11 @@ const (
 )
 
 var (
-	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/dials", nil)
-	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
-	activePeerGauge     = metrics.NewRegisteredGauge("p2p/peers", nil)
+	ingressConnectMeter = metrics.NewRegisteredMeterForced("p2p/serves", nil)
+	ingressTrafficMeter = metrics.NewRegisteredMeterForced(ingressMeterName, nil)
+	egressConnectMeter  = metrics.NewRegisteredMeterForced("p2p/dials", nil)
+	egressTrafficMeter  = metrics.NewRegisteredMeterForced(egressMeterName, nil)
+	activePeerGauge     = metrics.NewRegisteredGaugeForced("p2p/peers", nil)
 )
 
 // meteredConn is a wrapper around a net.Conn that meters both the
