@@ -124,9 +124,13 @@ func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 		return
 	}
 
-	if t.create && !t.pre[t.to].isExists() {
-		// Exclude newly created contract.
-		delete(t.pre, t.to)
+	if t.create {
+		if s := t.pre[t.to]; s != nil {
+			if !s.isExists() {
+				// Exclude newly created contract.
+				delete(t.pre, t.to)
+			}
+		}
 	}
 }
 
