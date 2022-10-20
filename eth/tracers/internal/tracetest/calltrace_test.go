@@ -48,17 +48,18 @@ type callContext struct {
 
 // callTrace is the result of a callTracer run.
 type callTrace struct {
-	Type     string          `json:"type"`
 	From     common.Address  `json:"from"`
-	To       common.Address  `json:"to"`
+	Gas      *hexutil.Uint64 `json:"gas"`
+	GasUsed  *hexutil.Uint64 `json:"gasUsed"`
+	To       common.Address  `json:"to,omitempty"`
 	Input    hexutil.Bytes   `json:"input"`
-	Output   hexutil.Bytes   `json:"output"`
-	Gas      *hexutil.Uint64 `json:"gas,omitempty"`
-	GasUsed  *hexutil.Uint64 `json:"gasUsed,omitempty"`
-	Value    *hexutil.Big    `json:"value,omitempty"`
+	Output   hexutil.Bytes   `json:"output,omitempty"`
 	Error    string          `json:"error,omitempty"`
 	Revertal string          `json:"revertReason,omitempty"`
 	Calls    []callTrace     `json:"calls,omitempty"`
+	Value    *hexutil.Big    `json:"value,omitempty"`
+	// Gencoded adds overriden fields at the end
+	Type string `json:"type"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.
@@ -146,7 +147,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// The legacy javascript calltracer marshals json in js, which
 			// is not deterministic (as opposed to the golang json encoder).
-			{
+			if strings.HasSuffix(dirPath, "_legacy") {
 				// This is a tweak to make it deterministic. Can be removed when
 				// we remove the legacy tracer.
 				var x callTrace

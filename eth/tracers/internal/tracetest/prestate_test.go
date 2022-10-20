@@ -33,6 +33,16 @@ import (
 	"github.com/ethereum/go-ethereum/tests"
 )
 
+// prestateTrace is the result of a prestateTrace run.
+type prestateTrace = map[common.Address]*account
+
+type account struct {
+	Balance string                      `json:"balance"`
+	Code    string                      `json:"code"`
+	Nonce   uint64                      `json:"nonce"`
+	Storage map[common.Hash]common.Hash `json:"storage"`
+}
+
 // testcase defines a single test to check the stateDiff tracer against.
 type testcase struct {
 	Genesis      *core.Genesis   `json:"genesis"`
@@ -40,6 +50,10 @@ type testcase struct {
 	Input        string          `json:"input"`
 	TracerConfig json.RawMessage `json:"tracerConfig"`
 	Result       interface{}     `json:"result"`
+}
+
+func TestPrestateTracerLegacy(t *testing.T) {
+	testPrestateDiffTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
 }
 
 func TestPrestateTracer(t *testing.T) {
@@ -113,6 +127,15 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			res, err := tracer.GetResult()
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
+			}
+			// The legacy javascript calltracer marshals json in js, which
+			// is not deterministic (as opposed to the golang json encoder).
+			if strings.HasSuffix(dirPath, "_legacy") {
+				// This is a tweak to make it deterministic. Can be removed when
+				// we remove the legacy tracer.
+				var x prestateTrace
+				json.Unmarshal(res, &x)
+				res, _ = json.Marshal(x)
 			}
 			want, err := json.Marshal(test.Result)
 			if err != nil {
