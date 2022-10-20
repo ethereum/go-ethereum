@@ -4086,15 +4086,8 @@ func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
-	// First block tries to create, but fails
-	{
-		block := blocks[0]
-		if _, err := chain.InsertChain([]*types.Block{blocks[0]}); err != nil {
-			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
-		}
-	}
-	// Import the rest of the blocks
-	for _, block := range blocks[1:] {
+	// Import the blocks
+	for _, block := range blocks {
 		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
 			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
 		}
