@@ -40,6 +40,18 @@ Geth regularly reports `Syncing, state heal in progress` regularly during state 
 state heal has not finished. It is also possible to confirm this using `eth.syncing` - if this command 
 returns `false` then the node is in sync. If it returns anything other than `false` then syncing is still in progress. 
 
+
+```sh
+# this log message indicates that state healing is still in progress
+INFO [10-20|20:20:09.510] State heal in progress                   accounts=316,602@18.59MiB slots=393,555@29.74MiB codes=7115@51.91MiB nodes=49,413,921@13.37GiB pending=28801
+```
+
+```sh
+# this indicates that the node is in sync, any other response indicates that syncing has not finished
+eth.syncing
+>> false
+```
+
 The healing has to outpace the growth of the blockchain, otherwise the node will never catch up to the current state. 
 There are some hardware factors that determine the speed of the state healing (speed of disk read/write and internet 
 connection) and also the total gas used in each block (more gas means more changes to the state that have to be 
