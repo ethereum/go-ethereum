@@ -3,7 +3,7 @@ title: Sync modes
 description: Introduction to Geth's sync modes
 ---
 
-Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. Now that Ethereum uses proof-of-stake based consensus,. a consensus client is required for Geth to sync. 
+Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. Now that Ethereum uses proof-of-stake based consensus, a consensus client is required for Geth to sync. 
 
 ## Full nodes
 
@@ -63,7 +63,6 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 
 Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or public APIs/web apps.
 
-**Note** it is not currently possible to use a Geth light node as an execution client on proof-of-stake Ethereum.
 
 ## Summary
 
