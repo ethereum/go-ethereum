@@ -290,7 +290,7 @@ func TestTraceCall(t *testing.T) {
 		},
 	}
 	for _, testspec := range testSuite {
-		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config, false)
+		result, err := api.TraceCall(context.Background(), testspec.call, rpc.BlockNumberOrHash{BlockNumber: &testspec.blockNumber}, testspec.config)
 		if testspec.expectErr != nil {
 			if err == nil {
 				t.Errorf("Expect error %v, get nothing", testspec.expectErr)
@@ -330,7 +330,7 @@ func TestTraceTransaction(t *testing.T) {
 		b.AddTx(tx)
 		target = tx.Hash()
 	}))
-	result, err := api.TraceTransaction(context.Background(), target, nil, false)
+	result, err := api.TraceTransaction(context.Background(), target, nil)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
@@ -513,7 +513,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.TraceCall(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config, false)
+		result, err := api.TraceCall(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
