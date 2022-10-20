@@ -270,6 +270,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 	if config == nil {
 		config = &TraceConfig{
 			BorTraceEnabled: newBoolPtr(false),
+			BorTx:           newBoolPtr(false),
 		}
 	}
 	// Tracing a chain is a **long** operation, only do with subscriptions
@@ -567,6 +568,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if config == nil {
 		config = &TraceConfig{
 			BorTraceEnabled: newBoolPtr(false),
+			BorTx:           newBoolPtr(false),
 		}
 	}
 
@@ -668,6 +670,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if config == nil {
 		config = &TraceConfig{
 			BorTraceEnabled: newBoolPtr(false),
+			BorTx:           newBoolPtr(false),
 		}
 	}
 
@@ -937,6 +940,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if config == nil {
 		config = &TraceConfig{
 			BorTraceEnabled: newBoolPtr(false),
+			BorTx:           newBoolPtr(false),
 		}
 	}
 	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
@@ -1077,6 +1081,10 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 
 	var result *core.ExecutionResult
+
+	if config.BorTx == nil {
+		config.BorTx = newBoolPtr(false)
+	}
 
 	if *config.BorTx {
 		callmsg := prepareCallMessage(message)
