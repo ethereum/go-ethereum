@@ -187,7 +187,10 @@ the healing is finished. As the blockchain progresses the state trie is updated 
 that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, 
 the state should heal faster than the blockchain progresses so the node can get in sync. When the state 
 healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the 
-state healing phase is over.
+state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not 
+yet in sync - the state healing is still ongoing. The sync can be confirmed using `eth.syncing` - it will
+return `false` if the node is in sync. If `eth.syncing` returns anything other than `false` it has not
+finished syncing.
 
 ```
 INFO [07-28|10:30:21.965] State heal in progress                   accounts=169,633@7.48MiB  slots=57314@4.17MiB    codes=4895@38.14MiB nodes=43,293,196@11.70GiB pending=112,626
