@@ -10,6 +10,12 @@ import {
   GETH_TWITTER_URL
 } from '../../constants'
 
+import {
+  DiscordIcon,
+  GitHubIcon,
+  TwitterIcon
+} from '../UI/icons';
+
 export const Footer: FC = () => {
   return (
     <Stack mt={4} border='2px solid' borderColor='brand.light.primary'>
@@ -52,59 +58,77 @@ export const Footer: FC = () => {
 
       <Grid templateColumns='repeat(3, 1fr)' sx={{ mt: '0 !important' }}>
         <GridItem
+          data-group
           borderRight='2px solid'
           borderBottom='2px solid'
           borderColor='brand.light.primary'
-          alignItems="center"
           _hover={{
-            textDecoration: 'none',
             bg: 'brand.light.primary',
-            color: 'yellow.50 !important'
           }}
         >
-          <Stack alignItems='center' p={4}>
+          <Stack alignItems='center'>
             <NextLink href={GETH_TWITTER_URL} passHref>
-              <Link isExternal>
-                <Image src="/images/pages/twitter.svg" alt="Twitter logo" />
+              <Link isExternal p={4}>
+                <TwitterIcon
+                  w={8}
+                  height={8} 
+                  _groupHover={{
+                    svg: {
+                      path:{fill: 'yellow.50 !important'}
+                    }
+                  }}
+                />
               </Link>
             </NextLink>
           </Stack>
         </GridItem>
 
         <GridItem
+          data-group
           borderRight='2px solid'
           borderBottom='2px solid'
           borderColor='brand.light.primary'
-          alignItems="center"
           _hover={{
-            textDecoration: 'none',
             bg: 'brand.light.primary',
-            color: 'yellow.50 !important'
           }}
         >
-          <Stack alignItems='center' p={4}>
+          <Stack alignItems='center'>
             <NextLink href={GETH_DISCORD_URL} passHref>
-              <Link isExternal>
-                <Image src="/images/pages/discord.svg" alt="Discord logo" />
+              <Link isExternal p={4}>
+                <DiscordIcon
+                  w={8}
+                  height={8} 
+                  _groupHover={{
+                    svg: {
+                      path:{fill: 'yellow.50 !important'}
+                    }
+                  }}
+                />
               </Link>
             </NextLink>
           </Stack>
         </GridItem>
 
         <GridItem
+          data-group
           borderBottom='2px solid'
           borderColor='brand.light.primary'
-          alignItems="center"
           _hover={{
-            textDecoration: 'none',
             bg: 'brand.light.primary',
-            color: 'yellow.50 !important'
           }}
         >
-          <Stack alignItems='center' p={4}>
+          <Stack alignItems='center'>
             <NextLink href={GETH_REPO_URL} passHref>
-              <Link isExternal>
-                <Image src="/images/pages/github.svg" alt="GitHub logo" />
+              <Link isExternal p={4}>
+                <GitHubIcon
+                  w={7}
+                  height={7} 
+                  _groupHover={{
+                    svg: {
+                      path:{fill: 'yellow.50 !important'}
+                    }
+                  }}
+                />
               </Link>
             </NextLink>
           </Stack>
