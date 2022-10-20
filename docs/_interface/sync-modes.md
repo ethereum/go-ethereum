@@ -5,7 +5,8 @@ sort-key: L
 
 Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. 
 There are several ways to sync a Geth node that differ in their speed, storage requirements and trust 
-assumptions. This page outlines three sync configurations for full nodes and one for light nodes.
+assumptions. Now that Ethereum uses proof-of-stake based consensus, a consensus client is required for 
+Geth to sync. 
 
 ## Full nodes
 
@@ -33,7 +34,24 @@ then regenerated locally. The state download is the part of the snap-sync that t
 and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also 
 progressing at the same time and invalidating some of the regenerated state data. This means it is also necessary 
 to have a 'healing' phase where errors in the state are fixed. It is not possible to monitor the progress of 
-the state heal because the extent of the errors cannot be known until the current state has already been regenerated. 
+the state heal because the extent of the errors cannot be known until the current state has already been regenerated.
+
+Geth regularly reports `Syncing, state heal in progress` during state heal - this informs the user that 
+state heal has not finished. It is also possible to confirm this using `eth.syncing` - if this command 
+returns `false` then the node is in sync. If it returns anything other than `false` then syncing is still in progress. 
+
+
+```sh
+# this log message indicates that state healing is still in progress
+INFO [10-20|20:20:09.510] State heal in progress                   accounts=313,309@17.95MiB slots=363,525@28.77MiB codes=7222@50.73MiB nodes=49,616,912@12.67GiB pending=29805
+```
+
+```sh
+# this indicates that the node is in sync, any other response indicates that syncing has not finished
+eth.syncing
+>> false
+```
+
 The healing has to outpace the growth of the blockchain, otherwise the node will never catch up to the current state. 
 There are some hardware factors that determine the speed of the state healing (speed of disk read/write and internet 
 connection) and also the total gas used in each block (more gas means more changes to the state that have to be 
@@ -80,7 +98,7 @@ on data served by altruistic full nodes. A light client can be used to query dat
 acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light 
 nodes can't validate blocks in the same way as full nodes - they receive a proof from the full node and verify it against their local header chain. 
 To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce 
-so light nodes can struggle to find peers.
+so light nodes can struggle to find peers. **Light nodes are not currently working on proof-of-stake Ethereum**.
 
 Read more about light nodes on our [LES page](/docs/interface/les.md).
 
@@ -90,6 +108,7 @@ Now that Ethereum has switched to proof-of-stake, all consensus logic and block 
 This means that syncing the blockchain is a process shared between the consensus and execution clients. Blocks are 
 downloaded by the consensus client and verified by the execution client. In order for Geth to sync, it requires a header from
 its connected consensus client. Geth does not import any data until it is instructed to by the consensus client. 
+**Geth cannot sync without being connected to a consensus client**. This includes block-by-block syncing from genesis.
 
 Once a header is available to use as a syncing target, Geth retrieves all headers between that target header and the 
 local header chain in reverse chronological order. These headers show that the sequence of blocks is correct because
