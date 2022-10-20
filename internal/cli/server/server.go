@@ -233,6 +233,12 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
+	// Check the global metrics if they're matching with the provided config
+	if metrics.Enabled != config.Enabled || metrics.EnabledExpensive != config.Expensive {
+		log.Warn("Metric misconfiguration, some of them might not be visible")
+	}
+
+	// Update the values anyways (for services which don't need immediate attention)
 	metrics.Enabled = config.Enabled
 	metrics.EnabledExpensive = config.Expensive
 
@@ -242,6 +248,10 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 	}
 
 	log.Info("Enabling metrics collection")
+
+	if metrics.EnabledExpensive {
+		log.Info("Enabling expensive metrics collection")
+	}
 
 	// influxdb
 	if v1Enabled, v2Enabled := config.InfluxDB.V1Enabled, config.InfluxDB.V2Enabled; v1Enabled || v2Enabled {
