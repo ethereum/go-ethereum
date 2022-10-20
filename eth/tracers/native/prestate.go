@@ -125,6 +125,7 @@ func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 	}
 
 	if t.create {
+		// Keep existing account prior to contract creation at that address
 		if s := t.pre[t.to]; s != nil && !s.exists() {
 			// Exclude newly created contract.
 			delete(t.pre, t.to)
