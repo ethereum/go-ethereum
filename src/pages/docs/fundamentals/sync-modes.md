@@ -3,7 +3,7 @@ title: Sync modes
 description: Introduction to Geth's sync modes
 ---
 
-Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions.
+Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. Now that Ethereum uses proof-of-stake based consensus,. a consensus client is required for Geth to sync. 
 
 ## Full nodes
 
