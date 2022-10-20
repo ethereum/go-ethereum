@@ -36,14 +36,14 @@ progressing at the same time and invalidating some of the regenerated state data
 to have a 'healing' phase where errors in the state are fixed. It is not possible to monitor the progress of 
 the state heal because the extent of the errors cannot be known until the current state has already been regenerated.
 
-Geth regularly reports `Syncing, state heal in progress` regularly during state heal - this informs the user that 
+Geth regularly reports `Syncing, state heal in progress` during state heal - this informs the user that 
 state heal has not finished. It is also possible to confirm this using `eth.syncing` - if this command 
 returns `false` then the node is in sync. If it returns anything other than `false` then syncing is still in progress. 
 
 
 ```sh
 # this log message indicates that state healing is still in progress
-INFO [10-20|20:20:09.510] State heal in progress                   accounts=316,602@18.59MiB slots=393,555@29.74MiB codes=7115@51.91MiB nodes=49,413,921@13.37GiB pending=28801
+INFO [10-20|20:20:09.510] State heal in progress                   accounts=313,309@17.95MiB slots=363,525@28.77MiB codes=7222@50.73MiB nodes=49,616,912@12.67GiB pending=29805
 ```
 
 ```sh
