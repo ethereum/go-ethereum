@@ -191,9 +191,11 @@ func (api *API) getAllBlockTransactions(ctx context.Context, block *types.Block)
 // TraceConfig holds extra parameters to trace functions.
 type TraceConfig struct {
 	*logger.Config
-	Tracer  *string
-	Timeout *string
-	Reexec  *uint64
+	Tracer          *string
+	Timeout         *string
+	Reexec          *uint64
+	BorTraceEnabled *bool
+	BorTx           *bool
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
@@ -209,8 +211,9 @@ type TraceCallConfig struct {
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
 	logger.Config
-	Reexec *uint64
-	TxHash common.Hash
+	Reexec   *uint64
+	TxHash   common.Hash
+	BorTrace *bool
 }
 
 // txTraceResult is the result of a single transaction trace.
@@ -264,6 +267,11 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
 func (api *API) traceChain(ctx context.Context, start, end *types.Block, config *TraceConfig) (*rpc.Subscription, error) {
+	if config == nil {
+		config = &TraceConfig{
+			BorTraceEnabled: newBoolPtr(false),
+		}
+	}
 	// Tracing a chain is a **long** operation, only do with subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -312,9 +320,14 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 					var err error
 
 					if stateSyncPresent && i == len(txs)-1 {
-						res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config, true)
+						if *config.BorTraceEnabled {
+							config.BorTx = newBoolPtr(true)
+							res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
+						} else {
+							break
+						}
 					} else {
-						res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config, false)
+						res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
 					}
 
 					if err != nil {
@@ -466,6 +479,11 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 	return sub, nil
 }
 
+func newBoolPtr(bb bool) *bool {
+	b := bb
+	return &b
+}
+
 // TraceBlockByNumber returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
 func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*txTraceResult, error) {
@@ -546,6 +564,12 @@ func prepareCallMessage(msg core.Message) statefull.Callmsg {
 // IntermediateRoots executes a block (bad- or canon- or side-), and returns a list
 // of intermediate roots: the stateroot after each transaction.
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
+	if config == nil {
+		config = &TraceConfig{
+			BorTraceEnabled: newBoolPtr(false),
+		}
+	}
+
 	block, _ := api.blockByHash(ctx, hash)
 	if block == nil {
 		// Check in the bad blocks
@@ -587,18 +611,23 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		statedb.Prepare(tx.Hash(), i)
 
 		if stateSyncPresent && i == len(txs)-1 {
-			callmsg := prepareCallMessage(msg)
+			if *config.BorTraceEnabled {
+				callmsg := prepareCallMessage(msg)
 
-			if _, err := statefull.ApplyMessage(ctx, callmsg, statedb, block.Header(), api.backend.ChainConfig(), api.chainContext(ctx)); err != nil {
-				log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
-				// We intentionally don't return the error here: if we do, then the RPC server will not
-				// return the roots. Most likely, the caller already knows that a certain transaction fails to
-				// be included, but still want the intermediate roots that led to that point.
-				// It may happen the tx_N causes an erroneous state, which in turn causes tx_N+M to not be
-				// executable.
-				// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
-				return roots, nil
+				if _, err := statefull.ApplyMessage(ctx, callmsg, statedb, block.Header(), api.backend.ChainConfig(), api.chainContext(ctx)); err != nil {
+					log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
+					// We intentionally don't return the error here: if we do, then the RPC server will not
+					// return the roots. Most likely, the caller already knows that a certain transaction fails to
+					// be included, but still want the intermediate roots that led to that point.
+					// It may happen the tx_N causes an erroneous state, which in turn causes tx_N+M to not be
+					// executable.
+					// N.B: This should never happen while tracing canon blocks, only when tracing bad blocks.
+					return roots, nil
+				}
+			} else {
+				break
 			}
+
 		} else {
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 				log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
@@ -635,6 +664,13 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
+
+	if config == nil {
+		config = &TraceConfig{
+			BorTraceEnabled: newBoolPtr(false),
+		}
+	}
+
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
@@ -682,9 +718,14 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 
 				var err error
 				if stateSyncPresent && task.index == len(txs)-1 {
-					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config, true)
+					if *config.BorTraceEnabled {
+						config.BorTx = newBoolPtr(true)
+						res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
+					} else {
+						break
+					}
 				} else {
-					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config, false)
+					res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				}
 				if err != nil {
 					results[task.index] = &txTraceResult{Error: err.Error()}
@@ -708,9 +749,13 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 
 		if stateSyncPresent && i == len(txs)-1 {
-			callmsg := prepareCallMessage(msg)
-			if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
-				failed = err
+			if *config.BorTraceEnabled {
+				callmsg := prepareCallMessage(msg)
+				if _, err := statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
+					failed = err
+					break
+				}
+			} else {
 				break
 			}
 		} else {
@@ -738,6 +783,11 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 // and traces either a full block or an individual transaction. The return value will
 // be one filename per transaction traced.
 func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block, config *StdTraceConfig) ([]string, error) {
+	if config == nil {
+		config = &StdTraceConfig{
+			BorTrace: newBoolPtr(false),
+		}
+	}
 	// If we're tracing a single transaction, make sure it's present
 	if config != nil && config.TxHash != (common.Hash{}) {
 		if !api.containsTx(ctx, block, config.TxHash) {
@@ -833,11 +883,15 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		statedb.Prepare(tx.Hash(), i)
 
 		if stateSyncPresent && i == len(txs)-1 {
-			callmsg := prepareCallMessage(msg)
-			_, err = statefull.ApplyBorMessage(*vmenv, callmsg)
+			if *config.BorTrace {
+				callmsg := prepareCallMessage(msg)
+				_, err = statefull.ApplyBorMessage(*vmenv, callmsg)
 
-			if writer != nil {
-				writer.Flush()
+				if writer != nil {
+					writer.Flush()
+				}
+			} else {
+				break
 			}
 		} else {
 			_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
@@ -879,7 +933,12 @@ func (api *API) containsTx(ctx context.Context, block *types.Block, hash common.
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig, borTx bool) (interface{}, error) {
+func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
+	if config == nil {
+		config = &TraceConfig{
+			BorTraceEnabled: newBoolPtr(false),
+		}
+	}
 	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if tx == nil {
 		// For BorTransaction, there will be no trace available
@@ -916,14 +975,14 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		TxHash:    hash,
 	}
 
-	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config, borTx)
+	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
 }
 
 // TraceCall lets you trace a given eth_call. It collects the structured logs
 // created during the execution of EVM if the given transaction was added on
 // top of the provided block and returns them as a JSON object.
 // You can provide -2 as a block number to trace on top of the pending block.
-func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig, borTx bool) (interface{}, error) {
+func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
 	// Try to retrieve the specified block
 	var (
 		err   error
@@ -971,13 +1030,13 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		}
 	}
 
-	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig, borTx)
+	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig, borTx bool) (interface{}, error) {
+func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer    vm.EVMLogger
@@ -1019,7 +1078,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 
 	var result *core.ExecutionResult
 
-	if borTx {
+	if *config.BorTx {
 		callmsg := prepareCallMessage(message)
 		if result, err = statefull.ApplyBorMessage(*vmenv, callmsg); err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
