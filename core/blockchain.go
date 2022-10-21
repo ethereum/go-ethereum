@@ -232,7 +232,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	if cacheConfig.TriesInMemory <= 0 {
-		cacheConfig.TriesInMemory = 128
+		cacheConfig.TriesInMemory = DefaultCacheConfig.TriesInMemory
 	}
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
