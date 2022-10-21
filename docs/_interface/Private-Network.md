@@ -175,7 +175,7 @@ geth --datadir data --networkid 15 --nat extip:172.16.254.4
 The 'node record' of the bootnode can be extracted using the JS console:
 
 ```shell
-geth attach data/geth.ipc --exec admin.nodeInfo.enr
+geth attach --exec admin.nodeInfo.enr data/geth.ipc
 ```
 
 This command should print a base64 string such as the following example. Other nodes will use the information contained in the bootstrap node record to connect to the peer-to-peer network.
@@ -206,7 +206,7 @@ geth --datadir data2 --networkid 12345 --port 30305 --bootnodes <bootstrap-node-
 With the member node running, it is possible to check that it is connected to the bootstrap node or any other node in the network by attaching a console and running `admin.peers`. It may take up to a few seconds for the nodes to get connected.
 
 ```shell
-geth attach data2/geth.ipc --exec admin.peers
+geth attach --exec admin.peers data2/geth.ipc
 ```
 
 ### Running A Signer (Clique)
