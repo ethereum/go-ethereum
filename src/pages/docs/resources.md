@@ -15,6 +15,8 @@ Here are more resources for a deeper understanding of Geth and related topics.
 
 [Geth team AMA at Devcon 6, Bogota](https://youtu.be/Wr_SHOmz4lc?t=10714)
 
+[Sina's EVM tracing workshop at Devcon 6, Bogota](https://youtu.be/b8RdmGsilfU)
+
 [Péter at ETH Prage 2022: Ethereum in numbers: where TPS meets physics](https://www.youtube.com/watch?v=TdsaVoJiy3g)
 
 [Marius at ETH Amsterdam 2022: Deep dive into Geth](https://www.youtube.com/watch?v=c4N79UXZqSc)
