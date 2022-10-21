@@ -45,6 +45,10 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 }
 
+func (a *account) exists() bool {
+	return a.Balance.Sign() != 0 || a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0
+}
+
 type accountMarshaling struct {
 	Balance *hexutil.Big
 	Code    hexutil.Bytes
@@ -116,9 +120,16 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if t.create && !t.config.DiffMode {
-		// Exclude created contract.
-		delete(t.pre, t.to)
+	if t.config.DiffMode {
+		return
+	}
+
+	if t.create {
+		// Keep existing account prior to contract creation at that address
+		if s := t.pre[t.to]; s != nil && !s.exists() {
+			// Exclude newly created contract.
+			delete(t.pre, t.to)
+		}
 	}
 }
 
@@ -229,10 +240,8 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil {
-			if s.Balance.Sign() == 0 && len(s.Storage) == 0 && len(s.Code) == 0 {
-				delete(t.pre, a)
-			}
+		if s := t.pre[a]; s != nil && !s.exists() {
+			delete(t.pre, a)
 		}
 	}
 }
