@@ -396,7 +396,7 @@ func DefaultConfig() *Config {
 		LogLevel:       "INFO",
 		DataDir:        DefaultDataDir(),
 		P2P: &P2PConfig{
-			MaxPeers:     30,
+			MaxPeers:     50,
 			MaxPendPeers: 50,
 			Bind:         "0.0.0.0",
 			Port:         30303,

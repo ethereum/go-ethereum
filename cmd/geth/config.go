@@ -329,7 +329,7 @@ func setDefaultMumbaiGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.TxPool.AccountQueue = 64
 	config.Eth.TxPool.GlobalQueue = 131072
 	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
+	config.Node.P2P.MaxPeers = 50
 	config.Metrics.Enabled = true
 	// --pprof is enabled in 'internal/debug/flags.go'
 }
@@ -352,7 +352,7 @@ func setDefaultBorMainnetGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.TxPool.AccountQueue = 64
 	config.Eth.TxPool.GlobalQueue = 131072
 	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
+	config.Node.P2P.MaxPeers = 50
 	config.Metrics.Enabled = true
 	// --pprof is enabled in 'internal/debug/flags.go'
 }
