@@ -22,7 +22,7 @@ ethstats = ""
 ["eth.requiredblocks"]
 
 [p2p]
-maxpeers = 30
+maxpeers = 50
 maxpendpeers = 50
 bind = "0.0.0.0"
 port = 30303
