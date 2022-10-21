@@ -401,7 +401,27 @@ func (s *stateObject) DeleteTrie(db Database) (*trie.NodeSet, error) {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.db.StorageDeletes += time.Since(start) }(time.Now())
 	}
-	stTrie, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
+	// Open the original account trie from database
+	acctTrie, err := db.OpenTrie(s.db.originalRoot)
+	if err != nil {
+		return nil, err
+	}
+	// Load the original account without any mutation
+	origin, err := acctTrie.TryGetAccount(s.address.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	// If the contract was not present in the state or the origin contract storage
+	// was empty, do nothing here. There are a few possible cases here:
+	// - the contract storage was empty and is destructed in this block
+	// - the contract is created and destructed in this block
+	if origin == nil || origin.Root == emptyRoot {
+		return nil, nil
+	}
+	// Open the original storage trie from database without any mutation. Because in
+	// the same block, the contract storage may be modified, and we only want to wipe
+	// the storage corresponding to the originalRoot in database.
+	stTrie, err := db.OpenStorageTrie(s.db.originalRoot, s.addrHash, origin.Root)
 	if err != nil {
 		return nil, err
 	}
