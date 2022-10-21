@@ -1,8 +1,6 @@
 package tracetest
 
 import (
-	"encoding/json"
-	"reflect"
 	"strings"
 	"unicode"
 
@@ -63,22 +61,6 @@ var makeTest = function(tx, rewind) {
   }, null, 2));
 }
 */
-
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
-// comparison
-func jsonEqual(xi, yi, xt, yt interface{}) bool {
-	if xj, err := json.Marshal(xi); err == nil {
-		json.Unmarshal(xj, xt)
-	} else {
-		return false
-	}
-	if yj, err := json.Marshal(yi); err == nil {
-		json.Unmarshal(yj, yt)
-	} else {
-		return false
-	}
-	return reflect.DeepEqual(xt, yt)
-}
 
 // camel converts a snake cased input string into a camel cased output.
 func camel(str string) string {

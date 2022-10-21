@@ -35,19 +35,16 @@ import (
 
 // prestateTrace is the result of a prestateTrace run.
 type prestateTrace = map[common.Address]*account
+
 type account struct {
-	Balance string                      `json:"balance,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
-	Code    string                      `json:"code,omitempty"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
-}
-type prePostStateTrace struct {
-	Pre  prestateTrace `json:"pre"`
-	Post prestateTrace `json:"post"`
+	Balance string                      `json:"balance"`
+	Code    string                      `json:"code"`
+	Nonce   uint64                      `json:"nonce"`
+	Storage map[common.Hash]common.Hash `json:"storage"`
 }
 
-// prestateTraceTest defines a single test to check the stateDiff tracer against.
-type prestateTraceTest struct {
+// testcase defines a single test to check the stateDiff tracer against.
+type testcase struct {
 	Genesis      *core.Genesis   `json:"genesis"`
 	Context      *callContext    `json:"context"`
 	Input        string          `json:"input"`
@@ -55,15 +52,19 @@ type prestateTraceTest struct {
 	Result       interface{}     `json:"result"`
 }
 
+func TestPrestateTracerLegacy(t *testing.T) {
+	testPrestateDiffTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
+}
+
 func TestPrestateTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t, func() interface{} { return new(prestateTrace) })
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
 }
 
 func TestPrestateWithDiffModeTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t, func() interface{} { return new(prePostStateTrace) })
+	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
 }
 
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typeBuilder func() interface{}) {
+func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -77,7 +78,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typ
 			t.Parallel()
 
 			var (
-				test = new(prestateTraceTest)
+				test = new(testcase)
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk
@@ -127,17 +128,21 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, typ
 			if err != nil {
 				t.Fatalf("failed to retrieve trace result: %v", err)
 			}
-			ret := typeBuilder()
-			if err := json.Unmarshal(res, ret); err != nil {
-				t.Fatalf("failed to unmarshal trace result: %v", err)
+			// The legacy javascript calltracer marshals json in js, which
+			// is not deterministic (as opposed to the golang json encoder).
+			if strings.HasSuffix(dirPath, "_legacy") {
+				// This is a tweak to make it deterministic. Can be removed when
+				// we remove the legacy tracer.
+				var x prestateTrace
+				json.Unmarshal(res, &x)
+				res, _ = json.Marshal(x)
 			}
-
-			if !jsonEqual(ret, test.Result, typeBuilder(), typeBuilder()) {
-				// uncomment this for easier debugging
-				// have, _ := json.MarshalIndent(ret, "", " ")
-				// want, _ := json.MarshalIndent(test.Result, "", " ")
-				// t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
-				t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
+			want, err := json.Marshal(test.Result)
+			if err != nil {
+				t.Fatalf("failed to marshal test: %v", err)
+			}
+			if string(want) != string(res) {
+				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}
 		})
 	}

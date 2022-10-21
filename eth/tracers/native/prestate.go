@@ -40,8 +40,8 @@ type state = map[common.Address]*account
 
 type account struct {
 	Balance *big.Int                    `json:"balance,omitempty"`
-	Nonce   uint64                      `json:"nonce,omitempty"`
 	Code    []byte                      `json:"code,omitempty"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 }
 
@@ -253,9 +253,9 @@ func (t *prestateTracer) GetResult() (json.RawMessage, error) {
 	var err error
 	if t.config.DiffMode {
 		res, err = json.Marshal(struct {
-			Pre  state `json:"pre"`
 			Post state `json:"post"`
-		}{t.pre, t.post})
+			Pre  state `json:"pre"`
+		}{t.post, t.pre})
 	} else {
 		res, err = json.Marshal(t.pre)
 	}
