@@ -213,9 +213,9 @@ type TraceCallConfig struct {
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
 	logger.Config
-	Reexec   *uint64
-	TxHash   common.Hash
-	BorTrace *bool
+	Reexec          *uint64
+	TxHash          common.Hash
+	BorTraceEnabled *bool
 }
 
 // txTraceResult is the result of a single transaction trace.
@@ -806,8 +806,11 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block, config *StdTraceConfig) ([]string, error) {
 	if config == nil {
 		config = &StdTraceConfig{
-			BorTrace: newBoolPtr(false),
+			BorTraceEnabled: defaultBorTraceEnabled,
 		}
+	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 	// If we're tracing a single transaction, make sure it's present
 	if config != nil && config.TxHash != (common.Hash{}) {
@@ -868,6 +871,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 
 	txs, stateSyncPresent := api.getAllBlockTransactions(ctx, block)
+	if !*config.BorTraceEnabled && stateSyncPresent {
+		txs = txs[:len(txs)-1]
+		stateSyncPresent = false
+	}
+
 	for i, tx := range txs {
 		// Prepare the trasaction for un-traced execution
 		var (
@@ -904,15 +912,13 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		statedb.Prepare(tx.Hash(), i)
 
 		if stateSyncPresent && i == len(txs)-1 {
-			if *config.BorTrace {
+			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(msg)
 				_, err = statefull.ApplyBorMessage(*vmenv, callmsg)
 
 				if writer != nil {
 					writer.Flush()
 				}
-			} else {
-				break
 			}
 		} else {
 			_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
