@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -196,5 +197,31 @@ func TestHTTPPeerInfo(t *testing.T) {
 	}
 	if info.HTTP.Origin != "origin.example.com" {
 		t.Errorf("wrong HTTP.Origin %q", info.HTTP.UserAgent)
+	}
+}
+
+func TestNewOutgoingContext(t *testing.T) {
+	const (
+		testHeaderKey   = "test-header-key"
+		testHeaderValue = "test-header-value"
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if got := request.Header.Get(testHeaderKey); got != testHeaderValue {
+			t.Errorf("wrong request headers for %s, expected: %s, actual: %s", testHeaderKey, testHeaderValue, got)
+		}
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	client, err := Dial(server.URL)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+	header := http.Header{}
+	header.Set(testHeaderKey, testHeaderValue)
+	ctx := NewOutgoingContext(context.TODO(), header)
+	if err := client.CallContext(ctx, &struct{}{}, "test"); err != ErrNoResult {
+		t.Errorf("failed to call context: %s", err)
 	}
 }
