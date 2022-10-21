@@ -65,6 +65,8 @@ const (
 	defaultTracechainMemLimit = common.StorageSize(500 * 1024 * 1024)
 )
 
+var defaultBorTraceEnabled = newBoolPtr(false)
+
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
@@ -269,9 +271,12 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 func (api *API) traceChain(ctx context.Context, start, end *types.Block, config *TraceConfig) (*rpc.Subscription, error) {
 	if config == nil {
 		config = &TraceConfig{
-			BorTraceEnabled: newBoolPtr(false),
+			BorTraceEnabled: defaultBorTraceEnabled,
 			BorTx:           newBoolPtr(false),
 		}
+	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 	// Tracing a chain is a **long** operation, only do with subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -308,6 +313,10 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				blockCtx := core.NewEVMBlockContext(task.block.Header(), api.chainContext(localctx), nil)
 				// Trace all the transactions contained within
 				txs, stateSyncPresent := api.getAllBlockTransactions(ctx, task.block)
+				if !*config.BorTraceEnabled && stateSyncPresent {
+					txs = txs[:len(txs)-1]
+					stateSyncPresent = false
+				}
 				for i, tx := range txs {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
 					txctx := &Context{
@@ -324,8 +333,6 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 						if *config.BorTraceEnabled {
 							config.BorTx = newBoolPtr(true)
 							res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
-						} else {
-							break
 						}
 					} else {
 						res, err = api.traceTx(localctx, msg, txctx, blockCtx, task.statedb, config)
@@ -567,9 +574,12 @@ func prepareCallMessage(msg core.Message) statefull.Callmsg {
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
 	if config == nil {
 		config = &TraceConfig{
-			BorTraceEnabled: newBoolPtr(false),
+			BorTraceEnabled: defaultBorTraceEnabled,
 			BorTx:           newBoolPtr(false),
 		}
+	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 
 	block, _ := api.blockByHash(ctx, hash)
@@ -669,9 +679,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 
 	if config == nil {
 		config = &TraceConfig{
-			BorTraceEnabled: newBoolPtr(false),
+			BorTraceEnabled: defaultBorTraceEnabled,
 			BorTx:           newBoolPtr(false),
 		}
+	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 
 	if block.NumberU64() == 0 {
@@ -779,7 +792,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if failed != nil {
 		return nil, failed
 	}
-	return results, nil
+
+	if !*config.BorTraceEnabled && stateSyncPresent {
+		return results[:len(results)-1], nil
+	} else {
+		return results, nil
+	}
 }
 
 // standardTraceBlockToFile configures a new tracer which uses standard JSON output,
@@ -939,10 +957,14 @@ func (api *API) containsTx(ctx context.Context, block *types.Block, hash common.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	if config == nil {
 		config = &TraceConfig{
-			BorTraceEnabled: newBoolPtr(false),
+			BorTraceEnabled: defaultBorTraceEnabled,
 			BorTx:           newBoolPtr(false),
 		}
 	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
+	}
+
 	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if tx == nil {
 		// For BorTransaction, there will be no trace available
@@ -1041,6 +1063,17 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
+
+	if config == nil {
+		config = &TraceConfig{
+			BorTraceEnabled: defaultBorTraceEnabled,
+			BorTx:           newBoolPtr(false),
+		}
+	}
+	if config.BorTraceEnabled == nil {
+		config.BorTraceEnabled = defaultBorTraceEnabled
+	}
+
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer    vm.EVMLogger
