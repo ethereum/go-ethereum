@@ -1,0 +1,92 @@
+body {
+    padding-top: 50px;
+}
+
+h1, h2, h3 {
+    margin-top: 36px;
+    margin-bottom: 24px;
+}
+
+pre code {
+    white-space: pre;
+}
+
+pre {
+    display: block;
+    margin-top: 4rem;
+    margin-bottom: 4rem;
+}
+
+code {
+    color: #4b5a5b;
+    background-color: #ecf0f1;
+    overflow-x: scroll;
+    overflow-y: hidden;
+}
+/* Darken down code highlighting */
+.highlight { color: #4b5a5b } /* Name */
+
+a code {
+    color: #18bc9c;
+}
+
+.hljs {
+    background-color: inherit;
+}
+
+.jumbotron h2 {
+    margin-top: 21px;
+    margin-bottom: 10px;
+}
+
+.fa {
+    margin-right: 4px;
+}
+
+.emoji {
+    width:         1.5em;
+    height:        1.5em;
+    display:       inline-block;
+    margin-bottom: -0.25em;
+}
+
+pre table {
+    white-space: pre;
+}
+
+table {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+table thead tr th, table tbody tr td {
+    border-bottom: 1px solid #ddd;
+    padding: 4px;
+}
+
+.navbar-input-group-fixup {
+    margin-top: 5px;
+}
+
+
+img{
+    margin-top: 2rem;
+    margin-bottom: 2rem
+}
+
+img[alt="Remix"]{
+    width: 800px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
+img[alt="Clef ruleset logic"]{
+    width: 800px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+img[alt="Clef signing logic"]{
+    width: 800px; 
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+
+}

@@ -1,0 +1,26 @@
+Getting started:
+  - Dev mode: /docs/getting-started/dev-mode
+Install and build:
+  - Downloads: /downloads
+  - Installing Ethereum: /docs/Building-Ethereum
+  - Developers' Guide: /docs/Developers-Guide
+How to use:
+  - Managing Accounts: /docs/Managing-your-accounts
+  - Mining: /docs/Mining
+  - Contract Tutorial: /docs/Contract-Tutorial
+Interface Documentation:
+  - Command Line Options: /docs/Command-Line-Options
+  - Bash Autocomplete: /docs/Bash-Autocomplete
+  - JavaScript Console: /docs/JavaScript-Console
+  - Management API: /docs/Management-APIs
+  - JSON-RPC server: https://github.com/ethereum/wiki/wiki/JSON-RPC
+Issues and support:
+  - FAQ: /docs/FAQ
+  - Reporting issues: /docs/geth#reporting
+  - Community and support: /docs/geth#community-and-support
+  - Issue handling workflow: /docs/Issue-handling-workflow
+Developers:
+  - Mobile Clients: /docs/Mobile-Clients/Libraries-and-Inproc-Ethereum-Nodes
+  - Native DApps: /docs/Native-DApps/Go-bindings-to-Ethereum-contracts
+  - Active go-ethereum projects: /docs/Active-go-ethereum-projects
+  - Other documents: /docs/other-documents

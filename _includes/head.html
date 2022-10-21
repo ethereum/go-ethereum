@@ -1,0 +1,41 @@
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% if page.title %}{{ page.title }} | {% endif %}Go Ethereum</title>
+    <!-- debug root:{% include link.html url="/debug-path" %} -->
+
+    <link rel="icon" type="image/png" href="{% include link.html url=site.favicon %}" />
+{% for x in layout.common-css %}{% capture target %}{% include link.html url=x %}{% endcapture %}
+    <link rel="stylesheet" href="{{ target |strip }}" />
+{% endfor %}
+
+{% for x in page.css %}{% capture target %}{% include link.html url=x %}{% endcapture %}
+    <link rel="stylesheet" href="{{ target |strip }}" />
+{% endfor %}
+
+{% for x in layout.common-js %}{% capture target %}{% include link.html url=x %}{% endcapture %}
+    <script src="{{ target | strip }}"></script>
+{% endfor %}
+
+{% for x in page.js %}{% capture target %}{% include link.html url=x %}{% endcapture %}
+    <script src="{{ target | strip }}"></script>
+{% endfor %}
+  <!-- Matomo -->
+  <script type="text/javascript">
+    var _paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {
+      var u="https://matomo.ethereum.org/";
+      _paq.push(['setTrackerUrl', u+'matomo.php']);
+      _paq.push(['setSiteId', '22']);
+      var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+      g.type='text/javascript'; g.async=true; g.defer=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    })();
+  </script>
+  <noscript><p><img src="https://matomo.ethereum.org/matomo.php?idsite=22&amp;rec=1" style="border:0;" alt="" /></p></noscript>
+  <!-- End Matomo Code -->
+</head>

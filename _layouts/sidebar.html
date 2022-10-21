@@ -1,0 +1,40 @@
+---
+layout: default
+---
+
+{% assign toplevels = site.collections | where_exp: "item", "item.sidebar_index" | sort:"sidebar_index" %}
+<div class="container" style="padding-top: 24px;">
+  <div class="row">
+    <div class="col-md-3" id="toc" style="padding-top: 16px;">
+    {% for collection in toplevels %}
+      {% assign frontdoc = collection.docs | where_exp: "doc","doc.path == collection.frontpage" | first %}
+      {% unless frontdoc %}
+        {% assign frontdoc = collection.docs[0] %}
+      {% endunless %}
+      {% assign docs_by_sort_key = collection.docs | group_by:"sort_key" | sort:"name", "last" %}
+      <div class="list-group">
+        <a class="list-group-item active" href="{{ docs_by_sort_key[0].items[0].url }}">{{ collection.caption }}</a>
+        {% if page.collection == collection.label  %}
+          {% for group in docs_by_sort_key %}
+            {% assign docs_sorted = group.items | sort:"title" %}
+            {% for doc in docs_sorted %}
+              {% assign classmodifier="" %}
+              {% if doc.url == page.url %}
+                {% assign classmodifier="disabled" %}
+              {% endif %}
+              {% capture target %}{% include link.html url=doc.url %}{% endcapture %}
+              <a class="list-group-item {{classmodifier}}" href="{{ target |strip }}">{% include title.html doc=doc coll=collection %}</a>
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    <div class="col-md-9" id="content">
+      {% if page.title %}
+        <h1 class="featurette-heading">{% include title.html doc=page coll=page.collection %}</h1>
+      {% endif %}
+      {{ content }}
+    </div>
+  </div>
+</div>

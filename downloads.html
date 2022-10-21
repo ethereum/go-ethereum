@@ -1,0 +1,538 @@
+--- 
+layout: default 
+title: Downloads
+root: ..
+permalink: /downloads/
+css:
+- /static/styles/custom/downloads.css
+js:
+- /static/scripts/filesize.min.js
+---
+    <div id="loader" class="modal fade" role="dialog" data-backdrop="static" data-keyboard="false">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-body">
+            <i class="fa fa-spinner fa-spin" aria-hidden="true"></i>
+            <span id="loader_label">Retrieving packages from release server...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="jumbotron" style="padding-top: 24px; padding-bottom: 24px;">
+      <div class="container">
+        <h2 style="text-align: center;">
+          Download Geth &ndash; <span id="release_title"></span>
+          <span id="release_notes_toggle">
+             &ndash; <a href="#" style='text-decoration: none;'>Release Notes</a>
+           </span>
+        </h2>
+        <div id="release_notes" class="col-md-12 collapse on"></div>
+        <div style="text-align: center;" class="col-md-12">
+          <br/>
+          <p style="font-size: 23px;">You can download the latest 64-bit stable release of Geth for our primary platforms below. Packages for all supported platforms, as well as develop builds, can be found further down the page. If you're looking to install Geth and/or associated tools via your favorite package manager, please check our <a href="../install">installation</a> guide.</p>
+          <a id="download_linux" class="btn btn-primary" href="#" role="button" style="margin: 4px;"></a>
+          <a id="download_darwin" class="btn btn-primary" href="#" role="button" style="margin: 4px;"></a>
+          <a id="download_windows" class="btn btn-primary" href="#" role="button" style="margin: 4px;"></a>
+          <a id="download_source" class="btn btn-primary" href="#" role="button" style="margin: 4px;"></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <h2>Specific Versions</h2>
+          <p>If you're looking for a specific release, operating system or architecture, below you will find:</p>
+          <ul>
+            <li>All stable and develop builds of Geth and tools</li>
+            <li>Archives for non-primary processor architectures</li>
+            <li>Android library archives and iOS XCode frameworks</li>
+          </ul>
+          <p>Please select your desired platform from the lists below and download your bundle of choice. Please be aware that the <code>MD5</code> checksums are provided by our binary hosting platform (Azure Blobstore) to help check for download errors. <strong>For security guarantees please verify any downloads via the attached PGP signature files</strong> (see <a href="#openpgp_signatures">OpenPGP Signatures</a> for details).</p>
+
+          <h3>Stable releases</h3>
+          <p>These are the current and previous stable releases of go-ethereum, updated automatically when a new version is tagged in our <a href="https://github.com/ethereum/go-ethereum" targer="_blank">GitHub repository</a>.</p>
+
+          <ul id="dl_stable" class="nav nav-tabs">
+            <li><a data-toggle="tab" href="#dl_stable_android">Android</a></li>
+            <li><a data-toggle="tab" href="#dl_stable_ios">iOS</a></li>
+            <li><a data-toggle="tab" href="#dl_stable_linux">Linux</a></li>
+            <li><a data-toggle="tab" href="#dl_stable_darwin">macOS</a></li>
+            <li><a data-toggle="tab" href="#dl_stable_windows">Windows</a></li>
+          </ul>
+
+          <div class="tab-content">
+            <div id="dl_stable_android" class="table-responsive tab-pane fade">
+              <table id="table_stable_android" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_stable_ios" class="table-responsive tab-pane fade">
+              <table id="table_stable_ios" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_stable_linux" class="table-responsive tab-pane fade in active">
+              <table id="table_stable_linux" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_stable_darwin" class="table-responsive tab-pane fade">
+              <table id="table_stable_darwin" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_stable_windows" class="table-responsive tab-pane fade">
+              <table id="table_stable_windows" class="table table-striped table-hover"></table>
+            </div>
+          </div>
+
+          <h3>Develop builds</h3>
+          <p>These are the develop snapshots of go-ethereum, updated automatically when a new commit is pushed into our <a href="https://github.com/ethereum/go-ethereum" targer="_blank">GitHub repository</a>.</p>
+
+          <ul id="dl_develop" class="nav nav-tabs">
+            <li><a data-toggle="tab" href="#dl_develop_android">Android</a></li>
+            <li><a data-toggle="tab" href="#dl_develop_ios">iOS</a></li>
+            <li><a data-toggle="tab" href="#dl_develop_linux">Linux</a></li>
+            <li><a data-toggle="tab" href="#dl_develop_darwin">macOS</a></li>
+            <li><a data-toggle="tab" href="#dl_develop_windows">Windows</a></li>
+          </ul>
+
+          <div class="tab-content">
+            <div id="dl_develop_android" class="table-responsive tab-pane fade">
+              <table id="table_develop_android" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_develop_ios" class="table-responsive tab-pane fade">
+              <table id="table_develop_ios" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_develop_linux" class="table-responsive tab-pane fade in active">
+              <table id="table_develop_linux" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_develop_darwin" class="table-responsive tab-pane fade">
+              <table id="table_develop_darwin" class="table table-striped table-hover"></table>
+            </div>
+            <div id="dl_develop_windows" class="table-responsive tab-pane fade">
+              <table id="table_develop_windows" class="table table-striped table-hover"></table>
+            </div>
+          </div>
+
+          <a name="openpgp_signatures"></a>
+          <h2>OpenPGP Signatures</h2>
+          <p>All the binaries available from this page are signed via our build server PGP keys:</p>
+          <div class="table-responsive">
+            <table id="table_develop_android" class="table table-striped table-hover">
+              <thead><tr>
+                <th>Build Server</th>
+                <th>Unique ID</th>
+                <th>OpenPGP Key</th>
+                <th>Fingerprint</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td>Android Builder</td>
+                  <td>Go Ethereum Android Builder &lt;geth-ci@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x70AD154BF9585DE6" target="_blank">F9585DE6</a></td>
+                  <td style='font-family: monospace;'>8272 1824 F4D7 46E0 B5A7  AB95 70AD 154B F958 5DE6</td>
+                </tr>
+                <tr>
+                  <td>iOS Builder</td>
+                  <td>Go Ethereum iOS Builder &lt;geth-ci@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF29DEFAFC2FF8BBF" target="_blank">C2FF8BBF</a></td>
+                  <td style='font-family: monospace;'>70AD EB8F 3BC6 6F69 0256  4D88 F29D EFAF C2FF 8BBF</td>
+                </tr>
+                <tr>
+                  <td>Linux Builder</td>
+                  <td>Go Ethereum Linux Builder &lt;geth-ci@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA61A13569BA28146" target="_blank">9BA28146</a></td>
+                  <td style='font-family: monospace;'>FDE5 A1A0 44FA 13D2 F7AD  A019 A61A 1356 9BA2 8146</td>
+                </tr>
+                <tr>
+                  <td>macOS Builder</td>
+                  <td>Go Ethereum macOS Builder &lt;geth-ci@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x558915E17B9E2481" target="_blank">7B9E2481</a></td>
+                  <td style='font-family: monospace;'>6D1D AF5D 0534 DEA6 1AA7  7AD5 5589 15E1 7B9E 2481</td>
+                </tr>
+                <tr>
+                  <td>Windows Builder</td>
+                  <td>Go Ethereum Windows Builder &lt;geth-ci@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x9417309ED2A67EAC" target="_blank">D2A67EAC</a></td>
+                  <td style='font-family: monospace;'>C4B3 2BB1 F603 4241 A9E6  50A1 9417 309E D2A6 7EAC</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <br/>
+          <div class="table-responsive">
+            <table id="table_develop_android" class="table table-striped table-hover">
+              <thead><tr>
+                <th>Developer</th>
+                <th>Unique ID</th>
+                <th>OpenPGP Key</th>
+                <th>Fingerprint</th>
+              </tr></thead>
+              </tbody>
+                <tr>
+                  <td>Felix Lange</td>
+                  <td>Felix Lange &lt;fjl@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x337E68FCE058A81C" target="_blank">E058A81C</a></td>
+                  <td style='font-family: monospace;'>6047 0B71 5865 392D E43D  75A3 337E 68FC E058 A81C</td>
+                </tr>
+                <tr>
+                  <td>Martin Holst Swende</td>
+                  <td>Martin Holst Swende &lt;martin.swende@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x683B438C05A5DDF0" target="_blank">05A5DDF0</a></td>
+                  <td style='font-family: monospace;'>CA99 ABB5 B36E 24AD 5DA0  FD40 683B 438C 05A5 DDF0</td>
+                </tr>
+                <tr>
+                  <td>Péter Szilágyi</td>
+                  <td>Péter Szilágyi &lt;peter@ethereum.org&gt;</td>
+                  <td><a style='font-family: monospace; text-decoration: none;' href="https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x119A76381CCB7DD2" target="_blank">1CCB7DD2</a></td>
+                  <td style='font-family: monospace;'>4948 43FC E822 1C4C 86AB  5E2F 119A 7638 1CCB 7DD2</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Importing keys and verifying builds</h3>
+          <p>You can import the build server public keys by grabbing the individual keys directly from the keyserver network:</p>
+          <pre>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</pre>
+          <p>Similarly you can import all the developer public keys by grabbing them directly from the keyserver network:</p>
+          <pre>gpg --recv-keys E058A81C  05A5DDF0 1CCB7DD2 </pre>
+          <br/>
+          <p>From the download listings above you should see a link both to the downloadable archives as well as detached signature files. To verify the authenticity of any downloaded data, grab both files and then run:</p>
+          <pre>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</pre>
+          <p>Note that you must use the name of the signature file, and you should use the one that's appropriate to the download you're verifying.</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      var myos = "linux";
+      if (navigator.appVersion.indexOf("Win") != -1) {
+        myos = "windows";
+      } else if (navigator.appVersion.indexOf("Mac") != -1) {
+        myos = "darwin";
+      } else if (navigator.appVersion.indexOf("Linux") != -1) {
+        myos = "linux";
+      }
+      $('#dl_stable a[href="#dl_stable_' + myos + '"]').tab('show');
+      $('#dl_develop a[href="#dl_develop_' + myos + '"]').tab('show');
+    </script>
+
+    <script type="text/javascript">
+      // Maintain a set of downloadable resources to cross check URL liveliness later
+      var resources = {};
+
+      // Maintain a counter for external requests to show a loader modal during
+      $('#loader').modal('show');
+      $('#loader').attr('data-reqs', '3');
+
+      var requestDone = function() {
+        var reqs = $('#loader').data('reqs');
+        if (reqs == 1) {
+          // All requests done, check which primary download buttons can be activated
+          var prefix = "https://gethstore.blob.core.windows.net/builds/";
+
+          if (!($('#download_linux').attr("href").slice(prefix.length) in resources)) {
+            $('#download_linux').addClass("disabled");
+          }
+          if (!($('#download_darwin').attr("href").slice(prefix.length) in resources)) {
+            $('#download_darwin').addClass("disabled");
+          }
+          if (!($('#download_windows').attr("href").slice(prefix.length) in resources)) {
+            $('#download_windows').addClass("disabled");
+          }
+          // Finally hide the load screen
+          $('#loader').modal('hide');
+        }
+        $('#loader').data('reqs', reqs-1);
+      }
+    </script>
+
+    <script type="text/javascript">
+      // Create the blob retriever that iterates over all the pages of the blobstore.
+      var blobs = [];
+      var retrieveBlobs = function(marker, finished) {
+        // Generate the blob listing URL and request it from Azure
+        var url = 'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&maxresults=250&prefix=geth-';
+        if (marker != "") {
+          url += "&marker=" + marker;
+        }
+        $.ajax({
+          url: url,
+          type: 'GET',
+          dataType: 'xml',
+          timeout: 3 * 60 * 1000,
+          error: function() {
+            alert("Failed to load releases!");
+            // Remove the modal blocker, so the user can at least access the things which have loaded
+            $('#loader').modal('hide');
+          },
+          success: function(data) {
+            // List of blobs retrieved, acumulate them first of all
+            Array.prototype.push.apply(blobs, $(data).find('Blob'));
+
+            // If there are more pages, load them all
+            marker = $($(data).find('NextMarker')[0]).text();
+            if (marker != "") {
+              retrieveBlobs(marker, finished);
+            } else {
+              finished(blobs);
+            }
+          }
+        });
+      }
+      // Start retrieving the release blobs and populate the page on success
+      retrieveBlobs("", function() {
+        // Define the release tables
+        var releases = {
+          stable:  [],
+          develop: [],
+          cross:   []
+        };
+        var signatures = {};
+
+        // Iterate over all the blobs and populate the tables
+        for (var i = 0; i < blobs.length; i++) {
+          // Gather all available resources to later inspection
+          var name = $($(blobs[i]).find('Name')[0]).text();
+          resources[name] = true;
+
+          // Skip any signatures, those are assumed implicitly
+          if (name.endsWith(".asc")) {
+            signatures[name] = true;
+            continue;
+          }
+          if (name.endsWith(".sig")) { // signify signature
+            // TODO account for these, for now ignore them
+            continue;
+          }
+
+          // Otherwise add an entry to one of the release tables
+          var parts = name.split("-");
+          var date  = parts[parts.length-1].split(".")[0];
+          if (date.length != 14) {
+            date = parts[parts.length-2];
+          }
+          if (date.length != 14) {
+            date = new Date($($(blobs[i]).find('Last-Modified')[0]).text());
+          } else {
+            date = moment(date, "YYYYMMDDhhmmss").toDate();
+          }
+          var size = $($(blobs[i]).find('Content-Length')[0]).text();
+
+          var sum = window.atob($($(blobs[i]).find('Content-MD5')[0]).text());
+          sum = sum.split('').map(function (char) { return ('0' + char.charCodeAt(0).toString(16)).slice(-2); }).join('');
+
+          var parts  = name.split("-");
+          var commit = parts[parts.length - 1].split(".")[0];
+
+          if (name.includes("unstable")) {
+            releases.develop.push({name: name, commit: commit, date: date, size: size, sum: sum});
+          } else {
+            releases.stable.push({name: name, commit: commit, date: date, size: size, sum: sum});
+          }
+        }
+        // Generate the actual release HTML tables
+        var groups = ["stable", "develop"];
+        var oses   = ["android", "ios", "linux", "darwin", "windows"];
+
+        for (var i = 0; i < groups.length; i++) {
+          // Fetch and sort the releases in the given group
+          var group = groups[i];
+
+          var bins = releases[group];
+          bins.sort(function compare(a,b) { return b.date - a.date; });
+
+          // Split up the releases into different OSes
+          for (var j = 0; j < oses.length; j++) {
+            var os = oses[j];
+
+            // Gather all the releases belonging to this group and operating system, split by version
+            var versions = [];
+
+            for (var k = 0; k < bins.length; k++) {
+              if (bins[k].name.includes(os)) {
+                var parts = bins[k].name.split("-").slice(1);
+
+                // Assemble the name of the download with the version string
+                var name = "Geth ";
+                if (parts[0] == "alltools") {
+                  name += "&amp; Tools ";
+                  parts = parts.slice(1);
+                }
+                name += parts[2];
+
+                // Extract a user friendly archive type
+                var kind = "Archive";
+                if (os == "android" || os == "ios") {
+                  kind = "Library";
+                } else if (os == "windows" && bins[k].name.split('.').pop() == "exe") {
+                  kind = "Installer";
+                }
+                // Extract the architecture and make it user friendly
+                var arch = parts[1];
+                switch (arch) {
+                  case "386":
+                    arch = "32-bit";
+                    break;
+                  case "amd64":
+                    arch = "64-bit";
+                    break;
+                  case "arm5":
+                    arch = "ARMv5";
+                    break;
+                  case "arm6":
+                    arch = "ARMv6";
+                    break;
+                  case "arm7":
+                    arch = "ARMv7";
+                    break;
+                  case "arm64":
+                    arch = "ARM64";
+                    break;
+                  case "mips":
+                    arch = "MIPS32";
+                    break;
+                  case "mipsle":
+                    arch = "MIPS32(le)";
+                    break;
+                  case "mips64":
+                    arch = "MIPS64";
+                    break;
+                  case "mips64le":
+                    arch = "MIPS64(le)";
+                    break;
+                }
+                var primary = (os == "android" && arch == "all") || (os == "ios" && arch == "all") ||
+                  (os == "linux" && arch == "64-bit") || (os == "darwin" && arch == "64-bit") || (os == "windows" && arch == "64-bit" && kind == "Installer");
+
+                // Extract the commit hash from the download name
+                parts = parts.slice(3);
+                if (parts[0] == "unstable") {
+                  parts = parts.slice(1);
+                }
+                var commit = parts[0].split(".")[0];
+
+                // Figure out whether a signature is available
+                var sig = (bins[k].name+".asc") in signatures;
+
+                if (versions.length == 0 || versions[versions.length - 1].commit != commit) {
+                  versions.push({commit: commit, bins: []});
+                }
+                versions[versions.length - 1].bins.push({
+                  file: bins[k].name, date: bins[k].date, sum: bins[k].sum, size: bins[k].size,
+                  name: name, commit: commit, kind: kind, arch: arch, primary: primary, sig: sig
+                });
+              }
+            }
+            // Look up the HTML table corresponding to the [group || os] and empty it
+            var table = $('#table_' + group + "_" + os);
+            table.empty();
+
+            $("<thead><tr>" +
+              "  <th class='text-center'>Release</th>" +
+              "  <th class='text-center'>Commit</th>" +
+              "  <th class='text-center'>Kind</th>" +
+              "  <th class='text-center'>Arch</th>" +
+              "  <th class='text-center'>Size</th>" +
+              "  <th class='text-center'>Published</th>" +
+              "  <th class='text-center'>Signature</th>" +
+              "  <th class='text-center'>Checksum (MD5)</th>" +
+              "</tr></thead>").appendTo(table);
+            var body = $("<tbody></tbody>").appendTo(table);
+
+            // Generate the contents for the HTML table
+            var collapsed = false;
+            var entires   = 0;
+
+            for (var k = 0; k < versions.length; k++) {
+              // Sort the downloads in the version group by name and architecture
+              var verbins = versions[k].bins;
+              verbins.sort(function(a, b) {
+                if (a.name < b.name) return 1;
+                if (a.name > b.name) return -1;
+                if (a.arch < b.arch) return -1;
+                if (a.arch > b.arch) return 1;
+                return 0;
+              });
+              // Iterate over the binaries and display them
+              for (var l = 0; l < verbins.length; l++) {
+                // Retrieve the current archive and decide on its recentness
+                var bin = verbins[l];
+
+                // Append the archive to the download table
+                $("<tr style='text-align: center; " + (k == 0 && bin.primary ? " font-weight: bold;" : "") + "' class='" + (group == "develop" && k == 0 ? "latest" : "") + (k >= 2 && entires >= 10 ? " collapse out" : "") + "'>" +
+                  "  <td><a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + "' style='text-decoration: none;'>" + bin.name + "</a></td>" +
+                  "  <td><a href='https://github.com/ethereum/go-ethereum/tree/" + bin.commit + "' target='_blank' style='text-decoration: none; font-family: monospace;'>" + bin.commit + "&hellip;</a></td>" +
+                  "  <td>" + bin.kind + "</td>" +
+                  "  <td>" + bin.arch + "</td>" +
+                  "  <td>" + filesize(bin.size) + "</td>" +
+                  "  <td>" + moment(bin.date).calendar() + "</td>" +
+                  "  <td>" + (bin.sig ? "<a href='https://gethstore.blob.core.windows.net/builds/" + bin.file + ".asc' style='text-decoration: none;'>Signature</a>" : "Unavailable") + "</td>" +
+                  "  <td style='font-family: monospace;'>" + bin.sum + "</td>" +
+                  "</tr>").appendTo(body);
+
+                // If we've displayed at least 3 versions and the table's getting long, collapse
+                if (k >= 2 && !collapsed && entires >= 10) {
+                  $("<tr style='text-align: center;'>" +
+                    "  <td colspan='8'><a class='btn btn-success btn-xs'>Show older releases</a></td>" +
+                    "</tr>").appendTo(table);
+                  $(table.find('.btn')).click(function(){
+                    $(this).parent().parent().toggle();
+                    $(this).parent().parent().parent().find('.collapse').toggle();
+                  });
+                  collapsed = true;
+                }
+                entires++;
+              }
+            }
+          }
+        }
+        // Mark the request done to possibly hide the loading page
+        requestDone();
+      });
+    </script>
+
+    <script type="text/javascript">
+      // Retrieve the latest release from GitHub for the ribbon and primary buttons
+      $.ajax({
+        url: 'https://api.github.com/repos/ethereum/go-ethereum/releases/latest',
+        error: function() {
+          alert("Failed to load latest release!");
+        },
+        success: function(release) {
+          // Render the release notes and the page title
+          $('#release_title').html(release.name);
+          $('#release_notes').html("<br/>" + marked(release.body));
+          emojify.setConfig({img_dir: '../static/images/emoji'});
+          emojify.run(document.getElementById('release_notes'));
+
+          $('#release_notes_toggle').click(function(){
+            $('#release_notes_toggle').toggle();
+            $('#release_notes').slideToggle();
+          });
+          $('#release_version').html(release.tag_name);
+
+          // Retrieve the commit of the latest release for the download links
+          $.ajax({
+            url: 'https://api.github.com/repos/ethereum/go-ethereum/commits/' + release.tag_name,
+            error: function() {
+              alert("Failed to load latest release!");
+            },
+            success: function(commit) {
+              // Update the primary download buttons
+              var version = release.tag_name.slice(1);
+              var commit  = commit.sha.slice(0, 8);
+
+              $('#download_linux').attr("href", "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-" + version + "-" + commit + ".tar.gz");
+              $('#download_darwin').attr("href", "https://gethstore.blob.core.windows.net/builds/geth-darwin-amd64-" + version + "-" + commit + ".tar.gz");
+              $('#download_windows').attr("href", "https://gethstore.blob.core.windows.net/builds/geth-windows-amd64-" + version + "-" + commit + ".exe");
+              $('#download_source').attr("href", "https://github.com/ethereum/go-ethereum/archive/" + release.tag_name + ".tar.gz");
+
+              $('#download_linux').html("<i class='fa fa-linux' aria-hidden='true'></i> Geth " + version + " for Linux");
+              $('#download_darwin').html("<i class='fa fa-apple' aria-hidden='true'></i> Geth " + version + " for macOS");
+              $('#download_windows').html("<i class='fa fa-windows' aria-hidden='true'></i> Geth " + version + " for Windows");
+              $('#download_source').html("<i class='fa fa-code-fork' aria-hidden='true'></i> Geth " + version + " sources");
+
+              // Mark the request done to possibly hide the loading page
+              requestDone();            }
+          });
+          // Mark the request done to possibly hide the loading page
+          requestDone();
+        }
+      });
+    </script>

@@ -1,0 +1,1 @@
+{% if page.root %}{% assign root=page.root %}{% else %}{% assign root=site.default_root %}{% endif %}{{ include.url | remove: ".html" | prepend: root | replace: '//', '/' }}

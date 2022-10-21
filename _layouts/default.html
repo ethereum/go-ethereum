@@ -1,0 +1,63 @@
+---
+common-css:
+- /static/styles/bootstrap.min.css
+- /static/styles/flatly.min.css
+- /static/styles/font-awesome.min.css
+- /static/styles/custom/common.css
+- /static/styles/custom/vss.css
+common-js:
+- /static/scripts/jquery.min.js
+- /static/scripts/bootstrap.min.js
+- /static/scripts/moment.min.js
+- /static/scripts/marked.min.js
+- /static/scripts/emojify.min.js
+- /static/scripts/custom/polyfills.js
+---
+<!DOCTYPE html>
+<html lang="en">
+  {% include head.html %}
+
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="{% include link.html url='' %}">Go Ethereum</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            {% for link in site.data.navbar %}
+              {% capture target %}{% include link.html url=link.last %}{% endcapture %}
+              <li><a href="{{target |strip }}">{{ link.first }}</a></li>
+            {% endfor %}
+          </ul>
+          <form class="navbar-form pull-right" role="search" method="get" action="https://duckduckgo.com/">
+            <input type="hidden" name="sites" value="geth.ethereum.org">
+            <input type="hidden" name="kz" value="-1">
+            <div class="input-group navbar-input-group-fixup">
+              <input class="input-sm" type="text" name="q" placeholder="Search site...">
+              <span class="input-group-btn">
+                <button type="submit" class="btn btn-default btn-sm"><i class="fa fa-search" aria-hidden="true"></i></button>
+              </span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </nav>
+    {{ content }}
+    <hr/>
+    <footer class="container">
+      {%- capture gh_link -%}
+      https://github.com/ethereum/go-ethereum/blob/gh-pages/
+      {%- if page.collection -%}{{ site.collections_dir }}/{%- endif -%}
+      {{- page.path -}}
+      {%- endcapture -%}
+      <p>&copy; 2013–2022. The go-ethereum Authors. <a href="{{ gh_link }}">Edit this page.</a></p>
+    </footer>
+  </body>
+</html>

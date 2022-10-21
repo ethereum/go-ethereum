@@ -1,0 +1,44 @@
+.jumbotron {
+  text-align: center;
+  padding: 20pt 0;
+}
+
+.jumbotron h1 {
+  font-size: 56px;
+  font-weight: bold;
+  margin-top: 0;
+}
+
+.jumbotron h2 {
+  font-size: 28px;
+}
+
+.mascot-mobile {
+  text-align: center;
+}
+
+.hide-on-small-screen {
+  display: none;
+}
+
+.featurette-divider {
+  margin: 80px 0;
+}
+
+@media (min-width: 768px) {
+  .mascot-mobile {
+    display: none;
+  }
+  .hide-on-small-screen {
+    display: block;
+  }
+  .featurette-heading {
+    font-size: 50px;
+  }
+}
+
+@media (min-width: 992px) {
+  .featurette-image {
+    margin-top: 30px;
+  }
+}
