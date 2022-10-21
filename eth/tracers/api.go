@@ -275,6 +275,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 			BorTx:           newBoolPtr(false),
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
@@ -317,6 +318,7 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 					txs = txs[:len(txs)-1]
 					stateSyncPresent = false
 				}
+
 				for i, tx := range txs {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
 					txctx := &Context{
@@ -578,6 +580,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			BorTx:           newBoolPtr(false),
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
@@ -621,7 +624,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
 		statedb.Prepare(tx.Hash(), i)
-
+		//nolint: nestif
 		if stateSyncPresent && i == len(txs)-1 {
 			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(msg)
@@ -639,7 +642,6 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			} else {
 				break
 			}
-
 		} else {
 			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 				log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
@@ -683,6 +685,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			BorTx:           newBoolPtr(false),
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
@@ -733,6 +736,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 				var res interface{}
 
 				var err error
+
 				if stateSyncPresent && task.index == len(txs)-1 {
 					if *config.BorTraceEnabled {
 						config.BorTx = newBoolPtr(true)
@@ -763,7 +767,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		statedb.Prepare(tx.Hash(), i)
 
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
-
+		//nolint: nestif
 		if stateSyncPresent && i == len(txs)-1 {
 			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(msg)
@@ -809,6 +813,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			BorTraceEnabled: defaultBorTraceEnabled,
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
@@ -910,7 +915,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.Prepare(tx.Hash(), i)
-
+		//nolint: nestif
 		if stateSyncPresent && i == len(txs)-1 {
 			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(msg)
@@ -967,6 +972,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 			BorTx:           newBoolPtr(false),
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
@@ -1076,6 +1082,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			BorTx:           newBoolPtr(false),
 		}
 	}
+
 	if config.BorTraceEnabled == nil {
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
