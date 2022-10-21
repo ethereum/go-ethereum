@@ -12,7 +12,7 @@ Note that there are a large number of log messages covering a wide range of poss
 a Geth node. This page will only address a subset of commonly seen messages. For more, see the 
 [Geth Github](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) 
 or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are 
-usually sufficiently self-descrining that they do not require additional explanation.
+usually sufficiently self-describing that they do not require additional explanation.
 
 
 ## Configuring log messages
