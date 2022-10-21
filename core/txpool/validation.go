@@ -66,6 +66,9 @@ func ValidateTransaction(tx *types.Transaction, blobs []kzg4844.Blob, commits []
 	if !opts.Config.IsCancun(head.Number, head.Time) && tx.Type() == types.BlobTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Cancun", core.ErrTxTypeNotSupported, tx.Type())
 	}
+	if !opts.Config.IsPrague(head.Number, head.Time) && tx.Type() == types.DelegateTxType {
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Prague", core.ErrTxTypeNotSupported, tx.Type())
+	}
 	// Check whether the init code size has been exceeded
 	if opts.Config.IsShanghai(head.Number, head.Time) && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 		return fmt.Errorf("%w: code size %v, limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)

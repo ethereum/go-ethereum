@@ -46,6 +46,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	DelegateTxType   = 0x04
 )
 
 // Transaction is an Ethereum transaction.
@@ -68,7 +69,7 @@ func NewTx(inner TxData) *Transaction {
 
 // TxData is the underlying data of a transaction.
 //
-// This is implemented by DynamicFeeTx, LegacyTx and AccessListTx.
+// This is implemented by DynamicFeeTx, LegacyTx, AccessListTx and DelegateTx.
 type TxData interface {
 	txType() byte // returns the type ID
 	copy() TxData // creates a deep copy and initializes all fields
@@ -200,6 +201,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner BlobTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case DelegateTxType:
+		var inner DelegateTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -262,6 +267,11 @@ func (tx *Transaction) Protected() bool {
 // Type returns the transaction type.
 func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
+}
+
+// Delegate returns wether the transaction type corresponds to a delegate operation or not. (see EIP-5806)
+func (tx *Transaction) Delegate() bool {
+	return tx.inner.txType() == DelegateTxType
 }
 
 // ChainId returns the EIP155 chain ID of the transaction. The return value will always be
