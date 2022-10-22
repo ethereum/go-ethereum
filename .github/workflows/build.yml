@@ -18,8 +18,5 @@ jobs:
         uses: actions/setup-go@v3
       -
         name: Go Release Linux
-        uses: wangyoucao577/go-release-action@v1.32
-        with:
-          github_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
-          goos: linux
-          goarch: amd64
+        run: |
+          go run build/ci.go install -static ./cmd/geth
