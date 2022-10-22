@@ -17,6 +17,11 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v3
       -
-        name: Go Release Linux
+        name: Build
         run: |
           go run build/ci.go install -static ./cmd/geth
+      - 
+        name: Release
+        run: |
+          cd ./cmd/geth
+          ls
