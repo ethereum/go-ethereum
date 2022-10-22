@@ -128,9 +128,9 @@ geth attach --exec eth.blockNumber
 The same syntax can be used to execute a local script file with more complex statements on a remote node over http, for example:
 
 ```shell
-geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
+geth attach --exec 'loadScript("/tmp/checkbalances.js")' http://geth.example.org:8545
 
-geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("checkbalances.js")'
+geth attach --jspath "/tmp" --exec 'loadScript("checkbalances.js")' http://geth.example.org:8545
 ```
 
 The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()`
