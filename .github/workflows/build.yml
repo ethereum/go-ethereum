@@ -21,8 +21,13 @@ jobs:
         name: Build
         run: |
           make all
-      - 
-        name: Release
-        run: |
-          cd ./build/bin
-          ls
+      -
+        name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
+          file: ./build/bin/geth.exe
+          asset_name: geth
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: "BerylBit experimental Geth"
