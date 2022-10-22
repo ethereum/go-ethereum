@@ -1,0 +1,21 @@
+name: goreleaser
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v3
+      -
+        name: Run GoReleaser
+        run: go install ./...
