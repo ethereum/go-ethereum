@@ -17,5 +17,9 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v3
       -
-        name: Run GoReleaser
-        run: go install ./...
+        name: Go Release Linux
+        uses: wangyoucao577/go-release-action@v1.32
+        with:
+          github_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
+          goos: linux
+          goarch: amd64
