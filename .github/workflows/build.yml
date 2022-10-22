@@ -19,9 +19,9 @@ jobs:
       -
         name: Build
         run: |
-          go run build/ci.go install -static ./cmd/geth
+          make all
       - 
         name: Release
         run: |
-          cd ./cmd/geth
+          cd ./
           ls
