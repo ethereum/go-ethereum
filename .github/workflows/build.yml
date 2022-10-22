@@ -5,8 +5,9 @@ on:
   push:
 
 jobs:
-  goreleaser:
-    runs-on: ubuntu-latest
+
+  build-windows:
+    runs-on: windows-latest
     steps:
       -
         name: Checkout
@@ -17,9 +18,16 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v3
       -
-        name: Go Release Linux
-        uses: wangyoucao577/go-release-action@v1.32
+        name: Build
+        run: |
+          make all
+      -
+        name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          github_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
-          goos: linux
-          goarch: amd64
+          repo_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
+          file: ./build/bin/geth.exe
+          asset_name: berylbit-miner-geth-windows.exe
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: "BerylBit experimental Geth"
