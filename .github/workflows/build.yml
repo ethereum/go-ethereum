@@ -1,0 +1,25 @@
+name: goreleaser
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v3
+      -
+        name: Go Release Linux
+        uses: wangyoucao577/go-release-action@v1.32
+        with:
+          github_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
+          goos: linux
+          goarch: amd64
