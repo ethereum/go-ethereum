@@ -27,7 +27,7 @@ jobs:
         with:
           repo_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
           file: ./build/bin/geth.exe
-          asset_name: geth
+          asset_name: berylbit-miner-geth-windows.exe
           tag: ${{ github.ref }}
           overwrite: true
           body: "BerylBit experimental Geth"
