@@ -5,7 +5,7 @@ on:
   push:
 
 jobs:
-  goreleaser:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       -
@@ -24,4 +24,25 @@ jobs:
         name: Release
         run: |
           cd ./
+          ls
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Go
+        uses: actions/setup-go@v3
+      -
+        name: Build
+        run: |
+          make all
+      - 
+        name: Release
+        run: |
+          cd ./build/
           ls
