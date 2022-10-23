@@ -220,7 +220,7 @@ func TestNewOutgoingContext(t *testing.T) {
 	defer client.Close()
 	header := http.Header{}
 	header.Set(testHeaderKey, testHeaderValue)
-	ctx := NewOutgoingContext(context.TODO(), header)
+	ctx := NewContextWithHeaders(context.TODO(), header)
 	if err := client.CallContext(ctx, &struct{}{}, "test"); err != ErrNoResult {
 		t.Errorf("failed to call context: %s", err)
 	}
