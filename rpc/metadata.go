@@ -29,7 +29,7 @@ func HeadersFromOutgoingContext(ctx context.Context) (http.Header, bool) {
 	return headers, true
 }
 
-// mergeHeadersFromOutgoingContext is used to extract http headers from the context and inject it into the provided headers
+// addHeadersFromContext is used to extract http headers from the context and inject it into the provided headers
 func addHeadersFromContext(ctx context.Context, headers http.Header) {
 	if kvs, ok := HeadersFromOutgoingContext(ctx); ok {
 		for key, values := range kvs {
