@@ -215,7 +215,7 @@ func TestNewOutgoingContext(t *testing.T) {
 	defer server.Close()
 	client, err := Dial(server.URL)
 	if err != nil {
-		panic(err)
+		t.Fatalf(err)
 	}
 	defer client.Close()
 	header := http.Header{}
