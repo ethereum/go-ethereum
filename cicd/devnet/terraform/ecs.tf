@@ -21,8 +21,12 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   execution_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
   task_role_arn = aws_iam_role.devnet_xdc_ecs_tasks_execution_role.arn
   
-  cpu = 1024
-  memory = 2048
+  # New nodes will consume a lot more CPU usage than existing nodes. 
+  # This is due to sync is resource heavy. Recommending set to below if doing sync:
+  # CPU = 2048, Memory = 4096
+  # Please set it back to cpu 512 and memory of 1024 after sync is done to save the cost
+  cpu = 512
+  memory = 1024
   volume {
     name = "efs"
 

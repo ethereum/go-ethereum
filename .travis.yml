@@ -125,8 +125,6 @@ jobs:
       - docker --version  # document the version travis is using
       - docker build -t xdc-devnet -f cicd/devnet/Dockerfile .
     script:
-      - pip install --user awscli # install aws cli w/o sudo
-      - export PATH=$PATH:$HOME/.local/bin # put aws in the path
       - docker tag xdc-devnet:latest xinfinorg/devnet:latest # Always push to the latest
       - docker push xinfinorg/devnet:latest
 
@@ -140,6 +138,8 @@ jobs:
         - unzip terraform_"$tf_version"_linux_amd64.zip
         - sudo mv terraform /usr/local/bin/
         - rm terraform_"$tf_version"_linux_amd64.zip
+        - pip install --user awscli # install aws cli w/o sudo
+        - export PATH=$PATH:$HOME/.local/bin # put aws in the path
     script:
       - echo "Merge detected, executing changes(Devnet)"
       - cd cicd/devnet/terraform
