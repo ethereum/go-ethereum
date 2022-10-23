@@ -30,7 +30,7 @@ func HeadersFromOutgoingContext(ctx context.Context) (http.Header, bool) {
 }
 
 // mergeHeadersFromOutgoingContext is used to extract http headers from the context and inject it into the provided headers
-func mergeHeadersFromOutgoingContext(ctx context.Context, headers http.Header) {
+func addHeadersFromContext(ctx context.Context, headers http.Header) {
 	if kvs, ok := HeadersFromOutgoingContext(ctx); ok {
 		for key, values := range kvs {
 			headers.Del(key)
