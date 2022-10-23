@@ -45,8 +45,9 @@ else
   log_level=$LOG_LEVEL
 fi
 
-netstats="${NODE_NAME}-${wallet}:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
 INSTANCE_IP=$(curl https://checkip.amazonaws.com)
+netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
+
 
 echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"
 echo "Starting nodes with $bootnodes ..."
