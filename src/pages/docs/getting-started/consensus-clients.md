@@ -47,6 +47,12 @@ The consensus clients all expose a [Beacon API](https://ethereum.github.io/beaco
 
 Validators are responsible for securing the Ethereum blockchain. Validators have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients have their own validator software that is described in detail in their respective documentation. The easiest way to handle staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad](https://launchpad.ethereum.org/). The Launchpad guides users through the process of generating validator keys and connecting the validator to the consensus client.
 
+## Syncing
+
+Geth cannot sync until the connected consensus client is synced. This is because Geth needs a target head to sync to. The fastest way to sync a consensus client is using checkpoint sync. To do this, a checkpoint or a url to a checkpoint provider can be provided to the consensus client on startup. There are several sources for these checkpoints. The ideal scenario is to get one from a trusted node operator, organized out-of-band, and verified against a third node or a block explorer or checkpoint provider. Some clients also allow checkpoint syncing by HTTP API access to an existing Beacon node. There are also several [public checkpoint sync endpoints](https://eth-clients.github.io/checkpoint-sync-endpoints/).
+
+Please see the pages on [syncing](/src/pages/docs/fundamentals/sync-modes.md) for more detail. For troubleshooting, please see the `Syncing` section on the [console log messages](/src/pages/docs/fundamentals/logs.md) page.
+
 ## Using Geth
 
 Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started
