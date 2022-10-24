@@ -59,9 +59,12 @@ func (tester *FullSyncTester) Start() error {
 	go func() {
 		defer tester.wg.Done()
 
+		ticker := time.NewTicker(time.Second * 5)
+		defer ticker.Stop()
+
 		for {
 			select {
-			case <-time.NewTicker(time.Second * 5).C:
+			case <-ticker.C:
 				// Don't bother downloader in case it's already syncing.
 				if tester.api.eth.Downloader().Synchronising() {
 					continue
