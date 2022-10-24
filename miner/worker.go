@@ -917,7 +917,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			env.tcount++
 			txs.Shift()
 
-		case errors.Is(err, core.ErrTxTypeNotSupported):
+		case errors.Is(err, types.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()

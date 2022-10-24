@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -354,7 +355,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
 	if from, err = types.Sender(pool.signer, tx); err != nil {
-		return core.ErrInvalidSender
+		return txpool.ErrInvalidSender
 	}
 	// Last but not least check for nonce errors
 	currentState := pool.currentState(ctx)
@@ -366,14 +367,14 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// block limit gas.
 	header := pool.chain.GetHeaderByHash(pool.head)
 	if header.GasLimit < tx.Gas() {
-		return core.ErrGasLimit
+		return txpool.ErrGasLimit
 	}
 
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.
 	if tx.Value().Sign() < 0 {
-		return core.ErrNegativeValue
+		return txpool.ErrNegativeValue
 	}
 
 	// Transactor should have enough funds to cover the costs
