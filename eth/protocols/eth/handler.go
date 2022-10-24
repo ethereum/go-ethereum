@@ -225,8 +225,11 @@ func handleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 
 	var handlers = eth66
-	if peer.Version() >= ETH67 {
+	if peer.Version() == ETH67 {
 		handlers = eth67
+	}
+	if peer.Version() >= ETH68 {
+		handlers = eth68
 	}
 
 	// Track the amount of time it takes to serve the request and run the handler
