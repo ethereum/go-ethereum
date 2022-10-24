@@ -23,12 +23,10 @@ func HeadersFromContext(ctx context.Context) http.Header {
 
 // addHeadersFromContext is used to extract http headers from the context and inject it into the provided headers
 func addHeadersFromContext(ctx context.Context, headers http.Header) {
-	if kvs := HeadersFromContext(ctx); kvs != nil {
-		for key, values := range kvs {
-			headers.Del(key)
-			for _, val := range values {
-				headers.Add(key, val)
-			}
+	for key, values := range HeadersFromContext(ctx) {
+		headers.Del(key)
+		for _, val := range values {
+			headers.Add(key, val)
 		}
 	}
 }
