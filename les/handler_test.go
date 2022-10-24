@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/les/downloader"
@@ -624,20 +625,20 @@ func testTransactionStatus(t *testing.T, protocol int) {
 
 	// test error status by sending an underpriced transaction
 	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
-	test(tx0, true, light.TxStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced.Error()})
+	test(tx0, true, light.TxStatus{Status: txpool.TxStatusUnknown, Error: txpool.ErrUnderpriced.Error()})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
-	test(tx1, false, light.TxStatus{Status: core.TxStatusUnknown}) // query before sending, should be unknown
-	test(tx1, true, light.TxStatus{Status: core.TxStatusPending})  // send valid processable tx, should return pending
-	test(tx1, true, light.TxStatus{Status: core.TxStatusPending})  // adding it again should not return an error
+	test(tx1, false, light.TxStatus{Status: txpool.TxStatusUnknown}) // query before sending, should be unknown
+	test(tx1, true, light.TxStatus{Status: txpool.TxStatusPending})  // send valid processable tx, should return pending
+	test(tx1, true, light.TxStatus{Status: txpool.TxStatusPending})  // adding it again should not return an error
 
 	tx2, _ := types.SignTx(types.NewTransaction(1, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	tx3, _ := types.SignTx(types.NewTransaction(2, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	// send transactions in the wrong order, tx3 should be queued
-	test(tx3, true, light.TxStatus{Status: core.TxStatusQueued})
-	test(tx2, true, light.TxStatus{Status: core.TxStatusPending})
+	test(tx3, true, light.TxStatus{Status: txpool.TxStatusQueued})
+	test(tx2, true, light.TxStatus{Status: txpool.TxStatusPending})
 	// query again, now tx3 should be pending too
-	test(tx3, false, light.TxStatus{Status: core.TxStatusPending})
+	test(tx3, false, light.TxStatus{Status: txpool.TxStatusPending})
 
 	// generate and add a block with tx1 and tx2 included
 	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 1, func(i int, block *core.BlockGen) {
@@ -663,9 +664,9 @@ func testTransactionStatus(t *testing.T, protocol int) {
 
 	// check if their status is included now
 	block1hash := rawdb.ReadCanonicalHash(server.db, 1)
-	test(tx1, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
+	test(tx1, false, light.TxStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
 
-	test(tx2, false, light.TxStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
+	test(tx2, false, light.TxStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
 
 	// create a reorg that rolls them back
 	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 2, func(i int, block *core.BlockGen) {})
@@ -687,8 +688,8 @@ func testTransactionStatus(t *testing.T, protocol int) {
 	msg.Discard()
 
 	// check if their status is pending again
-	test(tx1, false, light.TxStatus{Status: core.TxStatusPending})
-	test(tx2, false, light.TxStatus{Status: core.TxStatusPending})
+	test(tx1, false, light.TxStatus{Status: txpool.TxStatusPending})
+	test(tx2, false, light.TxStatus{Status: txpool.TxStatusPending})
 }
 
 func TestStopResumeLES3(t *testing.T) { testStopResume(t, lpv3) }
