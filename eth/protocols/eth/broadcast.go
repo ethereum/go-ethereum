@@ -145,12 +145,14 @@ func (p *Peer) announceTransactions() {
 				count        int
 				pending      []common.Hash
 				pendingTypes []byte
+				pendingSizes []uint32
 				size         common.StorageSize
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				if tx := p.txpool.Get(queue[count]); tx != nil {
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, tx.Type())
+					pendingSizes = append(pendingSizes, uint32(tx.Size()))
 					size += common.HashLength
 				}
 			}
@@ -162,7 +164,7 @@ func (p *Peer) announceTransactions() {
 				done = make(chan struct{})
 				go func() {
 					if p.version >= ETH68 {
-						if err := p.sendPooledTransactions(pendingTypes, pending); err != nil {
+						if err := p.sendPooledTransactions(pending, pendingTypes, pendingSizes); err != nil {
 							fail <- err
 							return
 						}
