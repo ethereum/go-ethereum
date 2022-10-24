@@ -457,6 +457,9 @@ func handleNewPooledTransactionHashes68(backend Backend, msg Decoder, peer *Peer
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	if len(ann.Hashes) != len(ann.Types) || len(ann.Hashes) != len(ann.Sizes) {
+		return fmt.Errorf("%w: message %v: invalid len of fields: %v %v %v", errDecode, msg, len(ann.Hashes), len(ann.Types), len(ann.Sizes))
+	}
 	// Schedule all the unknown hashes for retrieval
 	for _, hash := range ann.Hashes {
 		peer.markTransaction(hash)
