@@ -3,7 +3,8 @@ title: eth Namespace
 description: Documentation for the JSON-RPC API "eth" namespace
 ---
 
-Geth provides several extensions to the standard "eth" JSON-RPC namespace.
+
+Documentation for the API methods in the  `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
 
 ### eth_subscribe, eth_unsubscribe
 
