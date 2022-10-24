@@ -43,7 +43,7 @@ func makeReceipt(addr common.Address) *types.Receipt {
 func BenchmarkFilters(b *testing.B) {
 	var (
 		db, _   = rawdb.NewLevelDBDatabase(b.TempDir(), 0, 0, "", false)
-		_, sys  = newTestFilterSystem(b, db, Config{})
+		_, sys  = newTestFilterSystem(b, db, Config{}, params.TestChainConfig)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = common.BytesToAddress([]byte("jeff"))
@@ -98,20 +98,19 @@ func BenchmarkFilters(b *testing.B) {
 func TestFilters(t *testing.T) {
 	var (
 		db, _   = rawdb.NewLevelDBDatabase(t.TempDir(), 0, 0, "", false)
-		_, sys  = newTestFilterSystem(t, db, Config{})
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
+		gspec   = &core.Genesis{
+			Config:  params.TestChainConfig,
+			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
+			BaseFee: big.NewInt(params.InitialBaseFee),
+		}
+		_, sys = newTestFilterSystem(t, db, Config{}, gspec.Config)
 
 		hash1 = common.BytesToHash([]byte("topic1"))
 		hash2 = common.BytesToHash([]byte("topic2"))
 		hash3 = common.BytesToHash([]byte("topic3"))
 		hash4 = common.BytesToHash([]byte("topic4"))
-
-		gspec = &core.Genesis{
-			Config:  params.TestChainConfig,
-			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
 	)
 	defer db.Close()
 

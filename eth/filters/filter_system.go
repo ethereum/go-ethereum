@@ -32,7 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -55,6 +57,7 @@ func (cfg Config) withDefaults() Config {
 
 type Backend interface {
 	ChainDb() ethdb.Database
+	ChainConfig() *params.ChainConfig
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
@@ -151,7 +154,7 @@ type subscription struct {
 	created   time.Time
 	logsCrit  ethereum.FilterQuery
 	logs      chan []*types.Log
-	txs       chan []*types.Transaction
+	txs       chan []*ethapi.RPCTransaction
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -311,7 +314,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		logsCrit:  crit,
 		created:   time.Now(),
 		logs:      logs,
-		txs:       make(chan []*types.Transaction),
+		txs:       make(chan []*ethapi.RPCTransaction),
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -328,7 +331,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		logsCrit:  crit,
 		created:   time.Now(),
 		logs:      logs,
-		txs:       make(chan []*types.Transaction),
+		txs:       make(chan []*ethapi.RPCTransaction),
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -345,7 +348,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		logsCrit:  crit,
 		created:   time.Now(),
 		logs:      logs,
-		txs:       make(chan []*types.Transaction),
+		txs:       make(chan []*ethapi.RPCTransaction),
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -361,7 +364,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		typ:       BlocksSubscription,
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
-		txs:       make(chan []*types.Transaction),
+		txs:       make(chan []*ethapi.RPCTransaction),
 		headers:   headers,
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -371,7 +374,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 
 // SubscribePendingTxs creates a subscription that writes transactions for
 // transactions that enter the transaction pool.
-func (es *EventSystem) SubscribePendingTxs(txs chan []*types.Transaction) *Subscription {
+func (es *EventSystem) SubscribePendingTxs(txs chan []*ethapi.RPCTransaction) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingTransactionsSubscription,
@@ -422,7 +425,17 @@ func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLog
 
 func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) {
 	for _, f := range filters[PendingTransactionsSubscription] {
-		f.txs <- ev.Txs
+		header, err := es.backend.HeaderByNumber(context.Background(), rpc.LatestBlockNumber)
+		if err != nil {
+			log.Warn("failed to get latest header when processing new pending tx event", "err", err)
+			return
+		}
+		config := es.backend.ChainConfig()
+		txs := make([]*ethapi.RPCTransaction, 0, len(ev.Txs))
+		for _, tx := range ev.Txs {
+			txs = append(txs, ethapi.NewRPCPendingTransaction(tx, header, config))
+		}
+		f.txs <- txs
 	}
 }
 

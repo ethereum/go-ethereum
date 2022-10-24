@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -38,7 +39,7 @@ type filter struct {
 	typ      Type
 	deadline *time.Timer // filter is inactive when deadline triggers
 	hashes   []common.Hash
-	txs      []*types.Transaction
+	txs      []*ethapi.RPCTransaction
 	crit     FilterCriteria
 	logs     []*types.Log
 	s        *Subscription // associated subscription in event system
@@ -104,12 +105,12 @@ func (api *FilterAPI) timeoutLoop(timeout time.Duration) {
 // `eth_getFilterChanges` polling method that is also used for log filters.
 func (api *FilterAPI) NewPendingTransactionFilter() rpc.ID {
 	var (
-		pendingTxs   = make(chan []*types.Transaction)
+		pendingTxs   = make(chan []*ethapi.RPCTransaction)
 		pendingTxSub = api.events.SubscribePendingTxs(pendingTxs)
 	)
 
 	api.filtersMu.Lock()
-	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, deadline: time.NewTimer(api.timeout), txs: make([]*types.Transaction, 0), s: pendingTxSub}
+	api.filters[pendingTxSub.ID] = &filter{typ: PendingTransactionsSubscription, deadline: time.NewTimer(api.timeout), txs: make([]*ethapi.RPCTransaction, 0), s: pendingTxSub}
 	api.filtersMu.Unlock()
 
 	go func() {
@@ -145,7 +146,7 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 	rpcSub := notifier.CreateSubscription()
 
 	go func() {
-		txs := make(chan []*types.Transaction, 128)
+		txs := make(chan []*ethapi.RPCTransaction, 128)
 		pendingTxSub := api.events.SubscribePendingTxs(txs)
 
 		for {
@@ -157,7 +158,7 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 					if fullTx != nil && *fullTx {
 						notifier.Notify(rpcSub.ID, tx)
 					} else {
-						notifier.Notify(rpcSub.ID, tx.Hash())
+						notifier.Notify(rpcSub.ID, tx.Hash)
 					}
 				}
 			case <-rpcSub.Err():

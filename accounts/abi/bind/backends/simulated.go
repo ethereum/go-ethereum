@@ -842,6 +842,8 @@ type filterBackend struct {
 
 func (fb *filterBackend) ChainDb() ethdb.Database { return fb.db }
 
+func (fb *filterBackend) ChainConfig() *params.ChainConfig { return fb.backend.config }
+
 func (fb *filterBackend) EventMux() *event.TypeMux { panic("not supported") }
 
 func (fb *filterBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {

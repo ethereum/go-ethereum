@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func BenchmarkBloomBits512(b *testing.B) {
@@ -176,7 +177,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	clearBloomBits(db)
 
-	_, sys := newTestFilterSystem(b, db, Config{})
+	_, sys := newTestFilterSystem(b, db, Config{}, params.TestChainConfig)
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()

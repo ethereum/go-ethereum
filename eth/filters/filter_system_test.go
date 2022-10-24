@@ -34,14 +34,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type testBackend struct {
 	db              ethdb.Database
+	chainConfig     *params.ChainConfig
 	sections        uint64
 	txFeed          event.Feed
 	logsFeed        event.Feed
@@ -52,6 +55,10 @@ type testBackend struct {
 
 func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
+}
+
+func (b *testBackend) ChainConfig() *params.ChainConfig {
+	return b.chainConfig
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
@@ -158,8 +165,8 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 	}()
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
-	backend := &testBackend{db: db}
+func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config, chainConfig *params.ChainConfig) (*testBackend, *FilterSystem) {
+	backend := &testBackend{db: db, chainConfig: chainConfig}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
 }
@@ -173,15 +180,15 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
-		api          = NewFilterAPI(sys, false)
-		genesis      = &core.Genesis{
+		db      = rawdb.NewMemoryDatabase()
+		genesis = &core.Genesis{
 			Config:  params.TestChainConfig,
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		_, chain, _ = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 10, func(i int, gen *core.BlockGen) {})
-		chainEvents = []core.ChainEvent{}
+		backend, sys = newTestFilterSystem(t, db, Config{}, genesis.Config)
+		api          = NewFilterAPI(sys, false)
+		_, chain, _  = core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 10, func(i int, gen *core.BlockGen) {})
+		chainEvents  = []core.ChainEvent{}
 	)
 
 	for _, blk := range chain {
@@ -229,8 +236,12 @@ func TestPendingTxFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		chainConfig  = params.TestChainConfig
+		backend, sys = newTestFilterSystem(t, db, Config{}, chainConfig)
 		api          = NewFilterAPI(sys, false)
+		from         = "0x682a80a6f560eeC50d54E63CBeDa1c324C5F8d1b"
+		privkey, err = crypto.HexToECDSA("0000000000000000deadbeef00000000000000000000000000000000deadbeef")
+		signer       = types.LatestSigner(chainConfig)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -240,9 +251,15 @@ func TestPendingTxFilter(t *testing.T) {
 			types.NewTransaction(4, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
 		}
 
-		txs []*types.Transaction
+		txs []*ethapi.RPCTransaction
 	)
 
+	for i, tx := range transactions {
+		transactions[i], err = types.SignTx(tx, signer, privkey)
+		if err != nil {
+			t.Fatalf("failed to sign tx: %v", err)
+		}
+	}
 	fid0 := api.NewPendingTransactionFilter()
 
 	time.Sleep(1 * time.Second)
@@ -255,7 +272,7 @@ func TestPendingTxFilter(t *testing.T) {
 			t.Fatalf("Unable to retrieve logs: %v", err)
 		}
 
-		tx := results.([]*types.Transaction)
+		tx := results.([]*ethapi.RPCTransaction)
 		txs = append(txs, tx...)
 		if len(txs) >= len(transactions) {
 			break
@@ -273,8 +290,11 @@ func TestPendingTxFilter(t *testing.T) {
 		return
 	}
 	for i := range txs {
-		if txs[i].Hash() != transactions[i].Hash() {
-			t.Errorf("hashes[%d] invalid, want %x, got %x", i, transactions[i].Hash(), txs[i].Hash())
+		if txs[i].Hash != transactions[i].Hash() {
+			t.Errorf("hashes[%d] invalid, want %x, got %x", i, transactions[i].Hash(), txs[i].Hash)
+		}
+		if txs[i].From.Hex() != from {
+			t.Errorf("sender[%d] invalid, want %x, got %x", i, from, txs[i].From)
 		}
 	}
 }
@@ -284,7 +304,7 @@ func TestPendingTxFilter(t *testing.T) {
 func TestLogFilterCreation(t *testing.T) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		_, sys = newTestFilterSystem(t, db, Config{}, params.TestChainConfig)
 		api    = NewFilterAPI(sys, false)
 
 		testCases = []struct {
@@ -331,7 +351,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		_, sys = newTestFilterSystem(t, db, Config{}, params.TestChainConfig)
 		api    = NewFilterAPI(sys, false)
 	)
 
@@ -353,7 +373,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 func TestInvalidGetLogsRequest(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
-		_, sys    = newTestFilterSystem(t, db, Config{})
+		_, sys    = newTestFilterSystem(t, db, Config{}, params.TestChainConfig)
 		api       = NewFilterAPI(sys, false)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
@@ -378,7 +398,7 @@ func TestLogFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(t, db, Config{}, params.TestChainConfig)
 		api          = NewFilterAPI(sys, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -492,7 +512,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(t, db, Config{}, params.TestChainConfig)
 		api          = NewFilterAPI(sys, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -676,7 +696,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout})
+		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout}, params.TestChainConfig)
 		api          = NewFilterAPI(sys, false)
 		done         = make(chan struct{})
 	)
@@ -709,7 +729,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Filter should exist: %v\n", err)
 			}
-			if len(txs.([]*types.Transaction)) > 0 {
+			if len(txs.([]*ethapi.RPCTransaction)) > 0 {
 				break
 			}
 			runtime.Gosched()
