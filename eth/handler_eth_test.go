@@ -61,7 +61,7 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		h.blockBroadcasts.Send(packet.Block)
 		return nil
 
-	case *eth.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket67:
 		h.txAnnounces.Send(([]common.Hash)(*packet))
 		return nil
 
