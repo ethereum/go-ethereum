@@ -55,7 +55,7 @@ ETHEREUM OPTIONS:
   --keystore value                    Directory for the keystore (default = inside the datadir)
   --usb                               Enable monitoring and management of USB hardware wallets
   --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file
-  --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
+  --networkid value                   Explicitly set network id (integer)(For testnets: use --sepolia, --goerli instead) (default: 1)
   --syncmode value                    Blockchain sync mode ("snap", "full" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
@@ -65,11 +65,8 @@ ETHEREUM OPTIONS:
   --lightkdf                          Reduce key-derivation RAM & CPU usage at some expense of KDF strength
   --eth.requiredblocks value          Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
   --mainnet                           Ethereum mainnet
-  --ropsten                           Ropsten network: pre-configured proof-of-stake test network
-  --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --sepolia                           Sepolia network: pre-configured proof-of-work test network
-  --kiln                              Kiln network: pre-configured proof-of-work to proof-of-stake test network
   --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
   --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
   --remotedb value                    URL for remote database
