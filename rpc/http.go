@@ -214,7 +214,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	hc.mu.Lock()
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
-	addHeadersFromContext(ctx, req.Header)
+	mergeHeaders(req.Header, headersFromContext(ctx))
 
 	if hc.auth != nil {
 		if err := hc.auth(req.Header); err != nil {

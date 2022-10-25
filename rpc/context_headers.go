@@ -24,31 +24,31 @@ import (
 type mdHeaderKey struct{}
 
 // NewContextWithHeaders is used to add the http headers from source into the context.
-func NewContextWithHeaders(ctx context.Context, source http.Header) context.Context {
-	dest, ok := ctx.Value(mdHeaderKey{}).(http.Header)
+func NewContextWithHeaders(ctx context.Context, src http.Header) context.Context {
+	dst, ok := ctx.Value(mdHeaderKey{}).(http.Header)
 	if !ok {
-		return context.WithValue(ctx, mdHeaderKey{}, source)
+		dst = http.Header{}
+		ctx = context.WithValue(ctx, mdHeaderKey{}, dst)
 	}
-	for key, values := range source {
-		dest.Del(key)
-		for _, val := range values {
-			dest.Add(key, val)
-		}
-	}
-	return context.WithValue(ctx, mdHeaderKey{}, dest)
+	mergeHeaders(dst, src)
+	return ctx
 }
 
-// addHeadersFromContext takes any previously added http headers and adds them
-// to the dest http.Header.
-func addHeadersFromContext(ctx context.Context, dest http.Header) {
+// headersFromContext is used to extract http.Header from context
+func headersFromContext(ctx context.Context) http.Header {
 	source, ok := ctx.Value(mdHeaderKey{}).(http.Header)
 	if !ok {
-		return
+		return nil
 	}
-	for key, values := range source {
-		dest.Del(key)
+	return source
+}
+
+// mergeHeaders is used to merge src into dst
+func mergeHeaders(dst http.Header, src http.Header) {
+	for key, values := range src {
+		dst.Del(key)
 		for _, val := range values {
-			dest.Add(key, val)
+			dst.Add(key, val)
 		}
 	}
 }

@@ -201,7 +201,7 @@ func TestHTTPPeerInfo(t *testing.T) {
 	}
 }
 
-func TestNewOutgoingContext(t *testing.T) {
+func TestNewContextWithHeaders(t *testing.T) {
 	numHeaders := 3
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
