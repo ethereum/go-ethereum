@@ -64,8 +64,8 @@ type callTrace struct {
 	Error    string          `json:"error,omitempty"`
 	Revertal string          `json:"revertReason,omitempty"`
 	Calls    []callTrace     `json:"calls,omitempty"`
-	Value    *hexutil.Big    `json:"value,omitempty"`
 	Logs     []callLog       `json:"logs,omitempty"`
+	Value    *hexutil.Big    `json:"value,omitempty"`
 	// Gencodec adds overridden fields at the end
 	Type string `json:"type"`
 }
