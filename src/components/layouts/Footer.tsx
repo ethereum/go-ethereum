@@ -18,22 +18,35 @@ import {
 
 export const Footer: FC = () => {
   return (
-    <Box mt={4} border='2px solid' borderColor='brand.light.primary'>
+    <Flex
+      mt={4}
+      direction={{ base: 'column', lg: 'row'}}
+    >
       <Flex
-        direction={{ base: 'column'}}
+        direction={{ base: 'column', md: 'row'}}
+        justifyContent={{md: 'space-between'}}
+        border='2px solid'
+        borderColor='brand.light.primary'
       >
-        <Flex sx={{ mt: '-2px !important' }}>
+        <Flex
+          sx={{ mt: '-2px !important' }}
+          borderBottom={{
+            base: '2px solid',
+            md: 'none'
+          }}
+          borderColor='brand.light.primary'
+        >
           <Stack
             flex={1}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
             color='brand.light.primary'
-              _hover={{
-                textDecoration: 'none',
-                bg: 'brand.light.primary',
-                color: 'yellow.50 !important'
-              }}
+            _hover={{
+              textDecoration: 'none',
+              bg: 'brand.light.primary',
+              color: 'yellow.50 !important'
+            }}
+            justifyContent='center'
+            borderRight='2px solid'
+            borderColor='brand.light.primary'
           >
             <NextLink href={DOWNLOADS_PAGE} passHref>
               <Link _hover={{ textDecoration: 'none' }}>
@@ -44,14 +57,18 @@ export const Footer: FC = () => {
 
           <Stack
             flex={1}
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
             color='brand.light.primary'
-              _hover={{
-                textDecoration: 'none',
-                bg: 'brand.light.primary',
-                color: 'yellow.50 !important'
-              }}
+            _hover={{
+              textDecoration: 'none',
+              bg: 'brand.light.primary',
+              color: 'yellow.50 !important'
+            }}
+            borderRight={{
+              base: 'none',
+              md: '2px solid'
+            }}
+            borderColor='brand.light.primary'
+            justifyContent='center'
           >
             <NextLink href={DOCS_PAGE} passHref>
               <Link _hover={{ textDecoration: 'none' }}>
@@ -65,9 +82,13 @@ export const Footer: FC = () => {
           <Stack
             flex={1}
             data-group
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
+            borderLeft={{
+              base: 'none',
+              md: '2px solid',
+              lg: 'none'
+            }}
+            borderColor='brand.light.primary !important'
+            
             _hover={{
               bg: 'brand.light.primary',
             }}
@@ -91,13 +112,13 @@ export const Footer: FC = () => {
           <Stack
             data-group
             flex={1}
-            borderRight='2px solid'
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
             _hover={{
               bg: 'brand.light.primary',
             }}
             alignItems='center'
+            borderWidth='2px'
+            borderStyle='none solid'
+            borderColor='brand.light.primary'
           >
             <NextLink href={GETH_DISCORD_URL} passHref>
               <Link isExternal p={4}>
@@ -117,8 +138,6 @@ export const Footer: FC = () => {
           <Stack
             data-group
             flex={1}
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
             _hover={{
               bg: 'brand.light.primary',
             }}
@@ -141,9 +160,21 @@ export const Footer: FC = () => {
         </Flex>
       </Flex>
 
-      <Stack p={4} sx={{ mt: '0 !important' }} textAlign='center'>
+      <Stack
+        p={4}
+        sx={{ mt: '0 !important' }}
+        textAlign='center'
+        justifyContent='center'
+        borderWidth='2px'
+        borderStyle={{
+          base: 'none solid solid solid',
+          lg: 'solid solid solid none'
+        }}
+        borderColor='brand.light.primary'
+        flex={1}
+      >
         <Text textStyle='footer-text'>© 2013–2022. The go-ethereum Authors.</Text>
       </Stack>
-    </Box>
+    </Flex>
   )
 }

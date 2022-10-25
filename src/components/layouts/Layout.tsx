@@ -10,7 +10,15 @@ interface Props {
 // TODO: if mobile, getMobileLayout, else getDesktopLayout
 export const Layout: FC<Props> = ({ children }) => {
   return (
-    <Container maxW={{ sm: 'container.sm' }} my={7}>
+    <Container
+      maxW={{ 
+        sm: 'container.sm',
+        md: 'container.md', 
+        lg: 'container.lg',
+        xl: 'container.xl'
+      }}
+      my={7}
+    >
       {children}
 
       <Footer />
