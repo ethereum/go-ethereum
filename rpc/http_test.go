@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -201,13 +202,14 @@ func TestHTTPPeerInfo(t *testing.T) {
 }
 
 func TestNewOutgoingContext(t *testing.T) {
-	const (
-		testHeaderKey   = "test-header-key"
-		testHeaderValue = "test-header-value"
-	)
+	numHeaders := 3
+
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if got := request.Header.Get(testHeaderKey); got != testHeaderValue {
-			t.Errorf("wrong request headers for %s, expected: %s, actual: %s", testHeaderKey, testHeaderValue, got)
+		for i := 0; i < numHeaders; i++ {
+			key, want := fmt.Sprintf("key-%d", i), fmt.Sprintf("val-%d", i)
+			if have := request.Header.Get(key); have != want {
+				t.Errorf("wrong request headers for %s, want: %s, have: %s", key, want, have)
+			}
 		}
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{}`))
@@ -218,9 +220,15 @@ func TestNewOutgoingContext(t *testing.T) {
 		t.Fatalf("failed to dial: %s", err)
 	}
 	defer client.Close()
-	header := http.Header{}
-	header.Set(testHeaderKey, testHeaderValue)
-	ctx := NewContextWithHeaders(context.TODO(), header)
+	newHdr := func(k, v string) http.Header {
+		header := http.Header{}
+		header.Set(k, v)
+		return header
+	}
+	ctx := NewContextWithHeaders(context.TODO(), newHdr("key-0", "val-0"))
+	ctx = NewContextWithHeaders(ctx, newHdr("key-1", "val-1"))
+	ctx = NewContextWithHeaders(ctx, newHdr("key-2", "val-2"))
+
 	if err := client.CallContext(ctx, &struct{}{}, "test"); err != ErrNoResult {
 		t.Errorf("failed to call context: %s", err)
 	}
