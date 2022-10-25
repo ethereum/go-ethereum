@@ -59,6 +59,19 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: '12px'
   },
+  'downloads-button-label': {
+    fontFamily:'"JetBrains Mono", monospace',
+    color:'yellow.50',
+    fontSize:'xs',
+    textTransform:'uppercase',
+  },
+  'download-tab-label': {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    fontSize: 'sm',
+  },
   // TODO: refactor w/ semantic tokens for light/dark mode
   'link-light': {},
   // TODO: refactor w/ semantic tokens for light/dark mode

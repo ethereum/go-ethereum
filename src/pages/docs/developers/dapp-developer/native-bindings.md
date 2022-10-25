@@ -1,6 +1,6 @@
 ---
 title: Go Contract Bindings
-description: Intriduction to generating bindings for using Geth features in Go native applications
+description: Introduction to generating bindings for using Geth features in Go native applications
 ---
 
 This page introduces the concept of server-side native dapps. Geth provides the tools required to generate [Go](https://github.com/golang/go/wiki#getting-started-with-go) language bindings to any Ethereum contract that is compile-time type safe, highly performant and can be generated completely automatically from a compiled contract.

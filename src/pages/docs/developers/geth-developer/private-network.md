@@ -23,7 +23,7 @@ geth --networkid 12345
 
 ### Choosing A Consensus Algorithm
 
-While the main network uses proof-of-work (PoW) to secure the blockchain, Geth also supports the the 'Clique' proof-of-authority (PoA) consensus algorithm as an alternative for private networks. Clique is strongly recommended for private testnets because PoA is far less resource-intensive than PoW. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
+While the main network uses proof-of-work (PoW) to secure the blockchain, Geth also supports the the 'Clique' proof-of-authority (PoA) consensus algorithm as an alternative for private networks. Clique is strongly recommended for private testnets because PoA is far less resource-intensive than PoW. The key differences between the consensus algorithms available in Geth are:
 
 #### Ethash
 

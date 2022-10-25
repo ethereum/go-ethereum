@@ -128,13 +128,37 @@ INFO [07-28|10:30:18.658] Imported new block headers               count=1    el
 INFO [07-28|10:30:21.665] Imported new state entries
 ```
 
-For state sync, Geth reports when the state heal is in progress. This can takea long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over.
+For state sync, Geth reports when the state heal is in progress. This can takea long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
 
 ```
 INFO [07-28|10:30:21.965] State heal in progress                   accounts=169,633@7.48MiB  slots=57314@4.17MiB    codes=4895@38.14MiB nodes=43,293,196@11.70GiB pending=112,626
 INFO [09-06|01:31:59.885] Rebuilding state snapshot
 INFO [09-06|01:31:59.910] Resuming state snapshot generation root=bc64d4..fc1edd accounts=0 slots=0 storage=0.00B dangling=0 elapsed=18.838ms
 ```
+
+The sync can be confirmed using [`eth.syncing`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_syncing) - it will return `false` if the node is in sync. If `eth.syncing` returns anything other than `false` it has not finished syncing. Generally, if syncing is still ongoing, `eth.syncing` will return block info that looks as follows:
+
+```json
+> eth.sycing
+{
+  currentBlock: 15285946,
+  healedBytecodeBytes: 991164713,
+  healedBytecodes: 130880,
+  healedTrienodeBytes: 489298493475,
+  healedTrienodes: 1752917331,
+  healingBytecode: 0,
+  healingTrienodes: 1745,
+  highestBlock: 16345003,
+  startingBlock: 12218525,
+  syncedAccountBytes: 391561544809,
+  syncedAccounts: 136498212,
+  syncedBytecodeBytes: 2414143936,
+  syncedBytecodes: 420599,
+  syncedStorage: 496503178,
+  syncedStorageBytes: 103368240246
+}
+```
+
 
 There are other log messages that are commonly seen during syncing. For example:
 
@@ -182,6 +206,12 @@ WARN [10-03 |13:10:26.499] Beacon client online, but never received consensus up
 ```
 
 The message above indicates that a consensus client is present but not working correctly. The most likely reason for this is that the client is not yet in sync. Waiting for the consensus client to sync should solve the issue.
+
+
+```sh
+WARN [10-03 | 13:15:56.543] Dropping unsynced node during sync    id = e2fdc0d92d70953 conn = ...
+```
+This message indicates that a peer is being dropped because it is not fully synced. This is normal - the necessary data will be requested from an alternative peer instead.
 
 ## Summary
 
