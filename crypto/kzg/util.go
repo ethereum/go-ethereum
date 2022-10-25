@@ -15,7 +15,7 @@ var (
 
 func initDomain() {
 	BLSModulus = new(big.Int)
-	BLSModulus.SetString("0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 0)
+	BLSModulus.SetString(bls.ModulusStr, 10)
 
 	// ROOT_OF_UNITY = pow(PRIMITIVE_ROOT, (MODULUS - 1) // WIDTH, MODULUS)
 	primitiveRoot := big.NewInt(7)
