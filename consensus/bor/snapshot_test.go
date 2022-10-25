@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/JekaMas/crand"
+	"github.com/maticnetwork/crand"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 
