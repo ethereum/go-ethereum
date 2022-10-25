@@ -135,7 +135,10 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync 
 up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint 
 is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band 
-from another trusted friend, but it could also come from block explorers or public APIs/web apps.
+from another trusted friend, but it could also come from block explorers or [public APIs/web apps](https://eth-clients.github.io/checkpoint-sync-endpoints/).
+
+Please see the pages on [syncing](/docs/interface/sync-modes.md) for more detail. For troubleshooting, 
+please see the `Syncing` section on the [console log messages](/docs/interface/logs.md) page.
 
 **Note** it is not currently possible to use a Geth light node as an execution client on proof-of-stake Ethereum.
 
