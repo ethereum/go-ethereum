@@ -10,7 +10,7 @@ import (
 var (
 	BLSModulus *big.Int
 	Domain     [params.FieldElementsPerBlob]*big.Int
-	DomainFr   [params.FieldElementsPerBlob]bls.Fr
+	DomainFr   []bls.Fr
 )
 
 func initDomain() {
@@ -22,6 +22,7 @@ func initDomain() {
 	width := big.NewInt(int64(params.FieldElementsPerBlob))
 	exp := new(big.Int).Div(new(big.Int).Sub(BLSModulus, big.NewInt(1)), width)
 	rootOfUnity := new(big.Int).Exp(primitiveRoot, exp, BLSModulus)
+	DomainFr = make([]bls.Fr, params.FieldElementsPerBlob)
 	for i := 0; i < params.FieldElementsPerBlob; i++ {
 		// We reverse the bits of the index as specified in https://github.com/ethereum/consensus-specs/pull/3011
 		// This effectively permutes the order of the elements in Domain
@@ -43,51 +44,9 @@ func MatrixLinComb(vectors [][]bls.Fr, scalars []bls.Fr) []bls.Fr {
 	return r
 }
 
-// EvaluatePolyInEvaluationForm evaluates the polynomial using the barycentric formula:
-// f(x) = (1 - x**WIDTH) / WIDTH  *  sum_(i=0)^WIDTH  (f(DOMAIN[i]) * DOMAIN[i]) / (x - DOMAIN[i])
+// EvaluatePolyInEvaluationForm evaluates the polynomial using the barycentric formula
 func EvaluatePolyInEvaluationForm(yFr *bls.Fr, poly []bls.Fr, x *bls.Fr) {
-	if len(poly) != params.FieldElementsPerBlob {
-		panic("invalid polynomial length")
-	}
-
-	width := big.NewInt(int64(params.FieldElementsPerBlob))
-	var inverseWidth big.Int
-	blsModInv(&inverseWidth, width)
-
-	// Precomputing the mod inverses as a batch is alot faster
-	invDenom := make([]bls.Fr, params.FieldElementsPerBlob)
-	for i := range invDenom {
-		bls.SubModFr(&invDenom[i], x, &DomainFr[i])
-	}
-	bls.BatchInvModFr(invDenom)
-
-	var y bls.Fr
-	for i := 0; i < params.FieldElementsPerBlob; i++ {
-		var num bls.Fr
-		bls.MulModFr(&num, &poly[i], &DomainFr[i])
-
-		var denom bls.Fr
-		bls.SubModFr(&denom, x, &DomainFr[i])
-
-		var div bls.Fr
-		bls.MulModFr(&div, &num, &invDenom[i])
-
-		var tmp bls.Fr
-		bls.AddModFr(&tmp, &y, &div)
-		bls.CopyFr(&y, &tmp)
-	}
-
-	xB := new(big.Int)
-	frToBig(xB, x)
-	powB := new(big.Int).Exp(xB, width, BLSModulus)
-	powB.Sub(powB, big.NewInt(1))
-
-	// TODO: add ExpModFr to go-kzg
-	var yB big.Int
-	frToBig(&yB, &y)
-	yB.Mul(&yB, new(big.Int).Mul(powB, &inverseWidth))
-	yB.Mod(&yB, BLSModulus)
-	bls.SetFr(yFr, yB.String())
+	bls.EvaluatePolyInEvaluationForm(yFr, poly, x, DomainFr, 0)
 }
 
 func frToBig(b *big.Int, val *bls.Fr) {
