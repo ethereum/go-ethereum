@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -35,6 +36,10 @@ type UDPConn interface {
 	LocalAddr() net.Addr
 }
 
+type V5Config struct {
+	ProtocolID *[6]byte
+}
+
 // Config holds settings for the discovery listener.
 type Config struct {
 	// These settings are required and configure the UDP listener:
@@ -46,6 +51,7 @@ type Config struct {
 	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
 	Log          log.Logger         // if set, log messages go here
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
+	V5Config     V5Config           // DiscV5 settings
 	Clock        mclock.Clock
 }
 
@@ -58,6 +64,9 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = mclock.System{}
+	}
+	if cfg.V5Config.ProtocolID == nil {
+		cfg.V5Config.ProtocolID = &v5wire.DefaultProtocolID
 	}
 	return cfg
 }

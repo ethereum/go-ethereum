@@ -156,7 +156,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
 		// state of dispatch
-		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
+		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, *cfg.V5Config.ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[v5wire.Nonce]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
