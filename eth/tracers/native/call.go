@@ -219,6 +219,10 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 		if call.Type == vm.CREATE || call.Type == vm.CREATE2 {
 			call.To = common.Address{}
 		}
+		// clear logs for failed scope
+		if t.config.WithLog {
+			call.Logs = nil
+		}
 	}
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
