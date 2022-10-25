@@ -47,7 +47,7 @@ ETHEREUM OPTIONS:
   --keystore value                    Directory for the keystore (default = inside the datadir)
   --usb                               Enable monitoring and management of USB hardware wallets
   --pcscdpath value                   Path to the smartcard daemon (pcscd) socket file
-  --networkid value                   Explicitly set network id (integer)(For testnets: --sepolia, --goerli instead) (default: 1)
+  --networkid value                   Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead) (default: 1)
   --syncmode value                    Blockchain sync mode ("snap", "full" or "light") (default: snap)
   --exitwhensynced                    Exits after block synchronisation completes
   --gcmode value                      Blockchain garbage collection mode ("full", "archive") (default: "full")
