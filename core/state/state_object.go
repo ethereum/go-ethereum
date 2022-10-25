@@ -374,8 +374,8 @@ func (s *stateObject) updateRoot(db Database) {
 	s.data.Root = s.trie.Hash()
 }
 
-// CommitTrie the storage trie of the object to db.
-// This updates the trie root.
+// CommitTrie submits the storage changes into the storage trie and re-computes
+// the root. Besides, all trie changes will be collected in a nodeset and returned.
 func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
@@ -395,7 +395,8 @@ func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
 	return nodes, err
 }
 
-// DeleteTrie the storage trie of the object from db.
+// DeleteTrie collects all storage trie nodes of the object and returns a nodeset
+// which marks them as deleted.
 func (s *stateObject) DeleteTrie(db Database) (*trie.NodeSet, error) {
 	// Track the amount of time wasted on iterating and deleting the storage trie
 	if metrics.EnabledExpensive {
