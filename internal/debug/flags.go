@@ -127,7 +127,10 @@ var Flags = []cli.Flag{
 	traceFlag,
 }
 
-var glogger *log.GlogHandler
+var (
+	glogger         *log.GlogHandler
+	logOutputStream log.Handler
+)
 
 func init() {
 	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
@@ -148,10 +151,9 @@ func Setup(ctx *cli.Context) error {
 		logfmt = log.TerminalFormat(useColor)
 	}
 
-	var ostream log.Handler
 	if logFile != "" {
 		var err error
-		ostream, err = log.FileHandler(logFile, logfmt)
+		logOutputStream, err = log.FileHandler(logFile, logfmt)
 		if err != nil {
 			return err
 		}
@@ -160,9 +162,9 @@ func Setup(ctx *cli.Context) error {
 		if useColor {
 			output = colorable.NewColorableStderr()
 		}
-		ostream = log.StreamHandler(output, logfmt)
+		logOutputStream = log.StreamHandler(output, logfmt)
 	}
-	glogger.SetHandler(ostream)
+	glogger.SetHandler(logOutputStream)
 
 	// logging
 	verbosity := ctx.Int(verbosityFlag.Name)
@@ -236,4 +238,7 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
+	if closer, ok := logOutputStream.(io.Closer); ok {
+		closer.Close()
+	}
 }
