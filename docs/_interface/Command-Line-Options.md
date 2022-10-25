@@ -61,6 +61,7 @@ ETHEREUM OPTIONS:
   --rinkeby                           Rinkeby network: pre-configured proof-of-authority test network
   --goerli                            Görli network: pre-configured proof-of-authority test network
   --sepolia                           Sepolia network: pre-configured proof-of-work test network
+  --kiln                              Kiln network: pre-configured proof-of-work to proof-of-stake test network
   --datadir value                     Data directory for the databases and keystore (default: "~/.ethereum")
   --datadir.ancient value             Data directory for ancient chain segments (default = inside chaindata)
   --remotedb value                    URL for remote database
