@@ -532,7 +532,7 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 	return nil
 }
 
-func TestSize(t *testing.T) {
+func TestTransactionSizes(t *testing.T) {
 	signer := NewLondonSigner(big.NewInt(123))
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	to := common.HexToAddress("0x01")
@@ -575,19 +575,27 @@ func TestSize(t *testing.T) {
 			GasFeeCap: big.NewInt(500),
 		},
 	} {
-
 		tx, err := SignNewTx(key, signer, txdata)
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
 		bin, _ := tx.MarshalBinary()
-		// Check initial calc.
+
+		// Check initial calc
 		if have, want := int(tx.Size()), len(bin); have != want {
 			t.Errorf("test %d: size wrong, have %d want %d", i, have, want)
 		}
 		// Check cached version too
 		if have, want := int(tx.Size()), len(bin); have != want {
 			t.Errorf("test %d: (cached) size wrong, have %d want %d", i, have, want)
+		}
+		// Check unmarshalled version too
+		utx := new(Transaction)
+		if err := utx.UnmarshalBinary(bin); err != nil {
+			t.Fatalf("test %d: failed to unmarshal tx: %v", i, err)
+		}
+		if have, want := int(utx.Size()), len(bin); have != want {
+			t.Errorf("test %d: (unmarshalled) size wrong, have %d want %d", i, have, want)
 		}
 	}
 }

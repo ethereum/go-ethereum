@@ -142,7 +142,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		inner, err := tx.decodeTyped(b)
 		if err == nil {
-			tx.setDecoded(inner, uint64(len(b))+1 /* type byte */)
+			tx.setDecoded(inner, uint64(len(b)))
 		}
 		return err
 	}
@@ -166,7 +166,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	tx.setDecoded(inner, uint64(len(b))+1 /* type byte */)
+	tx.setDecoded(inner, uint64(len(b)))
 	return nil
 }
 
