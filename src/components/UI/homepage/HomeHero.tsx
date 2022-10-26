@@ -10,7 +10,7 @@ export const HomeHero: FC = () => {
       border='2px solid'
       borderColor='brand.light.primary'
       px={4}
-      py={{ base: 8, m:24, lg: 4 }}
+      py={{ base: 8, md: 24, lg: 48 }}
       flexGrow={1}
     >
       <Box mb={4}>
