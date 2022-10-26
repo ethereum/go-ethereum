@@ -58,6 +58,12 @@ export const textStyles = {
     fontSize: '13px',
     fontFamily: '"Inter", sans-serif'
   },
+  'footer-text': {
+    fontFamily: '"Inter", sans-serif',
+    lineHeight: '22px',
+    fontWeight: 400,
+    fontSize: '12px'
+  },
   'downloads-button-label': {
     fontFamily: '"JetBrains Mono", monospace',
     color: 'yellow.50',
