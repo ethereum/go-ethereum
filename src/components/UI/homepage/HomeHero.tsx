@@ -6,13 +6,22 @@ import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../../constants';
 
 export const HomeHero: FC = () => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary' px={4} py={{ base: 8, md: 5 }}>
+    <Stack
+      border='2px solid'
+      borderColor='brand.light.primary'
+      px={4}
+      py={{ base: 8, md: 24, lg: 48 }}
+      flexGrow={1}
+    >
       <Box mb={4}>
         <Box
           as='h1'
           textStyle='h1'
           mb={{ base: 2, md: 4 }}
           textAlign={{ base: 'center', md: 'left' }}
+          fontSize={{ base: '3rem', md: '6rem'}}
+          lineHeight={{ md: '6rem' }}
+          fontWeight='500'
         >
           go-ethereum
         </Box>

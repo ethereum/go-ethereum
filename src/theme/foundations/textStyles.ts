@@ -15,6 +15,11 @@ export const textStyles = {
     letterSpacing: '4%',
     color: 'brand.light.body'
   },
+  'header-font': {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontWeight: 700,
+    fontSize: { base: '0.86rem', sm: '1rem' }
+  },
   'homepage-description': {
     fontFamily: '"JetBrains Mono", monospace',
     fontWeight: 700,
@@ -60,17 +65,17 @@ export const textStyles = {
     fontSize: '12px'
   },
   'downloads-button-label': {
-    fontFamily:'"JetBrains Mono", monospace',
-    color:'yellow.50',
-    fontSize:'xs',
-    textTransform:'uppercase',
+    fontFamily: '"JetBrains Mono", monospace',
+    color: 'yellow.50',
+    fontSize: 'xs',
+    textTransform: 'uppercase'
   },
   'download-tab-label': {
     fontFamily: '"JetBrains Mono", monospace',
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
-    fontSize: 'sm',
+    fontSize: 'sm'
   },
   // TODO: refactor w/ semantic tokens for light/dark mode
   'link-light': {},
