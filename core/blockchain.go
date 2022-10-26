@@ -64,7 +64,6 @@ var (
 	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
 	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
 	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
-	storageDeleteTimer = metrics.NewRegisteredTimer("chain/storage/deletes", nil)
 	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
 
 	snapshotAccountReadTimer = metrics.NewRegisteredTimer("chain/snapshot/account/reads", nil)
@@ -1717,12 +1716,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete, we can mark them
 		accountUpdateTimer.Update(statedb.AccountUpdates)             // Account updates are complete, we can mark them
 		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
-		storageDeleteTimer.Update(statedb.StorageDeletes)             // Storage deletes are complete, we can mark them
 		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
 		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
 		triehash := statedb.AccountHashes + statedb.StorageHashes     // Save to not double count in validation
 		trieproc := statedb.SnapshotAccountReads + statedb.AccountReads + statedb.AccountUpdates
-		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates + statedb.StorageDeletes
+		trieproc += statedb.SnapshotStorageReads + statedb.StorageReads + statedb.StorageUpdates
 
 		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
