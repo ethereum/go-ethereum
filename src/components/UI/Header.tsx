@@ -17,8 +17,7 @@ export const Header: FC = () => {
         p={4}
         justifyContent='center'
         alignItems='flex-start'
-        borderRight={{ base: 'none', sm: '2px solid' }}
-        borderColor='brand.light.primary'
+        borderRight={{ base: 'none', sm: '2px solid #11866f'}}
         flexGrow={2}
       >
         <Text textStyle='header-font'>
@@ -54,8 +53,7 @@ export const Header: FC = () => {
         <Stack
           p={4}
           justifyContent='center'
-          borderRight={{ base: 'none', md: '2px solid' }}
-          borderColor='brand.light.primary'
+          borderRight={{ base: 'none', md: '2px solid #11866f' }}
           display={{ base: 'none', md: 'block' }}
           color='brand.light.primary'
           _hover={{
@@ -77,8 +75,7 @@ export const Header: FC = () => {
         <Stack
           p={4}
           display={{ base: 'none', md: 'block' }}
-          borderRight={{ base: 'none', md: '2px solid' }}
-          borderColor='brand.light.primary'
+          borderRight={{ base: 'none', md: '2px solid #11866f' }}
         >
           <InputGroup>
             <Input
@@ -97,8 +94,7 @@ export const Header: FC = () => {
         {/* DARK MODE SWITCH */}
         <Box
           p={4}
-          borderRight={{ base: '2px solid', lg: 'none' }}
-          borderColor='brand.light.primary'
+          borderRight={{ base: 'none', md: '2px solid #11866f' }}
         >
           <MoonIcon />
         </Box>
