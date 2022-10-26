@@ -13,7 +13,9 @@ export const GO_URL = 'https://go.dev/';
 
 // Downloads
 export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 10;
-export const DOWNLOAD_HEADER_BUTTONS: {[index: string]: {name: string; image: string; imageAlt: string; buildURL: string;}} = {
+export const DOWNLOAD_HEADER_BUTTONS: {
+  [index: string]: { name: string; image: string; imageAlt: string; buildURL: string };
+} = {
   linuxBuild: {
     name: 'Linux',
     image: '/images/pages/linux-penguin.svg',
@@ -38,14 +40,8 @@ export const DOWNLOAD_HEADER_BUTTONS: {[index: string]: {name: string; image: st
     imageAlt: 'Source branch logo',
     buildURL: ''
   }
-}
-export const DOWNLOAD_TABS = [
-  'Linux',
-  'macOS',
-  'Windows',
-  'iOS',
-  'Android'
-]
+};
+export const DOWNLOAD_TABS = ['Linux', 'macOS', 'Windows', 'iOS', 'Android'];
 export const DOWNLOAD_TAB_COLUMN_HEADERS = [
   'Release',
   'Commit',
@@ -55,16 +51,16 @@ export const DOWNLOAD_TAB_COLUMN_HEADERS = [
   'Published',
   'Signature',
   'Checksum (MD5)'
-]
+];
 export const DOWNLOAD_OPENPGP_BUILD_HEADERS = [
   'Build Server',
   'Unique ID',
   'OpenPGP Key',
   'Fingerprint'
-]
+];
 export const DOWNLOAD_OPENPGP_DEVELOPER_HEADERS = [
   'Developer',
   'Unique ID',
   'OpenPGP Key',
   'Fingerprint'
-]
+];

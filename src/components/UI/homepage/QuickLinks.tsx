@@ -13,7 +13,10 @@ export const QuickLinks: FC = () => {
         </Box>
       </Stack>
 
-      <Grid templateColumns='repeat(2, 1fr)' sx={{ mt: '0 !important' }}>
+      <Grid
+        templateColumns={{ base: 'repeat(2, 1fr)', md: '1fr auto' }}
+        sx={{ mt: '0 !important' }}
+      >
         {/* get started */}
         <GridItem
           borderRight='2px solid'

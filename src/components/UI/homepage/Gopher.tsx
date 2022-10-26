@@ -3,7 +3,14 @@ import { FC } from 'react';
 
 export const Gopher: FC = () => {
   return (
-    <Stack alignItems='center' p={4} border='2px solid' borderColor='brand.light.primary'>
+    <Stack
+      justifyContent='center'
+      alignItems='center'
+      p={4}
+      border='2px solid'
+      borderColor='brand.light.primary'
+      h='100%'
+    >
       <Image src='/images/pages/gopher-home-side-mobile.svg' alt='Gopher greeting' />
     </Stack>
   );

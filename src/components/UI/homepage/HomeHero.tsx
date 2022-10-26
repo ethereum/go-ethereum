@@ -6,7 +6,13 @@ import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../../constants';
 
 export const HomeHero: FC = () => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary' px={4} py={{ base: 8, md: 5 }}>
+    <Stack
+      border='2px solid'
+      borderColor='brand.light.primary'
+      px={4}
+      py={{ base: 8, md: 5 }}
+      flexGrow={1}
+    >
       <Box mb={4}>
         <Box
           as='h1'
