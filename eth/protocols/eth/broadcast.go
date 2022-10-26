@@ -152,7 +152,7 @@ func (p *Peer) announceTransactions() {
 				if tx := p.txpool.Get(queue[count]); tx != nil {
 					pending = append(pending, queue[count])
 					pendingTypes = append(pendingTypes, tx.Type())
-					pendingSizes = append(pendingSizes, 1+uint32(tx.Size())) // txsize += 1 because of txtype byte
+					pendingSizes = append(pendingSizes, uint32(tx.Size()))
 					size += common.HashLength
 				}
 			}
