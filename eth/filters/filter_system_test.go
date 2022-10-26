@@ -253,6 +253,9 @@ func TestPendingTxFilter(t *testing.T) {
 
 		txs []*ethapi.RPCTransaction
 	)
+	if err != nil {
+		t.Fatalf("failed to parse private key: %v", err)
+	}
 
 	for i, tx := range transactions {
 		transactions[i], err = types.SignTx(tx, signer, privkey)
