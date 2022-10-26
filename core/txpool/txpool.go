@@ -595,7 +595,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return core.ErrTxTypeNotSupported
 	}
 	// Reject transactions over defined size to prevent DOS attacks
-	if uint64(tx.Size()) > txMaxSize {
+	if tx.Size() > txMaxSize {
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
