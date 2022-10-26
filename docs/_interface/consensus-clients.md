@@ -103,7 +103,5 @@ information can be found on the clients' respective documentation sites or in nu
 [execution-clients-link]: https://ethereum.org/en/developers/docs/nodes-and-clients/client-diversity/#execution-clients
 [launchpad-link]:https://launchpad.ethereum.org/
 [prater-launchpad-link]:https://prater.launchpad.ethereum.org/
-[kiln-launchpad-link]:https://kiln.launchpad.ethereum.org/
-[ropsten-launchpad-link]:https://ropsten.launchpad.ethereum.org/
 [e-org-link]: https://ethereum.org/en/developers/docs/nodes-and-clients/run-a-node/
 [checklist-link]:https://launchpad.ethereum.org/en/merge-readiness

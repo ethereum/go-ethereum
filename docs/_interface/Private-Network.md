@@ -26,7 +26,7 @@ geth --networkid 12345
 
 ### Choosing A Consensus Algorithm
 
-While the main network uses proof-of-work (PoW) to secure the blockchain, Geth also supports the the 'Clique' proof-of-authority (PoA) consensus algorithm as an alternative for private networks. Clique is strongly recommended for private testnets because PoA is far less resource-intensive than PoW. Clique is currently used as the consensus algorithm in public testnets such as [Rinkeby](https://www.rinkeby.io) and [Görli](https://goerli.net). The key differences between the consensus algorithms available in Geth are:
+While the main network uses proof-of-work (PoW) to secure the blockchain, Geth also supports the the 'Clique' proof-of-authority (PoA) consensus algorithm as an alternative for private networks. Clique is strongly recommended for private testnets because PoA is far less resource-intensive than PoW. The key differences between the consensus algorithms available in Geth are:
 
 #### Ethash
 
@@ -36,9 +36,7 @@ Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensu
 
 Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consenus protocol is specified in [EIP-225][clique-eip]. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
-
 [clique-eip]: https://eips.ethereum.org/EIPS/eip-225
-
 
 ### Creating The Genesis Block
 

@@ -85,6 +85,8 @@ call.
 
 #### Simple example
 
+**note that this example uses the Rinkeby testnet, which is now deprecated**
+
 With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --http`) we can
 make a call against the [Checkpoint
 Oracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540)
