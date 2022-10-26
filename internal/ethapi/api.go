@@ -1606,6 +1606,7 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
+		"calls":             receipt.Calls,
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
 	}
@@ -1628,6 +1629,9 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 	}
 	if receipt.Logs == nil {
 		fields["logs"] = []*types.Log{}
+	}
+	if receipt.Calls == nil {
+		fields["Calls"] = []*types.Call{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {

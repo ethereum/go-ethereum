@@ -92,10 +92,12 @@ type StateDB struct {
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
-	thash   common.Hash
-	txIndex int
-	logs    map[common.Hash][]*types.Log
-	logSize uint
+	thash    common.Hash
+	txIndex  int
+	logs     map[common.Hash][]*types.Log
+	logSize  uint
+	calls    map[common.Hash][]*types.Call
+	callSize uint
 
 	preimages map[common.Hash][]byte
 
@@ -142,6 +144,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsPending: make(map[common.Address]struct{}),
 		stateObjectsDirty:   make(map[common.Address]struct{}),
 		logs:                make(map[common.Hash][]*types.Log),
+		calls:               make(map[common.Hash][]*types.Call),
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		accessList:          newAccessList(),
@@ -214,6 +217,32 @@ func (s *StateDB) Logs() []*types.Log {
 		logs = append(logs, lgs...)
 	}
 	return logs
+}
+
+func (s *StateDB) AddCall(call *types.Call) {
+	s.journal.append(addCallChange{txhash: s.thash})
+
+	call.TxHash = s.thash
+	call.TxIndex = uint(s.txIndex)
+	call.Index = s.callSize
+	s.calls[s.thash] = append(s.calls[s.thash], call)
+	s.callSize++
+}
+
+func (s *StateDB) GetCalls(hash common.Hash, blockHash common.Hash) []*types.Call {
+	calls := s.calls[hash]
+	for _, l := range calls {
+		l.BlockHash = blockHash
+	}
+	return calls
+}
+
+func (s *StateDB) Calls() []*types.Call {
+	var calls []*types.Call
+	for _, cals := range s.calls {
+		calls = append(calls, cals...)
+	}
+	return calls
 }
 
 // AddPreimage records a SHA3 preimage seen by the VM.
@@ -654,6 +683,8 @@ func (s *StateDB) Copy() *StateDB {
 		refund:              s.refund,
 		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:             s.logSize,
+		calls:               make(map[common.Hash][]*types.Call, len(s.calls)),
+		callSize:            s.callSize,
 		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
@@ -696,6 +727,14 @@ func (s *StateDB) Copy() *StateDB {
 			*cpy[i] = *l
 		}
 		state.logs[hash] = cpy
+	}
+	for hash, calls := range s.calls {
+		cpy := make([]*types.Call, len(calls))
+		for i, l := range calls {
+			cpy[i] = new(types.Call)
+			*cpy[i] = *l
+		}
+		state.calls[hash] = cpy
 	}
 	for hash, preimage := range s.preimages {
 		state.preimages[hash] = preimage

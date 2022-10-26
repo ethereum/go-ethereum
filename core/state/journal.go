@@ -124,6 +124,9 @@ type (
 	addLogChange struct {
 		txhash common.Hash
 	}
+	addCallChange struct {
+		txhash common.Hash
+	}
 	addPreimageChange struct {
 		hash common.Hash
 	}
@@ -232,6 +235,20 @@ func (ch addLogChange) revert(s *StateDB) {
 }
 
 func (ch addLogChange) dirtied() *common.Address {
+	return nil
+}
+
+func (ch addCallChange) revert(s *StateDB) {
+	calls := s.calls[ch.txhash]
+	if len(calls) == 1 {
+		delete(s.calls, ch.txhash)
+	} else {
+		s.calls[ch.txhash] = calls[:len(calls)-1]
+	}
+	s.logSize--
+}
+
+func (ch addCallChange) dirtied() *common.Address {
 	return nil
 }
 

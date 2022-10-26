@@ -71,6 +71,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
+	AddCall(*types.Call)
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) error

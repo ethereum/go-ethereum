@@ -22,6 +22,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		CumulativeGasUsed hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log         `json:"logs"              gencodec:"required"`
+		Calls             []*Call        `json:"calls"              gencodec:"required"`
 		TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   common.Address `json:"contractAddress"`
 		GasUsed           hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
@@ -36,6 +37,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.CumulativeGasUsed = hexutil.Uint64(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
+	enc.Calls = r.Calls
 	enc.TxHash = r.TxHash
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = hexutil.Uint64(r.GasUsed)
@@ -54,6 +56,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		CumulativeGasUsed *hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             *Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log          `json:"logs"              gencodec:"required"`
+		Calls             []*Call         `json:"calls"              gencodec:"required"`
 		TxHash            *common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   *common.Address `json:"contractAddress"`
 		GasUsed           *hexutil.Uint64 `json:"gasUsed" gencodec:"required"`
@@ -86,6 +89,10 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'logs' for Receipt")
 	}
 	r.Logs = dec.Logs
+	if dec.Calls == nil {
+		return errors.New("missing required field 'calls' for Receipt")
+	}
+	r.Calls = dec.Calls
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionHash' for Receipt")
 	}

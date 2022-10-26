@@ -51,12 +51,13 @@ const (
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
-	Type              uint8  `json:"type,omitempty"`
-	PostState         []byte `json:"root"`
-	Status            uint64 `json:"status"`
-	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
-	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
-	Logs              []*Log `json:"logs"              gencodec:"required"`
+	Type              uint8   `json:"type,omitempty"`
+	PostState         []byte  `json:"root"`
+	Status            uint64  `json:"status"`
+	CumulativeGasUsed uint64  `json:"cumulativeGasUsed" gencodec:"required"`
+	Bloom             Bloom   `json:"logsBloom"         gencodec:"required"`
+	Logs              []*Log  `json:"logs"              gencodec:"required"`
+	Calls             []*Call `json:"calls"              gencodec:"required"`
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
 	// They are stored in the chain database.
@@ -94,6 +95,7 @@ type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Logs              []*LogForStorage
+	Calls             []*CallForStorage
 }
 
 // v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
@@ -103,6 +105,7 @@ type v4StoredReceiptRLP struct {
 	TxHash            common.Hash
 	ContractAddress   common.Address
 	Logs              []*LogForStorage
+	Calls             []*CallForStorage
 	GasUsed           uint64
 }
 
@@ -114,6 +117,7 @@ type v3StoredReceiptRLP struct {
 	TxHash            common.Hash
 	ContractAddress   common.Address
 	Logs              []*LogForStorage
+	Calls             []*CallForStorage
 	GasUsed           uint64
 }
 
@@ -261,8 +265,12 @@ func (r *Receipt) statusEncoding() []byte {
 func (r *Receipt) Size() common.StorageSize {
 	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
+	size += common.StorageSize(len(r.Calls)) * common.StorageSize(unsafe.Sizeof(Call{}))
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
+	}
+	for _, call := range r.Calls {
+		size += common.StorageSize(common.HashLength*2 + len(call.Data) + call.Value.BitLen() + 8)
 	}
 	return size
 }
@@ -285,6 +293,13 @@ func (r *ReceiptForStorage) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	w.ListEnd(logList)
+	callList := w.List()
+	for _, call := range r.Calls {
+		if err := rlp.Encode(w, call); err != nil {
+			return err
+		}
+	}
+	w.ListEnd(callList)
 	w.ListEnd(outerList)
 	return w.Flush()
 }
@@ -322,6 +337,10 @@ func decodeStoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
 	}
+	r.Calls = make([]*Call, len(stored.Calls))
+	for i, call := range stored.Calls {
+		r.Calls[i] = (*Call)(call)
+	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
 	return nil
@@ -342,6 +361,10 @@ func decodeV4StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	r.Logs = make([]*Log, len(stored.Logs))
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
+	}
+	r.Calls = make([]*Call, len(stored.Calls))
+	for i, call := range stored.Calls {
+		r.Calls[i] = (*Call)(call)
 	}
 	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
 
@@ -364,6 +387,10 @@ func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
 	r.Logs = make([]*Log, len(stored.Logs))
 	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
+	}
+	r.Calls = make([]*Call, len(stored.Calls))
+	for i, call := range stored.Calls {
+		r.Calls[i] = (*Call)(call)
 	}
 	return nil
 }
@@ -400,6 +427,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 	signer := MakeSigner(config, new(big.Int).SetUint64(number))
 
 	logIndex := uint(0)
+	callIndex := uint(0)
 	if len(txs) != len(rs) {
 		return errors.New("transaction and receipt count mismatch")
 	}
@@ -433,6 +461,14 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 			rs[i].Logs[j].TxIndex = uint(i)
 			rs[i].Logs[j].Index = logIndex
 			logIndex++
+		}
+		for j := 0; j < len(rs[i].Calls); j++ {
+			rs[i].Calls[j].BlockNumber = number
+			rs[i].Calls[j].BlockHash = hash
+			rs[i].Calls[j].TxHash = rs[i].TxHash
+			rs[i].Calls[j].TxIndex = uint(i)
+			rs[i].Calls[j].Index = callIndex
+			callIndex++
 		}
 	}
 	return nil
