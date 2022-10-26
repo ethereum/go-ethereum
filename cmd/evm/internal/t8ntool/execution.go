@@ -69,6 +69,9 @@ type stEnv struct {
 	Difficulty       *big.Int                            `json:"currentDifficulty"`
 	Random           *big.Int                            `json:"currentRandom"`
 	ParentDifficulty *big.Int                            `json:"parentDifficulty"`
+	ParentBaseFee    *big.Int                            `json:"parentBaseFee,omitempty"`
+	ParentGasUsed    uint64                              `json:"parentGasUsed,omitempty"`
+	ParentGasLimit   uint64                              `json:"parentGasLimit,omitempty"`
 	GasLimit         uint64                              `json:"currentGasLimit"   gencodec:"required"`
 	Number           uint64                              `json:"currentNumber"     gencodec:"required"`
 	Timestamp        uint64                              `json:"currentTimestamp"  gencodec:"required"`
@@ -84,6 +87,9 @@ type stEnvMarshaling struct {
 	Difficulty       *math.HexOrDecimal256
 	Random           *math.HexOrDecimal256
 	ParentDifficulty *math.HexOrDecimal256
+	ParentBaseFee    *math.HexOrDecimal256
+	ParentGasUsed    math.HexOrDecimal64
+	ParentGasLimit   math.HexOrDecimal64
 	GasLimit         math.HexOrDecimal64
 	Number           math.HexOrDecimal64
 	Timestamp        math.HexOrDecimal64
