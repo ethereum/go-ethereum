@@ -37,6 +37,12 @@ export const Header: FC = () => {
           borderRight='2px solid'
           borderColor='brand.light.primary'
           display={{ base: 'none', md: 'block' }}
+          color='brand.light.primary'
+          _hover={{
+            textDecoration: 'none',
+            bg: 'brand.light.primary',
+            color: 'yellow.50 !important'
+          }}
         >
           <NextLink href={DOWNLOADS_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
@@ -44,7 +50,6 @@ export const Header: FC = () => {
                 fontFamily='"JetBrains Mono", monospace'
                 fontWeight={700}
                 fontSize={{ base: '0.86rem', sm: '1rem' }}
-                color='brand.light.primary'
                 textTransform='uppercase'
               >
                 downloads
@@ -59,6 +64,12 @@ export const Header: FC = () => {
           justifyContent='center'
           borderRight={{ base: 'none', md: '2px solid #11866f' }}
           display={{ base: 'none', md: 'block' }}
+          color='brand.light.primary'
+          _hover={{
+            textDecoration: 'none',
+            bg: 'brand.light.primary',
+            color: 'yellow.50 !important'
+          }}
         >
           <NextLink href={DOCS_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
@@ -66,7 +77,6 @@ export const Header: FC = () => {
                 fontFamily='"JetBrains Mono", monospace'
                 fontWeight={700}
                 fontSize={{ base: '0.86rem', sm: '1rem' }}
-                color='brand.light.primary'
                 textTransform='uppercase'
               >
                 documentation
