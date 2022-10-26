@@ -105,7 +105,7 @@ export const Header: FC = () => {
         </Box>
 
         {/* HAMBURGUER MENU */}
-        <Box p={4} display={{ base: 'block', lg: 'none' }}>
+        <Box p={4} display={{ base: 'block', md: 'none' }}>
           <HamburguerIcon />
         </Box>
       </Flex>

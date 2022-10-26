@@ -10,7 +10,7 @@ export const HomeHero: FC = () => {
       border='2px solid'
       borderColor='brand.light.primary'
       px={4}
-      py={{ base: 8, md: 5 }}
+      py={{ base: 8, m:24, lg: 4 }}
       flexGrow={1}
     >
       <Box mb={4}>
@@ -19,6 +19,9 @@ export const HomeHero: FC = () => {
           textStyle='h1'
           mb={{ base: 2, md: 4 }}
           textAlign={{ base: 'center', md: 'left' }}
+          fontSize={{ base: '3rem', md: '6rem'}}
+          lineHeight={{ md: '6rem' }}
+          fontWeight='500'
         >
           go-ethereum
         </Box>
