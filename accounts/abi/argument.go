@@ -206,6 +206,9 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			// If we have a static tuple, like (uint256, bool, uint256), these are
 			// coded as just like uint256,bool,uint256
 			virtualArgs += getTypeSize(arg.Type)/32 - 1
+		} else if arg.Type.T == FixedBytesTy {
+			// support for fixed bytes with size longer than 32
+			virtualArgs += getTypeSize(arg.Type)/32 - 1
 		}
 		retval = append(retval, marshalledValue)
 	}

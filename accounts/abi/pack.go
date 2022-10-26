@@ -64,7 +64,7 @@ func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
-		return common.RightPadBytes(reflectValue.Bytes(), 32), nil
+		return common.RightPadBytes(reflectValue.Bytes(), (len(reflectValue.Bytes())+31)/32*32), nil
 	default:
 		return []byte{}, fmt.Errorf("Could not pack element, unknown type: %v", t.T)
 	}

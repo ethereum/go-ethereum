@@ -391,6 +391,8 @@ func getTypeSize(t Type) int {
 			total += getTypeSize(*elem)
 		}
 		return total
+	} else if t.T == FixedBytesTy {
+		return (t.Size + 31) / 32 * 32
 	}
 	return 32
 }
