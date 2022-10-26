@@ -163,18 +163,15 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}
 			// Sanity check: compare top call's gas used against vm result
-			// Note: legacy callTracer's usedGas is broken
-			if !isLegacy {
-				type simpleResult struct {
-					GasUsed hexutil.Uint64
-				}
-				var topCall simpleResult
-				if err := json.Unmarshal(res, &topCall); err != nil {
-					t.Fatalf("failed to unmarshal top calls gasUsed: %v", err)
-				}
-				if uint64(topCall.GasUsed) != vmRet.UsedGas {
-					t.Fatalf("top call has invalid gasUsed. have: %d want: %d", topCall.GasUsed, vmRet.UsedGas)
-				}
+			type simpleResult struct {
+				GasUsed hexutil.Uint64
+			}
+			var topCall simpleResult
+			if err := json.Unmarshal(res, &topCall); err != nil {
+				t.Fatalf("failed to unmarshal top calls gasUsed: %v", err)
+			}
+			if uint64(topCall.GasUsed) != vmRet.UsedGas {
+				t.Fatalf("top call has invalid gasUsed. have: %d want: %d", topCall.GasUsed, vmRet.UsedGas)
 			}
 		})
 	}
