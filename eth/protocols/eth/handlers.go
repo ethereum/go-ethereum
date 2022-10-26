@@ -430,13 +430,13 @@ func handleReceipts66(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
-func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
+func handleNewPooledTransactionHashes66(backend Backend, msg Decoder, peer *Peer) error {
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil
 	}
-	ann := new(NewPooledTransactionHashesPacket67)
+	ann := new(NewPooledTransactionHashesPacket66)
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}

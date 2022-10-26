@@ -299,10 +299,10 @@ type ReceiptsRLPPacket66 struct {
 	ReceiptsRLPPacket
 }
 
-// NewPooledTransactionHashesPacket67 represents a transaction announcement packet.
-type NewPooledTransactionHashesPacket67 []common.Hash
+// NewPooledTransactionHashesPacket66 represents a transaction announcement packet on eth/66 and eth/67.
+type NewPooledTransactionHashesPacket66 []common.Hash
 
-// NewPooledTransactionHashesPacket68 represents a transaction announcement packet over eth/68.
+// NewPooledTransactionHashesPacket68 represents a transaction announcement packet on eth/68 and newer.
 type NewPooledTransactionHashesPacket68 struct {
 	Types  []byte
 	Sizes  []uint32
@@ -372,8 +372,8 @@ func (*GetReceiptsPacket) Kind() byte   { return GetReceiptsMsg }
 func (*ReceiptsPacket) Name() string { return "Receipts" }
 func (*ReceiptsPacket) Kind() byte   { return ReceiptsMsg }
 
-func (*NewPooledTransactionHashesPacket67) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket67) Kind() byte   { return NewPooledTransactionHashesMsg }
+func (*NewPooledTransactionHashesPacket66) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket66) Kind() byte   { return NewPooledTransactionHashesMsg }
 
 func (*NewPooledTransactionHashesPacket68) Name() string { return "NewPooledTransactionHashes" }
 func (*NewPooledTransactionHashesPacket68) Kind() byte   { return NewPooledTransactionHashesMsg }

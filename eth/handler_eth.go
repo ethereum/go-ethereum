@@ -67,7 +67,7 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 	case *eth.NewBlockPacket:
 		return h.handleBlockBroadcast(peer, packet.Block, packet.TD)
 
-	case *eth.NewPooledTransactionHashesPacket67:
+	case *eth.NewPooledTransactionHashesPacket66:
 		return h.txFetcher.Notify(peer.ID(), *packet)
 
 	case *eth.NewPooledTransactionHashesPacket68:

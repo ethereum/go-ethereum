@@ -48,6 +48,8 @@ func newTestPeer(name string, version uint, backend Backend) (*testPeer, <-chan 
 	peer := NewPeer(version, p2p.NewPeer(id, name, nil), net, backend.TxPool())
 	errc := make(chan error, 1)
 	go func() {
+		defer app.Close()
+
 		errc <- backend.RunPeer(peer, func(peer *Peer) error {
 			return Handle(backend, peer)
 		})
