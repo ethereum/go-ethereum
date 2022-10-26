@@ -185,6 +185,10 @@ func TestEIP2930Signer(t *testing.T) {
 			if signedTx.Hash() != test.wantHash {
 				t.Errorf("test %d: wrong tx hash after signing: got %x, want %x", i, signedTx.Hash(), test.wantHash)
 			}
+			wbyte, _ := signedTx.MarshalBinary()
+			if have, want := int(signedTx.Size()), len(wbyte); have != want {
+				t.Fatalf("test %d: size wrong, have %d want %d", i, have, want)
+			}
 		}
 	}
 }
