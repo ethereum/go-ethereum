@@ -18,46 +18,36 @@ package rawdb
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+type tableSize struct {
+	name string
+	size common.StorageSize
+}
+
 // freezerInfo contains the basic information of the freezer.
 type freezerInfo struct {
-	name  string                        // The identifier of freezer
-	head  uint64                        // The number of last stored item in the freezer
-	tail  uint64                        // The number of first stored item in the freezer
-	sizes map[string]common.StorageSize // The storage size per table
+	name  string      // The identifier of freezer
+	head  uint64      // The number of last stored item in the freezer
+	tail  uint64      // The number of first stored item in the freezer
+	sizes []tableSize // The storage size per table
 }
 
 // count returns the number of stored items in the freezer.
-func (info freezerInfo) count() uint64 {
+func (info *freezerInfo) count() uint64 {
 	return info.head - info.tail + 1
 }
 
-// totalSize returns the storage size of entire freezer.
-func (info freezerInfo) totalSize() common.StorageSize {
+// size returns the storage size of the entire freezer.
+func (info *freezerInfo) size() common.StorageSize {
 	var total common.StorageSize
-	for _, size := range info.sizes {
-		total += size
+	for _, table := range info.sizes {
+		total += table.size
 	}
 	return total
-}
-
-// summary returns a string-representation of the freezerInfo.
-func (info freezerInfo) summary() [][]string {
-	var ret [][]string
-	for table, size := range info.sizes {
-		ret = append(ret, []string{
-			fmt.Sprintf("Ancient store (%s)", strings.Title(info.name)),
-			strings.Title(table),
-			size.String(),
-			fmt.Sprintf("%d", info.count()),
-		})
-	}
-	return ret
 }
 
 // inspectFreezers inspects all freezers registered in the system.
@@ -68,17 +58,14 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 		case chainFreezerName:
 			// Chain ancient store is a bit special. It's always opened along
 			// with the key-value store, inspect the chain store directly.
-			info := freezerInfo{
-				name:  freezer,
-				sizes: make(map[string]common.StorageSize),
-			}
+			info := freezerInfo{name: freezer}
 			// Retrieve storage size of every contained table.
 			for table := range chainFreezerNoSnappy {
 				size, err := db.AncientSize(table)
 				if err != nil {
 					return nil, err
 				}
-				info.sizes[table] = common.StorageSize(size)
+				info.sizes = append(info.sizes, tableSize{name: table, size: common.StorageSize(size)})
 			}
 			// Retrieve the number of last stored item
 			ancients, err := db.Ancients()
