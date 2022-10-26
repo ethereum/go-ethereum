@@ -31,6 +31,7 @@ var (
 		Usage: "Operations on node keys",
 		Subcommands: []*cli.Command{
 			keyGenerateCommand,
+			keyToIDCommand,
 			keyToNodeCommand,
 		},
 	}
@@ -39,6 +40,13 @@ var (
 		Usage:     "Generates node key files",
 		ArgsUsage: "keyfile",
 		Action:    genkey,
+	}
+	keyToIDCommand = &cli.Command{
+		Name:      "to-id",
+		Usage:     "Creates a node ID from a node key file",
+		ArgsUsage: "keyfile",
+		Action:    keyToID,
+		Flags:     []cli.Flag{},
 	}
 	keyToNodeCommand = &cli.Command{
 		Name:      "to-enode",
@@ -78,6 +86,15 @@ func genkey(ctx *cli.Context) error {
 		return fmt.Errorf("could not generate key: %v", err)
 	}
 	return crypto.SaveECDSA(file, key)
+}
+
+func keyToID(ctx *cli.Context) error {
+	n, err := makeRecord(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println(n.ID())
+	return nil
 }
 
 func keyToURL(ctx *cli.Context) error {
