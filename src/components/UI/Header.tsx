@@ -94,7 +94,7 @@ export const Header: FC = () => {
         {/* DARK MODE SWITCH */}
         <Box
           p={4}
-          borderRight={{ base: 'none', md: '2px solid #11866f' }}
+          borderRight={{ base: '2px solid #11866f', md: 'none' }}
         >
           <MoonIcon />
         </Box>
