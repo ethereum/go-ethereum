@@ -381,7 +381,10 @@ func (tx *Transaction) Size() common.StorageSize {
 	c := writeCounter(0)
 	rlp.Encode(&c, &tx.inner)
 	tx.size.Store(common.StorageSize(c))
-	return common.StorageSize(c)
+	if tx.Type() == LegacyTxType {
+		return common.StorageSize(c)
+	}
+	return common.StorageSize(1 + c)
 }
 
 // WithSignature returns a new transaction with the given signature.
