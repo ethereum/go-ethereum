@@ -20,7 +20,7 @@ export const HomeSection: FC<Props> = ({
   children
 }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary'>
+    <Stack border='2px solid' borderColor='brand.light.primary' h='100%'>
       {!!imgSrc && (
         <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
           {/* TODO: use NextImage */}
@@ -45,6 +45,7 @@ export const HomeSection: FC<Props> = ({
         borderBottom='2px solid'
         borderColor='brand.light.primary'
         sx={{ mt: '0 !important' }}
+        h='100%'
       >
         {children}
       </Stack>

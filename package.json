@@ -12,6 +12,7 @@
     "format:fix": "prettier . --write --config .prettierrc --ignore-path .prettierignore --loglevel warn"
   },
   "dependencies": {
+    "@chakra-ui/icons": "^2.0.11",
     "@chakra-ui/react": "^2.3.2",
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
