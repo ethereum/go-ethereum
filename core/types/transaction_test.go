@@ -581,8 +581,13 @@ func TestSize(t *testing.T) {
 			t.Fatalf("test %d: %v", i, err)
 		}
 		bin, _ := tx.MarshalBinary()
+		// Check initial calc.
 		if have, want := int(tx.Size()), len(bin); have != want {
 			t.Errorf("test %d: size wrong, have %d want %d", i, have, want)
+		}
+		// Check cached version too
+		if have, want := int(tx.Size()), len(bin); have != want {
+			t.Errorf("test %d: (cached) size wrong, have %d want %d", i, have, want)
 		}
 	}
 }
