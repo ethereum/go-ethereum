@@ -15,6 +15,11 @@ export const textStyles = {
     letterSpacing: '4%',
     color: 'brand.light.body'
   },
+  'header-font': {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontWeight: 700,
+    fontSize: { base: '0.86rem', sm: '1rem' }
+  },
   'homepage-description': {
     fontFamily: '"JetBrains Mono", monospace',
     fontWeight: 700,

@@ -17,14 +17,11 @@ export const Header: FC = () => {
         p={4}
         justifyContent='center'
         alignItems='flex-start'
-        borderRight={{ base: 'none', sm: '2px solid #11866f' }}
+        borderRight={{ base: 'none', sm: '2px solid' }}
+        borderColor='brand.light.primary'
         flexGrow={2}
       >
-        <Text
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={700}
-          fontSize={{ base: '0.86rem', sm: '1rem' }}
-        >
+        <Text textStyle='header-font'>
           go-ethereum
         </Text>
       </Stack>
@@ -46,12 +43,7 @@ export const Header: FC = () => {
         >
           <NextLink href={DOWNLOADS_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
-              <Text
-                fontFamily='"JetBrains Mono", monospace'
-                fontWeight={700}
-                fontSize={{ base: '0.86rem', sm: '1rem' }}
-                textTransform='uppercase'
-              >
+              <Text textStyle='header-font' textTransform='uppercase'>
                 downloads
               </Text>
             </Link>
@@ -62,7 +54,8 @@ export const Header: FC = () => {
         <Stack
           p={4}
           justifyContent='center'
-          borderRight={{ base: 'none', md: '2px solid #11866f' }}
+          borderRight={{ base: 'none', md: '2px solid' }}
+          borderColor='brand.light.primary'
           display={{ base: 'none', md: 'block' }}
           color='brand.light.primary'
           _hover={{
@@ -73,12 +66,7 @@ export const Header: FC = () => {
         >
           <NextLink href={DOCS_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
-              <Text
-                fontFamily='"JetBrains Mono", monospace'
-                fontWeight={700}
-                fontSize={{ base: '0.86rem', sm: '1rem' }}
-                textTransform='uppercase'
-              >
+              <Text textStyle='header-font' textTransform='uppercase'>
                 documentation
               </Text>
             </Link>
@@ -89,7 +77,8 @@ export const Header: FC = () => {
         <Stack
           p={4}
           display={{ base: 'none', md: 'block' }}
-          borderRight={{ base: 'none', md: '2px solid #11866f' }}
+          borderRight={{ base: 'none', md: '2px solid' }}
+          borderColor='brand.light.primary'
         >
           <InputGroup>
             <Input
