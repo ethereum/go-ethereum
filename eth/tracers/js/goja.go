@@ -245,7 +245,6 @@ func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
-	t.ctx["intrinsicGas"] = t.vm.ToValue(t.gasLimit - gas)
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
