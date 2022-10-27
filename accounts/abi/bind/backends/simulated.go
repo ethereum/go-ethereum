@@ -325,7 +325,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call XDPoSChain.Call
 
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, uint64, bool, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.CallMsg, block *types.Block, statedb *state.StateDB) (ret []byte, usedGas uint64, failed bool, err error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
@@ -353,7 +353,8 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 	vmenv := vm.NewEVM(evmContext, statedb, nil, b.config, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
-	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	ret, usedGas, failed, err, _ = core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	return
 }
 
 // SendTransaction updates the pending block to include the given transaction.

@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"strings"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
@@ -144,7 +144,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	snapshot := statedb.Snapshot()
 
 	coinbase := &t.json.Env.Coinbase
-	if _, _, _, err := core.ApplyMessage(evm, msg, gaspool, *coinbase); err != nil {
+	if _, _, _, err, _ := core.ApplyMessage(evm, msg, gaspool, *coinbase); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {

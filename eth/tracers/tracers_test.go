@@ -20,6 +20,13 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
+	"io/ioutil"
+	"math/big"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
@@ -31,12 +38,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/tests"
-	"io/ioutil"
-	"math/big"
-	"path/filepath"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 // To generate a new callTracer test, copy paste the makeTest method below into
@@ -183,7 +184,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 		t.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
 	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-	if _, _, _, err = st.TransitionDb(common.Address{}); err != nil {
+	if _, _, _, err, _ = st.TransitionDb(common.Address{}); err != nil {
 		t.Fatalf("failed to execute transaction: %v", err)
 	}
 	// Retrieve the trace result and compare against the etalon
@@ -258,7 +259,7 @@ func TestCallTracer(t *testing.T) {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if _, _, _, err = st.TransitionDb(common.Address{}); err != nil {
+			if _, _, _, err, _ = st.TransitionDb(common.Address{}); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
 			// Retrieve the trace result and compare against the etalon
