@@ -44,7 +44,7 @@ type BuildPayloadArgs struct {
 type Payload struct {
 	empty    *types.Block
 	full     *types.Block
-	fullFees *big.Float
+	fullFees *big.Int
 	stop     chan struct{}
 	lock     *sync.Mutex
 	cond     *sync.Cond
@@ -62,7 +62,7 @@ func newPayload(empty *types.Block) *Payload {
 }
 
 // update updates the full-block with latest built version.
-func (payload *Payload) update(block *types.Block, fees *big.Float) {
+func (payload *Payload) update(block *types.Block, fees *big.Int) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
