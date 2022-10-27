@@ -22,7 +22,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		ParentDifficulty *math.HexOrDecimal256               `json:"parentDifficulty"`
 		ParentBaseFee    *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
 		ParentGasUsed    math.HexOrDecimal64                 `json:"parentGasUsed,omitempty"`
-		ParentGasLimit   math.HexOrDecimal64                 `json:"parentGasUsed,omitempty"`
+		ParentGasLimit   math.HexOrDecimal64                 `json:"parentGasLimit,omitempty"`
 		GasLimit         math.HexOrDecimal64                 `json:"currentGasLimit"   gencodec:"required"`
 		Number           math.HexOrDecimal64                 `json:"currentNumber"     gencodec:"required"`
 		Timestamp        math.HexOrDecimal64                 `json:"currentTimestamp"  gencodec:"required"`
@@ -60,7 +60,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		ParentDifficulty *math.HexOrDecimal256               `json:"parentDifficulty"`
 		ParentBaseFee    *math.HexOrDecimal256               `json:"parentBaseFee,omitempty"`
 		ParentGasUsed    *math.HexOrDecimal64                `json:"parentGasUsed,omitempty"`
-		ParentGasLimit   *math.HexOrDecimal64                `json:"parentGasUsed,omitempty"`
+		ParentGasLimit   *math.HexOrDecimal64                `json:"parentGasLimit,omitempty"`
 		GasLimit         *math.HexOrDecimal64                `json:"currentGasLimit"   gencodec:"required"`
 		Number           *math.HexOrDecimal64                `json:"currentNumber"     gencodec:"required"`
 		Timestamp        *math.HexOrDecimal64                `json:"currentTimestamp"  gencodec:"required"`
