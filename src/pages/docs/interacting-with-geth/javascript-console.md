@@ -15,7 +15,8 @@ This returns a result which is also a JSON object, with values expressed as hexa
 {"id":2,"jsonrpc":"2.0","result":"0x1639e49bba16280000"}
 ```
 
-While this approach is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). This is a collection of Javascript libraries for interacting with an Ethereum node at a higher level than sending raw JSON objects to the node. The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
+While this is valid, it is also a very low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/). 
+The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
 {% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.js documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/rpc/server)." %}
 
@@ -38,7 +39,6 @@ Alternatively, a Javascript console can be attached to an existing Geth instance
 geth <other flags> --ws
 
 # enable http
-
 geth <other flags> --http
 ```
 
@@ -52,7 +52,7 @@ geth <other commands> --http --http.addr 192.60.52.21 --http.port 8552 --http.ap
 geth <other commands> --ws --ws.addr 192.60.52.21 --ws.port 8552 --ws.api eth,web3,admin
 ```
 
-It is important to note that by default **some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled**. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is not recommended if there is any chance of the node connecting to Ethereum Mainnet. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**"
+It is important to note that by default **some functionality, including account unlocking is forbidden when HTTP or Websockets access is enabled**. This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port then control the unlocked account. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**"
 
 The Javascript console can also be connected to a Geth node using IPC. When Geth is started, a `geth.ipc` file is automatically generated and saved to the data directory. This file, or a custom path to a specific ipc file can be passed to `geth attach` as follows:
 
@@ -77,22 +77,18 @@ To exit, press ctrl-d or type exit
 
 ## Interactive use
 
-Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/rpc/server). For example, to create an account:
-
-```js
-personal.newAccount();
-```
+Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/rpc/server). For example:
 
 To check the balance of the first account already existing in the keystore:
 
 ```js
-eth.getBalance(personal.listAccounts[0]);
+eth.getBalance(eth.accounts[0]);
 ```
 
-To make a transaction (without global account unlocking):
+To send a transaction (without global account unlocking):
 
 ```js
-personal.sendTransaction({
+eth.sendTransaction({
   to: eth.accounts[0],
   to: eth.accounts[1],
   value: web3.toWei(0.5, 'ether')
@@ -108,6 +104,8 @@ geth console --preload "/my/scripts/folder/utils.js"
 ```
 
 Once the interactive session is over, the console can be closed down by typing `exit` or `CTRL-D`.
+
+Remember that interactions that touch accounts need approval in Clef - either manually or by writing a custom ruleset.
 
 ## Non-interactive Use: Script Mode
 
