@@ -70,7 +70,7 @@ This contract instance can then be deployed to the blockchain. This is done usin
 var gas = eth.estimateGas({data: bytecode})
 ```
 
-Note that each command that touches accounts will require approval in Clef unless a custom rule has been implemented.
+Note that each command that touches accounts will require **approval in Clef** unless a custom rule has been implemented. The bytecode, gas and address of the sender can be bundled together into an object that will be passed to the contract's `new()` method which deploys the contract.
 
 ```js
 var tx = {'from': eth.accounts[0], data: bytecode, gas: gas}
@@ -114,3 +114,5 @@ contract.retrieve().call()
 >> 2
 ```
 
+## Summary 
+This page demonstrated how to create, compile, deploy and interact with an Ethereum smart contract using Geth's Javascript console.
