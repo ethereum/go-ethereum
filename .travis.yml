@@ -10,15 +10,6 @@ env:
 
 jobs:
   include:
-  # TODO: temporary turn off linting to help fix all the tests. We will turn it back on once the branch is stable
-  # - stage: Lint
-  #   sudo: false
-  #   go: '1.14.x'
-  #   git:
-  #     submodules: false
-  #     script:
-  #       - go run build/ci.go lint
-
   - stage: Tests
     os: linux
     dist: bionic
@@ -83,69 +74,3 @@ jobs:
     env:
       - GO111MODULE=auto
     name: T-Z tests
-  - stage: Github release
-    go: '1.14.x'
-    script:
-      - GOARCH=amd64 GOOS=linux go build -o ./build/bin/XDC-linux-amd64 ./cmd/XDC
-    deploy:
-      provider: releases
-      api_key: $GITHUB_TOKEN
-      overwrite: true
-      file_glob: true
-      file: build/bin/XDC-*
-      skip_cleanup: true
-      on:
-        tags: true
-
-  - stage: Build and push image
-    services:
-      - docker
-    install: skip
-    before_script:
-      - docker build -t XinFinOrg/XDPoSChain .
-      - docker build -t XinFinOrg/node -f Dockerfile.node .
-    script:
-      - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:latest
-      - docker push XinFinOrg/XDPoSChain:latest
-      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:$TRAVIS_BUILD_ID
-      - docker push XinFinOrg/XDPoSChain:$TRAVIS_BUILD_ID
-      - docker tag XinFinOrg/node XinFinOrg/node:latest
-      - docker push XinFinOrg/node:latest
-      - docker tag XinFinOrg/node XinFinOrg/node:$TRAVIS_BUILD_ID
-      - docker push XinFinOrg/node:$TRAVIS_BUILD_ID
-
-  - stage: Build and push image (tagged)
-    services:
-      - docker
-    install: skip
-    before_script:
-      - docker build -t XinFinOrg/XDPoSChain .
-      - docker build -t XinFinOrg/XDPoSChain -f Dockerfile.node .
-    script:
-      - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:latest
-      - docker push XinFinOrg/XDPoSChain:latest
-      - docker tag XinFinOrg/XDPoSChain XinFinOrg/XDPoSChain:$TRAVIS_TAG
-      - docker push XinFinOrg/XDPoSChain:$TRAVIS_TAG
-      - docker tag XinFinOrg/XDPoSChain XinFinOrg/node:latest
-      - docker push XinFinOrg/node:latest
-      - docker tag XinFinOrg/node XinFinOrg/node:$TRAVIS_TAG
-      - docker push XinFinOrg/node:$TRAVIS_TAG
-
-stages:
-  # - name: Lint
-  - name: Build and test
-  - name: Github release
-    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XinFinOrg/XDPoSChain
-  - name: Build and push image
-    if: type != pull_request AND branch = master AND tag IS blank AND repo = XinFinOrg/XDPoSChain
-  - name: Build and push image (tagged)
-    if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = XinFinOrg/XDPoSChain
-
-notifications:
-  slack:
-    rooms:
-      secure: 
-    on_success: change
-    on_failure: always
