@@ -86,6 +86,26 @@ func TestEVM(t *testing.T) {
 	}, nil, nil)
 }
 
+func TestDifficulty(t *testing.T) {
+	ret, _, err := Execute([]byte{
+		byte(vm.DIFFICULTY),
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	}, nil, &Config{Difficulty: big.NewInt(1)})
+
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+
+	num := new(big.Int).SetBytes(ret)
+	if num.Cmp(big.NewInt(0)) != 0 {
+		t.Error("Expected 0, got", num)
+	}
+}
+
 func TestExecute(t *testing.T) {
 	ret, _, err := Execute([]byte{
 		byte(vm.PUSH1), 10,
