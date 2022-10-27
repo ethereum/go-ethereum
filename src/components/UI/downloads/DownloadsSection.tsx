@@ -6,16 +6,10 @@ interface Props {
   id: string;
   imgSrc?: string;
   imgAltText?: string;
-  sectionTitle: string
+  sectionTitle: string;
 }
 
-export const DownloadsSection: FC<Props> = ({
-  children,
-  imgSrc,
-  imgAltText,
-  sectionTitle,
-  id
-}) => {
+export const DownloadsSection: FC<Props> = ({ children, imgSrc, imgAltText, sectionTitle, id }) => {
   return (
     <Stack border='2px solid' borderColor='brand.light.primary' id={id}>
       {!!imgSrc && (
@@ -36,9 +30,7 @@ export const DownloadsSection: FC<Props> = ({
         </Box>
       </Stack>
 
-      <Stack spacing={4}>
-        {children}
-      </Stack>
+      <Stack spacing={4}>{children}</Stack>
     </Stack>
-  )
-}
+  );
+};
