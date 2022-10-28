@@ -69,6 +69,7 @@ type callTracer struct {
 	env       *vm.EVM
 	callstack []callFrame
 	config    callTracerConfig
+	gasLimit  uint64
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
 }
@@ -109,7 +110,6 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.callstack[0].GasUsed = gasUsed
 	output = common.CopyBytes(output)
 	if err == nil {
 		t.callstack[0].Output = output
@@ -185,9 +185,13 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (*callTracer) CaptureTxStart(gasLimit uint64) {}
+func (t *callTracer) CaptureTxStart(gasLimit uint64) {
+	t.gasLimit = gasLimit
+}
 
-func (*callTracer) CaptureTxEnd(restGas uint64) {}
+func (t *callTracer) CaptureTxEnd(restGas uint64) {
+	t.callstack[0].GasUsed = t.gasLimit - restGas
+}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
