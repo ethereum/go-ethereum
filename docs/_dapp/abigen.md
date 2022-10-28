@@ -165,5 +165,5 @@ type Storage struct {
 `Storage.sol` from a Go application.
 
 For instructions on how to deploy this contract to Ethereum from a Go 
-native application read our [Go bindings page](/docs/dapp/native.md). 
+native application read our [Go bindings page](/docs/dapp/native.md). Note that the contract bytecode is required in addition to the ABI to deploy the contract.
 To browse the Abigen source code visit the Geth [Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).
