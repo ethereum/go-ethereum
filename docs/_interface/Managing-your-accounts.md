@@ -47,11 +47,12 @@ There are two modes of interaction with Clef. One is direct interaction, which i
 
 ### Creating accounts
 
-New accounts can be created using Clef's `account new` method. This generates a new key pair and adds them to the `keystore` directory in the `datadir`:
+New accounts can be created using Clef's `account new` method. This generates a new key pair and adds them to the given `keystore` directory:
 
 ```sh
-clef newaccount
+clef newaccount --keystore sepolia-data/keystore
 ```
+
 Clef will request the new password in the terminal.
 
 The same can be achieved using raw JSON requests (this example send the request to Clef's exposed HTTP port using curl):
