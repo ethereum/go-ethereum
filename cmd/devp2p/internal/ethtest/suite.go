@@ -520,7 +520,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	for _, hash := range hashMap {
 		hashes = append(hashes, hash)
 	}
-	announce := NewPooledTransactionHashes(hashes)
+	announce := NewPooledTransactionHashes67(hashes)
 
 	// send announcement
 	conn, err := s.dial()
@@ -545,7 +545,9 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 			}
 			return
 
-		// ignore propagated txs from previous tests
+			// ignore propagated txs from previous tests
+		case *NewPooledTransactionHashes67:
+			continue
 		case *NewPooledTransactionHashes:
 			continue
 		case *Transactions:

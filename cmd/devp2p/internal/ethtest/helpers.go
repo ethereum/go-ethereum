@@ -359,6 +359,8 @@ func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 			return nil
 
 		// ignore tx announcements from previous tests
+		case *NewPooledTransactionHashes67:
+			continue
 		case *NewPooledTransactionHashes:
 			continue
 		case *Transactions:
