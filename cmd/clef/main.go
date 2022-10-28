@@ -23,8 +23,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"os/signal"
@@ -273,6 +275,7 @@ func init() {
 		setCredentialCommand,
 		delCredentialCommand,
 		newAccountCommand,
+		importRawCommand,
 		gendocCommand,
 		listAccountsCommand,
 		listWalletsCommand,
@@ -449,6 +452,79 @@ func removeCredential(ctx *cli.Context) error {
 	pwStorage.Del(address.Hex())
 
 	log.Info("Credential store updated", "unset", address)
+	return nil
+}
+
+// accountImport imports a raw hexadecimal private key via CLI.
+func accountImport(c *cli.Context) error {
+	if err := initialize(c); err != nil {
+		return err
+	}
+	// The importraw is meant for users using the CLI, since 'real' external
+	// UIs can use the UI-api instead. So we'll just use the native CLI UI here.
+	var (
+		ui                        = core.NewCommandlineUI()
+		pwStorage storage.Storage = &storage.NoStorage{}
+		ksLoc                     = c.String(keystoreFlag.Name)
+		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
+	)
+	if c.Args().Len() != 1 {
+		return errors.New("<keyfile> must be given as first argument.")
+	}
+	var hexkey string
+	if data, err := ioutil.ReadFile(c.Args().First()); err != nil {
+		return err
+	} else {
+		hexkey = strings.TrimSpace(string(data))
+	}
+	// This will be properly validated during import, but we do a brief sanity check
+	// prior to prompting for password
+	if b, err := hex.DecodeString(hexkey); err != nil {
+		return err
+	} else if len(b) != 32 {
+		return fmt.Errorf("Wrong-sized key, %d bits, need 256 bits", len(b)*8)
+	}
+	log.Info("Starting clef", "keystore", ksLoc, "light-kdf", lightKdf)
+	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	// This gives is us access to the external API
+	apiImpl := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	// This gives us access to the internal API
+	internalApi := core.NewUIServerAPI(apiImpl)
+	readPw := func(prompt string) (string, error) {
+		resp, err := ui.OnInputRequired(core.UserInputRequest{
+			Title:      "Password",
+			Prompt:     prompt,
+			IsPassword: true,
+		})
+		if err != nil {
+			return "", err
+		}
+		return resp.Text, nil
+	}
+	first, err := readPw("Please enter a password for the imported account")
+	if err != nil {
+		return err
+	}
+	second, err := readPw("Please repeat the password you just entered")
+	if err != nil {
+		return err
+	}
+	if first != second {
+		return errors.New("Passwords do not match")
+	}
+	acc, err := internalApi.ImportRawKey(hexkey, first)
+	if err != nil {
+		return err
+	}
+	ui.ShowInfo(fmt.Sprintf(`Key imported:
+  Address %v
+  Keystore file: %v
+
+The key is now encrypted; losing the password will result in permanently losing 
+access to the key and all associated funds!
+
+Make sure to backup keystore and passwords in a safe location.`,
+		acc.Address, acc.URL.Path))
 	return nil
 }
 
