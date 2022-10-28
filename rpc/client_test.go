@@ -160,7 +160,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		_, err := rw.Write(b)
 		if err != nil {
-			t.Error("failed to write reponse:", err)
+			t.Error("failed to write response:", err)
 		}
 	}))
 	t.Cleanup(s.Close)
@@ -170,7 +170,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 		t.Fatal("failed to dial test server:", err)
 	}
 	defer client.Close()
-	
+
 	t.Run("too-few", func(t *testing.T) {
 		batch := []BatchElem{
 			{Method: "foo"},
@@ -179,8 +179,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 		}
 		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 		defer cancelFn()
-		err := client.BatchCallContext(ctx, batch)
-		if !errors.Is(err, ErrBadResult) {
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
 			t.Errorf("expected %q but got: %v", ErrBadResult, err)
 		}
 	})
@@ -191,8 +190,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 		}
 		ctx, cancelFn := context.WithTimeout(context.Background(), time.Second)
 		defer cancelFn()
-		err := client.BatchCallContext(ctx, batch)
-		if !errors.Is(err, ErrBadResult) {
+		if err := client.BatchCallContext(ctx, batch); !errors.Is(err, ErrBadResult) {
 			t.Errorf("expected %q but got: %v", ErrBadResult, err)
 		}
 	})
