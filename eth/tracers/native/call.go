@@ -64,6 +64,10 @@ func (f callFrame) TypeString() string {
 	return f.Type.String()
 }
 
+func (f callFrame) failed() bool {
+	return len(f.Error) > 0
+}
+
 type callFrameMarshaling struct {
 	TypeString string `json:"type"`
 	Gas        hexutil.Uint64
@@ -139,11 +143,14 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// no need to capture if not specified, or OnlyTopCall with highter depth
-	if (!t.config.WithLog) || (t.config.OnlyTopCall && depth > 0) {
+	// Only logs need to be captured via opcode processing
+	if !t.config.WithLog {
 		return
 	}
-
+	// Avoid processing nested calls when only caring about top call
+	if t.config.OnlyTopCall && depth > 0 {
+		return
+	}
 	switch op {
 	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
 		size := int(op - vm.LOG0)
@@ -219,10 +226,6 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 		if call.Type == vm.CREATE || call.Type == vm.CREATE2 {
 			call.To = common.Address{}
 		}
-		// clear logs for failed scope
-		if t.config.WithLog {
-			call.Logs = nil
-		}
 	}
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
@@ -241,6 +244,10 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
+	if t.config.WithLog {
+		// Logs are not emitted when the call fails
+		clearFailedLogs(t.callstack[0], false)
+	}
 	res, err := json.Marshal(t.callstack[0])
 	if err != nil {
 		return nil, err
@@ -252,4 +259,17 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 func (t *callTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
+}
+
+// clearFailedLogs clears the logs of a callframe and all its children
+// in case of execution failure.
+func clearFailedLogs(cf callFrame, parentFailed bool) {
+	failed := cf.failed() || parentFailed
+	// Clear own logs
+	if failed {
+		cf.Logs = nil
+	}
+	for _, child := range cf.Calls {
+		clearFailedLogs(child, failed)
+	}
 }
