@@ -7,8 +7,8 @@ Abigen is a binding-generator for easily interacting with Ethereum using Go.
 Abigen creates easy-to-use, type-safe Go packages from Ethereum smart contract 
 definitions known as ABIs. This abstracts away a lot of the complexity of handling 
 smart contract deployment and interaction in Go native applications such as 
-encoding and decoding smart contracts into EVM bytecode. Abigen comes bundled with 
-Geth. A full Geth installation includes the abigen binary. Abigen can also be built 
+encoding and decoding events. Abigen comes bundled with 
+Geth. Abigen can also be built 
 independently by navigating to `go-ethereum/cmd/abigen` and running `go build`, or 
 equivalently:
 
