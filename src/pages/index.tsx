@@ -132,7 +132,7 @@ const HomePage: NextPage = ({}) => {
               >
                 <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
                   The Geth team comprises 10 developers distributed across the world. The Geth team
-                  is funded directly by The Ethereum Foundation.
+                  is funded exclusively by The Ethereum Foundation.
                 </Text>
               </HomeSection>
             </GridItem>
