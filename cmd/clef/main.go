@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"os/signal"
@@ -76,7 +75,7 @@ PURPOSE. See the GNU General Public License for more details.
 var (
 	logLevelFlag = &cli.IntFlag{
 		Name:  "loglevel",
-		Value: 4,
+		Value: 3,
 		Usage: "log level to emit to the screen",
 	}
 	advancedMode = &cli.BoolFlag{
@@ -472,7 +471,7 @@ func accountImport(c *cli.Context) error {
 		return errors.New("<keyfile> must be given as first argument.")
 	}
 	var hexkey string
-	if data, err := ioutil.ReadFile(c.Args().First()); err != nil {
+	if data, err := os.ReadFile(c.Args().First()); err != nil {
 		return err
 	} else {
 		hexkey = strings.TrimSpace(string(data))
