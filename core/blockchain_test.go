@@ -4007,3 +4007,89 @@ func TestTxIndexer(t *testing.T) {
 		os.RemoveAll(frdir)
 	}
 }
+
+func TestCreateThenDeletePreByzantium(t *testing.T) {
+	// We use Ropsten chain config instead of Testchain config, this is
+	// deliberate: we want to use pre-byz rules where we have intermediate state roots
+	// between transactions.
+	testCreateThenDelete(t, params.RopstenChainConfig)
+}
+func TestCreateThenDeletePostByzantium(t *testing.T) {
+	testCreateThenDelete(t, params.TestChainConfig)
+}
+
+// testCreateThenDelete tests a creation and subsequent deletion of a contract, happening
+// within the same block.
+func testCreateThenDelete(t *testing.T, config *params.ChainConfig) {
+	var (
+		engine = ethash.NewFaker()
+		// A sender who makes transactions, has some funds
+		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address     = crypto.PubkeyToAddress(key.PublicKey)
+		destAddress = crypto.CreateAddress(address, 0)
+		funds       = big.NewInt(1000000000000000)
+	)
+
+	// runtime code is 	0x60ffff : PUSH1 0xFF SELFDESTRUCT, a.k.a SELFDESTRUCT(0xFF)
+	code := append([]byte{0x60, 0xff, 0xff}, make([]byte, 32-3)...)
+	initCode := []byte{
+		// SSTORE 1:1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.PUSH1), 0x1,
+		byte(vm.SSTORE),
+		// Get the runtime-code on the stack
+		byte(vm.PUSH32)}
+	initCode = append(initCode, code...)
+	initCode = append(initCode, []byte{
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x3, // size
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.RETURN), // return 3 bytes of zero-code
+	}...)
+	gspec := &Genesis{
+		Config: config,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+		},
+	}
+	nonce := uint64(0)
+	signer := types.HomesteadSigner{}
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *BlockGen) {
+		fee := big.NewInt(1)
+		if b.header.BaseFee != nil {
+			fee = b.header.BaseFee
+		}
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			Data:     initCode,
+		})
+		nonce++
+		b.AddTx(tx)
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			To:       &destAddress,
+		})
+		b.AddTx(tx)
+		nonce++
+	})
+	// Import the canonical chain
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{
+		//Debug:  true,
+		//Tracer: logger.NewJSONLogger(nil, os.Stdout),
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	// Import the blocks
+	for _, block := range blocks {
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", block.NumberU64(), err)
+		}
+	}
+}

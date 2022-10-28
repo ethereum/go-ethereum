@@ -113,6 +113,7 @@ func NewNodeSet(owner common.Hash) *NodeSet {
 	}
 }
 
+/*
 // NewNodeSetWithDeletion initializes the nodeset with provided deletion set.
 func NewNodeSetWithDeletion(owner common.Hash, paths [][]byte, prev [][]byte) *NodeSet {
 	set := NewNodeSet(owner)
@@ -121,6 +122,7 @@ func NewNodeSetWithDeletion(owner common.Hash, paths [][]byte, prev [][]byte) *N
 	}
 	return set
 }
+*/
 
 // markUpdated marks the node as dirty(newly-inserted or updated) with provided
 // node path, node object along with its previous value.

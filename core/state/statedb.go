@@ -920,7 +920,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			set, err := obj.CommitTrie(s.db)
+			set, err := obj.commitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -934,6 +934,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				storageTrieNodesDeleted += deleted
 			}
 		}
+		// If the contract is destructed, the storage is still left in the
+		// database as dangling data. Theoretically it's should be wiped from
+		// database as well, but in hash-based-scheme it's extremely hard to
+		// determine that if the trie nodes are also referenced by other storage,
+		// and in path-based-scheme some technical challenges are still unsolved.
+		// Although it won't affect the correctness but please fix it TODO(rjl493456442).
 	}
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
