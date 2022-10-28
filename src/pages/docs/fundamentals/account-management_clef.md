@@ -3,8 +3,7 @@ title: Account Management with Clef
 description: Guide to basic account management using Geth's built-in tools
 ---
 
-Geth uses an external signer called Clef to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
-
+Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
 ## Connecting Geth and Clef
 
@@ -48,7 +47,15 @@ There are two modes of interaction with Clef. One is direct interaction, which i
 
 ### Creating accounts
 
-New accounts can be created using Clef's `account new` method. This generates a new key pair and adds them to the `keystore` directory in the `datadir`. To create a new account in the default data directory, send the following request to Clef (this example send the request to Clef's exposed HTTP port using curl):
+New accounts can be created using Clef's `account new` method. This generates a new key pair and adds them to the given `keystore` directory:
+
+```sh
+clef newaccount --keystore sepolia-data/keystore
+```
+
+Clef will request the new password in the terminal.
+
+The same can be achieved using raw JSON requests (this example send the request to Clef's exposed HTTP port using curl):
 
 ```shell
 curl -X POST --data '{"id": 0, "jsonrpc": "2.0", "method": "account_new", "params": []}' http://localhost:8550 -H "Content-Type: application/json"
@@ -61,8 +68,7 @@ The console will hang because Clef is waiting for manual approval. Switch to the
 
 It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
-{% include note.html content=" If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely!
-**IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**" %}
+{% include note.html content=" If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**" %}
 
 The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
 
@@ -139,23 +145,18 @@ geth wallet import /path/presale.wallet
 
 ## Updating accounts
 
-Geth's `account update` subcommand is used to unlock an account and migrate it to the newest format. This is useful for accounts that may have been created in a format that has since been deprecated. The same command can be used to update the account password. The current password and account address are needed in order to update the account, as follows:
+Clef can be used to set and remove passwords for an existing keystore file. To set a new password, pass the account address to `setpw`:
+
+```sh
+clef setpw a94f5374fce5edbc8e2a8697c15331677e6ebf0b
+```
+
+This will cause Clef to prompt for a new password, twice, and then the Clef master password to decrypt the keyfile. 
+
+Geth's `account update` subcommand can also be used to update the account password:
 
 ```shell
 geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b
-```
-
-The following will be returned to the terminal:
-
-```terminal
-Unlocking account a94f5374fce5edbc8e2a8697c15331677e6ebf0b | Attempt 1/3
-Passphrase:
-0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
-Account 'a94f5374fce5edbc8e2a8697c15331677e6ebf0b' unlocked.
-Please give a new password. Do not forget this password.
-Passphrase:
-Repeat Passphrase:
-0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b
 ```
 
 Alternatively, in non-interactive mode the path to a password file containing the account password in unencrypted plaintext can be passed with the `--password` flag:
@@ -164,7 +165,7 @@ Alternatively, in non-interactive mode the path to a password file containing th
 geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/password.txt
 ```
 
-Updating the account replaces the original file with a new one - this means the original file is no longer available after it has been updated.
+Updating the account using `geth account update` replaces the original file with a new one - this means the original file is no longer available after it has been updated. This can be used to update a key file to the latest format.
 
 ## Unlocking accounts
 
