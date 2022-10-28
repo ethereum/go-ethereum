@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -247,7 +248,17 @@ func Transition(ctx *cli.Context) error {
 	}
 	// Sanity check, to not `panic` in state_transition
 	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
-		if prestate.Env.BaseFee == nil {
+		if prestate.Env.BaseFee != nil {
+			// Already set, base fee has precedent over parent base fee.
+		} else if prestate.Env.ParentBaseFee != nil {
+			parent := &types.Header{
+				Number:   new(big.Int).SetUint64(prestate.Env.Number),
+				BaseFee:  prestate.Env.ParentBaseFee,
+				GasUsed:  prestate.Env.ParentGasUsed,
+				GasLimit: prestate.Env.ParentGasLimit,
+			}
+			prestate.Env.BaseFee = misc.CalcBaseFee(chainConfig, parent)
+		} else {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
