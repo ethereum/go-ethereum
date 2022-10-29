@@ -2098,12 +2098,7 @@ func TestGolangBindings(t *testing.T) {
 		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
 	}
 	pwd, _ := os.Getwd()
-	//replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
-	// TODO(EIP-4844): Replace with above once go-kzg fork is upstreamed
-	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0",
-		"-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", ".."),
-		"-replace", "github.com/protolambda/go-kzg=github.com/inphi/go-kzg@v0.0.0-20220819034031-381084440411",
-		"-replace", "github.com/kilic/bls12-381=github.com/inphi/bls12-381@v0.0.0-20220819032644-3ae7bcd28efc") // Repo root
+	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ethereum/go-ethereum@v0.0.0", "-replace", "github.com/ethereum/go-ethereum="+filepath.Join(pwd, "..", "..", "..")) // Repo root
 	replacer.Dir = pkg
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
