@@ -32,6 +32,7 @@
    <img src="https://img.shields.io/badge/discord-join%20chat-blue.svg">
   </a>
 </p>
+<hr>
 
 Automated builds are available for stable releases and the unstable master branch. Binary
 archives are published at https://geth.ethereum.org/downloads/.
