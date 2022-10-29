@@ -36,10 +36,7 @@ func NewContextWithHeaders(ctx context.Context, src http.Header) context.Context
 
 // headersFromContext is used to extract http.Header from context
 func headersFromContext(ctx context.Context) http.Header {
-	source, ok := ctx.Value(mdHeaderKey{}).(http.Header)
-	if !ok {
-		return nil
-	}
+	source, _ := ctx.Value(mdHeaderKey{}).(http.Header)
 	return source
 }
 
