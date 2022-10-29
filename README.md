@@ -1,6 +1,22 @@
-## Go Ethereum
+<p align="center">
+  <a href="https://ethereum.org/en/">
+    <img src="https://avatars.githubusercontent.com/u/6250754?s=200&v=4" alt="Logo" width="80" height="80">
+  </a>
 
-Official Golang execution layer implementation of the Ethereum protocol.
+  <h3 align="center">Go Ethereum</h3>
+
+  <p align="center">
+    Official Golang execution layer implementation of the Ethereum protocol.
+    <br />
+    <a href="https://ethereum.org/en/"><strong>Explore more about ethereum »</strong></a>
+    <br />
+    <br />
+    <a href="https://ethereum.org/en/community/">Community</a>
+    ·
+    <a href="https://ethereum.org/en/developers/docs/">Docs</a>
+  </p>
+</p>
+<hr>
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
