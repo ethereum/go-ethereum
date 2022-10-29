@@ -232,4 +232,8 @@ func TestNewContextWithHeaders(t *testing.T) {
 	if err := client.CallContext(ctx, &struct{}{}, "test"); err != ErrNoResult {
 		t.Errorf("failed to call context: %s", err)
 	}
+	numHeaders = 0
+	if err := client.CallContext(context.TODO(), &struct{}{}, "test"); err != ErrNoResult {
+		t.Errorf("failed to call context: %s", err)
+	}
 }
