@@ -301,7 +301,15 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		}},
 		preimages: preimage,
 	}
+	runtime.SetFinalizer(db, (*Database).finalizer)
 	return db
+}
+
+// must call Reset() to reclaim memory used by fastcache
+func (db *Database) finalizer() {
+	if db.cleans != nil {
+		db.cleans.Reset()
+	}
 }
 
 // insert inserts a simplified trie node into the memory database.
