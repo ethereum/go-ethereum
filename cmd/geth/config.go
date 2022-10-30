@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
@@ -113,8 +114,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(git.Commit, git.Date)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
-	cfg.WSModules = append(cfg.WSModules, "eth")
+	cfg.HTTPModules = append(cfg.HTTPModules, rpc.EthApi)
+	cfg.WSModules = append(cfg.WSModules, rpc.EthApi)
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }

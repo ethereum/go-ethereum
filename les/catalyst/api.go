@@ -35,7 +35,7 @@ func Register(stack *node.Node, backend *les.LightEthereum) error {
 	log.Warn("Catalyst mode enabled", "protocol", "les")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace:     "engine",
+			Namespace:     rpc.EngineApi,
 			Service:       NewConsensusAPI(backend),
 			Authenticated: true,
 		},

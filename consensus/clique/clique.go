@@ -696,7 +696,7 @@ func (c *Clique) Close() error {
 // controlling the signer voting.
 func (c *Clique) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "clique",
+		Namespace: rpc.CliqueApi,
 		Service:   &API{chain: chain, clique: c},
 	}}
 }

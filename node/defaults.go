@@ -43,7 +43,7 @@ var (
 	DefaultAuthVhosts  = []string{"localhost"} // Default virtual hosts for the authenticated apis
 	DefaultAuthOrigins = []string{"localhost"} // Default origins for the authenticated apis
 	DefaultAuthPrefix  = ""                    // Default prefix for the authenticated apis
-	DefaultAuthModules = []string{"eth", "engine"}
+	DefaultAuthModules = []string{rpc.EthApi, rpc.EngineApi}
 )
 
 // DefaultConfig contains reasonable default settings.
@@ -53,11 +53,11 @@ var DefaultConfig = Config{
 	AuthAddr:            DefaultAuthHost,
 	AuthPort:            DefaultAuthPort,
 	AuthVirtualHosts:    DefaultAuthVhosts,
-	HTTPModules:         []string{"net", "web3"},
+	HTTPModules:         []string{rpc.NetApi, rpc.Web3Api},
 	HTTPVirtualHosts:    []string{"localhost"},
 	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
 	WSPort:              DefaultWSPort,
-	WSModules:           []string{"net", "web3"},
+	WSModules:           []string{rpc.NetApi, rpc.Web3Api},
 	GraphQLVirtualHosts: []string{"localhost"},
 	P2P: p2p.Config{
 		ListenAddr: ":30303",

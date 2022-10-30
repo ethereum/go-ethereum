@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var DialBanTimeout = 200 * time.Millisecond
@@ -201,7 +202,7 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
 	}
 	events := make(chan *p2p.PeerEvent)
-	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
+	sub, err := client.Subscribe(context.Background(), rpc.AdminApi, events, "peerEvents")
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}

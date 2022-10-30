@@ -112,8 +112,8 @@ func TestAuthEndpoints(t *testing.T) {
 		AuthPort:  0,
 		JWTSecret: jwtPath,
 
-		WSModules:   []string{"eth", "engine"},
-		HTTPModules: []string{"eth", "engine"},
+		WSModules:   []string{rpc.EthApi, rpc.EngineApi},
+		HTTPModules: []string{rpc.EthApi, rpc.EngineApi},
 	}
 	node, err := New(conf)
 	if err != nil {
@@ -122,14 +122,14 @@ func TestAuthEndpoints(t *testing.T) {
 	// register dummy apis so we can test the modules are available and reachable with authentication
 	node.RegisterAPIs([]rpc.API{
 		{
-			Namespace:     "engine",
+			Namespace:     rpc.EngineApi,
 			Version:       "1.0",
 			Service:       helloRPC("hello engine"),
 			Public:        true,
 			Authenticated: true,
 		},
 		{
-			Namespace:     "eth",
+			Namespace:     rpc.EthApi,
 			Version:       "1.0",
 			Service:       helloRPC("hello eth"),
 			Public:        true,

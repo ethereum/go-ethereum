@@ -94,13 +94,13 @@ func (f *FullService) Protocols() []p2p.Protocol {
 func (f *FullService) APIs() []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: "admin",
+			Namespace: rpc.AdminApi,
 		},
 		{
-			Namespace: "debug",
+			Namespace: rpc.DebugApi,
 		},
 		{
-			Namespace: "net",
+			Namespace: rpc.NetApi,
 		},
 	}
 }

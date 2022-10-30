@@ -187,14 +187,14 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	exposed := confCopy.Stack.WSExposeAll
 	if !exposed {
 		for _, api := range confCopy.Stack.WSModules {
-			if api == "admin" {
+			if api == rpc.AdminApi {
 				exposed = true
 				break
 			}
 		}
 	}
 	if !exposed {
-		confCopy.Stack.WSModules = append(confCopy.Stack.WSModules, "admin")
+		confCopy.Stack.WSModules = append(confCopy.Stack.WSModules, rpc.AdminApi)
 	}
 	// start the one-shot server that waits for startup information
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -500,7 +500,7 @@ func startExecNodeStack() (*node.Node, error) {
 
 	// Add the snapshot API.
 	stack.RegisterAPIs([]rpc.API{{
-		Namespace: "simulation",
+		Namespace: rpc.SimulationApi,
 		Service:   SnapshotAPI{services},
 	}})
 

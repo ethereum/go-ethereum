@@ -207,7 +207,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			LogCacheSize: ethConf.FilterLogCacheSize,
 		})
 		rawStack.RegisterAPIs([]rpc.API{{
-			Namespace: "eth",
+			Namespace: rpc.EthApi,
 			Service:   filters.NewFilterAPI(filterSystem, true),
 		}})
 		// If netstats reporting is requested, do it

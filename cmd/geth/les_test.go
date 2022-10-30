@@ -53,7 +53,7 @@ func (g *gethrpc) addPeer(peer *gethrpc) {
 	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
-	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
+	sub, err := g.rpc.Subscribe(context.Background(), rpc.AdminApi, peerCh, "peerEvents")
 	if err != nil {
 		g.geth.Fatalf("subscribe %v: %v", g.name, err)
 	}

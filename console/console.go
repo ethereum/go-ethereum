@@ -205,9 +205,9 @@ func (c *Console) initExtensions() error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	aliases := map[string]struct{}{"eth": {}, "personal": {}}
+	aliases := map[string]struct{}{rpc.EthApi: {}, rpc.PersonalApi: {}}
 	for api := range apis {
-		if api == "web3" {
+		if api == rpc.Web3Api {
 			continue
 		}
 		aliases[api] = struct{}{}
@@ -220,7 +220,7 @@ func (c *Console) initExtensions() error {
 
 	// Apply aliases.
 	c.jsre.Do(func(vm *goja.Runtime) {
-		web3 := getObject(vm, "web3")
+		web3 := getObject(vm, rpc.Web3Api)
 		for name := range aliases {
 			if v := web3.Get(name); v != nil {
 				vm.Set(name, v)
@@ -232,7 +232,7 @@ func (c *Console) initExtensions() error {
 
 // initAdmin creates additional admin APIs implemented by the bridge.
 func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
-	if admin := getObject(vm, "admin"); admin != nil {
+	if admin := getObject(vm, rpc.AdminApi); admin != nil {
 		admin.Set("sleepBlocks", jsre.MakeCallback(vm, bridge.SleepBlocks))
 		admin.Set("sleep", jsre.MakeCallback(vm, bridge.Sleep))
 		admin.Set("clearHistory", c.clearHistory)
@@ -246,7 +246,7 @@ func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
 // interaction. The original web3 callbacks are stored in 'jeth'. These will be called
 // by the bridge after the prompt and send the original web3 request to the backend.
 func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
-	personal := getObject(vm, "personal")
+	personal := getObject(vm, rpc.PersonalApi)
 	if personal == nil || c.prompter == nil {
 		return
 	}

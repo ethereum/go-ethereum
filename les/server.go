@@ -159,15 +159,15 @@ func NewLesServer(node *node.Node, e ethBackend, config *ethconfig.Config) (*Les
 func (s *LesServer) APIs() []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: "les",
+			Namespace: rpc.LesApi,
 			Service:   NewLightAPI(&s.lesCommons),
 		},
 		{
-			Namespace: "les",
+			Namespace: rpc.LesApi,
 			Service:   NewLightServerAPI(s),
 		},
 		{
-			Namespace: "debug",
+			Namespace: rpc.DebugApi,
 			Service:   NewDebugAPI(s),
 		},
 	}

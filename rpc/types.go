@@ -28,6 +28,25 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+const (
+	AccountApi    = "account"
+	AdminApi      = "admin"
+	CliqueApi     = "clique"
+	EngineApi     = "engine"
+	EthApi        = "eth"
+	EthashApi     = "ethash"
+	DebugApi      = "debug"
+	MinerApi      = "miner"
+	NetApi        = "net"
+	PersonalApi   = "personal"
+	MetadataApi   = "rpc"
+	SimulationApi = "simulation"
+	TxPoolApi     = "txpool"
+	LesApi        = "les"
+	VfluxApi      = "vflux"
+	Web3Api       = "web3"
+)
+
 // API describes the set of methods offered over the RPC interface
 type API struct {
 	Namespace     string      // namespace under which the rpc methods of Service are exposed

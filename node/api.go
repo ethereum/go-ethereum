@@ -34,13 +34,13 @@ import (
 func (n *Node) apis() []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: "admin",
+			Namespace: rpc.AdminApi,
 			Service:   &adminAPI{n},
 		}, {
-			Namespace: "debug",
+			Namespace: rpc.DebugApi,
 			Service:   debug.Handler,
 		}, {
-			Namespace: "web3",
+			Namespace: rpc.Web3Api,
 			Service:   &web3API{n},
 		},
 	}

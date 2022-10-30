@@ -299,19 +299,19 @@ func (s *LightEthereum) APIs() []rpc.API {
 	apis = append(apis, s.engine.APIs(s.BlockChain().HeaderChain())...)
 	return append(apis, []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: rpc.EthApi,
 			Service:   &LightDummyAPI{},
 		}, {
-			Namespace: "eth",
+			Namespace: rpc.EthApi,
 			Service:   downloader.NewDownloaderAPI(s.handler.downloader, s.eventMux),
 		}, {
-			Namespace: "net",
+			Namespace: rpc.NetApi,
 			Service:   s.netRPCService,
 		}, {
-			Namespace: "les",
+			Namespace: rpc.LesApi,
 			Service:   NewLightAPI(&s.lesCommons),
 		}, {
-			Namespace: "vflux",
+			Namespace: rpc.VfluxApi,
 			Service:   s.serverPool.API(),
 		},
 	}...)

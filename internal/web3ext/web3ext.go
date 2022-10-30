@@ -14,22 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// package web3ext contains geth specific web3.js extensions.
+// Package web3ext contains geth specific web3.js extensions.
 package web3ext
 
+import "github.com/ethereum/go-ethereum/rpc"
+
 var Modules = map[string]string{
-	"admin":    AdminJs,
-	"clique":   CliqueJs,
-	"ethash":   EthashJs,
-	"debug":    DebugJs,
-	"eth":      EthJs,
-	"miner":    MinerJs,
-	"net":      NetJs,
-	"personal": PersonalJs,
-	"rpc":      RpcJs,
-	"txpool":   TxpoolJs,
-	"les":      LESJs,
-	"vflux":    VfluxJs,
+	rpc.AdminApi:    AdminJs,
+	rpc.CliqueApi:   CliqueJs,
+	rpc.EthashApi:   EthashJs,
+	rpc.DebugApi:    DebugJs,
+	rpc.EthApi:      EthJs,
+	rpc.MinerApi:    MinerJs,
+	rpc.NetApi:      NetJs,
+	rpc.PersonalApi: PersonalJs,
+	rpc.MetadataApi: RpcJs,
+	rpc.TxPoolApi:   TxpoolJs,
+	rpc.LesApi:      LESJs,
+	rpc.VfluxApi:    VfluxJs,
 }
 
 const CliqueJs = `
