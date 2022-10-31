@@ -117,10 +117,10 @@ func GetTreeKeyCodeSize(address []byte) []byte {
 func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
 	chunkOffset := new(uint256.Int).Add(CodeOffset, chunk)
 	treeIndex := new(uint256.Int).Div(chunkOffset, VerkleNodeWidth)
-	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth).Bytes()
+	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth)
 	var subIndex byte
 	if len(subIndexMod) != 0 {
-		subIndex = subIndexMod[0]
+		subIndex = byte(subIndexMod[0])
 	}
 	return GetTreeKey(address, treeIndex, subIndex)
 }
@@ -128,10 +128,10 @@ func GetTreeKeyCodeChunk(address []byte, chunk *uint256.Int) []byte {
 func GetTreeKeyCodeChunkWithEvaluatedAddress(addressPoint *verkle.Point, chunk *uint256.Int) []byte {
 	chunkOffset := new(uint256.Int).Add(CodeOffset, chunk)
 	treeIndex := new(uint256.Int).Div(chunkOffset, VerkleNodeWidth)
-	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth).Bytes()
+	subIndexMod := new(uint256.Int).Mod(chunkOffset, VerkleNodeWidth)
 	var subIndex byte
 	if len(subIndexMod) != 0 {
-		subIndex = subIndexMod[0]
+		subIndex = byte(subIndexMod[0])
 	}
 	return getTreeKeyWithEvaluatedAddess(addressPoint, treeIndex, subIndex)
 }
@@ -147,13 +147,13 @@ func GetTreeKeyStorageSlot(address []byte, storageKey *uint256.Int) []byte {
 
 	// calculate the sub_index, i.e. the index in the stem tree.
 	// Because the modulus is 256, it's the last byte of treeIndex
-	subIndexMod := new(uint256.Int).Mod(pos, VerkleNodeWidth).Bytes()
+	subIndexMod := new(uint256.Int).Mod(pos, VerkleNodeWidth)
 	var subIndex byte
 	if len(subIndexMod) != 0 {
 		// uint256 is broken into 4 little-endian quads,
 		// each with native endianness. Extract the least
 		// significant byte.
-		subIndex = subIndexMod[0] & 0xFF
+		subIndex = byte(subIndexMod[0])
 	}
 	return GetTreeKey(address, treeIndex, subIndex)
 }
@@ -230,13 +230,13 @@ func GetTreeKeyStorageSlotWithEvaluatedAddress(evaluated *verkle.Point, storageK
 	treeIndex := new(uint256.Int).Div(pos, VerkleNodeWidth)
 	// calculate the sub_index, i.e. the index in the stem tree.
 	// Because the modulus is 256, it's the last byte of treeIndex
-	subIndexMod := new(uint256.Int).Mod(pos, VerkleNodeWidth).Bytes()
+	subIndexMod := new(uint256.Int).Mod(pos, VerkleNodeWidth)
 	var subIndex byte
 	if len(subIndexMod) != 0 {
 		// uint256 is broken into 4 little-endian quads,
 		// each with native endianness. Extract the least
 		// significant byte.
-		subIndex = subIndexMod[0] & 0xFF
+		subIndex = byte(subIndexMod[0])
 	}
 	return getTreeKeyWithEvaluatedAddess(evaluated, treeIndex, subIndex)
 }
