@@ -216,6 +216,12 @@ The gendoc generates example structures of the json-rpc communication types.
 		Action: listAccounts,
 		Name:   "listaccounts",
 		Usage:  "List accounts in the keystore",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+			acceptFlag,
+		},
 		Description: `
 	Lists the accounts in the keystore.
 	`}
