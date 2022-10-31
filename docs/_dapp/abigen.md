@@ -23,7 +23,7 @@ Ethereum smart contracts have a schema that defines its functions and return typ
 in the form of a JSON file. This JSON file is known as an _Application Binary Interface_, 
 or ABI. The ABI acts as a specification for precisely how to encode data sent to a 
 contract and how to decode the data the contract sends back. The ABI is the only 
-essential piece of information required to generate Go bindings. Go developers can then 
+essential piece of information required to generate Go bindings, unless a deployment function is expected in which case the contract bytecode is also needed. Go developers can then 
 use the bindings to interact with the contract from their Go application without having 
 to deal directly with data encoding and decoding. An ABI is generated when a contract 
 is compiled.
@@ -31,7 +31,7 @@ is compiled.
 ### Generating the bindings
 
 To demonstrate the binding generator a contract is required. The contract `Storage.sol` 
-implements two very simple functions: `store` updates a user-defined `uint256` to the 
+implements two very simple functions: `store` updates a user-provided `uint256` to the 
 contract's storage, and `retrieve` displays the value stored in the contract to the user. 
 The Solidity code is as follows:
 
