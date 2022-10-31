@@ -5,6 +5,17 @@ sort_key: C
 
 Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
+## Initialize Clef
+
+The first time Clef is used it needs to be initialized with a master seed that unlocks Clef's secure vault and a path where the vault should be located. Clef will use the vault to store passwords for keystores, javascript auto-signing rules and hashes of rule files. To initialize Clef, pass a vault path to `clef init`, for example to store it in a new directory inside `/home/user/go-ethereum`:
+
+```sh
+clef init /home/user/go-ethereum/clefdata
+```
+
+It is extremely important to remember the master seed and keep it secure. It allows access to the accounts under Clef's management.
+
+
 ## Connecting Geth and Clef
 
 The first time Clef is used it should be initialized by running `clef init`. This will prompt for a master password that is used to encrypt passwords, account data and attested rules in Clef. Once this is done, Clef is ready to use as an external signer for Geth.
