@@ -5,6 +5,10 @@ description: Guide to basic account management using Geth's built-in tools
 
 Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
+## Initialize Clef
+
+The first time Clef is used it needs to be initialized with some information about where to store keys and a password for encrypting its internal data. This password is known as the "master seed". To do this, pass the path to the keystore to `clef init`.
+
 ## Connecting Geth and Clef
 
 Clef and Geth should be started separately but with complementary configurations so that they can communicate. This requires Clef to know the `chain_id` of the network Geth will connect to so that this information can be included in any signatures. Clef also needs to know the location of the keystore where accounts are (or will be) stored. This is usually in a subdirectory inside Geth's data directory. Clef is also given a data directory which is also often placed conveniently inside Geth's data directory. To enable communication with Clef using Curl, `--http` can be passed which will start an HTTP server on `localhost:8550` by default. To start Clef configured for a Geth node connecting to the Sepolia testnet:
