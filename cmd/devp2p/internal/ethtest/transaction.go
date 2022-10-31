@@ -95,7 +95,7 @@ func sendSuccessfulTx(s *Suite, tx *types.Transaction, prevTx *types.Transaction
 				}
 			}
 			return fmt.Errorf("missing transaction: got %v missing %v", recTxs, tx.Hash())
-		case *NewPooledTransactionHashes67:
+		case *NewPooledTransactionHashes66:
 			txHashes := *msg
 			// if you receive an old tx propagation, read from connection again
 			if len(txHashes) == 1 && prevTx != nil {
@@ -229,7 +229,7 @@ func sendMultipleSuccessfulTxs(t *utesting.T, s *Suite, txs []*types.Transaction
 			for _, tx := range *msg {
 				recvHashes = append(recvHashes, tx.Hash())
 			}
-		case *NewPooledTransactionHashes67:
+		case *NewPooledTransactionHashes66:
 			recvHashes = append(recvHashes, *msg...)
 		case *NewPooledTransactionHashes:
 			recvHashes = append(recvHashes, msg.Hashes...)
@@ -276,7 +276,7 @@ func checkMaliciousTxPropagation(s *Suite, txs []*types.Transaction, conn *Conn)
 		if len(badTxs) > 0 {
 			return fmt.Errorf("received %d bad txs: \n%v", len(badTxs), badTxs)
 		}
-	case *NewPooledTransactionHashes67:
+	case *NewPooledTransactionHashes66:
 		badTxs, _ := compareReceivedTxs(*msg, txs)
 		if len(badTxs) > 0 {
 			return fmt.Errorf("received %d bad txs: \n%v", len(badTxs), badTxs)

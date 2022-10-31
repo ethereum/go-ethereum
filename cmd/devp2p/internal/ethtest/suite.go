@@ -510,18 +510,22 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	}
 
 	// generate 50 txs
-	hashMap, _, err := generateTxs(s, 50)
+	_, txs, err := generateTxs(s, 50)
 	if err != nil {
 		t.Fatalf("failed to generate transactions: %v", err)
 	}
 
 	// create new pooled tx hashes announcement
 	hashes := make([]common.Hash, 0)
-	for _, hash := range hashMap {
-		hashes = append(hashes, hash)
+	types := make([]byte, 0)
+	sizes := make([]uint32, 0)
+	for _, tx := range txs {
+		hashes = append(hashes, tx.Hash())
+		types = append(types, tx.Type())
+		sizes = append(sizes, uint32(tx.Size()))
 	}
-	announce := NewPooledTransactionHashes67(hashes)
-
+	announce := NewPooledTransactionHashes(NewPooledTransactionHashes{Types: types, Sizes: sizes, Hashes: hashes})
+	announce66 := NewPooledTransactionHashes66(hashes)
 	// send announcement
 	conn, err := s.dial()
 	if err != nil {
@@ -531,8 +535,14 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
-	if err = conn.Write(announce); err != nil {
-		t.Fatalf("failed to write to connection: %v", err)
+	if conn.negotiatedProtoVersion <= eth.ETH67 {
+		if err = conn.Write(announce66); err != nil {
+			t.Fatalf("failed to write to connection: %v", err)
+		}
+	} else {
+		if err = conn.Write(announce); err != nil {
+			t.Fatalf("failed to write to connection: %v", err)
+		}
 	}
 
 	// wait for GetPooledTxs request
@@ -546,7 +556,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 			return
 
 			// ignore propagated txs from previous tests
-		case *NewPooledTransactionHashes67:
+		case *NewPooledTransactionHashes66:
 			continue
 		case *NewPooledTransactionHashes:
 			continue
