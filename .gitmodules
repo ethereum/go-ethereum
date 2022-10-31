@@ -2,3 +2,6 @@
 	path = tests/testdata
 	url = https://github.com/ethereum/tests
 	shallow = true
+[submodule "internal/utesting/blocktraces"]
+	path = internal/utesting/blocktraces
+	url = git@github.com:scroll-tech/test-traces.git

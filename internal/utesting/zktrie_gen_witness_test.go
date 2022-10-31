@@ -1,4 +1,4 @@
-package blocktraces
+package utesting
 
 import (
 	"encoding/json"
@@ -44,7 +44,7 @@ func loadStaff(t *testing.T, fname string) *types.BlockResult {
 }
 
 func TestWriterCreation(t *testing.T) {
-	trace := loadStaff(t, "deploy.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/deploy.json")
 	writer, err := zkproof.NewZkTrieProofWriter(trace.StorageTrace)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestWriterCreation(t *testing.T) {
 }
 
 func TestGreeterTx(t *testing.T) {
-	trace := loadStaff(t, "greeter.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/greeter.json")
 	writer, err := zkproof.NewZkTrieProofWriter(trace.StorageTrace)
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestGreeterTx(t *testing.T) {
 }
 
 func TestTokenTx(t *testing.T) {
-	trace := loadStaff(t, "token.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/token.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -105,7 +105,7 @@ func TestTokenTx(t *testing.T) {
 }
 
 func TestCallTx(t *testing.T) {
-	trace := loadStaff(t, "call.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/call.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -113,7 +113,7 @@ func TestCallTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	trace = loadStaff(t, "call_edge.json")
+	trace = loadStaff(t, "blocktraces/mpt_witness/call_edge.json")
 	traces, err = zkproof.HandleBlockResult(trace)
 	outObj, _ = json.Marshal(traces)
 	t.Log(string(outObj))
@@ -123,7 +123,7 @@ func TestCallTx(t *testing.T) {
 }
 
 func TestCreateTx(t *testing.T) {
-	trace := loadStaff(t, "create.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/create.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -131,7 +131,7 @@ func TestCreateTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	trace = loadStaff(t, "deploy.json")
+	trace = loadStaff(t, "blocktraces/mpt_witness/deploy.json")
 	traces, err = zkproof.HandleBlockResult(trace)
 	outObj, _ = json.Marshal(traces)
 	t.Log(string(outObj))
@@ -142,7 +142,7 @@ func TestCreateTx(t *testing.T) {
 }
 
 func TestFailedCallTx(t *testing.T) {
-	trace := loadStaff(t, "fail_call.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/fail_call.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -150,7 +150,7 @@ func TestFailedCallTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	trace = loadStaff(t, "fail_create.json")
+	trace = loadStaff(t, "blocktraces/mpt_witness/fail_create.json")
 	traces, err = zkproof.HandleBlockResult(trace)
 	outObj, _ = json.Marshal(traces)
 	t.Log(string(outObj))
@@ -162,7 +162,7 @@ func TestFailedCallTx(t *testing.T) {
 
 //notice: now only work with OP_ORDER=2
 func TestDeleteTx(t *testing.T) {
-	trace := loadStaff(t, "delete.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/delete.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -173,7 +173,7 @@ func TestDeleteTx(t *testing.T) {
 
 //notice: now only work with OP_ORDER=2
 func TestDestructTx(t *testing.T) {
-	trace := loadStaff(t, "destruct.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/destruct.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
@@ -183,7 +183,7 @@ func TestDestructTx(t *testing.T) {
 }
 
 func TestMutipleTx(t *testing.T) {
-	trace := loadStaff(t, "multi_txs.json")
+	trace := loadStaff(t, "blocktraces/mpt_witness/multi_txs.json")
 	traces, err := zkproof.HandleBlockResult(trace)
 	outObj, _ := json.Marshal(traces)
 	t.Log(string(outObj))
