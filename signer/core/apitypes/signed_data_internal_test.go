@@ -98,6 +98,9 @@ func TestParseBytes(t *testing.T) {
 		{"not a hex string", nil},
 		{15, nil},
 		{nil, nil},
+		{[2]byte{12, 34}, []byte{12, 34}},
+		{[8]byte{12, 34, 56, 78, 90, 12, 34, 56}, []byte{12, 34, 56, 78, 90, 12, 34, 56}},
+		{[16]byte{12, 34, 56, 78, 90, 12, 34, 56, 12, 34, 56, 78, 90, 12, 34, 56}, []byte{12, 34, 56, 78, 90, 12, 34, 56, 12, 34, 56, 78, 90, 12, 34, 56}},
 	} {
 		out, ok := parseBytes(tt.v)
 		if tt.exp == nil {
