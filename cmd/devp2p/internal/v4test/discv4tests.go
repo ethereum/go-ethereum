@@ -265,10 +265,23 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-	if reply, _, err := te.read(te.l1); err != nil {
-		t.Fatal(err)
-	} else if err := te.checkPong(reply, pingHash); err != nil {
-		t.Fatal(err)
+	for {
+		reply, _, err := te.read(te.l1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch reply.Kind() {
+		case v4wire.PongPacket:
+			if err := te.checkPong(reply, pingHash); err != nil {
+				t.Fatal(err)
+			}
+			// PONG response, all good
+			break
+		case v4wire.FindnodePacket:
+			continue // A FindNode is ok, just ignore it
+		default:
+			t.Fatalf("Expected PONG, got %v %v", reply.Name(), reply)
+		}
 	}
 }
 
