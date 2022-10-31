@@ -203,9 +203,8 @@ The delpw command removes a password for a given address (keyfile).
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
-which can be used in lieu of an external UI.`,
-	}
-
+which can be used in lieu of an external UI.
+`}
 	gendocCommand = &cli.Command{
 		Action: GenDoc,
 		Name:   "gendoc",
@@ -213,6 +212,13 @@ which can be used in lieu of an external UI.`,
 		Description: `
 The gendoc generates example structures of the json-rpc communication types.
 `}
+	listAccountsCommand = &cli.Command{
+		Action: listAccounts,
+		Name:   "listaccounts",
+		Usage:  "List accounts in the keystore",
+		Description: `
+	Lists the accounts in the keystore.
+	`}
 )
 
 var app = flags.NewApp("Manage Ethereum account operations")
@@ -249,6 +255,7 @@ func init() {
 		delCredentialCommand,
 		newAccountCommand,
 		gendocCommand,
+		listAccountsCommand,
 	}
 }
 
@@ -349,6 +356,33 @@ func attestFile(ctx *cli.Context) error {
 	configStorage.Put("ruleset_sha256", val)
 	log.Info("Ruleset attestation updated", "sha256", val)
 	return nil
+}
+
+func listAccounts(c *cli.Context) error {
+	if err := initialize(c); err != nil {
+		return err
+	}
+	// listaccounts is meant for users using the CLI.
+	var (
+		ui                        = core.NewCommandlineUI()
+		pwStorage storage.Storage = &storage.NoStorage{}
+		ksLoc                     = c.String(keystoreFlag.Name)
+		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
+	)
+	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	// Access external API and call List()
+	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	accs, err := api.List(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(accs) == 0 {
+		fmt.Println("\nThe keystore is empty.")
+	}
+	for _, account := range accs {
+		fmt.Println(account)
+	}
+	return err
 }
 
 func setCredential(ctx *cli.Context) error {
