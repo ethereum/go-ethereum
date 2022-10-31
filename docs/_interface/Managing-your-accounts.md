@@ -7,6 +7,8 @@ Geth uses an external signer called [Clef](/docs/clef/introduction) to manage ac
 
 ## Connecting Geth and Clef
 
+The first time Clef is used it should be initialized by running `clef init`. This will prompt for a master password that is used to encrypt passwords, account data and attested rules in Clef. Once this is done, Clef is ready to use as an external signer for Geth.
+
 Clef and Geth should be started separately but with complementary configurations so that they can communicate. This requires Clef to know the `chain_id` of the network Geth will connect to so that this information can be included in any signatures. Clef also needs to know the location of the keystore where accounts are (or will be) stored. This is usually in a subdirectory inside Geth's data directory. Clef is also given a data directory which is also often placed conveniently inside Geth's data directory. To enable communication with Clef using Curl, `--http` can be passed which will start an HTTP server on `localhost:8550` by default. To start Clef configured for a Geth node connecting to the Sepolia testnet:
 
 ```sh
