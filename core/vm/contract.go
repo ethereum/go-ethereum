@@ -201,6 +201,7 @@ func (c *Contract) CodeEndOffset() uint64 {
 	return c.header.CodeEndOffset()
 }
 
+// CodeSize returns the size of the code (if legacy) or code section (if EOF)
 func (c *Contract) CodeSize() uint64 {
 	if c.IsLegacy() {
 		return uint64(len(c.Code))
