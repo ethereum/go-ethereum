@@ -7,7 +7,13 @@ Geth uses an external signer called [Clef](/docs/clef/introduction) to manage ac
 
 ## Initialize Clef
 
-The first time Clef is used it needs to be initialized with some information about where to store keys and a password for encrypting its internal data. This password is known as the "master seed". To do this, pass the path to the keystore to `clef init`.
+The first time Clef is used it needs to be initialized with a master seed that unlocks Clef's secure vault and a path where the vault should be located. Clef will use the vault to store passwords for keystores, javascript auto-signing rules and hashes of rule files. To initialize Clef, pass a vault path to `clef init`, for example to store it in a new directory inside `/home/user/go-ethereum`:
+
+```sh
+clef init /home/user/go-ethereum/clefdata
+```
+
+It is extremely important to remember the master seed and keep it secure. It allows access to the accounts under Clef's management.
 
 ## Connecting Geth and Clef
 
