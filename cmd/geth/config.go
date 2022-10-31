@@ -24,9 +24,6 @@ import (
 	"reflect"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
-
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
@@ -41,7 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/naoina/toml"
+	"github.com/urfave/cli/v2"
 )
 
 var (
