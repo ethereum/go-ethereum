@@ -244,11 +244,12 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
+	callstack := t.callstack[0]
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails
-		clearFailedLogs(t.callstack[0], false)
+		clearFailedLogs(&callstack, false)
 	}
-	res, err := json.Marshal(t.callstack[0])
+	res, err := json.Marshal(callstack)
 	if err != nil {
 		return nil, err
 	}
@@ -263,13 +264,13 @@ func (t *callTracer) Stop(err error) {
 
 // clearFailedLogs clears the logs of a callframe and all its children
 // in case of execution failure.
-func clearFailedLogs(cf callFrame, parentFailed bool) {
+func clearFailedLogs(cf *callFrame, parentFailed bool) {
 	failed := cf.failed() || parentFailed
 	// Clear own logs
 	if failed {
 		cf.Logs = nil
 	}
-	for _, child := range cf.Calls {
-		clearFailedLogs(child, failed)
+	for i := range cf.Calls {
+		clearFailedLogs(&cf.Calls[i], failed)
 	}
 }
