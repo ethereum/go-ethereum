@@ -418,11 +418,12 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
 func parseBytes(encType interface{}) ([]byte, bool) {
+	// Handle array types.
 	val := reflect.ValueOf(encType)
-	if val.IsValid() && val.Type().Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 /* i.e. byte */ {
+	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
 		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
 		reflect.Copy(v, val)
-		return v.Interface().([]byte), true
+		return v.Bytes(), true
 	}
 
 	switch v := encType.(type) {
