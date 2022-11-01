@@ -378,15 +378,17 @@ func listAccounts(c *cli.Context) error {
 	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
 	// Access external API and call List()
 	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
-	accs, err := api.List(context.Background())
+	internalApi := core.NewUIServerAPI(api)
+	accs, err := internalApi.ListAccounts(context.Background())
 	if err != nil {
 		return err
 	}
 	if len(accs) == 0 {
 		fmt.Println("\nThe keystore is empty.")
 	}
+	fmt.Println()
 	for _, account := range accs {
-		fmt.Println(account)
+		fmt.Println(account.Address)
 	}
 	return err
 }
