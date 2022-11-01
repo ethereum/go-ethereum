@@ -283,6 +283,7 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 		default:
 			t.Fatalf("Expected PONG, got %v %v", reply.Name(), reply)
 		}
+		break
 	}
 }
 
