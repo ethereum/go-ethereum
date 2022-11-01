@@ -278,7 +278,6 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 			// PONG response, all good
 			break
 		case v4wire.FindnodePacket:
-			t.Log("Received FindNode, ignored, still waiting for PONG")
 			continue // A FindNode is ok, just ignore it
 		default:
 			t.Fatalf("Expected PONG, got %v %v", reply.Name(), reply)
