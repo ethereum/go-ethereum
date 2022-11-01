@@ -524,6 +524,13 @@ func TestUDPv5_lookup(t *testing.T) {
 	t.Parallel()
 	test := newUDPV5Test(t)
 
+	// Ensure lookupDistances includes 256 when necessary.
+	node256 := nodesAtDistance(test.table.self().ID(), 255, 1)[0]
+	dists := lookupDistances(test.table.self().ID(), node256.ID())
+	if !containsUint(256, dists) {
+		t.Errorf("lookup distances does not contain 256: %v", dists)
+	}
+
 	// Lookup on empty table returns no nodes.
 	if results := test.udp.Lookup(lookupTestnet.target.id()); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)

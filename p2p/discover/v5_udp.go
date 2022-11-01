@@ -323,7 +323,7 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
 	dists = append(dists, uint(td))
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
-		if td+i < 256 {
+		if td+i <= 256 {
 			dists = append(dists, uint(td+i))
 		}
 		if td-i > 0 {

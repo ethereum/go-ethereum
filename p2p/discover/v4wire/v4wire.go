@@ -59,7 +59,7 @@ type (
 	// Pong is the reply to ping.
 	Pong struct {
 		// This field should mirror the UDP envelope address
-		// of the ping packet, which provides a way to discover the
+		// of the ping packet, which provides a way to discover
 		// the external address (after NAT).
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
