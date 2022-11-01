@@ -67,7 +67,7 @@ func (f callFrame) failed() bool {
 	return len(f.Error) > 0
 }
 
-func (f *callFrame) capture(output []byte, err error) {
+func (f *callFrame) processOutput(output []byte, err error) {
 	output = common.CopyBytes(output)
 	if err == nil {
 		f.Output = output
@@ -144,7 +144,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.callstack[0].capture(output, err)
+	t.callstack[0].processOutput(output, err)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -155,6 +155,11 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	}
 	// Avoid processing nested calls when only caring about top call
 	if t.config.OnlyTopCall && depth > 0 {
+		return
+	}
+	// Skip if tracing was interrupted
+	if atomic.LoadUint32(&t.interrupt) > 0 {
+		t.env.Cancel()
 		return
 	}
 	switch op {
@@ -221,7 +226,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size -= 1
 
 	call.GasUsed = gasUsed
-	call.capture(output, err)
+	call.processOutput(output, err)
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
