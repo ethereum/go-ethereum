@@ -214,7 +214,7 @@ The gendoc generates example structures of the json-rpc communication types.
 `}
 	listAccountsCommand = &cli.Command{
 		Action: listAccounts,
-		Name:   "listaccounts",
+		Name:   "list-accounts",
 		Usage:  "List accounts in the keystore",
 		Flags: []cli.Flag{
 			logLevelFlag,
@@ -224,6 +224,19 @@ The gendoc generates example structures of the json-rpc communication types.
 		},
 		Description: `
 	Lists the accounts in the keystore.
+	`}
+	listWalletsCommand = &cli.Command{
+		Action: listWallets,
+		Name:   "list-wallets",
+		Usage:  "List wallets known to Clef",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+			acceptFlag,
+		},
+		Description: `
+	Lists the wallets known to Clef.
 	`}
 )
 
@@ -262,6 +275,7 @@ func init() {
 		newAccountCommand,
 		gendocCommand,
 		listAccountsCommand,
+		listWalletsCommand,
 	}
 }
 
@@ -391,6 +405,32 @@ func listAccounts(c *cli.Context) error {
 		fmt.Println(account.Address)
 	}
 	return err
+}
+
+func listWallets(c *cli.Context) error{
+	if err := initialize(c); err != nil {
+		return err
+	}
+	// listaccounts is meant for users using the CLI.
+	var (
+		ui                        = core.NewCommandlineUI()
+		pwStorage storage.Storage = &storage.NoStorage{}
+		ksLoc                     = c.String(keystoreFlag.Name)
+		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
+	)
+	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	// Access external API and call List()
+	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	internalApi := core.NewUIServerAPI(api)
+	wallets := internalApi.ListWallets()
+	if len(wallets) == 0 {
+		fmt.Println("\nThere are no wallets.")
+	}
+	fmt.Println()
+	for _, wallet := range wallets {
+		fmt.Println(wallet)
+	}
+	return nil
 }
 
 func setCredential(ctx *cli.Context) error {
