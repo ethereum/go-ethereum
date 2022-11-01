@@ -69,12 +69,10 @@ type prestateTracer struct {
 }
 
 type prestateTracerConfig struct {
-	DiffMode bool `json:"diffMode"` // If true, this tracer will return all diff states
+	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	// First callframe contains tx context info
-	// and is populated on start and end.
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -192,7 +190,7 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 	}
 
 	for addr, state := range t.pre {
-		// the deleted account's state is pruned
+		// The deleted account's state is pruned from `post` but kept in `pre`
 		if _, ok := t.deleted[addr]; ok {
 			continue
 		}
@@ -222,7 +220,10 @@ func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 			}
 
 			newVal := t.env.StateDB.GetState(addr, key)
-			if val != newVal {
+			if val == newVal {
+				// Omit unchanged slots
+				delete(t.pre[addr].Storage, key)
+			} else {
 				modified = true
 				if newVal != (common.Hash{}) {
 					postAccount.Storage[key] = newVal
