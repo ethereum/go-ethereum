@@ -646,15 +646,6 @@ func signer(c *cli.Context) error {
 			fmt.Println(account.Address)
 		}
 		fmt.Println()
-		
-		ui.OnSignerStartup(core.StartupInfo{
-			Info: map[string]interface{}{
-				"intapi_version": core.InternalAPIVersion,
-				"extapi_version": core.ExternalAPIVersion,
-				"extapi_http":    extapiURL,
-				"extapi_ipc":     ipcapiURL,
-			},
-		})
 	
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
