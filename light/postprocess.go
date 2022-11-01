@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -103,8 +102,6 @@ var (
 	errNoTrustedCht       = errors.New("no trusted canonical hash trie")
 	errNoTrustedBloomTrie = errors.New("no trusted bloom trie")
 	errNoHeader           = errors.New("header not found")
-	chtPrefix             = []byte("chtRootV2-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-	ChtTablePrefix        = "cht-"
 )
 
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
@@ -117,7 +114,7 @@ type ChtNode struct {
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	data, _ := db.Get(append(append(chtPrefix, encNumber[:]...), sectionHead.Bytes()...))
+	data, _ := db.Get(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...))
 	return common.BytesToHash(data)
 }
 
@@ -125,7 +122,7 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(chtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	db.Put(append(append(rawdb.ChtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // ChtIndexerBackend implements core.ChainIndexerBackend.
@@ -134,7 +131,6 @@ type ChtIndexerBackend struct {
 	diskdb, trieTable    ethdb.Database
 	odr                  OdrBackend
 	triedb               *trie.Database
-	trieset              mapset.Set
 	section, sectionSize uint64
 	lastHash             common.Hash
 	trie                 *trie.Trie
@@ -142,17 +138,16 @@ type ChtIndexerBackend struct {
 
 // NewChtIndexer creates a Cht chain indexer
 func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64, disablePruning bool) *core.ChainIndexer {
-	trieTable := rawdb.NewTable(db, ChtTablePrefix)
+	trieTable := rawdb.NewTable(db, string(rawdb.ChtTablePrefix))
 	backend := &ChtIndexerBackend{
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
 		triedb:         trie.NewDatabaseWithConfig(trieTable, &trie.Config{Cache: 1}), // Use a tiny cache only to keep memory down
-		trieset:        mapset.NewSet(),
 		sectionSize:    size,
 		disablePruning: disablePruning,
 	}
-	return core.NewChainIndexer(db, rawdb.NewTable(db, "chtIndexV2-"), backend, size, confirms, time.Millisecond*100, "cht")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, string(rawdb.ChtIndexTablePrefix)), backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
@@ -187,12 +182,12 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	c.trie, err = trie.New(common.Hash{}, root, c.triedb)
+	c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 
 	if err != nil && c.odr != nil {
 		err = c.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			c.trie, err = trie.New(common.Hash{}, root, c.triedb)
+			c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 		}
 	}
 	c.section = section
@@ -226,38 +221,44 @@ func (c *ChtIndexerBackend) Commit() error {
 		if err := c.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
+		if err := c.triedb.Commit(root, false, nil); err != nil {
+			return err
+		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	c.trie, err = trie.New(common.Hash{}, root, c.triedb)
+	c.trie, err = trie.New(trie.TrieID(root), c.triedb)
 	if err != nil {
 		return err
 	}
 	// Pruning historical trie nodes if necessary.
 	if !c.disablePruning {
-		// Flush the triedb and track the latest trie nodes.
-		c.trieset.Clear()
-		c.triedb.Commit(root, false, func(hash common.Hash) { c.trieset.Add(hash) })
-
 		it := c.trieTable.NewIterator(nil, nil)
 		defer it.Release()
 
 		var (
-			deleted   int
-			remaining int
-			t         = time.Now()
+			deleted int
+			batch   = c.trieTable.NewBatch()
+			t       = time.Now()
 		)
-		for it.Next() {
-			trimmed := bytes.TrimPrefix(it.Key(), []byte(ChtTablePrefix))
-			if !c.trieset.Contains(common.BytesToHash(trimmed)) {
-				c.trieTable.Delete(trimmed)
-				deleted += 1
-			} else {
-				remaining += 1
+		hashes := make(map[common.Hash]struct{})
+		if nodes != nil {
+			for _, hash := range nodes.Hashes() {
+				hashes[hash] = struct{}{}
 			}
 		}
-		log.Debug("Prune historical CHT trie nodes", "deleted", deleted, "remaining", remaining, "elapsed", common.PrettyDuration(time.Since(t)))
-	} else {
-		c.triedb.Commit(root, false, nil)
+		for it.Next() {
+			trimmed := bytes.TrimPrefix(it.Key(), rawdb.ChtTablePrefix)
+			if len(trimmed) == common.HashLength {
+				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
+					batch.Delete(trimmed)
+					deleted += 1
+				}
+			}
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		log.Debug("Prune historical CHT trie nodes", "deleted", deleted, "remaining", len(hashes), "elapsed", common.PrettyDuration(time.Since(t)))
 	}
 	log.Info("Storing CHT", "section", c.section, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
@@ -308,16 +309,11 @@ func (c *ChtIndexerBackend) Prune(threshold uint64) error {
 	return nil
 }
 
-var (
-	bloomTriePrefix      = []byte("bltRoot-") // bloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
-	BloomTrieTablePrefix = "blt-"
-)
-
 // GetBloomTrieRoot reads the BloomTrie root associated to the given section from the database
 func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	data, _ := db.Get(append(append(bloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...))
+	data, _ := db.Get(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...))
 	return common.BytesToHash(data)
 }
 
@@ -325,7 +321,7 @@ func GetBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.H
 func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
-	db.Put(append(append(bloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
+	db.Put(append(append(rawdb.BloomTriePrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
 // BloomTrieIndexerBackend implements core.ChainIndexerBackend
@@ -333,7 +329,6 @@ type BloomTrieIndexerBackend struct {
 	disablePruning    bool
 	diskdb, trieTable ethdb.Database
 	triedb            *trie.Database
-	trieset           mapset.Set
 	odr               OdrBackend
 	section           uint64
 	parentSize        uint64
@@ -345,20 +340,19 @@ type BloomTrieIndexerBackend struct {
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
 func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uint64, disablePruning bool) *core.ChainIndexer {
-	trieTable := rawdb.NewTable(db, BloomTrieTablePrefix)
+	trieTable := rawdb.NewTable(db, string(rawdb.BloomTrieTablePrefix))
 	backend := &BloomTrieIndexerBackend{
 		diskdb:         db,
 		odr:            odr,
 		trieTable:      trieTable,
 		triedb:         trie.NewDatabaseWithConfig(trieTable, &trie.Config{Cache: 1}), // Use a tiny cache only to keep memory down
-		trieset:        mapset.NewSet(),
 		parentSize:     parentSize,
 		size:           size,
 		disablePruning: disablePruning,
 	}
 	backend.bloomTrieRatio = size / parentSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, rawdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, string(rawdb.BloomTrieIndexPrefix)), backend, size, 0, time.Millisecond*100, "bloomtrie")
 }
 
 // fetchMissingNodes tries to retrieve the last entries of the latest trusted bloom trie from the
@@ -414,11 +408,11 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	b.trie, err = trie.New(common.Hash{}, root, b.triedb)
+	b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 	if err != nil && b.odr != nil {
 		err = b.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			b.trie, err = trie.New(common.Hash{}, root, b.triedb)
+			b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 		}
 	}
 	b.section = section
@@ -473,38 +467,44 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 		if err := b.triedb.Update(trie.NewWithNodeSet(nodes)); err != nil {
 			return err
 		}
+		if err := b.triedb.Commit(root, false, nil); err != nil {
+			return err
+		}
 	}
 	// Re-create trie with newly generated root and updated database.
-	b.trie, err = trie.New(common.Hash{}, root, b.triedb)
+	b.trie, err = trie.New(trie.TrieID(root), b.triedb)
 	if err != nil {
 		return err
 	}
 	// Pruning historical trie nodes if necessary.
 	if !b.disablePruning {
-		// Flush the triedb and track the latest trie nodes.
-		b.trieset.Clear()
-		b.triedb.Commit(root, false, func(hash common.Hash) { b.trieset.Add(hash) })
-
 		it := b.trieTable.NewIterator(nil, nil)
 		defer it.Release()
 
 		var (
-			deleted   int
-			remaining int
-			t         = time.Now()
+			deleted int
+			batch   = b.trieTable.NewBatch()
+			t       = time.Now()
 		)
-		for it.Next() {
-			trimmed := bytes.TrimPrefix(it.Key(), []byte(BloomTrieTablePrefix))
-			if !b.trieset.Contains(common.BytesToHash(trimmed)) {
-				b.trieTable.Delete(trimmed)
-				deleted += 1
-			} else {
-				remaining += 1
+		hashes := make(map[common.Hash]struct{})
+		if nodes != nil {
+			for _, hash := range nodes.Hashes() {
+				hashes[hash] = struct{}{}
 			}
 		}
-		log.Debug("Prune historical bloom trie nodes", "deleted", deleted, "remaining", remaining, "elapsed", common.PrettyDuration(time.Since(t)))
-	} else {
-		b.triedb.Commit(root, false, nil)
+		for it.Next() {
+			trimmed := bytes.TrimPrefix(it.Key(), rawdb.BloomTrieTablePrefix)
+			if len(trimmed) == common.HashLength {
+				if _, ok := hashes[common.BytesToHash(trimmed)]; !ok {
+					batch.Delete(trimmed)
+					deleted += 1
+				}
+			}
+		}
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		log.Debug("Prune historical bloom trie nodes", "deleted", deleted, "remaining", len(hashes), "elapsed", common.PrettyDuration(time.Since(t)))
 	}
 	sectionHead := b.sectionHeads[b.bloomTrieRatio-1]
 	StoreBloomTrieRoot(b.diskdb, b.section, sectionHead, root)

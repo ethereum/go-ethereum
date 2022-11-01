@@ -369,7 +369,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 			size += receipt.Size()
 		}
 		for _, tx := range result.Transactions {
-			size += tx.Size()
+			size += common.StorageSize(tx.Size())
 		}
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
@@ -480,9 +480,10 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // to access the queue, so they already need a lock anyway.
 //
 // Returns:
-//   item     - the fetchRequest
-//   progress - whether any progress was made
-//   throttle - if the caller should throttle for a while
+//
+//	item     - the fetchRequest
+//	progress - whether any progress was made
+//	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -631,7 +632,7 @@ func (q *queue) ExpireReceipts(peer string) int {
 // lock is not obtained in here is that the parameters already need to access
 // the queue, so they already need a lock anyway.
 func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue *prque.Prque) int {
-	// Retrieve the request being expired and log an error if it's non-existnet,
+	// Retrieve the request being expired and log an error if it's non-existent,
 	// as there's no order of events that should lead to such expirations.
 	req := pendPool[peer]
 	if req == nil {
@@ -856,7 +857,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 
 	for _, header := range request.Headers[:i] {
-		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
+		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			reconstruct(accepted, res)
 		} else {
 			// else: between here and above, some other peer filled this result,

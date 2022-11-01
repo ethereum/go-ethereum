@@ -66,7 +66,7 @@ func TestIterator(t *testing.T) {
 	}
 	db.Update(NewWithNodeSet(nodes))
 
-	trie, _ = New(common.Hash{}, root, db)
+	trie, _ = New(TrieID(root), db)
 	found := make(map[string]string)
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
@@ -227,7 +227,7 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 	rootA, nodesA, _ := triea.Commit(false)
 	dba.Update(NewWithNodeSet(nodesA))
-	triea, _ = New(common.Hash{}, rootA, dba)
+	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
 	trieb := NewEmpty(dbb)
@@ -236,7 +236,7 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 	rootB, nodesB, _ := trieb.Commit(false)
 	dbb.Update(NewWithNodeSet(nodesB))
-	trieb, _ = New(common.Hash{}, rootB, dbb)
+	trieb, _ = New(TrieID(rootB), dbb)
 
 	found := make(map[string]string)
 	di, _ := NewDifferenceIterator(triea.NodeIterator(nil), trieb.NodeIterator(nil))
@@ -269,7 +269,7 @@ func TestUnionIterator(t *testing.T) {
 	}
 	rootA, nodesA, _ := triea.Commit(false)
 	dba.Update(NewWithNodeSet(nodesA))
-	triea, _ = New(common.Hash{}, rootA, dba)
+	triea, _ = New(TrieID(rootA), dba)
 
 	dbb := NewDatabase(rawdb.NewMemoryDatabase())
 	trieb := NewEmpty(dbb)
@@ -278,7 +278,7 @@ func TestUnionIterator(t *testing.T) {
 	}
 	rootB, nodesB, _ := trieb.Commit(false)
 	dbb.Update(NewWithNodeSet(nodesB))
-	trieb, _ = New(common.Hash{}, rootB, dbb)
+	trieb, _ = New(TrieID(rootB), dbb)
 
 	di, _ := NewUnionIterator([]NodeIterator{triea.NodeIterator(nil), trieb.NodeIterator(nil)})
 	it := NewIterator(di)
@@ -356,7 +356,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	}
 	for i := 0; i < 20; i++ {
 		// Create trie that will load all nodes from DB.
-		tr, _ := New(common.Hash{}, tr.Hash(), triedb)
+		tr, _ := New(TrieID(tr.Hash()), triedb)
 
 		// Remove a random node from the database. It can't be the root node
 		// because that one is already loaded.
@@ -445,7 +445,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	}
 	// Create a new iterator that seeks to "bars". Seeking can't proceed because
 	// the node is missing.
-	tr, _ := New(common.Hash{}, root, triedb)
+	tr, _ := New(TrieID(root), triedb)
 	it := tr.NodeIterator([]byte("bars"))
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {
@@ -533,7 +533,7 @@ func makeLargeTestTrie() (*Database, *StateTrie, *loggingDb) {
 	// Create an empty trie
 	logDb := &loggingDb{0, memorydb.New()}
 	triedb := NewDatabase(logDb)
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	trie, _ := NewStateTrie(TrieID(common.Hash{}), triedb)
 
 	// Fill it with some arbitrary data
 	for i := 0; i < 10000; i++ {

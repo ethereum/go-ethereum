@@ -163,7 +163,7 @@ func (n *cachedNode) rlp() []byte {
 // or by regenerating it from the rlp encoded blob.
 func (n *cachedNode) obj(hash common.Hash) node {
 	if node, ok := n.node.(rawNode); ok {
-		// The raw-blob format nodes are loaded from either from
+		// The raw-blob format nodes are loaded either from the
 		// clean cache or the database, they are all in their own
 		// copy and safe to use unsafe decoder.
 		return mustDecodeNodeUnsafe(hash[:], node)
@@ -302,11 +302,6 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		preimages: preimage,
 	}
 	return db
-}
-
-// DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.KeyValueStore {
-	return db.diskdb
 }
 
 // insert inserts a simplified trie node into the memory database.
@@ -567,7 +562,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
 	if db.preimages != nil {
-		db.preimages.commit(false)
+		if err := db.preimages.commit(false); err != nil {
+			return err
+		}
 	}
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
@@ -645,7 +642,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 	// Move all of the accumulated preimages into a write batch
 	if db.preimages != nil {
-		db.preimages.commit(true)
+		if err := db.preimages.commit(true); err != nil {
+			return err
+		}
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
@@ -663,8 +662,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	// Uncache any leftovers in the last batch
 	db.lock.Lock()
 	defer db.lock.Unlock()
-
-	batch.Replay(uncacher)
+	if err := batch.Replay(uncacher); err != nil {
+		return err
+	}
 	batch.Reset()
 
 	// Reset the storage counters and bumped metrics
@@ -712,9 +712,12 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 			return err
 		}
 		db.lock.Lock()
-		batch.Replay(uncacher)
+		err := batch.Replay(uncacher)
 		batch.Reset()
 		db.lock.Unlock()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -792,8 +795,8 @@ func (db *Database) Update(nodes *MergedNodeSet) error {
 	}
 	for _, owner := range order {
 		subset := nodes.sets[owner]
-		for _, path := range subset.paths {
-			n, ok := subset.nodes[path]
+		for _, path := range subset.updates.order {
+			n, ok := subset.updates.nodes[path]
 			if !ok {
 				return fmt.Errorf("missing node %x %v", owner, path)
 			}
@@ -832,6 +835,34 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 		preimageSize = db.preimages.size()
 	}
 	return db.dirtiesSize + db.childrenSize + metadataSize - metarootRefs, preimageSize
+}
+
+// GetReader retrieves a node reader belonging to the given state root.
+func (db *Database) GetReader(root common.Hash) Reader {
+	return newHashReader(db)
+}
+
+// hashReader is reader of hashDatabase which implements the Reader interface.
+type hashReader struct {
+	db *Database
+}
+
+// newHashReader initializes the hash reader.
+func newHashReader(db *Database) *hashReader {
+	return &hashReader{db: db}
+}
+
+// Node retrieves the trie node with the given node hash.
+// No error will be returned if the node is not found.
+func (reader *hashReader) Node(_ common.Hash, _ []byte, hash common.Hash) (node, error) {
+	return reader.db.node(hash), nil
+}
+
+// NodeBlob retrieves the RLP-encoded trie node blob with the given node hash.
+// No error will be returned if the node is not found.
+func (reader *hashReader) NodeBlob(_ common.Hash, _ []byte, hash common.Hash) ([]byte, error) {
+	blob, _ := reader.db.Node(hash)
+	return blob, nil
 }
 
 // saveCache saves clean state cache to given directory path

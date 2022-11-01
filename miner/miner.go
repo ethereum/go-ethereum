@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
@@ -39,7 +40,7 @@ import (
 // to offer all the functions here.
 type Backend interface {
 	BlockChain() *core.BlockChain
-	TxPool() *core.TxPool
+	TxPool() *txpool.TxPool
 }
 
 // Config is the configuration parameters of mining.
@@ -53,6 +54,16 @@ type Config struct {
 	GasPrice   *big.Int       // Minimum gas price for mining a transaction
 	Recommit   time.Duration  // The time interval for miner to re-create mining work.
 	Noverify   bool           // Disable remote mining solution verification(only useful in ethash).
+
+	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
+}
+
+// DefaultConfig contains default settings for miner.
+var DefaultConfig = Config{
+	GasCeil:           30000000,
+	GasPrice:          big.NewInt(params.GWei),
+	Recommit:          3 * time.Second,
+	NewPayloadTimeout: 2 * time.Second,
 }
 
 // Miner creates blocks and searches for proof-of-work values.

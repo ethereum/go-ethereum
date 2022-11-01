@@ -29,7 +29,7 @@ import (
 )
 
 func newEmptySecure() *StateTrie {
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, NewDatabase(memorydb.New()))
+	trie, _ := NewStateTrie(TrieID(common.Hash{}), NewDatabase(memorydb.New()))
 	return trie
 }
 
@@ -37,7 +37,7 @@ func newEmptySecure() *StateTrie {
 func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	trie, _ := NewStateTrie(TrieID(common.Hash{}), triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -66,7 +66,7 @@ func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	// Re-create the trie based on the new state
-	trie, _ = NewSecure(common.Hash{}, root, triedb)
+	trie, _ = NewStateTrie(TrieID(root), triedb)
 	return triedb, trie, content
 }
 

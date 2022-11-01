@@ -166,7 +166,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x03"), 1); err != nil {
 		t.Fatalf("failed to merge accumulator onto disk: %v", err)
 	}
-	// Since the base layer was modified, ensure that data retrievald on the external reference fail
+	// Since the base layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %#x (err: %v)", acc, err)
 	}
@@ -224,7 +224,7 @@ func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	if err := snaps.Cap(common.HexToHash("0x04"), 1); err != nil {
 		t.Fatalf("failed to flatten diff layer into accumulator: %v", err)
 	}
-	// Since the accumulator diff layer was modified, ensure that data retrievald on the external reference fail
+	// Since the accumulator diff layer was modified, ensure that data retrievals on the external reference fail
 	if acc, err := ref.Account(common.HexToHash("0x01")); err != ErrSnapshotStale {
 		t.Errorf("stale reference returned account: %#x (err: %v)", acc, err)
 	}

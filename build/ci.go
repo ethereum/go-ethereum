@@ -24,19 +24,18 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
-   test       [ -coverage ] [ packages... ]                                                    -- runs the tests
-   lint                                                                                        -- runs certain pre-selected linters
-   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
-   importkeys                                                                                  -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
-   nsis                                                                                        -- creates a Windows NSIS installer
-   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
-   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
-   purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
+	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
+	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
+	lint                                                                                        -- runs certain pre-selected linters
+	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
+	importkeys                                                                                  -- imports signing keys from env
+	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
+	nsis                                                                                        -- creates a Windows NSIS installer
+	aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
+	xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
+	purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
 
 For all commands, -n prevents execution of external programs (dry run mode).
-
 */
 package main
 
@@ -149,7 +148,7 @@ var (
 	// This is the version of go that will be downloaded by
 	//
 	//     go run ci.go install -dlgo
-	dlgoVersion = "1.18.5"
+	dlgoVersion = "1.19.2"
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -255,8 +254,8 @@ func doInstall(cmdline []string) {
 func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
 	if env.Commit != "" {
-		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
-		ld = append(ld, "-X", "main.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
@@ -347,7 +346,7 @@ func doLint(cmdline []string) {
 
 // downloadLinter downloads and unpacks golangci-lint.
 func downloadLinter(cachedir string) string {
-	const version = "1.46.2"
+	const version = "1.49.0"
 
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 	arch := runtime.GOARCH
@@ -982,7 +981,10 @@ func doWindowsInstaller(cmdline []string) {
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
-	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	if err != nil {
+		log.Fatalf("Failed to convert installer file path: %v", err)
+	}
 	build.MustRunCommand("makensis.exe",
 		"/DOUTPUTFILE="+installer,
 		"/DMAJORVERSION="+version[0],
@@ -1148,7 +1150,7 @@ func doXCodeFramework(cmdline []string) {
 	tc := new(build.GoToolchain)
 
 	// Build gomobile.
-	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
+	build.MustRun(tc.Install(GOBIN, "golang.org/x/mobile/cmd/gomobile@latest", "golang.org/x/mobile/cmd/gobind@latest"))
 
 	// Build the iOS XCode framework
 	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")

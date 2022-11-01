@@ -120,6 +120,7 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+	TrieDBCommits        time.Duration
 
 	AccountUpdated int
 	StorageUpdated int
@@ -600,8 +601,8 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 // CreateAccount is called during the EVM CREATE operation. The situation might arise that
 // a contract does the following:
 //
-//   1. sends funds to sha(account ++ (nonce + 1))
-//   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
+//  1. sends funds to sha(account ++ (nonce + 1))
+//  2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
@@ -666,7 +667,7 @@ func (s *StateDB) Copy() *StateDB {
 		// nil
 		if object, exist := s.stateObjects[addr]; exist {
 			// Even though the original object is dirty, we are not copying the journal,
-			// so we need to make sure that anyside effect the journal would have caused
+			// so we need to make sure that any side-effect the journal would have caused
 			// during a commit (or similar op) is already applied to the copy.
 			state.stateObjects[addr] = object.deepCopy(state)
 
@@ -795,8 +796,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// resurrect an account; but the snapshotter needs both events.
 			if s.snap != nil {
 				s.snapDestructs[obj.addrHash] = struct{}{} // We need to maintain account deletions explicitly (will remain set indefinitely)
-				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
-				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
+				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a resurrect)
+				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a resurrect)
 			}
 		} else {
 			obj.finalise(true) // Prefetch slots in the background
@@ -904,11 +905,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 
 	// Commit objects to the trie, measuring the elapsed time
 	var (
-		accountTrieNodes int
-		storageTrieNodes int
-		nodes            = trie.NewMergedNodeSet()
+		accountTrieNodesUpdated int
+		accountTrieNodesDeleted int
+		storageTrieNodesUpdated int
+		storageTrieNodesDeleted int
+		nodes                   = trie.NewMergedNodeSet()
 	)
-	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
+	codeWriter := s.db.DiskDB().NewBatch()
 	for addr := range s.stateObjectsDirty {
 		if obj := s.stateObjects[addr]; !obj.deleted {
 			// Write any contract code associated with the state object
@@ -917,7 +920,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie
-			set, err := obj.CommitTrie(s.db)
+			set, err := obj.commitTrie(s.db)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -926,9 +929,17 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				if err := nodes.Merge(set); err != nil {
 					return common.Hash{}, err
 				}
-				storageTrieNodes += set.Len()
+				updates, deleted := set.Size()
+				storageTrieNodesUpdated += updates
+				storageTrieNodesDeleted += deleted
 			}
 		}
+		// If the contract is destructed, the storage is still left in the
+		// database as dangling data. Theoretically it's should be wiped from
+		// database as well, but in hash-based-scheme it's extremely hard to
+		// determine that if the trie nodes are also referenced by other storage,
+		// and in path-based-scheme some technical challenges are still unsolved.
+		// Although it won't affect the correctness but please fix it TODO(rjl493456442).
 	}
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
@@ -952,7 +963,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		if err := nodes.Merge(set); err != nil {
 			return common.Hash{}, err
 		}
-		accountTrieNodes = set.Len()
+		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 	}
 	if metrics.EnabledExpensive {
 		s.AccountCommits += time.Since(start)
@@ -961,16 +972,16 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		storageUpdatedMeter.Mark(int64(s.StorageUpdated))
 		accountDeletedMeter.Mark(int64(s.AccountDeleted))
 		storageDeletedMeter.Mark(int64(s.StorageDeleted))
-		accountTrieCommittedMeter.Mark(int64(accountTrieNodes))
-		storageTriesCommittedMeter.Mark(int64(storageTrieNodes))
+		accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
+		accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
+		storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
+		storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
 		s.AccountUpdated, s.AccountDeleted = 0, 0
 		s.StorageUpdated, s.StorageDeleted = 0, 0
 	}
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
-		if metrics.EnabledExpensive {
-			defer func(start time.Time) { s.SnapshotCommits += time.Since(start) }(time.Now())
-		}
+		start := time.Now()
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
 			if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage); err != nil {
@@ -984,13 +995,29 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
 			}
 		}
+		if metrics.EnabledExpensive {
+			s.SnapshotCommits += time.Since(start)
+		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
-	if err := s.db.TrieDB().Update(nodes); err != nil {
-		return common.Hash{}, err
+	if root == (common.Hash{}) {
+		root = emptyRoot
 	}
-	s.originalRoot = root
-	return root, err
+	origin := s.originalRoot
+	if origin == (common.Hash{}) {
+		origin = emptyRoot
+	}
+	if root != origin {
+		start := time.Now()
+		if err := s.db.TrieDB().Update(nodes); err != nil {
+			return common.Hash{}, err
+		}
+		s.originalRoot = root
+		if metrics.EnabledExpensive {
+			s.TrieDBCommits += time.Since(start)
+		}
+	}
+	return root, nil
 }
 
 // PrepareAccessList handles the preparatory steps for executing a state transition with

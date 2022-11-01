@@ -28,14 +28,10 @@ const (
 	defaultKeyfileName = "keyfile.json"
 )
 
-// Git SHA1 commit hash of the release (set via linker flags)
-var gitCommit = ""
-var gitDate = ""
-
 var app *cli.App
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "an Ethereum key manager")
+	app = flags.NewApp("Ethereum key manager")
 	app.Commands = []*cli.Command{
 		commandGenerate,
 		commandInspect,

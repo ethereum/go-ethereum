@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -91,11 +92,6 @@ var (
 
 var (
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-)
-
-var (
-	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
-	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
 )
 
 //go:embed faucet.html
@@ -226,9 +222,10 @@ type wsConn struct {
 
 func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
+	git, _ := version.VCS()
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
-		Version: params.VersionWithCommit(gitCommit, gitDate),
+		Version: params.VersionWithCommit(git.Commit, git.Date),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),

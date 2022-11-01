@@ -63,7 +63,7 @@ func (s Storage) Copy() Storage {
 // The usage pattern is as follows:
 // First you need to obtain a state object.
 // Account values can be accessed and modified through the object.
-// Finally, call CommitTrie to write the modified storage trie into a database.
+// Finally, call commitTrie to write the modified storage trie into a database.
 type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
@@ -159,9 +159,9 @@ func (s *stateObject) getTrie(db Database) Trie {
 		}
 		if s.trie == nil {
 			var err error
-			s.trie, err = db.OpenStorageTrie(s.addrHash, s.data.Root)
+			s.trie, err = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, s.data.Root)
 			if err != nil {
-				s.trie, _ = db.OpenStorageTrie(s.addrHash, common.Hash{})
+				s.trie, _ = db.OpenStorageTrie(s.db.originalRoot, s.addrHash, common.Hash{})
 				s.setError(fmt.Errorf("can't create storage trie: %v", err))
 			}
 		}
@@ -374,9 +374,9 @@ func (s *stateObject) updateRoot(db Database) {
 	s.data.Root = s.trie.Hash()
 }
 
-// CommitTrie the storage trie of the object to db.
-// This updates the trie root.
-func (s *stateObject) CommitTrie(db Database) (*trie.NodeSet, error) {
+// commitTrie submits the storage changes into the storage trie and re-computes
+// the root. Besides, all trie changes will be collected in a nodeset and returned.
+func (s *stateObject) commitTrie(db Database) (*trie.NodeSet, error) {
 	// If nothing changed, don't bother with hashing anything
 	if s.updateTrie(db) == nil {
 		return nil, nil
@@ -449,7 +449,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 // Attribute accessors
 //
 
-// Returns the address of the contract/account
+// Address returns the address of the contract/account
 func (s *stateObject) Address() common.Address {
 	return s.address
 }
@@ -527,7 +527,7 @@ func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
 }
 
-// Never called, but must be present to allow stateObject to be used
+// Value is never called, but must be present to allow stateObject to be used
 // as a vm.Account interface that also satisfies the vm.ContractRef
 // interface. Interfaces are awesome.
 func (s *stateObject) Value() *big.Int {

@@ -54,7 +54,7 @@ type codecV5 interface {
 	// Encode encodes a packet.
 	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
-	// decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
+	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
 	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
 }

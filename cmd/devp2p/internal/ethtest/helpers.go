@@ -357,9 +357,13 @@ func (s *Suite) waitAnnounce(conn *Conn, blockAnnouncement *NewBlock) error {
 				return fmt.Errorf("wrong block hash in announcement: expected %v, got %v", blockAnnouncement.Block.Hash(), hashes[0].Hash)
 			}
 			return nil
+
+		// ignore tx announcements from previous tests
 		case *NewPooledTransactionHashes:
-			// ignore tx announcements from previous tests
 			continue
+		case *Transactions:
+			continue
+
 		default:
 			return fmt.Errorf("unexpected: %s", pretty.Sdump(msg))
 		}

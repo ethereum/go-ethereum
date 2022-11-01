@@ -453,7 +453,7 @@ func (lc *LightChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	return lc.hc.GetTd(hash, number)
 }
 
-// GetHeaderByNumberOdr retrieves the total difficult from the database or
+// GetTdOdr retrieves the total difficult from the database or
 // network by hash and number, caching it (associated with its hash) if found.
 func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) *big.Int {
 	td := lc.GetTd(hash, number)

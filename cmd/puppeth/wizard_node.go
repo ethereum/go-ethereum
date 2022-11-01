@@ -50,7 +50,7 @@ func (w *wizard) deployNode(boot bool) {
 		if boot {
 			infos = &nodeInfos{port: 30303, peersTotal: 512, peersLight: 256}
 		} else {
-			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasTarget: 7.5, gasLimit: 10, gasPrice: 1}
+			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasLimit: 10, gasPrice: 1}
 		}
 	}
 	existed := err == nil
@@ -148,10 +148,6 @@ func (w *wizard) deployNode(boot bool) {
 			}
 		}
 		// Establish the gas dynamics to be enforced by the signer
-		fmt.Println()
-		fmt.Printf("What gas limit should empty blocks target (MGas)? (default = %0.3f)\n", infos.gasTarget)
-		infos.gasTarget = w.readDefaultFloat(infos.gasTarget)
-
 		fmt.Println()
 		fmt.Printf("What gas limit should full blocks target (MGas)? (default = %0.3f)\n", infos.gasLimit)
 		infos.gasLimit = w.readDefaultFloat(infos.gasLimit)
