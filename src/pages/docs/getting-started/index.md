@@ -149,7 +149,7 @@ Welcome to the Geth JavaScript console!
 instance: Geth/v1.10.15-stable/darwin-amd64/go1.17.5
 at block: 6354736 (Thu Feb 10 2022 14:01:46 GMT+0100 (WAT))
  datadir: /home/go-ethereum/geth-tutorial
- modules: admin:1.0 clique:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0
+ modules: admin:1.0 clique:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 rpc:1.0 txpool:1.0 web3:1.0
 
 To exit, press ctrl-d or type exit
 ```
@@ -201,15 +201,7 @@ eth.sendTransaction({
 });
 ```
 
-This command will return an error message indicating that `authentication is needed: password or unlock`. This is a security feature that prevents unauthorized access to sensitive account operations. There are two ways to unlock the account. The first is to start Geth with the account permanently unlocked (by passing `--unlock <address>` at startup). This is not recommended because the account remains unlocked all the time Geth is running, creating a security weakness. Instead, it is better to temporarily unlock the account for the specific transaction. This requires using the `sendTransaction` method from the `personal` namespace instead of the `eth` namespace. The password can be provided as a string in the method call as follows:
-
-```sh
-personal.sendTransaction({
-    from: "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
-    to: "0xce8dba5e4157c2b284d8853afeeea259344c1653",
-    value: web3.toWei(0.1, "ether")
-}, "password")
-```
+This command will return an error message indicating that `authentication is needed: password or unlock`. This is a security feature that prevents unauthorized access to sensitive account operations. There are two ways to unlock the account. The first is to start Geth with the account permanently unlocked (by passing `--unlock <address>` at startup). This is not recommended because the account remains unlocked all the time Geth is running, creating a security weakness. Instead, it is better to temporarily unlock the account for the specific transaction using Clef. This requires Geth to be started with Clef as an external signer, and for Clef to know the location of the keystore (please see the [account management](/pages/docs/fundamentals/account-management.md) or [Clef](/pages/docs/tools/clef/Introduction.md) pages for setup details).
 
 In the Javascript console, the transaction hash is displayed. This will be used in the next section to retrieve the transaction details.
 

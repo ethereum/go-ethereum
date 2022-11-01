@@ -69,7 +69,7 @@ instance: Geth/v1.10.18-unstable-8d85a701-20220503/linux-amd64/go1.18.1
 coinbase: 0x281aabb85c68e1638bb092750a0d9bb06ba103ee
 at block: 12305815 (Thu May 26 2022 16:16:00 GMT+0100 (BST))
   datadir: /home/go-ethereum/data
-  modules: admin:1.0 debug:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0
+  modules: admin:1.0 debug:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 rpc:1.0 txpool:1.0 web3:1.0
 
 To exit, press ctrl-d or type exit
 >
