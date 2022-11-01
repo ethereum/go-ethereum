@@ -566,8 +566,11 @@ func signer(c *cli.Context) error {
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
+	
 	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
+	intapi := core.NewUIServerAPI(apiImpl) 
+
 	// Audit logging
 	if logfile := c.String(auditLogFlag.Name); logfile != "" {
 		api, err = core.NewAuditLogger(logfile, api)
@@ -576,6 +579,7 @@ func signer(c *cli.Context) error {
 		}
 		log.Info("Audit logs configured", "file", logfile)
 	}
+
 	// register signer API with server
 	var (
 		extapiURL = "n/a"
@@ -634,19 +638,23 @@ func signer(c *cli.Context) error {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
+    
+	// list accounts on startup
+	accounts, err := intapi.ListAccounts(c.Context)
+	if err != nil {
+		utils.Fatalf(err.Error())
+	}
 
-		// list known accounts to console on startup
-		ui_server := core.NewUIServerAPI(apiImpl)
-		accs, err := ui_server.ListAccounts(c.Context)
-		if err != nil {
-			return err
-		}
-		fmt.Println("\nAccounts known to Clef:\n")
-		for _, account := range accs {
-			fmt.Println(account.Address)
-		}
-		fmt.Println()
-	
+	var addresses string
+	for _, account := range accounts {
+		// concat string to avoid repeating "INFO" on terminal
+		addresses += fmt.Sprintf("%s", account.Address)
+		addresses += "\n"
+	}
+
+	// print account string to console using ui
+	ui.ShowInfo(addresses)
+
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
 			"intapi_version": core.InternalAPIVersion,
