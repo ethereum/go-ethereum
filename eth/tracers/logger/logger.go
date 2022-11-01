@@ -151,7 +151,6 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if atomic.LoadUint32(&l.interrupt) > 0 {
-		l.env.Cancel()
 		return
 	}
 	// check if already accumulated the specified number of logs

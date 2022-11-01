@@ -99,7 +99,6 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	env       *vm.EVM
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
@@ -128,7 +127,6 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  vm.CALL,
 		From:  from,
@@ -159,7 +157,6 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	}
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
 		return
 	}
 	switch op {
@@ -195,7 +192,6 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 	}
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
 		return
 	}
 
