@@ -634,6 +634,28 @@ func signer(c *cli.Context) error {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
+
+		// list known accounts to console on startup
+		ui_server := core.NewUIServerAPI(apiImpl)
+		accs, err := ui_server.ListAccounts(c.Context)
+		if err != nil {
+			return err
+		}
+		fmt.Println("\nAccounts known to Clef:\n")
+		for _, account := range accs {
+			fmt.Println(account.Address)
+		}
+		fmt.Println()
+		
+		ui.OnSignerStartup(core.StartupInfo{
+			Info: map[string]interface{}{
+				"intapi_version": core.InternalAPIVersion,
+				"extapi_version": core.ExternalAPIVersion,
+				"extapi_http":    extapiURL,
+				"extapi_ipc":     ipcapiURL,
+			},
+		})
+	
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
 			"intapi_version": core.InternalAPIVersion,
