@@ -378,7 +378,7 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
-func initInternalApi(c *cli.Context) (*core.UIServerAPI, error){
+func initInternalApi(c *cli.Context) (*core.UIServerAPI, error) {
 	if err := initialize(c); err != nil {
 		return nil, err
 	}
