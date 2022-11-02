@@ -126,6 +126,7 @@ func TestParseInteger(t *testing.T) {
 	}{
 		{"uint32", "-123", nil},
 		{"int32", "-123", big.NewInt(-123)},
+		{"int32", big.NewInt(-124), big.NewInt(-124)},
 		{"uint32", "0xff", big.NewInt(0xff)},
 		{"int8", "0xffff", nil},
 	} {
