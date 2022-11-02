@@ -427,8 +427,11 @@ func listWallets(c *cli.Context) error{
 		fmt.Println("\nThere are no wallets.")
 	}
 	fmt.Println()
-	for _, wallet := range wallets {
-		fmt.Println(wallet)
+	for i, wallet := range wallets {
+		fmt.Printf("%d. Keystore at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
+		for _, acc := range wallet.Accounts {
+			fmt.Printf("\t%v (%v)\n", acc.Address, acc.URL)
+		}
 	}
 	return nil
 }
