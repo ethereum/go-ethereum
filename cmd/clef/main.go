@@ -522,7 +522,7 @@ func listWallets(c *cli.Context) error{
 		fmt.Printf("Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
 		fmt.Printf("Accounts in Wallet %d:\n", i)
 		for j, acc := range wallet.Accounts {
-			fmt.Printf("Account %d: %v (%v)\n", j, acc.Address, acc.URL)
+			fmt.Printf("  -Account %d: %v (%v)\n", j, acc.Address, acc.URL)
 		}
 		fmt.Println()
 	}
