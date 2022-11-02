@@ -169,11 +169,17 @@ type newWorkReq struct {
 	timestamp int64
 }
 
+// newPayloadResult represents a result struct corresponds to payload generation.
+type newPayloadResult struct {
+	err   error
+	block *types.Block
+	fees  *big.Int
+}
+
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
 	params *generateParams
-	result chan *types.Block // non-blocking channel
-	err    chan error
+	result chan *newPayloadResult // non-blocking channel
 }
 
 // intervalAdjust represents a resubmitting interval adjustment.
@@ -250,6 +256,10 @@ type worker struct {
 	// in case there are some computation expensive transactions in txpool.
 	newpayloadTimeout time.Duration
 
+	// recommit is the time interval to re-create sealing work or to re-build
+	// payload in proof-of-stake stage.
+	recommit time.Duration
+
 	// External functions
 	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
@@ -297,6 +307,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Sanitizing miner recommit interval", "provided", recommit, "updated", minRecommitInterval)
 		recommit = minRecommitInterval
 	}
+	worker.recommit = recommit
+
 	// Sanitize the timeout config for creating payload.
 	newpayloadTimeout := worker.config.NewPayloadTimeout
 	if newpayloadTimeout == 0 {
@@ -553,13 +565,11 @@ func (w *worker) mainLoop() {
 			w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
-			block, err := w.generateWork(req.params)
-			if err != nil {
-				req.err <- err
-				req.result <- nil
-			} else {
-				req.err <- nil
-				req.result <- block
+			block, fees, err := w.generateWork(req.params)
+			req.result <- &newPayloadResult{
+				err:   err,
+				block: block,
+				fees:  fees,
 			}
 		case ev := <-w.chainSideCh:
 			// Short circuit for duplicate side blocks
@@ -1071,10 +1081,10 @@ func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
+func (w *worker) generateWork(params *generateParams) (*types.Block, *big.Int, error) {
 	work, err := w.prepareWork(params)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer work.discard()
 
@@ -1090,7 +1100,11 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	return w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return block, totalFees(block, work.receipts), nil
 }
 
 // commitWork generates several new sealing tasks based on the parent block
@@ -1180,9 +1194,12 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			select {
 			case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 				w.unconfirmed.Shift(block.NumberU64() - 1)
+
+				fees := totalFees(block, env.receipts)
+				feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), new(big.Float).SetInt(big.NewInt(params.Ether)))
 				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 					"uncles", len(env.uncles), "txs", env.tcount,
-					"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+					"gas", block.GasUsed(), "fees", feesInEther,
 					"elapsed", common.PrettyDuration(time.Since(start)))
 
 			case <-w.exitCh:
@@ -1199,11 +1216,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 // getSealingBlock generates the sealing block based on the given parameters.
 // The generation result will be passed back via the given channel no matter
 // the generation itself succeeds or not.
-func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (chan *types.Block, chan error, error) {
-	var (
-		resCh = make(chan *types.Block, 1)
-		errCh = make(chan error, 1)
-	)
+func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase common.Address, random common.Hash, noTxs bool) (*types.Block, *big.Int, error) {
 	req := &getWorkReq{
 		params: &generateParams{
 			timestamp:  timestamp,
@@ -1215,12 +1228,15 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 			noExtra:    true,
 			noTxs:      noTxs,
 		},
-		result: resCh,
-		err:    errCh,
+		result: make(chan *newPayloadResult, 1),
 	}
 	select {
 	case w.getWorkCh <- req:
-		return resCh, errCh, nil
+		result := <-req.result
+		if result.err != nil {
+			return nil, nil, result.err
+		}
+		return result.block, result.fees, nil
 	case <-w.exitCh:
 		return nil, nil, errors.New("miner closed")
 	}
@@ -1251,14 +1267,14 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 	}
 }
 
-// totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
-func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
+// totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
+func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	feesWei := new(big.Int)
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
-	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+	return feesWei
 }
 
 // signalToErr converts the interruption signal to a concrete error type for return.
