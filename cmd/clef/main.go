@@ -394,43 +394,6 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, error){
 	return internalApi, nil
 }
 
-func listAccounts(c *cli.Context) error {
-	internalApi, err := initInternalApi(c)
-	accs, err := internalApi.ListAccounts(context.Background())
-	if err != nil {
-		return err
-	}
-	if len(accs) == 0 {
-		fmt.Println("\nThe keystore is empty.")
-	}
-	fmt.Println()
-	for _, account := range accs {
-		fmt.Println(account.Address)
-	}
-	return err
-}
-
-func listWallets(c *cli.Context) error{
-	internalApi, err := initInternalApi(c)
-	if err != nil {
-		return err
-	}
-	wallets := internalApi.ListWallets()
-	if len(wallets) == 0 {
-		fmt.Println("\nThere are no wallets.")
-	}
-	fmt.Println()
-	for i, wallet := range wallets {
-		fmt.Printf("Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
-		fmt.Printf("Accounts in Wallet %d:\n", i)
-		for j, acc := range wallet.Accounts {
-			fmt.Printf("Account %d: %v (%v)\n", j, acc.Address, acc.URL)
-		}
-		fmt.Println()
-	}
-	return nil
-}
-
 func setCredential(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		utils.Fatalf("This command requires an address to be passed as an argument")
@@ -523,6 +486,43 @@ func initialize(c *cli.Context) error {
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
 
+	return nil
+}
+
+func listAccounts(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
+	accs, err := internalApi.ListAccounts(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(accs) == 0 {
+		fmt.Println("\nThe keystore is empty.")
+	}
+	fmt.Println()
+	for _, account := range accs {
+		fmt.Println(account.Address)
+	}
+	return err
+}
+
+func listWallets(c *cli.Context) error{
+	internalApi, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	wallets := internalApi.ListWallets()
+	if len(wallets) == 0 {
+		fmt.Println("\nThere are no wallets.")
+	}
+	fmt.Println()
+	for i, wallet := range wallets {
+		fmt.Printf("Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
+		fmt.Printf("Accounts in Wallet %d:\n", i)
+		for j, acc := range wallet.Accounts {
+			fmt.Printf("Account %d: %v (%v)\n", j, acc.Address, acc.URL)
+		}
+		fmt.Println()
+	}
 	return nil
 }
 
