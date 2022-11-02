@@ -378,11 +378,10 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
-func listAccounts(c *cli.Context) error {
+func initInternalApi(c *cli.Context) (*core.UIServerAPI, error){
 	if err := initialize(c); err != nil {
-		return err
+		return nil, err
 	}
-	// listaccounts is meant for users using the CLI.
 	var (
 		ui                        = core.NewCommandlineUI()
 		pwStorage storage.Storage = &storage.NoStorage{}
@@ -390,9 +389,13 @@ func listAccounts(c *cli.Context) error {
 		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
 	)
 	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
-	// Access external API and call List()
 	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
 	internalApi := core.NewUIServerAPI(api)
+	return internalApi, nil
+}
+
+func listAccounts(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
 	accs, err := internalApi.ListAccounts(context.Background())
 	if err != nil {
 		return err
@@ -402,36 +405,28 @@ func listAccounts(c *cli.Context) error {
 	}
 	fmt.Println()
 	for _, account := range accs {
-		fmt.Printf("%v (%v)\n", account.Address, account.URL)
+		fmt.Println(account.Address)
 	}
 	return err
 }
 
 func listWallets(c *cli.Context) error{
-	if err := initialize(c); err != nil {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
 		return err
 	}
-	// listaccounts is meant for users using the CLI.
-	var (
-		ui                        = core.NewCommandlineUI()
-		pwStorage storage.Storage = &storage.NoStorage{}
-		ksLoc                     = c.String(keystoreFlag.Name)
-		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
-	)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
-	// Access external API and call List()
-	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
-	internalApi := core.NewUIServerAPI(api)
 	wallets := internalApi.ListWallets()
 	if len(wallets) == 0 {
 		fmt.Println("\nThere are no wallets.")
 	}
 	fmt.Println()
 	for i, wallet := range wallets {
-		fmt.Printf("%d. Keystore at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
-		for _, acc := range wallet.Accounts {
-			fmt.Printf("\t%v (%v)\n", acc.Address, acc.URL)
+		fmt.Printf("Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
+		fmt.Printf("Accounts in Wallet %d:\n", i)
+		for j, acc := range wallet.Accounts {
+			fmt.Printf("Account %d: %v (%v)\n", j, acc.Address, acc.URL)
 		}
+		fmt.Println()
 	}
 	return nil
 }
@@ -495,23 +490,10 @@ func removeCredential(ctx *cli.Context) error {
 }
 
 func newAccount(c *cli.Context) error {
-	if err := initialize(c); err != nil {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
 		return err
 	}
-	// The newaccount is meant for users using the CLI, since 'real' external
-	// UIs can use the UI-api instead. So we'll just use the native CLI UI here.
-	var (
-		ui                        = core.NewCommandlineUI()
-		pwStorage storage.Storage = &storage.NoStorage{}
-		ksLoc                     = c.String(keystoreFlag.Name)
-		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
-	)
-	log.Info("Starting clef", "keystore", ksLoc, "light-kdf", lightKdf)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
-	// This gives is us access to the external API
-	apiImpl := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
-	// This gives us access to the internal API
-	internalApi := core.NewUIServerAPI(apiImpl)
 	addr, err := internalApi.New(context.Background())
 	if err == nil {
 		fmt.Printf("Generated account %v\n", addr.String())
