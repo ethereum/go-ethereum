@@ -491,6 +491,9 @@ func initialize(c *cli.Context) error {
 
 func listAccounts(c *cli.Context) error {
 	internalApi, err := initInternalApi(c)
+	if err != nil {
+	    return err
+	}
 	accs, err := internalApi.ListAccounts(context.Background())
 	if err != nil {
 		return err
