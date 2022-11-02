@@ -161,25 +161,11 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			rawStack.Close()
 			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
-		// If we have the Ropsten testnet, hard code the chain configs too
-		if config.EthereumGenesis == RopstenGenesis() {
-			genesis.Config = params.RopstenChainConfig
-			if config.EthereumNetworkID == 1 {
-				config.EthereumNetworkID = 3
-			}
-		}
 		// If we have the Sepolia testnet, hard code the chain configs too
 		if config.EthereumGenesis == SepoliaGenesis() {
 			genesis.Config = params.SepoliaChainConfig
 			if config.EthereumNetworkID == 1 {
 				config.EthereumNetworkID = 11155111
-			}
-		}
-		// If we have the Rinkeby testnet, hard code the chain configs too
-		if config.EthereumGenesis == RinkebyGenesis() {
-			genesis.Config = params.RinkebyChainConfig
-			if config.EthereumNetworkID == 1 {
-				config.EthereumNetworkID = 4
 			}
 		}
 		// If we have the Goerli testnet, hard code the chain configs too

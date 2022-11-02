@@ -4009,10 +4009,10 @@ func TestTxIndexer(t *testing.T) {
 }
 
 func TestCreateThenDeletePreByzantium(t *testing.T) {
-	// We use Ropsten chain config instead of Testchain config, this is
-	// deliberate: we want to use pre-byz rules where we have intermediate state roots
-	// between transactions.
-	testCreateThenDelete(t, params.RopstenChainConfig)
+	// We use the chain config without enabling any forks instead of Testchain config,
+	// this is deliberate: we want to use pre-byz rules where we have intermediate
+	// state roots between transactions.
+	testCreateThenDelete(t, params.NonActivatedConfig)
 }
 func TestCreateThenDeletePostByzantium(t *testing.T) {
 	testCreateThenDelete(t, params.TestChainConfig)

@@ -53,7 +53,6 @@ func TestDifficulty(t *testing.T) {
 	// files are 2 years old, contains strange values
 	dt.skipLoad("difficultyCustomHomestead\\.json")
 
-	dt.config("Ropsten", *params.RopstenChainConfig)
 	dt.config("Frontier", params.ChainConfig{})
 
 	dt.config("Homestead", params.ChainConfig{
@@ -64,7 +63,6 @@ func TestDifficulty(t *testing.T) {
 		ByzantiumBlock: big.NewInt(0),
 	})
 
-	dt.config("Frontier", *params.RopstenChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
 	dt.config("Constantinople", params.ChainConfig{
