@@ -40,7 +40,7 @@ func TestBlobLru(t *testing.T) {
 	// Zero:th should be evicted
 	{
 		k := fmt.Sprintf("key-%d", 0)
-		if _, ok := lru.Get(k); ok {
+		if val := lru.Get([]byte(k)); val != nil {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}
@@ -48,11 +48,11 @@ func TestBlobLru(t *testing.T) {
 	for i := 1; i < 11; i++ {
 		k := fmt.Sprintf("key-%d", i)
 		want := fmt.Sprintf("value-%04d", i)
-		have, ok := lru.Get(k)
-		if !ok {
+		have := lru.Get([]byte(k))
+		if have == nil {
 			t.Fatalf("missing key %v", k)
 		}
-		if have != want {
+		if string(have) != want {
 			t.Fatalf("wrong value, have %v want %v", have, want)
 		}
 	}
@@ -77,7 +77,7 @@ func TestBlobLruOverflow(t *testing.T) {
 	// Elems 0-9 should be missing
 	for i := 1; i < 10; i++ {
 		k := fmt.Sprintf("key-%d", i)
-		if _, ok := lru.Get(k); ok {
+		if val := lru.Get([]byte(k)); val != nil {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}

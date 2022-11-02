@@ -43,6 +43,11 @@ func NewSizeConstraiedLRU(max uint64) *SizeConstrainedLRU {
 	}
 }
 
+// Set adds a value to the cache.  Returns true if an eviction occurred.
+func (c *SizeConstrainedLRU) Set(key []byte, value []byte) (evicted bool) {
+	return c.Add(string(key), string(value))
+}
+
 // Add adds a value to the cache.  Returns true if an eviction occurred.
 func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
 	targetSize := c.size + uint64(len(value))
@@ -61,9 +66,9 @@ func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *SizeConstrainedLRU) Get(key string) (value string, ok bool) {
-	if v, ok := c.lru.Get(key); ok {
-		return v.(string), ok
+func (c *SizeConstrainedLRU) Get(key []byte) []byte {
+	if v, ok := c.lru.Get(string(key)); ok {
+		return []byte(v.(string))
 	}
-	return "", false
+	return nil
 }
