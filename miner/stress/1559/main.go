@@ -43,10 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var (
-	londonBlock = big.NewInt(30) // Predefined london fork block for activating eip 1559.
-)
-
 func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
@@ -197,7 +193,6 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	genesis := core.DefaultSepoliaGenesisBlock()
 
 	genesis.Config = params.AllEthashProtocolChanges
-	genesis.Config.LondonBlock = londonBlock
 	genesis.Difficulty = params.MinimumDifficulty
 
 	// Small gaslimit for easier basefee moving testing.
@@ -211,11 +206,6 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 		genesis.Alloc[crypto.PubkeyToAddress(faucet.PublicKey)] = core.GenesisAccount{
 			Balance: new(big.Int).Exp(big.NewInt(2), big.NewInt(128), nil),
 		}
-	}
-	if londonBlock.Sign() == 0 {
-		log.Info("Enabled the eip 1559 by default")
-	} else {
-		log.Info("Registered the london fork", "number", londonBlock)
 	}
 	return genesis
 }
