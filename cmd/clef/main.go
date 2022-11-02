@@ -452,18 +452,6 @@ func removeCredential(ctx *cli.Context) error {
 	return nil
 }
 
-func newAccount(c *cli.Context) error {
-	internalApi, err := initInternalApi(c)
-	if err != nil {
-		return err
-	}
-	addr, err := internalApi.New(context.Background())
-	if err == nil {
-		fmt.Printf("Generated account %v\n", addr.String())
-	}
-	return err
-}
-
 func initialize(c *cli.Context) error {
 	// Set up the logger to print everything
 	logOutput := os.Stdout
@@ -487,6 +475,18 @@ func initialize(c *cli.Context) error {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
 
 	return nil
+}
+
+func newAccount(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	addr, err := internalApi.New(context.Background())
+	if err == nil {
+		fmt.Printf("Generated account %v\n", addr.String())
+	}
+	return err
 }
 
 func listAccounts(c *cli.Context) error {
@@ -519,8 +519,7 @@ func listWallets(c *cli.Context) error{
 	}
 	fmt.Println()
 	for i, wallet := range wallets {
-		fmt.Printf("Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
-		fmt.Printf("Accounts in Wallet %d:\n", i)
+		fmt.Printf("- Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
 		for j, acc := range wallet.Accounts {
 			fmt.Printf("  -Account %d: %v (%v)\n", j, acc.Address, acc.URL)
 		}
