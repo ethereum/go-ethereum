@@ -1,4 +1,15 @@
-import { Box, Button, Image, Link, Stack, HStack, Text } from '@chakra-ui/react';
+import {
+  Box,
+  Center,
+  Button,
+  Flex,
+  Grid,
+  Image,
+  Link,
+  Stack,
+  HStack,
+  Text
+} from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -29,61 +40,92 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   DOWNLOAD_HEADER_BUTTONS.sourceCode.buildURL = sourceCodeURL;
 
   return (
-    <Stack border='3px solid' borderColor='brand.light.primary' py={4} px={4}>
-      <Stack alignItems='center'>
-        <Image src='/images/pages/gopher-downloads-front-light.svg' alt='Gopher plugged in' />
-      </Stack>
+    <Flex border='3px solid' borderColor='brand.light.primary' py={4} px={4} flexDirection='row'>
+      <Flex flexDirection='column'>
+        <Flex mb={4} direction={{ base: 'column', md: 'row-reverse' }}>
+          <Flex
+            py={{ base: 0 }}
+            px={{ base: 8 }}
+            flex={{ base: 'none' }}
+            display={{ base: '', lg: 'none' }}
+          >
+            <Center>
+              <Image
+                src='/images/pages/gopher-downloads-front-light.svg'
+                alt='Gopher plugged in'
+                w={{ md: 72 }}
+              />
+            </Center>
+          </Flex>
 
-      <Box mb={4}>
-        <Box as='h1' textStyle='h1'>
-          Download go-ethereum
-        </Box>
+          <Flex flexDirection={{ base: 'column' }} alignItems={{ base: 'flex-start' }}>
+            <Box as='h1' textStyle='h1'>
+              Download go-ethereum
+            </Box>
 
-        <Text
-          // TODO: move text style to theme
-          fontFamily='"JetBrains Mono", monospace'
-          lineHeight='21px'
-          mb={8}
-        >
-          {currentBuildName} ({currentBuildVersion})
-        </Text>
+            <Text
+              // TODO: move text style to theme
+              fontFamily='"JetBrains Mono", monospace'
+              lineHeight='21px'
+              mb={8}
+            >
+              {currentBuildName} ({currentBuildVersion})
+            </Text>
 
-        <Text mb={4}>
-          You can download the latest 64-bit stable release of Geth for our primary platforms below.
-          Packages for all supported platforms, as well as develop builds, can be found further down
-          the page. If you&apos;re looking to install Geth and/or associated tools via your favorite
-          package manager, please check our installation guide.
-        </Text>
+            <Text mb={4}>
+              You can download the latest 64-bit stable release of Geth for our primary platforms
+              below. Packages for all supported platforms, as well as develop builds, can be found
+              further down the page. If you&apos;re looking to install Geth and/or associated tools
+              via your favorite package manager, please check our installation guide.
+            </Text>
+          </Flex>
+        </Flex>
 
-        {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
-          return (
-            <NextLink key={key} href={DOWNLOAD_HEADER_BUTTONS[key].buildURL} passHref>
-              <Button as='a' variant='primary' width={{ base: '100%' }} p={8} mb={4}>
-                <HStack spacing={4}>
-                  <Stack alignItems='center'>
-                    <Image
-                      src={DOWNLOAD_HEADER_BUTTONS[key].image}
-                      alt={DOWNLOAD_HEADER_BUTTONS[key].imageAlt}
-                    />
-                  </Stack>
-                  <Box>
-                    <Text textStyle='downloads-button-label'>
-                      For {DOWNLOAD_HEADER_BUTTONS[key].name}
-                    </Text>
-                    <Text textStyle='downloads-button-label'>geth {currentBuildName}</Text>
-                  </Box>
-                </HStack>
-              </Button>
-            </NextLink>
-          );
-        })}
+        <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4} mb={4}>
+          {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
+            return (
+              <NextLink key={key} href={DOWNLOAD_HEADER_BUTTONS[key].buildURL} passHref>
+                <Button as='a' variant='primary' width={{ base: '100%' }} p={8}>
+                  <HStack spacing={4}>
+                    <Stack alignItems='center'>
+                      <Image
+                        src={DOWNLOAD_HEADER_BUTTONS[key].image}
+                        alt={DOWNLOAD_HEADER_BUTTONS[key].imageAlt}
+                      />
+                    </Stack>
+                    <Box>
+                      <Text textStyle='downloads-button-label'>
+                        For {DOWNLOAD_HEADER_BUTTONS[key].name}
+                      </Text>
+                      <Text textStyle='downloads-button-label'>geth {currentBuildName}</Text>
+                    </Box>
+                  </HStack>
+                </Button>
+              </NextLink>
+            );
+          })}
+        </Grid>
 
         <Box textAlign={'center'}>
           <Link href={releaseNotesURL} isExternal variant='light'>
             Release notes for {currentBuildName} {currentBuildVersion}
           </Link>
         </Box>
-      </Box>
-    </Stack>
+      </Flex>
+      <Flex
+        py={{ base: 0 }}
+        px={{ base: 8 }}
+        flex={{ base: 'none' }}
+        display={{ base: 'none', lg: 'flex' }}
+      >
+        <Center>
+          <Image
+            src='/images/pages/gopher-downloads-front-light.svg'
+            alt='Gopher plugged in'
+            w={96}
+          />
+        </Center>
+      </Flex>
+    </Flex>
   );
 };

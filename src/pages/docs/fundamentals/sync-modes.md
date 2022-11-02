@@ -3,7 +3,7 @@ title: Sync modes
 description: Introduction to Geth's sync modes
 ---
 
-Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. Now that Ethereum uses proof-of-stake based consensus, a consensus client is required for Geth to sync. 
+Syncing is the process by which Geth catches up to the latest Ethereum block and current global state. There are several ways to sync a Geth node that differ in their speed, storage requirements and trust assumptions. Now that Ethereum uses proof-of-stake based consensus, a consensus client is required for Geth to sync.
 
 ## Full nodes
 
@@ -13,7 +13,7 @@ There are two types of full node that use different mechanisms to sync up to the
 
 A snap sync'd node holds the most recent 128 block states in memory, so transactions in that range are always quickly accessible. However, snap-sync only starts processing from a relatively recent block (as opposed to genesis for a full node). Between the initial sync block and the 128 most recent blocks, the node stores occasional checkpoints that can be used to rebuild the state on-the-fly. This means transactions can be traced back as far as the block that was used for the initial sync. Tracing a single transaction requires reexecuting all preceding transactions in the same block **and** all preceding blocks until the previous stored snapshot. Snap-sync'd nodes are therefore full nodes, with the only difference being the initial synchronization required a checkpoint block to sync from instead of independently verifying the chain all the way from genesis. Snap sync then only verifies the proof-of-work and ancestor-child block progression and assumes that the state transitions are correct rather than re-executing the transactions in each block to verify the state changes. Snap sync is much faster than block-by-block sync. To start a node with snap sync pass `--syncmode snap` at startup.
 
-Snap sync starts by downloading the headers for a chunk of blocks. Once the headers have been verified, the block bodies and receipts for those blocks are downloaded. In parallel, Geth also sync begins state-sync. In state-sync, Geth first downloads the leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is then regenerated locally. The state download is the part of the snap-sync that takes the most time to complete and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also progressing at the same time and invalidating some of the regenerated state data. This means it is also necessary to have a 'healing' phase where errors in the state are fixed. It is not possible to monitor the progress of the state heal because the extent of the errors cannot be known until the current state has already been regenerated. Geth regularly reports `Syncing, state heal in progress` regularly during state heal - this informs the user that state heal has not finished. It is also possible to confirm this using `eth.syncing` - if this command returns `false` then the node is in sync. If it returns anything other than `false` then syncing is still in progress. 
+Snap sync starts by downloading the headers for a chunk of blocks. Once the headers have been verified, the block bodies and receipts for those blocks are downloaded. In parallel, Geth also sync begins state-sync. In state-sync, Geth first downloads the leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is then regenerated locally. The state download is the part of the snap-sync that takes the most time to complete and the progress can be monitored using the ETA values in the log messages. However, the blockchain is also progressing at the same time and invalidating some of the regenerated state data. This means it is also necessary to have a 'healing' phase where errors in the state are fixed. It is not possible to monitor the progress of the state heal because the extent of the errors cannot be known until the current state has already been regenerated. Geth regularly reports `Syncing, state heal in progress` regularly during state heal - this informs the user that state heal has not finished. It is also possible to confirm this using `eth.syncing` - if this command returns `false` then the node is in sync. If it returns anything other than `false` then syncing is still in progress.
 
 The healing has to outpace the growth of the blockchain, otherwise the node will never catch up to the current state. There are some hardware factors that determine the speed of the state healing (speed of disk read/write and internet connection) and also the total gas used in each block (more gas means more changes to the state that have to be handled).
 
@@ -23,9 +23,7 @@ To summarize, snap sync progresses in the following sequence:
 - download block bodies and receipts. In parallel, download raw state data and build state trie
 - heal state trie to account for newly arriving data
 
-
 **Note** Snap sync is the default behaviour, so if the `--syncmode` value is not passed to Geth at startup, Geth will use snap sync. A node that is started using `snap` will switch to block-by-block sync once it has caught up to the head of the chain.
-
 
 ### Full
 
@@ -64,7 +62,6 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or [public APIs/web apps](https://eth-clients.github.io/checkpoint-sync-endpoints/).
 
 Please see the pages on [syncing](/docs/interface/sync-modes.md) for more detail. For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/interface/logs.md) page.
-
 
 ## Summary
 

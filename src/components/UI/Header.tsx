@@ -17,12 +17,10 @@ export const Header: FC = () => {
         p={4}
         justifyContent='center'
         alignItems='flex-start'
-        borderRight={{ base: 'none', sm: '2px solid #11866f'}}
+        borderRight={{ base: 'none', sm: '2px solid #11866f' }}
         flexGrow={2}
       >
-        <Text textStyle='header-font'>
-          go-ethereum
-        </Text>
+        <Text textStyle='header-font'>go-ethereum</Text>
       </Stack>
 
       <Flex>
@@ -92,10 +90,7 @@ export const Header: FC = () => {
         </Stack>
 
         {/* DARK MODE SWITCH */}
-        <Box
-          p={4}
-          borderRight={{ base: '2px solid #11866f', md: 'none' }}
-        >
+        <Box p={4} borderRight={{ base: '2px solid #11866f', md: 'none' }}>
           <MoonIcon />
         </Box>
 
