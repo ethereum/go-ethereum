@@ -503,7 +503,7 @@ func listAccounts(c *cli.Context) error {
 	}
 	fmt.Println()
 	for _, account := range accs {
-		fmt.Println(account.Address)
+		fmt.Printf("%v (%v)\n", account.Address, account.URL)
 	}
 	return err
 }
