@@ -492,7 +492,7 @@ func newAccount(c *cli.Context) error {
 func listAccounts(c *cli.Context) error {
 	internalApi, err := initInternalApi(c)
 	if err != nil {
-	    return err
+		return err
 	}
 	accs, err := internalApi.ListAccounts(context.Background())
 	if err != nil {
@@ -508,7 +508,7 @@ func listAccounts(c *cli.Context) error {
 	return err
 }
 
-func listWallets(c *cli.Context) error{
+func listWallets(c *cli.Context) error {
 	internalApi, err := initInternalApi(c)
 	if err != nil {
 		return err
