@@ -18,16 +18,19 @@ package lru
 
 import (
 	"math"
+	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
-// SizeConstrainedLRU is a wrapper around simplelru.LRU, which
-// adds a byte-size constraint.
+// SizeConstrainedLRU is a wrapper around simplelru.LRU. The simplelru.LRU is capable
+// of item-count constraints, but is not capable of enforcing a byte-size constraint,
+// hence this wrapper.
 type SizeConstrainedLRU struct {
 	size    uint64
 	maxSize uint64
 	lru     *simplelru.LRU
+	lock    sync.RWMutex
 }
 
 // NewSizeConstraiedLRU creates a new SizeConstrainedLRU.
@@ -50,6 +53,8 @@ func (c *SizeConstrainedLRU) Set(key []byte, value []byte) (evicted bool) {
 
 // Add adds a value to the cache.  Returns true if an eviction occurred.
 func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	targetSize := c.size + uint64(len(value))
 	for targetSize > c.maxSize {
 		evicted = true
@@ -67,6 +72,8 @@ func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
 
 // Get looks up a key's value from the cache.
 func (c *SizeConstrainedLRU) Get(key []byte) []byte {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	if v, ok := c.lru.Get(string(key)); ok {
 		return []byte(v.(string))
 	}
