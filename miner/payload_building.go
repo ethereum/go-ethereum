@@ -48,19 +48,18 @@ type Payload struct {
 	full     *types.Block
 	fullFees *big.Int
 	stop     chan struct{}
-	lock     *sync.Mutex
+	lock     sync.Mutex
 	cond     *sync.Cond
 }
 
 // newPayload initializes the payload object.
 func newPayload(empty *types.Block) *Payload {
-	lock := new(sync.Mutex)
-	return &Payload{
+	payload := &Payload{
 		empty: empty,
 		stop:  make(chan struct{}),
-		lock:  lock,
-		cond:  sync.NewCond(lock),
 	}
+	payload.cond = sync.NewCond(&payload.lock)
+	return payload
 }
 
 // update updates the full-block with latest built version.
