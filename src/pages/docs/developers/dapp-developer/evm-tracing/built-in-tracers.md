@@ -3,11 +3,11 @@ title: Built-in tracers
 description: Explanation of the tracers that come bundled in Geth as part of the tracing API.
 ---
 
-Geth comes bundled with a choice of tracers ready for usage through the [tracing API](/docs/rpc/ns-debug). Some of them are implemented natively in Go, and others in JS. In this page a summary of each of these will be outlined. They have to be specified by name when sending a request. The only exception is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods and cannot be specified by name.
+Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by name when sending a request. 
 
-## Struct logger
+## Struct/opcode logger
 
-Struct logger or opcode logger is a native Go tracer which executes a transaction and emits the opcode and execution context at every step. This is the tracer that will be used when no name is passed to the API, e.g. `debug.traceTransaction(<txhash>)`. The following information is emitted at each step:
+The struct logger (aka opcode logger) is a native Go tracer which executes a transaction and emits the opcode and execution context at every step. This is the tracer that will be used when no name is passed to the API, e.g. `debug.traceTransaction(<txhash>)`. The following information is emitted at each step:
 
 | field      | type          | description                                                                                                                      |
 | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,3 +107,46 @@ The following are a list of tracers written in JS that come as part of Geth:
 - `opcountTracer` Counts the total number of opcodes executed
 - `trigramTracer`: Counts the opcode trigrams
 - `unigramTracer`: Counts the occurances of each opcode
+
+
+
+
+
+
+#############################
+
+To follow along with this tutorial, transaction hashes can be found from a local Geth node (e.g. by attaching a [Javascript console](/docs/interface/javascript-console) and running `eth.getBlock('latest')` then passing a transaction hash from the returned block to `debug.traceTransaction()`) or from a block explorer (for [Mainnet](https://etherscan.io/) or a [testnet](https://goerli.etherscan.io/)).
+
+It is also possible to configure the trace by passing Boolean (true/false) values for four parameters that tweak the verbosity of the trace. By default, the _EVM memory_ and _Return data_ are not reported but the _EVM stack_ and _EVM storage_ are. To report the maximum amount of data:
+
+```shell
+enableMemory: true
+disableStack: false
+disableStorage: false
+enableReturnData: true
+```
+
+An example call, made in the Geth Javascript console, configured to report the maximum amount of data looks as follows:
+
+```js
+debug.traceTransaction('0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f', {
+  enableMemory: true,
+  disableStack: false,
+  disableStorage: false,
+  enableReturnData: true
+});
+```
+
+Running the above operation on the Rinkeby network (with a node retaining enough history) will result in this [trace dump](https://gist.github.com/karalabe/c91f95ac57f5e57f8b950ec65ecc697f).
+
+Alternatively, disabling _EVM Stack_, _EVM Memory_, _Storage_ and _Return data_ (as demonstrated in the Curl request below) results in the following, much shorter, [trace dump](https://gist.github.com/karalabe/d74a7cb33a70f2af75e7824fc772c5b4).
+
+```
+$ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableStorage": true}]}' localhost:8545
+```
+
+
+
+######################################################
+
+
