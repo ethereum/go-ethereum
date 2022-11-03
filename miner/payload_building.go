@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // BuildPayloadArgs contains the provided parameters for building payload.
@@ -77,6 +79,10 @@ func (payload *Payload) update(block *types.Block, fees *big.Int) {
 	if payload.full == nil || fees.Cmp(payload.fullFees) > 0 {
 		payload.full = block
 		payload.fullFees = fees
+
+		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), new(big.Float).SetInt(big.NewInt(params.Ether)))
+		log.Info("Updated payload", "number", block.NumberU64(), "hash", block.Hash(),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther)
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
