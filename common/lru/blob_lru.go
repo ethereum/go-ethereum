@@ -26,6 +26,8 @@ import (
 // SizeConstrainedLRU is a wrapper around simplelru.LRU. The simplelru.LRU is capable
 // of item-count constraints, but is not capable of enforcing a byte-size constraint,
 // hence this wrapper.
+// OBS: This cache assumes that items are content-addressed: keys are unique per content.
+// In other words: two Add(..) with the same key K, will always have the same value V.
 type SizeConstrainedLRU struct {
 	size    uint64
 	maxSize uint64
@@ -47,25 +49,33 @@ func NewSizeConstraiedLRU(max uint64) *SizeConstrainedLRU {
 }
 
 // Set adds a value to the cache.  Returns true if an eviction occurred.
+// OBS: This cache assumes that items are content-addressed: keys are unique per content.
+// In other words: two Set(..) with the same key K, will always have the same value V.
 func (c *SizeConstrainedLRU) Set(key []byte, value []byte) (evicted bool) {
 	return c.Add(string(key), string(value))
 }
 
 // Add adds a value to the cache.  Returns true if an eviction occurred.
+// OBS: This cache assumes that items are content-addressed: keys are unique per content.
+// In other words: two Add(..) with the same key K, will always have the same value V.
 func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	targetSize := c.size + uint64(len(value))
-	for targetSize > c.maxSize {
-		evicted = true
-		_, v, ok := c.lru.RemoveOldest()
-		if !ok {
-			// list is now empty. Break
-			break
+	// Unless it is already present, might need to evict something.
+	// OBS: If it is present, we still call Add internally to bump the recentness.
+	if !c.lru.Contains(key) {
+		targetSize := c.size + uint64(len(value))
+		for targetSize > c.maxSize {
+			evicted = true
+			_, v, ok := c.lru.RemoveOldest()
+			if !ok {
+				// list is now empty. Break
+				break
+			}
+			targetSize -= uint64(len(v.(string)))
 		}
-		targetSize -= uint64(len(v.(string)))
+		c.size = targetSize
 	}
-	c.size = targetSize
 	c.lru.Add(key, value)
 	return evicted
 }

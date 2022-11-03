@@ -96,3 +96,18 @@ func TestBlobLruOverflow(t *testing.T) {
 		}
 	}
 }
+
+// TestBlobLruSameItem tests what happens when inserting the same k/v multiple times.
+func TestBlobLruSameItem(t *testing.T) {
+	lru := NewSizeConstraiedLRU(100)
+	// Add one 10 byte-item 10 times
+	k := fmt.Sprintf("key-%d", 0)
+	v := fmt.Sprintf("value-%04d", 0)
+	for i := 0; i < 10; i++ {
+		lru.Add(k, v)
+	}
+	// The size should be accurate
+	if have, want := lru.size, uint64(10); have != want {
+		t.Fatalf("size wrong, have %d want %d", have, want)
+	}
+}
