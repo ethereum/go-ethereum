@@ -263,6 +263,9 @@ type APIConfig struct {
 
 	// Cors is the list of Cors endpoints
 	Cors []string `hcl:"corsdomain,optional" toml:"corsdomain,optional"`
+
+	// Origins is the list of endpoints to accept requests from (only consumed for websockets)
+	Origins []string `hcl:"origins,optional" toml:"origins,optional"`
 }
 
 type GpoConfig struct {
@@ -466,8 +469,7 @@ func DefaultConfig() *Config {
 				Prefix:  "",
 				Host:    "localhost",
 				API:     []string{"net", "web3"},
-				Cors:    []string{"localhost"},
-				VHost:   []string{"localhost"},
+				Origins: []string{"localhost"},
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
@@ -921,7 +923,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		HTTPVirtualHosts:    c.JsonRPC.Http.VHost,
 		HTTPPathPrefix:      c.JsonRPC.Http.Prefix,
 		WSModules:           c.JsonRPC.Ws.API,
-		WSOrigins:           c.JsonRPC.Ws.Cors,
+		WSOrigins:           c.JsonRPC.Ws.Origins,
 		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
 		GraphQLCors:         c.JsonRPC.Graphql.Cors,
 		GraphQLVirtualHosts: c.JsonRPC.Graphql.VHost,

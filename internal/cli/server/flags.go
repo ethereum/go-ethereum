@@ -350,17 +350,10 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "JsonRPC",
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:    "ws.corsdomain",
-		Usage:   "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value:   &c.cliConfig.JsonRPC.Ws.Cors,
-		Default: c.cliConfig.JsonRPC.Ws.Cors,
-		Group:   "JsonRPC",
-	})
-	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:    "ws.vhosts",
-		Usage:   "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value:   &c.cliConfig.JsonRPC.Ws.VHost,
-		Default: c.cliConfig.JsonRPC.Ws.VHost,
+		Name:    "ws.origins",
+		Usage:   "Origins from which to accept websockets requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.Origins,
+		Default: c.cliConfig.JsonRPC.Ws.Origins,
 		Group:   "JsonRPC",
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
