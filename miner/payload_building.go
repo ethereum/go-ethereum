@@ -80,7 +80,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int) {
 		payload.full = block
 		payload.fullFees = fees
 
-		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), new(big.Float).SetInt(big.NewInt(params.Ether)))
+		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 		log.Info("Updated payload", "number", block.NumberU64(), "hash", block.Hash(),
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther)
 	}
