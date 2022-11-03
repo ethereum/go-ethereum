@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // BuildPayloadArgs contains the provided parameters for building payload.
@@ -46,23 +48,22 @@ type Payload struct {
 	full     *types.Block
 	fullFees *big.Int
 	stop     chan struct{}
-	lock     *sync.Mutex
+	lock     sync.Mutex
 	cond     *sync.Cond
 }
 
 // newPayload initializes the payload object.
 func newPayload(empty *types.Block) *Payload {
-	lock := new(sync.Mutex)
-	return &Payload{
+	payload := &Payload{
 		empty: empty,
 		stop:  make(chan struct{}),
-		lock:  lock,
-		cond:  sync.NewCond(lock),
 	}
+	payload.cond = sync.NewCond(&payload.lock)
+	return payload
 }
 
 // update updates the full-block with latest built version.
-func (payload *Payload) update(block *types.Block, fees *big.Int) {
+func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.Duration) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -77,6 +78,10 @@ func (payload *Payload) update(block *types.Block, fees *big.Int) {
 	if payload.full == nil || fees.Cmp(payload.fullFees) > 0 {
 		payload.full = block
 		payload.fullFees = fees
+
+		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
+		log.Info("Updated payload", "number", block.NumberU64(), "hash", block.Hash(),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther, "elapsed", common.PrettyDuration(elapsed))
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
@@ -152,9 +157,10 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		for {
 			select {
 			case <-timer.C:
+				start := time.Now()
 				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, false)
 				if err == nil {
-					payload.update(block, fees)
+					payload.update(block, fees, time.Since(start))
 				}
 				timer.Reset(w.recommit)
 			case <-payload.stop:
