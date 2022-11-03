@@ -80,6 +80,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```cache.preimages```: Enable recording the SHA3/keccak preimages of trie keys
 
+- ```cache.triesinmemory```: Number of block states (tries) to keep in memory (default = 128)
+
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
 
 ### JsonRPC Options
@@ -96,9 +98,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 
-- ```ws.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
-
-- ```ws.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+- ```ws.origins```: Origins from which to accept websockets requests
 
 - ```graphql.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
 
