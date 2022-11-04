@@ -17,6 +17,9 @@ In its simplest form, tracing a transaction entails requesting the Ethereum node
 
 This means there are limits on the transactions that can be traced imposed by the synchronization and pruning configuration of a node:
 
+![state pruning options](/public/images/docs/state-pruning.png)
+
+
 - An **archive** node retains **all historical data** back to genesis. It can therefore trace arbitrary transactions at any point in the history of the chain. Tracing a single transaction requires reexecuting all preceding transactions in the same block.
 
 - A **node synced from genesis** node only retains the most recent 128 block states in memory. Older states are represented by a sequence of occasional checkpoints that intermediate states can be regenerated from. This means that states within the msot recent 128 blocks are immediately available, older states have to be regenerated from snapshots "on-the-fly". If the distance between the requested transaction and the most recent checkpoint is large, rebuilding the state can take a long time. Tracing a single transaction requires reexecuting all preceding transactions in the same block **and** all preceding blocks until the previous stored snapshot.
