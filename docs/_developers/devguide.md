@@ -88,6 +88,18 @@ For more information, see the [go test flags][testflag] documentation.
 
 ### Getting Stack Traces
 
+A stack trace provides a very detailed look into the current state of the geth node. 
+It helps us to debug issues easier as it contains information about what is currently 
+done by the node. Stack traces can be created by running `debug.stacks()` in the Geth
+console. If the node was started without the console command or with a script in the 
+background, the following command can be used to dump the stack trace into a file.
+
+```
+geth attach <path-to-geth.ipc> --exec "debug.stacks()" > stacktrace.txt
+```
+Geth logs the location of the IPC endpoint on startup. It is typically under 
+`/home/user/.ethereum/geth.ipc` or `/tmp/geth.ipc`.
+
 If `geth` is started with the `--pprof` option, a debugging HTTP server is made available
 on port 6060. You can bring up <http://localhost:6060/debug/pprof> to see the heap,
 running routines etc. By clicking "full goroutine stack dump" you can generate a trace
@@ -111,7 +123,10 @@ and have the stacktrace too, you can use the `-QUIT` signal with `kill`:
 killall -QUIT geth
 ```
 
-This will dump stack traces for each instance to their respective log file.
+This will dump stack traces for each instance to their respective log file. Please do not
+dump the stack trace into a GH issue as it is very hard for reviewers to read and intepret. 
+It is much better to upload the trace to a Github Gist or Pastebin and put the link in the
+issue.
 
 [install-guide]: ../install-and-build/installing-geth
 [code-review]: ../developers/code-review-guidelines
