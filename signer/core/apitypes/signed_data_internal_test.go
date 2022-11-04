@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -91,24 +92,25 @@ func TestParseAddress(t *testing.T) {
 	}{
 		{
 			Input:  [20]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
-			Output: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
 		},
 		{
 			Input:  "0x0102030405060708090A0B0C0D0E0F1011121314",
-			Output: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
 		},
 		{
 			Input:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
-			Output: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14},
+			Output: common.FromHex("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314"),
 		},
-		{
-			Input:  []byte{},
-			Output: nil,
-		},
-		{
-			Input:  [32]byte{},
-			Output: nil,
-		},
+		// Various error-cases:
+		{Input: "0x000102030405060708090A0B0C0D0E0F1011121314"}, // too long string
+		{Input: "0x01"}, // too short string
+		{Input: ""},
+		{Input: [32]byte{}},       // too long fixed-size array
+		{Input: [21]byte{}},       // too long fixed-size array
+		{Input: make([]byte, 19)}, // too short slice
+		{Input: make([]byte, 21)}, // too long slice
+		{Input: nil},
 	}
 
 	d := TypedData{}
@@ -118,16 +120,16 @@ func TestParseAddress(t *testing.T) {
 			if err == nil {
 				t.Errorf("test %d: expected error, got no error (result %x)", i, val)
 			}
-		} else {
-			if err != nil {
-				t.Errorf("test %d: expected no error, got %v", i, err)
-			}
-			if len(val) != 32 {
-				t.Errorf("test %d: expected len 32, got %d", i, len(val))
-			}
-			if !bytes.Equal(val, test.Output) {
-				t.Errorf("test %d: expected %x, got %x", i, test.Output, val)
-			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d: expected no error, got %v", i, err)
+		}
+		if have, want := len(val), 32; have != want {
+			t.Errorf("test %d: have len %d, want %d", i, have, want)
+		}
+		if !bytes.Equal(val, test.Output) {
+			t.Errorf("test %d: want %x, have %x", i, test.Output, val)
 		}
 	}
 }
