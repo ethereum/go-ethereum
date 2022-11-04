@@ -66,9 +66,15 @@ collections:
     caption: Clef
     sidebar_index: 7
     frontpage: _clef/Introduction.md
+  evm-tracing:
+    output: true
+    permalink: docs/:collection/:slug
+    caption: EVM tracing
+    sidebar_index: 8
+    frontpage: _evm-tracing/index.md
   vulnerabilities:
     output: true
     permalink: docs/:collection/:slug
     caption: Vulnerabilities
-    sidebar_index: 8
+    sidebar_index: 9
     frontpage: _vulnerabilies/vulnerabilities.md

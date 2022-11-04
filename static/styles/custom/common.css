@@ -2,7 +2,9 @@ body {
     padding-top: 50px;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
     margin-top: 36px;
     margin-bottom: 24px;
 }
@@ -23,8 +25,13 @@ code {
     overflow-x: scroll;
     overflow-y: hidden;
 }
+
 /* Darken down code highlighting */
-.highlight { color: #4b5a5b } /* Name */
+.highlight {
+    color: #4b5a5b
+}
+
+/* Name */
 
 a code {
     color: #18bc9c;
@@ -44,9 +51,9 @@ a code {
 }
 
 .emoji {
-    width:         1.5em;
-    height:        1.5em;
-    display:       inline-block;
+    width: 1.5em;
+    height: 1.5em;
+    display: inline-block;
     margin-bottom: -0.25em;
 }
 
@@ -58,7 +65,9 @@ table {
     margin-top: 16px;
     margin-bottom: 16px;
 }
-table thead tr th, table tbody tr td {
+
+table thead tr th,
+table tbody tr td {
     border-bottom: 1px solid #ddd;
     padding: 4px;
 }
@@ -68,24 +77,37 @@ table thead tr th, table tbody tr td {
 }
 
 
-img{
+img {
     margin-top: 2rem;
     margin-bottom: 2rem
 }
 
-img[alt="Remix"]{
-    width: 800px; 
+img[alt="state pruning options"] {
+    width: 850px;
     margin-top: 2rem;
     margin-bottom: 2rem;
 }
 
-img[alt="Clef ruleset logic"]{
-    width: 800px; 
+img[alt="Peter's Devcon2 talk"] {
+    width: 300px;
     margin-top: 2rem;
     margin-bottom: 2rem;
 }
-img[alt="Clef signing logic"]{
-    width: 800px; 
+
+img[alt="Remix"] {
+    width: 800px;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
+img[alt="Clef ruleset logic"] {
+    width: 800px;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
+img[alt="Clef signing logic"] {
+    width: 800px;
     margin-top: 2rem;
     margin-bottom: 2rem;
 

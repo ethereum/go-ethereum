@@ -1,6 +1,6 @@
 ---
 title: Go API
-sort_key: D
+sort_key: A
 ---
 
 Ethereum was originally conceptualized to be the base layer for [Web3][web3-link], providing 
