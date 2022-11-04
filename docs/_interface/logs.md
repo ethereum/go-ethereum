@@ -176,7 +176,6 @@ INFO [07-28|10:29:49.681] Block synchronisation started
 INFO [07-28|10:29:50.427] Imported new block headers               count=1    elapsed=253.434ms number=12,914,945 hash=ee1a08..9ce38a
 INFO [07-28|10:30:00.224] Imported new block receipts              count=64   elapsed=13.703s   number=12,914,881 hash=fef964..d789fc age=18m5s     size=7.69MiB
 INFO [07-28|10:30:18.658] Imported new block headers               count=1    elapsed=46.715ms  number=12,914,946 hash=7b24c8..2d8006
-INFO [07-28|10:30:21.665] Imported new state entries
 ```
 
 For state sync, Geth reports when the state heal is in progress. This can take a long time. 
