@@ -20,6 +20,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
@@ -35,8 +36,8 @@ type SizeConstrainedLRU struct {
 	lock    sync.RWMutex
 }
 
-// NewSizeConstraiedLRU creates a new SizeConstrainedLRU.
-func NewSizeConstraiedLRU(max uint64) *SizeConstrainedLRU {
+// NewSizeConstrainedLRU creates a new SizeConstrainedLRU.
+func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
 	lru, err := simplelru.NewLRU(math.MaxInt, nil)
 	if err != nil {
 		panic(err)
@@ -48,17 +49,10 @@ func NewSizeConstraiedLRU(max uint64) *SizeConstrainedLRU {
 	}
 }
 
-// Set adds a value to the cache.  Returns true if an eviction occurred.
-// OBS: This cache assumes that items are content-addressed: keys are unique per content.
-// In other words: two Set(..) with the same key K, will always have the same value V.
-func (c *SizeConstrainedLRU) Set(key []byte, value []byte) (evicted bool) {
-	return c.Add(string(key), string(value))
-}
-
 // Add adds a value to the cache.  Returns true if an eviction occurred.
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
-func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
+func (c *SizeConstrainedLRU) Add(key common.Hash, value string) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	// Unless it is already present, might need to evict something.
@@ -81,10 +75,10 @@ func (c *SizeConstrainedLRU) Add(key string, value string) (evicted bool) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *SizeConstrainedLRU) Get(key []byte) []byte {
+func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	if v, ok := c.lru.Get(string(key)); ok {
+	if v, ok := c.lru.Get(key); ok {
 		return []byte(v.(string))
 	}
 	return nil
