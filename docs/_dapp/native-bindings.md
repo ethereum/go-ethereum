@@ -1,6 +1,6 @@
 ---
 title: Go Contract Bindings
-sort_key: E
+sort_key: C
 ---
 
 This page introduces the concept of server-side native dapps. Geth provides the tools required

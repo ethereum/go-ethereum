@@ -1,6 +1,6 @@
 ---
 title: Go Account Management
-sort_key: D
+sort_key: B
 ---
 
 Geth provides a simple, yet thorough accounts package that includes all the tools developers

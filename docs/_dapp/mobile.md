@@ -1,6 +1,6 @@
 ---
 title: Geth for Mobile
-sort_key: F
+sort_key: D
 ---
 
 Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. 
