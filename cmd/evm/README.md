@@ -627,6 +627,14 @@ type BlockInfo struct {
 }
 ```
 
+## A Note on Encoding
+
+The encoding of values for `evm` utility attempts to be relatively flexible. It
+generally supports hex-encoded or decimal-encoded numeric values, and
+hex-encoded byte values (like `common.Address`, `common.Hash`, etc). When in
+doubt, the [`execution-apis`](https://github.com/ethereum/execution-apis) way
+of encoding should always be accepted.
+
 ## Testing
 
 There are many test cases in the [`cmd/evm/testdata`](./testdata) directory.
