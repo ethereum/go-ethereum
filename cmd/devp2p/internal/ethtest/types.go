@@ -127,7 +127,7 @@ func (msg NewBlock) Code() int     { return 23 }
 func (msg NewBlock) ReqID() uint64 { return 0 }
 
 // NewPooledTransactionHashes is the network packet for the tx hash propagation message.
-type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket
+type NewPooledTransactionHashes eth.NewPooledTransactionHashesPacket66
 
 func (msg NewPooledTransactionHashes) Code() int     { return 24 }
 func (msg NewPooledTransactionHashes) ReqID() uint64 { return 0 }

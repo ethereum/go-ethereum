@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -181,6 +182,8 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
+	// give the payload some time to be built
+	time.Sleep(100 * time.Millisecond)
 	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
 	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
@@ -586,12 +589,12 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		if resp.PayloadStatus.Status != beacon.VALID {
 			t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 		}
+		// give the payload some time to be built
+		time.Sleep(100 * time.Millisecond)
 		payload, err := api.GetPayloadV1(*resp.PayloadID)
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
-		// TODO(493456442, marius) this test can be flaky since we rely on a 100ms
-		// allowance for block generation internally.
 		if len(payload.Transactions) == 0 {
 			t.Fatalf("payload should not be empty")
 		}
@@ -618,11 +621,17 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 }
 
 func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	block, err := api.eth.Miner().GetSealingBlockSync(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random, false)
+	args := &miner.BuildPayloadArgs{
+		Parent:       parentHash,
+		Timestamp:    params.Timestamp,
+		FeeRecipient: params.SuggestedFeeRecipient,
+		Random:       params.Random,
+	}
+	payload, err := api.eth.Miner().BuildPayload(args)
 	if err != nil {
 		return nil, err
 	}
-	return beacon.BlockToExecutableData(block), nil
+	return payload.ResolveFull(), nil
 }
 
 func TestEmptyBlocks(t *testing.T) {
@@ -854,16 +863,17 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	}
 
 	// Test parent already post TTD in NewPayload
-	params := beacon.PayloadAttributesV1{
-		Timestamp:             parent.Time() + 1,
-		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
-		SuggestedFeeRecipient: parent.Coinbase(),
+	args := &miner.BuildPayloadArgs{
+		Parent:       parent.Hash(),
+		Timestamp:    parent.Time() + 1,
+		Random:       crypto.Keccak256Hash([]byte{byte(1)}),
+		FeeRecipient: parent.Coinbase(),
 	}
-	empty, err := api.eth.Miner().GetSealingBlockSync(parent.Hash(), params.Timestamp, params.SuggestedFeeRecipient, params.Random, true)
+	payload, err := api.eth.Miner().BuildPayload(args)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	data := *beacon.BlockToExecutableData(empty)
+	data := *payload.Resolve()
 	resp2, err := api.NewPayloadV1(data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
