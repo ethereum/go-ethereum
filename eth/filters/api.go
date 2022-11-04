@@ -336,6 +336,11 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
+			// Return an error if the user requested a toBlock that we don't have yet.
+			// Users can filter to latest by not specifying a `toBlock`.
+			if end > rpc.LatestBlockNumber.Int64() {
+				return nil, errors.New("toBlock not found")
+			}
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
