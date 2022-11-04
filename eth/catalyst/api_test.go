@@ -878,8 +878,8 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	data := *payload.Resolve()
-	resp2, err := api.NewPayloadV1(data)
+	data, _, _ := payload.Resolve()
+	resp2, err := api.NewPayloadV1(*data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
 	}

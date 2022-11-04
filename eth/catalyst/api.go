@@ -336,11 +336,24 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	data := api.localBlocks.get(payloadID)
+	data, _, _ := api.localBlocks.get(payloadID)
 	if data == nil {
 		return nil, beacon.UnknownPayload
 	}
 	return data, nil
+}
+
+// GetPayloadWithFees returns a cached payload specified by the provided id.
+// The corresponding fees collected in this block along with the fee history
+// will also be returned.
+// Note it's not standardized yet and only used for development purposes now.
+func (api *ConsensusAPI) GetPayloadWithFees(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, *big.Int, []*big.Int, error) {
+	log.Trace("Engine API request received", "method", "GetPayloadWithFees", "id", payloadID)
+	data, fees, history := api.localBlocks.get(payloadID)
+	if data == nil {
+		return nil, nil, nil, beacon.UnknownPayload
+	}
+	return data, fees, history, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.

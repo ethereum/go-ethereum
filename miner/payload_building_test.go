@@ -72,8 +72,8 @@ func TestBuildPayload(t *testing.T) {
 
 	// Ensure resolve can be called multiple times and the
 	// result should be unchanged
-	dataOne := payload.Resolve()
-	dataTwo := payload.Resolve()
+	dataOne, _, _ := payload.Resolve()
+	dataTwo, _, _ := payload.Resolve()
 	if !reflect.DeepEqual(dataOne, dataTwo) {
 		t.Fatal("Unexpected payload data")
 	}

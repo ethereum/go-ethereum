@@ -59,13 +59,14 @@ func (args *BuildPayloadArgs) Id() beacon.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id       beacon.PayloadID
-	empty    *types.Block
-	full     *types.Block
-	fullFees *big.Int
-	stop     chan struct{}
-	lock     sync.Mutex
-	cond     *sync.Cond
+	id         beacon.PayloadID
+	empty      *types.Block
+	full       *types.Block
+	fullFees   *big.Int
+	feeHistory []*big.Int
+	stop       chan struct{}
+	lock       sync.Mutex
+	cond       *sync.Cond
 }
 
 // newPayload initializes the payload object.
@@ -94,6 +95,9 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 	// In post-merge stage, there is no uncle reward anymore and transaction
 	// fee(apart from the mev revenue) is the only indicator for comparison.
 	if payload.full == nil || fees.Cmp(payload.fullFees) > 0 {
+		if payload.fullFees != nil {
+			payload.feeHistory = append(payload.feeHistory, payload.fullFees)
+		}
 		payload.full = block
 		payload.fullFees = fees
 
@@ -106,8 +110,9 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 }
 
 // Resolve returns the latest built payload and also terminates the background
-// thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
+// thread for updating payload. The corresponding transaction fees and the fee
+// history will also be returned as well. It's safe to be called multiple times.
+func (payload *Payload) Resolve() (*beacon.ExecutableDataV1, *big.Int, []*big.Int) {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -117,9 +122,9 @@ func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return beacon.BlockToExecutableData(payload.full)
+		return beacon.BlockToExecutableData(payload.full), payload.fullFees, payload.feeHistory
 	}
-	return beacon.BlockToExecutableData(payload.empty)
+	return beacon.BlockToExecutableData(payload.empty), big.NewInt(0), nil
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.

@@ -680,6 +680,10 @@ var (
 		TakesFile: true,
 		Category:  flags.MiscCategory,
 	}
+	RewardBenchFlag = &cli.BoolFlag{
+		Name:     "reward-bench",
+		Category: flags.MiscCategory,
+	}
 
 	// RPC settings
 	IPCDisabledFlag = &cli.BoolFlag{

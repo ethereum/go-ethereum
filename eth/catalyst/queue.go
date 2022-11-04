@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -70,19 +71,19 @@ func (q *payloadQueue) put(id beacon.PayloadID, payload *miner.Payload) {
 }
 
 // get retrieves a previously stored payload item or nil if it does not exist.
-func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
+func (q *payloadQueue) get(id beacon.PayloadID) (*beacon.ExecutableDataV1, *big.Int, []*big.Int) {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
 	for _, item := range q.payloads {
 		if item == nil {
-			return nil // no more items
+			return nil, nil, nil // no more items
 		}
 		if item.id == id {
 			return item.payload.Resolve()
 		}
 	}
-	return nil
+	return nil, nil, nil
 }
 
 // has checks if a particular payload is already tracked.
