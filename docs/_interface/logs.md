@@ -179,7 +179,7 @@ INFO [07-28|10:30:18.658] Imported new block headers               count=1    el
 INFO [07-28|10:30:21.665] Imported new state entries
 ```
 
-For state sync, Geth reports when the state heal is in progress. This can takea long time. 
+For state sync, Geth reports when the state heal is in progress. This can take a long time. 
 The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were 
 downloaded in the current healing phase, and the pending field is the number of state entires waiting 
 to be downloaded. The `pending` value is not necessarily the number of state entries remaining until 
@@ -200,7 +200,7 @@ The sync can be confirmed using [`eth.syncing`](https://ethereum.org/en/develope
 - it will return `false` if the node is in sync. If `eth.syncing` returns anything other than `false` it has not 
 finished syncing. Generally, if syncing is still ongoing, `eth.syncing` will return block info that looks as follows:
 
-```json
+```js
 > eth.sycing
 
 {
