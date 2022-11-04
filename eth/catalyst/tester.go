@@ -35,6 +35,7 @@ type FullSyncTester struct {
 	api    *ConsensusAPI
 	block  *types.Block
 	closed chan struct{}
+	stack  *node.Node
 	wg     sync.WaitGroup
 }
 
@@ -45,6 +46,7 @@ func RegisterFullSyncTester(stack *node.Node, backend *eth.Ethereum, block *type
 		api:    NewConsensusAPI(backend),
 		block:  block,
 		closed: make(chan struct{}),
+		stack:  stack,
 	}
 	stack.RegisterLifecycle(cl)
 	return cl, nil
@@ -73,6 +75,9 @@ func (tester *FullSyncTester) Start() error {
 				// locally.
 				if tester.api.eth.BlockChain().HasBlock(tester.block.Hash(), tester.block.NumberU64()) {
 					log.Info("Full-sync target reached", "number", tester.block.NumberU64(), "hash", tester.block.Hash())
+
+					// Shutdown the node in another go-routine.
+					go tester.stack.Close()
 					return
 				}
 				// Shoot out consensus events in order to trigger syncing.
