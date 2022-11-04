@@ -397,9 +397,16 @@ func TestLogFilter(t *testing.T) {
 			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 2},
 			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 3},
 		}
+		pendingLogs = []*types.Log{
+			{Address: firstAddr},
+			{Address: firstAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 4},
+			{Address: secondAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 4},
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 4},
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 4},
+		}
 
-		expectedCase7  = []*types.Log{allLogs[3], allLogs[4], allLogs[0], allLogs[1], allLogs[2], allLogs[3], allLogs[4]}
-		expectedCase11 = []*types.Log{allLogs[1], allLogs[2], allLogs[1], allLogs[2]}
+		expectedCase7  = []*types.Log{allLogs[3], allLogs[4], allLogs[0], pendingLogs[1], pendingLogs[2], pendingLogs[3], pendingLogs[4]}
+		expectedCase11 = []*types.Log{allLogs[1], allLogs[2], pendingLogs[1], pendingLogs[2]}
 
 		testCases = []struct {
 			crit     FilterCriteria
@@ -419,7 +426,7 @@ func TestLogFilter(t *testing.T) {
 			// match logs based on multiple addresses and "or" topics
 			5: {FilterCriteria{Addresses: []common.Address{secondAddr, thirdAddress}, Topics: [][]common.Hash{{firstTopic, secondTopic}}}, allLogs[2:5], ""},
 			// logs in the pending block
-			6: {FilterCriteria{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, allLogs[:2], ""},
+			6: {FilterCriteria{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(rpc.PendingBlockNumber.Int64()), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, pendingLogs[:2], ""},
 			// mined logs with block num >= 2 or pending logs
 			7: {FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(rpc.PendingBlockNumber.Int64())}, expectedCase7, ""},
 			// all "mined" logs with block num >= 2
@@ -445,7 +452,7 @@ func TestLogFilter(t *testing.T) {
 	if nsend := backend.logsFeed.Send(allLogs); nsend == 0 {
 		t.Fatal("Logs event not delivered")
 	}
-	if nsend := backend.pendingLogsFeed.Send(allLogs); nsend == 0 {
+	if nsend := backend.pendingLogsFeed.Send(pendingLogs); nsend == 0 {
 		t.Fatal("Pending logs event not delivered")
 	}
 
@@ -471,16 +478,28 @@ func TestLogFilter(t *testing.T) {
 		}
 
 		if len(fetched) != len(tt.expected) {
-			t.Errorf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched))
+			t.Errorf("test %d: invalid number of logs, want %d log(s), got %d", i, len(tt.expected), len(fetched))
 			return
 		}
-
-		for l := range fetched {
-			if fetched[l].Removed {
-				t.Errorf("expected log not to be removed for log %d in case %d", l, i)
+		for j, have := range fetched {
+			if have.Removed {
+				t.Errorf("test %d: expected log not to be removed for log %d", i, j)
 			}
-			if !reflect.DeepEqual(fetched[l], tt.expected[l]) {
-				t.Errorf("invalid log on index %d for case %d", l, i)
+			// The very last log should be marked as 'last'
+			var lastInBlock = (j == len(fetched)-1)
+			if j < len(fetched)-1 {
+				// Also, if this log blocknumber differs from the next log blocknumber,
+				// it should be marked as 'last' too.
+				next := fetched[j+1]
+				if have.BlockNumber != next.BlockNumber {
+					lastInBlock = true
+				}
+			}
+			cpy := *tt.expected[j]
+			cpy.Last = lastInBlock
+			want := &cpy
+			if !reflect.DeepEqual(have, want) {
+				t.Fatalf("test %d: invalid log for case %d", i, j)
 			}
 		}
 	}

@@ -257,9 +257,15 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 		for {
 			select {
 			case logs := <-matchedLogs:
-				for _, log := range logs {
+				for i, log := range logs {
 					log := log
-					notifier.Notify(rpcSub.ID, &log)
+					// If this is the last log of a block, annotate it as such
+					if i == len(logs)-1 || log.BlockNumber != logs[i+1].BlockNumber {
+						var cpy = *log
+						cpy.Last = true
+						log = &cpy
+					}
+					notifier.Notify(rpcSub.ID, log)
 				}
 			case <-rpcSub.Err(): // client send an unsubscribe request
 				logsSub.Unsubscribe()
@@ -305,8 +311,17 @@ func (api *FilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 			select {
 			case l := <-logs:
 				api.filtersMu.Lock()
-				if f, found := api.filters[logsSub.ID]; found {
-					f.logs = append(f.logs, l...)
+				if f := api.filters[logsSub.ID]; f != nil {
+					for i, log := range l {
+						log := log
+						// If this is the last log of a block, annotate it as such
+						if i == len(l)-1 || log.BlockNumber != l[i+1].BlockNumber {
+							var cpy = *log
+							cpy.Last = true
+							log = &cpy
+						}
+						f.logs = append(f.logs, log)
+					}
 				}
 				api.filtersMu.Unlock()
 			case <-logsSub.Err():
