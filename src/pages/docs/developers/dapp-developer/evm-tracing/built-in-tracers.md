@@ -268,7 +268,7 @@ This tracer is noop. It returns an empty object and is only meant for testing th
 
 ## Javascript tracers
 
-There are also a set of tracers written in Javascript. These are less performant than the Go native tracers because of overheads associated with compiling the Javascript in Geth's Go environment.
+There are also a set of tracers written in Javascript. These are less performant than the Go native tracers because of overheads associated with interpreting the Javascript in Geth's Go environment.
 
 ### bigram
 

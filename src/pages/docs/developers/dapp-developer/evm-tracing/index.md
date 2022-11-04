@@ -3,9 +3,9 @@ title: EVM Tracing
 description: Introduction to tracing EVM transactions using Geth
 ---
 
-Tracing allows users to examine precisely what was executed by the EVM during some specific transaction or set of transactions. There are two different types of [transactions](https://ethereum.org/en/developers/docs/transactions) in Ethereum: value transfers and contract executions. A value transfer just moves ETH from one account to another. A contract interaction executes some code stored at a contract address which can include altering stored data and transacting multiple times with other contracts and externally-owned accounts. A contract execution transaction can therefore be a complicated web of interactions that can be difficult to unpick. The transaction receipt contains a status code that shows whether the transaction succeeded or failed, but more detailed information is not readily available, meaning it is very difficult to know what a contract execution actually did, what data was modified and which addresses were touched. This is the problem that EVM tracing solves. 
+Tracing allows users to examine precisely what was executed by the EVM during some specific transaction or set of transactions. There are two different types of [transactions](https://ethereum.org/en/developers/docs/transactions) in Ethereum: value transfers and contract executions. A value transfer just moves ETH from one account to another. A contract interaction executes some code stored at a contract address which can include altering stored data and transacting multiple times with other contracts and externally-owned accounts. A contract execution transaction can therefore be a complicated web of interactions that can be difficult to unpick. The transaction receipt contains a status code that shows whether the transaction succeeded or failed, but more detailed information is not readily available, meaning it is very difficult to know what a contract execution actually did, what data was modified and which addresses were touched. This is the problem that EVM tracing solves. Geth traces transactions by re-running them locally and collecting data about precisely what was executed by the EVM.
 
-Geth traces transactions by re-running them locally and collecting data about precisely what was executed by the EVM.
+Also see this [Devcon 2022 talk](https://www.youtube.com/watch?v=b8RdmGsilfU) on tracing in Geth.
 
 ## State availability
 
@@ -43,6 +43,7 @@ _There are exceptions to the above rules when running batch traces of entire blo
 ## Types of trace
 
 ### Built-in tracers
+
 The tracing API accepts an optional `tracer` parameter that defines how the data returned to the API call should be processed. If this parameter is ommitted the default tracer is used. The default is the struct (or 'opcode') logger. These raw opcode traces are sometimes useful, but the returned data is very low level and can be too extensive and awkward to read for many use-cases. A full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally. For these reasons, there are a set of non-default built-in tracers that can be named in the API call to return different data from the method. Under the hood, these tracers are Go or Javascript functions that do some specific preprocessing on the trace data before it is returned.
 
 More information about Geth's built-in tracers is available on the [built-in tracers](/pages/docs/developers/dapp-developer/evm-tracing/built-in-tracers.md) page.
