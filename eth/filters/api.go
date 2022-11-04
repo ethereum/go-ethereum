@@ -332,13 +332,20 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		begin := rpc.LatestBlockNumber.Int64()
 		if crit.FromBlock != nil {
 			begin = crit.FromBlock.Int64()
+			// Return an error if the user requested a fromBlock that we don't have yet.
+			// Users can filter from latest by not specifying a `fromBlock`.
+			header, err := api.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(begin))
+			if err != nil || header == nil {
+				return nil, errors.New("fromBlock not found")
+			}
 		}
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 			// Return an error if the user requested a toBlock that we don't have yet.
 			// Users can filter to latest by not specifying a `toBlock`.
-			if end > rpc.LatestBlockNumber.Int64() {
+			header, err := api.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(end))
+			if err != nil || header == nil {
 				return nil, errors.New("toBlock not found")
 			}
 		}

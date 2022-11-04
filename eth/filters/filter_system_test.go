@@ -363,6 +363,13 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 		0: {BlockHash: &blockHash, FromBlock: big.NewInt(100)},
 		1: {BlockHash: &blockHash, ToBlock: big.NewInt(500)},
 		2: {BlockHash: &blockHash, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())},
+		// Reason: ToBlock too far into the future
+		3: {FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64()), ToBlock: big.NewInt(5000)},
+		// Reason: From > To
+		4: {FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)},
+		// Reason: Wonky from
+		5: {FromBlock: big.NewInt(-5)},
+		6: {FromBlock: big.NewInt(5000)},
 	}
 
 	for i, test := range testCases {
