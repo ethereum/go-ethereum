@@ -71,7 +71,7 @@ collections:
     permalink: docs/:collection/:slug
     caption: EVM tracing
     sidebar_index: 8
-    frontpage: evm-tracing/index.md
+    frontpage: _evm-tracing/index.md
   vulnerabilities:
     output: true
     permalink: docs/:collection/:slug

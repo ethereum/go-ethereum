@@ -17,9 +17,6 @@ In its simplest form, tracing a transaction entails requesting the Ethereum node
 
 This means there are limits on the transactions that can be traced imposed by the synchronization and pruning configuration of a node:
 
-![state pruning options](/static/images/docs/state-pruning.png)
-
-
 - An **archive** node retains **all historical data** back to genesis. It can therefore trace arbitrary transactions at any point in the history of the chain. Tracing a single transaction requires reexecuting all preceding transactions in the same block.
 
 - A **node synced from genesis** node only retains the most recent 128 block states in memory. Older states are represented by a sequence of occasional checkpoints that intermediate states can be regenerated from. This means that states within the msot recent 128 blocks are immediately available, older states have to be regenerated from snapshots "on-the-fly". If the distance between the requested transaction and the most recent checkpoint is large, rebuilding the state can take a long time. Tracing a single transaction requires reexecuting all preceding transactions in the same block **and** all preceding blocks until the previous stored snapshot.
@@ -30,6 +27,11 @@ This means there are limits on the transactions that can be traced imposed by th
 - A **light synced** node retrieving data **on demand** can in theory trace transactions for which all required historical state is readily available in the network. This is because the data required to generate the trace is requested from an les-serving full node. In practice, data
   availability **cannot** be reasonably assumed.
 
+![state pruning options](/static/images/state-pruning.png)
+ 
+*This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head*
+
+ 
 More detailed information about syncing is available on the [sync modes page](/pages/docs/fundamentals/sync-modes.md).
 
 When a trace of a specific transaction is executed, the state is prepared by fetching the state of the parent block from the database. If it is not available, Geth will crawl backwards in time to find the next available state but only up to a limit defined in the `reexec` parameter which defaults to 128 blocks. If no state is available within the `reexec` window then the trace fails with `Error: required historical state unavailable` and the `reexec` parameter must be increased. If a valid state *is* found in the `reexec` window, then Geth sequentially re-executes the transcations in each block between the last available state and the target block. The greater the value of `reexec` the longer the tracing will take because more blocks have to be re-executed to regenerate the target state.

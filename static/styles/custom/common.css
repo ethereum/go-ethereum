@@ -82,6 +82,12 @@ img {
     margin-bottom: 2rem
 }
 
+img[alt="state pruning options"] {
+    width: 850px;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+
 img[alt="Peter's Devcon2 talk"] {
     width: 300px;
     margin-top: 2rem;
