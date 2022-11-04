@@ -1,4 +1,13 @@
-## EVM state transition tool
+# EVM Tool
+
+The EVM tool provides a few useful subcommands to facilitate testing at the EVM
+layer.
+
+* transition tool    (t8n) : a stateless state transition utility
+* transaction tool   (t9n) : a transaction validation utility
+* block builder tool (b11r): a block assembler utility
+
+## State transition tool (t8n)
 
 The `evm t8n` tool is a stateless state transition utility. It is a utility
 which can
@@ -14,16 +23,16 @@ which can
 - Information about rejected transactions,
 - Optionally: a full or partial post-state dump
 
-## Specification
+### Specification
 
 The idea is to specify the behaviour of this binary very _strict_, so that other
 node implementors can build replicas based on their own state-machines, and the
 state generators can swap between a `geth`-based implementation and a `parityvm`-based
 implementation.
 
-### Command line params
+#### Command line params
 
-Command line params that has to be supported are
+Command line params that need to be supported are
 ```
 
    --trace                            Output full trace logs to files <txhash>.jsonl
@@ -45,12 +54,154 @@ Command line params that has to be supported are
 
 ```
 
-### Error codes and output
+#### Objects
+
+The transition tool uses JSON objects to read and write data related to the transition operation. The
+following object definitions are required.
+
+##### `alloc`
+
+The `alloc` object defines the prestate that transition will begin with.
+
+```go=
+// Map of address to account definition.
+type Alloc map[common.Address]Account
+
+// Genesis account. Each field is optional.
+type Account struct {
+    Code       []byte                           `json:"code"`
+    Storage    map[common.Hash]common.Hash      `json:"storage"`
+    Balance    *big.Int                         `json:"balance"`
+    Nonce      uint64                           `json:"nonce"`
+    SecretKey  []byte                            `json:"secretKey"`
+}
+```
+
+##### `env`
+
+The `env` object defines the environmental context in which the transition will
+take place.
+
+```go=
+type Env struct {
+    // required
+    CurrentCoinbase  common.Address      `json:"currentCoinbase"`
+    CurrentGasLimit  uint64              `json:"currentGasLimit"`
+    CurrentNumber    uint64              `json:"currentNumber"`
+    CurrentTimestamp uint64              `json:"currentTimestamp"`
+    Withdrawals      []*Withdrawal       `json:"withdrawals"`
+
+    // optional
+    CurrentDifficulty *big.Int           `json:"currentDifficuly"`
+    CurrentRandom     *big.Int           `json:"currentRandom"`
+    CurrentBaseFee    *big.Int           `json:"currentBaseFee"`
+    ParentDifficulty  *big.Int           `json:"parentDifficulty"`
+    ParentGasUsed     uint64             `json:"parentGasUsed"`
+    ParentGasLimit    uint64             `json:"parentGasLimit"`
+    ParentTimestamp   uint64             `json:"parentTimestamp"`
+    BlockHashes       map[uint64]common.Hash `json:"blockHashes"`
+    ParentUncleHash   common.Hash        `json:"parentUncleHash"`
+    Ommers            []Ommer            `json:"ommers"`
+}
+
+type Ommer struct {
+    Delta   uint64         `json:"delta"`
+    Address common.Address `json:"address"`
+}
+
+type Withdrawal struct {
+    Index          uint64         `json:"index"`
+    ValidatorIndex uint64         `json:"validatorIndex"`
+    Recipient      common.Address `json:"recipient"`
+    Amount         *big.Int       `json:"amount"`
+}
+```
+
+##### `txs`
+
+The `txs` object is an array of any of the transaction types: `LegacyTx`,
+`AccessListTx`, or `DynamicFeeTx`.
+
+```go=
+type LegacyTx struct {
+	Nonce     uint64          `json:"nonce"`
+	GasPrice  *big.Int        `json:"gasPrice"`
+	Gas       uint64          `json:"gas"`
+	To        *common.Address `json:"to"`
+	Value     *big.Int        `json:"value"`
+	Data      []byte          `json:"data"`
+	V         *big.Int        `json:"v"`
+	R         *big.Int        `json:"r"`
+	S         *big.Int        `json:"s"`
+    SecretKey *common.Hash    `json:"secretKey"`
+}
+
+type AccessList []AccessTuple
+
+type AccessTuple struct {
+	Address     common.Address `json:"address"        gencodec:"required"`
+	StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
+}
+
+type AccessListTx struct {
+	ChainID    *big.Int        `json:"chainId"`
+	Nonce      uint64          `json:"nonce"`
+	GasPrice   *big.Int        `json:"gasPrice"`
+	Gas        uint64          `json:"gas"`
+	To         *common.Address `json:"to"`
+	Value      *big.Int        `json:"value"`
+	Data       []byte          `json:"data"`
+	AccessList AccessList      `json:"accessList"`
+	V          *big.Int        `json:"v"`
+	R          *big.Int        `json:"r"`
+	S          *big.Int        `json:"s"`
+    SecretKey  *common.Hash     `json:"secretKey"`
+}
+
+type DynamicFeeTx struct {
+	ChainID    *big.Int        `json:"chainId"`
+	Nonce      uint64          `json:"nonce"`
+	GasTipCap  *big.Int        `json:"maxPriorityFeePerGas"`
+	GasFeeCap  *big.Int        `json:"maxFeePerGas"`
+	Gas        uint64          `json:"gas"`
+	To         *common.Address `json:"to"`
+	Value      *big.Int        `json:"value"`
+	Data       []byte          `json:"data"`
+	AccessList AccessList      `json:"accessList"`
+	V          *big.Int        `json:"v"`
+	R          *big.Int        `json:"r"`
+	S          *big.Int        `json:"s"`
+    SecretKey  *common.Hash     `json:"secretKey"`
+}
+```
+
+##### `result`
+
+The `result` object is output after a transition is executed. It includes
+information about the post-transition environment.
+
+```go=
+type ExecutionResult struct {
+    StateRoot   common.Hash    `json:"stateRoot"`
+    TxRoot      common.Hash    `json:"txRoot"`
+    ReceiptRoot common.Hash    `json:"receiptsRoot"`
+    LogsHash    common.Hash    `json:"logsHash"`
+    Bloom       types.Bloom    `json:"logsBloom"`
+    Receipts    types.Receipts `json:"receipts"`
+    Rejected    []*rejectedTx  `json:"rejected,omitempty"`
+    Difficulty  *big.Int       `json:"currentDifficulty"`
+    GasUsed     uint64         `json:"gasUsed"`
+    BaseFee     *big.Int       `json:"currentBaseFee,omitempty"`
+}
+```
+
+
+#### Error codes and output
 
 All logging should happen against the `stderr`.
 There are a few (not many) errors that can occur, those are defined below.
 
-#### EVM-based errors (`2` to `9`)
+##### EVM-based errors (`2` to `9`)
 
 - Other EVM error. Exit code `2`
 - Failed configuration: when a non-supported or invalid fork was specified. Exit code `3`.
@@ -58,14 +209,20 @@ There are a few (not many) errors that can occur, those are defined below.
   is invoked targeting a block which history has not been provided for, the program will
   exit with code `4`.
 
-#### IO errors (`10`-`20`)
+##### IO errors (`10`-`20`)
 
 - Invalid input json: the supplied data could not be marshalled.
   The program will exit with code `10`
 - IO problems: failure to load or save files, the program will exit with code `11`
 
-## Examples
-### Basic usage
+#### Forks
+
+The chain configuration to be used for a transition is specified via the
+`--state.fork` CLI flag. A list of possible values and configurations can be
+found in [`tests/init.go`](tests/init.go).
+
+#### Examples
+##### Basic usage
 
 Invoking it with the provided example files
 ```
@@ -170,7 +327,7 @@ Output:
 }
 ```
 
-## About Ommers
+#### About Ommers
 
 Mining rewards and ommer rewards might need to be added. This is how those are applied:
 
@@ -180,14 +337,14 @@ Mining rewards and ommer rewards might need to be added. This is how those are a
   - The account `0xbb` (ommer miner) is awarded `(8-delta)/ 8 * block_reward`
   - The account `0xaa` (block miner) is awarded `block_reward / 32`
 
-To make `state_t8n` apply these, the following inputs are required:
+To make `t8n` apply these, the following inputs are required:
 
-- `state.reward`
+- `--state.reward`
   - For ethash, it is `5000000000000000000` `wei`,
   - If this is not defined, mining rewards are not applied,
   - A value of `0` is valid, and causes accounts to be 'touched'.
 - For each ommer, the tool needs to be given an `address` and a `delta`. This
-  is done via the `env`.
+  is done via the `ommers` field in `env`.
 
 Note: the tool does not verify that e.g. the normal uncle rules apply,
 and allows e.g two uncles at the same height, or the uncle-distance. This means that
@@ -225,7 +382,7 @@ Output:
  }
 }
 ```
-### Future EIPS
+#### Future EIPS
 
 It is also possible to experiment with future eips that are not yet defined in a hard fork.
 Example, putting EIP-1344 into Frontier:
@@ -233,7 +390,7 @@ Example, putting EIP-1344 into Frontier:
 ./evm t8n --state.fork=Frontier+1344 --input.pre=./testdata/1/pre.json --input.txs=./testdata/1/txs.json --input.env=/testdata/1/env.json
 ```
 
-### Block history
+#### Block history
 
 The `BLOCKHASH` opcode requires blockhashes to be provided by the caller, inside the `env`.
 If a required blockhash is not provided, the exit code should be `4`:
@@ -264,7 +421,7 @@ ERROR(4): getHash(3) invoked, blockhash for that block not provided
 ```
 Error code: 4
 
-### Chaining
+#### Chaining
 
 Another thing that can be done, is to chain invocations:
 ```
@@ -288,7 +445,7 @@ the same two transactions: this time, both failed due to too low nonce.
 In order to meaningfully chain invocations, one would need to provide meaningful new `env`, otherwise the
 actual blocknumber (exposed to the EVM) would not increase.
 
-### Transactions in RLP form
+#### Transactions in RLP form
 
 It is possible to provide already-signed transactions as input to, using an `input.txs` which ends with the `rlp` suffix.
 The input format for RLP-form transactions is _identical_ to the _output_ format for block bodies. Therefore, it's fully possible
@@ -336,3 +493,144 @@ cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot
 "0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
 "0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
 ```
+
+## Transaction tool
+
+The transaction tool is used to perform static validity checks on transactions such as:
+* intrinsic gas calculation
+* max values on integers
+* fee semantics, such as `maxFeePerGas < maxPriorityFeePerGas`
+* newer tx types on old forks
+
+### Examples
+
+```console
+$ ./evm t9n --state.fork Homestead --input.txs testdata/15/signed_txs.rlp
+[
+  {
+    "error": "transaction type not supported",
+    "hash": "0xa98a24882ea90916c6a86da650fbc6b14238e46f0af04a131ce92be897507476"
+  },
+  {
+    "error": "transaction type not supported",
+    "hash": "0x36bad80acce7040c45fd32764b5c2b2d2e6f778669fb41791f73f546d56e739a"
+  }
+]
+
+$ ./evm t9n --state.fork London --input.txs testdata/15/signed_txs.rlp
+[
+  {
+    "address": "0xd02d72e067e77158444ef2020ff2d325f929b363",
+    "hash": "0xa98a24882ea90916c6a86da650fbc6b14238e46f0af04a131ce92be897507476",
+    "intrinsicGas": "0x5208"
+  },
+  {
+    "address": "0xd02d72e067e77158444ef2020ff2d325f929b363",
+    "hash": "0x36bad80acce7040c45fd32764b5c2b2d2e6f778669fb41791f73f546d56e739a",
+    "intrinsicGas": "0x5208"
+  }
+]
+```
+
+## Block builder tool (b11r)
+
+The `evm b11r` tool is used to assemble and seal full block rlps.
+
+### Specification
+
+#### Command line params
+
+Command line params that need to be supported are:
+
+```
+    --input.header value        `stdin` or file name of where to find the block header to use. (default: "header.json")
+    --input.ommers value        `stdin` or file name of where to find the list of ommer header RLPs to use.
+    --input.txs value           `stdin` or file name of where to find the transactions list in RLP form. (default: "txs.rlp")
+    --output.basedir value      Specifies where output files are placed. Will be created if it does not exist.
+    --output.block value        Determines where to put the alloc of the post-state. (default: "block.json")
+                                <file> - into the file <file>
+                                `stdout` - into the stdout output
+                                `stderr` - into the stderr output
+    --seal.clique value         Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.
+    --seal.ethash               Seal block with ethash. (default: false)
+    --seal.ethash.dir value     Path to ethash DAG. If none exists, a new DAG will be generated.
+    --seal.ethash.mode value    Defines the type and amount of PoW verification an ethash engine makes. (default: "normal")
+    --verbosity value           Sets the verbosity level. (default: 3)
+```
+
+#### Objects
+
+##### `header`
+
+The `header` object is a consensus header.
+
+```go=
+type Header struct {
+        ParentHash  common.Hash       `json:"parentHash"`
+        OmmerHash   *common.Hash      `json:"sha3Uncles"`
+        Coinbase    *common.Address   `json:"miner"`
+        Root        common.Hash       `json:"stateRoot"         gencodec:"required"`
+        TxHash      *common.Hash      `json:"transactionsRoot"`
+        ReceiptHash *common.Hash      `json:"receiptsRoot"`
+        Bloom       types.Bloom       `json:"logsBloom"`
+        Difficulty  *big.Int          `json:"difficulty"`
+        Number      *big.Int          `json:"number"            gencodec:"required"`
+        GasLimit    uint64            `json:"gasLimit"          gencodec:"required"`
+        GasUsed     uint64            `json:"gasUsed"`
+        Time        uint64            `json:"timestamp"         gencodec:"required"`
+        Extra       []byte            `json:"extraData"`
+        MixDigest   common.Hash       `json:"mixHash"`
+        Nonce       *types.BlockNonce `json:"nonce"`
+        BaseFee     *big.Int          `json:"baseFeePerGas"`
+}
+```
+
+#### `ommers`
+
+The `ommers` object is a list of RLP-encoded ommer blocks in hex
+representation.
+
+```go=
+type Ommers []string
+```
+
+#### `txs`
+
+The `txs` object is a list of RLP-encoded transactions in hex representation.
+
+```go=
+type Txs []string
+```
+
+#### `clique`
+
+The `clique` object provides the neccesary information to complete a clique
+seal of the block.
+
+```go=
+var CliqueInfo struct {
+        Key       *common.Hash    `json:"secretKey"`
+        Voted     *common.Address `json:"voted"`
+        Authorize *bool           `json:"authorize"`
+        Vanity    common.Hash     `json:"vanity"`
+}
+```
+
+#### `output`
+
+The `output` object contains two values, the block RLP and the block hash.
+
+```go=
+type BlockInfo struct {
+    Rlp  []byte      `json:"rlp"`
+    Hash common.Hash `json:"hash"`
+}
+```
+
+## Testing
+
+There are many test cases in the [`cmd/evm/testdata`](./testdata) directory.
+These fixtures are used to power the `t8n` tests in
+[`t8n_test.go`](./t8n_test.go). The best way to verify correctness of new `evm`
+implementations is to execute these and verify the output and error codes match
+the expected values.
