@@ -57,6 +57,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	eip4200InstructionSet          = newEIP4200InstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,6 +79,12 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newEIP4200InstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable4200(&instructionSet)
+	return validate(instructionSet)
 }
 
 func newMergeInstructionSet() JumpTable {

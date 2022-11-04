@@ -121,15 +121,54 @@ sectionLoop:
 func validateInstructions(code []byte, header *EOF1Header, jumpTable *JumpTable) error {
 	i := header.CodeBeginOffset()
 	var opcode OpCode
+	jumpdests := map[uint64]bool{}
+	immediates := map[uint64]bool{}
+
 	for i < header.CodeEndOffset() {
 		opcode = OpCode(code[i])
 		if jumpTable[opcode].undefined {
 			return ErrEOF1UndefinedInstruction
 		}
 		if opcode >= PUSH1 && opcode <= PUSH32 {
-			i += uint64(opcode) - uint64(PUSH1) + 1
+			pushSize := uint64(opcode) - uint64(PUSH1) + 1
+			for j := i + 1; j <= i+pushSize; j++ {
+				immediates[j] = true
+			}
+			i += pushSize
+		}
+
+		if opcode == RJUMP || opcode == RJUMPI {
+			i += 1
+			if i+1 >= header.CodeEndOffset() {
+				break
+			}
+
+			rjdBytes := code[i : i+2]
+			offset := int16(binary.BigEndian.Uint16(rjdBytes))
+
+			var rjumpdest uint64
+			if offset < 0 {
+				rjumpdest = i + 2 - uint64(offset*-1)
+			} else {
+				rjumpdest = i + 2 + uint64(offset)
+			}
+
+			if rjumpdest < header.CodeBeginOffset() || rjumpdest >= header.CodeEndOffset() {
+				return ErrEOF1RJumpDestinationOutOfBounds
+			}
+
+			jumpdests[rjumpdest] = true
+			immediates[i] = true
+			immediates[i+1] = true
+			i += 1
 		}
 		i += 1
+	}
+
+	for k := range jumpdests {
+		if immediates[k] {
+			return ErrEOF1RJumpDestTargetsImmediate
+		}
 	}
 
 	if !opcode.isTerminating() {

@@ -58,6 +58,8 @@ var (
 	ErrEOF1InvalidTotalSize              = errors.New("invalid total size")
 	ErrEOF1UndefinedInstruction          = errors.New("undefined instruction")
 	ErrEOF1TerminatingInstructionMissing = errors.New("code section doesn't end with terminating instruction")
+	ErrEOF1RJumpDestinationOutOfBounds   = errors.New("relative jump destination out of bounds")
+	ErrEOF1RJumpDestTargetsImmediate     = errors.New("relative jump destination targets immediate")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sort"
 
@@ -34,6 +35,7 @@ var activators = map[int]func(*JumpTable){
 	1344: enable1344,
 	3540: enable3540,
 	3670: enable3670,
+	4200: enable4200,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -201,4 +203,59 @@ func enable3540(jt *JumpTable) {
 
 func enable3670(jt *JumpTable) {
 	// Do nothing.
+}
+
+func enable4200(jt *JumpTable) {
+	// New opcodes
+	jt[RJUMP] = &operation{
+		execute:     opRjump,
+		constantGas: params.RjumpGas,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+
+	jt[RJUMPI] = &operation{
+		execute:     opRjumpi,
+		constantGas: params.RjumpiGas,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+}
+
+func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	immediateSize := 2
+	codeEnd := int(len(scope.Contract.Container))
+	start := codeEnd
+	pcAbsolute := scope.Contract.CodeBeginOffset + *pc
+	if int(pcAbsolute+1) < start {
+		start = int(pcAbsolute + 1)
+	}
+
+	end := start + immediateSize
+
+	if end >= codeEnd {
+		return nil, ErrEOF1TerminatingInstructionMissing
+	}
+
+	*pc = *pc + uint64(immediateSize)
+	bytes := scope.Contract.Container[start:end]
+	pos := int16(binary.BigEndian.Uint16(bytes))
+
+	if pos < 0 {
+		*pc = *pc - uint64(pos*-1)
+	} else {
+		*pc = *pc + uint64(pos)
+	}
+	return nil, nil
+}
+
+func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	cond := scope.Stack.pop()
+	if !cond.IsZero() {
+		return opRjump(pc, interpreter, scope)
+	} else {
+		*pc += 2
+	}
+
+	return nil, nil
 }

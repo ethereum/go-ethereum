@@ -42,6 +42,10 @@ var eof1ValidTests = []eof1Test{
 	{"EF0001010022007F000000000000000000000000000000000000000000000000000000000000000000", 34, 0},     // PUSH32
 	{"EF0001010022007F0C0D0E0F1E1F2122232425262728292A2B2C2D2E2F494A4B4C4D4E4F5C5D5E5F00", 34, 0},     // undefined instructions inside push data
 	{"EF000101000102002000000C0D0E0F1E1F2122232425262728292A2B2C2D2E2F494A4B4C4D4E4F5C5D5E5F", 1, 32}, // undefined instructions inside data section
+	{"EF000101000E005C00056002600255600160015500", 14, 0},                                             // RJUMP
+	{"EF000101000F005C000560026002555B600160015500", 15, 0},                                           // RJUMP (to JUMPDEST)
+	{"EF00010100100060015D00056002600255600160015500", 16, 0},                                         // RJUMPI
+	{"EF00010100110060015D000560026002555B600160015500", 17, 0},                                       // RJUMPI (to JUMPDEST)
 }
 
 type eof1InvalidTest struct {
@@ -104,6 +108,34 @@ var eof1InvalidInstructionsTests = []eof1InvalidTest{
 	{"EF0001010020007F00000000000000000000000000000000000000000000000000000000000000", ErrEOF1TerminatingInstructionMissing.Error()},
 	// PUSH32 with 32 bytes of data and no terminating instruction
 	{"EF0001010021007F0000000000000000000000000000000000000000000000000000000000000000", ErrEOF1TerminatingInstructionMissing.Error()},
+	// RJUMP truncated offset (final instruction in code section)
+	{"EF00010100060060016001555C", ErrEOF1TerminatingInstructionMissing.Error()},
+	// RJUMP truncated offset
+	{"EF00010100070060016001555C00", ErrEOF1TerminatingInstructionMissing.Error()},
+	// RJUMP to RJUMP's immediate
+	{"EF0001010011005C000660026002555C0000600160015500", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMP to PUSH's immediate
+	{"EF000101000A006400000000005CFFFC00", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMP to PUSH's immediate
+	{"EF000101000A006400000000005CFFFB00", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMP to RJUMPI's immediate
+	{"EF000101000D005C00086001600155005DFFF700", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMP target outside of code section bounds
+	{"EF0001010004020004005C000300AABBCCDD", ErrEOF1RJumpDestinationOutOfBounds.Error()},
+	// RJUMPI truncated offset (final instruction in code section)
+	{"EF000101000800600160015560015d", ErrEOF1TerminatingInstructionMissing.Error()},
+	// RJUMPI truncated offset
+	{"EF000101000900600160015560015d00", ErrEOF1TerminatingInstructionMissing.Error()},
+	// RJUMPI to RJUMP's immediate
+	{"EF00010100130060015D000660026002555C0000600160015500", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMPI to PUSH's immediate
+	{"EF000101000C0064000000000060015DFFFA00", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMPI to PUSHs immediate
+	{"EF000101000C0064000000000060015CFFF900", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMPI to RJUMPI's immediate
+	{"EF000101000F0060015D00086001600155005DFFF700", ErrEOF1RJumpDestTargetsImmediate.Error()},
+	// RJUMPI target outside of code section bounds
+	{"EF00010100060200040060015D000300AABBCCDD", ErrEOF1RJumpDestinationOutOfBounds.Error()},
 }
 
 func TestHasEOFMagic(t *testing.T) {
@@ -152,7 +184,7 @@ func TestReadEOF1Header(t *testing.T) {
 }
 
 func TestValidateEOF(t *testing.T) {
-	jt := &mergeInstructionSet
+	jt := &eip4200InstructionSet
 	for _, test := range eof1ValidTests {
 		_, err := validateEOF(common.Hex2Bytes(test.code), jt)
 		if err != nil {
@@ -181,7 +213,7 @@ func TestReadValidEOF1Header(t *testing.T) {
 }
 
 func TestValidateInstructions(t *testing.T) {
-	jt := &londonInstructionSet
+	jt := &eip4200InstructionSet
 	for _, test := range eof1ValidTests {
 		code := common.Hex2Bytes(test.code)
 		header, err := readEOF1Header(code)
