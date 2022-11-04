@@ -84,8 +84,8 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			code: 200,
 		},
 		{ // Should return info about latest block
-			body: `{"query": "{block{number,gasUsed,gasLimit}}","variables": null}`,
-			want: `{"data":{"block":{"number":10,"gasUsed":0,"gasLimit":11500000}}}`,
+			body: `{"query": "{block{number,gasUsed,gasLimit,timestamp}}","variables": null}`,
+			want: `{"data":{"block":{"number":10,"gasUsed":0,"gasLimit":11500000,"timestamp":100}}}`,
 			code: 200,
 		},
 		{
@@ -168,7 +168,7 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 	}
 }
 
-func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
+func TestGraphQLBlockSerializationWithTxn(t *testing.T) {
 	// Account for signing txes
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -228,6 +228,13 @@ func TestGraphQLBlockSerializationEIP2718(t *testing.T) {
 		want string
 		code int
 	}{
+		// should return `nonce` and `gas` as decimal
+		{
+			body: `{"query": "{block {number transactions { from { address} to { address } value hash type index nonce gas}}}"}`,
+			want: `{"data":{"block":{"number":1,"transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b","type":0,"index":0,"nonce":0,"gas":50000},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x19b35f8187b4e15fb59a9af469dca5dfa3cd363c11d372058c12f6482477b474","type":1,"index":1,"nonce":1,"gas":30000}]}}}`,
+			code: 200,
+		},
+		// EIP2718
 		{
 			body: `{"query": "{block {number transactions { from { address } to { address } value hash type accessList { address storageKeys } index}}}"}`,
 			want: `{"data":{"block":{"number":1,"transactions":[{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x64","hash":"0xd864c9d7d37fade6b70164740540c06dd58bb9c3f6b46101908d6339db6a6a7b","type":0,"accessList":[],"index":0},{"from":{"address":"0x71562b71999873db5b286df957af199ec94617f7"},"to":{"address":"0x0000000000000000000000000000000000000dad"},"value":"0x32","hash":"0x19b35f8187b4e15fb59a9af469dca5dfa3cd363c11d372058c12f6482477b474","type":1,"accessList":[{"address":"0x0000000000000000000000000000000000000dad","storageKeys":["0x0000000000000000000000000000000000000000000000000000000000000000"]}],"index":1}]}}}`,

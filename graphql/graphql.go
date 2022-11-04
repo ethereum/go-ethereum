@@ -224,12 +224,12 @@ func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
 	return tx.Data(), nil
 }
 
-func (t *Transaction) Gas(ctx context.Context) (hexutil.Uint64, error) {
+func (t *Transaction) Gas(ctx context.Context) (Long, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return 0, err
 	}
-	return hexutil.Uint64(tx.Gas()), nil
+	return Long(tx.Gas()), nil
 }
 
 func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
@@ -337,12 +337,12 @@ func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*tx.Value()), nil
 }
 
-func (t *Transaction) Nonce(ctx context.Context) (hexutil.Uint64, error) {
+func (t *Transaction) Nonce(ctx context.Context) (Long, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return 0, err
 	}
-	return hexutil.Uint64(tx.Nonce()), nil
+	return Long(tx.Nonce()), nil
 }
 
 func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, error) {
@@ -721,12 +721,12 @@ func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*header.Difficulty), nil
 }
 
-func (b *Block) Timestamp(ctx context.Context) (hexutil.Uint64, error) {
+func (b *Block) Timestamp(ctx context.Context) (Long, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(header.Time), nil
+	return Long(header.Time), nil
 }
 
 func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
