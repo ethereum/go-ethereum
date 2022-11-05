@@ -86,6 +86,19 @@ type TxContext struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 }
 
+// CurrentCallContext provides the EVM with information about the current
+// call or subcall context. All fields can change between calls and
+// transactions. Fields must be updated at the start of each *CALL operation.
+// Used to support non-pure precompiles.
+type CurrentCallContext struct {
+	From      common.Address
+	To        common.Address
+	Operation string
+	Calldata  []byte
+	Value     *big.Int
+	GasLimit  uint64
+}
+
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
 // the provided context. It should be noted that any error
@@ -99,6 +112,7 @@ type EVM struct {
 	// Context provides auxiliary blockchain related information
 	Context BlockContext
 	TxContext
+	CurrentCallContext CurrentCallContext
 	// StateDB gives access to the underlying state
 	StateDB StateDB
 	// Depth is the current call stack
@@ -166,6 +180,15 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	// First, set current call context for all subsequent operations
+	evm.CurrentCallContext = CurrentCallContext{
+		From:      caller.Address(),
+		To:        addr,
+		Operation: opCodeToString[CALL],
+		Calldata:  input,
+		GasLimit:  gas,
+		Value:     value,
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -252,6 +275,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	// First, set current call context for all subsequent operations
+	evm.CurrentCallContext = CurrentCallContext{
+		From:      caller.Address(),
+		To:        addr,
+		Operation: opCodeToString[CALLCODE],
+		Calldata:  input,
+		GasLimit:  gas,
+		Value:     value,
+	}
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -300,6 +333,16 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	// First, set current call context for all subsequent operations
+	evm.CurrentCallContext = CurrentCallContext{
+		From:      caller.Address(),
+		To:        addr,
+		Operation: opCodeToString[DELEGATECALL],
+		Calldata:  input,
+		GasLimit:  gas,
+		Value:     big.NewInt(0),
+	}
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -339,6 +382,16 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	// First, set current call context for all subsequent operations
+	evm.CurrentCallContext = CurrentCallContext{
+		From:      caller.Address(),
+		To:        addr,
+		Operation: opCodeToString[STATICCALL],
+		Calldata:  input,
+		GasLimit:  gas,
+		Value:     big.NewInt(0),
+	}
+
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
