@@ -34,10 +34,11 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md#payloadattributesv1
 type BuildPayloadArgs struct {
-	Parent       common.Hash    // The parent block to build payload on top
-	Timestamp    uint64         // The provided timestamp of generated payload
-	FeeRecipient common.Address // The provided recipient address for collecting transaction fee
-	Random       common.Hash    // The provided randomness value
+	Parent       common.Hash       // The parent block to build payload on top
+	Timestamp    uint64            // The provided timestamp of generated payload
+	FeeRecipient common.Address    // The provided recipient address for collecting transaction fee
+	Random       common.Hash       // The provided randomness value
+	Withdrawals  types.Withdrawals // The provided withdrawals
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -107,7 +108,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 
 // Resolve returns the latest built payload and also terminates the background
 // thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
+func (payload *Payload) Resolve() *beacon.ExecutableData {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -124,7 +125,7 @@ func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
 // It's only used in tests.
-func (payload *Payload) ResolveEmpty() *beacon.ExecutableDataV1 {
+func (payload *Payload) ResolveEmpty() *beacon.ExecutableData {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -133,7 +134,7 @@ func (payload *Payload) ResolveEmpty() *beacon.ExecutableDataV1 {
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
 // It's only used in tests.
-func (payload *Payload) ResolveFull() *beacon.ExecutableDataV1 {
+func (payload *Payload) ResolveFull() *beacon.ExecutableData {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -153,7 +154,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
-	empty, _, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, true)
+	empty, _, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, true)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +178,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			select {
 			case <-timer.C:
 				start := time.Now()
-				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, false)
+				block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.Random, args.Withdrawals, false)
 				if err == nil {
 					payload.update(block, fees, time.Since(start))
 				}
