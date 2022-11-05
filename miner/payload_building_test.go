@@ -47,7 +47,7 @@ func TestBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	verify := func(data *beacon.ExecutableDataV1, txs int) {
+	verify := func(data *beacon.ExecutableData, txs int) {
 		if data.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
 		}

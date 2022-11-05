@@ -142,7 +142,7 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableDataV1, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableData, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
@@ -150,7 +150,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if timestamp <= parentTimestamp {
 		timestamp = parentTimestamp + 1
 	}
-	payloadAttribute := beacon.PayloadAttributesV1{
+	payloadAttribute := beacon.PayloadAttributes{
 		Timestamp:             timestamp,
 		Random:                common.Hash{},
 		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
@@ -168,7 +168,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	return n.api.GetPayloadV1(*payload.PayloadID)
 }
 
-func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
+func (n *ethNode) insertBlock(eb beacon.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -194,7 +194,7 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableDataV1) error {
 	}
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableDataV1) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
