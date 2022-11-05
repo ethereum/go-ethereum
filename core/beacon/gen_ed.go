@@ -9,29 +9,31 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var _ = (*executableDataMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
-	type ExecutableDataV1 struct {
-		ParentHash    common.Hash     `json:"parentHash"    gencodec:"required"`
-		FeeRecipient  common.Address  `json:"feeRecipient"  gencodec:"required"`
-		StateRoot     common.Hash     `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  common.Hash     `json:"receiptsRoot"  gencodec:"required"`
-		LogsBloom     hexutil.Bytes   `json:"logsBloom"     gencodec:"required"`
-		Random        common.Hash     `json:"prevRandao"    gencodec:"required"`
-		Number        hexutil.Uint64  `json:"blockNumber"   gencodec:"required"`
-		GasLimit      hexutil.Uint64  `json:"gasLimit"      gencodec:"required"`
-		GasUsed       hexutil.Uint64  `json:"gasUsed"       gencodec:"required"`
-		Timestamp     hexutil.Uint64  `json:"timestamp"     gencodec:"required"`
-		ExtraData     hexutil.Bytes   `json:"extraData"     gencodec:"required"`
-		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
-		BlockHash     common.Hash     `json:"blockHash"     gencodec:"required"`
-		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
+func (e ExecutableData) MarshalJSON() ([]byte, error) {
+	type ExecutableData struct {
+		ParentHash    common.Hash         `json:"parentHash"    gencodec:"required"`
+		FeeRecipient  common.Address      `json:"feeRecipient"  gencodec:"required"`
+		StateRoot     common.Hash         `json:"stateRoot"     gencodec:"required"`
+		ReceiptsRoot  common.Hash         `json:"receiptsRoot"  gencodec:"required"`
+		LogsBloom     hexutil.Bytes       `json:"logsBloom"     gencodec:"required"`
+		Random        common.Hash         `json:"prevRandao"    gencodec:"required"`
+		Number        hexutil.Uint64      `json:"blockNumber"   gencodec:"required"`
+		GasLimit      hexutil.Uint64      `json:"gasLimit"      gencodec:"required"`
+		GasUsed       hexutil.Uint64      `json:"gasUsed"       gencodec:"required"`
+		Timestamp     hexutil.Uint64      `json:"timestamp"     gencodec:"required"`
+		ExtraData     hexutil.Bytes       `json:"extraData"     gencodec:"required"`
+		BaseFeePerGas *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
+		BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
+		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
+		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	}
-	var enc ExecutableDataV1
+	var enc ExecutableData
 	enc.ParentHash = e.ParentHash
 	enc.FeeRecipient = e.FeeRecipient
 	enc.StateRoot = e.StateRoot
@@ -51,89 +53,94 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 			enc.Transactions[k] = v
 		}
 	}
+	enc.Withdrawals = e.Withdrawals
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
-	type ExecutableDataV1 struct {
-		ParentHash    *common.Hash    `json:"parentHash"    gencodec:"required"`
-		FeeRecipient  *common.Address `json:"feeRecipient"  gencodec:"required"`
-		StateRoot     *common.Hash    `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  *common.Hash    `json:"receiptsRoot"  gencodec:"required"`
-		LogsBloom     *hexutil.Bytes  `json:"logsBloom"     gencodec:"required"`
-		Random        *common.Hash    `json:"prevRandao"    gencodec:"required"`
-		Number        *hexutil.Uint64 `json:"blockNumber"   gencodec:"required"`
-		GasLimit      *hexutil.Uint64 `json:"gasLimit"      gencodec:"required"`
-		GasUsed       *hexutil.Uint64 `json:"gasUsed"       gencodec:"required"`
-		Timestamp     *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		ExtraData     *hexutil.Bytes  `json:"extraData"     gencodec:"required"`
-		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
-		BlockHash     *common.Hash    `json:"blockHash"     gencodec:"required"`
-		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
+func (e *ExecutableData) UnmarshalJSON(input []byte) error {
+	type ExecutableData struct {
+		ParentHash    *common.Hash        `json:"parentHash"    gencodec:"required"`
+		FeeRecipient  *common.Address     `json:"feeRecipient"  gencodec:"required"`
+		StateRoot     *common.Hash        `json:"stateRoot"     gencodec:"required"`
+		ReceiptsRoot  *common.Hash        `json:"receiptsRoot"  gencodec:"required"`
+		LogsBloom     *hexutil.Bytes      `json:"logsBloom"     gencodec:"required"`
+		Random        *common.Hash        `json:"prevRandao"    gencodec:"required"`
+		Number        *hexutil.Uint64     `json:"blockNumber"   gencodec:"required"`
+		GasLimit      *hexutil.Uint64     `json:"gasLimit"      gencodec:"required"`
+		GasUsed       *hexutil.Uint64     `json:"gasUsed"       gencodec:"required"`
+		Timestamp     *hexutil.Uint64     `json:"timestamp"     gencodec:"required"`
+		ExtraData     *hexutil.Bytes      `json:"extraData"     gencodec:"required"`
+		BaseFeePerGas *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
+		BlockHash     *common.Hash        `json:"blockHash"     gencodec:"required"`
+		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
+		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
 	}
-	var dec ExecutableDataV1
+	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	if dec.ParentHash == nil {
-		return errors.New("missing required field 'parentHash' for ExecutableDataV1")
+		return errors.New("missing required field 'parentHash' for ExecutableData")
 	}
 	e.ParentHash = *dec.ParentHash
 	if dec.FeeRecipient == nil {
-		return errors.New("missing required field 'feeRecipient' for ExecutableDataV1")
+		return errors.New("missing required field 'feeRecipient' for ExecutableData")
 	}
 	e.FeeRecipient = *dec.FeeRecipient
 	if dec.StateRoot == nil {
-		return errors.New("missing required field 'stateRoot' for ExecutableDataV1")
+		return errors.New("missing required field 'stateRoot' for ExecutableData")
 	}
 	e.StateRoot = *dec.StateRoot
 	if dec.ReceiptsRoot == nil {
-		return errors.New("missing required field 'receiptsRoot' for ExecutableDataV1")
+		return errors.New("missing required field 'receiptsRoot' for ExecutableData")
 	}
 	e.ReceiptsRoot = *dec.ReceiptsRoot
 	if dec.LogsBloom == nil {
-		return errors.New("missing required field 'logsBloom' for ExecutableDataV1")
+		return errors.New("missing required field 'logsBloom' for ExecutableData")
 	}
 	e.LogsBloom = *dec.LogsBloom
 	if dec.Random == nil {
-		return errors.New("missing required field 'prevRandao' for ExecutableDataV1")
+		return errors.New("missing required field 'prevRandao' for ExecutableData")
 	}
 	e.Random = *dec.Random
 	if dec.Number == nil {
-		return errors.New("missing required field 'blockNumber' for ExecutableDataV1")
+		return errors.New("missing required field 'blockNumber' for ExecutableData")
 	}
 	e.Number = uint64(*dec.Number)
 	if dec.GasLimit == nil {
-		return errors.New("missing required field 'gasLimit' for ExecutableDataV1")
+		return errors.New("missing required field 'gasLimit' for ExecutableData")
 	}
 	e.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed == nil {
-		return errors.New("missing required field 'gasUsed' for ExecutableDataV1")
+		return errors.New("missing required field 'gasUsed' for ExecutableData")
 	}
 	e.GasUsed = uint64(*dec.GasUsed)
 	if dec.Timestamp == nil {
-		return errors.New("missing required field 'timestamp' for ExecutableDataV1")
+		return errors.New("missing required field 'timestamp' for ExecutableData")
 	}
 	e.Timestamp = uint64(*dec.Timestamp)
 	if dec.ExtraData == nil {
-		return errors.New("missing required field 'extraData' for ExecutableDataV1")
+		return errors.New("missing required field 'extraData' for ExecutableData")
 	}
 	e.ExtraData = *dec.ExtraData
 	if dec.BaseFeePerGas == nil {
-		return errors.New("missing required field 'baseFeePerGas' for ExecutableDataV1")
+		return errors.New("missing required field 'baseFeePerGas' for ExecutableData")
 	}
 	e.BaseFeePerGas = (*big.Int)(dec.BaseFeePerGas)
 	if dec.BlockHash == nil {
-		return errors.New("missing required field 'blockHash' for ExecutableDataV1")
+		return errors.New("missing required field 'blockHash' for ExecutableData")
 	}
 	e.BlockHash = *dec.BlockHash
 	if dec.Transactions == nil {
-		return errors.New("missing required field 'transactions' for ExecutableDataV1")
+		return errors.New("missing required field 'transactions' for ExecutableData")
 	}
 	e.Transactions = make([][]byte, len(dec.Transactions))
 	for k, v := range dec.Transactions {
 		e.Transactions[k] = v
+	}
+	if dec.Withdrawals != nil {
+		e.Withdrawals = dec.Withdrawals
 	}
 	return nil
 }
