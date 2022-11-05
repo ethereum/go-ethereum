@@ -70,7 +70,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 //
 // If there are payloadAttributes: we return an error since block creation is not
 // supported in les mode.
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
@@ -100,12 +100,12 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, pay
 }
 
 // GetPayloadV1 returns a cached payload by id. It's not supported in les mode.
-func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
+func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableData, error) {
 	return nil, beacon.GenericServerError.With(errors.New("not supported in light client mode"))
 }
 
 // ExecutePayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
+func (api *ConsensusAPI) ExecutePayloadV1(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
 		return api.invalid(), err
