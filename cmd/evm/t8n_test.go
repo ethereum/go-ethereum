@@ -251,6 +251,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
+		{ // Test withdrawals transition
+			base: "./testdata/26",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Shanghai", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
+			expOut: "exp.json",
+		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
@@ -391,13 +399,14 @@ func TestT9n(t *testing.T) {
 }
 
 type b11rInput struct {
-	inEnv       string
-	inOmmersRlp string
-	inTxsRlp    string
-	inClique    string
-	ethash      bool
-	ethashMode  string
-	ethashDir   string
+	inEnv         string
+	inOmmersRlp   string
+	inWithdrawals string
+	inTxsRlp      string
+	inClique      string
+	ethash        bool
+	ethashMode    string
+	ethashDir     string
 }
 
 func (args *b11rInput) get(base string) []string {
@@ -408,6 +417,10 @@ func (args *b11rInput) get(base string) []string {
 	}
 	if opt := args.inOmmersRlp; opt != "" {
 		out = append(out, "--input.ommers")
+		out = append(out, fmt.Sprintf("%v/%v", base, opt))
+	}
+	if opt := args.inWithdrawals; opt != "" {
+		out = append(out, "--input.withdrawals")
 		out = append(out, fmt.Sprintf("%v/%v", base, opt))
 	}
 	if opt := args.inTxsRlp; opt != "" {
@@ -477,6 +490,16 @@ func TestB11r(t *testing.T) {
 				inEnv:       "header.json",
 				inOmmersRlp: "ommers.json",
 				inTxsRlp:    "txs.rlp",
+			},
+			expOut: "exp.json",
+		},
+		{ // block with withdrawals
+			base: "./testdata/27",
+			input: b11rInput{
+				inEnv:         "header.json",
+				inOmmersRlp:   "ommers.json",
+				inWithdrawals: "withdrawals.json",
+				inTxsRlp:      "txs.rlp",
 			},
 			expOut: "exp.json",
 		},
