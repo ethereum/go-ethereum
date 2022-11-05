@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -36,24 +37,53 @@ import (
 )
 
 var (
-	testdb      = rawdb.NewMemoryDatabase()
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
-	gspec       = &core.Genesis{
-		Config:  params.TestChainConfig,
+	testdb       = rawdb.NewMemoryDatabase()
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddress  = crypto.PubkeyToAddress(testKey.PublicKey)
+	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
+	gspec        *core.Genesis
+	genesis      *types.Block
+)
+
+func init() {
+	config := &params.ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                true,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            big.NewInt(0),
+		ShanghaiBlock:                 big.NewInt(0),
+		TerminalTotalDifficulty:       big.NewInt(0),
+		TerminalTotalDifficultyPassed: true,
+		Ethash:                        new(params.EthashConfig),
+	}
+
+	gspec = &core.Genesis{
+		Config:  config,
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	genesis      = gspec.MustCommit(testdb)
-	unknownBlock = types.NewBlock(&types.Header{GasLimit: params.GenesisGasLimit, BaseFee: big.NewInt(params.InitialBaseFee)}, nil, nil, nil, trie.NewStackTrie(nil))
-)
+	genesis = gspec.MustCommit(testdb)
+}
 
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks, _ := core.GenerateChain(gspec.Config, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(gspec.Config, parent, beacon.New(ethash.NewFaker()), testdb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner
@@ -68,6 +98,12 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		// If the block number is a multiple of 5, add a bonus uncle to the block
 		if i > 0 && i%5 == 0 {
 			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 2).Hash(), Number: big.NewInt(int64(i - 1))})
+		}
+		// If the block number is a multiple of 7, add a withdrawal
+		if i > 0 && i%7 == 0 {
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(42)})
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(43)})
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(44)})
 		}
 	})
 	hashes := make([]common.Hash, n+1)
@@ -233,13 +269,17 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 	// Create a function that returns blocks from the closure
 	return func(hashes []common.Hash, sink chan *eth.Response) (*eth.Request, error) {
 		// Gather the block bodies to return
-		transactions := make([][]*types.Transaction, 0, len(hashes))
-		uncles := make([][]*types.Header, 0, len(hashes))
+		var (
+			transactions = make([][]*types.Transaction, 0, len(hashes))
+			uncles       = make([][]*types.Header, 0, len(hashes))
+			withdrawals  = make([][]*types.Withdrawal, 0, len(hashes))
+		)
 
 		for _, hash := range hashes {
 			if block, ok := closure[hash]; ok {
 				transactions = append(transactions, block.Transactions())
 				uncles = append(uncles, block.Uncles())
+				withdrawals = append(withdrawals, block.Withdrawals())
 			}
 		}
 		// Return on a new thread
@@ -248,6 +288,7 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 			bodies[i] = &eth.BlockBody{
 				Transactions: txs,
 				Uncles:       uncles[i],
+				Withdrawals:  withdrawals[i],
 			}
 		}
 		req := &eth.Request{
