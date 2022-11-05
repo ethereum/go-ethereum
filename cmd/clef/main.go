@@ -635,10 +635,10 @@ func signer(c *cli.Context) error {
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
-	
+
 	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
-	intapi := core.NewUIServerAPI(apiImpl) 
+	intapi := core.NewUIServerAPI(apiImpl)
 
 	// Audit logging
 	if logfile := c.String(auditLogFlag.Name); logfile != "" {
@@ -707,31 +707,28 @@ func signer(c *cli.Context) error {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
-    
+
 	// list accounts on startup
 	accounts, err := intapi.ListAccounts(c.Context)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
 
-	var addresses string
-	for _, account := range accounts {
+	var addresses string = "\n"
+	for i, account := range accounts {
 		// concat string to avoid repeating "INFO" on terminal
-		addresses += fmt.Sprintf("%s", account.Address)
+		addresses += fmt.Sprintf("Account %v: %s at %s", i, account.Address, account.URL)
 		addresses += "\n"
 	}
 
-	// print account string to console using ui
-	ui.ShowInfo(addresses)
-
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
+			"known accounts": addresses,
 			"intapi_version": core.InternalAPIVersion,
 			"extapi_version": core.ExternalAPIVersion,
 			"extapi_http":    extapiURL,
 			"extapi_ipc":     ipcapiURL,
-		},
-	})
+		}})
 
 	abortChan := make(chan os.Signal, 1)
 	signal.Notify(abortChan, os.Interrupt)

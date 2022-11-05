@@ -40,7 +40,7 @@ func NewCommandlineUI() *CommandlineUI {
 }
 
 func (ui *CommandlineUI) RegisterUIServer(api *UIServerAPI) {
-	// noop
+	//noop
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
