@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -74,7 +75,7 @@ PURPOSE. See the GNU General Public License for more details.
 var (
 	logLevelFlag = &cli.IntFlag{
 		Name:  "loglevel",
-		Value: 4,
+		Value: 3,
 		Usage: "log level to emit to the screen",
 	}
 	advancedMode = &cli.BoolFlag{
@@ -238,6 +239,23 @@ The gendoc generates example structures of the json-rpc communication types.
 		Description: `
 	Lists the wallets known to Clef.
 	`}
+	importRawCommand = &cli.Command{
+		Action:    accountImport,
+		Name:      "importraw",
+		Usage:     "Import a hex-encoded private key.",
+		ArgsUsage: "<keyfile>",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+			acceptFlag,
+		},
+		Description: `
+Imports an unencrypted private key from <keyfile> and creates a new account.
+Prints the address.
+The keyfile is assumed to contain an unencrypted private key in hexadecimal format.
+The account is saved in encrypted format, you are prompted for a password.
+`}
 )
 
 var app = flags.NewApp("Manage Ethereum account operations")
@@ -273,6 +291,7 @@ func init() {
 		setCredentialCommand,
 		delCredentialCommand,
 		newAccountCommand,
+		importRawCommand,
 		gendocCommand,
 		listAccountsCommand,
 		listWalletsCommand,
@@ -378,9 +397,9 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
-func initInternalApi(c *cli.Context) (*core.UIServerAPI, error) {
+func initInternalApi(c *cli.Context) (*core.UIServerAPI, core.UIClientAPI, error) {
 	if err := initialize(c); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var (
 		ui                        = core.NewCommandlineUI()
@@ -391,7 +410,7 @@ func initInternalApi(c *cli.Context) (*core.UIServerAPI, error) {
 	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
 	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
 	internalApi := core.NewUIServerAPI(api)
-	return internalApi, nil
+	return internalApi, ui, nil
 }
 
 func setCredential(ctx *cli.Context) error {
@@ -478,7 +497,7 @@ func initialize(c *cli.Context) error {
 }
 
 func newAccount(c *cli.Context) error {
-	internalApi, err := initInternalApi(c)
+	internalApi, _, err := initInternalApi(c)
 	if err != nil {
 		return err
 	}
@@ -490,7 +509,7 @@ func newAccount(c *cli.Context) error {
 }
 
 func listAccounts(c *cli.Context) error {
-	internalApi, err := initInternalApi(c)
+	internalApi, _, err := initInternalApi(c)
 	if err != nil {
 		return err
 	}
@@ -509,7 +528,7 @@ func listAccounts(c *cli.Context) error {
 }
 
 func listWallets(c *cli.Context) error {
-	internalApi, err := initInternalApi(c)
+	internalApi, _, err := initInternalApi(c)
 	if err != nil {
 		return err
 	}
@@ -525,6 +544,57 @@ func listWallets(c *cli.Context) error {
 		}
 		fmt.Println()
 	}
+	return nil
+}
+
+// accountImport imports a raw hexadecimal private key via CLI.
+func accountImport(c *cli.Context) error {
+	if c.Args().Len() != 1 {
+		return errors.New("<keyfile> must be given as first argument.")
+	}
+	internalApi, ui, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	pKey, err := crypto.LoadECDSA(c.Args().First())
+	if err != nil {
+		return err
+	}
+	readPw := func(prompt string) (string, error) {
+		resp, err := ui.OnInputRequired(core.UserInputRequest{
+			Title:      "Password",
+			Prompt:     prompt,
+			IsPassword: true,
+		})
+		if err != nil {
+			return "", err
+		}
+		return resp.Text, nil
+	}
+	first, err := readPw("Please enter a password for the imported account")
+	if err != nil {
+		return err
+	}
+	second, err := readPw("Please repeat the password you just entered")
+	if err != nil {
+		return err
+	}
+	if first != second {
+		return errors.New("Passwords do not match")
+	}
+	acc, err := internalApi.ImportRawKey(hex.EncodeToString(crypto.FromECDSA(pKey)), first)
+	if err != nil {
+		return err
+	}
+	ui.ShowInfo(fmt.Sprintf(`Key imported:
+  Address %v
+  Keystore file: %v
+
+The key is now encrypted; losing the password will result in permanently losing 
+access to the key and all associated funds!
+
+Make sure to backup keystore and passwords in a safe location.`,
+		acc.Address, acc.URL.Path))
 	return nil
 }
 
