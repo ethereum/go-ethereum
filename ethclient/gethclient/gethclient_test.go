@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	eth "github.com/ethereum/go-ethereum/g"
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/ethconfig"
 	"github.com/ethereum/go-ethereum/g/filters"
 	"github.com/ethereum/go-ethereum/node"
@@ -57,7 +57,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Create Ethereum Service
 	config := &ethconfig.Config{Genesis: genesis}
 	config.Ethash.PowMode = ethash.ModeFake
-	ethservice, err := eth.New(n, config)
+	ethservice, err := g.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}

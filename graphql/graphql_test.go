@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	eth "github.com/ethereum/go-ethereum/g"
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/ethconfig"
 	"github.com/ethereum/go-ethereum/g/filters"
 	"github.com/ethereum/go-ethereum/node"
@@ -346,7 +346,7 @@ func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlock
 		TrieTimeout:             60 * time.Minute,
 		SnapshotCache:           5,
 	}
-	ethBackend, err := eth.New(stack, ethConf)
+	ethBackend, err := g.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
 	}

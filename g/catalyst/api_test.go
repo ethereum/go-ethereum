@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	eth "github.com/ethereum/go-ethereum/g"
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
@@ -389,7 +389,7 @@ func TestEth2DeepReorg(t *testing.T) {
 }
 
 // startEthService creates a full node instance for testing.
-func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *eth.Ethereum) {
+func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block) (*node.Node, *g.Ethereum) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -403,7 +403,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	}
 
 	ethcfg := &ethconfig.Config{Genesis: genesis, Ethash: ethash.Config{PowMode: ethash.ModeFake}, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256}
-	ethservice, err := eth.New(n, ethcfg)
+	ethservice, err := g.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
 	}
@@ -440,7 +440,7 @@ func TestFullAPI(t *testing.T) {
 	setupBlocks(t, ethservice, 10, parent, callback)
 }
 
-func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Block, callback func(parent *types.Block)) {
+func setupBlocks(t *testing.T, ethservice *g.Ethereum, n int, parent *types.Block, callback func(parent *types.Block)) {
 	api := NewConsensusAPI(ethservice)
 	for i := 0; i < n; i++ {
 		callback(parent)

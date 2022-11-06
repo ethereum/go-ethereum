@@ -32,7 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	eth "github.com/ethereum/go-ethereum/g"
+
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
@@ -65,7 +66,7 @@ func main() {
 
 	var (
 		stacks []*node.Node
-		nodes  []*eth.Ethereum
+		nodes  []*g.Ethereum
 		enodes []*enode.Node
 	)
 	for _, sealer := range sealers {
@@ -180,7 +181,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+func makeSealer(genesis *core.Genesis) (*node.Node, *g.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := os.MkdirTemp("", "")
 
@@ -200,7 +201,7 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
 		return nil, nil, err
 	}
 	// Create and register the backend
-	ethBackend, err := eth.New(stack, &ethconfig.Config{
+	ethBackend, err := g.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,

@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	eth "github.com/ethereum/go-ethereum/g"
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/node"
@@ -108,7 +108,7 @@ func setupGeth(stack *node.Node) error {
 		return err
 	}
 
-	backend, err := eth.New(stack, &ethconfig.Config{
+	backend, err := g.New(stack, &ethconfig.Config{
 		Genesis:                 &chain.genesis,
 		NetworkId:               chain.genesis.Config.ChainID.Uint64(), // 19763
 		DatabaseCache:           10,

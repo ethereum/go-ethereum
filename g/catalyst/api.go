@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	eth "github.com/ethereum/go-ethereum/g"
+	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -39,7 +39,7 @@ import (
 )
 
 // Register adds the engine API to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum) error {
+func Register(stack *node.Node, backend *g.Ethereum) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
@@ -81,7 +81,7 @@ const (
 )
 
 type ConsensusAPI struct {
-	eth *eth.Ethereum
+	eth *g.Ethereum
 
 	remoteBlocks *headerQueue  // Cache of remote payloads received
 	localBlocks  *payloadQueue // Cache of local payloads generated
@@ -125,7 +125,7 @@ type ConsensusAPI struct {
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
+func NewConsensusAPI(eth *g.Ethereum) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
