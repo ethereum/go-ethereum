@@ -2,7 +2,7 @@ import { Code, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/rea
 import type { NextPage } from 'next';
 import { useState } from 'react';
 
-import { DownloadsHero, DownloadsSection, DownloadsTable } from '../components/UI/downloads';
+import { DownloadsHero, DownloadsSection, DownloadsTable, SpecificVersionsSection } from '../components/UI/downloads';
 import { DataTable } from '../components/UI';
 
 import {
@@ -51,12 +51,7 @@ const DownloadsPage: NextPage = () => {
             }
           />
 
-          <DownloadsSection
-            imgSrc='/images/pages/gopher-home-side-desktop.svg'
-            imgAltText='Gopher facing right'
-            sectionTitle='Specific Versions'
-            id='specificversions'
-          >
+          <SpecificVersionsSection>
             <Stack p={4}>
               <Text textStyle='quick-link-text'>
                 If you&apos;re looking for a specific release, operating system or architecture,
@@ -92,7 +87,7 @@ const DownloadsPage: NextPage = () => {
                 Signatures for details).
               </Text>
             </Stack>
-          </DownloadsSection>
+          </SpecificVersionsSection>
 
           <DownloadsSection sectionTitle='Stable releases' id='stablereleases'>
             <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
