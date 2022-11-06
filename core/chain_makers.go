@@ -297,7 +297,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			shanghai := config.IsShanghai(b.header.Number)
+			shanghai := config.IsShanghai(new(big.Int).SetUint64(b.header.Time))
 			if shanghai && b.withdrawals == nil {
 				// need to make empty list to denote non-nil, but empty withdrawals to calc withdrawals hash
 				b.withdrawals = make([]*types.Withdrawal, 0)
