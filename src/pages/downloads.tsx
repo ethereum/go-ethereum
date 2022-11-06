@@ -89,8 +89,9 @@ const DownloadsPage: NextPage = () => {
             </Stack>
           </SpecificVersionsSection>
 
-          <DownloadsSection sectionTitle='Stable releases' id='stablereleases'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+          <DownloadsSection
+            id='stablereleases'
+            sectionDescription={
               <Text textStyle='quick-link-text'>
                 These are the current and previous stable releases of go-ethereum, updated
                 automatically when a new version is tagged in our{' '}
@@ -98,8 +99,9 @@ const DownloadsPage: NextPage = () => {
                   GitHub repository.
                 </Link>
               </Text>
-            </Stack>
-
+            }
+            sectionTitle='Stable releases'
+          >
             {/* TODO: swap test data for real data */}
             <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)} />
 
@@ -118,8 +120,9 @@ const DownloadsPage: NextPage = () => {
             </Stack>
           </DownloadsSection>
 
-          <DownloadsSection sectionTitle='Develop builds' id='developbuilds'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+          <DownloadsSection
+            id='developbuilds'
+            sectionDescription={
               <Text textStyle='quick-link-text'>
                 These are the develop snapshots of go-ethereum, updated automatically when a new
                 commit is pushed into our{' '}
@@ -127,8 +130,9 @@ const DownloadsPage: NextPage = () => {
                   GitHub repository.
                 </Link>
               </Text>
-            </Stack>
-
+            }
+            sectionTitle='Develop builds'
+          >
             {/* TODO: swap for real data */}
             <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
 
@@ -147,13 +151,15 @@ const DownloadsPage: NextPage = () => {
             </Stack>
           </DownloadsSection>
 
-          <DownloadsSection sectionTitle='OpenPGP Signatures' id='pgpsignatures'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+          <DownloadsSection
+            id='pgpsignatures'
+            sectionDescription={
               <Text textStyle='quick-link-text'>
                 All the binaries available from this page are signed via our build server PGP keys:
               </Text>
-            </Stack>
-
+            }
+            sectionTitle='OpenPGP Signatures'
+          >
             {/* TODO: swap for real data */}
             <Stack borderBottom='2px solid' borderColor='brand.light.primary'>
               <DataTable columnHeaders={DOWNLOAD_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
@@ -168,7 +174,7 @@ const DownloadsPage: NextPage = () => {
             </Stack>
           </DownloadsSection>
 
-          <DownloadsSection sectionTitle='Importing keys and verifying builds' id='importingkeys'>
+          <DownloadsSection id='importingkeys' sectionTitle='Importing keys and verifying builds'>
             <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
               <Text textStyle='quick-link-text'>
                 You can import the build server public keys by grabbing the individual keys directly
