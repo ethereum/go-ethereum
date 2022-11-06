@@ -638,7 +638,6 @@ func signer(c *cli.Context) error {
 
 	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
-	intapi := core.NewUIServerAPI(apiImpl)
 
 	// Audit logging
 	if logfile := c.String(auditLogFlag.Name); logfile != "" {
@@ -708,22 +707,8 @@ func signer(c *cli.Context) error {
 		go testExternalUI(apiImpl)
 	}
 
-	// list accounts on startup
-	accounts, err := intapi.ListAccounts(c.Context)
-	if err != nil {
-		utils.Fatalf(err.Error())
-	}
-
-	var addresses string = "\n"
-	for i, account := range accounts {
-		// concat string to avoid repeating "INFO" on terminal
-		addresses += fmt.Sprintf("Account %v: %s at %s", i, account.Address, account.URL)
-		addresses += "\n"
-	}
-
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"known accounts": addresses,
 			"intapi_version": core.InternalAPIVersion,
 			"extapi_version": core.ExternalAPIVersion,
 			"extapi_http":    extapiURL,

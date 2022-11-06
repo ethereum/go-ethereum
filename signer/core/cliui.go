@@ -18,6 +18,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,8 +32,9 @@ import (
 )
 
 type CommandlineUI struct {
-	in *bufio.Reader
-	mu sync.Mutex
+	in  *bufio.Reader
+	mu  sync.Mutex
+	api *UIServerAPI
 }
 
 func NewCommandlineUI() *CommandlineUI {
@@ -40,7 +42,7 @@ func NewCommandlineUI() *CommandlineUI {
 }
 
 func (ui *CommandlineUI) RegisterUIServer(api *UIServerAPI) {
-	//noop
+	ui.api = api
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
@@ -242,6 +244,24 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
+	accounts, err := ui.api.ListAccounts(context.Background())
+	if err != nil {
+		fmt.Print("error listing accounts", err)
+	}
+	if len(accounts) == 0 {
+		fmt.Println("No accounts known to Clef")
+	} else {
+		// account info to string for nicer printing
+		var addresses string = "\n"
+		fmt.Println("Accounts known to Clef:")
+		for i, account := range accounts {
+			// concat string to avoid repeating "INFO" on terminal
+			addresses += fmt.Sprintf("Account %v: %s at %s", i, account.Address, account.URL)
+			addresses += "\n"
+		}
+		fmt.Print(addresses)
+		fmt.Println()
+	}
 	fmt.Printf("------- Signer info -------\n")
 	for k, v := range info.Info {
 		fmt.Printf("* %v : %v\n", k, v)
