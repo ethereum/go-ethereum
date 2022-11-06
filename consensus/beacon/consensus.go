@@ -268,7 +268,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return err
 	}
 	// Verify existence / non-existence of withdrawalsHash.
-	shanghai := chain.Config().IsShanghai(header.Number)
+	shanghai := chain.Config().IsShanghai(new(big.Int).SetUint64(header.Time))
 	if shanghai && header.WithdrawalsHash == nil {
 		return fmt.Errorf("missing withdrawalsHash")
 	}
@@ -342,7 +342,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		return
 	}
 	// If withdrawals have been activated, process each one.
-	if chain.Config().IsShanghai(header.Number) {
+	if chain.Config().IsShanghai(new(big.Int).SetUint64(header.Time)) {
 		for _, w := range withdrawals {
 			state.AddBalance(w.Address, w.Amount)
 		}
