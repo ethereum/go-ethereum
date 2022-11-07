@@ -23,7 +23,7 @@ Clef and Geth should be started separately but with complementary configurations
 clef --chainid 11155111 --keystore ~/.go-ethereum/sepolia-data/keystore --configdir ~/go-ethereum/sepolia-data/clef --http
 ```
 
-Clef will now start running in the terminal, beginning with a disclaimer and a prompt to click "ok":
+Clef will start running in the terminal, beginning with a disclaimer and a prompt to click "ok":
 
 ```terminal
 WARNING!
@@ -42,7 +42,7 @@ Enter 'ok' to proceed:
 >
 ```
 
-Geth can now be started in a separate terminal. To connect to Clef, ensure the data directory is consistent with the path provided to Clef and pass the location of the the Clef IPC file - which Clef saves to the path provided to its `--configdir` flag - in this case we set it to `~/go-ethereum/sepolia-data/clef`:
+Geth can be started in a separate terminal. To connect to Clef, ensure the data directory is consistent with the path provided to Clef and pass the location of the the Clef IPC file - which Clef saves to the path provided to its `--configdir` flag - in this case we set it to `~/go-ethereum/sepolia-data/clef`:
 
 ```sh
 geth --sepolia --datadir sepolia <other flags> --signer=sepolia-data/clef/clef.ipc
@@ -93,7 +93,13 @@ geth account new
 
 ### Listing accounts
 
-The accounts in the keystore can be listed to the terminal using `account_list` as follows:
+The accounts in the keystore can be listed to the terminal using a simple CLI command as follows:
+
+```
+clef list-accounts --keystore <path-to-keystore>
+```
+
+or using `account_list` in a POST request as follows:
 
 ```sh
 curl -X POST --data '{"id": 0, "jsonrpc": "2.0", "method": "account_list", "params": []}' http://localhost:8550 -H "Content-Type: application/json"
@@ -109,6 +115,20 @@ The ordering of accounts when they are listed is lexicographic, but is effective
 
 Accounts can also be listed in the Javascript console using `eth.accounts`, which will defer to Clef for approval.
 
+As well as individual account, any wallets managed by Clef can be listed (which will also print the wallet status and the address and URl of any accounts they contain. This uses the `list-wallets` CLI command.
+
+```
+clef list-wallets --keystore <path-to-keystore>
+```
+
+which returns:
+
+```terminal
+- Wallet 0 at keystore:///home/user/Code/go-ethereum/testdata/keystore/UTC--2022-11-01T17-05-01.517877299Z--4f4094babd1a8c433e0f52a6ee3b6ff32dee6a9c (Locked )
+  - Account 0: 0x4f4094BaBd1A8c433e0f52A6ee3B6ff32dEe6a9c (keystore:///home/user/go-ethereum/testdata/keystore/UTC--2022-11-01T17-05-01.517877299Z--4f4094babd1a8c433e0f52a6ee3b6ff32dee6a9c)
+- Wallet 1 at keystore:///home/user/go-ethereum/testdata/keystore/UTC--2022-11-01T17-05-11.100536003Z--8ef15919f852a8034688a71d8b57ab0187364009 (Locked )
+  - Account 0: 0x8Ef15919F852A8034688a71d8b57Ab0187364009 (keystore:///home/user/go-ethereum/testdata/keystore/UTC--2022-11-01T17-05-11.100536003Z--8ef15919f852a8034688a71d8b57ab0187364009)
+```
 
 ### Import a keyfile
 

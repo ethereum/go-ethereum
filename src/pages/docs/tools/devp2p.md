@@ -27,6 +27,22 @@ Ethereum Node Records can be decoded, verified and displayed to the terminal usi
 
 Use `devp2p enrdump <base64>` to verify and display an Ethereum Node Record.
 
+The following is an example of the data returned by `enrdump`:
+
+```terminal
+./devp2p enrdump "enr:-J24QG3pjTFObcDvTOTJr2qPOTDH3-YxDqS47Ylm-kgM5BUwb1oD5Id6fSRTfUzTahTa7y4TWx_HSV7wri7T6iYtyAQHg2V0aMfGhLjGKZ2AgmlkgnY0gmlwhJ1a19CJc2VjcDI1NmsxoQPlCNb7N__vcnsNC8YYkFkmNj8mibnR5NuvSowcRZsLU4RzbmFwwIN0Y3CCdl-DdWRwgnZf" Node ID: 001816492db22f7572e9eea1c871a2ffe75c28162a9fbc5a9d240e480a7c176f URLv4: ./devp2p enrdump  "enr:-J24QG3pjTFObcDvTOTJr2qPOTDH3-YxDqS47Ylm-kgM5BUwb1oD5Id6fSRTfUzTahTa7y4TWx_HSV7wri7T6iYtyAQHg2V0aMfGhLjGKZ2AgmlkgnY0gmlwhJ1a19CJc2VjcDI1NmsxoQPlCNb7N__vcnsNC8YYkFkmNj8mibnR5NuvSowcRZsLU4RzbmFwwIN0Y3CCdl-DdWRwgnZf"
+Node ID: 001816492db22f7572e9eea1c871a2ffe75c28162a9fbc5a9d240e480a7c176f
+URLv4:   enode://e508d6fb37ffef727b0d0bc618905926363f2689b9d1e4dbaf4a8c1c459b0b534dcdf84342b78250a6dc013c9ee9f89d095d7a6d1ef0c5f4c57a083b22c557ef@157.90.215.208:30303
+Record has sequence number 7 and 7 key/value pairs.
+  "eth"       c7c684b8c6299d80
+  "id"        "v4"
+  "ip"        157.90.215.208
+  "secp256k1" a103e508d6fb37ffef727b0d0bc618905926363f2689b9d1e4dbaf4a8c1c459b0b53
+  "snap"      c0
+  "tcp"       30303
+  "udp"       30303
+```
+
 Read more on [Ethereum Node Records](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enr) or browse the [specs](https://github.com/ethereum/devp2p/blob/591edbd36eb57280384d07373a818c00bddf3b31/enr.md).
 
 ## Node Key Management
