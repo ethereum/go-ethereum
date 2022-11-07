@@ -243,7 +243,7 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	}
 }
 
-func (ui *CommandlineUI) ShowAccounts() string {
+func (ui *CommandlineUI) showAccounts() string {
 	accounts, err := ui.api.ListAccounts(context.Background())
 	if err != nil {
 		fmt.Print("error listing accounts", err)
@@ -264,8 +264,10 @@ func (ui *CommandlineUI) ShowAccounts() string {
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
-	addresses := ui.ShowAccounts()
-	fmt.Printf("%s", addresses)
+	go func() {
+		addresses := ui.showAccounts()
+		fmt.Printf("%s", addresses)
+	}()
 	fmt.Printf("\n------- Signer info -------\n")
 	for k, v := range info.Info {
 		fmt.Printf("* %v : %v\n", k, v)
