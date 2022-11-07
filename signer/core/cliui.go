@@ -253,7 +253,7 @@ func (ui *CommandlineUI) ShowAccounts() string {
 		resp = "No accounts known to Clef"
 	} else {
 		// account info to string for nicer printing
-		var addresses string = ""
+		var addresses string = "\nAccounts known to Clef:\n"
 		for i, account := range accounts {
 			// concat string to avoid repeating "INFO" on terminal
 			addresses += fmt.Sprintf("Account %v: %s at %s\n", i, account.Address, account.URL)
@@ -265,9 +265,8 @@ func (ui *CommandlineUI) ShowAccounts() string {
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
 	addresses := ui.ShowAccounts()
-	fmt.Print("Accounts known to Clef:\n\n")
 	fmt.Printf("%s", addresses)
-	fmt.Printf("------- Signer info -------\n")
+	fmt.Printf("\n------- Signer info -------\n")
 	for k, v := range info.Info {
 		fmt.Printf("* %v : %v\n", k, v)
 	}
