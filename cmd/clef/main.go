@@ -707,6 +707,7 @@ func signer(c *cli.Context) error {
 	// it with the UI.
 	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
+
 	// Audit logging
 	if logfile := c.String(auditLogFlag.Name); logfile != "" {
 		api, err = core.NewAuditLogger(logfile, api)
@@ -768,7 +769,6 @@ func signer(c *cli.Context) error {
 			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
 	}
-
 	if c.Bool(testFlag.Name) {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
@@ -779,8 +779,7 @@ func signer(c *cli.Context) error {
 			"extapi_version": core.ExternalAPIVersion,
 			"extapi_http":    extapiURL,
 			"extapi_ipc":     ipcapiURL,
-		},
-	})
+		}})
 
 	abortChan := make(chan os.Signal, 1)
 	signal.Notify(abortChan, os.Interrupt)
