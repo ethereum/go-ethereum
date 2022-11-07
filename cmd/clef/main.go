@@ -646,7 +646,6 @@ func signer(c *cli.Context) error {
 		}
 		log.Info("Audit logs configured", "file", logfile)
 	}
-
 	// register signer API with server
 	var (
 		extapiURL = "n/a"
