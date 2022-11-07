@@ -85,11 +85,26 @@ The newly generated key files can be viewed in `<datadir>/keystore/`. The file n
 `UTC--2022-05-19T12-34-36.47413510Z--0b85e5a13e118466159b1e1b6a4234e5f9f784bb`
 
 
-Note that there is also a Geth command for creating new accounts that will eventually be deprecated in favour of Clef. The following command will achieve the same as the RPC call suggested above:
+An account can also be created by importing a raw private key (hex string) using `clef importraw` as follows:
 
 ```sh
-geth account new
+clef importraw <hexkey>
 ```
+
+The terminal will respond with the following message, indicating the account has been created successfully:
+
+```terminal
+## Info 
+Key imported:
+  Address 0x9160DC9105f7De5dC5E7f3d97ef11DA47269BdA6
+  Keystore file: /home/user/.ethereum/keystore/UTC--2022-10-28T12-03-13.976383602Z--9160dc9105f7de5dc5e7f3d97ef11da47269bda6
+
+The key is now encrypted; losing the password will result in permanently losing 
+access to the key and all associated funds!
+
+Make sure to backup keystore and passwords in a safe location.
+```
+
 
 ### Listing accounts
 
