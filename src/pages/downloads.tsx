@@ -216,36 +216,48 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection id='importingkeys' sectionTitle='Importing keys and verifying builds'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
-              <Text textStyle='quick-link-text'>
-                You can import the build server public keys by grabbing the individual keys directly
-                from the keyserver network:
-              </Text>
+            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+              <Stack flex={1}>
+                <Text textStyle='quick-link-text'>
+                  You can import the build server public keys by grabbing the individual keys directly
+                  from the keyserver network:
+                </Text>
+              </Stack>
 
-              {/* TODO: These keys depends on the binary */}
-              <Code p={4}>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</Code>
-            </Stack>
+              <Stack flex={1} w={'100%'}>
+                {/* TODO: These keys depends on the binary */}
+                <Code p={4}>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</Code>
+              </Stack>
+            </Flex>
 
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
-              <Text textStyle='quick-link-text'>
-                Similarly you can import all the developer public keys by grabbing them directly
-                from the keyserver network:
-              </Text>
+            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+              <Stack flex={1}>
+                <Text textStyle='quick-link-text'>
+                  Similarly you can import all the developer public keys by grabbing them directly
+                  from the keyserver network:
+                </Text>
+              </Stack>
 
-              {/* TODO: These are developer keys, do we need to change? */}
-              <Code p={4}>gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2</Code>
-            </Stack>
+              <Stack flex={1} w={'100%'}>
+                {/* TODO: These are developer keys, do we need to change? */}
+                <Code p={4}>gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2</Code>
+              </Stack>
+            </Flex>
 
-            <Stack p={4}>
-              <Text textStyle='quick-link-text'>
-                From the download listings above you should see a link both to the downloadable
-                archives as well as detached signature files. To verify the authenticity of any
-                downloaded data, grab both files and then run:
-              </Text>
+            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+              <Stack flex={1}>
+                <Text textStyle='quick-link-text'>
+                  From the download listings above you should see a link both to the downloadable
+                  archives as well as detached signature files. To verify the authenticity of any
+                  downloaded data, grab both files and then run:
+                </Text>
+              </Stack>
 
-              {/* TODO: These keys depends on the binary */}
-              <Code p={4}>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</Code>
-            </Stack>
+              <Stack flex={1} w={'100%'}>
+                {/* TODO: These keys depends on the binary */}
+                <Code p={4}>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</Code>
+              </Stack>
+            </Flex>
           </DownloadsSection>
         </Stack>
       </main>
