@@ -260,10 +260,10 @@ func (ui *CommandlineUI) showAccounts() {
 		limit = len(accounts)
 		msg = ""
 	}
+	fmt.Fprint(out, "\n------- Available accounts -------\n")
 	for i, account := range accounts[0:limit] {
 		fmt.Fprintf(out, "%d. %s at %s\n", i, account.Address, account.URL)
 	}
-	fmt.Fprint(out, "\n------- Available accounts -------\n")
 	fmt.Print(out.String(), msg)
 }
 
