@@ -114,7 +114,7 @@ func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
 	select {
 	case <-payload.stop:
 	default:
-		//	close(payload.stop)
+		close(payload.stop)
 	}
 	if payload.full != nil {
 		return beacon.BlockToExecutableData(payload.full)
@@ -167,7 +167,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		// for triggering process immediately.
 		timer := time.NewTimer(0)
 		defer timer.Stop()
-		defer close(payload.stop)
+
 		// Setup the timer for terminating the process if SECONDS_PER_SLOT (12s in
 		// the Mainnet configuration) have passed since the point in time identified
 		// by the timestamp parameter.
@@ -182,9 +182,11 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 					payload.update(block, fees, time.Since(start))
 				}
 				timer.Reset(w.recommit)
-			//case <-payload.stop:
-			//	return
+			case <-payload.stop:
+				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
+				return
 			case <-endTimer.C:
+				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
 				return
 			}
 		}
