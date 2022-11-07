@@ -34,7 +34,7 @@ func StringSize(s string) uint64 {
 	case len(s) == 0:
 		return 1
 	case len(s) == 1:
-		if s[0] < 0x7f {
+		if s[0] <= 0x7f {
 			return 1
 		} else {
 			return 2
@@ -50,7 +50,7 @@ func BytesSize(b []byte) uint64 {
 	case len(b) == 0:
 		return 1
 	case len(b) == 1:
-		if b[0] < 0x7f {
+		if b[0] <= 0x7f {
 			return 1
 		} else {
 			return 2
@@ -66,7 +66,8 @@ func ListSize(contentSize uint64) uint64 {
 	return uint64(headsize(contentSize)) + contentSize
 }
 
-// IntSize returns the encoded size of the integer x.
+// IntSize returns the encoded size of the integer x. Note: The return type of this
+// function is 'int' for backwards-compatibility reasons. The result is always positive.
 func IntSize(x uint64) int {
 	if x < 0x80 {
 		return 1
