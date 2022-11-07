@@ -52,9 +52,11 @@ func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
 // Add adds a value to the cache.  Returns true if an eviction occurred.
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
-func (c *SizeConstrainedLRU) Add(key common.Hash, value string) (evicted bool) {
+// OBS: The value is _not_ copied on Add, so the caller must not modify it afterwards.
+func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	// Unless it is already present, might need to evict something.
 	// OBS: If it is present, we still call Add internally to bump the recentness.
 	if !c.lru.Contains(key) {
@@ -66,7 +68,7 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value string) (evicted bool) {
 				// list is now empty. Break
 				break
 			}
-			targetSize -= uint64(len(v.(string)))
+			targetSize -= uint64(len(v.([]byte)))
 		}
 		c.size = targetSize
 	}
@@ -78,8 +80,9 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value string) (evicted bool) {
 func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
+
 	if v, ok := c.lru.Get(key); ok {
-		return []byte(v.(string))
+		return v.([]byte)
 	}
 	return nil
 }

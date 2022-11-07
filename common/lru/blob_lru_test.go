@@ -37,7 +37,7 @@ func TestBlobLru(t *testing.T) {
 	for i := 0; i < 11; i++ {
 		k := mkHash(i)
 		v := fmt.Sprintf("value-%04d", i)
-		lru.Add(k, v)
+		lru.Add(k, []byte(v))
 		want += uint64(len(v))
 		if want > 100 {
 			want = 100
@@ -75,13 +75,13 @@ func TestBlobLruOverflow(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		k := mkHash(i)
 		v := fmt.Sprintf("value-%04d", i)
-		lru.Add(k, v)
+		lru.Add(k, []byte(v))
 	}
 	// Add one single large elem. We expect it to swap out all entries.
 	{
 		k := mkHash(1337)
 		v := make([]byte, 200)
-		lru.Add(k, string(v))
+		lru.Add(k, v)
 	}
 	// Elems 0-9 should be missing
 	for i := 1; i < 10; i++ {
@@ -99,7 +99,7 @@ func TestBlobLruOverflow(t *testing.T) {
 		i := 0
 		k := mkHash(i)
 		v := fmt.Sprintf("value-%04d", i)
-		lru.Add(k, v)
+		lru.Add(k, []byte(v))
 		if have, want := lru.size, uint64(10); have != want {
 			t.Fatalf("size wrong, have %d want %d", have, want)
 		}
@@ -113,7 +113,7 @@ func TestBlobLruSameItem(t *testing.T) {
 	k := mkHash(0)
 	v := fmt.Sprintf("value-%04d", 0)
 	for i := 0; i < 10; i++ {
-		lru.Add(k, v)
+		lru.Add(k, []byte(v))
 	}
 	// The size should be accurate
 	if have, want := lru.size, uint64(10); have != want {
