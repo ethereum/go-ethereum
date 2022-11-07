@@ -1,8 +1,13 @@
-import { Code, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
+import { Center, Code, Flex, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 import { useState } from 'react';
 
-import { DownloadsHero, DownloadsSection, DownloadsTable, SpecificVersionsSection } from '../components/UI/downloads';
+import {
+  DownloadsHero,
+  DownloadsSection,
+  DownloadsTable,
+  SpecificVersionsSection
+} from '../components/UI/downloads';
 import { DataTable } from '../components/UI';
 
 import {
@@ -105,19 +110,37 @@ const DownloadsPage: NextPage = () => {
             {/* TODO: swap test data for real data */}
             <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)} />
 
-            <Stack sx={{ mt: '0 !important' }}>
-              <Link as='button' variant='button-link-secondary' onClick={showMoreStableReleases}>
-                <Text
-                  fontFamily='"JetBrains Mono", monospace'
-                  fontWeight={700}
-                  textTransform='uppercase'
-                  textAlign='center'
-                  p={4}
-                >
-                  Show older releases
-                </Text>
-              </Link>
-            </Stack>
+            <Flex
+              sx={{ mt: '0 !important' }}
+              flexDirection={{ base: 'column', md: 'row' }}
+              justifyContent='space-between'
+            >
+              <Stack p={4} display={{ base: 'none', md: 'block' }}>
+                <Center>
+                  {/* TODO: swap testDownloadData with actual data */}
+                  <Text>
+                    Showing {amountStableReleases} latest releases of a total{' '}
+                    {testDownloadData.length} releases
+                  </Text>
+                </Center>
+              </Stack>
+              <Stack
+                sx={{ mt: '0 !important' }}
+                borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+              >
+                <Link as='button' variant='button-link-secondary' onClick={showMoreStableReleases}>
+                  <Text
+                    fontFamily='"JetBrains Mono", monospace'
+                    fontWeight={700}
+                    textTransform='uppercase'
+                    textAlign='center'
+                    p={4}
+                  >
+                    Show older releases
+                  </Text>
+                </Link>
+              </Stack>
+            </Flex>
           </DownloadsSection>
 
           <DownloadsSection
@@ -136,19 +159,37 @@ const DownloadsPage: NextPage = () => {
             {/* TODO: swap for real data */}
             <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
 
-            <Stack sx={{ mt: '0 !important' }}>
-              <Link as='button' variant='button-link-secondary' onClick={showMoreDevelopBuilds}>
-                <Text
-                  fontFamily='"JetBrains Mono", monospace'
-                  fontWeight={700}
-                  textTransform='uppercase'
-                  textAlign='center'
-                  p={4}
-                >
-                  Show older releases
-                </Text>
-              </Link>
-            </Stack>
+            <Flex
+              sx={{ mt: '0 !important' }}
+              flexDirection={{ base: 'column', md: 'row' }}
+              justifyContent='space-between'
+            >
+              <Stack p={4} display={{ base: 'none', md: 'block' }}>
+                <Center>
+                  {/* TODO: swap testDownloadData with actual data */}
+                  <Text>
+                    Showing {amountDevelopBuilds} latest releases of a total{' '}
+                    {testDownloadData.length} releases
+                  </Text>
+                </Center>
+              </Stack>
+              <Stack
+                sx={{ mt: '0 !important' }}
+                borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+              >
+                <Link as='button' variant='button-link-secondary' onClick={showMoreStableReleases}>
+                  <Text
+                    fontFamily='"JetBrains Mono", monospace'
+                    fontWeight={700}
+                    textTransform='uppercase'
+                    textAlign='center'
+                    p={4}
+                  >
+                    Show older releases
+                  </Text>
+                </Link>
+              </Stack>
+            </Flex>
           </DownloadsSection>
 
           <DownloadsSection
