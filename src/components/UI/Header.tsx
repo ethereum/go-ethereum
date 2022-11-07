@@ -20,9 +20,13 @@ export const Header: FC = () => {
         borderRight={{ base: 'none', sm: '2px solid #11866f'}}
         flexGrow={2}
       >
-        <Text textStyle='header-font'>
-          go-ethereum
-        </Text>
+        <NextLink href={'/'} passHref>
+          <Link _hover={{ textDecoration: 'none' }}>
+            <Text textStyle='header-font'>
+              go-ethereum
+            </Text>
+          </Link>
+        </NextLink>
       </Stack>
 
       <Flex>
