@@ -524,8 +524,9 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 		types = append(types, tx.Type())
 		sizes = append(sizes, uint32(tx.Size()))
 	}
-	announce := NewPooledTransactionHashes(NewPooledTransactionHashes{Types: types, Sizes: sizes, Hashes: hashes})
+	announce := NewPooledTransactionHashes{Types: types, Sizes: sizes, Hashes: hashes}
 	announce66 := NewPooledTransactionHashes66(hashes)
+
 	// send announcement
 	conn, err := s.dial()
 	if err != nil {
@@ -535,7 +536,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	if err = conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
-	if conn.negotiatedProtoVersion <= eth.ETH67 {
+	if conn.negotiatedProtoVersion < eth.ETH68 {
 		if err = conn.Write(announce66); err != nil {
 			t.Fatalf("failed to write to connection: %v", err)
 		}
@@ -555,7 +556,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 			}
 			return
 
-			// ignore propagated txs from previous tests
+		// ignore propagated txs from previous tests
 		case *NewPooledTransactionHashes66:
 			continue
 		case *NewPooledTransactionHashes:
