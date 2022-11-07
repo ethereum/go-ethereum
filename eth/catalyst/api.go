@@ -287,6 +287,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			Random:       payloadAttributes.Random,
 		}
 		id := args.Id()
+		// If we already are busy generating this work, then we do not need
+		// to start a second process.
+		if api.localBlocks.has(id) {
+			return valid(&id), nil
+		}
 		payload, err := api.eth.Miner().BuildPayload(args)
 		if err != nil {
 			log.Error("Failed to build payload", "err", err)

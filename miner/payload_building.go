@@ -98,9 +98,9 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 		payload.fullFees = fees
 
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
-		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(),
+		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(), "hash", block.Hash(),
 			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther,
-			"hash", block.Hash(), "root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
+			"root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
@@ -114,7 +114,7 @@ func (payload *Payload) Resolve() *beacon.ExecutableDataV1 {
 	select {
 	case <-payload.stop:
 	default:
-		close(payload.stop)
+		//	close(payload.stop)
 	}
 	if payload.full != nil {
 		return beacon.BlockToExecutableData(payload.full)
@@ -167,7 +167,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		// for triggering process immediately.
 		timer := time.NewTimer(0)
 		defer timer.Stop()
-
+		defer close(payload.stop)
 		// Setup the timer for terminating the process if SECONDS_PER_SLOT (12s in
 		// the Mainnet configuration) have passed since the point in time identified
 		// by the timestamp parameter.
@@ -182,8 +182,8 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 					payload.update(block, fees, time.Since(start))
 				}
 				timer.Reset(w.recommit)
-			case <-payload.stop:
-				return
+			//case <-payload.stop:
+			//	return
 			case <-endTimer.C:
 				return
 			}
