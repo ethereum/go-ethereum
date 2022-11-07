@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	g "github.com/ethereum/go-ethereum/g"
 	ethdownloader "github.com/ethereum/go-ethereum/g/downloader"
-	"github.com/ethereum/go-ethereum/g/ethconfig"
+	ethconfig "github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
