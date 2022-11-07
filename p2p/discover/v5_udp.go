@@ -840,13 +840,13 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 	for len(nodes) > 0 {
 		p := &v5wire.Nodes{ReqID: reqid}
 		size := uint64(0)
-		for len(nodes) > 0 && size < sizeLimit {
+		for len(nodes) > 0 {
 			r := nodes[0].Record()
-			if size + r.Size() < sizeLimit {
-				p.Nodes = append(p.Nodes, r)
-				nodes = nodes[1:]
-				size += r.Size()
+			if size += r.Size(); size > sizeLimit {
+				break
 			}
+			p.Nodes = append(p.Nodes, r)
+			nodes = nodes[1:]
 		}
 		resp = append(resp, p)
 	}
