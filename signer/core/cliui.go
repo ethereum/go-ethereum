@@ -245,6 +245,9 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 
 func (ui *CommandlineUI) showAccounts() {
 	accounts, err := ui.api.ListAccounts(context.Background())
+	var limit int = 20 //max N accounts to print
+	var msg string = fmt.Sprintf("\nFirst %d accounts listed (%d more available).\n", limit, len(accounts)-limit)
+	var out = new(strings.Builder)
 	if err != nil {
 		log.Error("Error listing accounts", "err", err)
 		return
@@ -253,12 +256,15 @@ func (ui *CommandlineUI) showAccounts() {
 		fmt.Print("No accounts found\n")
 		return
 	}
-	var out = new(strings.Builder)
-	fmt.Fprint(out, "\n------- Available accounts -------\n")
-	for i, account := range accounts {
+	if len(accounts) < limit {
+		limit = len(accounts)
+		msg = ""
+	}
+	for i, account := range accounts[0:limit] {
 		fmt.Fprintf(out, "%d. %s at %s\n", i, account.Address, account.URL)
 	}
-	fmt.Print(out.String())
+	fmt.Fprint(out, "\n------- Available accounts -------\n")
+	fmt.Print(out.String(), msg)
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
