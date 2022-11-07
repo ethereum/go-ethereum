@@ -243,25 +243,30 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	}
 }
 
-func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
+func (ui *CommandlineUI) ShowAccounts() string {
 	accounts, err := ui.api.ListAccounts(context.Background())
 	if err != nil {
 		fmt.Print("error listing accounts", err)
 	}
+	var resp string
 	if len(accounts) == 0 {
-		fmt.Println("No accounts known to Clef")
+		resp = "No accounts known to Clef"
 	} else {
 		// account info to string for nicer printing
-		var addresses string = "\n"
-		fmt.Println("Accounts known to Clef:")
+		var addresses string = ""
 		for i, account := range accounts {
 			// concat string to avoid repeating "INFO" on terminal
-			addresses += fmt.Sprintf("Account %v: %s at %s", i, account.Address, account.URL)
-			addresses += "\n"
+			addresses += fmt.Sprintf("Account %v: %s at %s\n", i, account.Address, account.URL)
 		}
-		fmt.Print(addresses)
-		fmt.Println()
+		resp = addresses
 	}
+	return resp
+}
+
+func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
+	addresses := ui.ShowAccounts()
+	fmt.Print("Accounts known to Clef:\n\n")
+	fmt.Printf("%s", addresses)
 	fmt.Printf("------- Signer info -------\n")
 	for k, v := range info.Info {
 		fmt.Printf("* %v : %v\n", k, v)

@@ -635,7 +635,6 @@ func signer(c *cli.Context) error {
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering
 	// it with the UI.
-
 	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
 
@@ -701,12 +700,10 @@ func signer(c *cli.Context) error {
 			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
 	}
-
 	if c.Bool(testFlag.Name) {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
-
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
 			"intapi_version": core.InternalAPIVersion,
