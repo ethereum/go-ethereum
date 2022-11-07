@@ -204,14 +204,12 @@ func (m *FairMix) Next() bool {
 	m.cur = nil
 
 	for {
-
 		source := m.pickSource()
 		if source == nil {
 			return m.nextFromAny()
 		}
 
 		var timeout <-chan time.Time
-
 		if source.timeout >= 0 {
 			timer := time.NewTimer(source.timeout)
 			timeout = timer.C
