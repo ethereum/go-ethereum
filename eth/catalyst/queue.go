@@ -85,6 +85,22 @@ func (q *payloadQueue) get(id beacon.PayloadID) *beacon.ExecutableDataV1 {
 	return nil
 }
 
+// has checks if a particular payload is already tracked.
+func (q *payloadQueue) has(id beacon.PayloadID) bool {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.payloads {
+		if item == nil {
+			return false
+		}
+		if item.id == id {
+			return true
+		}
+	}
+	return false
+}
+
 // headerQueueItem represents an hash->header tuple to store until it's retrieved
 // or evicted.
 type headerQueueItem struct {

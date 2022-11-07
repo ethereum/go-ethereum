@@ -17,6 +17,8 @@
 package miner
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"math/big"
 	"sync"
 	"time"
@@ -38,12 +40,26 @@ type BuildPayloadArgs struct {
 	Random       common.Hash    // The provided randomness value
 }
 
+// Id computes an 8-byte identifier by hashing the components of the payload arguments.
+func (args *BuildPayloadArgs) Id() beacon.PayloadID {
+	// Hash
+	hasher := sha256.New()
+	hasher.Write(args.Parent[:])
+	binary.Write(hasher, binary.BigEndian, args.Timestamp)
+	hasher.Write(args.Random[:])
+	hasher.Write(args.FeeRecipient[:])
+	var out beacon.PayloadID
+	copy(out[:], hasher.Sum(nil)[:8])
+	return out
+}
+
 // Payload wraps the built payload(block waiting for sealing). According to the
 // engine-api specification, EL should build the initial version of the payload
 // which has an empty transaction set and then keep update it in order to maximize
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
+	id       beacon.PayloadID
 	empty    *types.Block
 	full     *types.Block
 	fullFees *big.Int
@@ -53,11 +69,13 @@ type Payload struct {
 }
 
 // newPayload initializes the payload object.
-func newPayload(empty *types.Block) *Payload {
+func newPayload(empty *types.Block, id beacon.PayloadID) *Payload {
 	payload := &Payload{
+		id:    id,
 		empty: empty,
 		stop:  make(chan struct{}),
 	}
+	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
 	return payload
 }
@@ -80,8 +98,9 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 		payload.fullFees = fees
 
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
-		log.Info("Updated payload", "number", block.NumberU64(), "hash", block.Hash(),
-			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther, "elapsed", common.PrettyDuration(elapsed))
+		log.Info("Updated payload", "id", payload.id, "number", block.NumberU64(), "hash", block.Hash(),
+			"txs", len(block.Transactions()), "gas", block.GasUsed(), "fees", feesInEther,
+			"root", block.Root(), "elapsed", common.PrettyDuration(elapsed))
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
 }
@@ -139,7 +158,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		return nil, err
 	}
 	// Construct a payload object for return.
-	payload := newPayload(empty)
+	payload := newPayload(empty, args.Id())
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -164,8 +183,10 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 				}
 				timer.Reset(w.recommit)
 			case <-payload.stop:
+				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
 			case <-endTimer.C:
+				log.Info("Stopping work on payload", "id", payload.id, "reason", "timeout")
 				return
 			}
 		}

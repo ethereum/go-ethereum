@@ -184,7 +184,12 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	}
 	// give the payload some time to be built
 	time.Sleep(100 * time.Millisecond)
-	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
+	payloadID := (&miner.BuildPayloadArgs{
+		Parent:       fcState.HeadBlockHash,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
+	}).Id()
 	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
