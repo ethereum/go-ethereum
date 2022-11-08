@@ -152,4 +152,4 @@ is required. Archive nodes keep local copies of all historical data right back t
 The opposite extreme is a light node that doesn't store any blockchain data - it requests everything from full nodes. 
 These configurations are controlled by passing `full`, `snap` or `light` to `--syncmode` at startup. For an archive node,
 `--syncmode` should be `full` and `--gcmode` should be set to `archive`. Currently, due to the transition to proof-of-stake, 
-light-sync dot not work (new light client protocols are being developed). 
+`syncmode=light` does not work (new light client protocols are being developed). 
