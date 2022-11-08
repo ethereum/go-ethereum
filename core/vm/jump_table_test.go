@@ -32,5 +32,4 @@ func TestJumpTableCopy(t *testing.T) {
 	deepCopy[SLOAD].constantGas = 100
 	require.Equal(t, uint64(100), deepCopy[SLOAD].constantGas)
 	require.Equal(t, uint64(0), tbl[SLOAD].constantGas)
-
 }
