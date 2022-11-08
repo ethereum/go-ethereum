@@ -33,9 +33,4 @@ func TestJumpTableCopy(t *testing.T) {
 	require.Equal(t, uint64(100), deepCopy[SLOAD].constantGas)
 	require.Equal(t, uint64(0), tbl[SLOAD].constantGas)
 
-	// but a shallow copy will modify the shared table
-	shallowCopy := tbl
-	shallowCopy[SLOAD].constantGas = 100
-	require.Equal(t, uint64(100), shallowCopy[SLOAD].constantGas)
-	require.Equal(t, uint64(100), tbl[SLOAD].constantGas)
 }
