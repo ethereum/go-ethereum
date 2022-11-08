@@ -682,6 +682,7 @@ var (
 	}
 	RewardBenchFlag = &cli.BoolFlag{
 		Name:     "reward-bench",
+		Usage:    "Enable block reward benchmark service",
 		Category: flags.MiscCategory,
 	}
 
