@@ -84,6 +84,8 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 	return c
 }
 
+// validJumpdest returns true if destination offset is inside code bounds and is JUMPDEST opcode
+// dest is offset inside code section in case of EOF contract
 func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	udest, overflow := dest.Uint64WithOverflow()
 	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
@@ -92,7 +94,7 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 		return false
 	}
 	// Only JUMPDESTs allowed for destinations
-	if OpCode(c.Code[c.CodeBeginOffset()+udest]) != JUMPDEST {
+	if c.GetOp(udest) != JUMPDEST {
 		return false
 	}
 	return c.isCode(udest)
@@ -144,9 +146,10 @@ func (c *Contract) AsDelegate() *Contract {
 }
 
 // GetOp returns the n'th element in the contract's byte array
+// n is offset inside code section in case of EOF contract
 func (c *Contract) GetOp(n uint64) OpCode {
-	if n < c.CodeEndOffset() {
-		return OpCode(c.Code[n])
+	if n < c.CodeSize() {
+		return OpCode(c.Code[c.CodeBeginOffset()+n])
 	}
 
 	return STOP
