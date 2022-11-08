@@ -1,6 +1,6 @@
 ---
-title: Custom EVM tracer
-sort_key: C
+title: Custom tracers
+sort_key: D
 ---
 
 In addition to the default opcode tracer and the built-in tracers, Geth offers the 
@@ -20,7 +20,7 @@ transaction execution, which can be a very large amount of data. Often, users ar
 only interested in a small subset of that data. Javascript trace filters are available 
 to isolate the useful information. Detailed information about `debug_traceTransaction` 
 and its component parts is available in the 
-[reference documentation](/content/docs/developers/interacting-with-geth/rpc/ns-debug#debug_tracetransaction).
+[reference documentation](/docs/rpc/ns-debug#debug_tracetransaction).
 
 ### A simple filter
 
@@ -397,7 +397,7 @@ type opcounter struct {
     reason    error          // Textual reason for the interruption
 }
 
-func newOpcounter(ctx *tracers.Context) tracers.Tracer {
+func newOpcounter(ctx *tracers.Context, cfg json.RawMessage) tracers.Tracer {
     return &opcounter{counts: make(map[string]int)}
 }
 
@@ -455,13 +455,17 @@ func (t *opcounter) Stop(err error) {
 }
 ```
 
-Every method of the 
-[EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) 
-needs to be implemented (even if empty). Key parts to notice are the `init()` function 
-which registers the tracer in Geth, the `CaptureState` hook where the opcode counts are 
-incremented and `GetResult` where the result is serialized and delivered. To test this, 
-the source is first compiled with `make geth`. Then in the console it can be invoked 
-through the usual API methods by passing in the name it was registered under:
+Every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) 
+needs to be implemented (even if empty). Key parts to notice are the `init()` 
+function which registers the tracer in Geth, the `CaptureState` hook where the 
+opcode counts are incremented and `GetResult` where the result is serialized 
+and delivered. Note that the constructor takes in a `cfg json.RawMessage`. 
+This will be filled with a JSON object that user provides to the tracer to 
+pass in optional config fields.
+
+To test out this tracer the source is first compiled with `make geth`. Then in the 
+console it can be invoked through the usual API methods by passing in the name it 
+was registered under:
 
 ```console
 > debug.traceTransaction('0x7ae446a7897c056023a8104d254237a8d97783a92900a7b0f7db668a9432f384', { tracer: 'opcounter' })

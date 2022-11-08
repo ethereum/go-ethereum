@@ -1,6 +1,6 @@
 ---
 title: Built-in tracers
-sort_key: B
+sort_key: C
 ---
 
 Geth comes bundled with a choice of tracers that can be invoked via the 
@@ -152,18 +152,19 @@ The result will be a nested list of call frames, resembling how EVM works. They 
 with the top-level call at root and sub-calls as children of the higher levels. Each call 
 frame has the following fields:
 
-| field   | type        | description                          |
-| ------- | ----------- | ------------------------------------ |
-| type    | string      | CALL or CREATE                       |
-| from    | string      | address                              |
-| to      | string      | address                              |
-| value   | string      | hex-encoded amount of value transfer |
-| gas     | string      | hex-encoded gas provided for call    |
-| gasUsed | string      | hex-encoded gas used during call     |
-| input   | string      | call data                            |
-| output  | string      | return data                          |
-| error   | string      | error, if any                        |
-| calls   | []callframe | list of sub-calls                    |
+| field        | type        | description                          |
+| ------------ | ----------- | ------------------------------------ |
+| type         | string      | CALL or CREATE                       |
+| from         | string      | address                              |
+| to           | string      | address                              |
+| value        | string      | hex-encoded amount of value transfer |
+| gas          | string      | hex-encoded gas provided for call    |
+| gasUsed      | string      | hex-encoded gas used during call     |
+| input        | string      | call data                            |
+| output       | string      | return data                          |
+| error        | string      | error, if any                        |
+| revertReason | string      | Solidity revert reason, if any       |
+| calls        | []callframe | list of sub-calls                    |
 
 
 Example Call:
@@ -206,10 +207,14 @@ Return:
 Things to note about the call tracer:
 
 - Calls to precompiles are also included in the result
-- In case a frame reverts, the field `output` will contain the raw return data, 
-- unlike [revertReasonTracer](#revertreasontracer) which parses the data and 
-- returns the revert message
+- In case a frame reverts, the field `output` will contain the raw return data
+- In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
 
+`callTracer` has an option to only trace the main (top-level) call and none of the sub-calls. This avoids extra processing for each call frame if only the top-level call info are required. Here's how it can be configured:
+
+```terminal
+> debug.traceTransaction('0xc73e70f6d60e63a71dabf90b9983f2cdd56b0cb7bcf1a205f638d630a95bba73', { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
+```
 
 ### prestateTracer
 
@@ -282,25 +287,6 @@ Return (same call with `{diffMode: True}`):
     }
   }
 }
-```
-
-
-### revertReasonTracer
-
-The `revertReasonTracer` is useful for analyzing failed transactions. If the transaction 
-reverted, the reason for the revert (according to the Solidity contract) is returned. 
-For any other failure, the error message is returned.
-
-Example:
-
-```js
-> debug.traceTransaction('0x97695ffb034be7e1faeb372a564bb951ba4ebf4fee4caff2f9d1702497bb2b8b', { tracer: 'revertReasonTracer' })
-```
-
-Returns:
-
-```terminal
-"execution reverted: tokensMintedPerAddress exceed MAX_TOKENS_MINTED_PER_ADDRESS"
 ```
 
 ### noopTracer
