@@ -1,5 +1,5 @@
 ---
-title: Custom EVM tracer
+title: Custom tracers
 sort_key: D
 ---
 
