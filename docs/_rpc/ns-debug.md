@@ -768,11 +768,11 @@ The `config` in the following example is the `onlyTopCall` option available in t
 debug.traceTransaction('<txhash>, { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
 ```
 
-The config in the following example is the `collectPostState` option available
+The config in the following example is the `diffMode` option available
 in the `prestateTracer`:
 
 ```js
-debug.traceTransaction('<txhash>, { tracer: 'prestateTracer': tracerConfig: { collectPostState: true } })
+debug.traceTransaction('<txhash>, { tracer: 'prestateTracer': tracerConfig: { diffMode: true } })
 ```
 
 ##### Step
