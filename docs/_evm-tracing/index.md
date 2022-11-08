@@ -1,5 +1,5 @@
 ---
-title: EVM Tracing
+title: Introduction to tracing
 sort-key: A
 ---
 
@@ -32,7 +32,7 @@ This means there are limits on the transactions that can be traced imposed by th
 *This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head*
 
  
-More detailed information about syncing is available on the [sync modes page](/pages/docs/fundamentals/sync-modes.md).
+More detailed information about syncing is available on the [sync modes page](/docs/interface/sync-modes.md).
 
 When a trace of a specific transaction is executed, the state is prepared by fetching the state of the parent block from the database. If it is not available, Geth will crawl backwards in time to find the next available state but only up to a limit defined in the `reexec` parameter which defaults to 128 blocks. If no state is available within the `reexec` window then the trace fails with `Error: required historical state unavailable` and the `reexec` parameter must be increased. If a valid state *is* found in the `reexec` window, then Geth sequentially re-executes the transcations in each block between the last available state and the target block. The greater the value of `reexec` the longer the tracing will take because more blocks have to be re-executed to regenerate the target state.
 
@@ -43,6 +43,18 @@ It is also possible to force Geth to store the state for specific sequences of b
 _There are exceptions to the above rules when running batch traces of entire blocks or chain segments. Those will be detailed later._
 
 ## Types of trace
+
+## Basic traces
+
+The simplest type of transaction trace that Geth can generate are raw EVM opcode
+traces. For every EVM instruction the transaction executes, a structured log entry is
+emitted, containing all contextual metadata deemed useful. This includes the *program
+counter*, *opcode name*, *opcode cost*, *remaining gas*, *execution depth* and any
+*occurred error*. The structured logs can optionally also contain the content of the
+*execution stack*, *execution memory* and *contract storage*.
+
+Read more about Geth's basic traces on the [basic traces page](/docs/evm-tracing/basic-traces.md).
+
 
 ### Built-in tracers
 
@@ -58,7 +70,7 @@ different data from the method. Under the hood, these tracers are Go or Javascri
 functions that do some specific preprocessing on the trace data before it is returned.
 
 More information about Geth's built-in tracers is available on the 
-[built-in tracers](/pages/docs/developers/dapp-developer/evm-tracing/built-in-tracers.md) 
+[built-in tracers](/docs/evm-tracing/evm-tracing/built-in-tracers.md) 
 page.
 
 
@@ -73,7 +85,7 @@ Geth source code. This means developers only have to gather the data they actual
 need, and do any processing at the source.
 
 More information about custom tracers is available on the 
-[custom tracers](/pages/docs/developers/dapp-developer/evm-tracing/custom-tracers.md) 
+[custom tracers](/docs/evm-tracing/custom-tracers.md) 
 page.
 
 

@@ -1,6 +1,6 @@
 ---
 title: Custom EVM tracer
-sort_key: C
+sort_key: D
 ---
 
 In addition to the default opcode tracer and the built-in tracers, Geth offers the 
@@ -20,7 +20,7 @@ transaction execution, which can be a very large amount of data. Often, users ar
 only interested in a small subset of that data. Javascript trace filters are available 
 to isolate the useful information. Detailed information about `debug_traceTransaction` 
 and its component parts is available in the 
-[reference documentation](/content/docs/developers/interacting-with-geth/rpc/ns-debug#debug_tracetransaction).
+[reference documentation](/docs/rpc/ns-debug#debug_tracetransaction).
 
 ### A simple filter
 
