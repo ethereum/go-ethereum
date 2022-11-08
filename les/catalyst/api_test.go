@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g/downloader"
-	ethconfig "github.com/ethereum/go-ethereum/g/gconfig"
+	"github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -209,7 +209,7 @@ func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Heade
 	if err != nil {
 		t.Fatal("can't create node:", err)
 	}
-	ethcfg := &ethconfig.Config{
+	ethcfg := &gconfig.Config{
 		Genesis:        genesis,
 		Ethash:         ethash.Config{PowMode: ethash.ModeFake},
 		SyncMode:       downloader.LightSync,

@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g"
 	"github.com/ethereum/go-ethereum/g/filters"
-	ethconfig "github.com/ethereum/go-ethereum/g/gconfig"
+	"github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 
@@ -333,7 +333,7 @@ func createNode(t *testing.T) *node.Node {
 }
 
 func newGQLService(t *testing.T, stack *node.Node, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) *handler {
-	ethConf := &ethconfig.Config{
+	ethConf := &gconfig.Config{
 		Genesis: gspec,
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeFake,
