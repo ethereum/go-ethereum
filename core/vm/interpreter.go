@@ -83,14 +83,14 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		}
 		var extraEips []int
 		for _, eip := range cfg.ExtraEips {
-			copy := *cfg.JumpTable
-			if err := EnableEIP(eip, &copy); err != nil {
+			copy := copyJumpTable(cfg.JumpTable)
+			if err := EnableEIP(eip, copy); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				log.Error("EIP activation failed", "eip", eip, "error", err)
 			} else {
 				extraEips = append(extraEips, eip)
 			}
-			cfg.JumpTable = &copy
+			cfg.JumpTable = copy
 		}
 		cfg.ExtraEips = extraEips
 	}
