@@ -253,12 +253,17 @@ func (ui *CommandlineUI) showAccounts() {
 		fmt.Print("No accounts found\n")
 		return
 	}
+	var msg string
 	var out = new(strings.Builder)
+	if limit := 20; len(accounts) > limit {
+		msg = fmt.Sprintf("\nFirst %d accounts listed (%d more available).\n", limit, len(accounts)-limit)
+		accounts = accounts[:limit]
+	}
 	fmt.Fprint(out, "\n------- Available accounts -------\n")
 	for i, account := range accounts {
 		fmt.Fprintf(out, "%d. %s at %s\n", i, account.Address, account.URL)
 	}
-	fmt.Print(out.String())
+	fmt.Print(out.String(), msg)
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
