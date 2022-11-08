@@ -50,7 +50,8 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
-	header EOF1Header
+	CodeBeginOffset uint64 // starting offset of the code section if EOF or 0 if legacy
+	CodeSize        uint64 // size of the code section if EOF or bytecode size if legacy
 
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
@@ -90,7 +91,7 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	udest, overflow := dest.Uint64WithOverflow()
 	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
 	// Don't bother checking for JUMPDEST in that case.
-	if overflow || udest >= c.CodeSize() {
+	if overflow || udest >= c.CodeSize {
 		return false
 	}
 	// Only JUMPDESTs allowed for destinations
@@ -148,8 +149,8 @@ func (c *Contract) AsDelegate() *Contract {
 // GetOp returns the n'th element in the contract's byte array
 // n is offset inside code section in case of EOF contract
 func (c *Contract) GetOp(n uint64) OpCode {
-	if n < c.CodeSize() {
-		return OpCode(c.Code[c.CodeBeginOffset()+n])
+	if n < c.CodeSize {
+		return OpCode(c.Code[c.CodeBeginOffset+n])
 	}
 
 	return STOP
@@ -182,34 +183,19 @@ func (c *Contract) Value() *big.Int {
 	return c.value
 }
 
-// IsLegacy returns true if contract is not EOF
-func (c *Contract) IsLegacy() bool {
+// getCodeBounds returns beginning offset and size of the code section if EOF
+// or 0 and bytecode length if legacy
+func getCodeBounds(container []byte, header *EOF1Header) (begin uint64, size uint64) {
 	// EOF1 doesn't allow contracts without code section
-	return c.header.codeSize == 0
-}
-
-// CodeBeginOffset returns starting offset of the code section
-func (c *Contract) CodeBeginOffset() uint64 {
-	if c.IsLegacy() {
-		return 0
+	isLegacy := (header.codeSize == 0)
+	if isLegacy {
+		begin = 0
+		size = uint64(len(container))
+	} else {
+		begin = header.CodeBeginOffset()
+		size = uint64(header.codeSize)
 	}
-	return c.header.CodeBeginOffset()
-}
-
-// CodeEndOffset returns offset of the code section end
-func (c *Contract) CodeEndOffset() uint64 {
-	if c.IsLegacy() {
-		return uint64(len(c.Code))
-	}
-	return c.header.CodeEndOffset()
-}
-
-// CodeSize returns the size of the code (if legacy) or code section (if EOF)
-func (c *Contract) CodeSize() uint64 {
-	if c.IsLegacy() {
-		return uint64(len(c.Code))
-	}
-	return uint64(c.header.codeSize)
+	return
 }
 
 // SetCallCode sets the code of the contract and address of the backing data
@@ -219,8 +205,7 @@ func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []by
 	c.CodeHash = hash
 	c.CodeAddr = addr
 
-	c.header.codeSize = header.codeSize
-	c.header.dataSize = header.dataSize
+	c.CodeBeginOffset, c.CodeSize = getCodeBounds(code, header)
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
@@ -230,6 +215,5 @@ func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAn
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
 
-	c.header.codeSize = header.codeSize
-	c.header.dataSize = header.dataSize
+	c.CodeBeginOffset, c.CodeSize = getCodeBounds(codeAndHash.code, header)
 }
