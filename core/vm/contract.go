@@ -56,10 +56,9 @@ type Contract struct {
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
-	Code     []byte
-	CodeHash common.Hash
-	CodeAddr *common.Address
-	Input    []byte
+	Container     []byte
+	ContainerHash common.Hash
+	Input         []byte
 
 	Gas   uint64
 	value *big.Int
@@ -111,14 +110,14 @@ func (c *Contract) isCode(udest uint64) bool {
 	// Do we have a contract hash already?
 	// If we do have a hash, that means it's a 'regular' contract. For regular
 	// contracts ( not temporary initcode), we store the analysis in a map
-	if c.CodeHash != (common.Hash{}) {
+	if c.ContainerHash != (common.Hash{}) {
 		// Does parent context have the analysis?
-		analysis, exist := c.jumpdests[c.CodeHash]
+		analysis, exist := c.jumpdests[c.ContainerHash]
 		if !exist {
 			// Do the analysis and save in parent context
 			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c)
-			c.jumpdests[c.CodeHash] = analysis
+			c.jumpdests[c.ContainerHash] = analysis
 		}
 		// Also stash it in current contract for faster access
 		c.analysis = analysis
@@ -150,7 +149,7 @@ func (c *Contract) AsDelegate() *Contract {
 // n is offset inside code section in case of EOF contract
 func (c *Contract) GetOp(n uint64) OpCode {
 	if n < c.CodeSize {
-		return OpCode(c.Code[c.CodeBeginOffset+n])
+		return OpCode(c.Container[c.CodeBeginOffset+n])
 	}
 
 	return STOP
@@ -200,20 +199,18 @@ func getCodeBounds(container []byte, header *EOF1Header) (begin uint64, size uin
 
 // SetCallCode sets the code of the contract and address of the backing data
 // object
-func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte, header *EOF1Header) {
-	c.Code = code
-	c.CodeHash = hash
-	c.CodeAddr = addr
+func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, container []byte, header *EOF1Header) {
+	c.Container = container
+	c.ContainerHash = hash
 
-	c.CodeBeginOffset, c.CodeSize = getCodeBounds(code, header)
+	c.CodeBeginOffset, c.CodeSize = getCodeBounds(container, header)
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
 // In case hash is not provided, the jumpdest analysis will not be saved to the parent context
-func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash, header *EOF1Header) {
-	c.Code = codeAndHash.code
-	c.CodeHash = codeAndHash.hash
-	c.CodeAddr = addr
+func (c *Contract) SetCodeOptionalHash(addr *common.Address, containerAndHash *codeAndHash, header *EOF1Header) {
+	c.Container = containerAndHash.code
+	c.ContainerHash = containerAndHash.hash
 
-	c.CodeBeginOffset, c.CodeSize = getCodeBounds(codeAndHash.code, header)
+	c.CodeBeginOffset, c.CodeSize = getCodeBounds(containerAndHash.code, header)
 }

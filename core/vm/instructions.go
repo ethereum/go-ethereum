@@ -349,22 +349,22 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 
 func opCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	l := new(uint256.Int)
-	l.SetUint64(uint64(len(scope.Contract.Code)))
+	l.SetUint64(uint64(len(scope.Contract.Container)))
 	scope.Stack.push(l)
 	return nil, nil
 }
 
 func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		memOffset  = scope.Stack.pop()
-		codeOffset = scope.Stack.pop()
-		length     = scope.Stack.pop()
+		memOffset       = scope.Stack.pop()
+		containerOffset = scope.Stack.pop()
+		length          = scope.Stack.pop()
 	)
-	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	uint64ContainerOffset, overflow := containerOffset.Uint64WithOverflow()
 	if overflow {
-		uint64CodeOffset = 0xffffffffffffffff
+		uint64ContainerOffset = 0xffffffffffffffff
 	}
-	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
+	codeCopy := getData(scope.Contract.Container, uint64ContainerOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -812,7 +812,7 @@ func opRevert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opUndefined(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	return nil, &ErrInvalidOpCode{opcode: OpCode(scope.Contract.Code[*pc])}
+	return nil, &ErrInvalidOpCode{opcode: OpCode(scope.Contract.Container[*pc])}
 }
 
 func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -873,7 +873,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	*pc += 1
 	dataPos := scope.Contract.CodeBeginOffset + *pc
 	if dataPos < codeEnd {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[dataPos])))
+		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Container[dataPos])))
 	} else {
 		scope.Stack.push(integer.Clear())
 	}
@@ -898,7 +898,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 
 		integer := new(uint256.Int)
 		scope.Stack.push(integer.SetBytes(common.RightPadBytes(
-			scope.Contract.Code[startMin:endMin], pushByteSize)))
+			scope.Contract.Container[startMin:endMin], pushByteSize)))
 
 		*pc += size
 		return nil, nil

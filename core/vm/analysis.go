@@ -75,7 +75,7 @@ func codeBitmap(c *Contract) bitvec {
 func codeBitmapInternal(c *Contract, bits bitvec) bitvec {
 	codeBegin := c.CodeBeginOffset
 	for pc := uint64(0); pc < c.CodeSize; {
-		op := OpCode(c.Code[codeBegin+pc])
+		op := OpCode(c.Container[codeBegin+pc])
 		pc++
 		if int8(op) < int8(PUSH1) { // If not PUSH (the int8(op) > int(PUSH32) is always false).
 			continue
