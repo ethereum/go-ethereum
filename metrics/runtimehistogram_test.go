@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+var _ Histogram = (*runtimeHistogram)(nil)
+
 type runtimeHistogramTest struct {
 	h metrics.Float64Histogram
 
@@ -40,19 +42,19 @@ func TestRuntimeHistogramStats(t *testing.T) {
 			Percentiles: []float64{0, 0, 0, 0, 0},
 		},
 		1: {
+			// This checks the case where the highest bucket is +Inf.
 			h: metrics.Float64Histogram{
-				Counts:  []uint64{0, 1},
-				Buckets: []float64{0, 1, math.Inf(1)},
+				Counts:  []uint64{0, 1, 2},
+				Buckets: []float64{0, 0.5, 1, math.Inf(1)},
 			},
-			Count:       1,
+			Count:       3,
 			Max:         math.MaxInt64,
-			Min:         1,
-			Sum:         1,
-			Mean:        math.Inf(1),
+			Min:         0,
+			Sum:         3,
+			Mean:        0.9166666,
 			Percentiles: []float64{1, 1, 1, 1, 1},
-			// Not sure if these should be a different value.
-			Variance: math.NaN(),
-			StdDev:   math.NaN(),
+			Variance:    0.020833,
+			StdDev:      0.144433,
 		},
 		2: {
 			h: metrics.Float64Histogram{

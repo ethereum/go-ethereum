@@ -144,11 +144,28 @@ func (h *runtimeHistogramSnapshot) Mean() float64 {
 func (h *runtimeHistogramSnapshot) mean() (mean, totalCount float64) {
 	var sum float64
 	for i, c := range h.Counts {
-		midpoint := (h.Buckets[i] + h.Buckets[i+1]) / 2
+		midpoint := h.midpoint(i)
 		sum += midpoint * float64(c)
 		totalCount += float64(c)
 	}
 	return sum / totalCount, totalCount
+}
+
+func (h *runtimeHistogramSnapshot) midpoint(bucket int) float64 {
+	high := h.Buckets[bucket+1]
+	low := h.Buckets[bucket]
+	if math.IsInf(high, 1) {
+		// The edge of the highest bucket can be +Inf, and it's supposed to mean that this
+		// bucket contains all remaining samples > low. We can't get the middle of an
+		// infinite range, so just return the lower bound of this bucket instead.
+		return low
+	}
+	if math.IsInf(low, -1) {
+		// Similarly, we can get -Inf in the left edge of the lowest bucket,
+		// and it means the bucket contains all remaining values < high.
+		return high
+	}
+	return (low + high) / 2
 }
 
 // StdDev approximates the standard deviation of the histogram.
@@ -163,9 +180,14 @@ func (h *runtimeHistogramSnapshot) Variance() float64 {
 	}
 
 	mean, totalCount := h.mean()
+	if totalCount <= 1 {
+		// There is no variance when there are zero or one items.
+		return 0
+	}
+
 	var sum float64
 	for i, c := range h.Counts {
-		midpoint := (h.Buckets[i] + h.Buckets[i+1]) / 2
+		midpoint := h.midpoint(i)
 		d := midpoint - mean
 		sum += float64(c) * (d * d)
 	}
