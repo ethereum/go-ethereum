@@ -221,6 +221,7 @@ func TestForkWithBlockTime(t *testing.T) {
 			var wg sync.WaitGroup
 			blockHeaders := make([]*types.Header, 2)
 			ticker := time.NewTicker(time.Duration(test.blockTime["0"]) * time.Second)
+			defer ticker.Stop()
 
 			for i := 0; i < 2; i++ {
 				wg.Add(1)
