@@ -195,9 +195,7 @@ func TestForkWithBlockTime(t *testing.T) {
 	genesis := initGenesis(t)
 
 	for _, test := range cases {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 
 			genesis.Config.Bor.Sprint = test.sprint
 			genesis.Config.Bor.Period = test.blockTime
@@ -229,15 +227,10 @@ func TestForkWithBlockTime(t *testing.T) {
 				go func(i int) {
 					defer wg.Done()
 
-					for {
-						select {
-						case <-ticker.C:
-							blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint*test.change + 10)
-							if blockHeaders[i] != nil {
-								return
-							}
-						default:
-
+					for range ticker.C {
+						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint*test.change + 10)
+						if blockHeaders[i] != nil {
+							break
 						}
 					}
 
@@ -245,7 +238,6 @@ func TestForkWithBlockTime(t *testing.T) {
 			}
 
 			wg.Wait()
-			ticker.Stop()
 
 			// Before the end of sprint
 			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint - 1)
