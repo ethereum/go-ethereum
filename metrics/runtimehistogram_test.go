@@ -48,7 +48,7 @@ func TestRuntimeHistogramStats(t *testing.T) {
 				Buckets: []float64{0, 0.5, 1, math.Inf(1)},
 			},
 			Count:       3,
-			Max:         math.MaxInt64,
+			Max:         1,
 			Min:         0,
 			Sum:         3,
 			Mean:        0.9166666,
