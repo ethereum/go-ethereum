@@ -253,7 +253,11 @@ func (h *runtimeHistogramSnapshot) Max() int64 {
 	for i := len(h.Counts) - 1; i >= 0; i-- {
 		count := h.Counts[i]
 		if count > 0 {
-			return int64(math.Ceil(h.Buckets[i+1]))
+			edge := h.Buckets[i+1]
+			if math.IsInf(edge, 1) {
+				edge = h.Buckets[i]
+			}
+			return int64(math.Ceil(edge))
 		}
 	}
 	return 0
