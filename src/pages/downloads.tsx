@@ -216,11 +216,17 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection id='importingkeys' sectionTitle='Importing keys and verifying builds'>
-            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+            <Flex
+              p={4}
+              borderBottom='2px solid'
+              borderColor='brand.light.primary'
+              gap={4}
+              flexDirection={{ base: 'column', md: 'row' }}
+            >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
-                  You can import the build server public keys by grabbing the individual keys directly
-                  from the keyserver network:
+                  You can import the build server public keys by grabbing the individual keys
+                  directly from the keyserver network:
                 </Text>
               </Stack>
 
@@ -230,7 +236,13 @@ const DownloadsPage: NextPage = () => {
               </Stack>
             </Flex>
 
-            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+            <Flex
+              p={4}
+              borderBottom='2px solid'
+              borderColor='brand.light.primary'
+              gap={4}
+              flexDirection={{ base: 'column', md: 'row' }}
+            >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
                   Similarly you can import all the developer public keys by grabbing them directly
@@ -244,7 +256,13 @@ const DownloadsPage: NextPage = () => {
               </Stack>
             </Flex>
 
-            <Flex p={4} borderBottom='2px solid' borderColor='brand.light.primary' gap={4} flexDirection={{ base: 'column', md: 'row' }}>
+            <Flex
+              p={4}
+              borderBottom='2px solid'
+              borderColor='brand.light.primary'
+              gap={4}
+              flexDirection={{ base: 'column', md: 'row' }}
+            >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
                   From the download listings above you should see a link both to the downloadable

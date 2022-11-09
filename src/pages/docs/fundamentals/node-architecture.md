@@ -4,6 +4,7 @@ description: Introduction to how Ethereum nodes are organized and where Geth fit
 ---
 
 ## Node architecture
+
 An Ethereum node is composed of two clients: an [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/#execution-clients) and a [consensus client](https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients). Geth is an [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/#execution-clients). Originally, an execution client alone was enough to run a full Ethereum node. However, ever since Ethereum turned off [proof-of-work](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/) and implemented [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/), Geth has needed to be coupled to another piece of software called a [“consensus client”](https://ethereum.org/en/developers/docs/nodes-and-clients/#consensus-clients) in order to keep track of the Ethereum blockchain.
 
 The execution client (Geth) is responsible for transaction handling, transaction gossip, state management and supporting the Ethereum Virtual Machine ([EVM])(https://ethereum.org/en/developers/docs/evm/). However, Geth is **not** responsible for block building, block gossiping or handling consensus logic. These are in the remit of the consensus client.
@@ -29,4 +30,3 @@ The consensus client deals with all the logic that enables a node to stay in syn
 Validators can be added to consensus clients if 32 ETH have been sent to the deposit contract. The validator client comes bundled with the consensus client and can be added to a node at any time. The validator handles attestations and block proposals. They enable a node to accrue rewards or lose ETH via penalties or slashing. Running the validator software also makes a node eligible to be selected to propose a new block.
 
 Read more about [proof-of-stake](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/).
-
