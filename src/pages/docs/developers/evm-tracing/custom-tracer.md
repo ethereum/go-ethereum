@@ -397,7 +397,7 @@ func (t *opcounter) Stop(err error) {
 }
 ```
 
-As can be seen every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) needs to be implemented (even if empty). Key parts to notice are the `init()` function which registers the tracer in Geth, the `CaptureState` hook where the opcode counts are incremented and `GetResult` where the result is serialized and delivered. To test this out the source is first compiled with `make geth`. Then in the console it can be invoked through the usual API methods by passing in the name it was registered under:
+Every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum/go-ethereum/core/vm#EVMLogger) needs to be implemented (even if empty). Key parts to notice are the `init()` function which registers the tracer in Geth, the `CaptureState` hook where the opcode counts are incremented and `GetResult` where the result is serialized and delivered. To test this, the source is first compiled with `make geth`. Then in the console it can be invoked through the usual API methods by passing in the name it was registered under:
 
 ```console
 > debug.traceTransaction('0x7ae446a7897c056023a8104d254237a8d97783a92900a7b0f7db668a9432f384', { tracer: 'opcounter' })
@@ -408,3 +408,7 @@ As can be seen every method of the [EVMLogger interface](https://pkg.go.dev/gith
     ...
 }
 ```
+
+## Summary
+
+This page described how to write custom tracers for Geth. Custom tracers can be written in Javascript or Go.

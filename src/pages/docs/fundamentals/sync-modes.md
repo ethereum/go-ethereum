@@ -43,6 +43,10 @@ A light node syncs very quickly and stores the bare minimum of blockchain data. 
 
 Read more about light nodes on our [LES page](/docs/interface/les.md).
 
+The following diagram shows how Geth stores state data in the different sync modes:
+
+![state pruning options](/public/images/docs/state-pruning.png)
+
 ## Consensus layer syncing
 
 Now that Ethereum has switched to proof-of-stake, all consensus logic and block propagation is handled by consensus clients. This means that syncing the blockchain is a process shared between the consensus and execution clients. Blocks are downloaded by the consensus client and verified by the execution client. In order for Geth to sync, it requires a header from its connected consensus client. Geth does not import any data until it is instructed to by the consensus client. **Geth cannot sync without being connected to a consensus client**. This includes block-by-block syncing from genesis.

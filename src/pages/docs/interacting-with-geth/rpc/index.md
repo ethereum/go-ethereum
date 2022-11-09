@@ -38,10 +38,10 @@ geth --http --http.port 3334
 
 Not all of the JSON-RPC method namespaces are enabled for HTTP requests by default. Instead, they have to be whitelisted explicitly when Geth is started. Calling non-whitelisted RPC namespaces returns an RPC error with code `-32602`.
 
-The default whitelist allows access to the `eth`, `net` and `web3` namespaces. To enable access to other APIs like account management (`personal`) and debugging (`debug`), they must be configured using the `--http.api` flag. Enabling these APIs over HTTP is **not recommended** because access to these methods increases the attack surface.
+The default whitelist allows access to the `eth`, `net` and `web3` namespaces. To enable access to other APIs like debugging (`debug`), they must be configured using the `--http.api` flag. Enabling these APIs over HTTP is **not recommended** because access to these methods increases the attack surface.
 
 ```sh
-geth --http --http.api personal,eth,net,web3
+geth --http --http.api eth,net,web3
 ```
 
 Since the HTTP server is reachable from any local application, additional protection is built into the server to prevent misuse of the API from web pages. To enable access to the API from a web page (for example to use the online IDE, [Remix](https://remix.ethereum.org)), the server needs to be configured to accept Cross-Origin requests. This is achieved using the `--http.corsdomain` flag.

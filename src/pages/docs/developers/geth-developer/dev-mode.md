@@ -27,7 +27,7 @@ Starting Geth in developer mode is as simple as providing the `--dev` flag. It i
 Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, enable `http` and the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. For this tutorial some other namespaces will also be enabled. The full command is as follows:
 
 ```shell
-geth --dev --http --http.api eth,web3,personal,net --http.corsdomain "http://remix.ethereum.org"
+geth --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
 ```
 
 The terminal will display the following logs, confirming Geth has started successfully in developer mode:
@@ -83,7 +83,7 @@ Welcome to the Geth Javascript console!
 instance: Geth/v1.10.18-unstable-8d84a701-20220503/linux-amd64/go.1.18.1
 coinbase: 0x540dbaeb2390f2eb005f7a6dbf3436a0959197a9
 at block: 0 (Thu Jan 01 1970 01:00:00 GMT+0100 (BST))
- modules: eth:1.0 personal:1.0 rpc:1.0 web3:1.0
+ modules: eth:1.0 rpc:1.0 web3:1.0
 
 To exit, press ctrl-d or type exit
 >
@@ -118,10 +118,10 @@ Using `web3.fromWei()` is less error prone because the correct multiplier is bui
 1.157920892373162e+59
 ```
 
-A new account can be created and some of the ether from the coinbase transferred across to it. A new account is generated using the `newAccount` function in the `personal` namespace:
+A new account can be created using Clef. Some of the ether from the coinbase can then be transferred across to it. A new account is generated using the `newaccount` function on the command line:
 
 ```shell
-personal.newAccount()
+clef newaccount --keystore <path-to-keystore>
 ```
 
 The terminal will display a request for a password, twice. Once provided, a new account will be created and its address printed to the terminal. The account creation is also logged in the Geth terminal, including the location of the keyfile in the keystore. It is a good idea to back up the password somewhere at this point. If this were an account on a live network, intended to own assets of real-world value, it would be critical to back up the account password and the keystore in a secure manner.
@@ -280,7 +280,7 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode.
 
 ```shell
-geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org"
+geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org"
 ```
 
 ## Re-using accounts
@@ -289,7 +289,7 @@ Geth will fail to start in dev-mode if keys have been manually created or import
 
 ```shell
 
-geth --datadir dev-chain --dev --http --http.api personal,web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
+geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
 
 ```
 

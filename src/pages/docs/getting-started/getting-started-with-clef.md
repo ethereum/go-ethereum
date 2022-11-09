@@ -5,7 +5,7 @@ description: Guide to getting up and running with Geth using Clef as an external
 
 This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](content/docs/getting_started/Installing-Geth.md) pages. Geth also needs to be connected to a consensus client in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/content/docs/fundamentals/security.md).
 
-This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial also uses [Clef](/content/docs/tools/Clef/Tutorial.md). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team and is intended to eventually replace the account management tool built in to Geth.
+This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/content/docs/tools/Clef/Tutorial.md). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team and is intended to eventually replace the account management tool built in to Geth.
 
 ## Prerequisites
 
@@ -19,8 +19,7 @@ In order to get the most value from the tutorials on this page, the following sk
 Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found [here](/content/docs/fundamentals/node-architecture.md) and our guide for configuring Geth to connect to a
 consensus client is [here](/content/docs/getting_started/consensus-clients.md).
 
-{% include note.html content="If Geth was installed from source on Linux, `make` saves the binaries for Geth and the associated tools in `/build/bin`. To run these programs it is convenient to move them to the top level project directory (e.g. running `mv ./build/bin/* ./`) from `/go-ethereum`. Then `./` must be prepended to the commands in the code snippets in order to execute a particular program, e.g. `./geth` instead of simply `geth`. If the executables are not
-moved then either navigate to the `bin` directory to run them (e.g. `cd ./build/bin` and `./geth`) or provide their path (e.g. `./build/bin/geth`). These instructions can be ignored for other installations." %}
+{% include note.html content="If Geth was installed from source on Linux, `make` saves the binaries for Geth and the associated tools in `/build/bin`. To run these programs it is convenient to move them to the top level project directory (e.g. running `mv ./build/bin/* ./`) from `/go-ethereum`. Then `./` must be prepended to the commands in the code snippets in order to execute a particular program, e.g. `./geth` instead of simply `geth`. If the executables are not moved then either navigate to the `bin` directory to run them (e.g. `cd ./build/bin` and `./geth`) or provide their path (e.g. `./build/bin/geth`). These instructions can be ignored for other installations." %}
 
 ## Background
 
@@ -83,9 +82,7 @@ The previous commands used Clef's `newaccount` function to add new key pairs to 
 To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config directory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial Chain ID 5 is used which is that of the Goerli testnet. It is very important that this chain ID parameter is set to 5. The following command starts Clef on Goerli:
 
 ```shell
-
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
-
 ```
 
 After running the command above, Clef requests the user to type “ok” to proceed. On typing "ok" and pressing enter, Clef returns the following to the terminal:
@@ -147,8 +144,7 @@ WARN [02-10|13:59:06.999] Failed to open wallet                    url=extapi://
 INFO [02-10|13:59:08.793] Block synchronisation started
 ```
 
-This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`.
-This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
+This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
 
 ```terminal
 INFO [04-29][15:54:09.238] Looking for peers             peercount=2 tried=0 static=0
@@ -156,16 +152,13 @@ INFO [04-29][15:54:19.393] Imported new block headers    count=2 elapsed=1.127ms
 INFO [04-29][15:54:19:656] Imported new block receipts   count=698  elapsed=4.464ms number=994566 hash=56dc44..007c93 age=13h9m9s
 ```
 
-These logs indicate that Geth is running as expected. Sending an empty Curl request to the http server
-provides a quick way to confirm that this too has been started without any issues. In a third terminal,
-the following command can be run:
+These logs indicate that Geth is running as expected. Sending an empty Curl request to the http server provides a quick way to confirm that this too has been started without any issues. In a third terminal, the following command can be run:
 
 ```shell
 curl http://localhost:8545
 ```
 
-If there is no error message reported to the terminal, everything is OK. Geth must be running in order for a user to interact with the Ethereum network. If this terminal is closed down then Geth must be restarted in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with
-Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir <other commands>`.
+If there is no error message reported to the terminal, everything is OK. Geth must be running in order for a user to interact with the Ethereum network. If this terminal is closed down then Geth must be restarted in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir <other commands>`.
 
 {% include note.html content="Snap syncing Goerli will take some time and until the sync is finished you can't use the node to transfer funds. You can also try doing a [light sync](interface/les) which will be much quicker but depends on light servers being available to serve your node the data it needs." %}
 
@@ -177,8 +170,7 @@ The address generated by Clef in Step 1 can be pasted into the Paradigm Multifau
 
 ## Step 5: Interact with Geth
 
-For interacting with the blockchain, Geth provides JSON-RPC APIs. [JSON-RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/) is a way to execute specific
-tasks by sending instructions to Geth in the form of [JSON](https://www.json.org/json-en.html) objects. RPC stands for "Remote Procedure Call" and it refers to the ability to send these JSON-encoded instructions from locations outside of those managed by Geth. It is possible to interact with Geth by sending these JSON encoded instructions directly over Geth's exposed http port using tools like Curl. However, this is somewhat user-unfriendly and error-prone, especially for more complex instructions. For this reason, there are a set of libraries built on top of JSON-RPC that provide a more user-friendly interface for interacting with Geth. One of the most widely used is Web3.js.
+For interacting with the blockchain, Geth provides JSON-RPC APIs. [JSON-RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/) is a way to execute specific tasks by sending instructions to Geth in the form of [JSON](https://www.json.org/json-en.html) objects. RPC stands for "Remote Procedure Call" and it refers to the ability to send these JSON-encoded instructions from locations outside of those managed by Geth. It is possible to interact with Geth by sending these JSON encoded instructions directly over Geth's exposed http port using tools like Curl. However, this is somewhat user-unfriendly and error-prone, especially for more complex instructions. For this reason, there are a set of libraries built on top of JSON-RPC that provide a more user-friendly interface for interacting with Geth. One of the most widely used is Web3.js.
 
 Geth provides a Javascript console that exposes the Web3.js API. This means that with Geth running in one terminal, a Javascript environment can be opened in another allowing the user to interact with Geth using Web3.js. There are three transport protocols that can be used to connect the Javascript environment to Geth:
 

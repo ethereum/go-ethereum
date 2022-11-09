@@ -27,7 +27,7 @@ While the main network uses proof-of-work (PoW) to secure the blockchain, Geth a
 
 #### Ethash
 
-Geth's PoW algorithm, [Ethhash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash), is a system that allows open participation by anyone willing to dedicate resources to mining. While this is a critical property for a public network, the overall security of the blockchain strictly depends on the total amount of resources used to secure it. As such, PoW is a poor choice for private networks with few miners. The Ethash mining 'difficulty' is adjusted automatically so that new blocks are created approximately 12 seconds apart. As more mining resources are deployed on the network, creating a new block becomes harder so that the average block time matches the target block time.
+Geth's PoW algorithm, [Ethash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash), is a system that allows open participation by anyone willing to dedicate resources to mining. While this is a critical property for a public network, the overall security of the blockchain strictly depends on the total amount of resources used to secure it. As such, PoW is a poor choice for private networks with few miners. The Ethash mining 'difficulty' is adjusted automatically so that new blocks are created approximately 12 seconds apart. As more mining resources are deployed on the network, creating a new block becomes harder so that the average block time matches the target block time.
 
 #### Clique
 
@@ -388,19 +388,19 @@ TRACE[05-13|16:15:57.767]  PING/v4                               id=f1364e6d060c
 
 It is now possible to attach a Javascript console to either node to query the network properties:
 
-```shell
+```sh
 geth attach node1/geth.ipc
 ```
 
 Once the Javascript console is running, check that the node is connected to one other peer (node 2):
 
-```shell
+```sh
 net.peerCount
 ```
 
 The details of this peer can also be queried and used to check that the peer really is Node 2:
 
-```
+```sh
 admin.peers
 ```
 
@@ -441,9 +441,6 @@ eth.getBalance(eth.accounts[0])
 This account can then be unlocked and some ether sent to Node 2, using the following commands:
 
 ```javascript
-// unlock account
-personal.unlockAccount(eth.accounts[0]);
-
 // send some Wei
 eth.sendTransaction({
   to: '0xc94d95a5106270775351eecfe43f97e8e75e59e8',
