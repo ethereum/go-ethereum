@@ -7,26 +7,24 @@ import (
 	"sync/atomic"
 )
 
-func getOrRegisterRuntimeHistogram(name string, r Registry) *runtimeHistogram {
-	if nil == r {
+func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runtimeHistogram {
+	if r == nil {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, newRuntimeHistogram).(*runtimeHistogram)
+	constructor := func() Histogram { return newRuntimeHistogram(scale) }
+	return r.GetOrRegister(name, constructor).(*runtimeHistogram)
 }
 
 // runtimeHistogram wraps a runtime/metrics histogram.
 type runtimeHistogram struct {
-	v atomic.Value
+	v           atomic.Value
+	scaleFactor float64
 }
 
-func newRuntimeHistogram() Histogram {
-	h := new(runtimeHistogram)
+func newRuntimeHistogram(scale float64) *runtimeHistogram {
+	h := &runtimeHistogram{scaleFactor: scale}
 	h.update(&metrics.Float64Histogram{})
 	return h
-}
-
-func (h *runtimeHistogram) load() *runtimeHistogramSnapshot {
-	return h.v.Load().(*runtimeHistogramSnapshot)
 }
 
 func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
@@ -43,7 +41,14 @@ func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
 	}
 	copy(s.Counts, mh.Counts)
 	copy(s.Buckets, mh.Buckets)
+	for i, b := range s.Buckets {
+		s.Buckets[i] = b * h.scaleFactor
+	}
 	h.v.Store(&s)
+}
+
+func (h *runtimeHistogram) load() *runtimeHistogramSnapshot {
+	return h.v.Load().(*runtimeHistogramSnapshot)
 }
 
 func (h *runtimeHistogram) Clear() {

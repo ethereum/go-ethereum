@@ -136,6 +136,11 @@ func CollectProcessMetrics(refresh time.Duration) {
 		rstats    = make([]runtimeStats, 2)
 	)
 
+	// This scale factor is used for the runtime's time metrics. It's useful to convert to
+	// ns here because the runtime gives times in float seconds, but runtimeHistogram can
+	// only provide integers for the minimum and maximum values.
+	const secondsToNs = float64(time.Second)
+
 	// Define the various metrics to collect
 	var (
 		cpuSysLoad            = GetOrRegisterGauge("system/cpu/sysload", DefaultRegistry)
@@ -143,9 +148,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
-		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", nil)
-		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", nil)
-		memAllocsBySize       = getOrRegisterRuntimeHistogram("system/memory/allocs-bysize", nil)
+		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
+		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", secondsToNs, nil)
+		memAllocsBySize       = getOrRegisterRuntimeHistogram("system/memory/allocs-bysize", 1, nil)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
