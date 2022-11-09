@@ -31,10 +31,8 @@ func (h *runtimeHistogram) load() *runtimeHistogramSnapshot {
 
 func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
 	s := runtimeHistogramSnapshot{
-		Float64Histogram: metrics.Float64Histogram{
-			Counts:  make([]uint64, len(mh.Counts)),
-			Buckets: make([]float64, len(mh.Buckets)),
-		},
+		Counts:  make([]uint64, len(mh.Counts)),
+		Buckets: make([]float64, len(mh.Buckets)),
 	}
 	copy(s.Counts, mh.Counts)
 	copy(s.Buckets, mh.Buckets)
@@ -101,9 +99,7 @@ func (h *runtimeHistogram) Sum() int64 {
 	return h.load().Sum()
 }
 
-type runtimeHistogramSnapshot struct {
-	metrics.Float64Histogram
-}
+type runtimeHistogramSnapshot metrics.Float64Histogram
 
 func (h *runtimeHistogramSnapshot) Clear() {
 	panic("runtimeHistogram does not support Clear")
@@ -130,8 +126,11 @@ func (h *runtimeHistogramSnapshot) Count() int64 {
 
 // Mean returns an approximation of the mean.
 func (h *runtimeHistogramSnapshot) Mean() float64 {
-	sum, count := h.mean()
-	return sum / count
+	if len(h.Counts) == 0 {
+		return 0
+	}
+	mean, _ := h.mean()
+	return mean
 }
 
 // mean computes the mean and also the total sample count.
@@ -152,6 +151,10 @@ func (h *runtimeHistogramSnapshot) StdDev() float64 {
 
 // Variance approximates the variance of the histogram.
 func (h *runtimeHistogramSnapshot) Variance() float64 {
+	if len(h.Counts) == 0 {
+		return 0
+	}
+
 	mean, totalCount := h.mean()
 	var sum float64
 	for i, c := range h.Counts {
@@ -159,7 +162,7 @@ func (h *runtimeHistogramSnapshot) Variance() float64 {
 		d := midpoint - mean
 		sum += float64(c) * (d * d)
 	}
-	return sum / totalCount
+	return sum / (totalCount - 1)
 }
 
 // Percentile computes the p'th percentile value.
@@ -179,7 +182,7 @@ func (h *runtimeHistogramSnapshot) Percentiles(ps []float64) []float64 {
 	thresholds := make([]float64, len(ps))
 	indexes := make([]int, len(ps))
 	for i, percentile := range ps {
-		thresholds[i] = count * percentile
+		thresholds[i] = count * math.Max(0, math.Min(1.0, percentile))
 		indexes[i] = i
 	}
 	sort.Sort(floatsAscendingKeepingIndex{thresholds, indexes})
@@ -207,10 +210,9 @@ func (h *runtimeHistogramSnapshot) computePercentiles(thresh []float64) {
 	}
 }
 
-// The operations below return rounded results, because
-// runtime/metrics.Float64Histogram is a collection of float64s.
-// It also doesn't keep track of individual samples, so the results
-// are approximated.
+// Note: runtime/metrics.Float64Histogram is a collection of float64s, but the methods
+// below need to return int64 to satisfy the interface. The histogram provided by runtime
+// also doesn't keep track of individual samples, so results are approximated.
 
 // Max returns the highest sample value.
 func (h *runtimeHistogramSnapshot) Max() int64 {
@@ -239,7 +241,7 @@ func (h *runtimeHistogramSnapshot) Sum() int64 {
 	for i := range h.Counts {
 		sum += h.Buckets[i] * float64(h.Counts[i])
 	}
-	return int64(math.Round(sum))
+	return int64(math.Ceil(sum))
 }
 
 type floatsAscendingKeepingIndex struct {
