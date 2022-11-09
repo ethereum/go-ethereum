@@ -65,7 +65,7 @@ test-race:
 	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
 
 test-integration:
-	$(GOTEST) --timeout 30m -tags integration $(TESTE2E)
+	$(GOTEST) --timeout 60m -tags integration $(TESTE2E)
 
 escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
