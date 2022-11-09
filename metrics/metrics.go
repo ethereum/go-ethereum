@@ -58,7 +58,7 @@ func init() {
 var threadCreateProfile = pprof.Lookup("threadcreate")
 
 type runtimeStats struct {
-	GCPauses     float64
+	GCPauses     *metrics.Float64Histogram
 	GCAllocBytes uint64
 	GCFreedBytes uint64
 
@@ -93,7 +93,7 @@ func readRuntimeStats(v *runtimeStats) {
 
 		switch s.Name {
 		case "/gc/pauses:seconds":
-			v.GCPauses = median(s.Value.Float64Histogram())
+			v.GCPauses = s.Value.Float64Histogram()
 		case "/gc/heap/allocs:bytes":
 			v.GCAllocBytes = s.Value.Uint64()
 		case "/gc/heap/frees:bytes":
@@ -110,23 +110,6 @@ func readRuntimeStats(v *runtimeStats) {
 			v.Goroutines = s.Value.Uint64()
 		}
 	}
-}
-
-// median gives an approximation of the median value of a histogram.
-func median(h *metrics.Float64Histogram) float64 {
-	total := uint64(0)
-	for _, count := range h.Counts {
-		total += count
-	}
-	thresh := total / 2
-	total = 0
-	for i, count := range h.Counts {
-		total += count
-		if total >= thresh {
-			return h.Buckets[i]
-		}
-	}
-	panic("should not happen")
 }
 
 // CollectProcessMetrics periodically collects various metrics about the running process.
@@ -152,7 +135,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
-		memPauses             = GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
+		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", nil)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
@@ -182,7 +165,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
 		memAllocs.Mark(int64(rstats[now].GCAllocBytes - rstats[prev].GCAllocBytes))
 		memFrees.Mark(int64(rstats[now].GCFreedBytes - rstats[prev].GCFreedBytes))
-		memPauses.Mark(int64(rstats[now].GCPauses - rstats[prev].GCPauses))
+		memPauses.update(rstats[now].GCPauses)
 		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
 		memHeld.Update(int64(rstats[now].MemTotal))
 
