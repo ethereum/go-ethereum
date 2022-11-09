@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	ethash "github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"

@@ -23,7 +23,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	ethash "github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 

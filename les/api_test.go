@@ -29,7 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	ethash "github.com/ethereum/go-ethereum/consensus/gash"
 	g "github.com/ethereum/go-ethereum/g"
 	ethdownloader "github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/gconfig"
