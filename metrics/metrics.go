@@ -61,6 +61,7 @@ type runtimeStats struct {
 	GCPauses     *metrics.Float64Histogram
 	GCAllocBytes uint64
 	GCFreedBytes uint64
+	GCHeapGoal   uint64
 
 	MemTotal     uint64
 	HeapFree     uint64
@@ -75,6 +76,7 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/gc/pauses:seconds"}, // histogram
 	{Name: "/gc/heap/allocs:bytes"},
 	{Name: "/gc/heap/frees:bytes"},
+	{Name: "/gc/heap/goal:bytes"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
 	{Name: "/memory/classes/heap/released:bytes"},
@@ -100,6 +102,8 @@ func readRuntimeStats(v *runtimeStats) {
 			v.GCAllocBytes = s.Value.Uint64()
 		case "/gc/heap/frees:bytes":
 			v.GCFreedBytes = s.Value.Uint64()
+		case "/gc/heap/goal:bytes":
+			v.GCHeapGoal = s.Value.Uint64()
 		case "/memory/classes/total:bytes":
 			v.MemTotal = s.Value.Uint64()
 		case "/memory/classes/heap/free:bytes":
@@ -148,8 +152,11 @@ func CollectProcessMetrics(refresh time.Duration) {
 		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", secondsToNs, nil)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
-		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
-		memUsed               = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
+		heapGCGoal            = GetOrRegisterGauge("system/memory/gcgoal", DefaultRegistry)
+		heapTotal             = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
+		heapUnused            = GetOrRegisterGauge("system/memory/unused", DefaultRegistry)
+		heapUsed              = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
+		heapReleased          = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
 		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
 		diskReadBytes         = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
 		diskReadBytesCounter  = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
@@ -172,13 +179,19 @@ func CollectProcessMetrics(refresh time.Duration) {
 
 		// Go runtime metrics
 		readRuntimeStats(&rstats[now])
+
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
 		cpuSchedLatency.update(rstats[now].SchedLatency)
+		memPauses.update(rstats[now].GCPauses)
+
 		memAllocs.Mark(int64(rstats[now].GCAllocBytes - rstats[prev].GCAllocBytes))
 		memFrees.Mark(int64(rstats[now].GCFreedBytes - rstats[prev].GCFreedBytes))
-		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
-		memHeld.Update(int64(rstats[now].MemTotal))
-		memPauses.update(rstats[now].GCPauses)
+
+		heapTotal.Update(int64(rstats[now].MemTotal))
+		heapUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapUnused - rstats[now].HeapFree - rstats[now].HeapReleased))
+		heapUnused.Update(int64(rstats[now].HeapUnused))
+		heapReleased.Update(int64(rstats[now].HeapReleased))
+		heapGCGoal.Update(int64(rstats[now].GCHeapGoal))
 
 		// Disk
 		if ReadDiskStats(&diskstats[now]) == nil {
