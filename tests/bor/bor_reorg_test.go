@@ -195,7 +195,10 @@ func TestForkWithBlockTime(t *testing.T) {
 	genesis := initGenesis(t)
 
 	for _, test := range cases {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			genesis.Config.Bor.Sprint = test.sprint
 			genesis.Config.Bor.Period = test.blockTime
 			genesis.Config.Bor.BackupMultiplier = test.blockTime
