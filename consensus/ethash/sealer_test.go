@@ -180,9 +180,6 @@ func TestRemoteMultiNotify(t *testing.T) {
 // Tests that pushing work packages fast to the miner doesn't cause any data race
 // issues in the notifications. Full pending block body / --miner.notify.full)
 func TestRemoteMultiNotifyFull(t *testing.T) {
-	// TODO: Understand the test case and Identify the reason for failing tests.
-	// Also, make it more deterministic.
-	t.Skip("skipping - non-deterministic test, no dependency on this test for now and not directly relevant to bor")
 
 	// Start a simple web server to capture notifications.
 	sink := make(chan map[string]interface{}, 64)
@@ -197,6 +194,9 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 		}
 		sink <- work
 	}))
+
+	// Allowing the server to start listening.
+	time.Sleep(2 * time.Second)
 	defer server.Close()
 
 	// Create the custom ethash engine.
