@@ -61,7 +61,6 @@ type runtimeStats struct {
 	GCPauses     *metrics.Float64Histogram
 	GCAllocBytes uint64
 	GCFreedBytes uint64
-	GCAllocSizes *metrics.Float64Histogram
 
 	MemTotal     uint64
 	HeapFree     uint64
@@ -75,7 +74,6 @@ type runtimeStats struct {
 var runtimeSamples = []metrics.Sample{
 	{Name: "/gc/pauses:seconds"}, // histogram
 	{Name: "/gc/heap/allocs:bytes"},
-	{Name: "/gc/heap/allocs-by-size:bytes"}, // histogram
 	{Name: "/gc/heap/frees:bytes"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
@@ -100,8 +98,6 @@ func readRuntimeStats(v *runtimeStats) {
 			v.GCPauses = s.Value.Float64Histogram()
 		case "/gc/heap/allocs:bytes":
 			v.GCAllocBytes = s.Value.Uint64()
-		case "/gc/heap/allocs-by-size:bytes":
-			v.GCAllocSizes = s.Value.Float64Histogram()
 		case "/gc/heap/frees:bytes":
 			v.GCFreedBytes = s.Value.Uint64()
 		case "/memory/classes/total:bytes":
@@ -150,7 +146,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
 		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", secondsToNs, nil)
 		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", secondsToNs, nil)
-		memAllocsBySize       = getOrRegisterRuntimeHistogram("system/memory/allocs-bysize", 1, nil)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
@@ -184,7 +179,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
 		memHeld.Update(int64(rstats[now].MemTotal))
 		memPauses.update(rstats[now].GCPauses)
-		memAllocsBySize.update(rstats[now].GCAllocSizes)
 
 		// Disk
 		if ReadDiskStats(&diskstats[now]) == nil {
