@@ -156,7 +156,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		heapTotal             = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
 		heapUnused            = GetOrRegisterGauge("system/memory/unused", DefaultRegistry)
 		heapUsed              = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
-		heapReleased          = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
+		heapReleased          = GetOrRegisterGauge("system/memory/released", DefaultRegistry)
 		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
 		diskReadBytes         = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
 		diskReadBytesCounter  = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
