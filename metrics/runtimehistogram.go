@@ -30,6 +30,13 @@ func (h *runtimeHistogram) load() *runtimeHistogramSnapshot {
 }
 
 func (h *runtimeHistogram) update(mh *metrics.Float64Histogram) {
+	if mh == nil {
+		// The update value can be nil if the current Go version doesn't support a
+		// requested metric. It's just easier to handle nil here than putting
+		// conditionals everywhere.
+		return
+	}
+
 	s := runtimeHistogramSnapshot{
 		Counts:  make([]uint64, len(mh.Counts)),
 		Buckets: make([]float64, len(mh.Buckets)),
