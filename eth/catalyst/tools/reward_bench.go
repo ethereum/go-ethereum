@@ -64,25 +64,34 @@ func track(reward *big.Int, base bool, genTime int) {
 		name = fmt.Sprintf("%ds", genTime)
 	}
 	name = fmt.Sprintf("%s%s", trackedMetricName, name)
-
 	sampler := func() metrics.Sample {
 		return metrics.ResettingSample(
 			metrics.NewExpDecaySample(1028, 0.015),
 		)
 	}
-	gwei := new(big.Int).Quo(reward, big.NewInt(params.GWei))
-	metrics.GetOrRegisterHistogramLazy(name, nil, sampler).Update(gwei.Int64())
-
-	log.Info("Tracked block reward", "duration(s)", genTime, "base", base, "reward(gwei)", gwei)
+	metrics.GetOrRegisterHistogramLazy(name, nil, sampler).Update(new(big.Int).Quo(reward, big.NewInt(params.GWei)).Int64())
 }
 
-func trackRewards(rewards []*big.Int) {
+func trackRewards(number uint64, rewards []*big.Int) {
 	if len(rewards) < 1 {
 		return // reject invalid
 	}
+	var (
+		base float64
+		fees []float64
+	)
 	for i, reward := range rewards {
 		track(reward, i == len(rewards)-1, i*recommitInterval)
+
+		feeInEther := new(big.Float).Quo(new(big.Float).SetInt(reward), big.NewFloat(params.Ether))
+		f64, _ := feeInEther.Float64()
+		if i == len(rewards)-1 {
+			base = f64
+		} else {
+			fees = append(fees, f64)
+		}
 	}
+	log.Info("Block rewards", "number", number, "base", base, "local", fees)
 }
 
 // RewardBench is the development service to compare the block revenue.
@@ -168,8 +177,7 @@ func (bench *RewardBench) readReward(block *types.Block) (*big.Int, error) {
 	}
 	if isMEV {
 		mevBlockGauge.Inc(1)
-		payment := block.Transactions()[len(block.Transactions())-1]
-		return payment.Value(), nil
+		return block.Transactions()[len(block.Transactions())-1].Value(), nil
 	}
 	standardBlockGauge.Inc(1)
 
@@ -205,7 +213,7 @@ func (bench *RewardBench) process(head *types.Block, done chan struct{}) {
 			delete(bench.rewards, number)
 			continue
 		}
-		trackRewards(append(rewards, base))
+		trackRewards(block.NumberU64(), append(rewards, base))
 	}
 	// Calculate the block rewards of next block locally.
 	// This function will be blocked for a few seconds
