@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 )
@@ -119,7 +120,7 @@ func (h peerByTxHistory) Less(i, j int) bool {
 func (h peerByTxHistory) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 const (
-	maxTxStatusRetry      = 3 // The maximum retrys will be made for tx status request.
+	maxTxStatusRetry      = 3 // The maximum retries will be made for tx status request.
 	maxTxStatusCandidates = 5 // The maximum les servers the tx status requests will be sent to.
 )
 
@@ -176,10 +177,10 @@ func (odr *LesOdr) RetrieveTxStatus(ctx context.Context, req *light.TxStatusRequ
 		// All the response is not verifiable, so always pick the first
 		// one we get.
 		for index, status := range req.Status {
-			if result[index].Status != core.TxStatusUnknown {
+			if result[index].Status != txpool.TxStatusUnknown {
 				continue
 			}
-			if status.Status == core.TxStatusUnknown {
+			if status.Status == txpool.TxStatusUnknown {
 				continue
 			}
 			result[index], missing = status, missing-1

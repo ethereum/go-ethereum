@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -50,7 +51,7 @@ var (
 type testBackend struct {
 	db     ethdb.Database
 	chain  *core.BlockChain
-	txpool *core.TxPool
+	txpool *txpool.TxPool
 }
 
 // newTestBackend creates an empty chain and wraps it into a mock backend.
@@ -76,13 +77,13 @@ func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)
 	for _, block := range bs {
 		chain.StateCache().TrieDB().Commit(block.Root(), false, nil)
 	}
-	txconfig := core.DefaultTxPoolConfig
+	txconfig := txpool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
 	return &testBackend{
 		db:     db,
 		chain:  chain,
-		txpool: core.NewTxPool(txconfig, params.TestChainConfig, chain),
+		txpool: txpool.NewTxPool(txconfig, params.TestChainConfig, chain),
 	}
 }
 
@@ -111,6 +112,8 @@ func (b *testBackend) Handle(*Peer, Packet) error {
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeaders66(t *testing.T) { testGetBlockHeaders(t, ETH66) }
+func TestGetBlockHeaders67(t *testing.T) { testGetBlockHeaders(t, ETH67) }
+func TestGetBlockHeaders68(t *testing.T) { testGetBlockHeaders(t, ETH68) }
 
 func testGetBlockHeaders(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -296,6 +299,8 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodies66(t *testing.T) { testGetBlockBodies(t, ETH66) }
+func TestGetBlockBodies67(t *testing.T) { testGetBlockBodies(t, ETH67) }
+func TestGetBlockBodies68(t *testing.T) { testGetBlockBodies(t, ETH68) }
 
 func testGetBlockBodies(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -335,7 +340,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 	}
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
-		// Collect the hashes to request, and the response to expectva
+		// Collect the hashes to request, and the response to expect
 		var (
 			hashes []common.Hash
 			bodies []*BlockBody
@@ -378,9 +383,11 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 }
 
 // Tests that the state trie nodes can be retrieved based on hashes.
-func TestGetNodeData66(t *testing.T) { testGetNodeData(t, ETH66) }
+func TestGetNodeData66(t *testing.T) { testGetNodeData(t, ETH66, false) }
+func TestGetNodeData67(t *testing.T) { testGetNodeData(t, ETH67, true) }
+func TestGetNodeData68(t *testing.T) { testGetNodeData(t, ETH68, true) }
 
-func testGetNodeData(t *testing.T, protocol uint) {
+func testGetNodeData(t *testing.T, protocol uint, drop bool) {
 	t.Parallel()
 
 	// Define three accounts to simulate transactions with
@@ -441,8 +448,15 @@ func testGetNodeData(t *testing.T, protocol uint) {
 		GetNodeDataPacket: hashes,
 	})
 	msg, err := peer.app.ReadMsg()
-	if err != nil {
-		t.Fatalf("failed to read node data response: %v", err)
+	if !drop {
+		if err != nil {
+			t.Fatalf("failed to read node data response: %v", err)
+		}
+	} else {
+		if err != nil {
+			return
+		}
+		t.Fatalf("succeeded to read node data response on non-supporting protocol: %v", msg)
 	}
 	if msg.Code != NodeDataMsg {
 		t.Fatalf("response packet code mismatch: have %x, want %x", msg.Code, NodeDataMsg)
@@ -488,6 +502,8 @@ func testGetNodeData(t *testing.T, protocol uint) {
 
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetBlockReceipts66(t *testing.T) { testGetBlockReceipts(t, ETH66) }
+func TestGetBlockReceipts67(t *testing.T) { testGetBlockReceipts(t, ETH67) }
+func TestGetBlockReceipts68(t *testing.T) { testGetBlockReceipts(t, ETH68) }
 
 func testGetBlockReceipts(t *testing.T, protocol uint) {
 	t.Parallel()

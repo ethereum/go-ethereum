@@ -31,7 +31,7 @@ import (
 // Since it's impossible to get the arbitrary-ness converted between Go and mobile
 // platforms, we're using explicit getters and setters for the conversions. There
 // is of course no point in enumerating everything, just enough to support the
-// contract bindins requiring client side generated code.
+// contract bindings requiring client side generated code.
 type Interface struct {
 	object interface{}
 }

@@ -17,8 +17,10 @@
 package graphql
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -41,7 +43,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := h.Schema.Exec(r.Context(), params.Query, params.OperationName, params.Variables)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -57,17 +62,18 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // New constructs a new GraphQL service instance.
 func New(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) error {
-	return newHandler(stack, backend, filterSystem, cors, vhosts)
+	_, err := newHandler(stack, backend, filterSystem, cors, vhosts)
+	return err
 }
 
 // newHandler returns a new `http.Handler` that will answer GraphQL queries.
 // It additionally exports an interactive query browser on the / endpoint.
-func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) error {
+func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cors, vhosts []string) (*handler, error) {
 	q := Resolver{backend, filterSystem}
 
 	s, err := graphql.ParseSchema(schema, &q)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	h := handler{Schema: s}
 	handler := node.NewHTTPHandlerStack(h, cors, vhosts, nil)
@@ -76,5 +82,5 @@ func newHandler(stack *node.Node, backend ethapi.Backend, filterSystem *filters.
 	stack.RegisterHandler("GraphQL", "/graphql", handler)
 	stack.RegisterHandler("GraphQL", "/graphql/", handler)
 
-	return nil
+	return &h, nil
 }

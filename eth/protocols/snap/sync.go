@@ -70,7 +70,7 @@ const (
 	// and waste round trip times. If it's too high, we're capping responses and
 	// waste bandwidth.
 	//
-	// Depoyed bytecodes are currently capped at 24KB, so the minimum request
+	// Deployed bytecodes are currently capped at 24KB, so the minimum request
 	// size should be maxRequestSize / 24K. Assuming that most contracts do not
 	// come close to that, requesting 4x should be a good approximation.
 	maxCodeRequestCount = maxRequestSize / (24 * 1024) * 4
@@ -87,8 +87,8 @@ const (
 	trienodeHealRateMeasurementImpact = 0.005
 
 	// minTrienodeHealThrottle is the minimum divisor for throttling trie node
-	// heal requests to avoid overloading the local node and exessively expanding
-	// the state trie bedth wise.
+	// heal requests to avoid overloading the local node and excessively expanding
+	// the state trie breadth wise.
 	minTrienodeHealThrottle = 1
 
 	// maxTrienodeHealThrottle is the maximum divisor for throttling trie node
@@ -615,6 +615,8 @@ func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 		}
 	}()
 	defer s.report(true)
+	// commit any trie- and bytecode-healing data.
+	defer s.commitHealer(true)
 
 	// Whether sync completed or not, disregard any future packets
 	defer func() {
@@ -2154,14 +2156,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 			log.Error("Invalid trienode processed", "hash", hash, "err", err)
 		}
 	}
-	batch := s.db.NewBatch()
-	if err := s.healer.scheduler.Commit(batch); err != nil {
-		log.Error("Failed to commit healing data", "err", err)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist healing data", "err", err)
-	}
-	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
+	s.commitHealer(false)
 
 	// Calculate the processing rate of one filled trie node
 	rate := float64(fills) / (float64(time.Since(start)) / float64(time.Second))
@@ -2208,6 +2203,20 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 	}
 }
 
+func (s *Syncer) commitHealer(force bool) {
+	if !force && s.healer.scheduler.MemSize() < ethdb.IdealBatchSize {
+		return
+	}
+	batch := s.db.NewBatch()
+	if err := s.healer.scheduler.Commit(batch); err != nil {
+		log.Error("Failed to commit healing data", "err", err)
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to persist healing data", "err", err)
+	}
+	log.Debug("Persisted set of healing data", "type", "trienodes", "bytes", common.StorageSize(batch.ValueSize()))
+}
+
 // processBytecodeHealResponse integrates an already validated bytecode response
 // into the healer tasks.
 func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
@@ -2234,14 +2243,7 @@ func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 			log.Error("Invalid bytecode processed", "hash", hash, "err", err)
 		}
 	}
-	batch := s.db.NewBatch()
-	if err := s.healer.scheduler.Commit(batch); err != nil {
-		log.Error("Failed to commit healing data", "err", err)
-	}
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist healing data", "err", err)
-	}
-	log.Debug("Persisted set of healing data", "type", "bytecode", "bytes", common.StorageSize(batch.ValueSize()))
+	s.commitHealer(false)
 }
 
 // forwardAccountTask takes a filled account task and persists anything available
@@ -2962,7 +2964,7 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
 	)
-	log.Info("State sync in progress", "synced", progress, "state", synced,
+	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
 		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }
 
@@ -2981,7 +2983,7 @@ func (s *Syncer) reportHealProgress(force bool) {
 		accounts = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.accountHealed), s.accountHealedBytes.TerminalString())
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageHealed), s.storageHealedBytes.TerminalString())
 	)
-	log.Info("State heal in progress", "accounts", accounts, "slots", storage,
+	log.Info("Syncing: state healing in progress", "accounts", accounts, "slots", storage,
 		"codes", bytecode, "nodes", trienode, "pending", s.healer.scheduler.Pending())
 }
 

@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
 	"time"
@@ -41,7 +40,6 @@ const (
 	lookupRequestLimit      = 3  // max requests against a single node during lookup
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
-	nodesResponseItemLimit  = 3  // applies in sendNodes
 
 	respTimeoutV5 = 700 * time.Millisecond
 )
@@ -54,7 +52,7 @@ type codecV5 interface {
 	// Encode encodes a packet.
 	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
-	// decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
+	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
 	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
 }
@@ -323,7 +321,7 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
 	dists = append(dists, uint(td))
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
-		if td+i < 256 {
+		if td+i <= 256 {
 			dists = append(dists, uint(td+i))
 		}
 		if td-i > 0 {
@@ -832,16 +830,28 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 		return []*v5wire.Nodes{{ReqID: reqid, Total: 1}}
 	}
 
-	total := uint8(math.Ceil(float64(len(nodes)) / 3))
+	// This limit represents the available space for nodes in output packets. Maximum
+	// packet size is 1280, and out of this ~80 bytes will be taken up by the packet
+	// frame. So limiting to 1000 bytes here leaves 200 bytes for other fields of the
+	// NODES message, which is a lot.
+	const sizeLimit = 1000
+
 	var resp []*v5wire.Nodes
 	for len(nodes) > 0 {
-		p := &v5wire.Nodes{ReqID: reqid, Total: total}
-		items := min(nodesResponseItemLimit, len(nodes))
-		for i := 0; i < items; i++ {
-			p.Nodes = append(p.Nodes, nodes[i].Record())
+		p := &v5wire.Nodes{ReqID: reqid}
+		size := uint64(0)
+		for len(nodes) > 0 {
+			r := nodes[0].Record()
+			if size += r.Size(); size > sizeLimit {
+				break
+			}
+			p.Nodes = append(p.Nodes, r)
+			nodes = nodes[1:]
 		}
-		nodes = nodes[items:]
 		resp = append(resp, p)
+	}
+	for _, msg := range resp {
+		msg.Total = uint8(len(resp))
 	}
 	return resp
 }

@@ -136,9 +136,11 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
-// 		len(extraData) <= 32
-// 		uncleHash = emptyUncleHash
-// 		difficulty = 0
+//
+//	len(extraData) <= 32
+//	uncleHash = emptyUncleHash
+//	difficulty = 0
+//
 // and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)

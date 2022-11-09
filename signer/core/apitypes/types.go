@@ -64,7 +64,7 @@ func (vs *ValidationMessages) Info(msg string) {
 	vs.Messages = append(vs.Messages, ValidationInfo{INFO, msg})
 }
 
-/// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
+// getWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
 func (v *ValidationMessages) GetWarnings() error {
 	var messages []string
 	for _, msg := range v.Messages {
@@ -418,6 +418,14 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
 func parseBytes(encType interface{}) ([]byte, bool) {
+	// Handle array types.
+	val := reflect.ValueOf(encType)
+	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
+		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
+		reflect.Copy(v, val)
+		return v.Bytes(), true
+	}
+
 	switch v := encType.(type) {
 	case []byte:
 		return v, true
@@ -458,6 +466,8 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	switch v := encValue.(type) {
 	case *math.HexOrDecimal256:
 		b = (*big.Int)(v)
+	case *big.Int:
+		b = v
 	case string:
 		var hexIntValue math.HexOrDecimal256
 		if err := hexIntValue.UnmarshalText([]byte(v)); err != nil {
@@ -490,13 +500,23 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
 	switch encType {
 	case "address":
-		stringValue, ok := encValue.(string)
-		if !ok || !common.IsHexAddress(stringValue) {
-			return nil, dataMismatchError(encType, encValue)
-		}
 		retval := make([]byte, 32)
-		copy(retval[12:], common.HexToAddress(stringValue).Bytes())
-		return retval, nil
+		switch val := encValue.(type) {
+		case string:
+			if common.IsHexAddress(val) {
+				copy(retval[12:], common.HexToAddress(val).Bytes())
+				return retval, nil
+			}
+		case []byte:
+			if len(val) == 20 {
+				copy(retval[12:], val)
+				return retval, nil
+			}
+		case [20]byte:
+			copy(retval[12:], val[:])
+			return retval, nil
+		}
+		return nil, dataMismatchError(encType, encValue)
 	case "bool":
 		boolValue, ok := encValue.(bool)
 		if !ok {

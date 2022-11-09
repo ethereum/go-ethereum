@@ -65,7 +65,7 @@ type (
 	handshakeAuthData struct {
 		h struct {
 			SrcID      enode.ID
-			SigSize    byte // ignature data
+			SigSize    byte // signature data
 			PubkeySize byte // offset of
 		}
 		// Trailing variable-size data.
@@ -89,6 +89,10 @@ const (
 	version         = 1
 	minVersion      = 1
 	sizeofMaskingIV = 16
+
+	// The minimum size of any Discovery v5 packet is 63 bytes.
+	// Should reject packets smaller than minPacketSize.
+	minPacketSize = 63
 
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
@@ -114,6 +118,7 @@ var (
 
 // Public errors.
 var (
+	// ErrInvalidReqID represents error when the ID is invalid.
 	ErrInvalidReqID = errors.New("request ID larger than 8 bytes")
 )
 
@@ -415,10 +420,10 @@ func (c *Codec) encryptMessage(s *session, p Packet, head *Header, headerData []
 
 // Decode decodes a discovery packet.
 func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, p Packet, err error) {
-	// Unmask the static header.
-	if len(input) < sizeofStaticPacketData {
+	if len(input) < minPacketSize {
 		return enode.ID{}, nil, nil, errTooShort
 	}
+	// Unmask the static header.
 	var head Header
 	copy(head.IV[:], input[:sizeofMaskingIV])
 	mask := head.mask(c.localnode.ID())
@@ -524,7 +529,7 @@ func (c *Codec) decodeHandshake(fromAddr string, head *Header) (n *enode.Node, a
 	if err != nil {
 		return nil, auth, nil, errInvalidAuthKey
 	}
-	// Derive sesssion keys.
+	// Derive session keys.
 	session := deriveKeys(sha256.New, c.privkey, ephkey, auth.h.SrcID, c.localnode.ID(), cdata)
 	session = session.keysFlipped()
 	return n, auth, session, nil

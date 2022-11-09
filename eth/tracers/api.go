@@ -61,6 +61,11 @@ const (
 	// For non-archive nodes, this limit _will_ be overblown, as disk-backed tries
 	// will only be found every ~15K blocks or so.
 	defaultTracechainMemLimit = common.StorageSize(500 * 1024 * 1024)
+
+	// maximumPendingTraceStates is the maximum number of states allowed waiting
+	// for tracing. The creation of trace state will be paused if the unused
+	// trace states exceed this limit.
+	maximumPendingTraceStates = 128
 )
 
 // StateReleaseFunc is used to deallocate resources held by constructing a
@@ -251,30 +256,6 @@ func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, conf
 	return sub, nil
 }
 
-// releaser is a helper tool responsible for caching the release
-// callbacks of tracing state.
-type releaser struct {
-	releases []StateReleaseFunc
-	lock     sync.Mutex
-}
-
-func (r *releaser) add(release StateReleaseFunc) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	r.releases = append(r.releases, release)
-}
-
-func (r *releaser) call() {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	for _, release := range r.releases {
-		release()
-	}
-	r.releases = r.releases[:0]
-}
-
 // traceChain configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The tracing chain range includes
 // the end block but excludes the start one. The return value will be one item per
@@ -291,11 +272,11 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		threads = blocks
 	}
 	var (
-		pend   = new(sync.WaitGroup)
-		ctx    = context.Background()
-		taskCh = make(chan *blockTraceTask, threads)
-		resCh  = make(chan *blockTraceTask, threads)
-		reler  = new(releaser)
+		pend    = new(sync.WaitGroup)
+		ctx     = context.Background()
+		taskCh  = make(chan *blockTraceTask, threads)
+		resCh   = make(chan *blockTraceTask, threads)
+		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 	)
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -326,8 +307,10 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					task.statedb.Finalise(api.backend.ChainConfig().IsEIP158(task.block.Number()))
 					task.results[i] = &txTraceResult{Result: res}
 				}
-				// Tracing state is used up, queue it for de-referencing
-				reler.add(task.release)
+				// Tracing state is used up, queue it for de-referencing. Note the
+				// state is the parent state of trace block, use block.number-1 as
+				// the state number.
+				tracker.releaseState(task.block.NumberU64()-1, task.release)
 
 				// Stream the result back to the result catcher or abort on teardown
 				select {
@@ -354,8 +337,8 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			close(taskCh)
 			pend.Wait()
 
-			// Clean out any pending derefs.
-			reler.call()
+			// Clean out any pending release functions of trace states.
+			tracker.callReleases()
 
 			// Log the chain result
 			switch {
@@ -392,6 +375,13 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				failed = err
 				break
 			}
+			// Make sure the state creator doesn't go too far. Too many unprocessed
+			// trace state may cause the oldest state to become stale(e.g. in
+			// path-based scheme).
+			if err = tracker.wait(number); err != nil {
+				failed = err
+				break
+			}
 			// Prepare the statedb for tracing. Don't use the live database for
 			// tracing to avoid persisting state junks into the database. Switch
 			// over to `preferDisk` mode only if the memory usage exceeds the
@@ -407,18 +397,18 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				failed = err
 				break
 			}
-			// Clean out any pending derefs. Note this step must be done after
-			// constructing tracing state, because the tracing state of block
-			// next depends on the parent state and construction may fail if
-			// we release too early.
-			reler.call()
+			// Clean out any pending release functions of trace state. Note this
+			// step must be done after constructing tracing state, because the
+			// tracing state of block next depends on the parent state and construction
+			// may fail if we release too early.
+			tracker.callReleases()
 
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			txs := next.Transactions()
 			select {
 			case taskCh <- &blockTraceTask{statedb: statedb.Copy(), block: next, release: release, results: make([]*txTraceResult, len(txs))}:
 			case <-closed:
-				reler.add(release)
+				tracker.releaseState(number, release)
 				return
 			}
 			traced += uint64(len(txs))
@@ -895,12 +885,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 
 	var traceConfig *TraceConfig
 	if config != nil {
-		traceConfig = &TraceConfig{
-			Config:  config.Config,
-			Tracer:  config.Tracer,
-			Timeout: config.Timeout,
-			Reexec:  config.Reexec,
-		}
+		traceConfig = &config.TraceConfig
 	}
 	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
 }
@@ -926,6 +911,8 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 			return nil, err
 		}
 	}
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {
 		if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
@@ -937,12 +924,12 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 		<-deadlineCtx.Done()
 		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
 			tracer.Stop(errors.New("execution timeout"))
+			// Stop evm execution. Note cancellation is not necessarily immediate.
+			vmenv.Cancel()
 		}
 	}()
 	defer cancel()
 
-	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {

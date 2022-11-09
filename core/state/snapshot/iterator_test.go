@@ -819,7 +819,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 // only spit out 200 values eventually.
 //
 // The value-fetching benchmark is easy on the binary iterator, since it never has to reach
-// down at any depth for retrieving the values -- all are on the toppmost layer
+// down at any depth for retrieving the values -- all are on the topmost layer
 //
 // BenchmarkAccountIteratorTraversal/binary_iterator_keys-6         	    2239	    483674 ns/op
 // BenchmarkAccountIteratorTraversal/binary_iterator_values-6       	    2403	    501810 ns/op

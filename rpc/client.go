@@ -32,6 +32,7 @@ import (
 )
 
 var (
+	ErrBadResult                 = errors.New("bad result in JSON-RPC response")
 	ErrClientQuit                = errors.New("client is closed")
 	ErrNoResult                  = errors.New("no result in JSON-RPC response")
 	ErrSubscriptionQueueOverflow = errors.New("subscription queue overflow")
