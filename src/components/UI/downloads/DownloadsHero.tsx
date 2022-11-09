@@ -40,14 +40,14 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   DOWNLOAD_HEADER_BUTTONS.sourceCode.buildURL = sourceCodeURL;
 
   return (
-    <Flex border='3px solid' borderColor='brand.light.primary' py={4} px={4} flexDirection='row'>
+    <Grid border='3px solid' borderColor='brand.light.primary' p={4} templateColumns={{ base: 'repeat(1, 1fr)', lg: '1fr 430px' }} gap={4}> 
       <Flex flexDirection='column'>
         <Flex mb={4} direction={{ base: 'column', md: 'row-reverse' }}>
           <Flex
             py={{ base: 0 }}
             px={{ base: 8 }}
             flex={{ base: 'none' }}
-            display={{ base: '', lg: 'none' }}
+            display={{ base: 'block', lg: 'none' }}
           >
             <Center>
               <Image
@@ -126,6 +126,6 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           />
         </Center>
       </Flex>
-    </Flex>
+    </Grid>
   );
 };
