@@ -201,6 +201,8 @@ type Server struct {
 
 	// State of run loop and listenLoop.
 	inboundHistory expHeap
+
+	ValidatedPubkeys []*ecdsa.PublicKey
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -591,11 +593,12 @@ func (srv *Server) setupDiscovery() error {
 			sconn = &sharedUDPConn{conn, unhandled}
 		}
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			Bootnodes:   srv.BootstrapNodes,
-			Unhandled:   unhandled,
-			Log:         srv.log,
+			PrivateKey:       srv.PrivateKey,
+			NetRestrict:      srv.NetRestrict,
+			Bootnodes:        srv.BootstrapNodes,
+			Unhandled:        unhandled,
+			Log:              srv.log,
+			ValidatedPubkeys: srv.ValidatedPubkeys,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -933,8 +936,10 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
 	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
 	if dialDest == nil {
+		// Inbound
 		c.transport = srv.newTransport(fd, nil)
 	} else {
+		// Outbound, from dial scheduler
 		c.transport = srv.newTransport(fd, dialDest.Pubkey())
 	}
 
@@ -966,15 +971,33 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 
 	// Run the RLPx handshake.
 	remotePubkey, err := c.doEncHandshake(srv.PrivateKey)
+
 	if err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return err
 	}
+
 	if dialDest != nil {
 		c.node = dialDest
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
+
+	peerPubkey := crypto.FromECDSAPub(c.node.Pubkey())
+	validated := len(srv.ValidatedPubkeys) == 0
+	for _, pubkey := range srv.ValidatedPubkeys {
+		pubkeyWithoutPrefix := crypto.FromECDSAPub(pubkey)
+		if bytes.Equal(pubkeyWithoutPrefix, peerPubkey) {
+			validated = true
+			break
+		}
+	}
+
+	// Discard packets if coming from non verified node
+	if !validated {
+		return errors.New("non validated node")
+	}
+
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)
 	if err != nil {

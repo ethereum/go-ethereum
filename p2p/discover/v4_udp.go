@@ -79,6 +79,8 @@ type UDPv4 struct {
 	gotreply        chan reply
 	closeCtx        context.Context
 	cancelCloseCtx  context.CancelFunc
+
+	validatedPubkeys []*ecdsa.PublicKey
 }
 
 // replyMatcher represents a pending reply.
@@ -130,16 +132,17 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	cfg = cfg.withDefaults()
 	closeCtx, cancel := context.WithCancel(context.Background())
 	t := &UDPv4{
-		conn:            c,
-		priv:            cfg.PrivateKey,
-		netrestrict:     cfg.NetRestrict,
-		localNode:       ln,
-		db:              ln.Database(),
-		gotreply:        make(chan reply),
-		addReplyMatcher: make(chan *replyMatcher),
-		closeCtx:        closeCtx,
-		cancelCloseCtx:  cancel,
-		log:             cfg.Log,
+		conn:             c,
+		priv:             cfg.PrivateKey,
+		netrestrict:      cfg.NetRestrict,
+		localNode:        ln,
+		db:               ln.Database(),
+		gotreply:         make(chan reply),
+		addReplyMatcher:  make(chan *replyMatcher),
+		closeCtx:         closeCtx,
+		cancelCloseCtx:   cancel,
+		log:              cfg.Log,
+		validatedPubkeys: cfg.ValidatedPubkeys,
 	}
 
 	tab, err := newTable(t, ln.Database(), cfg.Bootnodes, t.log)
@@ -547,6 +550,21 @@ func (t *UDPv4) handlePacket(from *net.UDPAddr, buf []byte) error {
 		return err
 	}
 	packet := t.wrapPacket(rawpacket)
+
+	validated := len(t.validatedPubkeys) == 0
+	for _, pubkey := range t.validatedPubkeys {
+		pubkeyWithoutPrefix := crypto.FromECDSAPub(pubkey)[1:]
+		if bytes.Equal(pubkeyWithoutPrefix, fromKey[:]) {
+			validated = true
+			break
+		}
+	}
+
+	// Discard packets if coming from non verified node
+	if !validated {
+		return errors.New("non validated node")
+	}
+
 	fromID := fromKey.ID()
 	if err == nil && packet.preverify != nil {
 		err = packet.preverify(packet, from, fromID, fromKey)
