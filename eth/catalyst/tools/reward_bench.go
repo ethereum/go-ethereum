@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -44,7 +45,12 @@ const (
 	recommitInterval = 2
 
 	// trackedMetricName is the prefix of the block reward tracking.
-	trackedMetricName = "core/reward/"
+	trackedMetricName = "eth/block/reward/"
+)
+
+var (
+	standardBlockGauge = metrics.NewRegisteredGauge("eth/block/standard", nil)
+	mevBlockGauge      = metrics.NewRegisteredGauge("eth/block/mev", nil)
 )
 
 func track(reward *big.Int, base bool, genTime int) {
@@ -57,8 +63,17 @@ func track(reward *big.Int, base bool, genTime int) {
 	} else {
 		name = fmt.Sprintf("%ds", genTime)
 	}
-	name = fmt.Sprintf("%s/%s", trackedMetricName, name)
-	metrics.GetOrRegisterHistogram(name, nil, metrics.NewExpDecaySample(1028, 0.015)).Update(new(big.Int).Quo(reward, big.NewInt(params.GWei)).Int64())
+	name = fmt.Sprintf("%s%s", trackedMetricName, name)
+
+	sampler := func() metrics.Sample {
+		return metrics.ResettingSample(
+			metrics.NewExpDecaySample(1028, 0.015),
+		)
+	}
+	gwei := new(big.Int).Quo(reward, big.NewInt(params.GWei))
+	metrics.GetOrRegisterHistogramLazy(name, nil, sampler).Update(gwei.Int64())
+
+	log.Info("Tracked block reward", "duration(s)", genTime, "base", base, "reward(gwei)", gwei)
 }
 
 func trackRewards(rewards []*big.Int) {
@@ -77,6 +92,7 @@ type RewardBench struct {
 	api     *catalyst.ConsensusAPI
 	chain   *core.BlockChain
 	rewards map[uint64][]*big.Int
+	signer  types.Signer
 	closed  chan struct{}
 	wg      sync.WaitGroup
 }
@@ -87,6 +103,7 @@ func RegisterRewardBench(stack *node.Node, backend *eth.Ethereum) *RewardBench {
 		api:     catalyst.NewConsensusAPI(backend),
 		chain:   backend.BlockChain(),
 		rewards: make(map[uint64][]*big.Int),
+		signer:  types.LatestSigner(backend.BlockChain().Config()),
 		closed:  make(chan struct{}),
 	}
 	stack.RegisterLifecycle(bench)
@@ -125,50 +142,79 @@ func (bench *RewardBench) calcRewards(block *types.Block) ([]*big.Int, error) {
 	return append(feeHistory, fees), nil
 }
 
+// isMEVBlock returns an indicator that the provided block is built along with
+// mev-boost rules. Usually mev-block will append a payment transaction to
+// validator at the end of block. It's very hacky to determine block in such
+// approach, todo(rjl493456442) any other better approach?
+func (bench *RewardBench) isMEVBlock(block *types.Block) (bool, error) {
+	txs := block.Transactions()
+	if len(txs) == 0 {
+		return false, nil
+	}
+	sender, err := bench.signer.Sender(txs[len(txs)-1])
+	if err != nil {
+		return false, err
+	}
+	return sender == block.Coinbase(), nil
+}
+
 // readReward retrieves the real reward earned by the fee recipient in the specified
 // block. The reward includes the standard transaction fees plus some additional mev
 // revenue.
 func (bench *RewardBench) readReward(block *types.Block) (*big.Int, error) {
-	parent := bench.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return nil, errors.New("parent block is not found")
-	}
-	prestate, err := bench.chain.StateAt(parent.Root())
+	isMEV, err := bench.isMEVBlock(block)
 	if err != nil {
 		return nil, err
 	}
-	poststate, err := bench.chain.StateAt(block.Root())
-	if err != nil {
-		return nil, err
+	if isMEV {
+		mevBlockGauge.Inc(1)
+		payment := block.Transactions()[len(block.Transactions())-1]
+		return payment.Value(), nil
 	}
-	return big.NewInt(0).Sub(poststate.GetBalance(block.Coinbase()), prestate.GetBalance(block.Coinbase())), nil
+	standardBlockGauge.Inc(1)
+
+	var (
+		fees     = new(big.Int)
+		txs      = block.Transactions()
+		receipts = bench.chain.GetReceiptsByHash(block.Hash())
+	)
+	if len(receipts) != len(txs) {
+		return nil, errors.New("invalid block")
+	}
+	for i, tx := range txs {
+		price := tx.EffectiveGasTipValue(block.BaseFee())
+		fees = new(big.Int).Add(fees, new(big.Int).Mul(price, big.NewInt(int64(receipts[i].GasUsed))))
+	}
+	return fees, nil
 }
 
-func (bench *RewardBench) process(block *types.Block, done chan struct{}) {
+func (bench *RewardBench) process(head *types.Block, done chan struct{}) {
 	defer close(done)
 
-	rewards, ok := bench.rewards[block.NumberU64()]
-	if ok {
+	for number, rewards := range bench.rewards {
+		if number > head.NumberU64() {
+			continue
+		}
+		block := bench.chain.GetBlockByNumber(number)
+		if block == nil {
+			delete(bench.rewards, number)
+			continue
+		}
 		base, err := bench.readReward(block)
 		if err != nil {
-			return
+			delete(bench.rewards, number)
+			continue
 		}
 		trackRewards(append(rewards, base))
 	}
-	// Clean up the outdated block rewards.
-	for number := range bench.rewards {
-		if number <= block.NumberU64() {
-			delete(bench.rewards, number)
-		}
-	}
 	// Calculate the block rewards of next block locally.
 	// This function will be blocked for a few seconds
-	// in order to collect as many statistics as possible.
-	local, err := bench.calcRewards(block)
+	// in order to collect as much statistics as possible.
+	local, err := bench.calcRewards(head)
 	if err != nil {
 		return
 	}
-	bench.rewards[block.NumberU64()+1] = local
+	bench.rewards[head.NumberU64()+1] = local
 }
 
 // Start launches the reward benchmarker.
