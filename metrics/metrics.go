@@ -61,24 +61,28 @@ type runtimeStats struct {
 	GCPauses     *metrics.Float64Histogram
 	GCAllocBytes uint64
 	GCFreedBytes uint64
+	GCAllocSizes *metrics.Float64Histogram
 
 	MemTotal     uint64
 	HeapFree     uint64
 	HeapReleased uint64
 	HeapUnused   uint64
 
-	Goroutines uint64
+	Goroutines   uint64
+	SchedLatency *metrics.Float64Histogram
 }
 
 var runtimeSamples = []metrics.Sample{
 	{Name: "/gc/pauses:seconds"}, // histogram
 	{Name: "/gc/heap/allocs:bytes"},
+	{Name: "/gc/heap/allocs-by-size:bytes"}, // histogram
 	{Name: "/gc/heap/frees:bytes"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
 	{Name: "/memory/classes/heap/released:bytes"},
 	{Name: "/memory/classes/heap/unused:bytes"},
 	{Name: "/sched/goroutines:goroutines"},
+	{Name: "/sched/latencies:seconds"}, // histogram
 }
 
 func readRuntimeStats(v *runtimeStats) {
@@ -135,7 +139,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 		cpuProcLoad           = GetOrRegisterGauge("system/cpu/procload", DefaultRegistry)
 		cpuThreads            = GetOrRegisterGauge("system/cpu/threads", DefaultRegistry)
 		cpuGoroutines         = GetOrRegisterGauge("system/cpu/goroutines", DefaultRegistry)
+		cpuSchedLatency       = getOrRegisterRuntimeHistogram("system/cpu/schedlatency", nil)
 		memPauses             = getOrRegisterRuntimeHistogram("system/memory/pauses", nil)
+		memAllocsBySize       = getOrRegisterRuntimeHistogram("system/memory/allocs-bysize", nil)
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memHeld               = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
@@ -163,11 +169,13 @@ func CollectProcessMetrics(refresh time.Duration) {
 		// Go runtime metrics
 		readRuntimeStats(&rstats[now])
 		cpuGoroutines.Update(int64(rstats[now].Goroutines))
+		cpuSchedLatency.update(rstats[now].SchedLatency)
 		memAllocs.Mark(int64(rstats[now].GCAllocBytes - rstats[prev].GCAllocBytes))
 		memFrees.Mark(int64(rstats[now].GCFreedBytes - rstats[prev].GCFreedBytes))
-		memPauses.update(rstats[now].GCPauses)
 		memUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapFree - rstats[now].HeapReleased))
 		memHeld.Update(int64(rstats[now].MemTotal))
+		memPauses.update(rstats[now].GCPauses)
+		memAllocsBySize.update(rstats[now].GCAllocSizes)
 
 		// Disk
 		if ReadDiskStats(&diskstats[now]) == nil {
