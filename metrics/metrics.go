@@ -100,6 +100,8 @@ func readRuntimeStats(v *runtimeStats) {
 			v.GCPauses = s.Value.Float64Histogram()
 		case "/gc/heap/allocs:bytes":
 			v.GCAllocBytes = s.Value.Uint64()
+		case "/gc/heap/allocs-by-size:bytes":
+			v.GCAllocSizes = s.Value.Float64Histogram()
 		case "/gc/heap/frees:bytes":
 			v.GCFreedBytes = s.Value.Uint64()
 		case "/memory/classes/total:bytes":
@@ -112,6 +114,8 @@ func readRuntimeStats(v *runtimeStats) {
 			v.HeapUnused = s.Value.Uint64()
 		case "/sched/goroutines:goroutines":
 			v.Goroutines = s.Value.Uint64()
+		case "/sched/latencies:seconds":
+			v.SchedLatency = s.Value.Float64Histogram()
 		}
 	}
 }
