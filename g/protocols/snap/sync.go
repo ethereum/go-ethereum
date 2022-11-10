@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
@@ -321,7 +321,7 @@ type accountTask struct {
 	codeTasks  map[common.Hash]struct{}    // Code hashes that need retrieval
 	stateTasks map[common.Hash]common.Hash // Account hashes->roots that need full state retrieval
 
-	genBatch ethdb.Batch     // Batch used by the node generator
+	genBatch gdb.Batch       // Batch used by the node generator
 	genTrie  *trie.StackTrie // Node generator from storage slots
 
 	done bool // Flag whether the task can be removed
@@ -336,7 +336,7 @@ type storageTask struct {
 	root common.Hash     // Storage root hash for this instance
 	req  *storageRequest // Pending request to fill this task
 
-	genBatch ethdb.Batch     // Batch used by the node generator
+	genBatch gdb.Batch       // Batch used by the node generator
 	genTrie  *trie.StackTrie // Node generator from storage slots
 
 	done bool // Flag whether the task can be removed
@@ -417,7 +417,7 @@ type SyncPeer interface {
 //   - The peer delivers a stale response after a previous timeout
 //   - The peer delivers a refusal to serve the requested state
 type Syncer struct {
-	db ethdb.KeyValueStore // Database to store the trie nodes into (and dedup)
+	db gdb.KeyValueStore // Database to store the trie nodes into (and dedup)
 
 	root    common.Hash    // Current state trie root being synced
 	tasks   []*accountTask // Current account task set being synced
@@ -470,7 +470,7 @@ type Syncer struct {
 	bytecodeHealDups   uint64             // Number of bytecodes already processed
 	bytecodeHealNops   uint64             // Number of bytecodes not requested
 
-	stateWriter        ethdb.Batch        // Shared batch writer used for persisting raw states
+	stateWriter        gdb.Batch          // Shared batch writer used for persisting raw states
 	accountHealed      uint64             // Number of accounts downloaded during the healing stage
 	accountHealedBytes common.StorageSize // Number of raw account bytes persisted to disk during the healing stage
 	storageHealed      uint64             // Number of storage slots downloaded during the healing stage
@@ -485,7 +485,7 @@ type Syncer struct {
 
 // NewSyncer creates a new snapshot syncer to download the Ethereum state over the
 // snap protocol.
-func NewSyncer(db ethdb.KeyValueStore) *Syncer {
+func NewSyncer(db gdb.KeyValueStore) *Syncer {
 	return &Syncer{
 		db: db,
 
@@ -737,7 +737,7 @@ func (s *Syncer) loadSyncStatus() {
 			}
 			s.tasks = progress.Tasks
 			for _, task := range s.tasks {
-				task.genBatch = ethdb.HookedBatch{
+				task.genBatch = gdb.HookedBatch{
 					Batch: s.db.NewBatch(),
 					OnPut: func(key []byte, value []byte) {
 						s.accountBytes += common.StorageSize(len(key) + len(value))
@@ -747,7 +747,7 @@ func (s *Syncer) loadSyncStatus() {
 
 				for accountHash, subtasks := range task.SubTasks {
 					for _, subtask := range subtasks {
-						subtask.genBatch = ethdb.HookedBatch{
+						subtask.genBatch = gdb.HookedBatch{
 							Batch: s.db.NewBatch(),
 							OnPut: func(key []byte, value []byte) {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
@@ -799,7 +799,7 @@ func (s *Syncer) loadSyncStatus() {
 			// Make sure we don't overflow if the step is not a proper divisor
 			last = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 		}
-		batch := ethdb.HookedBatch{
+		batch := gdb.HookedBatch{
 			Batch: s.db.NewBatch(),
 			OnPut: func(key []byte, value []byte) {
 				s.accountBytes += common.StorageSize(len(key) + len(value))
@@ -1927,7 +1927,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 	if res.subTask != nil {
 		res.subTask.req = nil
 	}
-	batch := ethdb.HookedBatch{
+	batch := gdb.HookedBatch{
 		Batch: s.db.NewBatch(),
 		OnPut: func(key []byte, value []byte) {
 			s.storageBytes += common.StorageSize(len(key) + len(value))
@@ -1996,7 +1996,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 					r := newHashRange(lastKey, chunks)
 
 					// Our first task is the one that was just filled by this response.
-					batch := ethdb.HookedBatch{
+					batch := gdb.HookedBatch{
 						Batch: s.db.NewBatch(),
 						OnPut: func(key []byte, value []byte) {
 							s.storageBytes += common.StorageSize(len(key) + len(value))
@@ -2010,7 +2010,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 						genTrie:  trie.NewStackTrieWithOwner(batch, account),
 					})
 					for r.Next() {
-						batch := ethdb.HookedBatch{
+						batch := gdb.HookedBatch{
 							Batch: s.db.NewBatch(),
 							OnPut: func(key []byte, value []byte) {
 								s.storageBytes += common.StorageSize(len(key) + len(value))
@@ -2099,7 +2099,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 				}
 			}
 		}
-		if res.subTask.genBatch.ValueSize() > ethdb.IdealBatchSize || res.subTask.done {
+		if res.subTask.genBatch.ValueSize() > gdb.IdealBatchSize || res.subTask.done {
 			if err := res.subTask.genBatch.Write(); err != nil {
 				log.Error("Failed to persist stack slots", "err", err)
 			}
@@ -2204,7 +2204,7 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 }
 
 func (s *Syncer) commitHealer(force bool) {
-	if !force && s.healer.scheduler.MemSize() < ethdb.IdealBatchSize {
+	if !force && s.healer.scheduler.MemSize() < gdb.IdealBatchSize {
 		return
 	}
 	batch := s.db.NewBatch()
@@ -2262,7 +2262,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// snapshot generation.
 	oldAccountBytes := s.accountBytes
 
-	batch := ethdb.HookedBatch{
+	batch := gdb.HookedBatch{
 		Batch: s.db.NewBatch(),
 		OnPut: func(key []byte, value []byte) {
 			s.accountBytes += common.StorageSize(len(key) + len(value))
@@ -2310,7 +2310,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			log.Error("Failed to commit stack account", "err", err)
 		}
 	}
-	if task.genBatch.ValueSize() > ethdb.IdealBatchSize || task.done {
+	if task.genBatch.ValueSize() > gdb.IdealBatchSize || task.done {
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}
@@ -2907,7 +2907,7 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}
-	if s.stateWriter.ValueSize() > ethdb.IdealBatchSize {
+	if s.stateWriter.ValueSize() > gdb.IdealBatchSize {
 		s.stateWriter.Write() // It's fine to ignore the error here
 		s.stateWriter.Reset()
 	}

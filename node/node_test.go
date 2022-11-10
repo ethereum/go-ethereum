@@ -27,7 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -171,7 +171,7 @@ func TestNodeOpenDatabaseFromLifecycleStart(t *testing.T) {
 	stack, _ := New(testNodeConfig())
 	defer stack.Close()
 
-	var db ethdb.Database
+	var db gdb.Database
 	var err error
 	stack.RegisterLifecycle(&InstrumentedService{
 		startHook: func() {

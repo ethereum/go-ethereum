@@ -21,19 +21,19 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 )
 
 // preimageStore is the store for caching preimages of node key.
 type preimageStore struct {
 	lock          sync.RWMutex
-	disk          ethdb.KeyValueStore
+	disk          gdb.KeyValueStore
 	preimages     map[common.Hash][]byte // Preimages of nodes from the secure trie
 	preimagesSize common.StorageSize     // Storage size of the preimages cache
 }
 
 // newPreimageStore initializes the store for caching preimages.
-func newPreimageStore(disk ethdb.KeyValueStore) *preimageStore {
+func newPreimageStore(disk gdb.KeyValueStore) *preimageStore {
 	return &preimageStore{
 		disk:      disk,
 		preimages: make(map[common.Hash][]byte),

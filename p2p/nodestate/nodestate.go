@@ -24,7 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -65,7 +65,7 @@ type (
 		started, closed     bool
 		lock                sync.Mutex
 		clock               mclock.Clock
-		db                  ethdb.KeyValueStore
+		db                  gdb.KeyValueStore
 		dbNodeKey           []byte
 		nodes               map[enode.ID]*nodeInfo
 		offlineCallbackList []offlineCallback
@@ -317,7 +317,7 @@ func (f Flags) String() string {
 // NewNodeStateMachine creates a new node state machine.
 // If db is not nil then the node states, fields and active timeouts are persisted.
 // Persistence can be enabled or disabled for each state flag and field.
-func NewNodeStateMachine(db ethdb.KeyValueStore, dbKey []byte, clock mclock.Clock, setup *Setup) *NodeStateMachine {
+func NewNodeStateMachine(db gdb.KeyValueStore, dbKey []byte, clock mclock.Clock, setup *Setup) *NodeStateMachine {
 	if setup.flags == nil {
 		panic("No state flags defined")
 	}

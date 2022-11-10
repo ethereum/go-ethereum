@@ -22,12 +22,12 @@ import (
 	"sort"
 	"testing"
 
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database
 // implementation.
-func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
+func TestDatabaseSuite(t *testing.T, New func() gdb.KeyValueStore) {
 	t.Run("Iterator", func(t *testing.T) {
 		tests := []struct {
 			content map[string]string
@@ -377,7 +377,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 	})
 }
 
-func iterateKeys(it ethdb.Iterator) []string {
+func iterateKeys(it gdb.Iterator) []string {
 	keys := []string{}
 	for it.Next() {
 		keys = append(keys, string(it.Key()))

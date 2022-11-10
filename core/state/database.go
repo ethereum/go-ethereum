@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -55,7 +55,7 @@ type Database interface {
 	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
 
 	// DiskDB returns the underlying key-value disk database.
-	DiskDB() ethdb.KeyValueStore
+	DiskDB() gdb.KeyValueStore
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
@@ -116,20 +116,20 @@ type Trie interface {
 	// If the trie does not contain a value for key, the returned proof contains all
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
-	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+	Prove(key []byte, fromLevel uint, proofDb gdb.KeyValueWriter) error
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use, but does not retain any recent trie nodes in memory. To keep some
 // historical state in memory, use the NewDatabaseWithConfig constructor.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db gdb.Database) Database {
 	return NewDatabaseWithConfig(db, nil)
 }
 
 // NewDatabaseWithConfig creates a backing store for state. The returned database
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
-func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
+func NewDatabaseWithConfig(db gdb.Database, config *trie.Config) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
@@ -141,7 +141,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 
 type cachingDB struct {
 	db            *trie.Database
-	disk          ethdb.KeyValueStore
+	disk          gdb.KeyValueStore
 	codeSizeCache *lru.Cache
 	codeCache     *fastcache.Cache
 }
@@ -214,7 +214,7 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 }
 
 // DiskDB returns the underlying key-value disk database.
-func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
+func (db *cachingDB) DiskDB() gdb.KeyValueStore {
 	return db.disk
 }
 

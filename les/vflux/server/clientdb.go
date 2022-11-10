@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -56,7 +56,7 @@ var (
 )
 
 type nodeDB struct {
-	db            ethdb.KeyValueStore
+	db            gdb.KeyValueStore
 	cache         *lru.Cache
 	auxbuf        []byte                                              // 37-byte auxiliary buffer for key encoding
 	verbuf        [2]byte                                             // 2-byte auxiliary buffer for db version
@@ -66,7 +66,7 @@ type nodeDB struct {
 	cleanupHook   func() // Test hook used for testing
 }
 
-func newNodeDB(db ethdb.KeyValueStore, clock mclock.Clock) *nodeDB {
+func newNodeDB(db gdb.KeyValueStore, clock mclock.Clock) *nodeDB {
 	cache, _ := lru.New(balanceCacheLimit)
 	ndb := &nodeDB{
 		db:      db,

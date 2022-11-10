@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/node"
 )
 
@@ -150,7 +150,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 }
 
 //nolint:unused
-func clearBloomBits(db ethdb.Database) {
+func clearBloomBits(db gdb.Database) {
 	var bloomBitsPrefix = []byte("bloomBits-")
 	fmt.Println("Clearing bloombits data...")
 	it := db.NewIterator(bloomBitsPrefix, nil)

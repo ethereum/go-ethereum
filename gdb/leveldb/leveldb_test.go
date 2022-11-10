@@ -19,7 +19,7 @@ package leveldb
 import (
 	"testing"
 
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/gdb/dbtest"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -27,7 +27,7 @@ import (
 
 func TestLevelDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
-		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
+		dbtest.TestDatabaseSuite(t, func() gdb.KeyValueStore {
 			db, err := leveldb.Open(storage.NewMemStorage(), nil)
 			if err != nil {
 				t.Fatal(err)

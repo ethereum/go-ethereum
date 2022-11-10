@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -261,7 +261,7 @@ func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.Syn
 func (b *backendMock) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
 }
-func (b *backendMock) ChainDb() ethdb.Database           { return nil }
+func (b *backendMock) ChainDb() gdb.Database             { return nil }
 func (b *backendMock) AccountManager() *accounts.Manager { return nil }
 func (b *backendMock) ExtRPCEnabled() bool               { return false }
 func (b *backendMock) RPCGasCap() uint64                 { return 0 }

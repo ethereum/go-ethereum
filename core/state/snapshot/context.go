@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/gdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -87,16 +87,16 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 
 // generatorContext carries a few global values to be shared by all generation functions.
 type generatorContext struct {
-	stats   *generatorStats     // Generation statistic collection
-	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
-	account *holdableIterator   // Iterator of account snapshot data
-	storage *holdableIterator   // Iterator of storage snapshot data
-	batch   ethdb.Batch         // Database batch for writing batch data atomically
-	logged  time.Time           // The timestamp when last generation progress was displayed
+	stats   *generatorStats   // Generation statistic collection
+	db      gdb.KeyValueStore // Key-value store containing the snapshot data
+	account *holdableIterator // Iterator of account snapshot data
+	storage *holdableIterator // Iterator of storage snapshot data
+	batch   gdb.Batch         // Database batch for writing batch data atomically
+	logged  time.Time         // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
-func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
+func newGeneratorContext(stats *generatorStats, db gdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
 	ctx := &generatorContext{
 		stats:  stats,
 		db:     db,
@@ -178,7 +178,7 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 		}
 		count++
 		ctx.batch.Delete(key)
-		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+		if ctx.batch.ValueSize() > gdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
 		}
@@ -209,7 +209,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 		}
 		count++
 		ctx.batch.Delete(key)
-		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+		if ctx.batch.ValueSize() > gdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
 		}
@@ -230,7 +230,7 @@ func (ctx *generatorContext) removeStorageLeft() {
 	for iter.Next() {
 		count++
 		ctx.batch.Delete(iter.Key())
-		if ctx.batch.ValueSize() > ethdb.IdealBatchSize {
+		if ctx.batch.ValueSize() > gdb.IdealBatchSize {
 			ctx.batch.Write()
 			ctx.batch.Reset()
 		}

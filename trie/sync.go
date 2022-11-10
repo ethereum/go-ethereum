@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -139,7 +139,7 @@ func (batch *syncMemBatch) hasCode(hash common.Hash) bool {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	database ethdb.KeyValueReader         // Persistent database to check for existing entries
+	database gdb.KeyValueReader           // Persistent database to check for existing entries
 	membatch *syncMemBatch                // Memory buffer to avoid frequent database writes
 	nodeReqs map[string]*nodeRequest      // Pending requests pertaining to a trie node path
 	codeReqs map[common.Hash]*codeRequest // Pending requests pertaining to a code hash
@@ -148,7 +148,7 @@ type Sync struct {
 }
 
 // NewSync creates a new trie data download scheduler.
-func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallback) *Sync {
+func NewSync(root common.Hash, database gdb.KeyValueReader, callback LeafCallback) *Sync {
 	ts := &Sync{
 		database: database,
 		membatch: newSyncMemBatch(),
@@ -326,7 +326,7 @@ func (s *Sync) ProcessNode(result NodeSyncResult) error {
 
 // Commit flushes the data stored in the internal membatch out to persistent
 // storage, returning any occurred error.
-func (s *Sync) Commit(dbw ethdb.Batch) error {
+func (s *Sync) Commit(dbw gdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for path, value := range s.membatch.nodes {
 		rawdb.WriteTrieNode(dbw, s.membatch.hashes[path], value)

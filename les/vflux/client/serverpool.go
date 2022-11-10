@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -56,7 +56,7 @@ const (
 type ServerPool struct {
 	clock    mclock.Clock
 	unixTime func() int64
-	db       ethdb.KeyValueStore
+	db       gdb.KeyValueStore
 
 	ns                  *nodestate.NodeStateMachine
 	vt                  *ValueTracker
@@ -151,7 +151,7 @@ var (
 )
 
 // NewServerPool creates a new server pool
-func NewServerPool(db ethdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query QueryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
+func NewServerPool(db gdb.KeyValueStore, dbKey []byte, mixTimeout time.Duration, query QueryFunc, clock mclock.Clock, trustedURLs []string, requestList []RequestInfo) (*ServerPool, enode.Iterator) {
 	s := &ServerPool{
 		db:           db,
 		clock:        clock,

@@ -27,7 +27,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -90,7 +90,7 @@ func ParseGeneratorStatus(generatorBlob []byte) string {
 }
 
 // loadAndParseJournal tries to parse the snapshot journal in latest format.
-func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
+func loadAndParseJournal(db gdb.KeyValueStore, base *diskLayer) (snapshot, journalGenerator, error) {
 	// Retrieve the disk layer generator. It must exist, no matter the
 	// snapshot is fully generated or not. Otherwise the entire disk
 	// layer is invalid.
@@ -120,7 +120,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 }
 
 // loadSnapshot loads a pre-existing state snapshot backed by a key-value store.
-func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *trie.Database, root common.Hash, cache int, recovery bool, noBuild bool) (snapshot, bool, error) {
+func loadSnapshot(diskdb gdb.KeyValueStore, triedb *trie.Database, root common.Hash, cache int, recovery bool, noBuild bool) (snapshot, bool, error) {
 	// If snapshotting is disabled (initial sync in progress), don't do anything,
 	// wait for the chain to permit us to do something meaningful
 	if rawdb.ReadSnapshotDisabled(diskdb) {
@@ -279,7 +279,7 @@ type journalCallback = func(parent common.Hash, root common.Hash, destructs map[
 // the most recent layer.
 // This method returns error either if there was some error reading from disk,
 // OR if the callback returns an error when invoked.
-func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
+func iterateJournal(db gdb.KeyValueReader, callback journalCallback) error {
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
 		log.Warn("Loaded snapshot journal", "diffs", "missing")

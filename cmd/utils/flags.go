@@ -49,7 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/g/gasprice"
 	"github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/g/tracers"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/gdb/remotedb"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -2126,13 +2126,13 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
-func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.Database {
+func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) gdb.Database {
 	var (
 		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
 
 		err     error
-		chainDb ethdb.Database
+		chainDb gdb.Database
 	)
 	switch {
 	case ctx.IsSet(RemoteDBFlag.Name):
@@ -2209,7 +2209,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, gdb.Database) {
 	var (
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database

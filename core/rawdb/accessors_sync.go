@@ -20,19 +20,19 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReadSkeletonSyncStatus retrieves the serialized sync status saved at shutdown.
-func ReadSkeletonSyncStatus(db ethdb.KeyValueReader) []byte {
+func ReadSkeletonSyncStatus(db gdb.KeyValueReader) []byte {
 	data, _ := db.Get(skeletonSyncStatusKey)
 	return data
 }
 
 // WriteSkeletonSyncStatus stores the serialized sync status to save at shutdown.
-func WriteSkeletonSyncStatus(db ethdb.KeyValueWriter, status []byte) {
+func WriteSkeletonSyncStatus(db gdb.KeyValueWriter, status []byte) {
 	if err := db.Put(skeletonSyncStatusKey, status); err != nil {
 		log.Crit("Failed to store skeleton sync status", "err", err)
 	}
@@ -40,14 +40,14 @@ func WriteSkeletonSyncStatus(db ethdb.KeyValueWriter, status []byte) {
 
 // DeleteSkeletonSyncStatus deletes the serialized sync status saved at the last
 // shutdown
-func DeleteSkeletonSyncStatus(db ethdb.KeyValueWriter) {
+func DeleteSkeletonSyncStatus(db gdb.KeyValueWriter) {
 	if err := db.Delete(skeletonSyncStatusKey); err != nil {
 		log.Crit("Failed to remove skeleton sync status", "err", err)
 	}
 }
 
 // ReadSkeletonHeader retrieves a block header from the skeleton sync store,
-func ReadSkeletonHeader(db ethdb.KeyValueReader, number uint64) *types.Header {
+func ReadSkeletonHeader(db gdb.KeyValueReader, number uint64) *types.Header {
 	data, _ := db.Get(skeletonHeaderKey(number))
 	if len(data) == 0 {
 		return nil
@@ -61,7 +61,7 @@ func ReadSkeletonHeader(db ethdb.KeyValueReader, number uint64) *types.Header {
 }
 
 // WriteSkeletonHeader stores a block header into the skeleton sync store.
-func WriteSkeletonHeader(db ethdb.KeyValueWriter, header *types.Header) {
+func WriteSkeletonHeader(db gdb.KeyValueWriter, header *types.Header) {
 	data, err := rlp.EncodeToBytes(header)
 	if err != nil {
 		log.Crit("Failed to RLP encode header", "err", err)
@@ -73,7 +73,7 @@ func WriteSkeletonHeader(db ethdb.KeyValueWriter, header *types.Header) {
 }
 
 // DeleteSkeletonHeader removes all block header data associated with a hash.
-func DeleteSkeletonHeader(db ethdb.KeyValueWriter, number uint64) {
+func DeleteSkeletonHeader(db gdb.KeyValueWriter, number uint64) {
 	if err := db.Delete(skeletonHeaderKey(number)); err != nil {
 		log.Crit("Failed to delete skeleton header", "err", err)
 	}

@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -353,7 +353,7 @@ func checkStateContent(ctx *cli.Context) error {
 	return nil
 }
 
-func showLeveldbStats(db ethdb.KeyValueStater) {
+func showLeveldbStats(db gdb.KeyValueStater) {
 	if stats, err := db.Stat("leveldb.stats"); err != nil {
 		log.Warn("Failed to read database stats", "error", err)
 	} else {
@@ -612,7 +612,7 @@ func importLDBdata(ctx *cli.Context) error {
 }
 
 type preimageIterator struct {
-	iter ethdb.Iterator
+	iter gdb.Iterator
 }
 
 func (iter *preimageIterator) Next() (byte, []byte, []byte, bool) {
@@ -631,8 +631,8 @@ func (iter *preimageIterator) Release() {
 
 type snapshotIterator struct {
 	init    bool
-	account ethdb.Iterator
-	storage ethdb.Iterator
+	account gdb.Iterator
+	storage gdb.Iterator
 }
 
 func (iter *snapshotIterator) Next() (byte, []byte, []byte, bool) {
@@ -661,12 +661,12 @@ func (iter *snapshotIterator) Release() {
 }
 
 // chainExporters defines the export scheme for all exportable chain data.
-var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
-	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
+var chainExporters = map[string]func(db gdb.Database) utils.ChainDataIterator{
+	"preimage": func(db gdb.Database) utils.ChainDataIterator {
 		iter := db.NewIterator(rawdb.PreimagePrefix, nil)
 		return &preimageIterator{iter: iter}
 	},
-	"snapshot": func(db ethdb.Database) utils.ChainDataIterator {
+	"snapshot": func(db gdb.Database) utils.ChainDataIterator {
 		account := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 		storage := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 		return &snapshotIterator{account: account, storage: storage}
@@ -799,7 +799,7 @@ func freezerMigrate(ctx *cli.Context) error {
 // dbHasLegacyReceipts checks freezer entries for legacy receipts. It stops at the first
 // non-empty receipt and checks its format. The index of this first non-empty element is
 // the second return parameter.
-func dbHasLegacyReceipts(db ethdb.Database, firstIdx uint64) (bool, uint64, error) {
+func dbHasLegacyReceipts(db gdb.Database, firstIdx uint64) (bool, uint64, error) {
 	// Check first block for legacy receipt format
 	numAncients, err := db.Ancients()
 	if err != nil {

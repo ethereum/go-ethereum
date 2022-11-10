@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g/tracers/logger"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -56,7 +56,7 @@ var (
 type testBackend struct {
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
-	chaindb     ethdb.Database
+	chaindb     gdb.Database
 	chain       *core.BlockChain
 
 	refHook func() // Hook is invoked when the requested state is referenced
@@ -133,7 +133,7 @@ func (b *testBackend) Engine() consensus.Engine {
 	return b.engine
 }
 
-func (b *testBackend) ChainDb() ethdb.Database {
+func (b *testBackend) ChainDb() gdb.Database {
 	return b.chaindb
 }
 

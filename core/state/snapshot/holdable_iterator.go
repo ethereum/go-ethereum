@@ -18,21 +18,21 @@ package snapshot
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 )
 
 // holdableIterator is a wrapper of underlying database iterator. It extends
 // the basic iterator interface by adding Hold which can hold the element
 // locally where the iterator is currently located and serve it up next time.
 type holdableIterator struct {
-	it     ethdb.Iterator
+	it     gdb.Iterator
 	key    []byte
 	val    []byte
 	atHeld bool
 }
 
 // newHoldableIterator initializes the holdableIterator with the given iterator.
-func newHoldableIterator(it ethdb.Iterator) *holdableIterator {
+func newHoldableIterator(it gdb.Iterator) *holdableIterator {
 	return &holdableIterator{it: it}
 }
 

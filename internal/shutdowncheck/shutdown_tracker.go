@@ -21,7 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -29,13 +29,13 @@ import (
 // upon start. It needs to be started after a successful start-up and stopped
 // after a successful shutdown, just before the db is closed.
 type ShutdownTracker struct {
-	db     ethdb.Database
+	db     gdb.Database
 	stopCh chan struct{}
 }
 
 // NewShutdownTracker creates a new ShutdownTracker instance and has
 // no other side-effect.
-func NewShutdownTracker(db ethdb.Database) *ShutdownTracker {
+func NewShutdownTracker(db gdb.Database) *ShutdownTracker {
 	return &ShutdownTracker{
 		db:     db,
 		stopCh: make(chan struct{}),

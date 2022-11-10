@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -37,7 +37,7 @@ var stPool = sync.Pool{
 	},
 }
 
-func stackTrieFromPool(db ethdb.KeyValueWriter, owner common.Hash) *StackTrie {
+func stackTrieFromPool(db gdb.KeyValueWriter, owner common.Hash) *StackTrie {
 	st := stPool.Get().(*StackTrie)
 	st.db = db
 	st.owner = owner
@@ -53,16 +53,16 @@ func returnToPool(st *StackTrie) {
 // in order. Once it determines that a subtree will no longer be inserted
 // into, it will hash it and free up the memory it uses.
 type StackTrie struct {
-	owner    common.Hash          // the owner of the trie
-	nodeType uint8                // node type (as in branch, ext, leaf)
-	val      []byte               // value contained by this node if it's a leaf
-	key      []byte               // key chunk covered by this (leaf|ext) node
-	children [16]*StackTrie       // list of children (for branch and exts)
-	db       ethdb.KeyValueWriter // Pointer to the commit db, can be nil
+	owner    common.Hash        // the owner of the trie
+	nodeType uint8              // node type (as in branch, ext, leaf)
+	val      []byte             // value contained by this node if it's a leaf
+	key      []byte             // key chunk covered by this (leaf|ext) node
+	children [16]*StackTrie     // list of children (for branch and exts)
+	db       gdb.KeyValueWriter // Pointer to the commit db, can be nil
 }
 
 // NewStackTrie allocates and initializes an empty trie.
-func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
+func NewStackTrie(db gdb.KeyValueWriter) *StackTrie {
 	return &StackTrie{
 		nodeType: emptyNode,
 		db:       db,
@@ -71,7 +71,7 @@ func NewStackTrie(db ethdb.KeyValueWriter) *StackTrie {
 
 // NewStackTrieWithOwner allocates and initializes an empty trie, but with
 // the additional owner field.
-func NewStackTrieWithOwner(db ethdb.KeyValueWriter, owner common.Hash) *StackTrie {
+func NewStackTrieWithOwner(db gdb.KeyValueWriter, owner common.Hash) *StackTrie {
 	return &StackTrie{
 		owner:    owner,
 		nodeType: emptyNode,
@@ -80,7 +80,7 @@ func NewStackTrieWithOwner(db ethdb.KeyValueWriter, owner common.Hash) *StackTri
 }
 
 // NewFromBinary initialises a serialized stacktrie with the given db.
-func NewFromBinary(data []byte, db ethdb.KeyValueWriter) (*StackTrie, error) {
+func NewFromBinary(data []byte, db gdb.KeyValueWriter) (*StackTrie, error) {
 	var st StackTrie
 	if err := st.UnmarshalBinary(data); err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 	return nil
 }
 
-func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
+func (st *StackTrie) setDb(db gdb.KeyValueWriter) {
 	st.db = db
 	for _, child := range st.children {
 		if child != nil {
@@ -169,7 +169,7 @@ func (st *StackTrie) setDb(db ethdb.KeyValueWriter) {
 	}
 }
 
-func newLeaf(owner common.Hash, key, val []byte, db ethdb.KeyValueWriter) *StackTrie {
+func newLeaf(owner common.Hash, key, val []byte, db gdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db, owner)
 	st.nodeType = leafNode
 	st.key = append(st.key, key...)
@@ -177,7 +177,7 @@ func newLeaf(owner common.Hash, key, val []byte, db ethdb.KeyValueWriter) *Stack
 	return st
 }
 
-func newExt(owner common.Hash, key []byte, child *StackTrie, db ethdb.KeyValueWriter) *StackTrie {
+func newExt(owner common.Hash, key []byte, child *StackTrie, db gdb.KeyValueWriter) *StackTrie {
 	st := stackTrieFromPool(db, owner)
 	st.nodeType = extNode
 	st.key = append(st.key, key...)

@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -95,7 +95,7 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
-func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
+func (db *odrDatabase) DiskDB() gdb.KeyValueStore {
 	panic("not implemented")
 }
 
@@ -186,7 +186,7 @@ func (t *odrTrie) GetKey(sha []byte) []byte {
 	return nil
 }
 
-func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb gdb.KeyValueWriter) error {
 	return errors.New("not implemented, needs client/server interface split")
 }
 

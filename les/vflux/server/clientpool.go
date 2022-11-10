@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/les/vflux"
 	"github.com/ethereum/go-ethereum/log"
@@ -81,7 +81,7 @@ type clientPeer interface {
 }
 
 // NewClientPool creates a new client pool
-func NewClientPool(balanceDb ethdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
+func NewClientPool(balanceDb gdb.KeyValueStore, minCap uint64, connectedBias time.Duration, clock mclock.Clock, synced func() bool) *ClientPool {
 	setup := newServerSetup()
 	ns := nodestate.NewNodeStateMachine(nil, nil, clock, setup.setup)
 	cp := &ClientPool{

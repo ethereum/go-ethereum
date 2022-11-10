@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -394,7 +394,7 @@ func exportPreimages(ctx *cli.Context) error {
 	return nil
 }
 
-func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, ethdb.Database, common.Hash, error) {
+func parseDumpConfig(ctx *cli.Context, stack *node.Node) (*state.DumpConfig, gdb.Database, common.Hash, error) {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	var header *types.Header
 	if ctx.NArg() > 1 {

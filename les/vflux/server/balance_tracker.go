@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/utils"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -59,7 +59,7 @@ type balanceTracker struct {
 }
 
 // newBalanceTracker creates a new balanceTracker
-func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db ethdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
+func newBalanceTracker(ns *nodestate.NodeStateMachine, setup *serverSetup, db gdb.KeyValueStore, clock mclock.Clock, posExp, negExp utils.ValueExpirer) *balanceTracker {
 	ndb := newNodeDB(db, clock)
 	bt := &balanceTracker{
 		ns:           ns,

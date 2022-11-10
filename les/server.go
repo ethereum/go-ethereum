@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/g/gconfig"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	vfs "github.com/ethereum/go-ethereum/les/vflux/server"
 	"github.com/ethereum/go-ethereum/light"
@@ -47,7 +47,7 @@ type ethBackend interface {
 	ArchiveMode() bool
 	BlockChain() *core.BlockChain
 	BloomIndexer() *core.ChainIndexer
-	ChainDb() ethdb.Database
+	ChainDb() gdb.Database
 	Synced() bool
 	TxPool() *core.TxPool
 }

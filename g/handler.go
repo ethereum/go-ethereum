@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/g/fetcher"
 	"github.com/ethereum/go-ethereum/g/protocols/eth"
 	"github.com/ethereum/go-ethereum/g/protocols/snap"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -77,7 +77,7 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database       ethdb.Database            // Database for direct sync insertions
+	Database       gdb.Database              // Database for direct sync insertions
 	Chain          *core.BlockChain          // Blockchain to serve data from
 	TxPool         txPool                    // Transaction pool to propagate from
 	Merger         *consensus.Merger         // The manager for eth1/2 transition
@@ -99,7 +99,7 @@ type handler struct {
 	checkpointNumber uint64      // Block number for the sync progress validator to cross reference
 	checkpointHash   common.Hash // Block hash for the sync progress validator to cross reference
 
-	database ethdb.Database
+	database gdb.Database
 	txpool   txPool
 	chain    *core.BlockChain
 	maxPeers int

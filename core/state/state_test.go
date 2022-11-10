@@ -24,12 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 type stateTest struct {
-	db    ethdb.Database
+	db    gdb.Database
 	state *StateDB
 }
 

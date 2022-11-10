@@ -17,18 +17,18 @@
 package rawdb
 
 import (
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-
 // configured string.
 type table struct {
-	db     ethdb.Database
+	db     gdb.Database
 	prefix string
 }
 
 // NewTable returns a database object that prefixes all keys with a given string.
-func NewTable(db ethdb.Database, prefix string) ethdb.Database {
+func NewTable(db gdb.Database, prefix string) gdb.Database {
 	return &table{
 		db:     db,
 		prefix: prefix,
@@ -87,11 +87,11 @@ func (t *table) AncientSize(kind string) (uint64, error) {
 }
 
 // ModifyAncients runs an ancient write operation on the underlying database.
-func (t *table) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (int64, error) {
+func (t *table) ModifyAncients(fn func(gdb.AncientWriteOp) error) (int64, error) {
 	return t.db.ModifyAncients(fn)
 }
 
-func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err error) {
+func (t *table) ReadAncients(fn func(reader gdb.AncientReaderOp) error) (err error) {
 	return t.db.ReadAncients(fn)
 }
 
@@ -138,7 +138,7 @@ func (t *table) Delete(key []byte) error {
 // NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
-func (t *table) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
+func (t *table) NewIterator(prefix []byte, start []byte) gdb.Iterator {
 	innerPrefix := append([]byte(t.prefix), prefix...)
 	iter := t.db.NewIterator(innerPrefix, start)
 	return &tableIterator{
@@ -191,26 +191,26 @@ func (t *table) Compact(start []byte, limit []byte) error {
 // NewBatch creates a write-only database that buffers changes to its host db
 // until a final write is called, each operation prefixing all keys with the
 // pre-configured string.
-func (t *table) NewBatch() ethdb.Batch {
+func (t *table) NewBatch() gdb.Batch {
 	return &tableBatch{t.db.NewBatch(), t.prefix}
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
-func (t *table) NewBatchWithSize(size int) ethdb.Batch {
+func (t *table) NewBatchWithSize(size int) gdb.Batch {
 	return &tableBatch{t.db.NewBatchWithSize(size), t.prefix}
 }
 
 // NewSnapshot creates a database snapshot based on the current state.
 // The created snapshot will not be affected by all following mutations
 // happened on the database.
-func (t *table) NewSnapshot() (ethdb.Snapshot, error) {
+func (t *table) NewSnapshot() (gdb.Snapshot, error) {
 	return t.db.NewSnapshot()
 }
 
 // tableBatch is a wrapper around a database batch that prefixes each key access
 // with a pre-configured string.
 type tableBatch struct {
-	batch  ethdb.Batch
+	batch  gdb.Batch
 	prefix string
 }
 
@@ -242,7 +242,7 @@ func (b *tableBatch) Reset() {
 // tableReplayer is a wrapper around a batch replayer which truncates
 // the added prefix.
 type tableReplayer struct {
-	w      ethdb.KeyValueWriter
+	w      gdb.KeyValueWriter
 	prefix string
 }
 
@@ -259,14 +259,14 @@ func (r *tableReplayer) Delete(key []byte) error {
 }
 
 // Replay replays the batch contents.
-func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
+func (b *tableBatch) Replay(w gdb.KeyValueWriter) error {
 	return b.batch.Replay(&tableReplayer{w: w, prefix: b.prefix})
 }
 
 // tableIterator is a wrapper around a database iterator that prefixes each key access
 // with a pre-configured string.
 type tableIterator struct {
-	iter   ethdb.Iterator
+	iter   gdb.Iterator
 	prefix string
 }
 

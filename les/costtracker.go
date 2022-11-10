@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/g/gconfig"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -115,7 +115,7 @@ const (
 // changes in the cost factor can be applied immediately without always notifying
 // the clients about the changed cost tables.
 type costTracker struct {
-	db     ethdb.Database
+	db     gdb.Database
 	stopCh chan chan struct{}
 
 	inSizeFactor  float64
@@ -137,7 +137,7 @@ type costTracker struct {
 
 // newCostTracker creates a cost tracker and loads the cost factor statistics from the database.
 // It also returns the minimum capacity that can be assigned to any peer.
-func newCostTracker(db ethdb.Database, config *gconfig.Config) (*costTracker, uint64) {
+func newCostTracker(db gdb.Database, config *gconfig.Config) (*costTracker, uint64) {
 	utilTarget := float64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	ct := &costTracker{
 		db:         db,

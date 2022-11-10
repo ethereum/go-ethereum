@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g/gconfig"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -289,7 +289,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
 // It's a part of the deprecated functionality, should be removed in the future.
-func ImportPreimages(db ethdb.Database, fn string) error {
+func ImportPreimages(db gdb.Database, fn string) error {
 	log.Info("Importing preimages", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -337,7 +337,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 // ExportPreimages exports all known hash preimages into the specified file,
 // truncating any data already present in the file.
 // It's a part of the deprecated functionality, should be removed in the future.
-func ExportPreimages(db ethdb.Database, fn string) error {
+func ExportPreimages(db gdb.Database, fn string) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -384,7 +384,7 @@ const (
 )
 
 // ImportLDBData imports a batch of snapshot data into the database
-func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
+func ImportLDBData(db gdb.Database, f string, startIndex int64, interrupt chan struct{}) error {
 	log.Info("Importing leveldb data", "file", f)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -453,7 +453,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		default:
 			return fmt.Errorf("unknown op %d\n", op)
 		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
+		if batch.ValueSize() > gdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return err
 			}

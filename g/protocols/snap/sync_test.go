@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -1639,7 +1639,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *trie.Database) (commo
 	return root, nodes, entries
 }
 
-func verifyTrie(db ethdb.KeyValueStore, root common.Hash, t *testing.T) {
+func verifyTrie(db gdb.KeyValueStore, root common.Hash, t *testing.T) {
 	t.Helper()
 	triedb := trie.NewDatabase(db)
 	accTrie, err := trie.New(trie.StateTrieID(root), triedb)

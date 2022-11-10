@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -118,7 +118,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 	defer accIt.Release()
 
 	snapRoot, err := generateTrieRoot(nil, accIt, common.Hash{}, stackTrieGenerate,
-		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
+		func(db gdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
 			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
 			defer storageIt.Release()
 
@@ -140,7 +140,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 }
 
 type testHelper struct {
-	diskdb  ethdb.Database
+	diskdb  gdb.Database
 	triedb  *trie.Database
 	accTrie *trie.StateTrie
 	nodes   *trie.MergedNodeSet
@@ -772,7 +772,7 @@ func decKey(key []byte) []byte {
 	return key
 }
 
-func populateDangling(disk ethdb.KeyValueStore) {
+func populateDangling(disk gdb.KeyValueStore) {
 	populate := func(accountHash common.Hash, keys []string, vals []string) {
 		for i, key := range keys {
 			rawdb.WriteStorageSnapshot(disk, accountHash, hashData([]byte(key)), []byte(vals[i]))

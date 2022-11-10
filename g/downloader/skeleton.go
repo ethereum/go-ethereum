@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/g/protocols/eth"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -189,8 +189,8 @@ type backfiller interface {
 // is wasted disk IO, but it's a price we're going to pay to keep things simple
 // for now.
 type skeleton struct {
-	db     ethdb.Database // Database backing the skeleton
-	filler backfiller     // Chain syncer suspended/resumed by head events
+	db     gdb.Database // Database backing the skeleton
+	filler backfiller   // Chain syncer suspended/resumed by head events
 
 	peers *peerSet                   // Set of peers we can sync from
 	idles map[string]*peerConnection // Set of idle peers in the current sync cycle
@@ -217,7 +217,7 @@ type skeleton struct {
 
 // newSkeleton creates a new sync skeleton that tracks a potentially dangling
 // header chain until it's linked into an existing set of blocks.
-func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
+func newSkeleton(db gdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
 	sk := &skeleton{
 		db:         db,
 		filler:     filler,
@@ -578,7 +578,7 @@ func (s *skeleton) initSync(head *types.Header) {
 }
 
 // saveSyncStatus marshals the remaining sync tasks into leveldb.
-func (s *skeleton) saveSyncStatus(db ethdb.KeyValueWriter) {
+func (s *skeleton) saveSyncStatus(db gdb.KeyValueWriter) {
 	status, err := json.Marshal(s.progress)
 	if err != nil {
 		panic(err) // This can only fail during implementation
@@ -1121,7 +1121,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		// The catch is that the sync metadata needs to reflect the actually
 		// flushed state, so temporarily change the subchain progress and
 		// revert after the flush.
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if batch.ValueSize() >= gdb.IdealBatchSize {
 			tmpTail := s.progress.Subchains[0].Tail
 			tmpNext := s.progress.Subchains[0].Next
 

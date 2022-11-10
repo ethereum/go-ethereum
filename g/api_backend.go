@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/g/gasprice"
 	"github.com/ethereum/go-ethereum/g/tracers"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -304,7 +304,7 @@ func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount int, lastBloc
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
-func (b *EthAPIBackend) ChainDb() ethdb.Database {
+func (b *EthAPIBackend) ChainDb() gdb.Database {
 	return b.eth.ChainDb()
 }
 

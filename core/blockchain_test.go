@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g/tracers/logger"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -52,7 +52,7 @@ var (
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain. The database and genesis specification for block generation
 // are also returned in case more test blocks are needed later.
-func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *Genesis, *BlockChain, error) {
+func newCanonical(engine consensus.Engine, n int, full bool) (gdb.Database, *Genesis, *BlockChain, error) {
 	var (
 		genesis = &Genesis{
 			BaseFee: big.NewInt(params.InitialBaseFee),
@@ -877,7 +877,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, gash.NewFaker(), int(height), nil)
 
 	// makeDb creates a db instance for testing.
-	makeDb := func() ethdb.Database {
+	makeDb := func() gdb.Database {
 		db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		if err != nil {
 			t.Fatalf("failed to create temp freezer db: %v", err)
@@ -3784,7 +3784,7 @@ func TestTxIndexer(t *testing.T) {
 
 	// verifyIndexes checks if the transaction indexes are present or not
 	// of the specified block.
-	verifyIndexes := func(db ethdb.Database, number uint64, exist bool) {
+	verifyIndexes := func(db gdb.Database, number uint64, exist bool) {
 		if number == 0 {
 			return
 		}
@@ -3800,12 +3800,12 @@ func TestTxIndexer(t *testing.T) {
 		}
 	}
 	// verifyRange runs verifyIndexes for a range of blocks, from and to are included.
-	verifyRange := func(db ethdb.Database, from, to uint64, exist bool) {
+	verifyRange := func(db gdb.Database, from, to uint64, exist bool) {
 		for number := from; number <= to; number += 1 {
 			verifyIndexes(db, number, exist)
 		}
 	}
-	verify := func(db ethdb.Database, expTail uint64) {
+	verify := func(db gdb.Database, expTail uint64) {
 		tail := rawdb.ReadTxIndexTail(db)
 		if tail == nil {
 			t.Fatal("Failed to write tx index tail")

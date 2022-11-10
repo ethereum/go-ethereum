@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -51,8 +51,8 @@ type snapshotTestBasic struct {
 
 	// share fields, set in runtime
 	datadir string
-	db      ethdb.Database
-	genDb   ethdb.Database
+	db      gdb.Database
+	genDb   gdb.Database
 	engine  consensus.Engine
 	gspec   *Genesis
 }

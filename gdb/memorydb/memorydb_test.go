@@ -19,13 +19,13 @@ package memorydb
 import (
 	"testing"
 
-	ethdb "github.com/ethereum/go-ethereum/gdb"
+	"github.com/ethereum/go-ethereum/gdb"
 	"github.com/ethereum/go-ethereum/gdb/dbtest"
 )
 
 func TestMemoryDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
-		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
+		dbtest.TestDatabaseSuite(t, func() gdb.KeyValueStore {
 			return New()
 		})
 	})
