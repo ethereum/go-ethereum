@@ -23,7 +23,7 @@ jobs:
           make all
       -
         name: Upload binaries to release
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.BUILDER_GITHUB_ACTIONS_TOKEN }}
