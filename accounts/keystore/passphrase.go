@@ -98,7 +98,12 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
 func StoreKey(dir, auth string, scryptN, scryptP int) (accounts.Account, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
+	return StoreKeyToFile(dir, "", auth, scryptN, scryptP)
+}
+
+// StoreKeyToFile generates a key, encrypts with 'auth' and stores in the given directory and file.
+func StoreKeyToFile(dir, filename, auth string, scryptN, scryptP int) (accounts.Account, error) {
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth, filename)
 	return a, err
 }
 

@@ -43,7 +43,7 @@ func TestKeyStorePlain(t *testing.T) {
 	_, ks := tmpKeyStoreIface(t, false)
 
 	pass := "" // not used but required by API
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 	_, ks := tmpKeyStoreIface(t, true)
 
 	pass := "foo"
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	_, ks := tmpKeyStoreIface(t, true)
 
 	pass := "foo"
-	k1, account, err := storeNewKey(ks, rand.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass, "")
 	if err != nil {
 		t.Fatal(err)
 	}

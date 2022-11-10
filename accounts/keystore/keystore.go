@@ -407,7 +407,13 @@ func (ks *KeyStore) expire(addr common.Address, u *unlocked, timeout time.Durati
 // NewAccount generates a new key and stores it into the key directory,
 // encrypting it with the passphrase.
 func (ks *KeyStore) NewAccount(passphrase string) (accounts.Account, error) {
-	_, account, err := storeNewKey(ks.storage, crand.Reader, passphrase)
+	return ks.NewAccountWitFile(passphrase, "")
+}
+
+// NewAccountWitFile generates a new key and stores it into the spec filename,
+// encrypting it with the passphrase.
+func (ks *KeyStore) NewAccountWitFile(passphrase, filename string) (accounts.Account, error) {
+	_, account, err := storeNewKey(ks.storage, crand.Reader, passphrase, filename)
 	if err != nil {
 		return accounts.Account{}, err
 	}
