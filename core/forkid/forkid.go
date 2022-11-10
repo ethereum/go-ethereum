@@ -139,6 +139,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 		forks                     = append(append([]uint64{}, forksByBlock...), forksByTime...)
 		sums                      = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
+	forks = append(forks, forksByTime...)
 	hash := crc32.ChecksumIEEE(genesis[:])
 	sums[0] = checksumToBytes(hash)
 	for i, fork := range forks {
@@ -277,6 +278,12 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	for i := 1; i < len(forksByBlock); i++ {
 		if forksByBlock[i] == forksByBlock[i-1] {
 			forksByBlock = append(forksByBlock[:i], forksByBlock[i+1:]...)
+			i--
+		}
+	}
+	for i := 1; i < len(forksByTime); i++ {
+		if forksByTime[i] == forksByTime[i-1] {
+			forksByTime = append(forksByTime[:i], forksByTime[i+1:]...)
 			i--
 		}
 	}
