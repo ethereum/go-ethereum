@@ -185,7 +185,105 @@ func TestCreation(t *testing.T) {
 	}
 	for i, tt := range tests {
 		for j, ttt := range tt.cases {
-			if have := NewID(tt.config, tt.genesis, ttt.head); have != ttt.want {
+			if have := NewID(tt.config, tt.genesis, ttt.head, 0); have != ttt.want {
+				t.Errorf("test %d, case %d: fork ID mismatch: have %x, want %x", i, j, have, ttt.want)
+			}
+		}
+	}
+}
+
+// TestCreationWithTimestamps tests that different genesis and fork rule combinations result in
+// the correct fork ID even for time based forks.
+func TestCreationWithTimestamps(t *testing.T) {
+	mergeConfig := *params.MainnetChainConfig
+	mergeConfig.MergeNetsplitBlock = big.NewInt(18000000)
+
+	withdrawalConfig := *params.MainnetChainConfig
+	withdrawalConfig.MergeNetsplitBlock = big.NewInt(18000000)
+	withdrawalConfig.ShanghaiTime = big.NewInt(1668000000)
+	type testcase struct {
+		head uint64
+		time uint64
+		want ID
+	}
+	tests := []struct {
+		config  *params.ChainConfig
+		genesis common.Hash
+		cases   []testcase
+	}{
+		// Mainnet test cases
+		{
+			params.MainnetChainConfig,
+			params.MainnetGenesisHash,
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},         // Unsynced
+				{1149999, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},   // Last Frontier block
+				{1150000, 0, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // First Homestead block
+				{1919999, 0, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},   // Last Homestead block
+				{1920000, 0, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // First DAO block
+				{2462999, 0, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},   // Last DAO block
+				{2463000, 0, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},   // First Tangerine block
+				{2674999, 0, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},   // Last Tangerine block
+				{2675000, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},   // First Spurious block
+				{4369999, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},   // Last Spurious block
+				{4370000, 0, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},   // First Byzantium block
+				{7279999, 0, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},   // Last Byzantium block
+				{7280000, 0, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}},   // First and last Constantinople, first Petersburg block
+				{9068999, 0, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}},   // Last Petersburg block
+				{9069000, 0, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}},   // First Istanbul and first Muir Glacier block
+				{9199999, 0, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}},   // Last Istanbul and first Muir Glacier block
+				{9200000, 0, ID{Hash: checksumToBytes(0xe029e991), Next: 12244000}},  // First Muir Glacier block
+				{12243999, 0, ID{Hash: checksumToBytes(0xe029e991), Next: 12244000}}, // Last Muir Glacier block
+				{12244000, 0, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}}, // First Berlin block
+				{12964999, 0, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}}, // Last Berlin block
+				{12965000, 0, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // First London block
+				{13772999, 0, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}}, // Last London block
+				{13773000, 0, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // First Arrow Glacier block
+				{15049999, 0, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}}, // Last Arrow Glacier block
+				{15050000, 0, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // First Gray Glacier block
+				{20000000, 0, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 0}},        // Future Gray Glacier block
+			},
+		},
+		// Withdrawal test cases
+		{
+			&withdrawalConfig,
+			params.MainnetGenesisHash,
+			[]testcase{
+				{0, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},           // Unsynced
+				{1149999, 0, ID{Hash: checksumToBytes(0xfc64ec04), Next: 1150000}},     // Last Frontier block
+				{1150000, 0, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},     // First Homestead block
+				{1919999, 0, ID{Hash: checksumToBytes(0x97c2c34c), Next: 1920000}},     // Last Homestead block
+				{1920000, 0, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},     // First DAO block
+				{2462999, 0, ID{Hash: checksumToBytes(0x91d1f948), Next: 2463000}},     // Last DAO block
+				{2463000, 0, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},     // First Tangerine block
+				{2674999, 0, ID{Hash: checksumToBytes(0x7a64da13), Next: 2675000}},     // Last Tangerine block
+				{2675000, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},     // First Spurious block
+				{4369999, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}},     // Last Spurious block
+				{4370000, 0, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},     // First Byzantium block
+				{7279999, 0, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}},     // Last Byzantium block
+				{7280000, 0, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}},     // First and last Constantinople, first Petersburg block
+				{9068999, 0, ID{Hash: checksumToBytes(0x668db0af), Next: 9069000}},     // Last Petersburg block
+				{9069000, 0, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}},     // First Istanbul and first Muir Glacier block
+				{9199999, 0, ID{Hash: checksumToBytes(0x879d6e30), Next: 9200000}},     // Last Istanbul and first Muir Glacier block
+				{9200000, 0, ID{Hash: checksumToBytes(0xe029e991), Next: 12244000}},    // First Muir Glacier block
+				{12243999, 0, ID{Hash: checksumToBytes(0xe029e991), Next: 12244000}},   // Last Muir Glacier block
+				{12244000, 0, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}},   // First Berlin block
+				{12964999, 0, ID{Hash: checksumToBytes(0x0eb440f6), Next: 12965000}},   // Last Berlin block
+				{12965000, 0, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}},   // First London block
+				{13772999, 0, ID{Hash: checksumToBytes(0xb715077d), Next: 13773000}},   // Last London block
+				{13773000, 0, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}},   // First Arrow Glacier block
+				{15049999, 0, ID{Hash: checksumToBytes(0x20c327fc), Next: 15050000}},   // Last Arrow Glacier block
+				{15050000, 0, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 18000000}},   // First Gray Glacier block
+				{18000000, 0, ID{Hash: checksumToBytes(0x4fb8a872), Next: 1668000000}}, // First Merge Start block
+				{20000000, 0, ID{Hash: checksumToBytes(0x4fb8a872), Next: 1668000000}}, // Last Merge Start block
+				{20000000, 1668000000, ID{Hash: checksumToBytes(0xc1fdf181), Next: 0}}, // First Merge Start block
+				{20000000, 2668000000, ID{Hash: checksumToBytes(0xc1fdf181), Next: 0}}, // Future Merge Start block
+			},
+		},
+	}
+	for i, tt := range tests {
+		for j, ttt := range tt.cases {
+			if have := NewID(tt.config, tt.genesis, ttt.head, ttt.time); have != ttt.want {
 				t.Errorf("test %d, case %d: fork ID mismatch: have %x, want %x", i, j, have, ttt.want)
 			}
 		}
@@ -267,7 +365,93 @@ func TestValidation(t *testing.T) {
 		{7279999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7279999}, ErrLocalIncompatibleOrStale},
 	}
 	for i, tt := range tests {
-		filter := newFilter(params.MainnetChainConfig, params.MainnetGenesisHash, func() uint64 { return tt.head })
+		filter := newFilter(params.MainnetChainConfig, params.MainnetGenesisHash, func() (uint64, uint64) { return tt.head, 0 })
+		if err := filter(tt.id); err != tt.err {
+			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
+		}
+	}
+}
+
+// TestValidationByTimestamp tests that a local peer correctly validates and accepts a remote
+// fork ID.
+func TestValidationByTimestamp(t *testing.T) {
+	withdrawalConfig := *params.MainnetChainConfig
+	withdrawalConfig.MergeNetsplitBlock = big.NewInt(18000000)
+	withdrawalConfig.ShanghaiTime = big.NewInt(1668000000)
+	tests := []struct {
+		head uint64
+		time uint64
+		id   ID
+		err  error
+	}{
+		// Local is mainnet Withdrawals, remote announces the same. No future fork is announced.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xc1fdf181), Next: 0}, nil},
+
+		// Local is mainnet Withdrawals, remote announces the same also announces a next fork
+		// at block/time 0xffffffff, but that is uncertain.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xc1fdf181), Next: math.MaxUint64}, nil},
+
+		// Local is mainnet currently in Byzantium only (so it's aware of Petersburg & Withdrawals), remote announces
+		// also Byzantium, but it's not yet aware of Petersburg (e.g. non updated node before the fork).
+		// In this case we don't know if Petersburg passed yet or not.
+		{7279999, 1667999999, ID{Hash: checksumToBytes(0xa00bc324), Next: 0}, nil},
+
+		// Local is mainnet currently in Byzantium only (so it's aware of Petersburg & Withdrawals), remote announces
+		// also Byzantium, and it's also aware of Petersburg (e.g. updated node before the fork). We
+		// don't know if Petersburg passed yet (will pass) or not.
+		{7279999, 1667999999, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
+
+		// Local is mainnet currently in Byzantium only (so it's aware of Petersburg & Withdrawals), remote announces
+		// also Byzantium, and it's also aware of some random fork (e.g. misconfigured Petersburg). As
+		// neither forks passed at neither nodes, they may mismatch, but we still connect for now.
+		{7279999, 1667999999, ID{Hash: checksumToBytes(0xa00bc324), Next: math.MaxUint64}, nil},
+
+		// Local is mainnet exactly on Withdrawals, remote announces Byzantium + knowledge about Petersburg. Remote
+		// is simply out of sync, accept.
+		{20000000, 1668000000, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
+
+		// Local is mainnet Withdrawals, remote announces Byzantium + knowledge about Petersburg. Remote
+		// is simply out of sync, accept.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xa00bc324), Next: 7280000}, nil},
+
+		// Local is mainnet Withdrawals, remote announces Spurious + knowledge about Byzantium. Remote
+		// is definitely out of sync. It may or may not need the Petersburg update, we don't know yet.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}, nil},
+
+		// Local is mainnet Byzantium & pre-withdrawals, remote announces Petersburg. Local is out of sync, accept.
+		{7279999, 1667999999, ID{Hash: checksumToBytes(0x668db0af), Next: 0}, nil},
+
+		// Local is mainnet Spurious, remote announces Byzantium, but is not aware of Petersburg. Local
+		// out of sync. Local also knows about a future fork, but that is uncertain yet.
+		{4369999, 1667999999, ID{Hash: checksumToBytes(0xa00bc324), Next: 0}, nil},
+
+		// Local is mainnet Withdrawals. remote announces Byzantium but is not aware of further forks.
+		// Remote needs software update.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xa00bc324), Next: 0}, ErrRemoteStale},
+
+		// Local is mainnet Withdrawals, and isn't aware of more forks. Remote announces Petersburg +
+		// 0xffffffff. Local needs software update, reject.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0x5cddc0e1), Next: 0}, ErrLocalIncompatibleOrStale},
+
+		// Local is mainnet Withdrawals, and is aware of Petersburg. Remote announces Petersburg +
+		// 0xffffffff. Local needs software update, reject.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0x5cddc0e1), Next: 0}, ErrLocalIncompatibleOrStale},
+
+		// Local is mainnet Withdrawals, remote is Rinkeby Petersburg.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xafec6b27), Next: 0}, ErrLocalIncompatibleOrStale},
+
+		// Local is mainnet Withdrawals, far in the future. Remote announces Gopherium (non existing fork)
+		// at some future block 88888888, for itself, but past block for local. Local is incompatible.
+		//
+		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
+		{88888888, 1668000001, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 88888888}, ErrRemoteStale},
+
+		// Local is mainnet Withdrawals. Remote is in Byzantium, but announces Gopherium (non existing
+		// fork) at block 7279999, before Petersburg. Local is incompatible.
+		{20000000, 1668000001, ID{Hash: checksumToBytes(0xa00bc324), Next: 7279999}, ErrRemoteStale},
+	}
+	for i, tt := range tests {
+		filter := newFilter(&withdrawalConfig, params.MainnetGenesisHash, func() (uint64, uint64) { return tt.head, tt.time })
 		if err := filter(tt.id); err != tt.err {
 			t.Errorf("test %d: validation error mismatch: have %v, want %v", i, err, tt.err)
 		}
