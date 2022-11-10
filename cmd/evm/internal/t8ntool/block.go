@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/clique"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -74,7 +74,7 @@ type bbInput struct {
 
 	Ethash    bool                 `json:"-"`
 	EthashDir string               `json:"-"`
-	PowMode   ethash.Mode          `json:"-"`
+	PowMode   gash.Mode            `json:"-"`
 	Txs       []*types.Transaction `json:"-"`
 	Ommers    []*types.Header      `json:"-"`
 }
@@ -173,7 +173,7 @@ func (i *bbInput) sealEthash(block *types.Block) (*types.Block, error) {
 	if i.Header.Nonce != nil {
 		return nil, NewError(ErrorConfig, fmt.Errorf("sealing with ethash will overwrite provided nonce"))
 	}
-	ethashConfig := ethash.Config{
+	ethashConfig := gash.Config{
 		PowMode:        i.PowMode,
 		DatasetDir:     i.EthashDir,
 		CacheDir:       i.EthashDir,
@@ -182,7 +182,7 @@ func (i *bbInput) sealEthash(block *types.Block) (*types.Block, error) {
 		CachesInMem:    2,
 		CachesOnDisk:   3,
 	}
-	engine := ethash.New(ethashConfig, nil, true)
+	engine := gash.New(ethashConfig, nil, true)
 	defer engine.Close()
 	// Use a buffered chan for results.
 	// If the testmode is used, the sealer will return quickly, and complain
@@ -276,11 +276,11 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 		inputData.EthashDir = ethashDir
 		switch ethashMode {
 		case "normal":
-			inputData.PowMode = ethash.ModeNormal
+			inputData.PowMode = gash.ModeNormal
 		case "test":
-			inputData.PowMode = ethash.ModeTest
+			inputData.PowMode = gash.ModeTest
 		case "fake":
-			inputData.PowMode = ethash.ModeFake
+			inputData.PowMode = gash.ModeFake
 		default:
 			return nil, NewError(ErrorConfig, fmt.Errorf("unknown pow mode: %s, supported modes: test, fake, normal", ethashMode))
 		}

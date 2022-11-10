@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -2220,7 +2220,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (*core.BlockChain, ethdb.Data
 	}
 	ethashConfig := gconfig.Defaults.Ethash
 	if ctx.Bool(FakePoWFlag.Name) {
-		ethashConfig.PowMode = ethash.ModeFake
+		ethashConfig.PowMode = gash.ModeFake
 	}
 	engine := gconfig.CreateConsensusEngine(stack, &ethashConfig, cliqueConfig, nil, false, chainDb)
 	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {

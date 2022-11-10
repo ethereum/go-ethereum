@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
@@ -106,7 +106,7 @@ func makecache(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Invalid block number: %v", err)
 	}
-	ethash.MakeCache(block, args[1])
+	gash.MakeCache(block, args[1])
 
 	return nil
 }
@@ -121,7 +121,7 @@ func makedag(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Invalid block number: %v", err)
 	}
-	ethash.MakeDataset(block, args[1])
+	gash.MakeDataset(block, args[1])
 
 	return nil
 }

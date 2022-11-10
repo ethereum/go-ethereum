@@ -29,7 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -73,7 +73,7 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		Alloc:   core.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, gspec, nil, gash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {
 		panic(err)
 	}

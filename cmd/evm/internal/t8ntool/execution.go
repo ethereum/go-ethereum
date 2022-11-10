@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -308,5 +308,5 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 		Number:     new(big.Int).SetUint64(number - 1),
 		Time:       parentTime,
 	}
-	return ethash.CalcDifficulty(config, currentTime, parent)
+	return gash.CalcDifficulty(config, currentTime, parent)
 }

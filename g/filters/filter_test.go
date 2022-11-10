@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -56,7 +56,7 @@ func BenchmarkFilters(b *testing.B) {
 	)
 	defer db.Close()
 
-	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
+	_, chain, receipts := core.GenerateChainWithGenesis(gspec, gash.NewFaker(), 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -114,7 +114,7 @@ func TestFilters(t *testing.T) {
 	)
 	defer db.Close()
 
-	_, chain, receipts := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
+	_, chain, receipts := core.GenerateChainWithGenesis(gspec, gash.NewFaker(), 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, false, 0)

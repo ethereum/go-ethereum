@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -1968,7 +1968,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  params.AllEthashProtocolChanges,
 		}
-		engine = ethash.NewFullFaker()
+		engine = gash.NewFullFaker()
 		config = &CacheConfig{
 			TrieCleanLimit: 256,
 			TrieDirtyLimit: 256,

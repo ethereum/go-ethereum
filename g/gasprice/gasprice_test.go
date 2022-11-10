@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -128,7 +128,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
 	config.TerminalTotalDifficulty = common.Big0
-	engine := ethash.NewFaker()
+	engine := gash.NewFaker()
 
 	// Generate testing blocks
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {

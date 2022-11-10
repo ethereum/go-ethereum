@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/g"
@@ -99,8 +99,8 @@ func newTester(t *testing.T, confOverride func(*gconfig.Config)) *tester {
 		Miner: miner.Config{
 			Etherbase: common.HexToAddress(testAddress),
 		},
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
+		Ethash: gash.Config{
+			PowMode: gash.ModeTest,
 		},
 	}
 	if confOverride != nil {

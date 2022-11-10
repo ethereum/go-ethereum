@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash" 
+	"github.com/ethereum/go-ethereum/consensus/gash" 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/gasprice"
@@ -50,7 +50,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Preimages                             bool
 		FilterLogCacheSize                    int
 		Miner                                 miner.Config
-		Ethash                                ethash.Config
+		Ethash                                gash.Config
 		TxPool                                core.TxPoolConfig
 		GPO                                   gasprice.Config
 		EnablePreimageRecording               bool
@@ -146,7 +146,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Preimages                             *bool
 		FilterLogCacheSize                    *int
 		Miner                                 *miner.Config
-		Ethash                                *ethash.Config
+		Ethash                                *gash.Config
 		TxPool                                *core.TxPoolConfig
 		GPO                                   *gasprice.Config
 		EnablePreimageRecording               *bool

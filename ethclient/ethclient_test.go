@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -221,7 +221,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	// Create Ethereum Service
 	config := &gconfig.Config{Genesis: genesis}
-	config.Ethash.PowMode = ethash.ModeFake
+	config.Ethash.PowMode = gash.ModeFake
 	ethservice, err := g.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -246,7 +246,7 @@ func generateTestChain() []*types.Block {
 			g.AddTx(testTx2)
 		}
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, generate)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, gash.NewFaker(), 2, generate)
 	return append([]*types.Block{genesis.ToBlock()}, blocks...)
 }
 

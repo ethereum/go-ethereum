@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -160,7 +160,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
-	blocks, _ := core.GenerateChain(testGspec.Config, parent, ethash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(testGspec.Config, parent, gash.NewFaker(), testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -217,7 +217,7 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		if pregenerated {
 			panic("Requested chain generation outside of init")
 		}
-		chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, testGspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, testGspec, nil, gash.NewFaker(), vm.Config{}, nil, nil)
 		if err != nil {
 			panic(err)
 		}

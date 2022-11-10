@@ -184,7 +184,7 @@ func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru 
 		maxItems = 1
 	}
 	cache, _ := simplelru.NewLRU(maxItems, func(key, value interface{}) {
-		log.Trace("Evicted ethash "+what, "epoch", key)
+		log.Trace("Evicted gash "+what, "epoch", key)
 	})
 	return &lru{what: what, new: new, cache: cache}
 }
@@ -202,14 +202,14 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 		if lru.future > 0 && lru.future == epoch {
 			item = lru.futureItem
 		} else {
-			log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
+			log.Trace("Requiring new gash "+lru.what, "epoch", epoch)
 			item = lru.new(epoch)
 		}
 		lru.cache.Add(epoch, item)
 	}
 	// Update the 'future item' if epoch is larger than previously seen.
 	if epoch < maxEpoch-1 && lru.future < epoch+1 {
-		log.Trace("Requiring new future ethash "+lru.what, "epoch", epoch+1)
+		log.Trace("Requiring new future gash "+lru.what, "epoch", epoch+1)
 		future = lru.new(epoch + 1)
 		lru.future = epoch + 1
 		lru.futureItem = future

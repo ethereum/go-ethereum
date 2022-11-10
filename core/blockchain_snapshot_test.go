@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -71,7 +71,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  params.AllEthashProtocolChanges,
 		}
-		engine = ethash.NewFullFaker()
+		engine = gash.NewFullFaker()
 
 		// Snapshot is enabled, the first snapshot is created from the Genesis.
 		// The snapshot memory allowance is 256MB, it means no snapshot flush

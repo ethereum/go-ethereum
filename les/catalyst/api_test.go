@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -53,7 +53,7 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Header, []*types.Bloc
 		Timestamp: 9000,
 		BaseFee:   big.NewInt(params.InitialBaseFee),
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), n, nil)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, gash.NewFaker(), n, nil)
 	totalDifficulty := big.NewInt(0)
 
 	var headers []*types.Header
@@ -211,7 +211,7 @@ func startLesService(t *testing.T, genesis *core.Genesis, headers []*types.Heade
 	}
 	ethcfg := &gconfig.Config{
 		Genesis:        genesis,
-		Ethash:         ethash.Config{PowMode: ethash.ModeFake},
+		Ethash:         gash.Config{PowMode: gash.ModeFake},
 		SyncMode:       downloader.LightSync,
 		TrieDirtyCache: 256,
 		TrieCleanCache: 256,

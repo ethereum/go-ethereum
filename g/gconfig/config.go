@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/g/downloader"
@@ -63,7 +63,7 @@ var LightClientGPO = gasprice.Config{
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
 	SyncMode: downloader.SnapSync,
-	Ethash: ethash.Config{
+	Ethash: gash.Config{
 		CacheDir:         "ethash",
 		CachesInMem:      2,
 		CachesOnDisk:     3,
@@ -179,7 +179,7 @@ type Config struct {
 	Miner miner.Config
 
 	// Ethash options
-	Ethash ethash.Config
+	Ethash gash.Config
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
@@ -217,21 +217,21 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, ethashConfig *gash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if cliqueConfig != nil {
 		engine = clique.New(cliqueConfig, db)
 	} else {
 		switch ethashConfig.PowMode {
-		case ethash.ModeFake:
+		case gash.ModeFake:
 			log.Warn("Ethash used in fake mode")
-		case ethash.ModeTest:
+		case gash.ModeTest:
 			log.Warn("Ethash used in test mode")
-		case ethash.ModeShared:
+		case gash.ModeShared:
 			log.Warn("Ethash used in shared mode")
 		}
-		engine = ethash.New(ethash.Config{
+		engine = gash.New(gash.Config{
 			PowMode:          ethashConfig.PowMode,
 			CacheDir:         stack.ResolvePath(ethashConfig.CacheDir),
 			CachesInMem:      ethashConfig.CachesInMem,
@@ -243,7 +243,7 @@ func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, clique
 			DatasetsLockMmap: ethashConfig.DatasetsLockMmap,
 			NotifyFull:       ethashConfig.NotifyFull,
 		}, notify, noverify)
-		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
+		engine.(*gash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
 	return beacon.New(engine)
 }

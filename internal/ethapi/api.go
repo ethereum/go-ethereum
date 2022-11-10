@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -2012,7 +2012,7 @@ func (api *DebugAPI) SeedHash(ctx context.Context, number uint64) (string, error
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("%#x", ethash.SeedHash(number)), nil
+	return fmt.Sprintf("%#x", gash.SeedHash(number)), nil
 }
 
 // ChaindbProperty returns leveldb properties of the key-value database.

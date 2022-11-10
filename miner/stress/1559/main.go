@@ -27,7 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	ethash "github.com/ethereum/go-ethereum/consensus/gash"
+	"github.com/ethereum/go-ethereum/consensus/gash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -55,8 +55,8 @@ func main() {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	// Pre-generate the ethash mining DAG so we don't race
-	ethash.MakeDataset(1, gconfig.Defaults.Ethash.DatasetDir)
+	// Pre-generate the gash mining DAG so we don't race
+	gash.MakeDataset(1, gconfig.Defaults.Ethash.DatasetDir)
 
 	// Create an Ethash network based off of the Ropsten config
 	genesis := makeGenesis(faucets)
