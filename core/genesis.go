@@ -65,6 +65,41 @@ type Genesis struct {
 	BaseFee    *big.Int    `json:"baseFeePerGas"`
 }
 
+func ReadGenesis(db ethdb.Database) (*Genesis, error) {
+	var genesis Genesis
+	stored := rawdb.ReadCanonicalHash(db, 0)
+	if (stored == common.Hash{}) {
+		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
+	}
+	blob := rawdb.ReadGenesisStateSpec(db, stored)
+	if blob == nil {
+		return nil, fmt.Errorf("genesis state missing from db")
+	}
+	if len(blob) != 0 {
+		if err := genesis.Alloc.UnmarshalJSON(blob); err != nil {
+			return nil, fmt.Errorf("could not unmarshal genesis state json: %s", err)
+		}
+	}
+	genesis.Config = rawdb.ReadChainConfig(db, stored)
+	if genesis.Config == nil {
+		return nil, fmt.Errorf("genesis config missing from db")
+	}
+	genesisBlock := rawdb.ReadBlock(db, stored, 0)
+	if genesisBlock == nil {
+		return nil, fmt.Errorf("genesis block missing from db")
+	}
+	genesisHeader := genesisBlock.Header()
+	genesis.Nonce = genesisHeader.Nonce.Uint64()
+	genesis.Timestamp = genesisHeader.Time
+	genesis.ExtraData = genesisHeader.Extra
+	genesis.GasLimit = genesisHeader.GasLimit
+	genesis.Difficulty = genesisHeader.Difficulty
+	genesis.Mixhash = genesisHeader.MixDigest
+	genesis.Coinbase = genesisHeader.Coinbase
+
+	return &genesis, nil
+}
+
 // GenesisAlloc specifies the initial state that is part of the genesis block.
 type GenesisAlloc map[common.Address]GenesisAccount
 
@@ -239,10 +274,10 @@ type ChainOverrides struct {
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
+//	                     genesis == nil       genesis != nil
+//	                  +------------------------------------------
+//	db has no genesis |  main-net default  |  genesis
+//	db has genesis    |  from DB           |  genesis (if compatible)
 //
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
@@ -323,6 +358,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
+	storedData, _ := json.Marshal(storedcfg)
 	// Special case: if a private network is being used (no genesis and also no
 	// mainnet hash in the database), we must not apply the `configOrDefault`
 	// chain config as that would be AllProtocolChanges (applying any new fork
@@ -342,7 +378,10 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
 		return newcfg, stored, compatErr
 	}
-	rawdb.WriteChainConfig(db, stored, newcfg)
+	// Don't overwrite if the old is identical to the new
+	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
+		rawdb.WriteChainConfig(db, stored, newcfg)
+	}
 	return newcfg, stored, nil
 }
 

@@ -20,8 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
+	lru2 "github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -43,7 +43,7 @@ type Database interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
 
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
@@ -135,7 +135,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 		db:            trie.NewDatabaseWithConfig(db, config),
 		disk:          db,
 		codeSizeCache: csc,
-		codeCache:     fastcache.New(codeCacheSize),
+		codeCache:     lru2.NewSizeConstrainedLRU(codeCacheSize),
 	}
 }
 
@@ -143,12 +143,12 @@ type cachingDB struct {
 	db            *trie.Database
 	disk          ethdb.KeyValueStore
 	codeSizeCache *lru.Cache
-	codeCache     *fastcache.Cache
+	codeCache     *lru2.SizeConstrainedLRU
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(common.Hash{}, root, db.db)
+	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +156,8 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	tr, err := trie.NewStateTrie(addrHash, root, db.db)
+func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error) {
+	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, addrHash, root), db.db)
 	if err != nil {
 		return nil, err
 	}
@@ -176,12 +176,12 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+	if code := db.codeCache.Get(codeHash); len(code) > 0 {
 		return code, nil
 	}
 	code := rawdb.ReadCode(db.disk, codeHash)
 	if len(code) > 0 {
-		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
 		return code, nil
 	}
@@ -192,12 +192,12 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 // code can't be found in the cache, then check the existence with **new**
 // db scheme.
 func (db *cachingDB) ContractCodeWithPrefix(addrHash, codeHash common.Hash) ([]byte, error) {
-	if code := db.codeCache.Get(nil, codeHash.Bytes()); len(code) > 0 {
+	if code := db.codeCache.Get(codeHash); len(code) > 0 {
 		return code, nil
 	}
 	code := rawdb.ReadCodeWithPrefix(db.disk, codeHash)
 	if len(code) > 0 {
-		db.codeCache.Set(codeHash.Bytes(), code)
+		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
 		return code, nil
 	}

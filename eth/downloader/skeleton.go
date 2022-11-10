@@ -35,7 +35,7 @@ import (
 // scratchHeaders is the number of headers to store in a scratch space to allow
 // concurrent downloads. A header is about 0.5KB in size, so there is no worry
 // about using too much memory. The only catch is that we can only validate gaps
-// afer they're linked to the head, so the bigger the scratch space, the larger
+// after they're linked to the head, so the bigger the scratch space, the larger
 // potential for invalid headers.
 //
 // The current scratch space of 131072 headers is expected to use 64MB RAM.

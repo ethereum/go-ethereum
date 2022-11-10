@@ -44,7 +44,7 @@ type Type struct {
 	Elem      *Type // non-nil for Kind values of Ptr, Slice, Array
 }
 
-// defaultNilValue determines whether a nil pointer to t encodes/decodes
+// DefaultNilValue determines whether a nil pointer to t encodes/decodes
 // as an empty string or empty list.
 func (t Type) DefaultNilValue() NilKind {
 	k := t.Kind

@@ -23,8 +23,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -277,7 +277,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bit uint, sections []uint
 // number of retries, thus giving a weak guarantee.
 func GetTransaction(ctx context.Context, odr OdrBackend, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	r := &TxStatusRequest{Hashes: []common.Hash{txHash}}
-	if err := odr.RetrieveTxStatus(ctx, r); err != nil || r.Status[0].Status != core.TxStatusIncluded {
+	if err := odr.RetrieveTxStatus(ctx, r); err != nil || r.Status[0].Status != txpool.TxStatusIncluded {
 		return nil, common.Hash{}, 0, 0, err
 	}
 	pos := r.Status[0].Lookup

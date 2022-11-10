@@ -192,6 +192,9 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
 	}
+	if len(respmsgs) != len(msgs) {
+		return fmt.Errorf("batch has %d requests but response has %d: %w", len(msgs), len(respmsgs), ErrBadResult)
+	}
 	for i := 0; i < len(respmsgs); i++ {
 		op.resp <- &respmsgs[i]
 	}

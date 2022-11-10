@@ -439,6 +439,16 @@ type optionalPtrField struct {
 	B *[3]byte `rlp:"optional"`
 }
 
+type nonOptionalPtrField struct {
+	A uint
+	B *[3]byte
+}
+
+type multipleOptionalFields struct {
+	A *[3]byte `rlp:"optional"`
+	B *[3]byte `rlp:"optional"`
+}
+
 type optionalPtrFieldNil struct {
 	A uint
 	B *[3]byte `rlp:"optional,nil"`
@@ -743,6 +753,30 @@ var decodeTests = []decodeTest{
 		input: "C50183010203",
 		ptr:   new(optionalPtrField),
 		value: optionalPtrField{A: 1, B: &[3]byte{1, 2, 3}},
+	},
+	{
+		// all optional fields nil
+		input: "C0",
+		ptr:   new(multipleOptionalFields),
+		value: multipleOptionalFields{A: nil, B: nil},
+	},
+	{
+		// all optional fields set
+		input: "C88301020383010203",
+		ptr:   new(multipleOptionalFields),
+		value: multipleOptionalFields{A: &[3]byte{1, 2, 3}, B: &[3]byte{1, 2, 3}},
+	},
+	{
+		// nil optional field appears before a non-nil one
+		input: "C58083010203",
+		ptr:   new(multipleOptionalFields),
+		error: "rlp: input string too short for [3]uint8, decoding into (rlp.multipleOptionalFields).A",
+	},
+	{
+		// decode a nil ptr into a ptr that is not nil or not optional
+		input: "C20180",
+		ptr:   new(nonOptionalPtrField),
+		error: "rlp: input string too short for [3]uint8, decoding into (rlp.nonOptionalPtrField).B",
 	},
 	{
 		input: "C101",

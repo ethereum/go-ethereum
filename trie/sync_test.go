@@ -30,7 +30,7 @@ import (
 func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	trie, _ := NewStateTrie(TrieID(common.Hash{}), triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -59,7 +59,7 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	// Re-create the trie based on the new state
-	trie, _ = NewSecure(common.Hash{}, root, triedb)
+	trie, _ = NewStateTrie(TrieID(root), triedb)
 	return triedb, trie, content
 }
 
@@ -67,7 +67,7 @@ func makeTestTrie() (*Database, *StateTrie, map[string][]byte) {
 // content map.
 func checkTrieContents(t *testing.T, db *Database, root []byte, content map[string][]byte) {
 	// Check root availability and trie contents
-	trie, err := NewStateTrie(common.Hash{}, common.BytesToHash(root), db)
+	trie, err := NewStateTrie(TrieID(common.BytesToHash(root)), db)
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
@@ -84,7 +84,7 @@ func checkTrieContents(t *testing.T, db *Database, root []byte, content map[stri
 // checkTrieConsistency checks that all nodes in a trie are indeed present.
 func checkTrieConsistency(db *Database, root common.Hash) error {
 	// Create and iterate a trie rooted in a subnode
-	trie, err := NewStateTrie(common.Hash{}, root, db)
+	trie, err := NewStateTrie(TrieID(root), db)
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
@@ -105,8 +105,8 @@ type trieElement struct {
 func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(memorydb.New())
 	dbB := NewDatabase(memorydb.New())
-	emptyA := NewEmpty(dbA)
-	emptyB, _ := New(common.Hash{}, emptyRoot, dbB)
+	emptyA, _ := New(TrieID(common.Hash{}), dbA)
+	emptyB, _ := New(TrieID(emptyRoot), dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		sync := NewSync(trie.Hash(), memorydb.New(), nil)

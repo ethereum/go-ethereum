@@ -59,7 +59,7 @@ type (
 		Nonce Nonce
 	}
 
-	// WHOAREYOU contains the handshake challenge.
+	// Whoareyou contains the handshake challenge.
 	Whoareyou struct {
 		ChallengeData []byte   // Encoded challenge
 		Nonce         Nonce    // Nonce of request packet
@@ -73,13 +73,13 @@ type (
 		sent mclock.AbsTime // for handshake GC.
 	}
 
-	// PING is sent during liveness checks.
+	// Ping is sent during liveness checks.
 	Ping struct {
 		ReqID  []byte
 		ENRSeq uint64
 	}
 
-	// PONG is the reply to PING.
+	// Pong is the reply to Ping.
 	Pong struct {
 		ReqID  []byte
 		ENRSeq uint64
@@ -87,58 +87,58 @@ type (
 		ToPort uint16 // packet, which provides a way to discover the external address (after NAT).
 	}
 
-	// FINDNODE is a query for nodes in the given bucket.
+	// Findnode is a query for nodes in the given bucket.
 	Findnode struct {
 		ReqID     []byte
 		Distances []uint
 	}
 
-	// NODES is the reply to FINDNODE and TOPICQUERY.
+	// Nodes is the reply to Findnode and Topicquery.
 	Nodes struct {
 		ReqID []byte
 		Total uint8
 		Nodes []*enr.Record
 	}
 
-	// TALKREQ is an application-level request.
+	// TalkRequest is an application-level request.
 	TalkRequest struct {
 		ReqID    []byte
 		Protocol string
 		Message  []byte
 	}
 
-	// TALKRESP is the reply to TALKREQ.
+	// TalkResponse is the reply to TalkRequest.
 	TalkResponse struct {
 		ReqID   []byte
 		Message []byte
 	}
 
-	// REQUESTTICKET requests a ticket for a topic queue.
+	// RequestTicket requests a ticket for a topic queue.
 	RequestTicket struct {
 		ReqID []byte
 		Topic []byte
 	}
 
-	// TICKET is the response to REQUESTTICKET.
+	// Ticket is the response to RequestTicket.
 	Ticket struct {
 		ReqID  []byte
 		Ticket []byte
 	}
 
-	// REGTOPIC registers the sender in a topic queue using a ticket.
+	// Regtopic registers the sender in a topic queue using a ticket.
 	Regtopic struct {
 		ReqID  []byte
 		Ticket []byte
 		ENR    *enr.Record
 	}
 
-	// REGCONFIRMATION is the reply to REGTOPIC.
+	// Regconfirmation is the reply to Regtopic.
 	Regconfirmation struct {
 		ReqID      []byte
 		Registered bool
 	}
 
-	// TOPICQUERY asks for nodes with the given topic.
+	// TopicQuery asks for nodes with the given topic.
 	TopicQuery struct {
 		ReqID []byte
 		Topic []byte

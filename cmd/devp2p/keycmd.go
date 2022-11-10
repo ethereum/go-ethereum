@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,7 +32,9 @@ var (
 		Usage: "Operations on node keys",
 		Subcommands: []*cli.Command{
 			keyGenerateCommand,
+			keyToIDCommand,
 			keyToNodeCommand,
+			keyToRecordCommand,
 		},
 	}
 	keyGenerateCommand = &cli.Command{
@@ -40,11 +43,25 @@ var (
 		ArgsUsage: "keyfile",
 		Action:    genkey,
 	}
+	keyToIDCommand = &cli.Command{
+		Name:      "to-id",
+		Usage:     "Creates a node ID from a node key file",
+		ArgsUsage: "keyfile",
+		Action:    keyToID,
+		Flags:     []cli.Flag{},
+	}
 	keyToNodeCommand = &cli.Command{
 		Name:      "to-enode",
 		Usage:     "Creates an enode URL from a node key file",
 		ArgsUsage: "keyfile",
 		Action:    keyToURL,
+		Flags:     []cli.Flag{hostFlag, tcpPortFlag, udpPortFlag},
+	}
+	keyToRecordCommand = &cli.Command{
+		Name:      "to-enr",
+		Usage:     "Creates an ENR from a node key file",
+		ArgsUsage: "keyfile",
+		Action:    keyToRecord,
 		Flags:     []cli.Flag{hostFlag, tcpPortFlag, udpPortFlag},
 	}
 )
@@ -80,9 +97,36 @@ func genkey(ctx *cli.Context) error {
 	return crypto.SaveECDSA(file, key)
 }
 
+func keyToID(ctx *cli.Context) error {
+	n, err := makeRecord(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println(n.ID())
+	return nil
+}
+
 func keyToURL(ctx *cli.Context) error {
+	n, err := makeRecord(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println(n.URLv4())
+	return nil
+}
+
+func keyToRecord(ctx *cli.Context) error {
+	n, err := makeRecord(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Println(n.String())
+	return nil
+}
+
+func makeRecord(ctx *cli.Context) (*enode.Node, error) {
 	if ctx.NArg() != 1 {
-		return fmt.Errorf("need key file as argument")
+		return nil, fmt.Errorf("need key file as argument")
 	}
 
 	var (
@@ -93,13 +137,26 @@ func keyToURL(ctx *cli.Context) error {
 	)
 	key, err := crypto.LoadECDSA(file)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return fmt.Errorf("invalid IP address %q", host)
+
+	var r enr.Record
+	if host != "" {
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP address %q", host)
+		}
+		r.Set(enr.IP(ip))
 	}
-	node := enode.NewV4(&key.PublicKey, ip, tcp, udp)
-	fmt.Println(node.URLv4())
-	return nil
+	if udp != 0 {
+		r.Set(enr.UDP(udp))
+	}
+	if tcp != 0 {
+		r.Set(enr.TCP(tcp))
+	}
+
+	if err := enode.SignV4(&r, key); err != nil {
+		return nil, err
+	}
+	return enode.New(enode.ValidSchemes, &r)
 }

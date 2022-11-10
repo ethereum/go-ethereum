@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -91,12 +93,21 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams)
-	if err != nil {
-		t.Fatalf("error producing block, err=%v", err)
+	// This test is a bit time-sensitive, the miner needs to pick up on the
+	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
+	var testErr error
+	for retries := 2; retries > 0; retries-- {
+		if execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams); err != nil {
+			t.Fatalf("error producing block, err=%v", err)
+		} else if have, want := len(execData.Transactions), 1; have != want {
+			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+		} else {
+			testErr = nil
+			break
+		}
 	}
-	if len(execData.Transactions) != 1 {
-		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	if testErr != nil {
+		t.Fatal(testErr)
 	}
 }
 
@@ -112,12 +123,21 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams)
-	if err != nil {
-		t.Fatalf("error producing block, err=%v", err)
+	// This test is a bit time-sensitive, the miner needs to pick up on the
+	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
+	var testErr error
+	for retries := 2; retries > 0; retries-- {
+		if execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams); err != nil {
+			t.Fatalf("error producing block, err=%v", err)
+		} else if have, want := len(execData.Transactions), blocks[9].Transactions().Len(); have != want {
+			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+		} else {
+			testErr = nil
+			break
+		}
 	}
-	if len(execData.Transactions) != blocks[9].Transactions().Len() {
-		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	if testErr != nil {
+		t.Fatal(testErr)
 	}
 }
 
@@ -162,7 +182,14 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
+	// give the payload some time to be built
+	time.Sleep(100 * time.Millisecond)
+	payloadID := (&miner.BuildPayloadArgs{
+		Parent:       fcState.HeadBlockHash,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
+	}).Id()
 	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
@@ -277,10 +304,12 @@ func TestEth2NewBlock(t *testing.T) {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
 		newResp, err := api.NewPayloadV1(*execData)
-		if err != nil || newResp.Status != "VALID" {
+		switch {
+		case err != nil:
 			t.Fatalf("Failed to insert block: %v", err)
-		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1 {
+		case newResp.Status != "VALID":
+			t.Fatalf("Failed to insert block: %v", newResp.Status)
+		case ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1:
 			t.Fatalf("Chain head shouldn't be updated")
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
@@ -292,8 +321,8 @@ func TestEth2NewBlock(t *testing.T) {
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
-			t.Fatalf("Chain head should be updated")
+		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
+			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
 		checkLogEvents(t, newLogCh, rmLogsCh, 1, 0)
 
@@ -411,7 +440,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	time.Sleep(500 * time.Millisecond) // give txpool enough time to consume head event
 
 	ethservice.SetEtherbase(testAddr)
 	ethservice.SetSynced()
@@ -474,10 +502,9 @@ func TestExchangeTransitionConfig(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
-	var (
-		api = NewConsensusAPI(ethservice)
-	)
+
 	// invalid ttd
+	api := NewConsensusAPI(ethservice)
 	config := beacon.TransitionConfigurationV1{
 		TerminalTotalDifficulty: (*hexutil.Big)(big.NewInt(0)),
 		TerminalBlockHash:       common.Hash{},
@@ -519,18 +546,18 @@ func TestExchangeTransitionConfig(t *testing.T) {
 TestNewPayloadOnInvalidChain sets up a valid chain and tries to feed blocks
 from an invalid chain to test if latestValidHash (LVH) works correctly.
 
-We set up the following chain where P1 ... Pn and P1'' are valid while
+We set up the following chain where P1 ... Pn and P1” are valid while
 P1' is invalid.
 We expect
 (1) The LVH to point to the current inserted payload if it was valid.
 (2) The LVH to point to the valid parent on an invalid payload (if the parent is available).
 (3) If the parent is unavailable, the LVH should not be set.
 
-CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
-				│
-				└── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
-				│
-				└── P1''
+	CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
+	                │
+	                └── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
+	                │
+	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(10)
@@ -567,12 +594,12 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		if resp.PayloadStatus.Status != beacon.VALID {
 			t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 		}
+		// give the payload some time to be built
+		time.Sleep(100 * time.Millisecond)
 		payload, err := api.GetPayloadV1(*resp.PayloadID)
 		if err != nil {
 			t.Fatalf("can't get payload: %v", err)
 		}
-		// TODO(493456442, marius) this test can be flaky since we rely on a 100ms
-		// allowance for block generation internally.
 		if len(payload.Transactions) == 0 {
 			t.Fatalf("payload should not be empty")
 		}
@@ -599,11 +626,17 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 }
 
 func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
-	block, err := api.eth.Miner().GetSealingBlockSync(parentHash, params.Timestamp, params.SuggestedFeeRecipient, params.Random, false)
+	args := &miner.BuildPayloadArgs{
+		Parent:       parentHash,
+		Timestamp:    params.Timestamp,
+		FeeRecipient: params.SuggestedFeeRecipient,
+		Random:       params.Random,
+	}
+	payload, err := api.eth.Miner().BuildPayload(args)
 	if err != nil {
 		return nil, err
 	}
-	return beacon.BlockToExecutableData(block), nil
+	return payload.ResolveFull(), nil
 }
 
 func TestEmptyBlocks(t *testing.T) {
@@ -810,10 +843,8 @@ func TestInvalidBloom(t *testing.T) {
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generatePreMergeChain(100)
-	fmt.Println(genesis.Config.TerminalTotalDifficulty)
 	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
-	fmt.Println(genesis.Config.TerminalTotalDifficulty)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -837,21 +868,121 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	}
 
 	// Test parent already post TTD in NewPayload
-	params := beacon.PayloadAttributesV1{
-		Timestamp:             parent.Time() + 1,
-		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
-		SuggestedFeeRecipient: parent.Coinbase(),
+	args := &miner.BuildPayloadArgs{
+		Parent:       parent.Hash(),
+		Timestamp:    parent.Time() + 1,
+		Random:       crypto.Keccak256Hash([]byte{byte(1)}),
+		FeeRecipient: parent.Coinbase(),
 	}
-	empty, err := api.eth.Miner().GetSealingBlockSync(parent.Hash(), params.Timestamp, params.SuggestedFeeRecipient, params.Random, true)
+	payload, err := api.eth.Miner().BuildPayload(args)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	data := *beacon.BlockToExecutableData(empty)
+	data := *payload.Resolve()
 	resp2, err := api.NewPayloadV1(data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
 	}
 	if resp2 != beacon.INVALID_TERMINAL_BLOCK {
 		t.Fatalf("error sending invalid forkchoice, invalid status: %v", resp.PayloadStatus.Status)
+	}
+}
+
+// TestSimultaneousNewBlock does several parallel inserts, both as
+// newPayLoad and forkchoiceUpdate. This is to test that the api behaves
+// well even of the caller is not being 'serial'.
+func TestSimultaneousNewBlock(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	defer n.Close()
+
+	var (
+		api    = NewConsensusAPI(ethservice)
+		parent = preMergeBlocks[len(preMergeBlocks)-1]
+	)
+	for i := 0; i < 10; i++ {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		ethservice.TxPool().AddLocal(types.MustSignNewTx(testKey, types.LatestSigner(ethservice.BlockChain().Config()),
+			&types.DynamicFeeTx{
+				Nonce:     statedb.GetNonce(testAddr),
+				Value:     big.NewInt(0),
+				GasFeeCap: big.NewInt(2 * params.InitialBaseFee),
+				GasTipCap: big.NewInt(2 * params.InitialBaseFee),
+				ChainID:   genesis.Config.ChainID,
+				Gas:       1000000,
+				To:        &common.Address{99},
+			}))
+		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
+			Timestamp: parent.Time() + 5,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create the executable data %v", err)
+		}
+		// Insert it 10 times in parallel. Should be ignored.
+		{
+			var (
+				wg      sync.WaitGroup
+				testErr error
+				errMu   sync.Mutex
+			)
+			wg.Add(10)
+			for ii := 0; ii < 10; ii++ {
+				go func() {
+					defer wg.Done()
+					if newResp, err := api.NewPayloadV1(*execData); err != nil {
+						errMu.Lock()
+						testErr = fmt.Errorf("Failed to insert block: %w", err)
+						errMu.Unlock()
+					} else if newResp.Status != "VALID" {
+						errMu.Lock()
+						testErr = fmt.Errorf("Failed to insert block: %v", newResp.Status)
+						errMu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			if testErr != nil {
+				t.Fatal(testErr)
+			}
+		}
+		block, err := beacon.ExecutableDataToBlock(*execData)
+		if err != nil {
+			t.Fatalf("Failed to convert executable data to block %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1 {
+			t.Fatalf("Chain head shouldn't be updated")
+		}
+		fcState := beacon.ForkchoiceStateV1{
+			HeadBlockHash:      block.Hash(),
+			SafeBlockHash:      block.Hash(),
+			FinalizedBlockHash: block.Hash(),
+		}
+		{
+			var (
+				wg      sync.WaitGroup
+				testErr error
+				errMu   sync.Mutex
+			)
+			wg.Add(10)
+			// Do each FCU 10 times
+			for ii := 0; ii < 10; ii++ {
+				go func() {
+					defer wg.Done()
+					if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+						errMu.Lock()
+						testErr = fmt.Errorf("Failed to insert block: %w", err)
+						errMu.Unlock()
+					}
+				}()
+			}
+			wg.Wait()
+			if testErr != nil {
+				t.Fatal(testErr)
+			}
+		}
+		if have, want := ethservice.BlockChain().CurrentBlock().NumberU64(), block.NumberU64(); have != want {
+			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
+		}
+		parent = block
 	}
 }

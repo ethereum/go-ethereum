@@ -391,11 +391,16 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if h.checkpointHash != (common.Hash{}) {
 		// Request the peer's checkpoint header for chain height/weight validation
 		resCh := make(chan *eth.Response)
-		if _, err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false, resCh); err != nil {
+
+		req, err := peer.RequestHeadersByNumber(h.checkpointNumber, 1, 0, false, resCh)
+		if err != nil {
 			return err
 		}
 		// Start a timer to disconnect if the peer doesn't reply in time
 		go func() {
+			// Ensure the request gets cancelled in case of error/drop
+			defer req.Close()
+
 			timeout := time.NewTimer(syncChallengeTimeout)
 			defer timeout.Stop()
 
@@ -437,10 +442,15 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// If we have any explicit peer required block hashes, request them
 	for number, hash := range h.requiredBlocks {
 		resCh := make(chan *eth.Response)
-		if _, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh); err != nil {
+
+		req, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh)
+		if err != nil {
 			return err
 		}
-		go func(number uint64, hash common.Hash) {
+		go func(number uint64, hash common.Hash, req *eth.Request) {
+			// Ensure the request gets cancelled in case of error/drop
+			defer req.Close()
+
 			timeout := time.NewTimer(syncChallengeTimeout)
 			defer timeout.Stop()
 
@@ -469,7 +479,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 				peer.Log().Warn("Required block challenge timed out, dropping", "addr", peer.RemoteAddr(), "type", peer.Name())
 				h.removePeer(peer.ID())
 			}
-		}(number, hash)
+		}(number, hash, req)
 	}
 	// Handle incoming messages until the connection is torn down
 	return handler(peer)

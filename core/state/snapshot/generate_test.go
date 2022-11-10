@@ -149,7 +149,7 @@ type testHelper struct {
 func newHelper() *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	triedb := trie.NewDatabase(diskdb)
-	accTrie, _ := trie.NewStateTrie(common.Hash{}, common.Hash{}, triedb)
+	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(common.Hash{}), triedb)
 	return &testHelper{
 		diskdb:  diskdb,
 		triedb:  triedb,
@@ -182,7 +182,8 @@ func (t *testHelper) addSnapStorage(accKey string, keys []string, vals []string)
 }
 
 func (t *testHelper) makeStorageTrie(stateRoot, owner common.Hash, keys []string, vals []string, commit bool) []byte {
-	stTrie, _ := trie.NewStateTrie(owner, common.Hash{}, t.triedb)
+	id := trie.StorageTrieID(stateRoot, owner, common.Hash{})
+	stTrie, _ := trie.NewStateTrie(id, t.triedb)
 	for i, k := range keys {
 		stTrie.Update([]byte(k), []byte(vals[i]))
 	}
@@ -220,10 +221,12 @@ func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 //   - miss in the beginning
 //   - miss in the middle
 //   - miss in the end
+//
 // - the contract(non-empty storage) has wrong storage slots
 //   - wrong slots in the beginning
 //   - wrong slots in the middle
 //   - wrong slots in the end
+//
 // - the contract(non-empty storage) has extra storage slots
 //   - extra slots in the beginning
 //   - extra slots in the middle
