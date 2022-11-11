@@ -451,7 +451,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 			select {
 			case event := <-txChs[i]:
 				arrived += len(event.Txs)
-			case <-time.After(time.Second):
+			case <-time.After(2 * time.Second):
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
 				timeout = true
 			}
