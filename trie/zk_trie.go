@@ -41,14 +41,14 @@ func init() {
 	zkt.InitHashScheme(poseidon.HashFixed)
 }
 
-func santiyCheckByte32Key(b []byte) {
+func sanityCheckByte32Key(b []byte) {
 	if len(b) != 32 && len(b) != 20 {
 		panic(fmt.Errorf("do not support length except for 120bit and 256bit now. data: %v len: %v", b, len(b)))
 	}
 }
 
-// NewSecure creates a trie
-// SecureBinaryTrie bypasses all the buffer mechanism in *Database, it directly uses the
+// NewZkTrie creates a trie
+// NewZkTrie bypasses all the buffer mechanism in *Database, it directly uses the
 // underlying diskdb
 func NewZkTrie(root common.Hash, db *ZktrieDatabase) (*ZkTrie, error) {
 	tr, err := zktrie.NewZkTrie(*zkt.NewByte32FromBytes(root.Bytes()), db)
@@ -61,7 +61,7 @@ func NewZkTrie(root common.Hash, db *ZktrieDatabase) (*ZkTrie, error) {
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *ZkTrie) Get(key []byte) []byte {
-	santiyCheckByte32Key(key)
+	sanityCheckByte32Key(key)
 	res, err := t.TryGet(key)
 	if err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
@@ -72,7 +72,7 @@ func (t *ZkTrie) Get(key []byte) []byte {
 // TryUpdateAccount will abstract the write of an account to the
 // secure trie.
 func (t *ZkTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	santiyCheckByte32Key(key)
+	sanityCheckByte32Key(key)
 	value, flag := acc.MarshalFields()
 	return t.ZkTrie.TryUpdate(key, flag, value)
 }
@@ -92,13 +92,13 @@ func (t *ZkTrie) Update(key, value []byte) {
 // NOTE: value is restricted to length of bytes32.
 // we override the underlying zktrie's TryUpdate method
 func (t *ZkTrie) TryUpdate(key, value []byte) error {
-	santiyCheckByte32Key(key)
+	sanityCheckByte32Key(key)
 	return t.ZkTrie.TryUpdate(key, 1, []zkt.Byte32{*zkt.NewByte32FromBytes(value)})
 }
 
 // Delete removes any existing value for key from the trie.
 func (t *ZkTrie) Delete(key []byte) {
-	santiyCheckByte32Key(key)
+	sanityCheckByte32Key(key)
 	if err := t.TryDelete(key); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
