@@ -137,7 +137,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	}
 }
 
-// NewDatabaseWithNodeDB creates a state database with a live node database.
+// NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *trie.Database) Database {
 	return &cachingDB{
 		disk:          db,
