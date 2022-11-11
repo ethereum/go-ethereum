@@ -83,3 +83,11 @@ func (c *LRU[K, V]) Remove(key K) bool {
 
 	return c.cache.Remove(key)
 }
+
+// Keys returns all keys of items currently in the LRU.
+func (c *LRU[K, V]) Keys() []K {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.cache.Keys()
+}

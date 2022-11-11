@@ -137,6 +137,15 @@ func (c *BasicLRU[K, V]) RemoveOldest() (key K, value V, ok bool) {
 	return key, item.value, true
 }
 
+// Keys returns all keys in the cache.
+func (c *BasicLRU[K, V]) Keys() []K {
+	keys := make([]K, 0, len(c.items))
+	for node := c.list.head; node != nil; node = node.next {
+		keys = append(keys, node.v)
+	}
+	return keys
+}
+
 // dlist is a doubly-linked list holding items of type T.
 type dlist[T any] struct {
 	head *dlistNode[T]

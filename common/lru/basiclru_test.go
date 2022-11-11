@@ -20,17 +20,8 @@ import (
 	"testing"
 )
 
-// keys returns all keys in the cache.
-func (c *BasicLRU[K, V]) keys() []K {
-	keys := make([]K, 0, len(c.items))
-	for node := c.list.head; node != nil; node = node.next {
-		keys = append(keys, node.v)
-	}
-	return keys
-}
-
 func TestCache(t *testing.T) {
-	cache := New[int, int](128)
+	cache := NewBasicLRU[int, int](128)
 
 	for i := 0; i < 256; i++ {
 		cache.Add(i, i)
@@ -78,7 +69,7 @@ func TestCache(t *testing.T) {
 
 // This test checks GetOldest and RemoveOldest.
 func TestCacheGetOldest(t *testing.T) {
-	cache := New[int, int](128)
+	cache := NewBasicLRU[int, int](128)
 	for i := 0; i < 256; i++ {
 		cache.Add(i, i)
 	}
@@ -110,7 +101,7 @@ func TestCacheGetOldest(t *testing.T) {
 
 // Test that Add returns true/false if an eviction occurred
 func TestCacheAddReturnValue(t *testing.T) {
-	cache := New[int, int](1)
+	cache := NewBasicLRU[int, int](1)
 	if cache.Add(1, 1) {
 		t.Errorf("first add shouldn't have evicted")
 	}
@@ -121,7 +112,7 @@ func TestCacheAddReturnValue(t *testing.T) {
 
 // This test verifies that Contains doesn't change item recency.
 func TestCacheContains(t *testing.T) {
-	cache := New[int, int](2)
+	cache := NewBasicLRU[int, int](2)
 	cache.Add(1, 1)
 	cache.Add(2, 2)
 	if !cache.Contains(1) {
