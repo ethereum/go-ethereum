@@ -33,7 +33,7 @@ type SizeConstrainedLRU struct {
 	size    uint64
 	maxSize uint64
 	lru     *simplelru.LRU
-	lock    sync.RWMutex
+	lock    sync.Mutex
 }
 
 // NewSizeConstrainedLRU creates a new SizeConstrainedLRU.
@@ -78,8 +78,8 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 
 // Get looks up a key's value from the cache.
 func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	if v, ok := c.lru.Get(key); ok {
 		return v.([]byte)
