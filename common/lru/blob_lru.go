@@ -23,9 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// SizeConstrainedLRU is a wrapper around simplelru.LRU. The simplelru.LRU is capable
-// of item-count constraints, but is not capable of enforcing a byte-size constraint,
-// hence this wrapper.
+// SizeConstrainedLRU is a LRU cache where capacity is in bytes (instead of item count).
+// When the cache is at capacity, and a new item is added, the older items are evicted
+// until the size constraint can be met.
+//
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
 type SizeConstrainedLRU struct {
