@@ -19,29 +19,32 @@ package lru
 import (
 	"math"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
-// SizeConstrainedLRU is a LRU cache where capacity is in bytes (instead of item count).
+// BlobType is the type constraint for values stored in BlobLRU.
+type BlobType interface {
+	[]byte | string
+}
+
+// BlobLRU is a LRU cache where capacity is in bytes (instead of item count).
 // When the cache is at capacity, and a new item is added, the older items are evicted
 // until the size constraint can be met.
 //
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
-type SizeConstrainedLRU struct {
+type BlobLRU[K comparable, V BlobType] struct {
 	size    uint64
 	maxSize uint64
-	lru     BasicLRU[common.Hash, []byte]
+	lru     BasicLRU[K, V]
 	lock    sync.Mutex
 }
 
-// NewSizeConstrainedLRU creates a new SizeConstrainedLRU.
-func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
-	return &SizeConstrainedLRU{
+// NewBlobLRU creates a new SizeConstrainedLRU.
+func NewBlobLRU[K comparable, V BlobType](max uint64) *BlobLRU[K, V] {
+	return &BlobLRU[K, V]{
 		size:    0,
 		maxSize: max,
-		lru:     NewBasicLRU[common.Hash, []byte](math.MaxInt),
+		lru:     NewBasicLRU[K, V](math.MaxInt),
 	}
 }
 
@@ -49,7 +52,7 @@ func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
 // OBS: The value is _not_ copied on Add, so the caller must not modify it afterwards.
-func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
+func (c *BlobLRU[K, V]) Add(key K, value V) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -73,12 +76,9 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
+func (c *BlobLRU[K, V]) Get(key K) (V, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if v, ok := c.lru.Get(key); ok {
-		return v
-	}
-	return nil
+	return c.lru.Get(key)
 }
