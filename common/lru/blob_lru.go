@@ -32,7 +32,7 @@ import (
 type SizeConstrainedLRU struct {
 	size    uint64
 	maxSize uint64
-	lru     Cache[common.Hash, []byte]
+	lru     BasicLRU[common.Hash, []byte]
 	lock    sync.Mutex
 }
 
@@ -41,7 +41,7 @@ func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
 	return &SizeConstrainedLRU{
 		size:    0,
 		maxSize: max,
-		lru:     NewCache[common.Hash, []byte](math.MaxInt),
+		lru:     NewBasicLRU[common.Hash, []byte](math.MaxInt),
 	}
 }
 
