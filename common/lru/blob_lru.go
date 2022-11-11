@@ -23,7 +23,7 @@ import (
 
 // BlobType is the type constraint for values stored in BlobLRU.
 type BlobType interface {
-	[]byte | string
+	~[]byte | ~string
 }
 
 // BlobLRU is a LRU cache where capacity is in bytes (instead of item count).
