@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
 // SizeConstrainedLRU is a wrapper around simplelru.LRU. The simplelru.LRU is capable
@@ -32,20 +31,16 @@ import (
 type SizeConstrainedLRU struct {
 	size    uint64
 	maxSize uint64
-	lru     *simplelru.LRU
+	lru     Cache[common.Hash, []byte]
 	lock    sync.Mutex
 }
 
 // NewSizeConstrainedLRU creates a new SizeConstrainedLRU.
 func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
-	lru, err := simplelru.NewLRU(math.MaxInt, nil)
-	if err != nil {
-		panic(err)
-	}
 	return &SizeConstrainedLRU{
 		size:    0,
 		maxSize: max,
-		lru:     lru,
+		lru:     NewCache[common.Hash, []byte](math.MaxInt),
 	}
 }
 
@@ -68,7 +63,7 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 				// list is now empty. Break
 				break
 			}
-			targetSize -= uint64(len(v.([]byte)))
+			targetSize -= uint64(len(v))
 		}
 		c.size = targetSize
 	}
@@ -82,7 +77,7 @@ func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
 	defer c.lock.Unlock()
 
 	if v, ok := c.lru.Get(key); ok {
-		return v.([]byte)
+		return v
 	}
 	return nil
 }
