@@ -67,6 +67,18 @@ func TestCache(t *testing.T) {
 	}
 }
 
+func TestBasicLRUAddExistingKey(t *testing.T) {
+	cache := NewBasicLRU[int, int](1)
+
+	cache.Add(1, 1)
+	cache.Add(1, 2)
+
+	v, _ := cache.Get(1)
+	if v != 2 {
+		t.Fatal("wrong value:", v)
+	}
+}
+
 // This test checks GetOldest and RemoveOldest.
 func TestCacheGetOldest(t *testing.T) {
 	cache := NewBasicLRU[int, int](128)

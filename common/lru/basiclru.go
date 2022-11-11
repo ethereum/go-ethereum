@@ -49,6 +49,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	if ok {
 		// Already exists in cache.
 		item.value = value
+		c.items[key] = item
 		c.list.moveToFront(item.node)
 		return false
 	}
@@ -61,8 +62,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	}
 
 	// Store the new item.
-	item = cacheItem[K, V]{value: value, node: c.list.push(key)}
-	c.items[key] = item
+	c.items[key] = cacheItem[K, V]{value, c.list.push(key)}
 	return evicted
 }
 
