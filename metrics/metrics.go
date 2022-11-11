@@ -61,7 +61,6 @@ type runtimeStats struct {
 	GCPauses     *metrics.Float64Histogram
 	GCAllocBytes uint64
 	GCFreedBytes uint64
-	GCHeapGoal   uint64
 
 	MemTotal     uint64
 	HeapObjects  uint64
@@ -77,7 +76,6 @@ var runtimeSamples = []metrics.Sample{
 	{Name: "/gc/pauses:seconds"}, // histogram
 	{Name: "/gc/heap/allocs:bytes"},
 	{Name: "/gc/heap/frees:bytes"},
-	{Name: "/gc/heap/goal:bytes"},
 	{Name: "/memory/classes/total:bytes"},
 	{Name: "/memory/classes/heap/objects:bytes"},
 	{Name: "/memory/classes/heap/free:bytes"},
@@ -104,8 +102,6 @@ func readRuntimeStats(v *runtimeStats) {
 			v.GCAllocBytes = s.Value.Uint64()
 		case "/gc/heap/frees:bytes":
 			v.GCFreedBytes = s.Value.Uint64()
-		case "/gc/heap/goal:bytes":
-			v.GCHeapGoal = s.Value.Uint64()
 		case "/memory/classes/total:bytes":
 			v.MemTotal = s.Value.Uint64()
 		case "/memory/classes/heap/objects:bytes":
@@ -157,7 +153,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		memAllocs             = GetOrRegisterMeter("system/memory/allocs", DefaultRegistry)
 		memFrees              = GetOrRegisterMeter("system/memory/frees", DefaultRegistry)
 		memTotal              = GetOrRegisterGauge("system/memory/held", DefaultRegistry)
-		heapGCGoal            = GetOrRegisterGauge("system/memory/gcgoal", DefaultRegistry)
 		heapUsed              = GetOrRegisterGauge("system/memory/used", DefaultRegistry)
 		heapObjects           = GetOrRegisterGauge("system/memory/objects", DefaultRegistry)
 		diskReads             = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
@@ -193,7 +188,6 @@ func CollectProcessMetrics(refresh time.Duration) {
 		memTotal.Update(int64(rstats[now].MemTotal))
 		heapUsed.Update(int64(rstats[now].MemTotal - rstats[now].HeapUnused - rstats[now].HeapFree - rstats[now].HeapReleased))
 		heapObjects.Update(int64(rstats[now].HeapObjects))
-		heapGCGoal.Update(int64(rstats[now].GCHeapGoal))
 
 		// Disk
 		if ReadDiskStats(&diskstats[now]) == nil {
