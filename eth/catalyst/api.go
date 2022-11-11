@@ -58,7 +58,7 @@ const (
 
 	// invalidTipsetsCap is the max number of recent block hashes tracked that
 	// have lead to some bad ancestor block. It's just an OOM protection.
-	invalidTipsetsCap = 512
+	invalidTipSetsCap = 512
 
 	// beaconUpdateStartupTimeout is the time to wait for a beacon client to get
 	// attached before starting to issue warnings.
@@ -141,7 +141,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 	return api
 }
 
-// ForkchoiceUpdatedV1 has several responsibilities:
+// ForkChoiceUpdatedV1 has several responsibilities:
 //
 // We try to set our blockchain to the headBlock.
 //
@@ -155,7 +155,7 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 //
 // If there are payloadAttributes: we try to assemble a block with the payloadAttributes
 // and return its payloadID.
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkChoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
@@ -525,7 +525,7 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 	// Not too many failures yet, mark the head of the invalid chain as invalid
 	if check != head {
 		log.Warn("Marked new chain head as invalid", "hash", head, "badnumber", invalid.Number, "badhash", badHash)
-		for len(api.invalidTipsets) >= invalidTipsetsCap {
+		for len(api.invalidTipsets) >= invalidTipSetsCap {
 			for key := range api.invalidTipsets {
 				delete(api.invalidTipsets, key)
 				break

@@ -160,7 +160,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	payload, err := n.api.ForkchoiceUpdatedV1(fcState, &payloadAttribute)
+	payload, err := n.api.ForkChoiceUpdatedV1(fcState, &payloadAttribute)
 	if err != nil {
 		return nil, err
 	}
@@ -212,12 +212,12 @@ func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.Executab
 	}
 	switch n.typ {
 	case eth2NormalNode, eth2MiningNode:
-		if _, err := n.api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+		if _, err := n.api.ForkChoiceUpdatedV1(fcState, nil); err != nil {
 			return err
 		}
 		return nil
 	case eth2LightClient:
-		if _, err := n.lapi.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+		if _, err := n.lapi.ForkChoiceUpdatedV1(fcState, nil); err != nil {
 			return err
 		}
 		return nil
@@ -324,7 +324,7 @@ func (mgr *nodeManager) run() {
 				SafeBlockHash:      oldest.Hash(),
 				FinalizedBlockHash: oldest.Hash(),
 			}
-			node.api.ForkchoiceUpdatedV1(fcState, nil)
+			node.api.ForkChoiceUpdatedV1(fcState, nil)
 		}
 		log.Info("Finalised eth2 block", "number", oldest.NumberU64(), "hash", oldest.Hash())
 		waitFinalise = waitFinalise[1:]

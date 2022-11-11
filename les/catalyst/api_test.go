@@ -77,7 +77,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err == nil {
+	if _, err := api.ForkChoiceUpdatedV1(fcState, nil); err == nil {
 		t.Errorf("fork choice updated before total terminal difficulty should fail")
 	}
 }
@@ -94,7 +94,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+	if _, err := api.ForkChoiceUpdatedV1(fcState, nil); err != nil {
 		t.Errorf("Failed to update head %v", err)
 	}
 	block := blocks[9]
@@ -146,7 +146,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
 	}
-	if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+	if _, err := api.ForkChoiceUpdatedV1(fcState, nil); err != nil {
 		t.Fatal("Failed to update head")
 	}
 	headHeader = api.les.BlockChain().CurrentHeader()

@@ -56,7 +56,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 	return &ConsensusAPI{les: les}
 }
 
-// ForkchoiceUpdatedV1 has several responsibilities:
+// ForkChoiceUpdatedV1 has several responsibilities:
 //
 // We try to set our blockchain to the headBlock.
 //
@@ -70,7 +70,7 @@ func NewConsensusAPI(les *les.LightEthereum) *ConsensusAPI {
 //
 // If there are payloadAttributes: we return an error since block creation is not
 // supported in les mode.
-func (api *ConsensusAPI) ForkchoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkChoiceUpdatedV1(heads beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	if heads.HeadBlockHash == (common.Hash{}) {
 		log.Warn("Forkchoice requested update to zero hash")
 		return beacon.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
