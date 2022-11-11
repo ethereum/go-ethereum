@@ -71,11 +71,9 @@ type sessionState struct {
 
 // hashMAC holds the state of the RLPx v4 MAC contraption.
 type hashMAC struct {
-	cipher     cipher.Block
-	hash       hash.Hash
-	aesBuffer  [16]byte
-	hashBuffer [32]byte
-	seedBuffer [32]byte
+	cipher    cipher.Block
+	hash      hash.Hash
+	aesBuffer [16]byte
 }
 
 func newHashMAC(cipher cipher.Block, h hash.Hash) hashMAC {
@@ -83,7 +81,7 @@ func newHashMAC(cipher cipher.Block, h hash.Hash) hashMAC {
 	if cipher.BlockSize() != len(m.aesBuffer) {
 		panic(fmt.Errorf("invalid MAC cipher block size %d", cipher.BlockSize()))
 	}
-	if h.Size() != len(m.hashBuffer) {
+	if h.Size() != 32 {
 		panic(fmt.Errorf("invalid MAC digest size %d", h.Size()))
 	}
 	return m
@@ -263,14 +261,14 @@ func (h *sessionState) writeFrame(conn io.Writer, code uint64, data []byte) erro
 
 // computeHeader computes the MAC of a frame header.
 func (m *hashMAC) computeHeader(header []byte) []byte {
-	sum1 := m.hash.Sum(m.hashBuffer[:0])
+	sum1 := m.hash.Sum(nil)
 	return m.compute(sum1, header)
 }
 
 // computeFrame computes the MAC of framedata.
 func (m *hashMAC) computeFrame(framedata []byte) []byte {
 	m.hash.Write(framedata)
-	seed := m.hash.Sum(m.seedBuffer[:0])
+	seed := m.hash.Sum(nil)
 	return m.compute(seed, seed[:16])
 }
 
@@ -291,7 +289,7 @@ func (m *hashMAC) compute(sum1, seed []byte) []byte {
 		m.aesBuffer[i] ^= seed[i]
 	}
 	m.hash.Write(m.aesBuffer[:])
-	sum2 := m.hash.Sum(m.hashBuffer[:0])
+	sum2 := m.hash.Sum(nil)
 	return sum2[:16]
 }
 
