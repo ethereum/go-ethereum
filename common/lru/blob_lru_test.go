@@ -31,7 +31,7 @@ func mkHash(i int) common.Hash {
 }
 
 func TestBlobLru(t *testing.T) {
-	lru := NewBlobLRU(100)
+	lru := NewBlobLRU[common.Hash, []byte](100)
 	var want uint64
 	// Add 11 items of 10 byte each. First item should be swapped out
 	for i := 0; i < 11; i++ {
@@ -49,7 +49,7 @@ func TestBlobLru(t *testing.T) {
 	// Zero:th should be evicted
 	{
 		k := mkHash(0)
-		if val := lru.Get(k); val != nil {
+		if _, ok := lru.Get(k); ok {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}
@@ -57,8 +57,8 @@ func TestBlobLru(t *testing.T) {
 	for i := 1; i < 11; i++ {
 		k := mkHash(i)
 		want := fmt.Sprintf("value-%04d", i)
-		have := lru.Get(k)
-		if have == nil {
+		have, ok := lru.Get(k)
+		if !ok {
 			t.Fatalf("missing key %v", k)
 		}
 		if string(have) != want {
@@ -70,7 +70,7 @@ func TestBlobLru(t *testing.T) {
 // TestBlobLruOverflow tests what happens when inserting an element exceeding
 // the max size
 func TestBlobLruOverflow(t *testing.T) {
-	lru := NewBlobLRU(100)
+	lru := NewBlobLRU[common.Hash, []byte](100)
 	// Add 10 items of 10 byte each, filling the cache
 	for i := 0; i < 10; i++ {
 		k := mkHash(i)
@@ -86,7 +86,7 @@ func TestBlobLruOverflow(t *testing.T) {
 	// Elems 0-9 should be missing
 	for i := 1; i < 10; i++ {
 		k := mkHash(i)
-		if val := lru.Get(k); val != nil {
+		if _, ok := lru.Get(k); ok {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}
@@ -108,7 +108,7 @@ func TestBlobLruOverflow(t *testing.T) {
 
 // TestBlobLruSameItem tests what happens when inserting the same k/v multiple times.
 func TestBlobLruSameItem(t *testing.T) {
-	lru := NewBlobLRU(100)
+	lru := NewBlobLRU[common.Hash, []byte](100)
 	// Add one 10 byte-item 10 times
 	k := mkHash(0)
 	v := fmt.Sprintf("value-%04d", 0)
