@@ -24,14 +24,16 @@ resource "aws_ecs_task_definition" "devnet_task_definition_group" {
   # New nodes will consume a lot more CPU usage than existing nodes. 
   # This is due to sync is resource heavy. Recommending set to below if doing sync:
   # CPU = 2048, Memory = 4096
-  # Please set it back to cpu 512 and memory of 2048 after sync is done to save the cost
-  cpu = 256
-  memory = 2048
+  # Please set it back to cpu 256 and memory of 2048 after sync is done to save the cost
+  # cpu = 256
+  # memory = 2048
+  cpu = 2048
+  memory = 4096
   volume {
     name = "efs"
 
     efs_volume_configuration {
-      file_system_id          = aws_efs_file_system.devnet_efs.id
+      file_system_id          = aws_efs_file_system.devnet_efs[each.key].id
       root_directory          = "/"
       transit_encryption      = "ENABLED"
       authorization_config {

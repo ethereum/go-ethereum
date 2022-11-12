@@ -24,24 +24,29 @@ resource "aws_security_group" "devnet_efs_security_group" {
 }
 
 resource "aws_efs_file_system" "devnet_efs" {
-   creation_token = "efs"
-   performance_mode = "generalPurpose"
-   throughput_mode = "bursting"
-   encrypted = "true"
-   tags = {
-       Name = "TfDevnetEfs"
-   }
+  for_each = local.devnetNodeKyes
+  creation_token = "efs-${each.key}"
+  performance_mode = "generalPurpose"
+  throughput_mode = "bursting"
+  encrypted = "true"
+  lifecycle_policy {
+    transition_to_ia = "AFTER_30_DAYS"
+  }
+  tags = {
+    Name = "TfDevnetEfs${each.key}"
+  }
  }
 
 resource "aws_efs_mount_target" "devnet_efs_efs_mount_target" {
-  file_system_id = aws_efs_file_system.devnet_efs.id
+  for_each = local.devnetNodeKyes
+  file_system_id = aws_efs_file_system.devnet_efs[each.key].id
   subnet_id      = aws_subnet.devnet_subnet.id
   security_groups = [aws_security_group.devnet_efs_security_group.id]
 }
 
 resource "aws_efs_access_point" "devnet_efs_access_point" {
   for_each = local.devnetNodeKyes
-  file_system_id = aws_efs_file_system.devnet_efs.id
+  file_system_id = aws_efs_file_system.devnet_efs[each.key].id
   root_directory {
     path = "/${each.key}/database"
     creation_info {

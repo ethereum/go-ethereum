@@ -23,7 +23,9 @@ Each PR merged into `dev-upgrade` will trigger below actions:
   "xdc{{NUMBER}}: {...}
 }
 ```
-2. Access to aws console, create a bucket with name `terraform-devnet-bucket`
+2. Access to aws console, create a bucket with name `tf-devnet-bucket`:
+  - You can choose any name, just make sure update the name in the s3 bucket name variable in `variables.tf`
+  - And update the name of the terraform.backend.s3.bucket from `s3.tf`
 3. Upload the file from step 1 into the above bucket with name `node-config.json`
 4. In order to allow pipeline able to push and deploy via ECR and ECS, we require below environment variables to be injected into the CI pipeline:
   1. DOCKER_USERNAME

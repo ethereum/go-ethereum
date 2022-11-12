@@ -15,4 +15,5 @@ locals {
     devnetNodeKyes = {
       for i in local.keyNames: i => local.predefinedNodesConfig[i]
     }
+    s3BucketName = "tf-devnet-bucket"
 }
