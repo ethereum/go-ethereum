@@ -28,8 +28,8 @@ type BasicLRU[K comparable, V any] struct {
 }
 
 type cacheItem[K any, V any] struct {
-	value V
 	elem  *listElem[K]
+	value V
 }
 
 // NewBasicLRU creates a new LRU cache.
@@ -68,7 +68,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	// Store the new item.
 	// Note that, if another item was evicted, we re-use its list element here.
 	elem.v = key
-	c.items[key] = cacheItem[K, V]{value, elem}
+	c.items[key] = cacheItem[K, V]{elem, value}
 	c.list.pushElem(elem)
 	return evicted
 }
