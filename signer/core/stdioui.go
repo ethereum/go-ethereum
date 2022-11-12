@@ -19,7 +19,7 @@ package core
 import (
 	"context"
 
-	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
+	"github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -97,7 +97,7 @@ func (ui *StdIOUI) ShowInfo(message string) {
 		log.Info("Error calling 'ui_showInfo'", "exc", err.Error(), "msg", message)
 	}
 }
-func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+func (ui *StdIOUI) OnApprovedTx(tx gapi.SignTransactionResult) {
 	err := ui.notify("ui_onApprovedTx", tx)
 	if err != nil {
 		log.Info("Error calling 'ui_onApprovedTx'", "exc", err.Error(), "tx", tx)

@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
+	"github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -50,9 +50,9 @@ func (ui *headlessUi) OnInputRequired(info core.UserInputRequest) (core.UserInpu
 	return core.UserInputResponse{Text: input}, nil
 }
 
-func (ui *headlessUi) OnSignerStartup(info core.StartupInfo)        {}
-func (ui *headlessUi) RegisterUIServer(api *core.UIServerAPI)       {}
-func (ui *headlessUi) OnApprovedTx(tx ethapi.SignTransactionResult) {}
+func (ui *headlessUi) OnSignerStartup(info core.StartupInfo)      {}
+func (ui *headlessUi) RegisterUIServer(api *core.UIServerAPI)     {}
+func (ui *headlessUi) OnApprovedTx(tx gapi.SignTransactionResult) {}
 
 func (ui *headlessUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	switch <-ui.approveCh {
@@ -237,7 +237,7 @@ func mkTestTx(from common.MixedcaseAddress) apitypes.SendTxArgs {
 func TestSignTx(t *testing.T) {
 	var (
 		list      []common.Address
-		res, res2 *ethapi.SignTransactionResult
+		res, res2 *gapi.SignTransactionResult
 		err       error
 	)
 

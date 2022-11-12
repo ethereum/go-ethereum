@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g/tracers/logger"
 	"github.com/ethereum/go-ethereum/gdb"
-	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
+	"github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -207,7 +207,7 @@ func TestTraceCall(t *testing.T) {
 	}))
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
-		call        ethapi.TransactionArgs
+		call        gapi.TransactionArgs
 		config      *TraceCallConfig
 		expectErr   error
 		expect      string
@@ -215,7 +215,7 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the genesis, plain transfer.
 		{
 			blockNumber: rpc.BlockNumber(0),
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -227,7 +227,7 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the head, plain transfer.
 		{
 			blockNumber: rpc.BlockNumber(genBlocks),
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -239,7 +239,7 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the non-existent block, error expects
 		{
 			blockNumber: rpc.BlockNumber(genBlocks + 1),
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -251,7 +251,7 @@ func TestTraceCall(t *testing.T) {
 		// Standard JSON trace upon the latest block
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -263,7 +263,7 @@ func TestTraceCall(t *testing.T) {
 		// Tracing on 'pending' should fail:
 		{
 			blockNumber: rpc.PendingBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -273,12 +273,12 @@ func TestTraceCall(t *testing.T) {
 		},
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &accounts[0].addr,
 				Input: &hexutil.Bytes{0x43}, // blocknumber
 			},
 			config: &TraceCallConfig{
-				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+				BlockOverrides: &gapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
 			expectErr: nil,
 			expect: ` {"gas":53018,"failed":false,"returnValue":"","structLogs":[
@@ -464,7 +464,7 @@ func TestTracingWithOverrides(t *testing.T) {
 	}
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
-		call        ethapi.TransactionArgs
+		call        gapi.TransactionArgs
 		config      *TraceCallConfig
 		expectErr   error
 		want        string
@@ -472,14 +472,14 @@ func TestTracingWithOverrides(t *testing.T) {
 		// Call which can only succeed if state is state overridden
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				StateOverrides: &gapi.StateOverride{
+					randomAccounts[0].addr: gapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 				},
 			},
 			want: `{"gas":21000,"failed":false,"returnValue":""}`,
@@ -487,7 +487,7 @@ func TestTracingWithOverrides(t *testing.T) {
 		// Invalid call without state overriding
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From:  &randomAccounts[0].addr,
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -513,15 +513,15 @@ func TestTracingWithOverrides(t *testing.T) {
 		//  }
 		{
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From: &randomAccounts[0].addr,
 				To:   &randomAccounts[2].addr,
 				Data: newRPCBytes(common.Hex2Bytes("8381f58a")), // call number()
 			},
 			config: &TraceCallConfig{
 				//Tracer: &tracer,
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[2].addr: ethapi.OverrideAccount{
+				StateOverrides: &gapi.StateOverride{
+					randomAccounts[2].addr: gapi.OverrideAccount{
 						Code:      newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
 						StateDiff: newStates([]common.Hash{{}}, []common.Hash{common.BigToHash(big.NewInt(123))}),
 					},
@@ -531,20 +531,20 @@ func TestTracingWithOverrides(t *testing.T) {
 		},
 		{ // Override blocknumber
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From: &accounts[0].addr,
 				// BLOCKNUMBER PUSH1 MSTORE
 				Input: newRPCBytes(common.Hex2Bytes("4360005260206000f3")),
 				//&hexutil.Bytes{0x43}, // blocknumber
 			},
 			config: &TraceCallConfig{
-				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+				BlockOverrides: &gapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
 			want: `{"gas":59537,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000001337"}`,
 		},
 		{ // Override blocknumber, and query a blockhash
 			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
+			call: gapi.TransactionArgs{
 				From: &accounts[0].addr,
 				Input: &hexutil.Bytes{
 					0x60, 0x00, 0x40, // BLOCKHASH(0)
@@ -558,7 +558,7 @@ func TestTracingWithOverrides(t *testing.T) {
 				}, // blocknumber
 			},
 			config: &TraceCallConfig{
-				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
+				BlockOverrides: &gapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
 			want: `{"gas":72666,"failed":false,"returnValue":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
 		},

@@ -53,7 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/gdb/remotedb"
 	"github.com/ethereum/go-ethereum/graphql"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
+	"github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/les"
 	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
 	"github.com/ethereum/go-ethereum/log"
@@ -1992,7 +1992,7 @@ func SetDNSDiscoveryDefaults(cfg *gconfig.Config, genesis common.Hash) {
 // RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterEthService(stack *node.Node, cfg *gconfig.Config) (ethapi.Backend, *g.Ethereum) {
+func RegisterEthService(stack *node.Node, cfg *gconfig.Config) (gapi.Backend, *g.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
@@ -2022,14 +2022,14 @@ func RegisterEthService(stack *node.Node, cfg *gconfig.Config) (ethapi.Backend, 
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to the node.
-func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
+func RegisterEthStatsService(stack *node.Node, backend gapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
 }
 
 // RegisterGraphQLService adds the GraphQL API to the node.
-func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem, cfg *node.Config) {
+func RegisterGraphQLService(stack *node.Node, backend gapi.Backend, filterSystem *filters.FilterSystem, cfg *node.Config) {
 	err := graphql.New(stack, backend, filterSystem, cfg.GraphQLCors, cfg.GraphQLVirtualHosts)
 	if err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
@@ -2037,7 +2037,7 @@ func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, filterSyst
 }
 
 // RegisterFilterAPI adds the eth log filtering RPC API to the node.
-func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *gconfig.Config) *filters.FilterSystem {
+func RegisterFilterAPI(stack *node.Node, backend gapi.Backend, ethcfg *gconfig.Config) *filters.FilterSystem {
 	isLightClient := ethcfg.SyncMode == downloader.LightSync
 	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
