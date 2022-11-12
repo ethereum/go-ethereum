@@ -23,7 +23,10 @@ import (
 	"testing"
 )
 
-func TestCache(t *testing.T) {
+// Some of these test cases were adapted
+// from https://github.com/hashicorp/golang-lru/blob/master/simplelru/lru_test.go
+
+func TestBasicLRU(t *testing.T) {
 	cache := NewBasicLRU[int, int](128)
 
 	for i := 0; i < 256; i++ {
@@ -110,7 +113,7 @@ func TestBasicLRUAddExistingKey(t *testing.T) {
 }
 
 // This test checks GetOldest and RemoveOldest.
-func TestCacheGetOldest(t *testing.T) {
+func TestBasicLRUGetOldest(t *testing.T) {
 	cache := NewBasicLRU[int, int](128)
 	for i := 0; i < 256; i++ {
 		cache.Add(i, i)
@@ -142,7 +145,7 @@ func TestCacheGetOldest(t *testing.T) {
 }
 
 // Test that Add returns true/false if an eviction occurred
-func TestCacheAddReturnValue(t *testing.T) {
+func TestBasicLRUAddReturnValue(t *testing.T) {
 	cache := NewBasicLRU[int, int](1)
 	if cache.Add(1, 1) {
 		t.Errorf("first add shouldn't have evicted")
@@ -153,7 +156,7 @@ func TestCacheAddReturnValue(t *testing.T) {
 }
 
 // This test verifies that Contains doesn't change item recency.
-func TestCacheContains(t *testing.T) {
+func TestBasicLRUContains(t *testing.T) {
 	cache := NewBasicLRU[int, int](2)
 	cache.Add(1, 1)
 	cache.Add(2, 2)
@@ -211,26 +214,26 @@ func BenchmarkLRU(b *testing.B) {
 
 	// // vs. github.com/hashicorp/golang-lru/simplelru
 	// b.Run("Add/simplelru.LRU", func(b *testing.B) {
-	// 	cache, _ := simplelru.NewLRU(capacity, nil)
-	// 	for i := 0; i < b.N; i++ {
-	// 		cache.Add(i, i)
-	// 	}
+	//	cache, _ := simplelru.NewLRU(capacity, nil)
+	//	for i := 0; i < b.N; i++ {
+	//		cache.Add(i, i)
+	//	}
 	// })
 	// b.Run("Get/simplelru.LRU", func(b *testing.B) {
-	// 	cache, _ := simplelru.NewLRU(capacity, nil)
-	// 	for i := 0; i < capacity; i++ {
-	// 		index := indexes[i]
-	// 		cache.Add(keys[index], values[index])
-	// 	}
+	//	cache, _ := simplelru.NewLRU(capacity, nil)
+	//	for i := 0; i < capacity; i++ {
+	//		index := indexes[i]
+	//		cache.Add(keys[index], values[index])
+	//	}
 	//
-	// 	b.ResetTimer()
-	// 	for i := 0; i < b.N; i++ {
-	// 		k := keys[indexes[i%len(indexes)]]
-	// 		v, ok := cache.Get(k)
-	// 		if ok {
-	// 			sink = v.([]byte)
-	// 		}
-	// 	}
+	//	b.ResetTimer()
+	//	for i := 0; i < b.N; i++ {
+	//		k := keys[indexes[i%len(indexes)]]
+	//		v, ok := cache.Get(k)
+	//		if ok {
+	//			sink = v.([]byte)
+	//		}
+	//	}
 	// })
 
 	fmt.Fprintln(io.Discard, sink)
