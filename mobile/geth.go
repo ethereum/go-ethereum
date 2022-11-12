@@ -25,11 +25,11 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/filters"
 	"github.com/ethereum/go-ethereum/g/gconfig"
+	ethclient "github.com/ethereum/go-ethereum/gclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"

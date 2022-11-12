@@ -22,7 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
+	ethclient "github.com/ethereum/go-ethereum/gclient"
 )
 
 // EthereumClient provides access to the Ethereum APIs.

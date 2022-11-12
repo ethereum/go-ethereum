@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
+	ethclient "github.com/ethereum/go-ethereum/gclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
