@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
@@ -54,7 +55,6 @@ func (x *XDPoS_v2) sendVote(chainReader consensus.ChainReader, blockInfo *types.
 }
 
 func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote) error {
-
 	// checkRoundNumber
 	if (voteMsg.ProposedBlockInfo.Round != x.currentRound) && (voteMsg.ProposedBlockInfo.Round != x.currentRound+1) {
 		return &utils.ErrIncomingMessageRoundTooFarFromCurrentRound{
@@ -62,6 +62,11 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 			IncomingRound: voteMsg.ProposedBlockInfo.Round,
 			CurrentRound:  x.currentRound,
 		}
+	}
+
+	if x.votePoolCollectionTime.IsZero() {
+		log.Info("[voteHandler] set vote pool time", "round", x.currentRound)
+		x.votePoolCollectionTime = time.Now()
 	}
 
 	// Collect vote
@@ -87,6 +92,9 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 		if err != nil {
 			return err
 		}
+		elapsed := time.Since(x.votePoolCollectionTime)
+		log.Info("[voteHandler] time cost from receive first vote under QC create", "elapsed", elapsed)
+		x.votePoolCollectionTime = time.Time{}
 	}
 
 	return nil
@@ -99,7 +107,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, pooledVotes map[common.Hash]utils.PoolObj, currentVoteMsg utils.PoolObj, proposedBlockHeader *types.Header) error {
 
 	masternodes := x.GetMasternodes(chain, proposedBlockHeader)
-
+	start := time.Now()
 	// Filter out non-Master nodes signatures
 	var wg sync.WaitGroup
 	wg.Add(len(pooledVotes))
@@ -121,6 +129,8 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 		counter++
 	}
 	wg.Wait()
+	elapsed := time.Since(start)
+	log.Info("[onVotePoolThresholdReached] verify message signatures of vote pool took", "elapsed", elapsed)
 
 	// The signature list may contain empty entey. we only care the ones with values
 	var validSignatureSlice []types.Signature
