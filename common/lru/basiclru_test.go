@@ -17,6 +17,9 @@
 package lru
 
 import (
+	"fmt"
+	"io"
+	"math/rand"
 	"testing"
 )
 
@@ -134,4 +137,74 @@ func TestCacheContains(t *testing.T) {
 	if cache.Contains(1) {
 		t.Errorf("Contains should not have updated recency of 1")
 	}
+}
+
+func BenchmarkLRU(b *testing.B) {
+	var (
+		capacity = 1000
+		indexes  = make([]int, capacity*20)
+		keys     = make([]string, capacity)
+		values   = make([][]byte, capacity)
+	)
+	for i := range indexes {
+		indexes[i] = rand.Intn(capacity)
+	}
+	for i := range keys {
+		b := make([]byte, 32)
+		rand.Read(b)
+		keys[i] = string(b)
+		rand.Read(b)
+		values[i] = b
+	}
+
+	var sink []byte
+
+	b.Run("Add/BasicLRU", func(b *testing.B) {
+		cache := NewBasicLRU[int, int](capacity)
+		for i := 0; i < b.N; i++ {
+			cache.Add(i, i)
+		}
+	})
+	b.Run("Get/BasicLRU", func(b *testing.B) {
+		cache := NewBasicLRU[string, []byte](capacity)
+		for i := 0; i < capacity; i++ {
+			index := indexes[i]
+			cache.Add(keys[index], values[index])
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			k := keys[indexes[i%len(indexes)]]
+			v, ok := cache.Get(k)
+			if ok {
+				sink = v
+			}
+		}
+	})
+
+	// // vs. github.com/hashicorp/golang-lru/simplelru
+	// b.Run("Add/simplelru.LRU", func(b *testing.B) {
+	// 	cache, _ := simplelru.NewLRU(capacity, nil)
+	// 	for i := 0; i < b.N; i++ {
+	// 		cache.Add(i, i)
+	// 	}
+	// })
+	// b.Run("Get/simplelru.LRU", func(b *testing.B) {
+	// 	cache, _ := simplelru.NewLRU(capacity, nil)
+	// 	for i := 0; i < capacity; i++ {
+	// 		index := indexes[i]
+	// 		cache.Add(keys[index], values[index])
+	// 	}
+	//
+	// 	b.ResetTimer()
+	// 	for i := 0; i < b.N; i++ {
+	// 		k := keys[indexes[i%len(indexes)]]
+	// 		v, ok := cache.Get(k)
+	// 		if ok {
+	// 			sink = v.([]byte)
+	// 		}
+	// 	}
+	// })
+
+	fmt.Fprintln(io.Discard, sink)
 }
