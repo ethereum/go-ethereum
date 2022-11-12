@@ -33,6 +33,24 @@ func TestCache(t *testing.T) {
 		t.Fatalf("bad len: %v", cache.Len())
 	}
 
+	// Check that Keys returns least-recent key first.
+	keys := cache.Keys()
+	if len(keys) != 128 {
+		t.Fatal("wrong Keys() length", len(keys))
+	}
+	for i, k := range keys {
+		v, ok := cache.Peek(k)
+		if !ok {
+			t.Fatalf("expected key %d be present", i)
+		}
+		if v != k {
+			t.Fatalf("expected %d == %d", k, v)
+		}
+		if v != i+128 {
+			t.Fatalf("wrong value at key %d: %d, want %d", i, v, i+128)
+		}
+	}
+
 	for i := 0; i < 128; i++ {
 		_, ok := cache.Get(i)
 		if ok {
@@ -58,6 +76,15 @@ func TestCache(t *testing.T) {
 		_, ok = cache.Get(i)
 		if ok {
 			t.Fatalf("%d should be deleted", i)
+		}
+	}
+
+	// Request item 192.
+	cache.Get(192)
+	// It should be the last item returned by Keys().
+	for i, k := range cache.Keys() {
+		if (i < 63 && k != i+193) || (i == 63 && k != 192) {
+			t.Fatalf("out of order key: %v", k)
 		}
 	}
 

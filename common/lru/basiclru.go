@@ -216,7 +216,7 @@ func (l *list[T]) last() *listElem[T] {
 
 // appendTo appends all list elements to a slice.
 func (l *list[T]) appendTo(slice []T) []T {
-	for e := l.root.next; e != &l.root; e = e.next {
+	for e := l.root.prev; e != &l.root; e = e.prev {
 		slice = append(slice, e.v)
 	}
 	return slice
