@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/g/gasprice"
 	"github.com/ethereum/go-ethereum/g/gconfig"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/les/downloader"
 	"github.com/ethereum/go-ethereum/les/vflux"

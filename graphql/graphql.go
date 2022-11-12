@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/g/filters"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )

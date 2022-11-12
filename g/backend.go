@@ -44,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/g/protocols/eth"
 	"github.com/ethereum/go-ethereum/g/protocols/snap"
 	"github.com/ethereum/go-ethereum/gdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"

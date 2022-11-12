@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package ethapi implements the general Ethereum API functions.
-package ethapi
+package gapi
 
 import (
 	"context"

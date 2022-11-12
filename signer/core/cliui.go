@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/log"
 )
 

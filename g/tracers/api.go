@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/g/tracers/logger"
 	"github.com/ethereum/go-ethereum/gdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"

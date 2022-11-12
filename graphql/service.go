@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/g/filters"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
+	ethapi "github.com/ethereum/go-ethereum/internal/gapi"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/graph-gophers/graphql-go"
 )
