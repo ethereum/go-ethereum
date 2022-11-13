@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 package bor
 
 import (
@@ -42,17 +39,38 @@ var (
 	keys2     = []*ecdsa.PrivateKey{pkey12, pkey22}
 )
 
+var (
+
+	// Only this account is a validator for the 0th span
+	key, _ = crypto.HexToECDSA(privKey)
+	addr   = crypto.PubkeyToAddress(key.PublicKey) // 0x71562b71999873DB5b286dF957af199Ec94617F7
+
+	// This account is one the validators for 1st span (0-indexed)
+	key2, _ = crypto.HexToECDSA(privKey2)
+	addr2   = crypto.PubkeyToAddress(key2.PublicKey) // 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
+
+	keys = []*ecdsa.PrivateKey{key, key2}
+)
+
+const (
+	privKey  = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+	privKey2 = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3"
+
+	// The genesis for tests was generated with following parameters
+	extraSeal = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+
+	sprintSize uint64 = 4
+	spanSize   uint64 = 8
+
+	validatorHeaderBytesLength = common.AddressLength + 20 // address + power
+)
+
 // Sprint length change tests
 func TestValidatorsBlockProduction(t *testing.T) {
 	t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
-	_, err := fdlimit.Raise(2048)
-
-	if err != nil {
-		panic(err)
-	}
+	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
 
 	// Generate a batch of accounts to seal and fund with
 	faucets := make([]*ecdsa.PrivateKey, 128)
@@ -61,13 +79,17 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesisSprintLength(t, faucets, "./testdata/genesis_sprint_length_change.json", 32)
-	nodes := make([]*eth.Ethereum, 2)
-	enodes := make([]*enode.Node, 2)
+	// Generate a batch of accounts to seal and fund with
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_sprint_length_change.json", 8)
 
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
 	for i := 0; i < 2; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner(genesis, keys2[i], true)
+		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
 		if err != nil {
 			panic(err)
 		}
@@ -81,8 +103,9 @@ func TestValidatorsBlockProduction(t *testing.T) {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
-		nodes[i] = ethBackend
-		enodes[i] = stack.Server().Self()
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
 	}
 
 	// Iterate over all the nodes and start mining
@@ -257,7 +280,7 @@ var keys_21val = []map[string]string{
 
 func getTestSprintLengthReorgCases2Nodes() []map[string]interface{} {
 	sprintSizes := []uint64{64, 32, 16, 8}
-	faultyNodes := [][]uint64{[]uint64{0, 1}, []uint64{1, 2}, []uint64{0, 2}}
+	faultyNodes := [][]uint64{{0, 1}, {1, 2}, {0, 2}}
 	reorgsLengthTests := make([]map[string]interface{}, 0)
 
 	for i := uint64(0); i < uint64(len(sprintSizes)); i++ {
@@ -368,6 +391,9 @@ func TestSprintLengthReorg2Nodes(t *testing.T) {
 	// t.Skip()
 	t.Parallel()
 
+	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
+
 	reorgsLengthTests := getTestSprintLengthReorgCases2Nodes()
 	f, err := os.Create("sprintReorg2Nodes.csv")
 
@@ -477,25 +503,27 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 	t.Helper()
 
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
 
-	_, err := fdlimit.Raise(2048)
-
-	if err != nil {
-		panic(err)
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesisSprintLength(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"])
+	// Generate a batch of accounts to seal and fund with
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"])
 
-	nodes := make([]*eth.Ethereum, len(keys_21val))
-	enodes := make([]*enode.Node, len(keys_21val))
-	stacks := make([]*node.Node, len(keys_21val))
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
 	pkeys_21val := make([]*ecdsa.PrivateKey, len(keys_21val))
-
 	for index, signerdata := range keys_21val {
 		pkeys_21val[index], _ = crypto.HexToECDSA(signerdata["priv_key"])
 	}
-
 	for i := 0; i < len(keys_21val); i++ {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := InitMiner(genesis, pkeys_21val[i], true)
@@ -512,9 +540,9 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
-		nodes[i] = ethBackend
-		enodes[i] = stack.Server().Self()
-		stacks[i] = stack
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
 	}
 
 	// Iterate over all the nodes and start mining
@@ -602,24 +630,27 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 	t.Helper()
 
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
 
-	_, err := fdlimit.Raise(2048)
-
-	if err != nil {
-		panic(err)
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
 	}
+
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesisSprintLength(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"].(uint64))
+	// Generate a batch of accounts to seal and fund with
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"].(uint64))
 
-	nodes := make([]*eth.Ethereum, len(keys_21val))
-	enodes := make([]*enode.Node, len(keys_21val))
-	stacks := make([]*node.Node, len(keys_21val))
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
 	pkeys_21val := make([]*ecdsa.PrivateKey, len(keys_21val))
-
 	for index, signerdata := range keys_21val {
 		pkeys_21val[index], _ = crypto.HexToECDSA(signerdata["priv_key"])
 	}
-
 	for i := 0; i < len(keys_21val); i++ {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := InitMiner(genesis, pkeys_21val[i], true)
@@ -636,9 +667,9 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
-		nodes[i] = ethBackend
-		enodes[i] = stack.Server().Self()
-		stacks[i] = stack
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
 	}
 
 	// Iterate over all the nodes and start mining
@@ -720,7 +751,7 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 	return 0, 0
 }
 
-func InitGenesisSprintLength(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
+func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
 
 	// sprint size = 8 in genesis
 	genesisData, err := ioutil.ReadFile(fileLocation)

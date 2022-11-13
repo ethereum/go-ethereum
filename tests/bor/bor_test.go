@@ -1,4 +1,5 @@
 //go:build integration
+// +build integration
 
 package bor
 
@@ -9,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,7 +46,6 @@ var (
 	pkey1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	// addr2 = 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
 	pkey2, _ = crypto.HexToECDSA("9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3")
-	keys     = []*ecdsa.PrivateKey{pkey1, pkey2}
 )
 
 func TestValidatorWentOffline(t *testing.T) {
@@ -59,6 +60,7 @@ func TestValidatorWentOffline(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
+	// Generate a batch of accounts to seal and fund with
 	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
 
 	var (
@@ -207,57 +209,73 @@ func TestValidatorWentOffline(t *testing.T) {
 
 	// check node1 has block mined by node1
 	assert.Equal(t, authorVal1, nodes[0].AccountManager().Accounts()[0])
-
 }
 
 func TestForkWithBlockTime(t *testing.T) {
 
 	cases := []struct {
 		name          string
-		sprint        uint64
+		sprint        map[string]uint64
 		blockTime     map[string]uint64
 		change        uint64
-		producerDelay uint64
+		producerDelay map[string]uint64
 		forkExpected  bool
 	}{
 		{
-			name:   "No fork after 2 sprints with producer delay = max block time",
-			sprint: 128,
+			name: "No fork after 2 sprints with producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 128,
+			},
 			blockTime: map[string]uint64{
 				"0":   5,
 				"128": 2,
 				"256": 8,
 			},
-			change:        2,
-			producerDelay: 8,
-			forkExpected:  false,
+			change: 2,
+			producerDelay: map[string]uint64{
+				"0": 8,
+			},
+			forkExpected: false,
 		},
 		{
-			name:   "No Fork after 1 sprint producer delay = max block time",
-			sprint: 64,
+			name: "No Fork after 1 sprint producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 64,
+			},
 			blockTime: map[string]uint64{
 				"0":  5,
 				"64": 2,
 			},
-			change:        1,
-			producerDelay: 5,
-			forkExpected:  false,
+			change: 1,
+			producerDelay: map[string]uint64{
+				"0": 5,
+			},
+			forkExpected: false,
 		},
 		{
-			name:   "Fork after 4 sprints with producer delay < max block time",
-			sprint: 16,
+			name: "Fork after 4 sprints with producer delay < max block time",
+			sprint: map[string]uint64{
+				"0": 16,
+			},
 			blockTime: map[string]uint64{
 				"0":  2,
 				"64": 5,
 			},
-			change:        4,
-			producerDelay: 4,
-			forkExpected:  true,
+			change: 4,
+			producerDelay: map[string]uint64{
+				"0": 4,
+			},
+			forkExpected: true,
 		},
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := initGenesis(t)
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
+	}
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -293,7 +311,7 @@ func TestForkWithBlockTime(t *testing.T) {
 					defer wg.Done()
 
 					for range ticker.C {
-						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint*test.change + 10)
+						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint["0"]*test.change + 10)
 						if blockHeaders[i] != nil {
 							break
 						}
@@ -305,8 +323,8 @@ func TestForkWithBlockTime(t *testing.T) {
 			wg.Wait()
 
 			// Before the end of sprint
-			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint - 1)
-			blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint - 1)
+			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
+			blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
 			assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
 			assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
 
