@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/g/protocols/eth"
+	eth "github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/stretchr/testify/assert"
 )

@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	ethproto "github.com/ethereum/go-ethereum/g/protocols/eth"
+	gproto "github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -475,7 +475,7 @@ func (s *Service) login(conn *connWrapper) error {
 	}
 	var network string
 	if info := infos.Protocols["eth"]; info != nil {
-		network = fmt.Sprintf("%d", info.(*ethproto.NodeInfo).Network)
+		network = fmt.Sprintf("%d", info.(*gproto.NodeInfo).Network)
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
 	}

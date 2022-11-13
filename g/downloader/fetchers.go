@@ -21,7 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/g/protocols/eth"
+	eth "github.com/ethereum/go-ethereum/g/protocols/g"
 )
 
 // fetchHeadersByHash is a blocking version of Peer.RequestHeadersByHash which

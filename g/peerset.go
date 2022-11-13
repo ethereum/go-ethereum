@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/g/protocols/eth"
+	eth "github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/g/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 )
