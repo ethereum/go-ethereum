@@ -201,14 +201,14 @@ type BlockChain struct {
 	currentSafeBlock      atomic.Value // Current safe head
 
 	stateCache    state.Database // State database to reuse between imports (contains state cache)
-	bodyCache     *lru.LRU[common.Hash, *types.Body]
-	bodyRLPCache  *lru.LRU[common.Hash, rlp.RawValue]
-	receiptsCache *lru.LRU[common.Hash, []*types.Receipt]
-	blockCache    *lru.LRU[common.Hash, *types.Block]
-	txLookupCache *lru.LRU[common.Hash, *rawdb.LegacyTxLookupEntry]
+	bodyCache     *lru.Cache[common.Hash, *types.Body]
+	bodyRLPCache  *lru.Cache[common.Hash, rlp.RawValue]
+	receiptsCache *lru.Cache[common.Hash, []*types.Receipt]
+	blockCache    *lru.Cache[common.Hash, *types.Block]
+	txLookupCache *lru.Cache[common.Hash, *rawdb.LegacyTxLookupEntry]
 
 	// future blocks are blocks added for later processing
-	futureBlocks *lru.LRU[common.Hash, *types.Block]
+	futureBlocks *lru.Cache[common.Hash, *types.Block]
 
 	wg            sync.WaitGroup //
 	quit          chan struct{}  // shutdown signal, closed in Stop.
@@ -258,12 +258,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
-		bodyCache:     lru.NewLRU[common.Hash, *types.Body](bodyCacheLimit),
-		bodyRLPCache:  lru.NewLRU[common.Hash, rlp.RawValue](bodyCacheLimit),
-		receiptsCache: lru.NewLRU[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:    lru.NewLRU[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache: lru.NewLRU[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
-		futureBlocks:  lru.NewLRU[common.Hash, *types.Block](maxFutureBlocks),
+		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache: lru.NewCache[common.Hash, *rawdb.LegacyTxLookupEntry](txLookupCacheLimit),
+		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
 	}

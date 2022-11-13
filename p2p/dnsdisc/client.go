@@ -41,7 +41,7 @@ import (
 type Client struct {
 	cfg          Config
 	clock        mclock.Clock
-	entries      *lru.LRU[string, entry]
+	entries      *lru.Cache[string, entry]
 	ratelimit    *rate.Limiter
 	singleflight singleflight.Group
 }
@@ -99,7 +99,7 @@ func NewClient(cfg Config) *Client {
 	rlimit := rate.NewLimiter(rate.Limit(cfg.RateLimit), 10)
 	return &Client{
 		cfg:       cfg,
-		entries:   lru.NewLRU[string, entry](cfg.CacheLimit),
+		entries:   lru.NewCache[string, entry](cfg.CacheLimit),
 		clock:     mclock.System{},
 		ratelimit: rlimit,
 	}

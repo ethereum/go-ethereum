@@ -18,18 +18,20 @@ package lru
 
 import "sync"
 
-// LRU is an LRU cache protected by a mutex.
-type LRU[K comparable, V any] struct {
+// Cache is a LRU cache.
+// This type is safe for concurrent use.
+type Cache[K comparable, V any] struct {
 	cache BasicLRU[K, V]
 	mu    sync.Mutex
 }
 
-func NewLRU[K comparable, V any](capacity int) *LRU[K, V] {
-	return &LRU[K, V]{cache: NewBasicLRU[K, V](capacity)}
+// NewCache creates an LRU cache.
+func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
+	return &Cache[K, V]{cache: NewBasicLRU[K, V](capacity)}
 }
 
 // Add adds a value to the cache. Returns true if an item was evicted to store the new item.
-func (c *LRU[K, V]) Add(key K, value V) (evicted bool) {
+func (c *Cache[K, V]) Add(key K, value V) (evicted bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -37,7 +39,7 @@ func (c *LRU[K, V]) Add(key K, value V) (evicted bool) {
 }
 
 // Contains reports whether the given key exists in the cache.
-func (c *LRU[K, V]) Contains(key K) bool {
+func (c *Cache[K, V]) Contains(key K) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -45,7 +47,7 @@ func (c *LRU[K, V]) Contains(key K) bool {
 }
 
 // Get retrieves a value from the cache. This marks the key as recently used.
-func (c *LRU[K, V]) Get(key K) (value V, ok bool) {
+func (c *Cache[K, V]) Get(key K) (value V, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -53,7 +55,7 @@ func (c *LRU[K, V]) Get(key K) (value V, ok bool) {
 }
 
 // Len returns the current number of items in the cache.
-func (c *LRU[K, V]) Len() int {
+func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -61,7 +63,7 @@ func (c *LRU[K, V]) Len() int {
 }
 
 // Peek retrieves a value from the cache, but does not mark the key as recently used.
-func (c *LRU[K, V]) Peek(key K) (value V, ok bool) {
+func (c *Cache[K, V]) Peek(key K) (value V, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -69,7 +71,7 @@ func (c *LRU[K, V]) Peek(key K) (value V, ok bool) {
 }
 
 // Purge empties the cache.
-func (c *LRU[K, V]) Purge() {
+func (c *Cache[K, V]) Purge() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -77,7 +79,7 @@ func (c *LRU[K, V]) Purge() {
 }
 
 // Remove drops an item from the cache. Returns true if the key was present in cache.
-func (c *LRU[K, V]) Remove(key K) bool {
+func (c *Cache[K, V]) Remove(key K) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -85,7 +87,7 @@ func (c *LRU[K, V]) Remove(key K) bool {
 }
 
 // Keys returns all keys of items currently in the LRU.
-func (c *LRU[K, V]) Keys() []K {
+func (c *Cache[K, V]) Keys() []K {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

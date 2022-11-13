@@ -74,7 +74,7 @@ type Backend interface {
 // FilterSystem holds resources shared by all filters.
 type FilterSystem struct {
 	backend   Backend
-	logsCache *lru.LRU[common.Hash, [][]*types.Log]
+	logsCache *lru.Cache[common.Hash, [][]*types.Log]
 	cfg       *Config
 }
 
@@ -83,7 +83,7 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	config = config.withDefaults()
 	return &FilterSystem{
 		backend:   backend,
-		logsCache: lru.NewLRU[common.Hash, [][]*types.Log](config.LogCacheSize),
+		logsCache: lru.NewCache[common.Hash, [][]*types.Log](config.LogCacheSize),
 		cfg:       &config,
 	}
 }

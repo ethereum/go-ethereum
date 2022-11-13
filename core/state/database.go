@@ -132,16 +132,16 @@ func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
 	return &cachingDB{
 		db:            trie.NewDatabaseWithConfig(db, config),
 		disk:          db,
-		codeSizeCache: lru.NewLRU[common.Hash, int](codeSizeCacheSize),
-		codeCache:     lru.NewBlobLRU[common.Hash, []byte](codeCacheSize),
+		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
+		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 	}
 }
 
 type cachingDB struct {
 	db            *trie.Database
 	disk          ethdb.KeyValueStore
-	codeSizeCache *lru.LRU[common.Hash, int]
-	codeCache     *lru.BlobLRU[common.Hash, []byte]
+	codeSizeCache *lru.Cache[common.Hash, int]
+	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 }
 
 // OpenTrie opens the main account trie at a specific root hash.

@@ -31,7 +31,7 @@ func mkHash(i int) common.Hash {
 }
 
 func TestBlobLru(t *testing.T) {
-	lru := NewBlobLRU[common.Hash, []byte](100)
+	lru := NewSizeConstrainedCache[common.Hash, []byte](100)
 	var want uint64
 	// Add 11 items of 10 byte each. First item should be swapped out
 	for i := 0; i < 11; i++ {
@@ -70,7 +70,7 @@ func TestBlobLru(t *testing.T) {
 // TestBlobLruOverflow tests what happens when inserting an element exceeding
 // the max size
 func TestBlobLruOverflow(t *testing.T) {
-	lru := NewBlobLRU[common.Hash, []byte](100)
+	lru := NewSizeConstrainedCache[common.Hash, []byte](100)
 	// Add 10 items of 10 byte each, filling the cache
 	for i := 0; i < 10; i++ {
 		k := mkHash(i)
@@ -108,7 +108,7 @@ func TestBlobLruOverflow(t *testing.T) {
 
 // TestBlobLruSameItem tests what happens when inserting the same k/v multiple times.
 func TestBlobLruSameItem(t *testing.T) {
-	lru := NewBlobLRU[common.Hash, []byte](100)
+	lru := NewSizeConstrainedCache[common.Hash, []byte](100)
 	// Add one 10 byte-item 10 times
 	k := mkHash(0)
 	v := fmt.Sprintf("value-%04d", 0)

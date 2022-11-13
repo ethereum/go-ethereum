@@ -21,29 +21,29 @@ import (
 	"sync"
 )
 
-// BlobType is the type constraint for values stored in BlobLRU.
-type BlobType interface {
+// blobType is the type constraint for values stored in SizeConstrainedCache.
+type blobType interface {
 	~[]byte | ~string
 }
 
-// BlobLRU is a LRU cache where capacity is in bytes (instead of item count).
-// When the cache is at capacity, and a new item is added, the older items are evicted
-// until the size constraint can be met.
+// SizeConstrainedCache is a cache where capacity is in bytes (instead of item count). When the cache
+// is at capacity, and a new item is added, older items are evicted until the size
+// constraint is met.
 //
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
-type BlobLRU[K comparable, V BlobType] struct {
+type SizeConstrainedCache[K comparable, V blobType] struct {
 	size    uint64
 	maxSize uint64
 	lru     BasicLRU[K, V]
 	lock    sync.Mutex
 }
 
-// NewBlobLRU creates a new SizeConstrainedLRU.
-func NewBlobLRU[K comparable, V BlobType](max uint64) *BlobLRU[K, V] {
-	return &BlobLRU[K, V]{
+// NewSizeConstrainedCache creates a new size-constrained LRU cache.
+func NewSizeConstrainedCache[K comparable, V blobType](maxSize uint64) *SizeConstrainedCache[K, V] {
+	return &SizeConstrainedCache[K, V]{
 		size:    0,
-		maxSize: max,
+		maxSize: maxSize,
 		lru:     NewBasicLRU[K, V](math.MaxInt),
 	}
 }
@@ -52,7 +52,7 @@ func NewBlobLRU[K comparable, V BlobType](max uint64) *BlobLRU[K, V] {
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
 // OBS: The value is _not_ copied on Add, so the caller must not modify it afterwards.
-func (c *BlobLRU[K, V]) Add(key K, value V) (evicted bool) {
+func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -76,7 +76,7 @@ func (c *BlobLRU[K, V]) Add(key K, value V) (evicted bool) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *BlobLRU[K, V]) Get(key K) (V, bool) {
+func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

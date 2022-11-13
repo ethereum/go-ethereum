@@ -64,9 +64,9 @@ type HeaderChain struct {
 	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
 	currentHeaderHash common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
-	headerCache *lru.LRU[common.Hash, *types.Header]
-	tdCache     *lru.LRU[common.Hash, *big.Int] // most recent total difficulties
-	numberCache *lru.LRU[common.Hash, uint64]   // most recent block numbers
+	headerCache *lru.Cache[common.Hash, *types.Header]
+	tdCache     *lru.Cache[common.Hash, *big.Int] // most recent total difficulties
+	numberCache *lru.Cache[common.Hash, uint64]   // most recent block numbers
 
 	procInterrupt func() bool
 
@@ -85,9 +85,9 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	hc := &HeaderChain{
 		config:        config,
 		chainDb:       chainDb,
-		headerCache:   lru.NewLRU[common.Hash, *types.Header](headerCacheLimit),
-		tdCache:       lru.NewLRU[common.Hash, *big.Int](tdCacheLimit),
-		numberCache:   lru.NewLRU[common.Hash, uint64](numberCacheLimit),
+		headerCache:   lru.NewCache[common.Hash, *types.Header](headerCacheLimit),
+		tdCache:       lru.NewCache[common.Hash, *big.Int](tdCacheLimit),
+		numberCache:   lru.NewCache[common.Hash, uint64](numberCacheLimit),
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
 		engine:        engine,
