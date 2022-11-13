@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	eth "github.com/ethereum/go-ethereum/g/protocols/g"
+	"github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -109,7 +109,7 @@ func newSkeletonTestPeerWithHook(id string, headers []*types.Header, serve func(
 // RequestHeadersByNumber constructs a GetBlockHeaders function based on a numbered
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *eth.Response) (*eth.Request, error) {
+func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool, sink chan *g.Response) (*g.Request, error) {
 	// Since skeleton test peer are in-memory mocks, dropping the does not make
 	// them inaccessible. As such, check a local `dropped` field to see if the
 	// peer has been dropped and should not respond any more.
@@ -152,7 +152,7 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 			for i := 0; i < amount; i++ {
 				// Consider nil headers as a form of attack and withhold them. Nil
 				// cannot be decoded from RLP, so it's not possible to produce an
-				// attack by sending/receiving those over eth.
+				// attack by sending/receiving those over g.
 				header := p.headers[int(origin)-i]
 				if header == nil {
 					continue
@@ -168,12 +168,12 @@ func (p *skeletonTestPeer) RequestHeadersByNumber(origin uint64, amount int, ski
 		hashes[i] = header.Hash()
 	}
 	// Deliver the headers to the downloader
-	req := &eth.Request{
+	req := &g.Request{
 		Peer: p.id,
 	}
-	res := &eth.Response{
+	res := &g.Response{
 		Req:  req,
-		Res:  (*eth.BlockHeadersPacket)(&headers),
+		Res:  (*g.BlockHeadersPacket)(&headers),
 		Meta: hashes,
 		Time: 1,
 		Done: make(chan error),
@@ -192,15 +192,15 @@ func (p *skeletonTestPeer) Head() (common.Hash, *big.Int) {
 	panic("skeleton sync must not request the remote head")
 }
 
-func (p *skeletonTestPeer) RequestHeadersByHash(common.Hash, int, int, bool, chan *eth.Response) (*eth.Request, error) {
+func (p *skeletonTestPeer) RequestHeadersByHash(common.Hash, int, int, bool, chan *g.Response) (*g.Request, error) {
 	panic("skeleton sync must not request headers by hash")
 }
 
-func (p *skeletonTestPeer) RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error) {
+func (p *skeletonTestPeer) RequestBodies([]common.Hash, chan *g.Response) (*g.Request, error) {
 	panic("skeleton sync must not request block bodies")
 }
 
-func (p *skeletonTestPeer) RequestReceipts([]common.Hash, chan *eth.Response) (*eth.Request, error) {
+func (p *skeletonTestPeer) RequestReceipts([]common.Hash, chan *g.Response) (*g.Request, error) {
 	panic("skeleton sync must not request receipts")
 }
 
@@ -769,7 +769,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// Create a peer set to feed headers through
 		peerset := newPeerSet()
 		for _, peer := range tt.peers {
-			peerset.Register(newPeerConnection(peer.id, eth.ETH66, peer, log.New("id", peer.id)))
+			peerset.Register(newPeerConnection(peer.id, g.ETH66, peer, log.New("id", peer.id)))
 		}
 		// Create a peer dropper to track malicious peers
 		dropped := make(map[string]int)
@@ -834,7 +834,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			skeleton.Sync(tt.newHead, true)
 		}
 		if tt.newPeer != nil {
-			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH66, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
+			if err := peerset.Register(newPeerConnection(tt.newPeer.id, g.ETH66, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
 				t.Errorf("test %d: failed to register new peer: %v", i, err)
 			}
 		}

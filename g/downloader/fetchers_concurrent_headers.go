@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	eth "github.com/ethereum/go-ethereum/g/protocols/g"
+	"github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -73,15 +73,15 @@ func (q *headerQueue) unreserve(peer string) int {
 
 // request is responsible for converting a generic fetch request into a header
 // one and sending it to the remote peer for fulfillment.
-func (q *headerQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {
+func (q *headerQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *g.Response) (*g.Request, error) {
 	peer.log.Trace("Requesting new batch of headers", "from", req.From)
 	return peer.peer.RequestHeadersByNumber(req.From, MaxHeaderFetch, 0, false, resCh)
 }
 
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the header data and delivering it to the downloader's queue.
-func (q *headerQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	headers := *packet.Res.(*eth.BlockHeadersPacket)
+func (q *headerQueue) deliver(peer *peerConnection, packet *g.Response) (int, error) {
+	headers := *packet.Res.(*g.BlockHeadersPacket)
 	hashes := packet.Meta.([]common.Hash)
 
 	accepted, err := q.queue.DeliverHeaders(peer.id, headers, hashes, q.headerProcCh)

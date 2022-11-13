@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	eth "github.com/ethereum/go-ethereum/g/protocols/g"
+	"github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -73,7 +73,7 @@ func (q *receiptQueue) unreserve(peer string) int {
 
 // request is responsible for converting a generic fetch request into a receipt
 // one and sending it to the remote peer for fulfillment.
-func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error) {
+func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh chan *g.Response) (*g.Request, error) {
 	peer.log.Trace("Requesting new batch of receipts", "count", len(req.Headers), "from", req.Headers[0].Number)
 	if q.receiptFetchHook != nil {
 		q.receiptFetchHook(req.Headers)
@@ -87,8 +87,8 @@ func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh ch
 
 // deliver is responsible for taking a generic response packet from the concurrent
 // fetcher, unpacking the receipt data and delivering it to the downloader's queue.
-func (q *receiptQueue) deliver(peer *peerConnection, packet *eth.Response) (int, error) {
-	receipts := *packet.Res.(*eth.ReceiptsPacket)
+func (q *receiptQueue) deliver(peer *peerConnection, packet *g.Response) (int, error) {
+	receipts := *packet.Res.(*g.ReceiptsPacket)
 	hashes := packet.Meta.([]common.Hash) // {receipt hashes}
 
 	accepted, err := q.queue.DeliverReceipts(peer.id, receipts, hashes)

@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
-	eth "github.com/ethereum/go-ethereum/g/protocols/g"
+	"github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -65,12 +65,12 @@ type typedQueue interface {
 
 	// request is responsible for converting a generic fetch request into a typed
 	// one and sending it to the remote peer for fulfillment.
-	request(peer *peerConnection, req *fetchRequest, resCh chan *eth.Response) (*eth.Request, error)
+	request(peer *peerConnection, req *fetchRequest, resCh chan *g.Response) (*g.Request, error)
 
 	// deliver is responsible for taking a generic response packet from the
 	// concurrent fetcher, unpacking the type specific data and delivering
 	// it to the downloader's queue.
-	deliver(peer *peerConnection, packet *eth.Response) (int, error)
+	deliver(peer *peerConnection, packet *g.Response) (int, error)
 }
 
 // concurrentFetch iteratively downloads scheduled block parts, taking available
@@ -78,10 +78,10 @@ type typedQueue interface {
 // or timeouts.
 func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	// Create a delivery channel to accept responses from all peers
-	responses := make(chan *eth.Response)
+	responses := make(chan *g.Response)
 
 	// Track the currently active requests and their timeout order
-	pending := make(map[string]*eth.Request)
+	pending := make(map[string]*g.Request)
 	defer func() {
 		// Abort all requests on sync cycle cancellation. The requests may still
 		// be fulfilled by the remote side, but the dispatcher will not wait to
@@ -90,9 +90,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 			req.Close()
 		}
 	}()
-	ordering := make(map[*eth.Request]int)
+	ordering := make(map[*g.Request]int)
 	timeouts := prque.New(func(data interface{}, index int) {
-		ordering[data.(*eth.Request)] = index
+		ordering[data.(*g.Request)] = index
 	})
 
 	timeout := time.NewTimer(0)
@@ -106,7 +106,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 	// all trace of a timed out request is not good. We also can't just cancel
 	// the pending request altogether as that would prevent a late response from
 	// being delivered, thus never unblocking the peer.
-	stales := make(map[string]*eth.Request)
+	stales := make(map[string]*g.Request)
 	defer func() {
 		// Abort all requests on sync cycle cancellation. The requests may still
 		// be fulfilled by the remote side, but the dispatcher will not wait to
@@ -274,7 +274,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue, beaconMode bool) error {
 				timeout.Reset(at.Sub(now))
 				continue
 			}
-			req := item.(*eth.Request)
+			req := item.(*g.Request)
 
 			// Stop tracking the timed out request from a timing perspective,
 			// cancel it, so it's not considered in-flight anymore, but keep

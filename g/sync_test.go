@@ -22,15 +22,15 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/g/downloader"
-	eth "github.com/ethereum/go-ethereum/g/protocols/g"
+	"github.com/ethereum/go-ethereum/g/protocols/g"
 	"github.com/ethereum/go-ethereum/g/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Tests that snap sync is disabled after a successful sync cycle.
-func TestSnapSyncDisabling66(t *testing.T) { testSnapSyncDisabling(t, eth.ETH66, snap.SNAP1) }
-func TestSnapSyncDisabling67(t *testing.T) { testSnapSyncDisabling(t, eth.ETH67, snap.SNAP1) }
+func TestSnapSyncDisabling66(t *testing.T) { testSnapSyncDisabling(t, g.ETH66, snap.SNAP1) }
+func TestSnapSyncDisabling67(t *testing.T) { testSnapSyncDisabling(t, g.ETH67, snap.SNAP1) }
 
 // Tests that snap sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
@@ -51,23 +51,23 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	}
 	defer full.close()
 
-	// Sync up the two handlers via both `eth` and `snap`
+	// Sync up the two handlers via both `g` and `snap`
 	caps := []p2p.Cap{{Name: "eth", Version: ethVer}, {Name: "snap", Version: snapVer}}
 
 	emptyPipeEth, fullPipeEth := p2p.MsgPipe()
 	defer emptyPipeEth.Close()
 	defer fullPipeEth.Close()
 
-	emptyPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool)
-	fullPeerEth := eth.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool)
+	emptyPeerEth := g.NewPeer(ethVer, p2p.NewPeer(enode.ID{1}, "", caps), emptyPipeEth, empty.txpool)
+	fullPeerEth := g.NewPeer(ethVer, p2p.NewPeer(enode.ID{2}, "", caps), fullPipeEth, full.txpool)
 	defer emptyPeerEth.Close()
 	defer fullPeerEth.Close()
 
-	go empty.handler.runEthPeer(emptyPeerEth, func(peer *eth.Peer) error {
-		return eth.Handle((*ethHandler)(empty.handler), peer)
+	go empty.handler.runEthPeer(emptyPeerEth, func(peer *g.Peer) error {
+		return g.Handle((*ethHandler)(empty.handler), peer)
 	})
-	go full.handler.runEthPeer(fullPeerEth, func(peer *eth.Peer) error {
-		return eth.Handle((*ethHandler)(full.handler), peer)
+	go full.handler.runEthPeer(fullPeerEth, func(peer *g.Peer) error {
+		return g.Handle((*ethHandler)(full.handler), peer)
 	})
 
 	emptyPipeSnap, fullPipeSnap := p2p.MsgPipe()
