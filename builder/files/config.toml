@@ -10,6 +10,7 @@ datadir = "/var/lib/bor/data"
 syncmode = "full"
 # gcmode = "full"
 # snapshot = true
+# "bor.logs" = false
 # ethstats = ""
 
 # ["eth.requiredblocks"]
@@ -77,8 +78,7 @@ syncmode = "full"
     # prefix = ""
     # host = "localhost"
     # api = ["web3", "net"]
-    # vhosts = ["*"]
-    # corsdomain = ["*"]
+    # origins = ["*"]
   # [jsonrpc.graphql]
     # enabled = false
     # port = 0
@@ -121,6 +121,7 @@ syncmode = "full"
   # noprefetch = false
   # preimages = false
   # txlookuplimit = 2350000
+  # triesinmemory = 128
 
 [accounts]
   # allow-insecure-unlock = true

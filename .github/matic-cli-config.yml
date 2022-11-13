@@ -3,6 +3,9 @@ defaultFee: 2000
 borChainId: "15001"
 heimdallChainId: heimdall-15001
 contractsBranch: arpit/v0.3.2-backport
+sprintSize: 64
+blockNumber: '0'
+blockTime: '2'
 numOfValidators: 3
 numOfNonValidators: 0
 ethURL: http://ganache:9545

@@ -6,8 +6,11 @@ package bor
 import (
 	"crypto/ecdsa"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	_log "log"
+	"math/big"
 	"os"
 	"sync"
 	"testing"
@@ -15,12 +18,18 @@ import (
 
 	"gotest.tools/assert"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -52,7 +61,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_sprint_length_change.json", 32)
+	genesis := InitGenesisSprintLength(t, faucets, "./testdata/genesis_sprint_length_change.json", 32)
 	nodes := make([]*eth.Ethereum, 2)
 	enodes := make([]*enode.Node, 2)
 
@@ -265,7 +274,7 @@ func getTestSprintLengthReorgCases2Nodes() []map[string]interface{} {
 						"reorgLength": j,
 						"startBlock":  k,
 						"sprintSize":  sprintSizes[i],
-						"faultyNodes": faultyNodes[i], // node 1(index) is primary validator of the first sprint
+						"faultyNodes": faultyNodes[l], // node 1(index) is primary validator of the first sprint
 					}
 					reorgsLengthTests = append(reorgsLengthTests, reorgsLengthTest)
 				}
@@ -356,7 +365,7 @@ func SprintLengthReorgIndividual2Nodes(t *testing.T, index int, tt map[string]in
 }
 
 func TestSprintLengthReorg2Nodes(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	t.Parallel()
 
 	reorgsLengthTests := getTestSprintLengthReorgCases2Nodes()
@@ -476,7 +485,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 	}
 
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"])
+	genesis := InitGenesisSprintLength(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"])
 
 	nodes := make([]*eth.Ethereum, len(keys_21val))
 	enodes := make([]*enode.Node, len(keys_21val))
@@ -599,9 +608,8 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 	if err != nil {
 		panic(err)
 	}
-
 	// Create an Ethash network based off of the Ropsten config
-	genesis := InitGenesis(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"])
+	genesis := InitGenesisSprintLength(t, nil, "./testdata/genesis_7val.json", tt["sprintSize"].(uint64))
 
 	nodes := make([]*eth.Ethereum, len(keys_21val))
 	enodes := make([]*enode.Node, len(keys_21val))
@@ -710,4 +718,82 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 	}
 
 	return 0, 0
+}
+
+func InitGenesisSprintLength(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
+
+	// sprint size = 8 in genesis
+	genesisData, err := ioutil.ReadFile(fileLocation)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis := &core.Genesis{}
+
+	if err := json.Unmarshal(genesisData, genesis); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis.Config.ChainID = big.NewInt(15001)
+	genesis.Config.EIP150Hash = common.Hash{}
+	genesis.Config.Bor.Sprint["0"] = sprintSize
+
+	return genesis
+}
+
+func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
+	datadir, _ := ioutil.TempDir("", "")
+
+	config := &node.Config{
+		Name:    "geth",
+		Version: params.Version,
+		DataDir: datadir,
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		},
+		UseLightweightKDF: true,
+	}
+	// Create the node and configure a full Ethereum node on it
+	stack, err := node.New(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             ethconfig.Defaults.GPO,
+		Ethash:          ethconfig.Defaults.Ethash,
+		Miner: miner.Config{
+			Etherbase: crypto.PubkeyToAddress(privKey.PublicKey),
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
+		},
+		WithoutHeimdall: withoutHeimdall,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// register backend to account manager with keystore for signing
+	keydir := stack.KeyStoreDir()
+
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	kStore := keystore.NewKeyStore(keydir, n, p)
+
+	kStore.ImportECDSA(privKey, "")
+	acc := kStore.Accounts()[0]
+	kStore.Unlock(acc, "")
+	// proceed to authorize the local account manager in any case
+	ethBackend.AccountManager().AddBackend(kStore)
+
+	err = stack.Start()
+	return stack, ethBackend, err
 }

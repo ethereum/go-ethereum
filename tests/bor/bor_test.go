@@ -210,6 +210,141 @@ func TestValidatorWentOffline(t *testing.T) {
 
 }
 
+func TestForkWithBlockTime(t *testing.T) {
+
+	cases := []struct {
+		name          string
+		sprint        uint64
+		blockTime     map[string]uint64
+		change        uint64
+		producerDelay uint64
+		forkExpected  bool
+	}{
+		{
+			name:   "No fork after 2 sprints with producer delay = max block time",
+			sprint: 128,
+			blockTime: map[string]uint64{
+				"0":   5,
+				"128": 2,
+				"256": 8,
+			},
+			change:        2,
+			producerDelay: 8,
+			forkExpected:  false,
+		},
+		{
+			name:   "No Fork after 1 sprint producer delay = max block time",
+			sprint: 64,
+			blockTime: map[string]uint64{
+				"0":  5,
+				"64": 2,
+			},
+			change:        1,
+			producerDelay: 5,
+			forkExpected:  false,
+		},
+		{
+			name:   "Fork after 4 sprints with producer delay < max block time",
+			sprint: 16,
+			blockTime: map[string]uint64{
+				"0":  2,
+				"64": 5,
+			},
+			change:        4,
+			producerDelay: 4,
+			forkExpected:  true,
+		},
+	}
+
+	// Create an Ethash network based off of the Ropsten config
+	genesis := initGenesis(t)
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+
+			genesis.Config.Bor.Sprint = test.sprint
+			genesis.Config.Bor.Period = test.blockTime
+			genesis.Config.Bor.BackupMultiplier = test.blockTime
+			genesis.Config.Bor.ProducerDelay = test.producerDelay
+
+			stacks, nodes, _ := setupMiner(t, 2, genesis)
+
+			defer func() {
+				for _, stack := range stacks {
+					stack.Close()
+				}
+			}()
+
+			// Iterate over all the nodes and start mining
+			for _, node := range nodes {
+				if err := node.StartMining(1); err != nil {
+					t.Fatal("Error occured while starting miner", "node", node, "error", err)
+				}
+			}
+			var wg sync.WaitGroup
+			blockHeaders := make([]*types.Header, 2)
+			ticker := time.NewTicker(time.Duration(test.blockTime["0"]) * time.Second)
+			defer ticker.Stop()
+
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+
+				go func(i int) {
+					defer wg.Done()
+
+					for range ticker.C {
+						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint*test.change + 10)
+						if blockHeaders[i] != nil {
+							break
+						}
+					}
+
+				}(i)
+			}
+
+			wg.Wait()
+
+			// Before the end of sprint
+			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint - 1)
+			blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint - 1)
+			assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
+			assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
+
+			author0, err := nodes[0].Engine().Author(blockHeaderVal0)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author1, err := nodes[1].Engine().Author(blockHeaderVal1)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			assert.Equal(t, author0, author1)
+
+			// After the end of sprint
+			author2, err := nodes[0].Engine().Author(blockHeaders[0])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author3, err := nodes[1].Engine().Author(blockHeaders[1])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+
+			if test.forkExpected {
+				assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.NotEqual(t, author2, author3)
+			} else {
+				assert.Equal(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.Equal(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.Equal(t, author2, author3)
+			}
+		})
+
+	}
+
+}
+
 func TestInsertingSpanSizeBlocks(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
