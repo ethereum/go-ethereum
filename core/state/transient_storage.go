@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ func newTransientStorage() transientStorage {
 	return make(transientStorage)
 }
 
+// Set sets the transient-storage `value` for `key` at the given `addr`.
 func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
 	if _, ok := t[addr]; !ok {
 		t[addr] = make(Storage)
@@ -33,6 +34,7 @@ func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
 	t[addr][key] = value
 }
 
+// Get gets the transient storage for `key` at the given `addr`.
 func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash {
 	val, ok := t[addr]
 	if !ok {
@@ -41,6 +43,7 @@ func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash 
 	return val[key]
 }
 
+// Copy does a deep copy of the transientStorage
 func (t transientStorage) Copy() transientStorage {
 	storage := make(transientStorage)
 	for key, value := range t {
