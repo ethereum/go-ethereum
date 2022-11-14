@@ -27,7 +27,7 @@ export const getStaticPaths: GetStaticPaths = () => {
       }
     }
 
-    return files.map(file => file.replace('.md', '')).map((file) => file.replace('/index', ''));
+    return files.map(file => file.replace('.md', '')).map(file => file.replace('/index', ''));
   };
 
   const paths: string[] = getFileList('docs'); // This is folder that get crawled for valid docs paths. Change if this path changes.
@@ -40,20 +40,18 @@ export const getStaticPaths: GetStaticPaths = () => {
 
 // Reads file data for markdown pages
 export const getStaticProps: GetStaticProps = async context => {
-  const { slug } = context.params as ParsedUrlQuery
-  const filePath = (slug as string[])!.join('/')
-  let file
+  const { slug } = context.params as ParsedUrlQuery;
+  const filePath = (slug as string[])!.join('/');
+  let file;
 
   try {
-    file = fs
-    .readFileSync(`${filePath}.md`, 'utf-8')
+    file = fs.readFileSync(`${filePath}.md`, 'utf-8');
   } catch {
-    file = fs
-    .readFileSync(`${filePath}/index.md`, 'utf-8')
+    file = fs.readFileSync(`${filePath}/index.md`, 'utf-8');
   }
 
   const { data: frontmatter, content } = matter(file, MATTER_OPTIONS);
-  
+
   return {
     props: {
       frontmatter,
@@ -72,15 +70,9 @@ interface Props {
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
-      <Heading as='h1'>
-        {frontmatter.title}
-      </Heading>
+      <Heading as='h1'>{frontmatter.title}</Heading>
 
-      <ReactMarkdown
-        components={MDXComponents}
-      >
-        {content}
-      </ReactMarkdown> 
+      <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
     </>
   );
 };
