@@ -307,7 +307,7 @@ cd go-ethereum
 CC=clang make geth
 ```
 
-To start the node, the followijng command can be run:
+To start the node, the following command can be run:
 
 ```shell
 build/bin/geth
