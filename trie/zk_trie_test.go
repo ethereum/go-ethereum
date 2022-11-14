@@ -18,6 +18,9 @@ package trie
 
 import (
 	"bytes"
+	"encoding/binary"
+	"io/ioutil"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -27,6 +30,7 @@ import (
 	zkt "github.com/scroll-tech/zktrie/types"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/ethdb/leveldb"
 	"github.com/scroll-tech/go-ethereum/ethdb/memorydb"
 )
 
@@ -147,4 +151,75 @@ func TestZkTrieConcurrency(t *testing.T) {
 	}
 	// Wait for all threads to finish
 	pend.Wait()
+}
+
+func tempDBZK(b *testing.B) (string, *Database) {
+	dir, err := ioutil.TempDir("", "zktrie-bench")
+	assert.NoError(b, err)
+
+	diskdb, err := leveldb.New(dir, 256, 0, "", false)
+	assert.NoError(b, err)
+	config := &Config{Cache: 256, Preimages: true, Zktrie: true}
+	return dir, NewDatabaseWithConfig(diskdb, config)
+}
+
+const benchElemCountZk = 10000
+
+func BenchmarkZkTrieGet(b *testing.B) {
+	_, tmpdb := tempDBZK(b)
+	zkTrie, _ := NewZkTrie(common.Hash{}, NewZktrieDatabaseFromTriedb(tmpdb))
+	defer func() {
+		ldb := zkTrie.db.db.diskdb.(*leveldb.Database)
+		ldb.Close()
+		os.RemoveAll(ldb.Path())
+	}()
+
+	k := make([]byte, 32)
+	for i := 0; i < benchElemCountZk; i++ {
+		binary.LittleEndian.PutUint64(k, uint64(i))
+
+		err := zkTrie.TryUpdate(k, k)
+		assert.NoError(b, err)
+	}
+
+	zkTrie.db.db.Commit(common.Hash{}, true, nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		binary.LittleEndian.PutUint64(k, uint64(i))
+		_, err := zkTrie.TryGet(k)
+		assert.NoError(b, err)
+	}
+	b.StopTimer()
+}
+
+func BenchmarkZkTrieUpdate(b *testing.B) {
+	_, tmpdb := tempDBZK(b)
+	zkTrie, _ := NewZkTrie(common.Hash{}, NewZktrieDatabaseFromTriedb(tmpdb))
+	defer func() {
+		ldb := zkTrie.db.db.diskdb.(*leveldb.Database)
+		ldb.Close()
+		os.RemoveAll(ldb.Path())
+	}()
+
+	k := make([]byte, 32)
+	v := make([]byte, 32)
+	b.ReportAllocs()
+
+	for i := 0; i < benchElemCountZk; i++ {
+		binary.LittleEndian.PutUint64(k, uint64(i))
+		err := zkTrie.TryUpdate(k, k)
+		assert.NoError(b, err)
+	}
+	binary.LittleEndian.PutUint64(k, benchElemCountZk/2)
+
+	//zkTrie.Commit(nil)
+	zkTrie.db.db.Commit(common.Hash{}, true, nil)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		binary.LittleEndian.PutUint64(k, uint64(i))
+		binary.LittleEndian.PutUint64(v, 0xffffffff+uint64(i))
+		err := zkTrie.TryUpdate(k, v)
+		assert.NoError(b, err)
+	}
+	b.StopTimer()
 }
