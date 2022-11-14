@@ -223,7 +223,7 @@ func (ch transientStorageChange) revert(s *StateDB) {
 }
 
 func (ch transientStorageChange) dirtied() *common.Address {
-	return ch.account
+	return nil
 }
 
 func (ch refundChange) revert(s *StateDB) {
