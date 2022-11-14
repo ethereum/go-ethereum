@@ -4,7 +4,7 @@ import yaml from 'js-yaml';
 import ReactMarkdown from 'react-markdown';
 import { Heading } from '@chakra-ui/react';
 import MDXComponents from '../components/';
-
+import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 
 const MATTER_OPTIONS = {
@@ -38,15 +38,10 @@ export const getStaticPaths: GetStaticPaths = () => {
   };
 };
 
-interface Context { 
-  params: {
-    slug: string[];
-  }
-}
-
 // Reads file data for markdown pages
-export const getStaticProps: GetStaticProps = async (context: Context) => {
-  const filePath = context.params.slug.join('/')
+export const getStaticProps: GetStaticProps = async context => {
+  const { slug } = context.params as ParsedUrlQuery
+  const filePath = (slug as string[])!.join('/')
   let file
 
   try {
