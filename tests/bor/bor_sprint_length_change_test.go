@@ -373,7 +373,7 @@ func SprintLengthReorgIndividual2Nodes(t *testing.T, index int, tt map[string]in
 }
 
 func TestSprintLengthReorg2Nodes(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 	t.Parallel()
 
 	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
