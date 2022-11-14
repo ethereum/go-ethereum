@@ -20,22 +20,21 @@ import (
 	"encoding/binary"
 	"fmt"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
-func mkHash(i int) common.Hash {
-	h := make([]byte, 32)
-	binary.LittleEndian.PutUint64(h, uint64(i))
-	return common.BytesToHash(h)
+type testKey [8]byte
+
+func mkKey(i int) (key testKey) {
+	binary.LittleEndian.PutUint64(key[:], uint64(i))
+	return key
 }
 
-func TestBlobLru(t *testing.T) {
-	lru := NewSizeConstrainedLRU(100)
+func TestSizeConstrainedCache(t *testing.T) {
+	lru := NewSizeConstrainedCache[testKey, []byte](100)
 	var want uint64
 	// Add 11 items of 10 byte each. First item should be swapped out
 	for i := 0; i < 11; i++ {
-		k := mkHash(i)
+		k := mkKey(i)
 		v := fmt.Sprintf("value-%04d", i)
 		lru.Add(k, []byte(v))
 		want += uint64(len(v))
@@ -48,17 +47,17 @@ func TestBlobLru(t *testing.T) {
 	}
 	// Zero:th should be evicted
 	{
-		k := mkHash(0)
-		if val := lru.Get(k); val != nil {
+		k := mkKey(0)
+		if _, ok := lru.Get(k); ok {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}
 	// Elems 1-11 should be present
 	for i := 1; i < 11; i++ {
-		k := mkHash(i)
+		k := mkKey(i)
 		want := fmt.Sprintf("value-%04d", i)
-		have := lru.Get(k)
-		if have == nil {
+		have, ok := lru.Get(k)
+		if !ok {
 			t.Fatalf("missing key %v", k)
 		}
 		if string(have) != want {
@@ -67,26 +66,26 @@ func TestBlobLru(t *testing.T) {
 	}
 }
 
-// TestBlobLruOverflow tests what happens when inserting an element exceeding
-// the max size
-func TestBlobLruOverflow(t *testing.T) {
-	lru := NewSizeConstrainedLRU(100)
+// This test adds inserting an element exceeding the max size.
+func TestSizeConstrainedCacheOverflow(t *testing.T) {
+	lru := NewSizeConstrainedCache[testKey, []byte](100)
+
 	// Add 10 items of 10 byte each, filling the cache
 	for i := 0; i < 10; i++ {
-		k := mkHash(i)
+		k := mkKey(i)
 		v := fmt.Sprintf("value-%04d", i)
 		lru.Add(k, []byte(v))
 	}
 	// Add one single large elem. We expect it to swap out all entries.
 	{
-		k := mkHash(1337)
+		k := mkKey(1337)
 		v := make([]byte, 200)
 		lru.Add(k, v)
 	}
 	// Elems 0-9 should be missing
 	for i := 1; i < 10; i++ {
-		k := mkHash(i)
-		if val := lru.Get(k); val != nil {
+		k := mkKey(i)
+		if _, ok := lru.Get(k); ok {
 			t.Fatalf("should be evicted: %v", k)
 		}
 	}
@@ -97,7 +96,7 @@ func TestBlobLruOverflow(t *testing.T) {
 	// Adding one small item should swap out the large one
 	{
 		i := 0
-		k := mkHash(i)
+		k := mkKey(i)
 		v := fmt.Sprintf("value-%04d", i)
 		lru.Add(k, []byte(v))
 		if have, want := lru.size, uint64(10); have != want {
@@ -106,17 +105,51 @@ func TestBlobLruOverflow(t *testing.T) {
 	}
 }
 
-// TestBlobLruSameItem tests what happens when inserting the same k/v multiple times.
-func TestBlobLruSameItem(t *testing.T) {
-	lru := NewSizeConstrainedLRU(100)
-	// Add one 10 byte-item 10 times
-	k := mkHash(0)
+// This checks what happens when inserting the same k/v multiple times.
+func TestSizeConstrainedCacheSameItem(t *testing.T) {
+	lru := NewSizeConstrainedCache[testKey, []byte](100)
+
+	// Add one 10 byte-item 10 times.
+	k := mkKey(0)
 	v := fmt.Sprintf("value-%04d", 0)
 	for i := 0; i < 10; i++ {
 		lru.Add(k, []byte(v))
 	}
-	// The size should be accurate
+
+	// The size should be accurate.
 	if have, want := lru.size, uint64(10); have != want {
 		t.Fatalf("size wrong, have %d want %d", have, want)
+	}
+}
+
+// This tests that empty/nil values are handled correctly.
+func TestSizeConstrainedCacheEmpties(t *testing.T) {
+	lru := NewSizeConstrainedCache[testKey, []byte](100)
+
+	// This test abuses the lru a bit, using different keys for identical value(s).
+	for i := 0; i < 10; i++ {
+		lru.Add(testKey{byte(i)}, []byte{})
+		lru.Add(testKey{byte(255 - i)}, nil)
+	}
+
+	// The size should not count, only the values count. So this could be a DoS
+	// since it basically has no cap, and it is intentionally overloaded with
+	// different-keyed 0-length values.
+	if have, want := lru.size, uint64(0); have != want {
+		t.Fatalf("size wrong, have %d want %d", have, want)
+	}
+
+	for i := 0; i < 10; i++ {
+		if v, ok := lru.Get(testKey{byte(i)}); !ok {
+			t.Fatalf("test %d: expected presence", i)
+		} else if v == nil {
+			t.Fatalf("test %d, v is nil", i)
+		}
+
+		if v, ok := lru.Get(testKey{byte(255 - i)}); !ok {
+			t.Fatalf("test %d: expected presence", i)
+		} else if v != nil {
+			t.Fatalf("test %d, v is not nil", i)
+		}
 	}
 }

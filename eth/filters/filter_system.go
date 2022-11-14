@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -35,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Config represents the configuration of the filter system.
@@ -77,21 +77,16 @@ type Backend interface {
 // FilterSystem holds resources shared by all filters.
 type FilterSystem struct {
 	backend   Backend
-	logsCache *lru.Cache
+	logsCache *lru.Cache[common.Hash, [][]*types.Log]
 	cfg       *Config
 }
 
 // NewFilterSystem creates a filter system.
 func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	config = config.withDefaults()
-
-	cache, err := lru.New(config.LogCacheSize)
-	if err != nil {
-		panic(err)
-	}
 	return &FilterSystem{
 		backend:   backend,
-		logsCache: cache,
+		logsCache: lru.NewCache[common.Hash, [][]*types.Log](config.LogCacheSize),
 		cfg:       &config,
 	}
 }
@@ -100,7 +95,7 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 func (sys *FilterSystem) cachedGetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
 	cached, ok := sys.logsCache.Get(blockHash)
 	if ok {
-		return cached.([][]*types.Log), nil
+		return cached, nil
 	}
 
 	logs, err := sys.backend.GetLogs(ctx, blockHash, number)
