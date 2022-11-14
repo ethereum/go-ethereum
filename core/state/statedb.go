@@ -456,6 +456,9 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 	return true
 }
 
+// SetTransientState sets transient storage for a given account. It
+// adds the change to the journal so that it can be rolled back
+// to its previous value if there is a revert.
 func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash) {
 	prev := s.GetTransientState(addr, key)
 	if prev == value {
@@ -471,10 +474,13 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	s.setTransientState(addr, key, value)
 }
 
+// setTransientState is a lower level setter for transient storage. It
+// is called during a revert to prevent modifications to the journal.
 func (s *StateDB) setTransientState(addr common.Address, key, value common.Hash) {
 	s.transientStorage.Set(addr, key, value)
 }
 
+// GetTransientState gets transient storage for a given account.
 func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
 	return s.transientStorage.Get(addr, key)
 }
