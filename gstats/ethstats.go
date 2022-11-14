@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package ethstats implements the network stats reporting service.
-package ethstats
+package gstats
 
 import (
 	"context"

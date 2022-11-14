@@ -45,10 +45,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/gclient"
+	"github.com/ethereum/go-ethereum/gstats"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
@@ -252,9 +252,9 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}
 
-	// Assemble the ethstats monitoring and reporting service'
+	// Assemble the gstats monitoring and reporting service'
 	if stats != "" {
-		if err := ethstats.New(stack, lesBackend.ApiBackend, lesBackend.Engine(), stats); err != nil {
+		if err := gstats.New(stack, lesBackend.ApiBackend, lesBackend.Engine(), stats); err != nil {
 			return nil, err
 		}
 	}
