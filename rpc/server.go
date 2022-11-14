@@ -122,10 +122,6 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")
-		//s.codecs.Each(func(c *ServerCodec) bool {
-		//	(*c).close()
-		//	return true
-		//})
 		s.codecs.Each(func(c *ServerCodec) bool {
 			(*c).close()
 			return true
