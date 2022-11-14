@@ -69,7 +69,7 @@ interface Props {
   content: string;
 }
 
-const DocPage: NextPage = ({ frontmatter, content }: Props) => {
+const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
       <Heading as='h1'>
