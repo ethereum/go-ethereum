@@ -20,27 +20,27 @@ const KeyLength = common.AddressLength + common.HashLength + 2
 
 type Key [KeyLength]byte
 
-func (k *Key) IsAddress() bool {
+func (k Key) IsAddress() bool {
 	return k[KeyLength-1] == addressType
 }
 
-func (k *Key) IsState() bool {
+func (k Key) IsState() bool {
 	return k[KeyLength-1] == stateType
 }
 
-func (k *Key) IsSubpath() bool {
+func (k Key) IsSubpath() bool {
 	return k[KeyLength-1] == subpathType
 }
 
-func (k *Key) GetAddress() common.Address {
+func (k Key) GetAddress() common.Address {
 	return common.BytesToAddress(k[:common.AddressLength])
 }
 
-func (k *Key) GetStateKey() common.Hash {
+func (k Key) GetStateKey() common.Hash {
 	return common.BytesToHash(k[common.AddressLength : KeyLength-2])
 }
 
-func (k *Key) GetSubpath() byte {
+func (k Key) GetSubpath() byte {
 	return k[KeyLength-2]
 }
 
