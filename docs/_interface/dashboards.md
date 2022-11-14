@@ -1,6 +1,6 @@
 ---
 title: Grafana Dashboard
-description: introduction to monitoring Geth nodes with Grafana
+sort-key: S
 ---
 
 There are several ways to monitor the performance of a Geth node. Insights 
