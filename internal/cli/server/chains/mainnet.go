@@ -30,6 +30,7 @@ var mainnetBor = &Chain{
 			LondonBlock:         big.NewInt(23850000),
 			Bor: &params.BorConfig{
 				JaipurBlock: 23850000,
+				DelhiBlock:  36507200,
 				Period: map[string]uint64{
 					"0": 2,
 				},

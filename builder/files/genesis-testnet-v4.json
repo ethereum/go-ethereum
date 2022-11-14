@@ -15,6 +15,7 @@
     "londonBlock": 22640000,
     "bor": {
       "jaipurBlock": 22770000,
+      "delhiBlock":  29392500,
       "period": {
         "0": 2,
         "25275000": 5
