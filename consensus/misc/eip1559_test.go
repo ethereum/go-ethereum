@@ -53,7 +53,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 func config() *params.ChainConfig {
 	config := copyConfig(params.TestChainConfig)
 	config.LondonBlock = big.NewInt(5)
-	config.Bor.DelhiBlock = 8
+	config.Bor.DelhiBlock = big.NewInt(8)
 	return config
 }
 

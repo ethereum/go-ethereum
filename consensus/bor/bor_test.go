@@ -125,20 +125,20 @@ func TestEncodeSigHeaderJaipur(t *testing.T) {
 	)
 
 	// Jaipur NOT enabled and BaseFee not set
-	hash := SealHash(h, &params.BorConfig{JaipurBlock: 10})
+	hash := SealHash(h, &params.BorConfig{JaipurBlock: big.NewInt(10)})
 	require.Equal(t, hash, hashWithoutBaseFee)
 
 	// Jaipur enabled (Jaipur=0) and BaseFee not set
-	hash = SealHash(h, &params.BorConfig{JaipurBlock: 0})
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: common.Big0})
 	require.Equal(t, hash, hashWithoutBaseFee)
 
 	h.BaseFee = big.NewInt(2)
 
 	// Jaipur enabled (Jaipur=Header block) and BaseFee set
-	hash = SealHash(h, &params.BorConfig{JaipurBlock: 1})
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: common.Big1})
 	require.Equal(t, hash, hashWithBaseFee)
 
 	// Jaipur NOT enabled and BaseFee set
-	hash = SealHash(h, &params.BorConfig{JaipurBlock: 10})
+	hash = SealHash(h, &params.BorConfig{JaipurBlock: big.NewInt(10)})
 	require.Equal(t, hash, hashWithoutBaseFee)
 }

@@ -171,7 +171,7 @@ var (
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
 
-func BaseFeeChangeDenominator(borConfig *BorConfig, number uint64) uint64 {
+func BaseFeeChangeDenominator(borConfig *BorConfig, number *big.Int) uint64 {
 	if borConfig.IsDelhi(number) {
 		return BaseFeeChangeDenominatorPostDelhi
 	} else {

@@ -349,8 +349,8 @@ var (
 		BerlinBlock:         big.NewInt(13996000),
 		LondonBlock:         big.NewInt(22640000),
 		Bor: &BorConfig{
-			JaipurBlock: 22770000,
-			DelhiBlock:  29392500,
+			JaipurBlock: big.NewInt(22770000),
+			DelhiBlock:  big.NewInt(29392500),
 			Period: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
@@ -399,8 +399,8 @@ var (
 		BerlinBlock:         big.NewInt(14750000),
 		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
-			JaipurBlock: 23850000,
-			DelhiBlock:  36507200,
+			JaipurBlock: big.NewInt(23850000),
+			DelhiBlock:  big.NewInt(36507200),
 			Period: map[string]uint64{
 				"0": 2,
 			},
@@ -578,8 +578,8 @@ type BorConfig struct {
 	OverrideStateSyncRecords map[string]int         `json:"overrideStateSyncRecords"` // override state records count
 	BlockAlloc               map[string]interface{} `json:"blockAlloc"`
 	BurntContract            map[string]string      `json:"burntContract"` // governance contract where the token will be sent to and burnt in london fork
-	JaipurBlock              uint64                 `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
-	DelhiBlock               uint64                 `json:"delhiBlock"`    // Delhi switch block (nil = no fork, 0 = already on delhi)
+	JaipurBlock              *big.Int               `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
+	DelhiBlock               *big.Int               `json:"delhiBlock"`    // Delhi switch block (nil = no fork, 0 = already on delhi)
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -603,12 +603,12 @@ func (c *BorConfig) CalculatePeriod(number uint64) uint64 {
 	return c.calculateBorConfigHelper(c.Period, number)
 }
 
-func (c *BorConfig) IsJaipur(number uint64) bool {
-	return number >= c.JaipurBlock
+func (c *BorConfig) IsJaipur(number *big.Int) bool {
+	return isForked(c.JaipurBlock, number)
 }
 
-func (c *BorConfig) IsDelhi(number uint64) bool {
-	return number >= c.DelhiBlock
+func (c *BorConfig) IsDelhi(number *big.Int) bool {
+	return isForked(c.DelhiBlock, number)
 }
 
 func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {
