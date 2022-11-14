@@ -13,7 +13,7 @@ The tutorial on this page assumes Geth and the associated developer tools have b
 
 This page provides step-by-step instructions covering the fundamentals of using Geth. This includes 
 generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. 
-It is considered best-practice to use [Clef](/docs/clef/Introduction) for account management - this 
+It is considered best-practice to use [Clef](/docs/clef/introduction) for account management - this 
 is explained in the [Geth with Clef](/docs/getting-started/geth_with_clef) tutorial. In this 
 introductory tutorial, Geth's built-in account management tools are used instead.
 
