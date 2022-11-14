@@ -1,6 +1,6 @@
 ---
 title: Grafana Dashboard
-sort-key: S
+sort_key: S
 ---
 
 There are several ways to monitor the performance of a Geth node. Insights 
