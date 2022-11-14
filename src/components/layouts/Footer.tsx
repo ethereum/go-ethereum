@@ -8,23 +8,16 @@ import {
   GETH_DISCORD_URL,
   GETH_REPO_URL,
   GETH_TWITTER_URL
-} from '../../constants'
+} from '../../constants';
 
-import {
-  DiscordIcon,
-  GitHubIcon,
-  TwitterIcon
-} from '../UI/icons';
+import { DiscordIcon, GitHubIcon, TwitterIcon } from '../UI/icons';
 
 export const Footer: FC = () => {
   return (
-    <Flex
-      mt={4}
-      direction={{ base: 'column', lg: 'row'}}
-    >
+    <Flex mt={4} direction={{ base: 'column', lg: 'row' }}>
       <Flex
-        direction={{ base: 'column', md: 'row'}}
-        justifyContent={{md: 'space-between'}}
+        direction={{ base: 'column', md: 'row' }}
+        justifyContent={{ md: 'space-between' }}
         border='2px solid'
         borderColor='brand.light.primary'
       >
@@ -51,7 +44,6 @@ export const Footer: FC = () => {
               <Text textStyle='home-section-link-label'>DOWNLOADS</Text>
             </Link>
           </NextLink>
-
 
           <NextLink href={DOCS_PAGE} passHref>
             <Link
@@ -88,9 +80,8 @@ export const Footer: FC = () => {
                 lg: 'none'
               }}
               borderColor='brand.light.primary !important'
-              
               _hover={{
-                bg: 'brand.light.primary',
+                bg: 'brand.light.primary'
               }}
               justifyContent='center'
             >
@@ -100,7 +91,7 @@ export const Footer: FC = () => {
                 margin='auto'
                 _groupHover={{
                   svg: {
-                    path:{fill: 'yellow.50 !important'}
+                    path: { fill: 'yellow.50 !important' }
                   }
                 }}
               />
@@ -110,12 +101,12 @@ export const Footer: FC = () => {
           <NextLink href={GETH_DISCORD_URL} passHref>
             <Link
               isExternal
-              p={4} 
-              data-group 
+              p={4}
+              data-group
               display='flex'
               flex={1}
               _hover={{
-                bg: 'brand.light.primary',
+                bg: 'brand.light.primary'
               }}
               justifyContent='center'
               borderWidth='2px'
@@ -124,10 +115,10 @@ export const Footer: FC = () => {
             >
               <DiscordIcon
                 w={6}
-                height={6} 
+                height={6}
                 _groupHover={{
                   svg: {
-                    path:{fill: 'yellow.50 !important'}
+                    path: { fill: 'yellow.50 !important' }
                   }
                 }}
               />
@@ -142,16 +133,16 @@ export const Footer: FC = () => {
               flex={1}
               display='flex'
               _hover={{
-                bg: 'brand.light.primary',
+                bg: 'brand.light.primary'
               }}
               justifyContent='center'
             >
               <GitHubIcon
                 w={6}
-                height={6} 
+                height={6}
                 _groupHover={{
                   svg: {
-                    path:{fill: 'yellow.50 !important'}
+                    path: { fill: 'yellow.50 !important' }
                   }
                 }}
               />
@@ -175,5 +166,5 @@ export const Footer: FC = () => {
         <Text textStyle='footer-text'>© 2013–2022. The go-ethereum Authors.</Text>
       </Stack>
     </Flex>
-  )
-}
+  );
+};
