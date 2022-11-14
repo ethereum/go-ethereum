@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/g"
-	ethcatalyst "github.com/ethereum/go-ethereum/g/catalyst"
+	gcatalyst "github.com/ethereum/go-ethereum/g/catalyst"
 	"github.com/ethereum/go-ethereum/g/downloader"
 	"github.com/ethereum/go-ethereum/g/gconfig"
 	"github.com/ethereum/go-ethereum/les"
@@ -91,7 +91,7 @@ type ethNode struct {
 	typ        nodetype
 	stack      *node.Node
 	enode      *enode.Node
-	api        *ethcatalyst.ConsensusAPI
+	api        *gcatalyst.ConsensusAPI
 	ethBackend *g.Ethereum
 	lapi       *lescatalyst.ConsensusAPI
 	lesBackend *les.LightEthereum
@@ -100,7 +100,7 @@ type ethNode struct {
 func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode {
 	var (
 		err        error
-		api        *ethcatalyst.ConsensusAPI
+		api        *gcatalyst.ConsensusAPI
 		lapi       *lescatalyst.ConsensusAPI
 		stack      *node.Node
 		ethBackend *g.Ethereum
@@ -458,7 +458,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 	return genesis
 }
 
-func makeFullNode(genesis *core.Genesis) (*node.Node, *g.Ethereum, *ethcatalyst.ConsensusAPI, error) {
+func makeFullNode(genesis *core.Genesis) (*node.Node, *g.Ethereum, *gcatalyst.ConsensusAPI, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := os.MkdirTemp("", "")
 
@@ -506,7 +506,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *g.Ethereum, *ethcatalyst.
 		log.Crit("Failed to create the LES server", "err", err)
 	}
 	err = stack.Start()
-	return stack, ethBackend, ethcatalyst.NewConsensusAPI(ethBackend), err
+	return stack, ethBackend, gcatalyst.NewConsensusAPI(ethBackend), err
 }
 
 func makeLightNode(genesis *core.Genesis) (*node.Node, *les.LightEthereum, *lescatalyst.ConsensusAPI, error) {
