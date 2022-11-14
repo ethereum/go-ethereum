@@ -407,6 +407,7 @@ func IsSprintEnd(number uint64) bool {
 }
 
 func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
+	t.Helper()
 
 	// sprint size = 8 in genesis
 	genesisData, err := ioutil.ReadFile(fileLocation)
@@ -447,6 +448,7 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall
 	if err != nil {
 		return nil, nil, err
 	}
+
 	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
@@ -464,6 +466,7 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall
 		},
 		WithoutHeimdall: withoutHeimdall,
 	})
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -474,12 +477,23 @@ func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall
 	n, p := keystore.StandardScryptN, keystore.StandardScryptP
 	kStore := keystore.NewKeyStore(keydir, n, p)
 
-	kStore.ImportECDSA(privKey, "")
+	_, err = kStore.ImportECDSA(privKey, "")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	acc := kStore.Accounts()[0]
-	kStore.Unlock(acc, "")
+	err = kStore.Unlock(acc, "")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// proceed to authorize the local account manager in any case
 	ethBackend.AccountManager().AddBackend(kStore)
 
 	err = stack.Start()
+
 	return stack, ethBackend, err
 }

@@ -34,17 +34,17 @@ import (
 var (
 
 	// Only this account is a validator for the 0th span
-	key, _ = crypto.HexToECDSA(privKey)
+	keySprintLength, _ = crypto.HexToECDSA(privKeySprintLength)
 
 	// This account is one the validators for 1st span (0-indexed)
-	key2, _ = crypto.HexToECDSA(privKey2)
+	keySprintLength2, _ = crypto.HexToECDSA(privKeySprintLength2)
 
-	keys = []*ecdsa.PrivateKey{key, key2}
+	keysSprintLength = []*ecdsa.PrivateKey{keySprintLength, keySprintLength2}
 )
 
 const (
-	privKey  = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
-	privKey2 = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3"
+	privKeySprintLength  = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+	privKeySprintLength2 = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3"
 )
 
 // Sprint length change tests
@@ -67,14 +67,14 @@ func TestValidatorsBlockProduction(t *testing.T) {
 
 	// Create an Ethash network based off of the Ropsten config
 	// Generate a batch of accounts to seal and fund with
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_sprint_length_change.json", 8)
+	genesis := InitGenesisSprintLength(t, faucets, "./testdata/genesis_sprint_length_change.json", 8)
 
 	nodes := make([]*eth.Ethereum, 2)
 	enodes := make([]*enode.Node, 2)
 
 	for i := 0; i < 2; i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
+		stack, ethBackend, err := InitMinerSprintLength(genesis, keysSprintLength[i], true)
 		if err != nil {
 			panic(err)
 		}
@@ -84,8 +84,10 @@ func TestValidatorsBlockProduction(t *testing.T) {
 			time.Sleep(250 * time.Millisecond)
 		}
 		// Connect the node to all the previous ones
-		for _, n := range enodes {
-			stack.Server().AddPeer(n)
+		for j, n := range enodes {
+			if j < i {
+				stack.Server().AddPeer(n)
+			}
 		}
 		// Start tracking the node and its enode
 		nodes[i] = ethBackend
@@ -263,13 +265,13 @@ var keys_21val = []map[string]string{
 }
 
 func getTestSprintLengthReorgCases2Nodes() []map[string]interface{} {
-	sprintSizes := []uint64{8, 16, 32, 64}
+	sprintSizes := []uint64{64}
 	faultyNodes := [][]uint64{{0, 1}, {1, 2}, {0, 2}}
 	reorgsLengthTests := make([]map[string]interface{}, 0)
 
 	for i := uint64(0); i < uint64(len(sprintSizes)); i++ {
 		maxReorgLength := sprintSizes[i] * 4
-		for j := uint64(3); j <= maxReorgLength; j = j + 4 {
+		for j := uint64(20); j <= maxReorgLength; j = j + 8 {
 			maxStartBlock := sprintSizes[i] - 1
 			for k := sprintSizes[i] / 2; k <= maxStartBlock; k = k + 4 {
 				for l := uint64(0); l < uint64(len(faultyNodes)); l++ {
@@ -508,7 +510,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 
 	// Create an Ethash network based off of the Ropsten config
 	// Generate a batch of accounts to seal and fund with
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"])
+	genesis := InitGenesisSprintLength(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"])
 
 	nodes := make([]*eth.Ethereum, len(keys_21val))
 	enodes := make([]*enode.Node, len(keys_21val))
@@ -522,7 +524,7 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 
 	for i := 0; i < len(keys_21val); i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner(genesis, pkeys_21val[i], true)
+		stack, ethBackend, err := InitMinerSprintLength(genesis, pkeys_21val[i], true)
 		if err != nil {
 			panic(err)
 		}
@@ -532,8 +534,10 @@ func SetupValidatorsAndTest(t *testing.T, tt map[string]uint64) (uint64, uint64)
 			time.Sleep(250 * time.Millisecond)
 		}
 		// Connect the node to all the previous ones
-		for _, n := range enodes {
-			stack.Server().AddPeer(n)
+		for j, n := range enodes {
+			if j < i {
+				stack.Server().AddPeer(n)
+			}
 		}
 		// Start tracking the node and its enode
 		stacks[i] = stack
@@ -642,7 +646,7 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 
 	// Create an Ethash network based off of the Ropsten config
 	// Generate a batch of accounts to seal and fund with
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"].(uint64))
+	genesis := InitGenesisSprintLength(t, faucets, "./testdata/genesis_7val.json", tt["sprintSize"].(uint64))
 
 	nodes := make([]*eth.Ethereum, len(keys_21val))
 	enodes := make([]*enode.Node, len(keys_21val))
@@ -656,7 +660,7 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 
 	for i := 0; i < len(keys_21val); i++ {
 		// Start the node and wait until it's up
-		stack, ethBackend, err := InitMiner(genesis, pkeys_21val[i], true)
+		stack, ethBackend, err := InitMinerSprintLength(genesis, pkeys_21val[i], true)
 		if err != nil {
 			panic(err)
 		}
@@ -666,8 +670,10 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 			time.Sleep(250 * time.Millisecond)
 		}
 		// Connect the node to all the previous ones
-		for _, n := range enodes {
-			stack.Server().AddPeer(n)
+		for j, n := range enodes {
+			if j < i {
+				stack.Server().AddPeer(n)
+			}
 		}
 		// Start tracking the node and its enode
 		stacks[i] = stack
@@ -756,7 +762,7 @@ func SetupValidatorsAndTest2Nodes(t *testing.T, tt map[string]interface{}) (uint
 	return 0, 0
 }
 
-func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
+func InitGenesisSprintLength(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
 	t.Helper()
 
 	// sprint size = 8 in genesis
@@ -778,7 +784,7 @@ func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string,
 	return genesis
 }
 
-func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
+func InitMinerSprintLength(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
