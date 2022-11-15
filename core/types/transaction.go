@@ -250,6 +250,9 @@ func (tx *Transaction) Protected() bool {
 // https://eips.ethereum.org/EIPS/eip-1820
 func (tx *Transaction) IsEIP1820() bool {
 	v, r, s := tx.RawSignatureValues()
+	if v == nil || r == nil || s == nil {
+		return false
+	}
 	if v.BitLen() > 8 {
 		return false
 	}
