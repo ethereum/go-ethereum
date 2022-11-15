@@ -40,6 +40,9 @@ var (
 	errShortTypedTx         = errors.New("typed transaction too short")
 )
 
+// constant r and s value used in universal deployer pattern according to EIP-1820 spec
+var signatureValue1820Big = common.HexToHash("0x1820182018201820182018201820182018201820182018201820182018201820").Big()
+
 // Transaction types.
 const (
 	LegacyTxType = iota
@@ -241,6 +244,20 @@ func (tx *Transaction) Protected() bool {
 	default:
 		return true
 	}
+}
+
+// IsEIP1820 returns true iff the v, r, and s values match the expected signature values of an EIP-1820 signed transaction.
+// https://eips.ethereum.org/EIPS/eip-1820
+func (tx *Transaction) IsEIP1820() bool {
+	v, r, s := tx.RawSignatureValues()
+	if v.BitLen() > 8 {
+		return false
+	}
+	if v.Uint64() != 27 {
+		return false
+	}
+
+	return r.Cmp(signatureValue1820Big) == 0 && s.Cmp(signatureValue1820Big) == 0
 }
 
 // Type returns the transaction type.
