@@ -592,11 +592,11 @@ func (b *BorConfig) String() string {
 }
 
 func (c *BorConfig) CalculateProducerDelay(number uint64) uint64 {
-	return c.calculateBorConfigHelper(c.ProducerDelay, number)
+	return c.calculateSprintSizeHelper(c.ProducerDelay, number)
 }
 
 func (c *BorConfig) CalculateSprint(number uint64) uint64 {
-	return c.calculateBorConfigHelper(c.Sprint, number)
+	return c.calculateSprintSizeHelper(c.Sprint, number)
 }
 
 func (c *BorConfig) CalculateBackupMultiplier(number uint64) uint64 {
@@ -616,6 +616,26 @@ func (c *BorConfig) IsDelhi(number *big.Int) bool {
 }
 
 func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {
+	keys := make([]string, 0, len(field))
+	for k := range field {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for i := 0; i < len(keys)-1; i++ {
+		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
+		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
+
+		if number > valUint && number < valUintNext {
+			return field[keys[i]]
+		}
+	}
+
+	return field[keys[len(keys)-1]]
+}
+
+func (c *BorConfig) calculateSprintSizeHelper(field map[string]uint64, number uint64) uint64 {
 	keys := make([]string, 0, len(field))
 	for k := range field {
 		keys = append(keys, k)
