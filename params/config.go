@@ -354,6 +354,7 @@ var (
 			Period: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
+				"29389056": 2,
 			},
 			ProducerDelay: map[string]uint64{
 				"0":        6,
@@ -366,6 +367,7 @@ var (
 			BackupMultiplier: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
+				"29389056": 2,
 			},
 			ValidatorContract:     "0x0000000000000000000000000000000000001000",
 			StateReceiverContract: "0x0000000000000000000000000000000000001001",
