@@ -23,6 +23,11 @@ if (( $balance <= $balanceInit )); then
     exit 1
 fi
 
+delayCheckpoint=300
+
+echo "Wait ${delayCheckpoint} seconds for checkpoint..."
+sleep $delayCheckpoint
+
 checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
 
 if [ $checkpointID == "null" ]; then
