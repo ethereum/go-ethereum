@@ -3,9 +3,9 @@ defaultFee: 2000
 borChainId: "15001"
 heimdallChainId: heimdall-15001
 contractsBranch: mardizzone/node-upgrade
-sprintSize: 64
-blockNumber: '0'
+sprintSize: '64'
 sprintSizeBlockNumber: '0'
+blockNumber: '0'
 blockTime: '2'
 numOfValidators: 3
 numOfNonValidators: 0
