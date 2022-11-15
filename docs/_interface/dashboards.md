@@ -29,7 +29,10 @@ the data.
 
 InfluxDB can be downloaded from the [Influxdata release page](https://portal.influxdata.com/downloads/). 
 It can also be installed from a [repository](https://repos.influxdata.com/). 
-For example for a Debian based Linux operating system:
+
+For example the following commands will download and install InfluxDB on a 
+Debian based Linux operating system - you can check for up-to-date instructions 
+for your operating system on the InfluxDB [downloads page](https://portal.influxdata.com/downloads/):
 
 ```sh
 curl -tlsv1.3 --proto =https -sL https://repos.influxdata.com/influxdb.key | sudo apt-key add
@@ -106,12 +109,12 @@ show measurements
 ## Setting up Grafana {#setting-up-grafana}
 
 With the InfluxDB database setup and successfully receiving data from Geth, 
-the next step is to install Grafana so that the data can be visualized. 
-Instructions for specific operating systems are available on the Grafana 
-[downloads page](https://grafana.com/grafana/download?pg=get&plcmt=selfmanaged-box1-cta1).
+the next step is to install Grafana so that the data can be visualized.
 
-Alternatively, the following code snippet shows how to download, install and 
-run Grafana on a Debian based Linux system:
+The following code snippet shows how to download, install and 
+run Grafana on a Debian based Linux system. Up to date instructions for
+your operating system can be found on the Grafana 
+[downloads page](https://grafana.com/grafana/download).
 
 ```sh
 curl -tlsv1.3 --proto =https -sL https://packages.grafana.com/gpg.key | sudo apt-key add -
