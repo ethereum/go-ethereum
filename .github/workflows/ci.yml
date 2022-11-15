@@ -98,13 +98,13 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.19.x
+            go-version: 1.18.x
 
         - name: Checkout matic-cli
           uses: actions/checkout@v3
           with:
             repository: maticnetwork/matic-cli
-            ref: arpit/pos-655
+            ref: arpit/pos-655-2
             path: matic-cli
 
         - name: Install dependencies on Linux
@@ -119,7 +119,7 @@ jobs:
 
         - uses: actions/setup-node@v3
           with:
-            node-version: '16.17.1'
+            node-version: '10.17.0'
             cache: 'npm'
             cache-dependency-path: |
               matic-cli/package-lock.json
