@@ -180,6 +180,7 @@ func TestRemoteMultiNotify(t *testing.T) {
 // Tests that pushing work packages fast to the miner doesn't cause any data race
 // issues in the notifications. Full pending block body / --miner.notify.full)
 func TestRemoteMultiNotifyFull(t *testing.T) {
+	t.Skip()
 
 	// Start a simple web server to capture notifications.
 	sink := make(chan map[string]interface{}, 64)
