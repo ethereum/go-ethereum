@@ -70,9 +70,11 @@ interface Props {
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
-      <Heading as='h1'>{frontmatter.title}</Heading>
+      <main>
+        <Heading as='h1'>{frontmatter.title}</Heading>
 
-      <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+        <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+      </main>
     </>
   );
 };
