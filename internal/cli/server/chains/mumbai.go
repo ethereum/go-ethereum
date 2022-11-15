@@ -30,18 +30,18 @@ var mumbaiTestnet = &Chain{
 			LondonBlock:         big.NewInt(22640000),
 			Bor: &params.BorConfig{
 				JaipurBlock: big.NewInt(22770000),
-				DelhiBlock:  big.NewInt(29388800),
+				DelhiBlock:  big.NewInt(29389056),
 				Period: map[string]uint64{
 					"0":        2,
 					"25275000": 5,
 				},
 				ProducerDelay: map[string]uint64{
 					"0":        6,
-					"29388800": 4,
+					"29389056": 4,
 				},
 				Sprint: map[string]uint64{
 					"0":        64,
-					"29388800": 16,
+					"29389056": 16,
 				},
 				BackupMultiplier: map[string]uint64{
 					"0":        2,

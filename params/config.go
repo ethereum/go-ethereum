@@ -350,18 +350,18 @@ var (
 		LondonBlock:         big.NewInt(22640000),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(22770000),
-			DelhiBlock:  big.NewInt(29388800),
+			DelhiBlock:  big.NewInt(29389056),
 			Period: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
 			},
 			ProducerDelay: map[string]uint64{
 				"0":        6,
-				"29388800": 4,
+				"29389056": 4,
 			},
 			Sprint: map[string]uint64{
 				"0":        64,
-				"29388800": 16,
+				"29389056": 16,
 			},
 			BackupMultiplier: map[string]uint64{
 				"0":        2,
@@ -402,17 +402,17 @@ var (
 		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(23850000),
-			DelhiBlock:  big.NewInt(36499200),
+			DelhiBlock:  big.NewInt(36499456),
 			Period: map[string]uint64{
 				"0": 2,
 			},
 			ProducerDelay: map[string]uint64{
 				"0":        6,
-				"36499200": 4,
+				"36499456": 4,
 			},
 			Sprint: map[string]uint64{
 				"0":        64,
-				"36499200": 16,
+				"36499456": 16,
 			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,

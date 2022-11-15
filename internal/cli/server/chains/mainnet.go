@@ -30,17 +30,17 @@ var mainnetBor = &Chain{
 			LondonBlock:         big.NewInt(23850000),
 			Bor: &params.BorConfig{
 				JaipurBlock: big.NewInt(23850000),
-				DelhiBlock:  big.NewInt(36499200),
+				DelhiBlock:  big.NewInt(36499456),
 				Period: map[string]uint64{
 					"0": 2,
 				},
 				ProducerDelay: map[string]uint64{
 					"0":        6,
-					"36499200": 4,
+					"36499456": 4,
 				},
 				Sprint: map[string]uint64{
 					"0":        64,
-					"36499200": 16,
+					"36499456": 16,
 				},
 				BackupMultiplier: map[string]uint64{
 					"0": 2,
