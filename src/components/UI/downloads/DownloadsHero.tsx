@@ -2,7 +2,6 @@ import {
   Box,
   Center,
   Button,
-  Flex,
   Grid,
   Image,
   Link,
@@ -47,24 +46,14 @@ export const DownloadsHero: FC<DownloadsHero> = ({
       templateColumns={{ base: 'repeat(1, 1fr)', lg: '1fr 430px' }}
       gap={4}
     >
-      <Flex flexDirection='column'>
-        <Flex mb={4} direction={{ base: 'column', md: 'row-reverse' }}>
-          <Flex
-            py={{ base: 0 }}
-            px={{ base: 8 }}
-            flex={{ base: 'none' }}
-            display={{ base: 'block', lg: 'none' }}
-          >
-            <Center>
-              <Image
-                src='/images/pages/gopher-downloads-front-light.svg'
-                alt='Gopher plugged in'
-                w={{ md: 72 }}
-              />
-            </Center>
-          </Flex>
-
-          <Flex flexDirection={{ base: 'column' }} alignItems={{ base: 'flex-start' }}>
+      <Stack>
+        <Grid
+          mb={4}
+          templateColumns={{ base: 'repeat(1, 1fr)', md: '1fr 300px', lg: '1fr' }}
+          gap={4}
+          p={4}
+        >
+          <Stack flexDirection={{ base: 'column' }} alignItems={{ base: 'flex-start' }}>
             <Box as='h1' textStyle='h1'>
               Download go-ethereum
             </Box>
@@ -84,8 +73,24 @@ export const DownloadsHero: FC<DownloadsHero> = ({
               further down the page. If you&apos;re looking to install Geth and/or associated tools
               via your favorite package manager, please check our installation guide.
             </Text>
-          </Flex>
-        </Flex>
+          </Stack>
+
+          <Stack
+            py={{ base: 0 }}
+            px={{ base: 8 }}
+            flex={{ base: 'none' }}
+            display={{ base: 'block', lg: 'none' }}
+            order={{base: -1, md: 1}}
+          >
+            <Center>
+              <Image
+                src='/images/pages/gopher-downloads-front-light.svg'
+                alt='Gopher plugged in'
+                w={{ md: 72 }}
+              />
+            </Center>
+          </Stack>
+        </Grid>
 
         <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4} mb={4}>
           {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
@@ -117,21 +122,17 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             Release notes for {currentBuildName} {currentBuildVersion}
           </Link>
         </Box>
-      </Flex>
-      <Flex
-        py={{ base: 0 }}
-        px={{ base: 8 }}
-        flex={{ base: 'none' }}
+      </Stack>
+
+      <Center
         display={{ base: 'none', lg: 'flex' }}
       >
-        <Center>
-          <Image
-            src='/images/pages/gopher-downloads-front-light.svg'
-            alt='Gopher plugged in'
-            w={96}
-          />
-        </Center>
-      </Flex>
+        <Image
+          src='/images/pages/gopher-downloads-front-light.svg'
+          alt='Gopher plugged in'
+          w={96}
+        />
+      </Center>
     </Grid>
   );
 };
