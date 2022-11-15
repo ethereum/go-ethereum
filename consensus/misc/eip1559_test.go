@@ -109,6 +109,8 @@ func TestBlockGasLimits(t *testing.T) {
 
 // TestCalcBaseFee assumes all blocks are 1559-blocks
 func TestCalcBaseFee(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		parentBaseFee   int64
 		parentGasLimit  uint64
@@ -136,6 +138,7 @@ func TestCalcBaseFee(t *testing.T) {
 
 // TestCalcBaseFee assumes all blocks are 1559-blocks post Delhi Hard Fork
 func TestCalcBaseFeeDelhi(t *testing.T) {
+	t.Parallel()
 
 	testConfig := copyConfig(config())
 
@@ -166,5 +169,4 @@ func TestCalcBaseFeeDelhi(t *testing.T) {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
 	}
-
 }
