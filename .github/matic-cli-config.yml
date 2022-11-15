@@ -2,7 +2,7 @@ defaultStake: 10000
 defaultFee: 2000
 borChainId: "15001"
 heimdallChainId: heimdall-15001
-contractsBranch: arpit/v0.3.2-backport
+contractsBranch: mardizzone/node-upgrade
 sprintSize: 64
 blockNumber: '0'
 blockTime: '2'
