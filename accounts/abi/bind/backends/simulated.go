@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -72,37 +73,48 @@ type SimulatedBackend struct {
 	filterSystem *filters.FilterSystem // for filtering database logs
 
 	config *params.ChainConfig
+
+	coinbase common.Address
 }
 
 // NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) (*SimulatedBackend, error) {
 	genesis := core.Genesis{
 		Config:   params.AllEthashProtocolChanges,
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 
+	return NewSimulatedBackendWithDatabaseAndGenesis(database, genesis)
+}
+
+func NewSimulatedBackendWithDatabaseAndGenesis(database ethdb.Database, genesis core.Genesis) (*SimulatedBackend, error) {
+	blockchain, err := core.NewBlockChain(database, nil, &genesis, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+	if err != nil {
+		return nil, err
+	}
 	backend := &SimulatedBackend{
 		database:   database,
 		blockchain: blockchain,
 		config:     genesis.Config,
 	}
 
+	backend.SetCoinbase(genesis.Coinbase)
+
 	filterBackend := &filterBackend{database, blockchain, backend}
 	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
 	backend.events = filters.NewEventSystem(backend.filterSystem, false)
 
 	backend.rollback(blockchain.CurrentBlock())
-	return backend
+	return backend, nil
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) (*SimulatedBackend, error) {
 	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
 
@@ -110,6 +122,14 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 func (b *SimulatedBackend) Close() error {
 	b.blockchain.Stop()
 	return nil
+}
+
+func (b *SimulatedBackend) SetCoinbase(addr common.Address) {
+	b.coinbase = addr
+}
+
+func (b *SimulatedBackend) Coinbase() common.Address {
+	return b.coinbase
 }
 
 // Commit imports all the pending transactions as a single block and starts a
@@ -139,7 +159,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback(parent *types.Block) {
-	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(b.config, parent, beacon.New(ethash.NewFaker()), b.database, 1, func(int, *core.BlockGen) {})
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
@@ -664,6 +684,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	if err != nil {
 		return fmt.Errorf("could not fetch parent")
 	}
+
 	// Check transaction validity
 	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
 	sender, err := types.Sender(signer, tx)
@@ -675,7 +696,8 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		return fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce)
 	}
 	// Include tx in chain
-	blocks, receipts := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(b.config, block, beacon.New(ethash.NewFaker()), b.database, 1, func(number int, block *core.BlockGen) {
+		block.SetCoinbase(b.coinbase)
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -799,7 +821,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 		return fmt.Errorf("could not find parent")
 	}
 
-	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, block, beacon.New(ethash.NewFaker()), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	stateDB, _ := b.blockchain.State()
@@ -813,6 +835,11 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 // Blockchain returns the underlying blockchain.
 func (b *SimulatedBackend) Blockchain() *core.BlockChain {
 	return b.blockchain
+}
+
+// FilterSystem returns the underlying filterSystem.
+func (b *SimulatedBackend) FilterSystem() *filters.FilterSystem {
+	return b.filterSystem
 }
 
 // callMsg implements core.Message to allow passing it as a transaction simulator.

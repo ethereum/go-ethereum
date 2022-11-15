@@ -54,12 +54,15 @@ var waitDeployedTests = map[string]struct {
 
 func TestWaitDeployed(t *testing.T) {
 	for name, test := range waitDeployedTests {
-		backend := backends.NewSimulatedBackend(
+		backend, err := backends.NewSimulatedBackend(
 			core.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 			},
 			10000000,
 		)
+		if err != nil {
+			t.Fatalf("Failed to create NewSimulatedBackend: %v", err)
+		}
 		defer backend.Close()
 
 		// Create the transaction
@@ -71,7 +74,6 @@ func TestWaitDeployed(t *testing.T) {
 
 		// Wait for it to get mined in the background.
 		var (
-			err     error
 			address common.Address
 			mined   = make(chan struct{})
 			ctx     = context.Background()
@@ -100,12 +102,15 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
-	backend := backends.NewSimulatedBackend(
+	backend, err := backends.NewSimulatedBackend(
 		core.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 		},
 		10000000,
 	)
+	if err != nil {
+		t.Fatalf("Failed to create NewSimulatedBackend: %v", err)
+	}
 	defer backend.Close()
 
 	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough

@@ -267,7 +267,7 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	genesis := gspec.MustCommit(db)
 
 	// create a simulation backend and pre-commit several customized block to the database.
-	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
+	simulation, _ := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
 	txpoolConfig := txpool.DefaultConfig
