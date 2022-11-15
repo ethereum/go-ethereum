@@ -19,10 +19,12 @@
         "0": 2
       },
       "producerDelay": {
-        "0": 6
+        "0": 6,
+        "29392500": 4
       },
       "sprint": {
-        "0": 64
+        "0": 64,
+        "29392500": 16
       },
       "backupMultiplier": {
         "0": 2
@@ -41,7 +43,8 @@
       "burntContract": {
         "22640000": "0x70bcA57F4579f58670aB2d18Ef16e02C17553C38"
       },
-      "jaipurBlock": 22770000
+      "jaipurBlock": 22770000,
+      "delhiBlock": 29392500
     }
   },
   "nonce": "0x0",

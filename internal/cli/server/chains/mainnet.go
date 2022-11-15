@@ -35,10 +35,12 @@ var mainnetBor = &Chain{
 					"0": 2,
 				},
 				ProducerDelay: map[string]uint64{
-					"0": 6,
+					"0":        6,
+					"36507200": 4,
 				},
 				Sprint: map[string]uint64{
-					"0": 64,
+					"0":        64,
+					"36507200": 16,
 				},
 				BackupMultiplier: map[string]uint64{
 					"0": 2,
