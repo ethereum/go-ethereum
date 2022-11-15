@@ -1073,11 +1073,11 @@ func TestJaipurFork(t *testing.T) {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
 
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock-1 {
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64()-1 {
 			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
 
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock {
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64() {
 			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
 	}
@@ -1109,7 +1109,7 @@ func testEncodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig)
 		header.MixDigest,
 		header.Nonce,
 	}
-	if c.IsJaipur(header.Number.Uint64()) {
+	if c.IsJaipur(header.Number) {
 		if header.BaseFee != nil {
 			enc = append(enc, header.BaseFee)
 		}

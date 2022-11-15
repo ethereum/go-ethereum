@@ -169,7 +169,7 @@ func encodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig) {
 		header.Nonce,
 	}
 
-	if c.IsJaipur(header.Number.Uint64()) {
+	if c.IsJaipur(header.Number) {
 		if header.BaseFee != nil {
 			enc = append(enc, header.BaseFee)
 		}
