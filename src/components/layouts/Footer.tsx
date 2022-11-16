@@ -99,11 +99,8 @@ export const Footer: FC = () => {
                 <TwitterIcon
                   w={8}
                   height={8} 
-                  _groupHover={{
-                    svg: {
-                      path:{fill: 'yellow.50 !important'}
-                    }
-                  }}
+                  _groupHover={{ color: 'bg' }}
+                  color='primary'
                 />
               </Link>
             </NextLink>
@@ -126,11 +123,8 @@ export const Footer: FC = () => {
                 <DiscordIcon
                   w={8}
                   height={8} 
-                  _groupHover={{
-                    svg: {
-                      path:{fill: 'yellow.50 !important'}
-                    }
-                  }}
+                  _groupHover={{ color: 'bg' }}
+                  color='primary'
                 />
               </Link>
             </NextLink>
@@ -150,11 +144,8 @@ export const Footer: FC = () => {
                 <GitHubIcon
                   w={7}
                   height={7} 
-                  _groupHover={{
-                    svg: {
-                      path:{fill: 'yellow.50 !important'}
-                    }
-                  }}
+                  _groupHover={{ color: 'bg' }}
+                  color='primary'
                 />
               </Link>
             </NextLink>

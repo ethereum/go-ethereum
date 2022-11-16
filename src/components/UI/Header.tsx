@@ -90,7 +90,7 @@ export const Header: FC = () => {
             />
 
             <Stack pl={4} justifyContent='center' alignItems='center'>
-              <LensIcon />
+              <LensIcon color='primary' />
             </Stack>
           </InputGroup>
         </Stack>
@@ -100,7 +100,7 @@ export const Header: FC = () => {
           p={4}
           borderRight={{ base: '2px solid #11866f', md: 'none' }}
         >
-          <MoonIcon />
+          <MoonIcon color="primary" />
         </Box>
 
         {/* HAMBURGER MENU */}
