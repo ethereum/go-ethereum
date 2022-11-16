@@ -1,9 +1,8 @@
-import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Grid, GridItem, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
-import NextLink from 'next/link';
-
 import { GlyphHome } from '../svgs/GlyphHome';
 import { ETHEREUM_ORG_URL } from '../../../constants';
+import { ButtonLinkSecondary } from '..';
 
 interface Props {
   children: React.ReactNode;
@@ -22,12 +21,7 @@ export const WhatIsEthereum: FC<Props> = ({ children }) => {
           borderRight={{ base: 'none', md: '2px' }}
           borderColor='primary !important'
         >
-          <Stack
-            p={4}
-            borderBottom='2px'
-            borderColor='primary'
-            sx={{ mt: '0 !important' }}
-          >
+          <Stack p={4} borderBottom='2px' borderColor='primary' sx={{ mt: '0 !important' }}>
             <Box as='h2' textStyle='h2'>
               What is Ethereum
             </Box>
@@ -52,13 +46,7 @@ export const WhatIsEthereum: FC<Props> = ({ children }) => {
         </GridItem>
       </Grid>
 
-      <Stack sx={{ mt: '0 !important' }}>
-        <NextLink href={ETHEREUM_ORG_URL} passHref>
-          <Link variant='button-link-secondary' isExternal>
-            <Text textStyle='home-section-link-label'>Learn more on Ethereum.org</Text>
-          </Link>
-        </NextLink>
-      </Stack>
+      <ButtonLinkSecondary href={ETHEREUM_ORG_URL}>Learn more on Ethereum.org</ButtonLinkSecondary>
     </Stack>
   );
 };

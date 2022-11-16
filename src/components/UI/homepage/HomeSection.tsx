@@ -1,7 +1,7 @@
-import { Box, IconProps, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, IconProps, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
-import NextLink from 'next/link';
 
+import { ButtonLinkSecondary } from '..';
 interface Props {
   sectionTitle: string;
   linkLabel: string;
@@ -26,12 +26,7 @@ export const HomeSection: FC<Props> = ({
           <Svg aria-label={ariaLabel} />
         </Stack>
       )}
-      <Stack
-        p={4}
-        borderBottom='2px solid'
-        borderColor='primary'
-        sx={{ mt: '0 !important' }}
-      >
+      <Stack p={4} borderBottom='2px solid' borderColor='primary' sx={{ mt: '0 !important' }}>
         <Box as='h2' textStyle='h2'>
           {sectionTitle}
         </Box>
@@ -48,13 +43,7 @@ export const HomeSection: FC<Props> = ({
         {children}
       </Stack>
 
-      <Stack sx={{ mt: '0 !important' }}>
-        <NextLink href={buttonHref} passHref>
-          <Link variant='button-link-secondary' isExternal={buttonHref.startsWith('http')}>
-            <Text textStyle='home-section-link-label'>{linkLabel}</Text>
-          </Link>
-        </NextLink>
-      </Stack>
+      <ButtonLinkSecondary href={buttonHref}>{linkLabel}</ButtonLinkSecondary>
     </Stack>
   );
 };
