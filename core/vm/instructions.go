@@ -527,8 +527,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	}
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
-	interpreter.evm.StateDB.SetState(scope.Contract.Address(),
-		loc.Bytes32(), val.Bytes32())
+	interpreter.evm.StateDB.SetState(scope.Contract.Address(), loc.Bytes32(), val.Bytes32())
 	return nil, nil
 }
 

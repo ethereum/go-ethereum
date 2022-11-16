@@ -902,7 +902,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		logs, err := w.commitTransaction(env, tx)
 		switch {

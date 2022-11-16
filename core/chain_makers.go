@@ -79,6 +79,26 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
+// addTx adds a transaction to the generated block. If no coinbase has
+// been set, the block's coinbase is set to the zero address.
+//
+// There are a few options can be passed as well in order to run some
+// customized rules.
+// - bc:       enables the ability to query historical block hashes for BLOCKHASH
+// - vmConfig: extends the flexibility for customizing evm rules, e.g. enable extra EIPs
+func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transaction) {
+	if b.gasPool == nil {
+		b.SetCoinbase(common.Address{})
+	}
+	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
+	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	if err != nil {
+		panic(err)
+	}
+	b.txs = append(b.txs, tx)
+	b.receipts = append(b.receipts, receipt)
+}
+
 // AddTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
@@ -88,7 +108,7 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 // added. Notably, contract code relying on the BLOCKHASH instruction
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.AddTxWithChain(nil, tx)
+	b.addTx(nil, vm.Config{}, tx)
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -100,16 +120,14 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 // added. If contract code relies on the BLOCKHASH instruction,
 // the block in chain will be returned.
 func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
-	if b.gasPool == nil {
-		b.SetCoinbase(common.Address{})
-	}
-	b.statedb.Prepare(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{})
-	if err != nil {
-		panic(err)
-	}
-	b.txs = append(b.txs, tx)
-	b.receipts = append(b.receipts, receipt)
+	b.addTx(bc, vm.Config{}, tx)
+}
+
+// AddTxWithVMConfig adds a transaction to the generated block. If no coinbase has
+// been set, the block's coinbase is set to the zero address.
+// The evm interpreter can be customized with the provided vm config.
+func (b *BlockGen) AddTxWithVMConfig(tx *types.Transaction, config vm.Config) {
+	b.addTx(nil, config, tx)
 }
 
 // GetBalance returns the balance of the given address at the generated block.
