@@ -9,12 +9,7 @@ export const Header: FC = () => {
   const { colorMode, toggleColorMode } = useColorMode();
   const isDark = colorMode === 'dark';
   return (
-    <Flex
-      mb={4}
-      border='2px solid'
-      borderColor='primary'
-      justifyContent='space-between'
-    >
+    <Flex mb={4} border='2px solid' borderColor='primary' justifyContent='space-between'>
       <Stack
         p={4}
         justifyContent='center'
@@ -25,9 +20,7 @@ export const Header: FC = () => {
       >
         <NextLink href={'/'} passHref>
           <Link _hover={{ textDecoration: 'none' }}>
-            <Text textStyle='header-font'>
-              go-ethereum
-            </Text>
+            <Text textStyle='header-font'>go-ethereum</Text>
           </Link>
         </NextLink>
       </Stack>
@@ -108,12 +101,12 @@ export const Header: FC = () => {
           borderColor='primary'
           onClick={toggleColorMode}
         >
-          {isDark ? <SunIcon color="primary" /> : <MoonIcon color="primary" />}
+          {isDark ? <SunIcon color='primary' /> : <MoonIcon color='primary' />}
         </Box>
 
         {/* HAMBURGER MENU */}
         <Box p={4} display={{ base: 'block', md: 'none' }}>
-          <HamburgerIcon color="primary" />
+          <HamburgerIcon color='primary' />
         </Box>
       </Flex>
     </Flex>

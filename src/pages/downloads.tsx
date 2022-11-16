@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { DownloadsHero, DownloadsSection, DownloadsTable } from '../components/UI/downloads';
 import { DataTable } from '../components/UI';
-import { GopherDownloads } from '../components/UI/svgs'
+import { GopherDownloads } from '../components/UI/svgs';
 
 import {
   DEFAULT_BUILD_AMOUNT_TO_SHOW,
@@ -56,7 +56,7 @@ const DownloadsPage: NextPage = () => {
             sectionTitle='Specific Versions'
             id='specificversions'
             Svg={GopherDownloads}
-            ariaLabel="Gopher facing right"
+            ariaLabel='Gopher facing right'
           >
             <Stack p={4}>
               <Text textStyle='quick-link-text'>
