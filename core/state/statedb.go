@@ -1068,7 +1068,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 //
 // Potential EIPs:
 // - Reset transient storage(1153)
-func (s *StateDB) Prepare(rules params.Rules, sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
 		s.accessList = newAccessList()
@@ -1086,6 +1086,9 @@ func (s *StateDB) Prepare(rules params.Rules, sender common.Address, dst *common
 			for _, key := range el.StorageKeys {
 				s.AddSlotToAccessList(el.Address, key)
 			}
+		}
+		if rules.IsShanghai {
+			s.AddAddressToAccessList(coinbase)
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
