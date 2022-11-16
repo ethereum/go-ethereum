@@ -1,6 +1,8 @@
 import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 
+import { GopherHomeFront } from '../components/UI/svgs';
+
 import {
   HomeHero,
   HomeSection,
@@ -35,7 +37,8 @@ const HomePage: NextPage = ({}) => {
                 sectionTitle='What is Geth'
                 linkLabel='Get started with Geth'
                 buttonHref={`${DOCS_PAGE}/getting-started`}
-                showGopher
+                Svg={GopherHomeFront}
+                ariaLabel='Gopher greeting'
               >
                 <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
                   Geth (go-ethereum) is a{' '}

@@ -1,24 +1,20 @@
-import { Box, Image, Stack } from '@chakra-ui/react';
+import { Box, IconProps, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
-import { GopherHomeLinks } from '../svgs'
 interface Props {
-  children: React.ReactNode;
   id: string;
-  imgSrc?: string;
-  imgAltText?: string;
   sectionTitle: string;
-  showGopher?: boolean;
+  children: React.ReactNode;
+  Svg?: React.FC<IconProps>;
+  ariaLabel?: string;
 }
 
-export const DownloadsSection: FC<Props> = ({ children, imgSrc, imgAltText, sectionTitle, id, showGopher }) => {
+export const DownloadsSection: FC<Props> = ({ children, Svg, ariaLabel, sectionTitle, id, showGopher }) => {
   return (
     <Stack border='2px solid' borderColor='primary' id={id}>
-      {imgSrc || showGopher && (
+      {Svg && (
         <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='primary'>
-          {/* TODO: use NextImage */}
-          {imgSrc && <Image src={imgSrc} alt={imgAltText} />}
-          {showGopher && < GopherHomeLinks/>}
+          <Svg aria-label={ariaLabel} />
         </Stack>
       )}
 
