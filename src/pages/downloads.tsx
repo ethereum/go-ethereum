@@ -66,22 +66,24 @@ export const getServerSideProps: GetServerSideProps = async () => {
 
   return {
     props: {
-      data: LATEST_RELEASES_DATA
+      data: { LATEST_RELEASES_DATA }
     }
   };
 };
 
 interface Props {
   data: {
-    // TODO: define interface
-    versionNumber: string;
-    releaseName: string;
-    urls: {
-      LATEST_LINUX_BINARY_URL: string;
-      LATEST_MACOS_BINARY_URL: string;
-      LATEST_WINDOWS_BINARY_URL: string;
-      LATEST_SOURCES_URL: string;
-      RELEASE_NOTES_URL: string;
+    // TODO: define interfaces
+    LATEST_RELEASES_DATA: {
+      versionNumber: string;
+      releaseName: string;
+      urls: {
+        LATEST_LINUX_BINARY_URL: string;
+        LATEST_MACOS_BINARY_URL: string;
+        LATEST_WINDOWS_BINARY_URL: string;
+        LATEST_SOURCES_URL: string;
+        RELEASE_NOTES_URL: string;
+      };
     };
   };
 }
@@ -98,7 +100,9 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
     updateAmountDevelopBuilds(amountDevelopBuilds + 10);
   };
 
-  const { releaseName, versionNumber, urls } = data;
+  const {
+    LATEST_RELEASES_DATA: { releaseName, versionNumber, urls }
+  } = data;
 
   return (
     <>
@@ -270,10 +274,6 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               <Code p={4}>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</Code>
             </Stack>
           </DownloadsSection>
-
-          <div>
-            <pre>{JSON.stringify(data, null, 2)}</pre>
-          </div>
         </Stack>
       </main>
     </>
