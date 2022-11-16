@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -915,9 +916,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.trie.Hash()
 }
 
-// Prepare sets the current transaction hash and index which are
-// used when the EVM emits new state logs.
-func (s *StateDB) Prepare(thash common.Hash, ti int) {
+// SetTxContext sets the current transaction hash and index which are
+// used when the EVM emits new state logs. It should be invoked before
+// transaction execution.
+func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
 }
@@ -1055,41 +1057,38 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	return root, nil
 }
 
-// PrepareAccessList handles the preparatory steps for executing a state transition with
-// regards to both EIP-2929 and EIP-2930:
+// Prepare handles the preparatory steps for executing a state transition with.
+// This method must be invoked before state transition.
 //
+// Berlin fork:
 // - Add sender to access list (2929)
 // - Add destination to access list (2929)
 // - Add precompiles to access list (2929)
 // - Add the contents of the optional tx access list (2930)
 //
-// This method should only be called if Berlin/2929+2930 is applicable at the current number.
-func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	// Clear out any leftover from previous executions
-	s.accessList = newAccessList()
+// Potential EIPs:
+// - Reset transient storage(1153)
+func (s *StateDB) Prepare(rules params.Rules, sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	if rules.IsBerlin {
+		// Clear out any leftover from previous executions
+		s.accessList = newAccessList()
 
-	s.AddAddressToAccessList(sender)
-	if dst != nil {
-		s.AddAddressToAccessList(*dst)
-		// If it's a create-tx, the destination will be added inside evm.create
-	}
-	for _, addr := range precompiles {
-		s.AddAddressToAccessList(addr)
-	}
-	for _, el := range list {
-		s.AddAddressToAccessList(el.Address)
-		for _, key := range el.StorageKeys {
-			s.AddSlotToAccessList(el.Address, key)
+		s.AddAddressToAccessList(sender)
+		if dst != nil {
+			s.AddAddressToAccessList(*dst)
+			// If it's a create-tx, the destination will be added inside evm.create
+		}
+		for _, addr := range precompiles {
+			s.AddAddressToAccessList(addr)
+		}
+		for _, el := range list {
+			s.AddAddressToAccessList(el.Address)
+			for _, key := range el.StorageKeys {
+				s.AddSlotToAccessList(el.Address, key)
+			}
 		}
 	}
-}
-
-// PrepareTransientStorage clears out the leftover transient storage from previous
-// executions and re-initializes an empty one.
-//
-// This method should only be called at the beginning of transaction execution and
-// can be invoked even the EIP1153 is not activated.
-func (s *StateDB) PrepareTransientStorage() {
+	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()
 }
 
