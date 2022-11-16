@@ -3,4 +3,5 @@ export * from './GitHubIcon';
 export * from './HamburgerIcon';
 export * from './LensIcon';
 export * from './MoonIcon';
+export * from './SunIcon';
 export * from './TwitterIcon';

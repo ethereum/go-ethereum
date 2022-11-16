@@ -2,11 +2,12 @@ import { Box, Flex, Input, InputGroup, Link, Stack, Text, useColorMode } from '@
 import { FC } from 'react';
 import NextLink from 'next/link';
 
-import { HamburgerIcon, LensIcon, MoonIcon } from '../UI/icons';
+import { HamburgerIcon, LensIcon, MoonIcon, SunIcon } from '../UI/icons';
 import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../constants';
 
 export const Header: FC = () => {
-  const { toggleColorMode } = useColorMode();
+  const { colorMode, toggleColorMode } = useColorMode();
+  const isDark = colorMode === 'dark';
   return (
     <Flex
       mb={4}
@@ -107,7 +108,7 @@ export const Header: FC = () => {
           borderColor='primary'
           onClick={toggleColorMode}
         >
-          <MoonIcon color="primary" />
+          {isDark ? <SunIcon color="primary" /> : <MoonIcon color="primary" />}
         </Box>
 
         {/* HAMBURGER MENU */}
