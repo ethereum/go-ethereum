@@ -1,4 +1,4 @@
-import { Box, Flex, Input, InputGroup, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Flex, Input, InputGroup, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -6,6 +6,7 @@ import { HamburgerIcon, LensIcon, MoonIcon } from '../UI/icons';
 import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../constants';
 
 export const Header: FC = () => {
+  const { toggleColorMode } = useColorMode();
   return (
     <Flex
       mb={4}
@@ -100,9 +101,11 @@ export const Header: FC = () => {
 
         {/* DARK MODE SWITCH */}
         <Box
+          as='button'
           p={4}
           borderRight={{ base: '2px', md: 'none' }}
           borderColor='primary'
+          onClick={toggleColorMode}
         >
           <MoonIcon color="primary" />
         </Box>
