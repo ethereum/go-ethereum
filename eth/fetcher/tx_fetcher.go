@@ -27,7 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -154,7 +154,7 @@ type TxFetcher struct {
 	// broadcast without needing explicit request/reply round trips.
 	waitlist  map[common.Hash]map[string]struct{} // Transactions waiting for an potential broadcast
 	waittime  map[common.Hash]mclock.AbsTime      // Timestamps when transactions were added to the waitlist
-	waitslots map[string]map[common.Hash]struct{} // Waiting announcement sgroupped by peer (DoS protection)
+	waitslots map[string]map[common.Hash]struct{} // Waiting announcements grouped by peer (DoS protection)
 
 	// Stage 2: Queue of transactions that waiting to be allocated to some peer
 	// to be retrieved directly.
@@ -218,7 +218,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
 	// Skip any transaction announcements that we already know of, or that we've
-	// previously marked as cheap and discarded. This check is of course racey,
+	// previously marked as cheap and discarded. This check is of course racy,
 	// because multiple concurrent notifies will still manage to pass it, but it's
 	// still valuable to check here because it runs concurrent  to the internal
 	// loop, so anything caught here is time saved internally.
@@ -262,54 +262,72 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
-	// Keep track of all the propagated transactions
-	if direct {
-		txReplyInMeter.Mark(int64(len(txs)))
-	} else {
-		txBroadcastInMeter.Mark(int64(len(txs)))
+	var (
+		inMeter          = txReplyInMeter
+		knownMeter       = txReplyKnownMeter
+		underpricedMeter = txReplyUnderpricedMeter
+		otherRejectMeter = txReplyOtherRejectMeter
+	)
+	if !direct {
+		inMeter = txBroadcastInMeter
+		knownMeter = txBroadcastKnownMeter
+		underpricedMeter = txBroadcastUnderpricedMeter
+		otherRejectMeter = txBroadcastOtherRejectMeter
 	}
+	// Keep track of all the propagated transactions
+	inMeter.Mark(int64(len(txs)))
+
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
-		added       = make([]common.Hash, 0, len(txs))
-		duplicate   int64
-		underpriced int64
-		otherreject int64
+		added = make([]common.Hash, 0, len(txs))
 	)
-	errs := f.addTxs(txs)
-	for i, err := range errs {
-		// Track the transaction hash if the price is too low for us.
-		// Avoid re-request this transaction when we receive another
-		// announcement.
-		if errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced) {
-			for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
-				f.underpriced.Pop()
+	// proceed in batches
+	for i := 0; i < len(txs); i += 128 {
+		end := i + 128
+		if end > len(txs) {
+			end = len(txs)
+		}
+		var (
+			duplicate   int64
+			underpriced int64
+			otherreject int64
+		)
+		batch := txs[i:end]
+		for j, err := range f.addTxs(batch) {
+			// Track the transaction hash if the price is too low for us.
+			// Avoid re-request this transaction when we receive another
+			// announcement.
+			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
+				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
+					f.underpriced.Pop()
+				}
+				f.underpriced.Add(batch[j].Hash())
 			}
-			f.underpriced.Add(txs[i].Hash())
+			// Track a few interesting failure types
+			switch {
+			case err == nil: // Noop, but need to handle to not count these
+
+			case errors.Is(err, txpool.ErrAlreadyKnown):
+				duplicate++
+
+			case errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced):
+				underpriced++
+
+			default:
+				otherreject++
+			}
+			added = append(added, batch[j].Hash())
 		}
-		// Track a few interesting failure types
-		switch {
-		case err == nil: // Noop, but need to handle to not count these
+		knownMeter.Mark(duplicate)
+		underpricedMeter.Mark(underpriced)
+		otherRejectMeter.Mark(otherreject)
 
-		case errors.Is(err, core.ErrAlreadyKnown):
-			duplicate++
-
-		case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
-			underpriced++
-
-		default:
-			otherreject++
+		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
+		if otherreject > 128/4 {
+			time.Sleep(200 * time.Millisecond)
+			log.Warn("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
-		added = append(added, txs[i].Hash())
-	}
-	if direct {
-		txReplyKnownMeter.Mark(duplicate)
-		txReplyUnderpricedMeter.Mark(underpriced)
-		txReplyOtherRejectMeter.Mark(otherreject)
-	} else {
-		txBroadcastKnownMeter.Mark(duplicate)
-		txBroadcastUnderpricedMeter.Mark(underpriced)
-		txBroadcastOtherRejectMeter.Mark(otherreject)
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:

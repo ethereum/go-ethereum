@@ -78,9 +78,12 @@ type SimulatedBackend struct {
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
-	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, GasLimit: gasLimit, Alloc: alloc}
-	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, nil, genesis.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	genesis := core.Genesis{
+		Config:   params.AllEthashProtocolChanges,
+		GasLimit: gasLimit,
+		Alloc:    alloc,
+	}
+	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -524,7 +527,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		available := new(big.Int).Set(balance)
 		if call.Value != nil {
 			if call.Value.Cmp(available) >= 0 {
-				return 0, errors.New("insufficient funds for transfer")
+				return 0, core.ErrInsufficientFundsForTransfer
 			}
 			available.Sub(available, call.Value)
 		}
@@ -797,8 +800,13 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	if len(b.pendingBlock.Transactions()) != 0 {
 		return errors.New("Could not adjust time on non-empty block")
 	}
+	// Get the last block
+	block := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())
+	if block == nil {
+		return fmt.Errorf("could not find parent")
+	}
 
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, block, ethash.NewFaker(), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	stateDB, _ := b.blockchain.State()
@@ -845,11 +853,28 @@ func (fb *filterBackend) ChainDb() ethdb.Database { return fb.db }
 
 func (fb *filterBackend) EventMux() *event.TypeMux { panic("not supported") }
 
-func (fb *filterBackend) HeaderByNumber(ctx context.Context, block rpc.BlockNumber) (*types.Header, error) {
-	if block == rpc.LatestBlockNumber {
+func (fb *filterBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	switch number {
+	case rpc.PendingBlockNumber:
+		if block := fb.backend.pendingBlock; block != nil {
+			return block.Header(), nil
+		}
+		return nil, nil
+	case rpc.LatestBlockNumber:
 		return fb.bc.CurrentHeader(), nil
+	case rpc.FinalizedBlockNumber:
+		if block := fb.bc.CurrentFinalizedBlock(); block != nil {
+			return block.Header(), nil
+		}
+		return nil, errors.New("finalized block not found")
+	case rpc.SafeBlockNumber:
+		if block := fb.bc.CurrentSafeBlock(); block != nil {
+			return block.Header(), nil
+		}
+		return nil, errors.New("safe block not found")
+	default:
+		return fb.bc.GetHeaderByNumber(uint64(number.Int64())), nil
 	}
-	return fb.bc.GetHeaderByNumber(uint64(block.Int64())), nil
 }
 
 func (fb *filterBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {

@@ -203,9 +203,8 @@ The delpw command removes a password for a given address (keyfile).
 		},
 		Description: `
 The newaccount command creates a new keystore-backed account. It is a convenience-method
-which can be used in lieu of an external UI.`,
-	}
-
+which can be used in lieu of an external UI.
+`}
 	gendocCommand = &cli.Command{
 		Action: GenDoc,
 		Name:   "gendoc",
@@ -213,15 +212,35 @@ which can be used in lieu of an external UI.`,
 		Description: `
 The gendoc generates example structures of the json-rpc communication types.
 `}
+	listAccountsCommand = &cli.Command{
+		Action: listAccounts,
+		Name:   "list-accounts",
+		Usage:  "List accounts in the keystore",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+			acceptFlag,
+		},
+		Description: `
+	Lists the accounts in the keystore.
+	`}
+	listWalletsCommand = &cli.Command{
+		Action: listWallets,
+		Name:   "list-wallets",
+		Usage:  "List wallets known to Clef",
+		Flags: []cli.Flag{
+			logLevelFlag,
+			keystoreFlag,
+			utils.LightKDFFlag,
+			acceptFlag,
+		},
+		Description: `
+	Lists the wallets known to Clef.
+	`}
 )
 
-var (
-	// Git SHA1 commit hash of the release (set via linker flags)
-	gitCommit = ""
-	gitDate   = ""
-
-	app = flags.NewApp(gitCommit, gitDate, "Manage Ethereum account operations")
-)
+var app = flags.NewApp("Manage Ethereum account operations")
 
 func init() {
 	app.Name = "Clef"
@@ -255,6 +274,8 @@ func init() {
 		delCredentialCommand,
 		newAccountCommand,
 		gendocCommand,
+		listAccountsCommand,
+		listWalletsCommand,
 	}
 }
 
@@ -357,6 +378,22 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
+func initInternalApi(c *cli.Context) (*core.UIServerAPI, error) {
+	if err := initialize(c); err != nil {
+		return nil, err
+	}
+	var (
+		ui                        = core.NewCommandlineUI()
+		pwStorage storage.Storage = &storage.NoStorage{}
+		ksLoc                     = c.String(keystoreFlag.Name)
+		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
+	)
+	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
+	api := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
+	internalApi := core.NewUIServerAPI(api)
+	return internalApi, nil
+}
+
 func setCredential(ctx *cli.Context) error {
 	if ctx.NArg() < 1 {
 		utils.Fatalf("This command requires an address to be passed as an argument")
@@ -415,31 +452,6 @@ func removeCredential(ctx *cli.Context) error {
 	return nil
 }
 
-func newAccount(c *cli.Context) error {
-	if err := initialize(c); err != nil {
-		return err
-	}
-	// The newaccount is meant for users using the CLI, since 'real' external
-	// UIs can use the UI-api instead. So we'll just use the native CLI UI here.
-	var (
-		ui                        = core.NewCommandlineUI()
-		pwStorage storage.Storage = &storage.NoStorage{}
-		ksLoc                     = c.String(keystoreFlag.Name)
-		lightKdf                  = c.Bool(utils.LightKDFFlag.Name)
-	)
-	log.Info("Starting clef", "keystore", ksLoc, "light-kdf", lightKdf)
-	am := core.StartClefAccountManager(ksLoc, true, lightKdf, "")
-	// This gives is us access to the external API
-	apiImpl := core.NewSignerAPI(am, 0, true, ui, nil, false, pwStorage)
-	// This gives us access to the internal API
-	internalApi := core.NewUIServerAPI(apiImpl)
-	addr, err := internalApi.New(context.Background())
-	if err == nil {
-		fmt.Printf("Generated account %v\n", addr.String())
-	}
-	return err
-}
-
 func initialize(c *cli.Context) error {
 	// Set up the logger to print everything
 	logOutput := os.Stdout
@@ -462,6 +474,57 @@ func initialize(c *cli.Context) error {
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(output, log.TerminalFormat(usecolor))))
 
+	return nil
+}
+
+func newAccount(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	addr, err := internalApi.New(context.Background())
+	if err == nil {
+		fmt.Printf("Generated account %v\n", addr.String())
+	}
+	return err
+}
+
+func listAccounts(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	accs, err := internalApi.ListAccounts(context.Background())
+	if err != nil {
+		return err
+	}
+	if len(accs) == 0 {
+		fmt.Println("\nThe keystore is empty.")
+	}
+	fmt.Println()
+	for _, account := range accs {
+		fmt.Printf("%v (%v)\n", account.Address, account.URL)
+	}
+	return err
+}
+
+func listWallets(c *cli.Context) error {
+	internalApi, err := initInternalApi(c)
+	if err != nil {
+		return err
+	}
+	wallets := internalApi.ListWallets()
+	if len(wallets) == 0 {
+		fmt.Println("\nThere are no wallets.")
+	}
+	fmt.Println()
+	for i, wallet := range wallets {
+		fmt.Printf("- Wallet %d at %v (%v %v)\n", i, wallet.URL, wallet.Status, wallet.Failure)
+		for j, acc := range wallet.Accounts {
+			fmt.Printf("  -Account %d: %v (%v)\n", j, acc.Address, acc.URL)
+		}
+		fmt.Println()
+	}
 	return nil
 }
 

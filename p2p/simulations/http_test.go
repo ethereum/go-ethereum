@@ -596,7 +596,7 @@ func TestHTTPSnapshot(t *testing.T) {
 	network, s := testHTTPServer(t)
 	defer s.Close()
 
-	var eventsDone = make(chan struct{})
+	var eventsDone = make(chan struct{}, 1)
 	count := 1
 	eventsDoneChan := make(chan *Event)
 	eventSub := network.Events().Subscribe(eventsDoneChan)

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -62,7 +63,7 @@ type serverHandler struct {
 	forkFilter forkid.Filter
 	blockchain *core.BlockChain
 	chainDb    ethdb.Database
-	txpool     *core.TxPool
+	txpool     *txpool.TxPool
 	server     *LesServer
 
 	closeCh chan struct{}  // Channel used to exit all background routines of handler.
@@ -73,7 +74,7 @@ type serverHandler struct {
 	addTxsSync bool
 }
 
-func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *core.TxPool, synced func() bool) *serverHandler {
+func newServerHandler(server *LesServer, blockchain *core.BlockChain, chainDb ethdb.Database, txpool *txpool.TxPool, synced func() bool) *serverHandler {
 	handler := &serverHandler{
 		forkFilter: forkid.NewFilter(blockchain),
 		server:     server,
@@ -343,7 +344,7 @@ func (h *serverHandler) BlockChain() *core.BlockChain {
 }
 
 // TxPool implements serverBackend
-func (h *serverHandler) TxPool() *core.TxPool {
+func (h *serverHandler) TxPool() *txpool.TxPool {
 	return h.txpool
 }
 
@@ -359,7 +360,7 @@ func (h *serverHandler) AddTxsSync() bool {
 
 // getAccount retrieves an account from the state based on root.
 func getAccount(triedb *trie.Database, root, hash common.Hash) (types.StateAccount, error) {
-	trie, err := trie.New(common.Hash{}, root, triedb)
+	trie, err := trie.New(trie.StateTrieID(root), triedb)
 	if err != nil {
 		return types.StateAccount{}, err
 	}
@@ -383,15 +384,15 @@ func (h *serverHandler) GetHelperTrie(typ uint, index uint64) *trie.Trie {
 	switch typ {
 	case htCanonical:
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.ChtSize-1)
-		root, prefix = light.GetChtRoot(h.chainDb, index, sectionHead), light.ChtTablePrefix
+		root, prefix = light.GetChtRoot(h.chainDb, index, sectionHead), string(rawdb.ChtTablePrefix)
 	case htBloomBits:
 		sectionHead := rawdb.ReadCanonicalHash(h.chainDb, (index+1)*h.server.iConfig.BloomTrieSize-1)
-		root, prefix = light.GetBloomTrieRoot(h.chainDb, index, sectionHead), light.BloomTrieTablePrefix
+		root, prefix = light.GetBloomTrieRoot(h.chainDb, index, sectionHead), string(rawdb.BloomTrieTablePrefix)
 	}
 	if root == (common.Hash{}) {
 		return nil
 	}
-	trie, _ := trie.New(common.Hash{}, root, trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
+	trie, _ := trie.New(trie.TrieID(root), trie.NewDatabase(rawdb.NewTable(h.chainDb, prefix)))
 	return trie
 }
 

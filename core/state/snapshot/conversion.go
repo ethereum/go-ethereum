@@ -136,7 +136,7 @@ func (stat *generateStats) progressAccounts(account common.Hash, done uint64) {
 	stat.head = account
 }
 
-// finishAccounts updates the gemerator stats for the finished account range.
+// finishAccounts updates the generator stats for the finished account range.
 func (stat *generateStats) finishAccounts(done uint64) {
 	stat.lock.Lock()
 	defer stat.lock.Unlock()

@@ -232,7 +232,7 @@ var Forks = map[string]*params.ChainConfig{
 	},
 }
 
-// Returns the set of defined fork names
+// AvailableForks returns the set of defined fork names
 func AvailableForks() []string {
 	var availableForks []string
 	for k := range Forks {

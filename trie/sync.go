@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -110,6 +111,7 @@ type syncMemBatch struct {
 	nodes  map[string][]byte      // In-memory membatch of recently completed nodes
 	hashes map[string]common.Hash // Hashes of recently completed nodes
 	codes  map[common.Hash][]byte // In-memory membatch of recently completed codes
+	size   uint64                 // Estimated batch-size of in-memory data.
 }
 
 // newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
@@ -337,6 +339,11 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	return nil
 }
 
+// MemSize returns an estimated size (in bytes) of the data held in the membatch.
+func (s *Sync) MemSize() uint64 {
+	return s.membatch.size
+}
+
 // Pending returns the number of state entries currently pending for download.
 func (s *Sync) Pending() int {
 	return len(s.nodeReqs) + len(s.codeReqs)
@@ -381,11 +388,11 @@ func (s *Sync) scheduleCodeRequest(req *codeRequest) {
 // retrieval scheduling.
 func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 	// Gather all the children of the node, irrelevant whether known or not
-	type child struct {
+	type childNode struct {
 		path []byte
 		node node
 	}
-	var children []child
+	var children []childNode
 
 	switch node := (object).(type) {
 	case *shortNode:
@@ -393,14 +400,14 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		if hasTerm(key) {
 			key = key[:len(key)-1]
 		}
-		children = []child{{
+		children = []childNode{{
 			node: node.Val,
 			path: append(append([]byte(nil), req.path...), key...),
 		}}
 	case *fullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
-				children = append(children, child{
+				children = append(children, childNode{
 					node: node.Children[i],
 					path: append(append([]byte(nil), req.path...), byte(i)),
 				})
@@ -410,7 +417,10 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		panic(fmt.Sprintf("unknown node: %+v", node))
 	}
 	// Iterate over the children, and request all unknown ones
-	requests := make([]*nodeRequest, 0, len(children))
+	var (
+		missing = make(chan *nodeRequest, len(children))
+		pending sync.WaitGroup
+	)
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
@@ -433,19 +443,36 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if s.membatch.hasNode(child.path) {
 				continue
 			}
-			// If database says duplicate, then at least the trie node is present
-			// and we hold the assumption that it's NOT legacy contract code.
-			chash := common.BytesToHash(node)
-			if rawdb.HasTrieNode(s.database, chash) {
-				continue
-			}
-			// Locally unknown node, schedule for retrieval
-			requests = append(requests, &nodeRequest{
-				path:     child.path,
-				hash:     chash,
-				parent:   req,
-				callback: req.callback,
-			})
+			// Check the presence of children concurrently
+			pending.Add(1)
+			go func(child childNode) {
+				defer pending.Done()
+
+				// If database says duplicate, then at least the trie node is present
+				// and we hold the assumption that it's NOT legacy contract code.
+				chash := common.BytesToHash(node)
+				if rawdb.HasTrieNode(s.database, chash) {
+					return
+				}
+				// Locally unknown node, schedule for retrieval
+				missing <- &nodeRequest{
+					path:     child.path,
+					hash:     chash,
+					parent:   req,
+					callback: req.callback,
+				}
+			}(child)
+		}
+	}
+	pending.Wait()
+
+	requests := make([]*nodeRequest, 0, len(children))
+	for done := false; !done; {
+		select {
+		case miss := <-missing:
+			requests = append(requests, miss)
+		default:
+			done = true
 		}
 	}
 	return requests, nil
@@ -458,7 +485,10 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 	// Write the node content to the membatch
 	s.membatch.nodes[string(req.path)] = req.data
 	s.membatch.hashes[string(req.path)] = req.hash
-
+	// The size tracking refers to the db-batch, not the in-memory data.
+	// Therefore, we ignore the req.path, and account only for the hash+data
+	// which eventually is written to db.
+	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.nodeReqs, string(req.path))
 	s.fetches[len(req.path)]--
 
@@ -480,6 +510,7 @@ func (s *Sync) commitNodeRequest(req *nodeRequest) error {
 func (s *Sync) commitCodeRequest(req *codeRequest) error {
 	// Write the node content to the membatch
 	s.membatch.codes[req.hash] = req.data
+	s.membatch.size += common.HashLength + uint64(len(req.data))
 	delete(s.codeReqs, req.hash)
 	s.fetches[len(req.path)]--
 

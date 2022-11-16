@@ -409,7 +409,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 
 // New creates a new password protected Account. The private key is protected with
 // the given password. Users are responsible to backup the private key that is stored
-// in the keystore location thas was specified when this API was created.
+// in the keystore location that was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (common.Address, error) {
 	if be := api.am.Backends(keystore.KeyStoreType); len(be) == 0 {
 		return common.Address{}, errors.New("password based accounts not supported")
@@ -587,7 +587,10 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args apitypes.SendTxA
 		return nil, err
 	}
 	// Convert fields into a real transaction
-	var unsignedTx = result.Transaction.ToTransaction()
+	unsignedTx, err := result.Transaction.ToTransaction()
+	if err != nil {
+		return nil, err
+	}
 	// Get the password for the transaction
 	pw, err := api.lookupOrQueryPassword(acc.Address, "Account password",
 		fmt.Sprintf("Please enter the password for account %s", acc.Address.String()))
@@ -635,7 +638,7 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 
 	gnosisTx.Signature = signature
 	gnosisTx.SafeTxHash = common.BytesToHash(preimage)
-	gnosisTx.Sender = *checkSummedSender // Must be checksumed to be accepted by relay
+	gnosisTx.Sender = *checkSummedSender // Must be checksummed to be accepted by relay
 
 	return &gnosisTx, nil
 }

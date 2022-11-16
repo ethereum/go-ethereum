@@ -58,19 +58,23 @@ type jsonrpcMessage struct {
 }
 
 func (msg *jsonrpcMessage) isNotification() bool {
-	return msg.ID == nil && msg.Method != ""
+	return msg.hasValidVersion() && msg.ID == nil && msg.Method != ""
 }
 
 func (msg *jsonrpcMessage) isCall() bool {
-	return msg.hasValidID() && msg.Method != ""
+	return msg.hasValidVersion() && msg.hasValidID() && msg.Method != ""
 }
 
 func (msg *jsonrpcMessage) isResponse() bool {
-	return msg.hasValidID() && msg.Method == "" && msg.Params == nil && (msg.Result != nil || msg.Error != nil)
+	return msg.hasValidVersion() && msg.hasValidID() && msg.Method == "" && msg.Params == nil && (msg.Result != nil || msg.Error != nil)
 }
 
 func (msg *jsonrpcMessage) hasValidID() bool {
 	return len(msg.ID) > 0 && msg.ID[0] != '{' && msg.ID[0] != '['
+}
+
+func (msg *jsonrpcMessage) hasValidVersion() bool {
+	return msg.Version == vsn
 }
 
 func (msg *jsonrpcMessage) isSubscribe() bool {
@@ -100,15 +104,14 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 func (msg *jsonrpcMessage) response(result interface{}) *jsonrpcMessage {
 	enc, err := json.Marshal(result)
 	if err != nil {
-		// TODO: wrap with 'internal server error'
-		return msg.errorResponse(err)
+		return msg.errorResponse(&internalServerError{errcodeMarshalError, err.Error()})
 	}
 	return &jsonrpcMessage{Version: vsn, ID: msg.ID, Result: enc}
 }
 
 func errorMessage(err error) *jsonrpcMessage {
 	msg := &jsonrpcMessage{Version: vsn, ID: null, Error: &jsonError{
-		Code:    defaultErrorCode,
+		Code:    errcodeDefault,
 		Message: err.Error(),
 	}}
 	ec, ok := err.(Error)

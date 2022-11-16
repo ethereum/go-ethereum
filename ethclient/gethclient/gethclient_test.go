@@ -19,6 +19,7 @@ package gethclient
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -78,10 +78,8 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 }
 
 func generateTestChain() (*core.Genesis, []*types.Block) {
-	db := rawdb.NewMemoryDatabase()
-	config := params.AllEthashProtocolChanges
 	genesis := &core.Genesis{
-		Config:    config,
+		Config:    params.AllEthashProtocolChanges,
 		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}}},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
@@ -90,10 +88,8 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
 	}
-	gblock := genesis.MustCommit(db)
-	engine := ethash.NewFaker()
-	blocks, _ := core.GenerateChain(config, gblock, engine, db, 1, generate)
-	blocks = append([]*types.Block{gblock}, blocks...)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
+	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
 	return genesis, blocks
 }
 
@@ -111,10 +107,6 @@ func TestGethClient(t *testing.T) {
 		test func(t *testing.T)
 	}{
 		{
-			"TestAccessList",
-			func(t *testing.T) { testAccessList(t, client) },
-		},
-		{
 			"TestGetProof",
 			func(t *testing.T) { testGetProof(t, client) },
 		}, {
@@ -130,14 +122,24 @@ func TestGethClient(t *testing.T) {
 			"TestSetHead",
 			func(t *testing.T) { testSetHead(t, client) },
 		}, {
-			"TestSubscribePendingTxs",
+			"TestSubscribePendingTxHashes",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
+		}, {
+			"TestSubscribePendingTxs",
+			func(t *testing.T) { testSubscribeFullPendingTransactions(t, client) },
 		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
 		},
+		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
+		// one block. The `testAcessList` fails if the miner has not yet created a
+		// new pending-block after the import event.
+		// Hence: this test should be last, execute the tests serially.
+		{
+			"TestAccessList",
+			func(t *testing.T) { testAccessList(t, client) },
+		},
 	}
-	t.Parallel()
 	for _, tt := range tests {
 		t.Run(tt.name, tt.test)
 	}
@@ -304,6 +306,40 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	}
 }
 
+func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	ethcl := ethclient.NewClient(client)
+	// Subscribe to Transactions
+	ch := make(chan *types.Transaction)
+	ec.SubscribeFullPendingTransactions(context.Background(), ch)
+	// Send a transaction
+	chainID, err := ethcl.ChainID(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Create transaction
+	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	signer := types.LatestSignerForChainID(chainID)
+	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedTx, err := tx.WithSignature(signer, signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Send transaction
+	err = ethcl.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check that the transaction was send over the channel
+	tx = <-ch
+	if tx.Hash() != signedTx.Hash() {
+		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
+	}
+}
+
 func testCallContract(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	msg := ethereum.CallMsg{
@@ -325,5 +361,55 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	mapAcc[testAddr] = override
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOverrideAccountMarshal(t *testing.T) {
+	om := map[common.Address]OverrideAccount{
+		common.Address{0x11}: OverrideAccount{
+			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+			Nonce: 0,
+		},
+		common.Address{0xaa}: OverrideAccount{
+			Nonce: 5,
+		},
+		common.Address{0xbb}: OverrideAccount{
+			Code: []byte{1},
+		},
+		common.Address{0xcc}: OverrideAccount{
+			// 'code', 'balance', 'state' should be set when input is
+			// a non-nil but empty value.
+			Code:    []byte{},
+			Balance: big.NewInt(0),
+			State:   map[common.Hash]common.Hash{},
+			// For 'stateDiff' the behavior is different, empty map
+			// is ignored because it makes no difference.
+			StateDiff: map[common.Hash]common.Hash{},
+		},
+	}
+
+	marshalled, err := json.MarshalIndent(&om, "", "  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := `{
+  "0x1100000000000000000000000000000000000000": {},
+  "0xaa00000000000000000000000000000000000000": {
+    "nonce": "0x5"
+  },
+  "0xbb00000000000000000000000000000000000000": {
+    "code": "0x01"
+  },
+  "0xcc00000000000000000000000000000000000000": {
+    "code": "0x",
+    "balance": "0x0",
+    "state": {}
+  }
+}`
+
+	if string(marshalled) != expected {
+		t.Error("wrong output:", string(marshalled))
+		t.Error("want:", expected)
 	}
 }

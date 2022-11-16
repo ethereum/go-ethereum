@@ -100,11 +100,11 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 }
 
 // checkTrieConsistency checks that all nodes in a (sub-)trie are indeed present.
-func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
+func checkTrieConsistency(db ethdb.KeyValueStore, root common.Hash) error {
 	if v, _ := db.Get(root[:]); v == nil {
 		return nil // Consider a non existent state consistent.
 	}
-	trie, err := trie.New(common.Hash{}, root, trie.NewDatabase(db))
+	trie, err := trie.New(trie.StateTrieID(root), trie.NewDatabase(db))
 	if err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 	if commit {
 		srcDb.TrieDB().Commit(srcRoot, false, nil)
 	}
-	srcTrie, _ := trie.New(common.Hash{}, srcRoot, srcDb.TrieDB())
+	srcTrie, _ := trie.New(trie.StateTrieID(srcRoot), srcDb.TrieDB())
 
 	// Create a destination state and sync with the scheduler
 	dstDb := rawdb.NewMemoryDatabase()
@@ -222,7 +222,8 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 					if err := rlp.DecodeBytes(srcTrie.Get(node.syncPath[0]), &acc); err != nil {
 						t.Fatalf("failed to decode account on path %x: %v", node.syncPath[0], err)
 					}
-					stTrie, err := trie.New(common.BytesToHash(node.syncPath[0]), acc.Root, srcDb.TrieDB())
+					id := trie.StorageTrieID(srcRoot, common.BytesToHash(node.syncPath[0]), acc.Root)
+					stTrie, err := trie.New(id, srcDb.TrieDB())
 					if err != nil {
 						t.Fatalf("failed to retriev storage trie for path %x: %v", node.syncPath[1], err)
 					}
@@ -553,7 +554,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		}
 	}
 	isCode[common.BytesToHash(emptyCodeHash)] = struct{}{}
-	checkTrieConsistency(srcDb.TrieDB().DiskDB().(ethdb.Database), srcRoot)
+	checkTrieConsistency(srcDb.DiskDB(), srcRoot)
 
 	// Create a destination state and sync with the scheduler
 	dstDb := rawdb.NewMemoryDatabase()

@@ -32,23 +32,6 @@ func initDomain() {
 	}
 }
 
-func MatrixLinComb(vectors [][]bls.Fr, scalars []bls.Fr) []bls.Fr {
-	r := make([]bls.Fr, len(vectors[0]))
-	for i := 0; i < len(vectors); i++ {
-		var tmp bls.Fr
-		for j := 0; j < len(r); j++ {
-			bls.MulModFr(&tmp, &vectors[i][j], &scalars[i])
-			bls.AddModFr(&r[j], &r[j], &tmp)
-		}
-	}
-	return r
-}
-
-// EvaluatePolyInEvaluationForm evaluates the polynomial using the barycentric formula
-func EvaluatePolyInEvaluationForm(yFr *bls.Fr, poly []bls.Fr, x *bls.Fr) {
-	bls.EvaluatePolyInEvaluationForm(yFr, poly, x, DomainFr, 0)
-}
-
 func frToBig(b *big.Int, val *bls.Fr) {
 	//b.SetBytes((*kilicbls.Fr)(val).RedToBytes())
 	// silly double conversion

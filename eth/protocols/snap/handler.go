@@ -139,7 +139,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 	start := time.Now()
-	// Track the emount of time it takes to serve the request and run the handler
+	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
@@ -283,7 +283,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		req.Bytes = softResponseLimit
 	}
 	// Retrieve the requested state and bail out if non existent
-	tr, err := trie.New(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+	tr, err := trie.New(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
 	if err != nil {
 		return nil, nil
 	}
@@ -343,7 +343,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		req.Bytes = softResponseLimit
 	}
 	// TODO(karalabe): Do we want to enforce > 0 accounts and 1 account if origin is set?
-	// TODO(karalabe):   - Logging locally is not ideal as remote faulst annoy the local user
+	// TODO(karalabe):   - Logging locally is not ideal as remote faults annoy the local user
 	// TODO(karalabe):   - Dropping the remote peer is less flexible wrt client bugs (slow is better than non-functional)
 
 	// Calculate the hard limit at which to abort, even if mid storage trie
@@ -413,7 +413,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
-			accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, chain.StateCache().TrieDB())
+			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -421,7 +421,8 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 			if err != nil || acc == nil {
 				return nil, nil
 			}
-			stTrie, err := trie.NewStateTrie(account, acc.Root, chain.StateCache().TrieDB())
+			id := trie.StorageTrieID(req.Root, account, acc.Root)
+			stTrie, err := trie.NewStateTrie(id, chain.StateCache().TrieDB())
 			if err != nil {
 				return nil, nil
 			}
@@ -487,19 +488,13 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 	// Make sure we have the state associated with the request
 	triedb := chain.StateCache().TrieDB()
 
-	accTrie, err := trie.NewStateTrie(common.Hash{}, req.Root, triedb)
+	accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), triedb)
 	if err != nil {
 		// We don't have the requested state available, bail out
 		return nil, nil
 	}
+	// The 'snap' might be nil, in which case we cannot serve storage slots.
 	snap := chain.Snapshots().Snapshot(req.Root)
-	if snap == nil {
-		// We don't have the requested state snapshotted yet, bail out.
-		// In reality we could still serve using the account and storage
-		// tries only, but let's protect the node a bit while it's doing
-		// snapshot generation.
-		return nil, nil
-	}
 	// Retrieve trie nodes until the packet size limit is reached
 	var (
 		nodes [][]byte
@@ -523,13 +518,27 @@ func ServiceGetTrieNodesQuery(chain *core.BlockChain, req *GetTrieNodesPacket, s
 			bytes += uint64(len(blob))
 
 		default:
+			var stRoot common.Hash
 			// Storage slots requested, open the storage trie and retrieve from there
-			account, err := snap.Account(common.BytesToHash(pathset[0]))
-			loads++ // always account database reads, even for failures
-			if err != nil || account == nil {
-				break
+			if snap == nil {
+				// We don't have the requested state snapshotted yet (or it is stale),
+				// but can look up the account via the trie instead.
+				account, err := accTrie.TryGetAccountWithPreHashedKey(pathset[0])
+				loads += 8 // We don't know the exact cost of lookup, this is an estimate
+				if err != nil || account == nil {
+					break
+				}
+				stRoot = account.Root
+			} else {
+				account, err := snap.Account(common.BytesToHash(pathset[0]))
+				loads++ // always account database reads, even for failures
+				if err != nil || account == nil {
+					break
+				}
+				stRoot = common.BytesToHash(account.Root)
 			}
-			stTrie, err := trie.NewStateTrie(common.BytesToHash(pathset[0]), common.BytesToHash(account.Root), triedb)
+			id := trie.StorageTrieID(req.Root, common.BytesToHash(pathset[0]), stRoot)
+			stTrie, err := trie.NewStateTrie(id, triedb)
 			loads++ // always account database reads, even for failures
 			if err != nil {
 				break

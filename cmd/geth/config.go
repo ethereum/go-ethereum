@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -108,9 +109,10 @@ func loadConfig(file string, cfg *gethConfig) error {
 }
 
 func defaultNodeConfig() node.Config {
+	git, _ := version.VCS()
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
+	cfg.Version = params.VersionWithCommit(git.Commit, git.Date)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "geth.ipc"
@@ -175,12 +177,13 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
 			firstIdx = 46147
 		}
-		isLegacy, _, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
+		isLegacy, firstLegacy, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
 		if err != nil {
 			log.Error("Failed to check db for legacy receipts", "err", err)
 		} else if isLegacy {
 			stack.Close()
-			utils.Fatalf("Database has receipts with a legacy format. Please run `geth db freezer-migrate`.")
+			log.Error("Database has receipts with a legacy format", "firstLegacy", firstLegacy)
+			utils.Fatalf("Aborting. Please run `geth db freezer-migrate`.")
 		}
 	}
 

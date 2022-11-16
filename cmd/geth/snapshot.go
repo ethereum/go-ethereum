@@ -170,7 +170,14 @@ func pruneState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, false)
-	pruner, err := pruner.NewPruner(chaindb, stack.ResolvePath(""), stack.ResolvePath(config.Eth.TrieCleanCacheJournal), ctx.Uint64(utils.BloomFilterSizeFlag.Name))
+	defer chaindb.Close()
+
+	prunerconfig := pruner.Config{
+		Datadir:   stack.ResolvePath(""),
+		Cachedir:  stack.ResolvePath(config.Eth.TrieCleanCacheJournal),
+		BloomSize: ctx.Uint64(utils.BloomFilterSizeFlag.Name),
+	}
+	pruner, err := pruner.NewPruner(chaindb, prunerconfig)
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -199,12 +206,20 @@ func verifyState(ctx *cli.Context) error {
 	defer stack.Close()
 
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, headBlock.Root(), false, false, false)
+	snapconfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapconfig, chaindb, trie.NewDatabase(chaindb), headBlock.Root())
 	if err != nil {
 		log.Error("Failed to open snapshot tree", "err", err)
 		return err
@@ -271,7 +286,7 @@ func traverseState(ctx *cli.Context) error {
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewStateTrie(common.Hash{}, root, triedb)
+	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
@@ -292,7 +307,8 @@ func traverseState(ctx *cli.Context) error {
 			return err
 		}
 		if acc.Root != emptyRoot {
-			storageTrie, err := trie.NewStateTrie(common.BytesToHash(accIter.Key), acc.Root, triedb)
+			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
+			storageTrie, err := trie.NewStateTrie(id, triedb)
 			if err != nil {
 				log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 				return err
@@ -360,7 +376,7 @@ func traverseRawState(ctx *cli.Context) error {
 		log.Info("Start traversing the state", "root", root, "number", headBlock.NumberU64())
 	}
 	triedb := trie.NewDatabase(chaindb)
-	t, err := trie.NewStateTrie(common.Hash{}, root, triedb)
+	t, err := trie.NewStateTrie(trie.StateTrieID(root), triedb)
 	if err != nil {
 		log.Error("Failed to open trie", "root", root, "err", err)
 		return err
@@ -406,7 +422,8 @@ func traverseRawState(ctx *cli.Context) error {
 				return errors.New("invalid account")
 			}
 			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewStateTrie(common.BytesToHash(accIter.LeafKey()), acc.Root, triedb)
+				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
+				storageTrie, err := trie.NewStateTrie(id, triedb)
 				if err != nil {
 					log.Error("Failed to open storage trie", "root", acc.Root, "err", err)
 					return errors.New("missing storage trie")
@@ -479,7 +496,13 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, root, false, false, false)
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapConfig, db, trie.NewDatabase(db), root)
 	if err != nil {
 		return err
 	}

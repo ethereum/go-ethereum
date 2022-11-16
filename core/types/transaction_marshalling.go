@@ -61,76 +61,76 @@ type txJSON struct {
 }
 
 // MarshalJSON marshals as JSON with a hash.
-func (t *Transaction) MarshalJSON() ([]byte, error) {
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	var enc txJSON
 	// These are set for all tx types.
-	enc.Hash = t.Hash()
-	enc.Type = hexutil.Uint64(t.Type())
+	enc.Hash = tx.Hash()
+	enc.Type = hexutil.Uint64(tx.Type())
 
 	// Other fields are set conditionally depending on tx type.
-	switch tx := t.inner.(type) {
+	switch itx := tx.inner.(type) {
 	case *LegacyTx:
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *AccessListTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.GasPrice = (*hexutil.Big)(tx.GasPrice)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.GasPrice = (*hexutil.Big)(itx.GasPrice)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *DynamicFeeTx:
-		enc.ChainID = (*hexutil.Big)(tx.ChainID)
-		enc.AccessList = &tx.AccessList
-		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
-		enc.Value = (*hexutil.Big)(tx.Value)
-		enc.Data = (*hexutil.Bytes)(&tx.Data)
-		enc.To = t.To()
-		enc.V = (*hexutil.Big)(tx.V)
-		enc.R = (*hexutil.Big)(tx.R)
-		enc.S = (*hexutil.Big)(tx.S)
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.AccessList = &itx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Data = (*hexutil.Bytes)(&itx.Data)
+		enc.To = tx.To()
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 	case *SignedBlobTx:
-		enc.ChainID = (*hexutil.Big)(u256ToBig(&tx.Message.ChainID))
-		enc.AccessList = (*AccessList)(&tx.Message.AccessList)
-		enc.Nonce = (*hexutil.Uint64)(&tx.Message.Nonce)
-		enc.Gas = (*hexutil.Uint64)(&tx.Message.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(u256ToBig(&tx.Message.GasFeeCap))
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(u256ToBig(&tx.Message.GasTipCap))
-		enc.Value = (*hexutil.Big)(u256ToBig(&tx.Message.Value))
-		enc.Data = (*hexutil.Bytes)(&tx.Message.Data)
-		enc.To = t.To()
-		v, r, s := tx.rawSignatureValues()
+		enc.ChainID = (*hexutil.Big)(u256ToBig(&itx.Message.ChainID))
+		enc.AccessList = (*AccessList)(&itx.Message.AccessList)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Message.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&itx.Message.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(u256ToBig(&itx.Message.GasFeeCap))
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(u256ToBig(&itx.Message.GasTipCap))
+		enc.Value = (*hexutil.Big)(u256ToBig(&itx.Message.Value))
+		enc.Data = (*hexutil.Bytes)(&itx.Message.Data)
+		enc.To = tx.To()
+		v, r, s := tx.RawSignatureValues()
 		enc.V = (*hexutil.Big)(v)
 		enc.R = (*hexutil.Big)(r)
 		enc.S = (*hexutil.Big)(s)
-		enc.MaxFeePerDataGas = (*hexutil.Big)(u256ToBig(&tx.Message.MaxFeePerDataGas))
-		enc.BlobVersionedHashes = tx.Message.BlobVersionedHashes
-		if t.wrapData != nil {
-			enc.Blobs = t.wrapData.blobs()
-			enc.BlobKzgs = t.wrapData.kzgs()
-			enc.KzgAggregatedProof = t.wrapData.aggregatedProof()
+		enc.MaxFeePerDataGas = (*hexutil.Big)(u256ToBig(&itx.Message.MaxFeePerDataGas))
+		enc.BlobVersionedHashes = itx.Message.BlobVersionedHashes
+		if tx.wrapData != nil {
+			enc.Blobs = tx.wrapData.blobs()
+			enc.BlobKzgs = tx.wrapData.kzgs()
+			enc.KzgAggregatedProof = tx.wrapData.aggregatedProof()
 		}
 	}
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (t *Transaction) UnmarshalJSON(input []byte) error {
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec txJSON
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
@@ -356,13 +356,13 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		itx.Message.BlobVersionedHashes = dec.BlobVersionedHashes
 		// A BlobTx may not contain data
 		if len(dec.Blobs) != 0 || len(dec.BlobKzgs) != 0 {
-			t.wrapData = &BlobTxWrapData{
+			tx.wrapData = &BlobTxWrapData{
 				BlobKzgs:           dec.BlobKzgs,
 				Blobs:              dec.Blobs,
 				KzgAggregatedProof: dec.KzgAggregatedProof,
 			}
 			// Verify that versioned hashes match kzgs, and kzgs match blobs.
-			if err := t.wrapData.verifyBlobs(&itx); err != nil {
+			if err := tx.wrapData.validateBlobTransactionWrapper(&itx); err != nil {
 				return fmt.Errorf("blob wrapping data is invalid: %v", err)
 			}
 		}
@@ -371,7 +371,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	}
 
 	// Now set the inner transaction.
-	t.setDecoded(inner, 0)
+	tx.setDecoded(inner, 0)
 
 	// TODO: check hash here?
 	return nil

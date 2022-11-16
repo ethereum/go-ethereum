@@ -381,7 +381,7 @@ func (w EncoderBuffer) WriteBytes(b []byte) {
 	w.buf.writeBytes(b)
 }
 
-// WriteBytes encodes s as an RLP string.
+// WriteString encodes s as an RLP string.
 func (w EncoderBuffer) WriteString(s string) {
 	w.buf.writeString(s)
 }

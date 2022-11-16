@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -106,7 +107,7 @@ type ConsensusAPI struct {
 	//     problematic, so we will only track the head chain segment of a bad
 	//     chain to allow discarding progressing bad chains and side chains,
 	//     without tracking too much bad data.
-	invalidBlocksHits map[common.Hash]int           // Emhemeral cache to track invalid blocks and their hit count
+	invalidBlocksHits map[common.Hash]int           // Ephemeral cache to track invalid blocks and their hit count
 	invalidTipsets    map[common.Hash]*types.Header // Ephemeral cache to track invalid tipsets and their bad ancestor
 	invalidLock       sync.Mutex                    // Protects the invalid maps from concurrent access
 
@@ -121,6 +122,7 @@ type ConsensusAPI struct {
 	lastNewPayloadLock   sync.Mutex
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
+	newPayloadLock sync.Mutex // Lock for the NewPayload method
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -143,15 +145,19 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 }
 
 // ForkchoiceUpdatedV1 has several responsibilities:
-// If the method is called with an empty head block:
-// 		we return success, which can be used to check if the engine API is enabled
-// If the total difficulty was not reached:
-// 		we return INVALID
-// If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
-// We try to set our blockchain to the headBlock
-// If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+//
+// We try to set our blockchain to the headBlock.
+//
+// If the method is called with an empty head block: we return success, which can be used
+// to check if the engine API is enabled.
+//
+// If the total difficulty was not reached: we return INVALID.
+//
+// If the finalizedBlockHash is set: we check if we have the finalizedBlockHash in our db,
+// if not we start a sync.
+//
+// If there are payloadAttributes: we try to assemble a block with the payloadAttributes
+// and return its payloadID.
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
@@ -275,23 +281,21 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	}
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
-	// might replace it arbitrarily many times in between.
+	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
-		// Create an empty block first which can be used as a fallback
-		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
-		if err != nil {
-			log.Error("Failed to create empty sealing payload", "err", err)
-			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
+		args := &miner.BuildPayloadArgs{
+			Parent:       update.HeadBlockHash,
+			Timestamp:    payloadAttributes.Timestamp,
+			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
+			Random:       payloadAttributes.Random,
 		}
-		// Send a request to generate a full block in the background.
-		// The result can be obtained via the returned channel.
-		resCh, err := api.eth.Miner().GetSealingBlockAsync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, false)
+		payload, err := api.eth.Miner().BuildPayload(args)
 		if err != nil {
-			log.Error("Failed to create async sealing payload", "err", err)
+			log.Error("Failed to build payload", "err", err)
 			return valid(nil), beacon.InvalidPayloadAttributes.With(err)
 		}
 		id := computePayloadId(update.HeadBlockHash, payloadAttributes)
-		api.localBlocks.put(id, &payload{empty: empty, result: resCh})
+		api.localBlocks.put(id, payload)
 		return valid(&id), nil
 	}
 	return valid(nil), nil
@@ -330,25 +334,44 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableDataV1, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
-	block := api.localBlocks.get(payloadID)
-	if block == nil {
+	data := api.localBlocks.get(payloadID)
+	if data == nil {
 		return nil, beacon.UnknownPayload
 	}
-	return beacon.BlockToExecutableData(block), nil
+	return data, nil
 }
 
 // GetBlobsBundleV1 returns a bundle of all blob and corresponding KZG commitments by payload id
 func (api *ConsensusAPI) GetBlobsBundleV1(payloadID beacon.PayloadID) (*beacon.BlobsBundleV1, error) {
 	log.Trace("Engine API request received", "method", "GetBlobsBundle")
-	block := api.localBlocks.get(payloadID)
-	if block == nil {
+	data, err := api.localBlocks.getBlobsBundle(payloadID)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
 		return nil, beacon.UnknownPayload
 	}
-	return beacon.BlockToBlobData(block)
+	return data, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.PayloadStatusV1, error) {
+	// The locking here is, strictly, not required. Without these locks, this can happen:
+	//
+	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
+	//      api.eth.BlockChain().InsertBlockWithoutSetHead, where it is blocked on
+	//      e.g database compaction.
+	// 2. The call times out on the CL layer, which issues another NewPayload (execdata-N) call.
+	//    Similarly, this also get stuck on the same place. Importantly, since the
+	//    first call has not gone through, the early checks for "do we already have this block"
+	//    will all return false.
+	// 3. When the db compaction ends, then N calls inserting the same payload are processed
+	//    sequentially.
+	// Hence, we use a lock here, to be sure that the previous call has finished before we
+	// check whether we already have the block locally.
+	api.newPayloadLock.Lock()
+	defer api.newPayloadLock.Unlock()
+
 	log.Trace("Engine API request received", "method", "ExecutePayload", "number", params.Number, "hash", params.BlockHash)
 	block, err := beacon.ExecutableDataToBlock(params)
 	if err != nil {
@@ -575,16 +598,16 @@ func (api *ConsensusAPI) heartbeat() {
 
 	var (
 		offlineLogged time.Time
+		ttd           = api.eth.BlockChain().Config().TerminalTotalDifficulty
 	)
+	// If the network is not yet merged/merging, don't bother continuing.
+	if ttd == nil {
+		return
+	}
 	for {
 		// Sleep a bit and retrieve the last known consensus updates
 		time.Sleep(5 * time.Second)
 
-		// If the network is not yet merged/merging, don't bother scaring the user
-		ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
-		if ttd == nil {
-			continue
-		}
 		api.lastTransitionLock.Lock()
 		lastTransitionUpdate := api.lastTransitionUpdate
 		api.lastTransitionLock.Unlock()
@@ -600,82 +623,16 @@ func (api *ConsensusAPI) heartbeat() {
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
 		if api.eth.BlockChain().Config().TerminalTotalDifficultyPassed || api.eth.Merger().TDDReached() {
-			if time.Since(lastForkchoiceUpdate) > beaconUpdateConsensusTimeout && time.Since(lastNewPayloadUpdate) > beaconUpdateConsensusTimeout {
-				if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
-					if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-						if lastTransitionUpdate.IsZero() {
-							log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
-						} else {
-							log.Warn("Previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
-						}
-						offlineLogged = time.Now()
-					}
-					continue
-				}
-				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-					if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
-						log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
-					} else {
-						log.Warn("Beacon client online, but no consensus updates received in a while. Please fix your beacon client to follow the chain!")
-					}
-					offlineLogged = time.Now()
-				}
-				continue
-			} else {
+			if time.Since(lastForkchoiceUpdate) <= beaconUpdateConsensusTimeout || time.Since(lastNewPayloadUpdate) <= beaconUpdateConsensusTimeout {
 				offlineLogged = time.Time{}
+				continue
 			}
-		} else {
 			if time.Since(lastTransitionUpdate) > beaconUpdateExchangeTimeout {
 				if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
-					// Retrieve the last few blocks and make a rough estimate as
-					// to when the merge transition should happen
-					var (
-						chain = api.eth.BlockChain()
-						head  = chain.CurrentBlock()
-						htd   = chain.GetTd(head.Hash(), head.NumberU64())
-						eta   time.Duration
-					)
-					if head.NumberU64() > 0 && htd.Cmp(ttd) < 0 {
-						// Accumulate the last 64 difficulties to estimate the growth
-						var diff float64
-
-						block := head
-						for i := 0; i < 64; i++ {
-							diff += float64(block.Difficulty().Uint64())
-							if parent := chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent == nil {
-								break
-							} else {
-								block = parent
-							}
-						}
-						// Estimate an ETA based on the block times and the difficulty growth
-						growth := diff / float64(head.Time()-block.Time()+1) // +1 to avoid div by zero
-						if growth > 0 {
-							if left := new(big.Int).Sub(ttd, htd); left.IsUint64() {
-								eta = time.Duration(float64(left.Uint64())/growth) * time.Second
-							} else {
-								eta = time.Duration(new(big.Int).Div(left, big.NewInt(int64(growth))).Uint64()) * time.Second
-							}
-						}
-					}
-					var message string
-					if htd.Cmp(ttd) > 0 {
-						if lastTransitionUpdate.IsZero() {
-							message = "Merge already reached, but no beacon client seen. Please launch one to follow the chain!"
-						} else {
-							message = "Merge already reached, but previously seen beacon client is offline. Please ensure it is operational to follow the chain!"
-						}
+					if lastTransitionUpdate.IsZero() {
+						log.Warn("Post-merge network, but no beacon client seen. Please launch one to follow the chain!")
 					} else {
-						if lastTransitionUpdate.IsZero() {
-							message = "Merge is configured, but no beacon client seen. Please ensure you have one available before the transition arrives!"
-						} else {
-							message = "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transition arrives!"
-						}
-					}
-					if eta == 0 {
-						log.Warn(message)
-					} else {
-						log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doesn't handle days
+						log.Warn("Previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
 					}
 					offlineLogged = time.Now()
 				}
@@ -683,6 +640,71 @@ func (api *ConsensusAPI) heartbeat() {
 			} else {
 				offlineLogged = time.Time{}
 			}
+			if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
+				if lastForkchoiceUpdate.IsZero() && lastNewPayloadUpdate.IsZero() {
+					log.Warn("Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!")
+				} else {
+					log.Warn("Beacon client online, but no consensus updates received in a while. Please fix your beacon client to follow the chain!")
+				}
+				offlineLogged = time.Now()
+			}
+			continue
+		}
+		if time.Since(lastTransitionUpdate) <= beaconUpdateExchangeTimeout {
+			offlineLogged = time.Time{}
+			continue
+		}
+		if time.Since(offlineLogged) > beaconUpdateWarnFrequency {
+			// Retrieve the last few blocks and make a rough estimate as
+			// to when the merge transition should happen
+			var (
+				chain = api.eth.BlockChain()
+				head  = chain.CurrentHeader()
+				htd   = chain.GetTd(head.Hash(), head.Number.Uint64())
+			)
+			if htd.Cmp(ttd) >= 0 {
+				if lastTransitionUpdate.IsZero() {
+					log.Warn("Merge already reached, but no beacon client seen. Please launch one to follow the chain!")
+				} else {
+					log.Warn("Merge already reached, but previously seen beacon client is offline. Please ensure it is operational to follow the chain!")
+				}
+				offlineLogged = time.Now()
+				continue
+			}
+			var eta time.Duration
+			if head.Number.Uint64() > 0 {
+				// Accumulate the last 64 difficulties to estimate the growth
+				var (
+					deltaDiff uint64
+					deltaTime uint64
+					current   = head
+				)
+				for i := 0; i < 64; i++ {
+					parent := chain.GetHeader(current.ParentHash, current.Number.Uint64()-1)
+					if parent == nil {
+						break
+					}
+					deltaDiff += current.Difficulty.Uint64()
+					deltaTime += current.Time - parent.Time
+					current = parent
+				}
+				// Estimate an ETA based on the block times and the difficulty growth
+				if deltaTime > 0 {
+					growth := deltaDiff / deltaTime
+					left := new(big.Int).Sub(ttd, htd)
+					eta = time.Duration(new(big.Int).Div(left, new(big.Int).SetUint64(growth+1)).Uint64()) * time.Second
+				}
+			}
+			message := "Merge is configured, but previously seen beacon client is offline. Please ensure it is operational before the transition arrives!"
+			if lastTransitionUpdate.IsZero() {
+				message = "Merge is configured, but no beacon client seen. Please ensure you have one available before the transition arrives!"
+			}
+			if eta < time.Second {
+				log.Warn(message)
+			} else {
+				log.Warn(message, "eta", common.PrettyAge(time.Now().Add(-eta))) // weird hack, but duration formatted doesn't handle days
+			}
+			offlineLogged = time.Now()
 		}
 	}
 }

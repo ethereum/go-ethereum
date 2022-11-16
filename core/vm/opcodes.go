@@ -25,11 +25,7 @@ type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
-	switch op {
-	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-		return true
-	}
-	return false
+	return PUSH1 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
@@ -99,6 +95,7 @@ const (
 	NUMBER      OpCode = 0x43
 	DIFFICULTY  OpCode = 0x44
 	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47
@@ -281,7 +278,7 @@ var opCodeToString = map[OpCode]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to RANDOM post merge
+	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",

@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// DumpConfig is a set of options to control what portions of the statewill be
+// DumpConfig is a set of options to control what portions of the state will be
 // iterated and collected.
 type DumpConfig struct {
 	SkipCode          bool

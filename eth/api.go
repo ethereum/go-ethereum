@@ -411,10 +411,12 @@ func (api *DebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, contract
 	if block == nil {
 		return StorageRangeResult{}, fmt.Errorf("block %#x not found", blockHash)
 	}
-	_, _, statedb, err := api.eth.stateAtTransaction(block, txIndex, 0)
+	_, _, statedb, release, err := api.eth.stateAtTransaction(block, txIndex, 0)
 	if err != nil {
 		return StorageRangeResult{}, err
 	}
+	defer release()
+
 	st := statedb.StorageTrie(contractAddress)
 	if st == nil {
 		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
@@ -506,11 +508,11 @@ func (api *DebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]c
 	}
 	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewStateTrie(common.Hash{}, startBlock.Root(), triedb)
+	oldTrie, err := trie.NewStateTrie(trie.StateTrieID(startBlock.Root()), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewStateTrie(common.Hash{}, endBlock.Root(), triedb)
+	newTrie, err := trie.NewStateTrie(trie.StateTrieID(endBlock.Root()), triedb)
 	if err != nil {
 		return nil, err
 	}

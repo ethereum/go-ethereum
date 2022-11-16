@@ -153,7 +153,7 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 	}
 }
 
-// SetCapacityRaiseThreshold sets a threshold value used for raising capFactor.
+// SetCapacityLimits sets a threshold value used for raising capFactor.
 // Either if the difference between total allowed and connected capacity is less
 // than this threshold or if their ratio is less than capacityRaiseThresholdRatio
 // then capFactor is allowed to slowly raise.
@@ -223,7 +223,7 @@ func (cm *ClientManager) processed(node *ClientNode, maxCost, realCost uint64, n
 	cm.updateBuffer(node, int64(maxCost-realCost), now)
 }
 
-// updateBuffer recalulates the corrected buffer value, adds the given value to it
+// updateBuffer recalculates the corrected buffer value, adds the given value to it
 // and updates the node's actual buffer value if possible
 func (cm *ClientManager) updateBuffer(node *ClientNode, add int64, now mclock.AbsTime) {
 	cm.lock.Lock()

@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
@@ -207,7 +206,7 @@ func (st *StackTrie) TryUpdate(key, value []byte) error {
 
 func (st *StackTrie) Update(key, value []byte) {
 	if err := st.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error("Unhandled trie error in StackTrie.Update", "err", err)
 	}
 }
 
@@ -376,11 +375,12 @@ func (st *StackTrie) insert(key, value []byte) {
 // hash converts st into a 'hashedNode', if possible. Possible outcomes:
 //
 // 1. The rlp-encoded value was >= 32 bytes:
-//  - Then the 32-byte `hash` will be accessible in `st.val`.
-//  - And the 'st.type' will be 'hashedNode'
+//   - Then the 32-byte `hash` will be accessible in `st.val`.
+//   - And the 'st.type' will be 'hashedNode'
+//
 // 2. The rlp-encoded value was < 32 bytes
-//  - Then the <32 byte rlp-encoded value will be accessible in 'st.val'.
-//  - And the 'st.type' will be 'hashedNode' AGAIN
+//   - Then the <32 byte rlp-encoded value will be accessible in 'st.val'.
+//   - And the 'st.type' will be 'hashedNode' AGAIN
 //
 // This method also sets 'st.type' to hashedNode, and clears 'st.key'.
 func (st *StackTrie) hash() {
@@ -494,7 +494,7 @@ func (st *StackTrie) Hash() (h common.Hash) {
 	return h
 }
 
-// Commit will firstly hash the entrie trie if it's still not hashed
+// Commit will firstly hash the entire trie if it's still not hashed
 // and then commit all nodes to the associated database. Actually most
 // of the trie nodes MAY have been committed already. The main purpose
 // here is to commit the root node.

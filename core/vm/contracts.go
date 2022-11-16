@@ -22,8 +22,6 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -32,9 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/protolambda/go-kzg/bls"
-
-	//lint:ignore SA1019 Needed for precompile
+	big2 "github.com/holiman/big"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -260,7 +256,7 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
-	return in, nil
+	return common.CopyBytes(in), nil
 }
 
 // bigModExp implements a native big integer exponential modular operation.
@@ -288,10 +284,10 @@ var (
 
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
-// def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//	def mult_complexity(x):
+//		if x <= 64: return x ** 2
+//		elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//		else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -402,15 +398,22 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base = new(big2.Int).SetBytes(getData(input, 0, baseLen))
+		exp  = new(big2.Int).SetBytes(getData(input, baseLen, expLen))
+		mod  = new(big2.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		v    []byte
 	)
-	if mod.BitLen() == 0 {
+	switch {
+	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
 		return common.LeftPadBytes([]byte{}, int(modLen)), nil
+	case base.BitLen() == 1: // a bit length of 1 means it's 1 (or -1).
+		//If base == 1, then we can just return base % mod (if mod >= 1, which it is)
+		v = base.Mod(base, mod).Bytes()
+	default:
+		v = base.Exp(base, exp, mod).Bytes()
 	}
-	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
+	return common.LeftPadBytes(v, int(modLen)), nil
 }
 
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
@@ -960,7 +963,7 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 			return nil, errBLS12381G2PointSubgroup
 		}
 
-		// Update pairing engine with G1 and G2 ponits
+		// Update pairing engine with G1 and G2 points
 		e.AddPair(p1, p2)
 	}
 	// Prepare 32 byte output
@@ -1071,70 +1074,11 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 // to check if a value is part of a blob at a specific point with a KZG proof.
 type pointEvaluation struct{}
 
-var (
-	errPointEvaluationInputLength           = errors.New("invalid input length")
-	errPointEvaluationInvalidVersionedHash  = errors.New("invalid versioned hash")
-	errPointEvaluationInvalidX              = errors.New("invalid evaluation point")
-	errPointEvaluationInvalidY              = errors.New("invalid expected output")
-	errPointEvaluationInvalidKzg            = errors.New("invalid data kzg")
-	errPointEvaluationInvalidProof          = errors.New("invalid proof")
-	errPointEvaluationMismatchVersionedHash = errors.New("mismatched versioned hash")
-	errPointEvaluationBadProof              = errors.New("bad proof")
-)
-
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
 	return params.PointEvaluationGas
 }
 
 func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
-	if len(input) != 192 {
-		return nil, errPointEvaluationInputLength
-	}
-
-	var versionedHash common.Hash
-	copy(versionedHash[:], input[:32])
-	// XXX Should we version check the hash?
-	if versionedHash[0] != params.BlobCommitmentVersionKZG {
-		return nil, errPointEvaluationInvalidVersionedHash
-	}
-
-	var x bls.Fr
-	var data [32]byte
-	copy(data[:], input[32:64])
-	ok := bls.FrFrom32(&x, data)
-	if !ok {
-		return nil, errPointEvaluationInvalidX
-	}
-
-	var y bls.Fr
-	copy(data[:], input[64:96])
-	ok = bls.FrFrom32(&y, data)
-	if !ok {
-		return nil, errPointEvaluationInvalidY
-	}
-
-	var commitment types.KZGCommitment
-	copy(commitment[:], input[96:144])
-	if commitment.ComputeVersionedHash() != versionedHash {
-		return nil, errPointEvaluationMismatchVersionedHash
-	}
-
-	parsedCommitment, err := commitment.Point()
-	if err != nil {
-		return nil, errPointEvaluationInvalidKzg
-	}
-
-	var proof types.KZGCommitment
-	copy(proof[:], input[144:192])
-	parsedProof, err := proof.Point()
-	if err != nil {
-		return nil, errPointEvaluationInvalidProof
-	}
-
-	if !kzg.VerifyKzgProof(parsedCommitment, &x, &y, parsedProof) {
-		return nil, errPointEvaluationBadProof
-	}
-
-	return []byte{}, nil
+	return kzg.PointEvaluationPrecompile(input)
 }

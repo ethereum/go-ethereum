@@ -54,7 +54,7 @@ type codecV5 interface {
 	// Encode encodes a packet.
 	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
-	// decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
+	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
 	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
 }
@@ -323,7 +323,7 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
 	dists = append(dists, uint(td))
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
-		if td+i < 256 {
+		if td+i <= 256 {
 			dists = append(dists, uint(td+i))
 		}
 		if td-i > 0 {
