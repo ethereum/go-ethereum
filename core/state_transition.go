@@ -323,6 +323,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if rules.IsBerlin {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
+	// Set up the transient storage for transaction. It's safe to even invoke
+	// it without activating EIP 1153, which is just simply noop anyway.
+	st.state.PrepareTransientStorage()
+
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err

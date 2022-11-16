@@ -1084,6 +1084,15 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 	}
 }
 
+// PrepareTransientStorage clears out the leftover transient storage from previous
+// executions and re-initializes an empty one.
+//
+// This method should only be called at the beginning of transaction execution and
+// can be invoked even the EIP1153 is not activated.
+func (s *StateDB) PrepareTransientStorage() {
+	s.transientStorage = newTransientStorage()
+}
+
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
