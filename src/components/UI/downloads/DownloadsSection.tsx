@@ -9,7 +9,7 @@ interface Props {
   ariaLabel?: string;
 }
 
-export const DownloadsSection: FC<Props> = ({ children, Svg, ariaLabel, sectionTitle, id, showGopher }) => {
+export const DownloadsSection: FC<Props> = ({ id, sectionTitle, children, Svg, ariaLabel }) => {
   return (
     <Stack border='2px solid' borderColor='primary' id={id}>
       {Svg && (
