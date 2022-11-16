@@ -5,7 +5,7 @@ import NextLink from 'next/link';
 import { DOWNLOAD_HEADER_BUTTONS } from '../../../constants';
 
 interface DownloadsHero {
-  currentBuildName: string;
+  currentBuild: string;
   currentBuildVersion: string;
   linuxBuildURL: string;
   macOSBuildURL: string;
@@ -15,7 +15,7 @@ interface DownloadsHero {
 }
 
 export const DownloadsHero: FC<DownloadsHero> = ({
-  currentBuildName,
+  currentBuild,
   currentBuildVersion,
   linuxBuildURL,
   macOSBuildURL,
@@ -45,7 +45,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           lineHeight='21px'
           mb={8}
         >
-          {currentBuildName} ({currentBuildVersion})
+          {currentBuild}
         </Text>
 
         <Text mb={4}>
@@ -70,7 +70,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
                     <Text textStyle='downloads-button-label'>
                       For {DOWNLOAD_HEADER_BUTTONS[key].name}
                     </Text>
-                    <Text textStyle='downloads-button-label'>geth {currentBuildName}</Text>
+                    <Text textStyle='downloads-button-label'>geth {currentBuildVersion}</Text>
                   </Box>
                 </HStack>
               </Button>
@@ -80,7 +80,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
 
         <Box textAlign={'center'}>
           <Link href={releaseNotesURL} isExternal variant='light'>
-            Release notes for {currentBuildName} {currentBuildVersion}
+            Release notes for {currentBuild}
           </Link>
         </Box>
       </Box>

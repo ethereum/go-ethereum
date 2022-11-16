@@ -1,22 +1,92 @@
 import { Code, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
-import type { NextPage } from 'next';
+import type { GetServerSideProps, NextPage } from 'next';
 import { useState } from 'react';
 
 import { DownloadsHero, DownloadsSection, DownloadsTable } from '../components/UI/downloads';
 import { DataTable } from '../components/UI';
 
 import {
+  ALL_GETH_COMMITS_URL,
   DEFAULT_BUILD_AMOUNT_TO_SHOW,
   DOWNLOAD_OPENPGP_BUILD_HEADERS,
   DOWNLOAD_OPENPGP_DEVELOPER_HEADERS,
-  GETH_REPO_URL
+  GETH_REPO_URL,
+  LATEST_GETH_RELEASE_URL,
+  LATEST_SOURCES_BASE_URL,
+  LINUX_BINARY_BASE_URL,
+  MACOS_BINARY_BASE_URL,
+  RELEASE_NOTES_BASE_URL,
+  WINDOWS_BINARY_BASE_URL
 } from '../constants';
 
 import { testDownloadData } from '../data/test/download-testdata';
 import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
 import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
-const DownloadsPage: NextPage = () => {
+export const getServerSideProps: GetServerSideProps = async () => {
+  // Latest release version number
+  const versionNumber = await fetch(LATEST_GETH_RELEASE_URL)
+    .then(response => response.json())
+    .then(release => release.tag_name);
+  // Latest release name
+  const releaseName = await fetch(LATEST_GETH_RELEASE_URL)
+    .then(response => response.json())
+    .then(release => release.name);
+  // Latest release commit hash
+  const commit = await fetch(`${ALL_GETH_COMMITS_URL}/${versionNumber}`)
+    .then(response => response.json())
+    .then(commit => commit.sha.slice(0, 8));
+
+  // Latest binaries urls
+  const LATEST_LINUX_BINARY_URL = `${LINUX_BINARY_BASE_URL}${versionNumber.slice(
+    1
+  )}-${commit}.tar.gz`;
+  const LATEST_MACOS_BINARY_URL = `${MACOS_BINARY_BASE_URL}${versionNumber.slice(
+    1
+  )}-${commit}.tar.gz`;
+  const LATEST_WINDOWS_BINARY_URL = `${WINDOWS_BINARY_BASE_URL}${versionNumber.slice(
+    1
+  )}-${commit}.exe`;
+
+  // Sources urls
+  const LATEST_SOURCES_URL = `${LATEST_SOURCES_BASE_URL}${versionNumber}.tar.gz`;
+  const RELEASE_NOTES_URL = `${RELEASE_NOTES_BASE_URL}${versionNumber}`;
+
+  const LATEST_RELEASES_DATA = {
+    versionNumber,
+    releaseName,
+    urls: {
+      LATEST_LINUX_BINARY_URL,
+      LATEST_MACOS_BINARY_URL,
+      LATEST_WINDOWS_BINARY_URL,
+      LATEST_SOURCES_URL,
+      RELEASE_NOTES_URL
+    }
+  };
+
+  return {
+    props: {
+      data: LATEST_RELEASES_DATA
+    }
+  };
+};
+
+interface Props {
+  data: {
+    // TODO: define interface
+    versionNumber: string;
+    releaseName: string;
+    urls: {
+      LATEST_LINUX_BINARY_URL: string;
+      LATEST_MACOS_BINARY_URL: string;
+      LATEST_WINDOWS_BINARY_URL: string;
+      LATEST_SOURCES_URL: string;
+      RELEASE_NOTES_URL: string;
+    };
+  };
+}
+
+const DownloadsPage: NextPage<Props> = ({ data }) => {
   const [amountStableReleases, updateAmountStables] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
   const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
 
@@ -28,27 +98,22 @@ const DownloadsPage: NextPage = () => {
     updateAmountDevelopBuilds(amountDevelopBuilds + 10);
   };
 
+  const { releaseName, versionNumber, urls } = data;
+
   return (
     <>
       {/* TODO: add PageMetadata */}
 
       <main>
         <Stack spacing={4}>
-          {/* TODO: replace hardcoded strings with build information */}
           <DownloadsHero
-            currentBuildName={'Sentry Omega'}
-            currentBuildVersion={'v1.10.23'}
-            linuxBuildURL={
-              'https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.25-69568c55.tar.gz'
-            }
-            macOSBuildURL={
-              'https://gethstore.blob.core.windows.net/builds/geth-darwin-amd64-1.10.25-69568c55.tar.gz'
-            }
-            releaseNotesURL={''}
-            sourceCodeURL={'https://github.com/ethereum/go-ethereum/archive/v1.10.25.tar.gz'}
-            windowsBuildURL={
-              'https://gethstore.blob.core.windows.net/builds/geth-windows-amd64-1.10.25-69568c55.exe'
-            }
+            currentBuild={releaseName}
+            currentBuildVersion={versionNumber}
+            linuxBuildURL={urls.LATEST_LINUX_BINARY_URL}
+            macOSBuildURL={urls.LATEST_MACOS_BINARY_URL}
+            releaseNotesURL={urls.RELEASE_NOTES_URL}
+            sourceCodeURL={urls.LATEST_SOURCES_URL}
+            windowsBuildURL={urls.LATEST_WINDOWS_BINARY_URL}
           />
 
           <DownloadsSection
@@ -205,6 +270,10 @@ const DownloadsPage: NextPage = () => {
               <Code p={4}>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</Code>
             </Stack>
           </DownloadsSection>
+
+          <div>
+            <pre>{JSON.stringify(data, null, 2)}</pre>
+          </div>
         </Stack>
       </main>
     </>
