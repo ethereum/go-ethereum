@@ -34,7 +34,7 @@ type cacheItem[K any, V any] struct {
 
 // NewBasicLRU creates a new LRU cache.
 func NewBasicLRU[K comparable, V any](capacity int) BasicLRU[K, V] {
-	if capacity < 0 {
+	if capacity <= 0 {
 		capacity = 1
 	}
 	c := BasicLRU[K, V]{
