@@ -1,7 +1,8 @@
-import { Box, Grid, GridItem, Image, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
+import { GlyphHome } from '../svgs/GlyphHome';
 import { ETHEREUM_ORG_URL } from '../../../constants';
 
 interface Props {
@@ -46,8 +47,7 @@ export const WhatIsEthereum: FC<Props> = ({ children }) => {
             borderColor='primary'
             h='100%'
           >
-            {/* TODO: use NextImage */}
-            <Image src='/images/pages/glyph-home-light.svg' alt='Ethereum glyph' />
+            <GlyphHome />
           </Stack>
         </GridItem>
       </Grid>

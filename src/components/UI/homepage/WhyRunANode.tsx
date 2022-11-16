@@ -2,6 +2,7 @@ import { Box, Grid, GridItem, Image, Link, Stack, Text } from '@chakra-ui/react'
 import { FC } from 'react';
 import NextLink from 'next/link';
 
+import { GopherHomeNodes } from '../svgs/GopherHomeNodes';
 import { ETHEREUM_ORG_RUN_A_NODE_URL } from '../../../constants';
 
 interface Props {
@@ -48,8 +49,7 @@ export const WhyRunANode: FC<Props> = ({ children }) => {
             borderColor='primary !important'
             h='100%'
           >
-            {/* TODO: use NextImage */}
-            <Image src='/images/pages/gopher-home-nodes.svg' alt='Gopher staring at nodes' />
+            <GopherHomeNodes />
           </Stack>
         </GridItem>
       </Grid>
