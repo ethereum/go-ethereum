@@ -23,20 +23,22 @@ import (
 
 type mdHeaderKey struct{}
 
-// NewContextWithHeaders is used to add the http headers from source into the context.
-func NewContextWithHeaders(ctx context.Context, src http.Header) context.Context {
-	if len(src) == 0 {
+// NewContextWithHeaders wraps the given context, adding HTTP headers. These headers will
+// be applied by Client when making a request using the returned context.
+func NewContextWithHeaders(ctx context.Context, h http.Header) context.Context {
+	if len(h) == 0 {
+		// This check ensures the header map set in context will never be nil.
 		return ctx
 	}
 
-	var h http.Header
+	var ctxh http.Header
 	prev, ok := ctx.Value(mdHeaderKey{}).(http.Header)
 	if ok {
-		h = setHeaders(prev.Clone(), src)
+		ctxh = setHeaders(prev.Clone(), h)
 	} else {
-		h = src.Clone()
+		ctxh = h.Clone()
 	}
-	return context.WithValue(ctx, mdHeaderKey{}, h)
+	return context.WithValue(ctx, mdHeaderKey{}, ctxh)
 }
 
 // headersFromContext is used to extract http.Header from context.
