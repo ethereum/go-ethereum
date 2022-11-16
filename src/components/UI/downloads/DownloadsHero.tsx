@@ -1,6 +1,8 @@
-import { Box, Button, Image, Link, Stack, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, Link, Stack, HStack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
+
+import { GopherDownloads } from '../svgs'
 
 import { DOWNLOAD_HEADER_BUTTONS } from '../../../constants';
 
@@ -31,7 +33,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   return (
     <Stack border='3px solid' borderColor='primary' py={4} px={4}>
       <Stack alignItems='center'>
-        <Image src='/images/pages/gopher-downloads-front-light.svg' alt='Gopher plugged in' />
+        <GopherDownloads aria-label="Gopher plugged in" />
       </Stack>
 
       <Box mb={4}>
@@ -56,19 +58,17 @@ export const DownloadsHero: FC<DownloadsHero> = ({
         </Text>
 
         {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
+          const { name, buildURL, Svg, ariaLabel } = DOWNLOAD_HEADER_BUTTONS[key]; 
           return (
-            <NextLink key={key} href={DOWNLOAD_HEADER_BUTTONS[key].buildURL} passHref>
+            <NextLink key={key} href={buildURL} passHref>
               <Button as='a' variant='primary' width={{ base: '100%' }} p={8} mb={4}>
                 <HStack spacing={4}>
                   <Stack alignItems='center'>
-                    <Image
-                      src={DOWNLOAD_HEADER_BUTTONS[key].image}
-                      alt={DOWNLOAD_HEADER_BUTTONS[key].imageAlt}
-                    />
+                    <Svg aria-label={ariaLabel} maxH={16} />
                   </Stack>
                   <Box>
                     <Text textStyle='downloads-button-label'>
-                      For {DOWNLOAD_HEADER_BUTTONS[key].name}
+                      For {name}
                     </Text>
                     <Text textStyle='downloads-button-label'>geth {currentBuildName}</Text>
                   </Box>

@@ -52,10 +52,9 @@ const DownloadsPage: NextPage = () => {
           />
 
           <DownloadsSection
-            imgSrc='/images/pages/gopher-home-side-desktop.svg'
-            imgAltText='Gopher facing right'
             sectionTitle='Specific Versions'
             id='specificversions'
+            showGopher
           >
             <Stack p={4}>
               <Text textStyle='quick-link-text'>

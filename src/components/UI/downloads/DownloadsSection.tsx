@@ -1,21 +1,24 @@
 import { Box, Image, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
+import { GopherHomeLinks } from '../svgs'
 interface Props {
   children: React.ReactNode;
   id: string;
   imgSrc?: string;
   imgAltText?: string;
   sectionTitle: string;
+  showGopher?: boolean;
 }
 
-export const DownloadsSection: FC<Props> = ({ children, imgSrc, imgAltText, sectionTitle, id }) => {
+export const DownloadsSection: FC<Props> = ({ children, imgSrc, imgAltText, sectionTitle, id, showGopher }) => {
   return (
     <Stack border='2px solid' borderColor='primary' id={id}>
-      {!!imgSrc && (
+      {imgSrc || showGopher && (
         <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='primary'>
           {/* TODO: use NextImage */}
-          <Image src={imgSrc} alt={imgAltText} />
+          {imgSrc && <Image src={imgSrc} alt={imgAltText} />}
+          {showGopher && < GopherHomeLinks/>}
         </Stack>
       )}
 
