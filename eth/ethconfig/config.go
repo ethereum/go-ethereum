@@ -93,6 +93,7 @@ var Defaults = Config{
 	},
 	TxPool:        core.DefaultTxPoolConfig,
 	RPCGasCap:     50000000,
+	RPCCache:      1000000, // 1 Million call results
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
 	RPCTxFeeCap:   1, // 1 ether
@@ -202,6 +203,9 @@ type Config struct {
 
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
+
+	// RPCCache is the cache setting for eth_call/eth_multiCall
+	RPCCache uint64
 
 	// RPCEVMTimeout is the global timeout for eth-call.
 	RPCEVMTimeout time.Duration

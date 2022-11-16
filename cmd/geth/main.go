@@ -182,6 +182,7 @@ var (
 		utils.IPCPathFlag,
 		utils.InsecureUnlockAllowedFlag,
 		utils.RPCGlobalGasCapFlag,
+		utils.RPCCacheFlag,
 		utils.RPCGlobalEVMTimeoutFlag,
 		utils.RPCGlobalTxFeeCapFlag,
 		utils.AllowUnprotectedTxs,

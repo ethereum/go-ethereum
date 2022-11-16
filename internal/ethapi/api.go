@@ -18,10 +18,13 @@ package ethapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -41,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -52,6 +56,13 @@ import (
 type EthereumAPI struct {
 	b Backend
 }
+
+var (
+	ethCallCacheHit        = metrics.GetOrRegisterMeter("rpc/ethcall/cache/hit", nil)
+	ethCallCacheCount      = metrics.GetOrRegisterMeter("rpc/ethcall/cache/count", nil)
+	ethMultiCallCacheHit   = metrics.GetOrRegisterMeter("rpc/ethmulticall/cache/hit", nil)
+	ethMultiCallCacheCount = metrics.GetOrRegisterMeter("rpc/ethmulticall/cache/count", nil)
+)
 
 // NewEthereumAPI creates a new Ethereum protocol API.
 func NewEthereumAPI(b Backend) *EthereumAPI {
@@ -84,6 +95,13 @@ type feeHistoryResult struct {
 	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
 	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
 	GasUsedRatio []float64        `json:"gasUsedRatio"`
+}
+
+type multicallResult struct {
+	Err       string        `json:"err"`
+	FromCache bool          `json:"fromCache"`
+	Result    hexutil.Bytes `json:"result"`
+	GasUsed   uint64        `json:"gasUsed"`
 }
 
 // FeeHistory returns the fee market history.
@@ -737,10 +755,10 @@ func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) m
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
@@ -1012,6 +1030,86 @@ func (e *revertError) ErrorData() interface{} {
 	return e.reason
 }
 
+func ethCallCacheKey(blockNum int64, to *common.Address, input []byte) string {
+	h := sha256.New()
+	h.Write(input)
+	bs := h.Sum(nil)
+
+	key := strconv.FormatInt(blockNum, 10)
+	key += strings.ToLower(string(to.Bytes()))
+	key += string(bs)
+	return key
+}
+
+func (s *BlockChainAPI) ethCallCacheBlockNr(blockNrOrHash rpc.BlockNumberOrHash) int64 {
+	var blockNr int64
+	if n, ok := blockNrOrHash.Number(); ok {
+		blockNr = n.Int64()
+		if n == rpc.LatestBlockNumber || n == rpc.PendingBlockNumber {
+			blockNr = s.b.CurrentBlock().Header().Number.Int64()
+		}
+	}
+	return blockNr
+}
+
+func (s *BlockChainAPI) MultiCall(ctx context.Context, args []TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) ([]*multicallResult, error) {
+	ret := make([]*multicallResult, len(args))
+
+	var wg sync.WaitGroup
+	for i, arg := range args {
+		wg.Add(1)
+		go func(i int, arg TransactionArgs) {
+			defer wg.Done()
+
+			var result *core.ExecutionResult
+			var err error
+
+			// try load result from cache
+			blockNr := s.ethCallCacheBlockNr(blockNrOrHash)
+			cacheKey := ethCallCacheKey(blockNr, arg.To, arg.data())
+
+			ethMultiCallCacheCount.Mark(1)
+			if r, ok := s.b.GetCallCache(cacheKey); ok {
+				ethMultiCallCacheHit.Mark(1)
+				if res, ok := r.(*core.ExecutionResult); ok {
+					ret[i] = &multicallResult{
+						Result:    res.Return(),
+						FromCache: true,
+						GasUsed:   res.UsedGas,
+					}
+					return
+				}
+			}
+
+			defer func() {
+				// cache result on success
+				if err == nil && result.Err == nil {
+					s.b.SetCallCache(cacheKey, result, int64(len(result.ReturnData)))
+				}
+			}()
+
+			var errstr string
+			result, err = DoCall(ctx, s.b, arg, blockNrOrHash, overrides, 5*time.Second, s.b.RPCGasCap())
+			if err != nil {
+				errstr = err.Error()
+			} else if len(result.Revert()) > 0 {
+				errstr = newRevertError(result).Error()
+			} else if result.Err != nil {
+				errstr = result.Err.Error()
+			}
+
+			ret[i] = &multicallResult{
+				Result:  result.Return(),
+				Err:     errstr,
+				GasUsed: result.UsedGas,
+			}
+		}(i, arg)
+	}
+	wg.Wait()
+
+	return ret, nil
+}
+
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
@@ -1019,7 +1117,28 @@ func (e *revertError) ErrorData() interface{} {
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, err := DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
+	var result *core.ExecutionResult
+	var err error
+
+	// try load result from cache
+	blockNr := s.ethCallCacheBlockNr(blockNrOrHash)
+	cacheKey := ethCallCacheKey(blockNr, args.To, args.data())
+	ethCallCacheCount.Mark(1)
+	if r, ok := s.b.GetCallCache(cacheKey); ok {
+		ethCallCacheHit.Mark(1)
+		if res, ok := r.(*core.ExecutionResult); ok {
+			return res.Return(), res.Err
+		}
+	}
+
+	defer func() {
+		// cache result on success
+		if err == nil && result.Err == nil {
+			s.b.SetCallCache(cacheKey, result, int64(len(result.ReturnData)))
+		}
+	}()
+
+	result, err = DoCall(ctx, s.b, args, blockNrOrHash, overrides, s.b.RPCEVMTimeout(), s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}

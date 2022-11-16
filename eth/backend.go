@@ -26,6 +26,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dgraph-io/ristretto"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -257,7 +258,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	callCache, _ := ristretto.NewCache(&ristretto.Config{
+		NumCounters: 1e7,                    // number of keys to track frequency of (10M).
+		MaxCost:     int64(config.RPCCache), // maximum cost of cache (1GB).
+		BufferItems: 64,                     // number of keys per Get buffer.
+	})
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil, callCache}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}

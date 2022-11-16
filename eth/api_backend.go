@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/dgraph-io/ristretto"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -46,6 +47,7 @@ type EthAPIBackend struct {
 	allowUnprotectedTxs bool
 	eth                 *Ethereum
 	gpo                 *gasprice.Oracle
+	callCache           *ristretto.Cache
 }
 
 // ChainConfig returns the active chain configuration.
@@ -334,6 +336,13 @@ func (b *EthAPIBackend) RPCEVMTimeout() time.Duration {
 
 func (b *EthAPIBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
+}
+
+func (b *EthAPIBackend) SetCallCache(key string, value interface{}, weight int64) {
+	b.callCache.Set(key, value, weight)
+}
+func (b *EthAPIBackend) GetCallCache(key string) (interface{}, bool) {
+	return b.callCache.Get(key)
 }
 
 func (b *EthAPIBackend) BloomStatus() (uint64, uint64) {
