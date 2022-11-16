@@ -10,16 +10,17 @@ interface Props {
 
 export const WhyRunANode: FC<Props> = ({ children }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary'>
+    <Stack border='2px solid' borderColor='primary'>
       <Grid
         templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }}
-        borderBottom={{ base: 'none', md: '2px solid #11866f' }}
+        borderBottom={{ base: 'none', md: '2px' }}
+        borderColor='primary !important'
       >
         <GridItem order={{ base: 1, md: 2 }}>
           <Stack
             p={4}
-            borderBottom='2px solid'
-            borderColor='brand.light.primary'
+            borderBottom='2px'
+            borderColor='primary'
             sx={{ mt: '0 !important' }}
           >
             <Box as='h2' textStyle='h2'>
@@ -29,8 +30,8 @@ export const WhyRunANode: FC<Props> = ({ children }) => {
 
           <Stack
             p={4}
-            borderBottom={{ base: '2px solid', md: 'none' }}
-            borderColor='brand.light.primary'
+            borderBottom={{ base: '2px', md: 'none' }}
+            borderColor='primary'
             sx={{ mt: '0 !important' }}
           >
             {children}
@@ -42,8 +43,9 @@ export const WhyRunANode: FC<Props> = ({ children }) => {
             justifyContent='center'
             alignItems='center'
             p={4}
-            borderBottom={{ base: '2px solid #11866f', md: 'none' }}
-            borderRight={{ base: 'none', md: '2px solid #11866f' }}
+            borderBottom={{ base: '2px', md: 'none' }}
+            borderRight={{ base: 'none', md: '2px' }}
+            borderColor='primary !important'
             h='100%'
           >
             {/* TODO: use NextImage */}

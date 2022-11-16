@@ -20,9 +20,9 @@ export const HomeSection: FC<Props> = ({
   children
 }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary' h='100%'>
+    <Stack border='2px solid' borderColor='primary' h='100%'>
       {!!imgSrc && (
-        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='primary'>
           {/* TODO: use NextImage */}
           <Image src={imgSrc} alt={imgAltText} />
         </Stack>
@@ -31,7 +31,7 @@ export const HomeSection: FC<Props> = ({
       <Stack
         p={4}
         borderBottom='2px solid'
-        borderColor='brand.light.primary'
+        borderColor='primary'
         sx={{ mt: '0 !important' }}
       >
         <Box as='h2' textStyle='h2'>
@@ -43,7 +43,7 @@ export const HomeSection: FC<Props> = ({
         p={4}
         spacing={4}
         borderBottom='2px solid'
-        borderColor='brand.light.primary'
+        borderColor='primary'
         sx={{ mt: '0 !important' }}
         h='100%'
       >

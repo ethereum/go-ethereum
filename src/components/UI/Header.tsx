@@ -10,14 +10,15 @@ export const Header: FC = () => {
     <Flex
       mb={4}
       border='2px solid'
-      borderColor='brand.light.primary'
+      borderColor='primary'
       justifyContent='space-between'
     >
       <Stack
         p={4}
         justifyContent='center'
         alignItems='flex-start'
-        borderRight={{ base: 'none', sm: '2px solid #11866f'}}
+        borderRight='2px'
+        borderColor='primary'
         flexGrow={2}
       >
         <NextLink href={'/'} passHref>
@@ -34,14 +35,14 @@ export const Header: FC = () => {
         <Stack
           p={4}
           justifyContent='center'
-          borderRight='2px solid'
-          borderColor='brand.light.primary'
+          borderRight='2px'
+          borderColor='primary'
           display={{ base: 'none', md: 'block' }}
-          color='brand.light.primary'
+          color='primary'
           _hover={{
             textDecoration: 'none',
-            bg: 'brand.light.primary',
-            color: 'yellow.50 !important'
+            bg: 'primary',
+            color: 'bg !important'
           }}
         >
           <NextLink href={DOWNLOADS_PAGE} passHref>
@@ -57,13 +58,14 @@ export const Header: FC = () => {
         <Stack
           p={4}
           justifyContent='center'
-          borderRight={{ base: 'none', md: '2px solid #11866f' }}
+          borderRight='2px'
+          borderColor='primary'
           display={{ base: 'none', md: 'block' }}
-          color='brand.light.primary'
+          color='primary'
           _hover={{
             textDecoration: 'none',
-            bg: 'brand.light.primary',
-            color: 'yellow.50 !important'
+            bg: 'primary',
+            color: 'bg !important'
           }}
         >
           <NextLink href={DOCS_PAGE} passHref>
@@ -79,14 +81,15 @@ export const Header: FC = () => {
         <Stack
           p={4}
           display={{ base: 'none', md: 'block' }}
-          borderRight={{ base: 'none', md: '2px solid #11866f' }}
+          borderRight='2px'
+          borderColor='primary'
         >
           <InputGroup>
             <Input
               variant='unstyled'
               placeholder='search'
               size='md'
-              _placeholder={{ color: 'brand.light.primary', fontStyle: 'italic' }}
+              _placeholder={{ color: 'primary', fontStyle: 'italic' }}
             />
 
             <Stack pl={4} justifyContent='center' alignItems='center'>
@@ -98,7 +101,8 @@ export const Header: FC = () => {
         {/* DARK MODE SWITCH */}
         <Box
           p={4}
-          borderRight={{ base: '2px solid #11866f', md: 'none' }}
+          borderRight={{ base: '2px', md: 'none' }}
+          borderColor='primary'
         >
           <MoonIcon color="primary" />
         </Box>

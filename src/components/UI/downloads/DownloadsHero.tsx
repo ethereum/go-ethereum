@@ -29,7 +29,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   DOWNLOAD_HEADER_BUTTONS.sourceCode.buildURL = sourceCodeURL;
 
   return (
-    <Stack border='3px solid' borderColor='brand.light.primary' py={4} px={4}>
+    <Stack border='3px solid' borderColor='primary' py={4} px={4}>
       <Stack alignItems='center'>
         <Image src='/images/pages/gopher-downloads-front-light.svg' alt='Gopher plugged in' />
       </Stack>

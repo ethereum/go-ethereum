@@ -6,8 +6,8 @@ import { CONTRIBUTING_PAGE, DOCS_PAGE, FAQ_PAGE } from '../../../constants';
 
 export const QuickLinks: FC = () => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary'>
-      <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+    <Stack border='2px solid' borderColor='primary'>
+      <Stack p={4} borderBottom='2px solid' borderColor='primary'>
         <Box as='h2' textStyle='h2'>
           Quick Links
         </Box>
@@ -21,7 +21,7 @@ export const QuickLinks: FC = () => {
         <GridItem
           borderRight='2px solid'
           borderBottom='2px solid'
-          borderColor='brand.light.primary'
+          borderColor='primary'
         >
           <Stack p={4} h='100%'>
             <Text textStyle='quick-link-text' mb={-1}>
@@ -31,23 +31,23 @@ export const QuickLinks: FC = () => {
             <Text textStyle='quick-link-text'>We can help.</Text>
           </Stack>
         </GridItem>
-        <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
+        <GridItem borderBottom='2px solid' borderColor='primary'>
           <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='green.50'
-                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
+                bg='button-bg'
+                _hover={{ textDecoration: 'none', bg: 'primary', color: 'bg' }}
                 _focus={{
                   textDecoration: 'none',
-                  bg: 'brand.light.primary',
-                  color: 'yellow.50',
+                  bg: 'primary',
+                  color: 'bg',
                   boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
                 }}
                 _active={{
                   textDecoration: 'none',
-                  bg: 'brand.light.secondary',
-                  color: 'yellow.50'
+                  bg: 'secondary',
+                  color: 'bg'
                 }}
                 justifyContent='center'
                 h='100%'
@@ -63,7 +63,7 @@ export const QuickLinks: FC = () => {
         <GridItem
           borderRight='2px solid'
           borderBottom='2px solid'
-          borderColor='brand.light.primary'
+          borderColor='primary'
         >
           <Stack p={4} h='100%'>
             <Text textStyle='quick-link-text' mb={-1}>
@@ -73,23 +73,23 @@ export const QuickLinks: FC = () => {
             <Text textStyle='quick-link-text'>Check the FAQ section in the documentation.</Text>
           </Stack>
         </GridItem>
-        <GridItem borderBottom='2px solid' borderColor='brand.light.primary'>
+        <GridItem borderBottom='2px solid' borderColor='primary'>
           <NextLink href={FAQ_PAGE} passHref>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='green.50'
-                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
+                bg='button-bg'
+                _hover={{ textDecoration: 'none', bg: 'primary', color: 'bg' }}
                 _focus={{
                   textDecoration: 'none',
-                  bg: 'brand.light.primary',
-                  color: 'yellow.50',
-                  boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+                  bg: 'primary',
+                  color: 'bg',
+                  boxShadow: 'inset 0 0 0 3px var(--chakra-colors-bg) !important'
                 }}
                 _active={{
                   textDecoration: 'none',
-                  bg: 'brand.light.secondary',
-                  color: 'yellow.50'
+                  bg: 'secondary',
+                  color: 'bg'
                 }}
                 justifyContent='center'
                 h='100%'
@@ -102,7 +102,7 @@ export const QuickLinks: FC = () => {
         </GridItem>
 
         {/* how to contribute */}
-        <GridItem borderRight='2px solid' borderColor='brand.light.primary'>
+        <GridItem borderRight='2px solid' borderColor='primary'>
           <Stack p={4} h='100%'>
             <Text textStyle='quick-link-text' mb={-1}>
               Want to know how to contribute?
@@ -116,18 +116,18 @@ export const QuickLinks: FC = () => {
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
-                bg='green.50'
-                _hover={{ textDecoration: 'none', bg: 'brand.light.primary', color: 'yellow.50' }}
+                bg='button-bg'
+                _hover={{ textDecoration: 'none', bg: 'primary', color: 'bg' }}
                 _focus={{
                   textDecoration: 'none',
-                  bg: 'brand.light.primary',
-                  color: 'yellow.50',
-                  boxShadow: 'inset 0 0 0 3px #f0f2e2 !important'
+                  bg: 'primary',
+                  color: 'bg',
+                  boxShadow: 'inset 0 0 0 3px var(--chakra-colors-bg) !important'
                 }}
                 _active={{
                   textDecoration: 'none',
-                  bg: 'brand.light.secondary',
-                  color: 'yellow.50'
+                  bg: 'secondary',
+                  color: 'bg'
                 }}
                 justifyContent='center'
                 h='100%'

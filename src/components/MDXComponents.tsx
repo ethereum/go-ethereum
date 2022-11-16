@@ -43,8 +43,7 @@ const MDXComponents = {
       <NextLink href={href} passHref>
         <Link
           isExternal={href.startsWith('http') && !href.includes('geth.ethereum.org')}
-          // TODO: move color to theme
-          color='#18bc9c'
+          color='primary'
         >
           {children}
         </Link>
@@ -97,7 +96,7 @@ const MDXComponents = {
   //       as={'span'}
   //       padding='0.125em 0.25em'
   //       color='red.300'
-  //       background='#1c1e2d'
+  //       background='code-bg-contrast'
   //       borderRadius='0.25em'
   //       fontFamily='code'
   //       fontSize='sm'

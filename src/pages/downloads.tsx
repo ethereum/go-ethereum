@@ -95,7 +95,7 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection sectionTitle='Stable releases' id='stablereleases'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack p={4} borderBottom='2px solid' borderColor='primary'>
               <Text textStyle='quick-link-text'>
                 These are the current and previous stable releases of go-ethereum, updated
                 automatically when a new version is tagged in our{' '}
@@ -124,7 +124,7 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection sectionTitle='Develop builds' id='developbuilds'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack p={4} borderBottom='2px solid' borderColor='primary'>
               <Text textStyle='quick-link-text'>
                 These are the develop snapshots of go-ethereum, updated automatically when a new
                 commit is pushed into our{' '}
@@ -153,14 +153,14 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection sectionTitle='OpenPGP Signatures' id='pgpsignatures'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack p={4} borderBottom='2px solid' borderColor='primary'>
               <Text textStyle='quick-link-text'>
                 All the binaries available from this page are signed via our build server PGP keys:
               </Text>
             </Stack>
 
             {/* TODO: swap for real data */}
-            <Stack borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack borderBottom='2px solid' borderColor='primary'>
               <DataTable columnHeaders={DOWNLOAD_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
             </Stack>
 
@@ -174,7 +174,7 @@ const DownloadsPage: NextPage = () => {
           </DownloadsSection>
 
           <DownloadsSection sectionTitle='Importing keys and verifying builds' id='importingkeys'>
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack p={4} borderBottom='2px solid' borderColor='primary'>
               <Text textStyle='quick-link-text'>
                 You can import the build server public keys by grabbing the individual keys directly
                 from the keyserver network:
@@ -184,7 +184,7 @@ const DownloadsPage: NextPage = () => {
               <Code p={4}>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</Code>
             </Stack>
 
-            <Stack p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack p={4} borderBottom='2px solid' borderColor='primary'>
               <Text textStyle='quick-link-text'>
                 Similarly you can import all the developer public keys by grabbing them directly
                 from the keyserver network:
