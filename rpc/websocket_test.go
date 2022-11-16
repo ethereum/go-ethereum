@@ -228,6 +228,7 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 }
 
 func TestClientWebsocketSevered(t *testing.T) {
+	t.Skip("This test takes >90s to execute, and does not need to be tested on a day-to-day basis.")
 	t.Parallel()
 
 	var (
