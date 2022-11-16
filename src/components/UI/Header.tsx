@@ -2,7 +2,7 @@ import { Box, Flex, Input, InputGroup, Link, Stack, Text } from '@chakra-ui/reac
 import { FC } from 'react';
 import NextLink from 'next/link';
 
-import { HamburguerIcon, LensIcon, MoonIcon } from '../UI/icons';
+import { HamburgerIcon, LensIcon, MoonIcon } from '../UI/icons';
 import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../constants';
 
 export const Header: FC = () => {
@@ -103,9 +103,9 @@ export const Header: FC = () => {
           <MoonIcon />
         </Box>
 
-        {/* HAMBURGUER MENU */}
+        {/* HAMBURGER MENU */}
         <Box p={4} display={{ base: 'block', md: 'none' }}>
-          <HamburguerIcon />
+          <HamburgerIcon color="primary" />
         </Box>
       </Flex>
     </Flex>
