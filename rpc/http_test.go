@@ -231,12 +231,12 @@ func TestNewContextWithHeaders(t *testing.T) {
 	ctx3 := NewContextWithHeaders(ctx2, newHdr("key-2", "val-2"))
 
 	expectedHeaders = 3
-	if err := client.CallContext(ctx3, &struct{}{}, "test"); err != ErrNoResult {
+	if err := client.CallContext(ctx3, nil, "test"); err != ErrNoResult {
 		t.Error("call failed", err)
 	}
 
 	expectedHeaders = 2
-	if err := client.CallContext(ctx2, &struct{}{}, "test"); err != ErrNoResult {
+	if err := client.CallContext(ctx2, nil, "test"); err != ErrNoResult {
 		t.Error("call failed:", err)
 	}
 }
