@@ -25,14 +25,18 @@ type mdHeaderKey struct{}
 
 // NewContextWithHeaders is used to add the http headers from source into the context.
 func NewContextWithHeaders(ctx context.Context, src http.Header) context.Context {
-	var dst = make(http.Header)
-	if prev, ok := ctx.Value(mdHeaderKey{}).(http.Header); ok {
-		// Merge with previous layered values
-		mergeHeaders(dst, prev)
+	if len(src) == 0 {
+		return ctx
 	}
-	// And merge with the provided ones
-	mergeHeaders(dst, src)
-	return context.WithValue(ctx, mdHeaderKey{}, dst)
+
+	var h http.Header
+	prev, ok := ctx.Value(mdHeaderKey{}).(http.Header)
+	if ok {
+		h = setHeaders(prev.Clone(), src)
+	} else {
+		h = src.Clone()
+	}
+	return context.WithValue(ctx, mdHeaderKey{}, h)
 }
 
 // headersFromContext is used to extract http.Header from context.
@@ -41,12 +45,10 @@ func headersFromContext(ctx context.Context) http.Header {
 	return source
 }
 
-// mergeHeaders is used to merge src into dst.
-func mergeHeaders(dst http.Header, src http.Header) {
+// setHeaders sets all headers from src in dst.
+func setHeaders(dst http.Header, src http.Header) http.Header {
 	for key, values := range src {
-		dst.Del(key)
-		for _, val := range values {
-			dst.Add(key, val)
-		}
+		dst[http.CanonicalHeaderKey(key)] = values
 	}
+	return dst
 }

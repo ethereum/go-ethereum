@@ -202,10 +202,9 @@ func TestHTTPPeerInfo(t *testing.T) {
 }
 
 func TestNewContextWithHeaders(t *testing.T) {
-	numHeaders := 3
-
+	expectedHeaders := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		for i := 0; i < numHeaders; i++ {
+		for i := 0; i < expectedHeaders; i++ {
 			key, want := fmt.Sprintf("key-%d", i), fmt.Sprintf("val-%d", i)
 			if have := request.Header.Get(key); have != want {
 				t.Errorf("wrong request headers for %s, want: %s, have: %s", key, want, have)
@@ -215,25 +214,29 @@ func TestNewContextWithHeaders(t *testing.T) {
 		_, _ = writer.Write([]byte(`{}`))
 	}))
 	defer server.Close()
+
 	client, err := Dial(server.URL)
 	if err != nil {
 		t.Fatalf("failed to dial: %s", err)
 	}
 	defer client.Close()
+
 	newHdr := func(k, v string) http.Header {
 		header := http.Header{}
 		header.Set(k, v)
 		return header
 	}
-	ctx := NewContextWithHeaders(context.TODO(), newHdr("key-0", "val-0"))
-	ctx = NewContextWithHeaders(ctx, newHdr("key-1", "val-1"))
-	ctx = NewContextWithHeaders(ctx, newHdr("key-2", "val-2"))
+	ctx1 := NewContextWithHeaders(context.Background(), newHdr("key-0", "val-0"))
+	ctx2 := NewContextWithHeaders(ctx1, newHdr("key-1", "val-1"))
+	ctx3 := NewContextWithHeaders(ctx2, newHdr("key-2", "val-2"))
 
-	if err := client.CallContext(ctx, &struct{}{}, "test"); err != ErrNoResult {
-		t.Errorf("failed to call context: %s", err)
+	expectedHeaders = 3
+	if err := client.CallContext(ctx3, &struct{}{}, "test"); err != ErrNoResult {
+		t.Error("call failed", err)
 	}
-	numHeaders = 0
-	if err := client.CallContext(context.TODO(), &struct{}{}, "test"); err != ErrNoResult {
-		t.Errorf("failed to call context: %s", err)
+
+	expectedHeaders = 2
+	if err := client.CallContext(ctx2, &struct{}{}, "test"); err != ErrNoResult {
+		t.Error("call failed:", err)
 	}
 }
