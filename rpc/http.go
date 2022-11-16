@@ -254,7 +254,17 @@ type httpServerConn struct {
 func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
-	return NewCodec(conn)
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(conn)
+	dec.UseNumber()
+	encoder := func(v any) error {
+		err := enc.Encode(v)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		return err
+	}
+	return NewFuncCodec(conn, encoder, dec.Decode)
 }
 
 // Close does nothing and always returns nil.

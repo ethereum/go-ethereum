@@ -113,11 +113,41 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	}
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
-		answers := make([]*jsonrpcMessage, 0, len(msgs))
-		for _, msg := range calls {
-			if answer := h.handleCallMsg(cp, msg); answer != nil {
+		var mutex sync.Mutex
+		answers := make([]*jsonrpcMessage, 0, len(calls))
+		go func() {
+			// Context timeout is set in node/rpcstack:ServeHTTP.
+			// Only for HTTP requests.
+			<-cp.ctx.Done()
+			log.Info("yooo context dooone\n")
+
+			mutex.Lock()
+			defer mutex.Unlock()
+			for _, msg := range calls {
+				if !msg.isNotification() {
+					answers = append(answers, msg.errorResponse(&timeoutError{}))
+				}
+			}
+			h.conn.writeJSON(cp.ctx, answers)
+		}()
+
+		for {
+			mutex.Lock()
+			if len(calls) == 0 {
+				mutex.Unlock()
+				break
+			}
+			msg := calls[0]
+			mutex.Unlock()
+
+			answer := h.handleCallMsg(cp, msg)
+
+			mutex.Lock()
+			if answer != nil {
 				answers = append(answers, answer)
 			}
+			calls = calls[1:]
+			mutex.Unlock()
 		}
 		h.addSubscriptions(cp.notifiers)
 		if len(answers) > 0 {
@@ -135,10 +165,27 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		return
 	}
 	h.startCallProc(func(cp *callProc) {
+		var (
+			responded sync.Once
+			timer     *time.Timer
+		)
+		if deadline, ok := cp.ctx.Deadline(); ok {
+			timer = time.AfterFunc(time.Until(deadline), func() {
+				responded.Do(func() {
+					h.conn.writeJSON(cp.ctx, msg.errorResponse(&timeoutError{}))
+				})
+			})
+		}
+
 		answer := h.handleCallMsg(cp, msg)
+		if timer != nil {
+			timer.Stop()
+		}
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
-			h.conn.writeJSON(cp.ctx, answer)
+			responded.Do(func() {
+				h.conn.writeJSON(cp.ctx, answer)
+			})
 		}
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -333,19 +380,7 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
-	answerCh := make(chan *jsonrpcMessage)
-	go func() {
-		answerCh <- h.runMethod(cp.ctx, msg, callb, args)
-	}()
-
-	var answer *jsonrpcMessage
-	select {
-	// Context timeout is set in node/rpcstack:ServeHTTP.
-	// Only for HTTP requests.
-	case <-cp.ctx.Done():
-		answer = msg.errorResponse(&timeoutError{})
-	case answer = <-answerCh:
-	}
+	answer := h.runMethod(cp.ctx, msg, callb, args)
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
 	if callb != h.unsubscribeCb {
