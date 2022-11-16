@@ -93,7 +93,7 @@ type TxContext struct {
 type EvmCallContext struct {
 	From      common.Address
 	To        common.Address
-	Operation string
+	Operation OpCode
 	Calldata  []byte
 	Value     *big.Int
 	GasLimit  uint64
@@ -185,7 +185,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	evm.CurrentCallContext = EvmCallContext{
 		From:      caller.Address(),
 		To:        addr,
-		Operation: opCodeToString[CALL],
+		Operation: CALL,
 		Calldata:  input,
 		GasLimit:  gas,
 		Value:     value,
@@ -281,7 +281,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	evm.CurrentCallContext = EvmCallContext{
 		From:      caller.Address(),
 		To:        addr,
-		Operation: opCodeToString[CALLCODE],
+		Operation: CALLCODE,
 		Calldata:  input,
 		GasLimit:  gas,
 		Value:     value,
@@ -340,7 +340,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	evm.CurrentCallContext = EvmCallContext{
 		From:      caller.Address(),
 		To:        addr,
-		Operation: opCodeToString[DELEGATECALL],
+		Operation: DELEGATECALL,
 		Calldata:  input,
 		GasLimit:  gas,
 		Value:     big.NewInt(0),
@@ -390,7 +390,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	evm.CurrentCallContext = EvmCallContext{
 		From:      caller.Address(),
 		To:        addr,
-		Operation: opCodeToString[STATICCALL],
+		Operation: STATICCALL,
 		Calldata:  input,
 		GasLimit:  gas,
 		Value:     big.NewInt(0),
