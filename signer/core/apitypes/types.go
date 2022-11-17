@@ -367,8 +367,8 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		encType := field.Type
 		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
-			arrayValue, ok := encValue.([]interface{})
-			if !ok {
+			arrayValue, err := convertDataToSlice(encValue)
+			if err != nil {
 				return nil, dataMismatchError(encType, encValue)
 			}
 
@@ -573,6 +573,19 @@ func dataMismatchError(encType string, encValue interface{}) error {
 	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
 }
 
+func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
+	var outEncValue []interface{}
+	rv := reflect.ValueOf(encValue)
+	if rv.Kind() == reflect.Slice {
+		for i := 0; i < rv.Len(); i++ {
+			outEncValue = append(outEncValue, rv.Index(i).Interface())
+		}
+	} else {
+		return outEncValue, fmt.Errorf("provided data '%v' is not slice", encValue)
+	}
+	return outEncValue, nil
+}
+
 // validate makes sure the types are sound
 func (typedData *TypedData) validate() error {
 	if err := typedData.Types.validate(); err != nil {
@@ -632,7 +645,7 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 			Typ:  field.Type,
 		}
 		if field.isArray() {
-			arrayValue, _ := encValue.([]interface{})
+			arrayValue, _ := convertDataToSlice(encValue)
 			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
