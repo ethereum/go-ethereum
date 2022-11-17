@@ -91,6 +91,65 @@ func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *
 	return h
 }
 
+// batchCallBuffer manages in progress calls and their responses during a batch call.
+// The calls need to be synchronized between the processing and timeout-triggering goroutines.
+type batchCallBuffer struct {
+	mutex   sync.Mutex
+	calls   []*jsonrpcMessage
+	answers []*jsonrpcMessage
+}
+
+func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	for _, msg := range b.calls {
+		if !msg.isNotification() {
+			b.answers = append(b.answers, msg.errorResponse(&timeoutError{}))
+		}
+	}
+
+	b.write(ctx, conn)
+}
+
+func (b *batchCallBuffer) popCall() *jsonrpcMessage {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if len(b.calls) == 0 {
+		return nil
+	}
+	// The popping happens in `pushAnswer`. The in progress call is kept
+	// so we can return an error for it in case of timeout.
+	msg := b.calls[0]
+	return msg
+}
+
+func (b *batchCallBuffer) pushAnswer(answer *jsonrpcMessage) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if answer != nil {
+		b.answers = append(b.answers, answer)
+	}
+	b.calls = b.calls[1:]
+}
+
+func (b *batchCallBuffer) commit(ctx context.Context, conn jsonWriter) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.write(ctx, conn)
+}
+
+// write assumes mutex is held.
+func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
+	if len(b.answers) > 0 {
+		conn.writeJSON(ctx, b.answers)
+	}
+	// Prevent double write by normal path after a timeout.
+	b.answers = nil
+}
+
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
@@ -114,52 +173,29 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
 		var (
-			mutex     sync.Mutex
-			timer     *time.Timer
-			responded sync.Once
-			answers   = make([]*jsonrpcMessage, 0, len(calls))
+			timer      *time.Timer
+			callBuffer = &batchCallBuffer{calls: calls, answers: make([]*jsonrpcMessage, 0, len(calls))}
 		)
 		if deadline, ok := cp.ctx.Deadline(); ok {
-			timer = time.AfterFunc(time.Until(deadline), func() {
-				responded.Do(func() {
-					mutex.Lock()
-					defer mutex.Unlock()
-					for _, msg := range calls {
-						if !msg.isNotification() {
-							answers = append(answers, msg.errorResponse(&timeoutError{}))
-						}
-					}
-					h.conn.writeJSON(cp.ctx, answers)
-				})
-			})
+			timer = time.AfterFunc(time.Until(deadline), func() { callBuffer.timeout(cp.ctx, h.conn) })
 		}
 		for {
-			mutex.Lock()
-			if len(calls) == 0 {
-				mutex.Unlock()
+			// No need to handle rest of calls if timed out.
+			if cp.ctx.Err() != nil {
 				break
 			}
-			msg := calls[0]
-			mutex.Unlock()
-
-			answer := h.handleCallMsg(cp, msg)
-
-			mutex.Lock()
-			if answer != nil {
-				answers = append(answers, answer)
+			msg := callBuffer.popCall()
+			if msg == nil {
+				break
 			}
-			calls = calls[1:]
-			mutex.Unlock()
+			answer := h.handleCallMsg(cp, msg)
+			callBuffer.pushAnswer(answer)
 		}
 		if timer != nil {
 			timer.Stop()
 		}
+		callBuffer.write(cp.ctx, h.conn)
 		h.addSubscriptions(cp.notifiers)
-		if len(answers) > 0 {
-			responded.Do(func() {
-				h.conn.writeJSON(cp.ctx, answers)
-			})
-		}
 		for _, n := range cp.notifiers {
 			n.activate()
 		}
