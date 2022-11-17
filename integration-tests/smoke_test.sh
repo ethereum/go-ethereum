@@ -39,7 +39,7 @@ do
         checkpointFound=true
     fi
 
-    if [ $stateSyncFound && $checkpointFound ]; then
+    if (( $stateSyncFound && $checkpointFound )); then
         break
     fi    
 
