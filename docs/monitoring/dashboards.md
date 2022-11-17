@@ -16,22 +16,13 @@ To follow along with the instructions on this page it will be useful to have:
 
 ## Monitoring stack {#monitoring-stack}
 
-An Ethereum client collects lots of data which can be read in the form of a chronological database. To make monitoring easier, this data can be fed into data visualisation software. There are many options available:
-
-- [Prometheus](https://prometheus.io/) (pull model)
-- [InfluxDB](https://www.influxdata.com/get-influxdb/) (push model)
-- [Telegraf](https://www.influxdata.com/get-influxdb/)
-- [Grafana](https://www.grafana.com/)
-- [Datadog](https://www.datadoghq.com/)
-- [Chronograf](https://www.influxdata.com/time-series-platform/chronograf/)
-
-There's also [Geth Prometheus Exporter](https://github.com/hunterlong/gethexporter), an option preconfigured with InfluxDB and Grafana. You can set it up easily using docker and [Ethbian OS](https://ethbian.org/index.html) for RPi 4.
-
-On this page, a Geth client will be configured to push data into a InfluxDB database and Grafana will be used to visualize the data.
+An Ethereum client collects lots of data which can be read in the form of a chronological database. To make monitoring easier, this data can be fed into data visualisation software. On this page, a Geth client will be configured to push data into a InfluxDB database and Grafana will be used to visualize the data.
 
 ## Setting up InfluxDB {#setting-up-influxdb}
 
-InfluxDB can be downloaded from the [Influxdata release page](https://portal.influxdata.com/downloads/). It can also be installed from a [repository](https://repos.influxdata.com/). For example for a Debian based Linux operating system:
+InfluxDB can be downloaded from the [Influxdata release page](https://portal.influxdata.com/downloads/). It can also be installed from a [repository](https://repos.influxdata.com/).
+
+For example the following commands will download and install InfluxDB on a Debian based Linux operating system - you can check for up-to-date instructions for your operating system on the InfluxDB [downloads page](https://portal.influxdata.com/downloads/):
 
 ```sh
 curl -tlsv1.3 --proto =https -sL https://repos.influxdata.com/influxdb.key | sudo apt-key add
@@ -56,7 +47,7 @@ Now the influx client can be used to enter [InfluxDB shell](https://docs.influxd
 influx -username 'username' -password 'password'
 ```
 
-A database and user for geth metrics can be created by communicatign with it directly via its shell.
+A database and user for Geth metrics can be created by communicating with it directly via its shell.
 
 ```sh
 create database geth
@@ -80,7 +71,8 @@ InfluxDB is running and configured to store metrics from Geth.
 
 ## Preparing Geth {#preparing-geth}
 
-After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS` in `geth --help` and in our [metrics page](). In this case Geth will be configured to push data into InfluxDB. Basic setup specifies the endpoint where InfluxDB is reachable and authenticates the database.
+After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS` 
+in `geth --help` and in our [metrics page](/pages/docs/monitoring/metrics.md). In this case Geth will be configured to push data into InfluxDB. Basic setup specifies the endpoint where InfluxDB is reachable and authenticates the database.
 
 ```sh
 geth --metrics --metrics.influxdb --metrics.influxdb.endpoint "http://0.0.0.0:8086" --metrics.influxdb.username "geth" --metrics.influxdb.password "chosenpassword"
@@ -97,9 +89,9 @@ show measurements
 
 ## Setting up Grafana {#setting-up-grafana}
 
-With the InfluxDB database setup and successfully receiving data from Geth, the next step is to install Grafana so that the data can be visualized. Instructions for specific operating systems are available on the Grafana [downloads page](https://grafana.com/grafana/download?pg=get&plcmt=selfmanaged-box1-cta1).
+With the InfluxDB database setup and successfully receiving data from Geth, the next step is to install Grafana so that the data can be visualized.
 
-Alternatively, the following code snippet shows how to download, install and run Grafana on a Debian based Linux system:
+The following code snippet shows how to download, install and run Grafana on a Debian based Linux system. Up to date instructions for your operating system can be found on the Grafana [downloads page](https://grafana.com/grafana/download).
 
 ```sh
 curl -tlsv1.3 --proto =https -sL https://packages.grafana.com/gpg.key | sudo apt-key add -
@@ -112,40 +104,44 @@ sudo systemctl start grafana-server
 
 When Grafana is up and running, it should be reachable at `localhost:3000`. A browser can be pointed to that URL to access a visualization dashboard. The browser will prompt for login credentials (user: `admin` and password: `admin`). When prompted, the default password should be changed and saved.
 
-![](/images/docs/grafana1.png)
+The browser first redirects to the Grafana home page to set up the source data. Click on the "Data sources" icon and then click on "InfluxDB". The following configuration options are recommended:
 
-The browser first redirects to the Grafana home page to set up the source data. Click on the configuration icon in the left bar and select "Data sources".
+```sh
+Name: InfluxDB
+Query Language: InfluxQL
+HTTP
+  URL: http://localhost:8086
+  Access: Server (default)
+  Whitelisted cookies: None (leave blank)
+Auth
+  All options left as their default (switches off)
+Custom HTTP Headers
+  None
+InfluxDB Details
+  Database: geth
+  User: <your-user-name>
+  Password: <your-password>
+  HTTP Method: GET
+```
 
-![](/images/docs/grafana2.png)
+Click on "Save and test" and wait for the confirmation to pop up.
 
-There aren't any data sources yet, click on "Add data source" to define one.
+Grafana is now set up to read data from InfluxDB. Now a dashboard can be created to interpret and display it. Dashboards properties are encoded in JSON files which can be created by anybody and easily imported. On the left bar, click on the "Dashboards" icon, then "Import".
 
-![](/images/docs/grafana3.png)
+For a Geth monitoring dashboard, copy the URL of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
 
-Select "InfluxDB" and proceed.
+![Grafana 1](/public/images/docs/grafana.png)
 
-![](/images/docs/grafana4.png)
 
-Data source configuration is pretty straight forward if the tools run on the same machine as Geth. The InfluxDB address and details for accessing the database must be set. Refer to the image below.
+## Customization
 
-![](/images/docs/grafana5.png)
-
-If everything is complete and InfluxDB is reachable, click on "Save and test" and wait for the confirmation to pop up.
-
-![](/images/docs/grafana6.png)
-
-Grafana is now set up to read data from InfluxDB. Now a dashboard can be created to interpret and display it. Dashboards properties are encoded in JSON files which can be created by anybody and easily imported. On the left bar, click on "Create and Import".
-
-![](/images/docs/grafana7.png)
-
-For a Geth monitoring dashboard, copy the ID of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
-
-![](/images/docs/grafana8.png)
-
-The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to [Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
+The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to 
+[Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
 
 Some users might also be interested in automatic [alerting](https://grafana.com/docs/grafana/latest/alerting/), which sets up alert notifications that are sent automatically when metrics reach certain values. Various communication channels are supported.
 
 ## Summary
 
 This page has outlined how to set up a simple node monitoring dashboard using Grafana.
+
+***NB: this page was adapted from a tutorial on ethereum.org written by Mario Havel***

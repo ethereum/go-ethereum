@@ -11,9 +11,9 @@ interface Props {
 
 export const DownloadsTable: FC<Props> = ({ data }) => {
   return (
-    <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid' borderColor='brand.light.primary'>
+    <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid' borderColor='primary'>
       <Tabs variant='unstyled'>
-        <TabList color='brand.light.primary' bg='green.50'>
+        <TabList color='primary' bg='button-bg'>
           {DOWNLOAD_TABS.map((tab, idx) => {
             return (
               <Tab
@@ -21,12 +21,12 @@ export const DownloadsTable: FC<Props> = ({ data }) => {
                 w={'20%'}
                 p={4}
                 _selected={{
-                  bg: 'brand.light.primary',
-                  color: 'yellow.50'
+                  bg: 'primary',
+                  color: 'bg'
                 }}
                 borderBottom='2px solid'
                 borderRight={idx === DOWNLOAD_TABS.length - 1 ? 'none' : '2px solid'}
-                borderColor='brand.light.primary'
+                borderColor='primary'
               >
                 <Text textStyle='download-tab-label'>{tab}</Text>
               </Tab>
