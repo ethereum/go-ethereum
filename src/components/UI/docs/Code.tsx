@@ -1,22 +1,17 @@
 // Libraries
-import { Code as ChakraCode } from '@chakra-ui/react';
+import { Code as ChakraCode, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
- 
-// Utils
-import { getProgrammingLanguageName } from '../../../utils';
-
 
 interface Props {
   code: any;
 }
 
 export const Code: FC<Props> = ({ code }) => {
-  const language = getProgrammingLanguageName(code);
-
   return (
     !!code.inline ?
       (
-        <ChakraCode
+        <Text
+          as='span'
           background='gray.200'
           fontFamily='"JetBrains Mono", monospace'
           fontWeight={400}
@@ -27,11 +22,25 @@ export const Code: FC<Props> = ({ code }) => {
           mb={-2}
         >
           {code.children[0]}
-        </ChakraCode>
+        </Text>
       )
     : 
       (
-        <p>test</p>
+        <Stack>
+          <ChakraCode
+            overflow="scroll"
+            p={6}
+            background='gray.800'
+            color='green.50'
+            fontFamily='"JetBrains Mono", monospace'
+            fontWeight={400}
+            fontSize='md'
+            lineHeight='21.12px'
+            letterSpacing='1%'
+          >
+            {code.children[0]}
+          </ChakraCode>
+        </Stack>
       )
   );
 };
