@@ -75,3 +75,19 @@ export const DOWNLOAD_OPENPGP_DEVELOPER_HEADERS = [
   'OpenPGP Key',
   'Fingerprint'
 ];
+
+// GitHub urls
+export const LATEST_GETH_RELEASE_URL =
+  'https://api.github.com/repos/ethereum/go-ethereum/releases/latest';
+export const ALL_GETH_RELEASES_URL = 'https://api.github.com/repos/ethereum/go-ethereum/releases';
+export const ALL_GETH_COMMITS_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits/';
+
+export const LINUX_BINARY_BASE_URL =
+  'https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-';
+export const MACOS_BINARY_BASE_URL =
+  'https://gethstore.blob.core.windows.net/builds/geth-darwin-amd64-';
+export const WINDOWS_BINARY_BASE_URL =
+  'https://gethstore.blob.core.windows.net/builds/geth-windows-amd64-';
+
+export const LATEST_SOURCES_BASE_URL = 'https://github.com/ethereum/go-ethereum/archive/';
+export const RELEASE_NOTES_BASE_URL = 'https://github.com/ethereum/go-ethereum/releases/tag/';

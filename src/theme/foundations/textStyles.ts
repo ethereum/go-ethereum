@@ -67,7 +67,13 @@ export const textStyles = {
   'downloads-button-label': {
     fontFamily: '"JetBrains Mono", monospace',
     color: 'bg',
-    fontSize: 'xs',
+    fontSize: { base: 'md', lg: 'xl' },
+    textTransform: 'uppercase'
+  },
+  'downloads-button-sublabel': {
+    fontFamily: '"JetBrains Mono", monospace',
+    color: 'bg',
+    fontSize: { base: 'xs', lg: 'sm' },
     textTransform: 'uppercase'
   },
   'download-tab-label': {

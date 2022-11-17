@@ -50,10 +50,9 @@ geth --sepolia --datadir sepolia <other flags> --signer=sepolia-data/clef/clef.i
 
 Remember that it is also necessary to have a consensus client running too, which requires `--http` and several `authrpc` values to be provided to Geth. A complete set of startup commands for the Geth-Lodestar client combinaton plus Clef is provided as an example in this [Gist](https://gist.github.com/jmcook1186/ea5de9215ecedb1b0105bcfa9c30d44c) - adapt it for different client combinations and configurations.
 
-
 ## Interacting with Clef
 
-There are two modes of interaction with Clef. One is direct interaction, which is achieved by passing requests by HTTP or IPC with JSON-RPC data as defined in Clef's external API. This is the way to do things in Clef that don't require Geth, such as creating and listing accounts, or signing data offline. The other way is via Geth. With Geth started with Clef as an external signer, requests made to Geth that touch account data will route via Clef for approval. By default, the user approves or denies interactions manually by typing `y` or `n` into the Clef console when prompted, but custom rules can also be created to automate common tasks. 
+There are two modes of interaction with Clef. One is direct interaction, which is achieved by passing requests by HTTP or IPC with JSON-RPC data as defined in Clef's external API. This is the way to do things in Clef that don't require Geth, such as creating and listing accounts, or signing data offline. The other way is via Geth. With Geth started with Clef as an external signer, requests made to Geth that touch account data will route via Clef for approval. By default, the user approves or denies interactions manually by typing `y` or `n` into the Clef console when prompted, but custom rules can also be created to automate common tasks.
 
 ### Creating accounts
 
@@ -70,6 +69,7 @@ The same can be achieved using raw JSON requests (this example send the request 
 ```shell
 curl -X POST --data '{"id": 0, "jsonrpc": "2.0", "method": "account_new", "params": []}' http://localhost:8550 -H "Content-Type: application/json"
 ```
+
 The console will hang because Clef is waiting for manual approval. Switch to the Clef terminal and approve the action. Clef will prompt for a account password and then confirm the account creation in the terminal logs. A new keyfile has been added to the keystore in `go-ethereum/sepolia-data`. A JSON response is returned to the terminal the request originated from, containing the new account address in the `result` field.
 
 ```terminal
@@ -84,7 +84,6 @@ The newly generated key files can be viewed in `<datadir>/keystore/`. The file n
 
 `UTC--2022-05-19T12-34-36.47413510Z--0b85e5a13e118466159b1e1b6a4234e5f9f784bb`
 
-
 An account can also be created by importing a raw private key (hex string) using `clef importraw` as follows:
 
 ```sh
@@ -94,17 +93,16 @@ clef importraw <hexkey>
 The terminal will respond with the following message, indicating the account has been created successfully:
 
 ```terminal
-## Info 
+## Info
 Key imported:
   Address 0x9160DC9105f7De5dC5E7f3d97ef11DA47269BdA6
   Keystore file: /home/user/.ethereum/keystore/UTC--2022-10-28T12-03-13.976383602Z--9160dc9105f7de5dc5e7f3d97ef11da47269bda6
 
-The key is now encrypted; losing the password will result in permanently losing 
+The key is now encrypted; losing the password will result in permanently losing
 access to the key and all associated funds!
 
 Make sure to backup keystore and passwords in a safe location.
 ```
-
 
 ### Listing accounts
 
@@ -196,7 +194,7 @@ Clef can be used to set and remove passwords for an existing keystore file. To s
 clef setpw a94f5374fce5edbc8e2a8697c15331677e6ebf0b
 ```
 
-This will cause Clef to prompt for a new password, twice, and then the Clef master password to decrypt the keyfile. 
+This will cause Clef to prompt for a new password, twice, and then the Clef master password to decrypt the keyfile.
 
 Geth's `account update` subcommand can also be used to update the account password:
 
@@ -215,7 +213,6 @@ Updating the account using `geth account update` replaces the original file with
 ## Unlocking accounts
 
 With Clef, indiscriminate account unlocking is no longer a feature. Instead, Clef unlocks are locked until actions are explicitly approved manually by a user, unless they conform to some specific scenario that has been encoded in a ruleset. Please refer to our Clef docs for instructions for how to create rulesets.
-
 
 ### Transactions
 
