@@ -8,7 +8,7 @@ export const HomeHero: FC = () => {
   return (
     <Stack
       border='2px solid'
-      borderColor='brand.light.primary'
+      borderColor='primary'
       px={4}
       py={{ base: 8, md: 24, lg: 48 }}
       flexGrow={1}

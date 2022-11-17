@@ -272,7 +272,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             sectionTitle='OpenPGP Signatures'
           >
             {/* TODO: swap for real data */}
-            <Stack borderBottom='2px solid' borderColor='brand.light.primary'>
+            <Stack borderBottom='2px solid' borderColor='primary'>
               <DataTable columnHeaders={DOWNLOAD_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
             </Stack>
 
@@ -288,8 +288,8 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
           <DownloadsSection id='importingkeys' sectionTitle='Importing keys and verifying builds'>
             <Flex
               p={4}
-              borderBottom='2px solid'
-              borderColor='brand.light.primary'
+              borderBottom='2px'
+              borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
             >
@@ -308,8 +308,8 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
 
             <Flex
               p={4}
-              borderBottom='2px solid'
-              borderColor='brand.light.primary'
+              borderBottom='2px'
+              borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
             >
@@ -328,8 +328,8 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
 
             <Flex
               p={4}
-              borderBottom='2px solid'
-              borderColor='brand.light.primary'
+              borderBottom='2px'
+              borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
             >

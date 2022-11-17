@@ -1,6 +1,8 @@
-import { Box, Center, Button, Grid, Image, Link, Stack, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, Center, Grid, HStack, Image, Link, Stack,Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
+
+import { GopherDownloads } from '../svgs';
 
 import { DOWNLOAD_HEADER_BUTTONS } from '../../../constants';
 
@@ -31,7 +33,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   return (
     <Grid
       border='3px solid'
-      borderColor='brand.light.primary'
+      borderColor='primary'
       p={4}
       templateColumns={{ base: 'repeat(1, 1fr)', lg: '1fr 430px' }}
       gap={4}
@@ -47,7 +49,6 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             <Box as='h1' textStyle='h1'>
               Download go-ethereum
             </Box>
-
             <Text
               // TODO: move text style to theme
               fontFamily='"JetBrains Mono", monospace'
@@ -73,31 +74,24 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             order={{ base: -1, md: 1 }}
           >
             <Center>
-              <Image
-                src='/images/pages/gopher-downloads-front-light.svg'
-                alt='Gopher plugged in'
-                w={{ md: 72 }}
-              />
+              <GopherDownloads aria-label='Gopher plugged in' w={{ md: 96 }} />
             </Center>
           </Stack>
         </Grid>
 
         <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4} mb={4}>
           {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
+            const { name, buildURL, Svg, ariaLabel } = DOWNLOAD_HEADER_BUTTONS[key];
             return (
-              <NextLink key={key} href={DOWNLOAD_HEADER_BUTTONS[key].buildURL} passHref>
+              <NextLink key={key} href={buildURL} passHref>
                 <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16}>
                   <HStack spacing={4}>
                     <Stack alignItems='center'>
-                      <Image
-                        src={DOWNLOAD_HEADER_BUTTONS[key].image}
-                        alt={DOWNLOAD_HEADER_BUTTONS[key].imageAlt}
-                        h='44px'
-                      />
+                      <Svg aria-label={ariaLabel} maxH="44px" />
                     </Stack>
                     <Box>
                       <Text textStyle='downloads-button-label'>
-                        For {DOWNLOAD_HEADER_BUTTONS[key].name}
+                        For {name}
                       </Text>
                       <Text textStyle='downloads-button-sublabel'>geth {currentBuildVersion}</Text>
                     </Box>
@@ -116,11 +110,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
       </Stack>
 
       <Center display={{ base: 'none', lg: 'flex' }}>
-        <Image
-          src='/images/pages/gopher-downloads-front-light.svg'
-          alt='Gopher plugged in'
-          w={96}
-        />
+        <GopherDownloads aria-label='Gopher plugged in' w={96} />
       </Center>
     </Grid>
   );

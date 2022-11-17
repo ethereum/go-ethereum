@@ -1,35 +1,34 @@
-import { Center, Flex, Image, Stack, Text } from '@chakra-ui/react';
+import { Center, Flex, IconProps, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 
 interface Props {
-  children: React.ReactNode;
   id: string;
-  imgSrc?: string;
-  imgAltText?: string;
-  sectionDescription?: React.ReactNode;
   sectionTitle: string;
+  sectionDescription?: React.ReactNode;
+  children: React.ReactNode;
+  Svg?: React.FC<IconProps>;
+  ariaLabel?: string;
 }
 
 export const DownloadsSection: FC<Props> = ({
-  children,
-  imgSrc,
-  imgAltText,
-  sectionDescription,
+  id,
   sectionTitle,
-  id
+  sectionDescription,
+  children,
+  Svg,
+  ariaLabel
 }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary' id={id}>
-      {!!imgSrc && (
-        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
-          {/* TODO: use NextImage */}
-          <Image src={imgSrc} alt={imgAltText} />
+    <Stack border='2px solid' borderColor='primary' id={id}>
+      {Svg && (
+        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='primary'>
+          <Svg aria-label={ariaLabel} />
         </Stack>
       )}
 
       <Flex
         borderBottom='2px solid'
-        borderColor='brand.light.primary'
+        borderColor='primary'
         flexDirection={{ base: 'column', md: 'row' }}
       >
         <Flex p={4} sx={{ mt: '0 !important' }} flex='none'>
@@ -43,8 +42,9 @@ export const DownloadsSection: FC<Props> = ({
         {sectionDescription && (
           <Center
             p={4}
-            borderLeft={{ base: 'none', md: '2px solid #11866f' }}
-            borderTop={{ base: '2px solid #11866f', md: 'none' }}
+            borderLeft={{ base: 'none', md: '2px' }}
+            borderTop={{ base: '2px', md: 'none' }}
+            borderColor='primary'
           >
             {sectionDescription}
           </Center>
