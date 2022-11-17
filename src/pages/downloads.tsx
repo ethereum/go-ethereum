@@ -29,14 +29,15 @@ import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
 import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
 export const getServerSideProps: GetServerSideProps = async () => {
-  // Latest release version number
-  const versionNumber = await fetch(LATEST_GETH_RELEASE_URL)
+  // Latest release name & version number
+  const { versionNumber, releaseName } = await fetch(LATEST_GETH_RELEASE_URL)
     .then(response => response.json())
-    .then(release => release.tag_name);
-  // Latest release name
-  const releaseName = await fetch(LATEST_GETH_RELEASE_URL)
-    .then(response => response.json())
-    .then(release => release.name);
+    .then(release => {
+      return {
+        versionNumber: release.tag_name,
+        releaseName: release.name
+      };
+    });
   // Latest release commit hash
   const commit = await fetch(`${ALL_GETH_COMMITS_URL}/${versionNumber}`)
     .then(response => response.json())
