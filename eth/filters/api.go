@@ -337,8 +337,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, errors.New("No chain config found. Proper PublicFilterAPI initialization required")
 	}
 
-	// get sprint from bor config
-	sprint := api.chainConfig.Bor.Sprint
+	borConfig := api.chainConfig.Bor
 
 	var filter *Filter
 	var borLogsFilter *BorBlockLogsFilter
@@ -347,7 +346,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 		// Block bor filter
 		if api.borLogs {
-			borLogsFilter = NewBorBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
+			borLogsFilter = NewBorBlockLogsFilter(api.backend, borConfig, *crit.BlockHash, crit.Addresses, crit.Topics)
 		}
 	} else {
 		// Convert the RPC block numbers into internal representations
@@ -363,7 +362,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 		// Block bor filter
 		if api.borLogs {
-			borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
+			borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, borConfig, begin, end, crit.Addresses, crit.Topics)
 		}
 	}
 

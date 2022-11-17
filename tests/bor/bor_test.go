@@ -1,21 +1,27 @@
 //go:build integration
+// +build integration
 
 package bor
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"io"
 	"math/big"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
@@ -26,10 +32,336 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
+
+var (
+	// addr1 = 0x71562b71999873DB5b286dF957af199Ec94617F7
+	pkey1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	// addr2 = 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
+	pkey2, _ = crypto.HexToECDSA("9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3")
+)
+
+func TestValidatorWentOffline(t *testing.T) {
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
+
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
+	}
+
+	// Create an Ethash network based off of the Ropsten config
+	// Generate a batch of accounts to seal and fund with
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
+
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
+	for i := 0; i < 2; i++ {
+		// Start the node and wait until it's up
+		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
+		if err != nil {
+			panic(err)
+		}
+		defer stack.Close()
+
+		for stack.Server().NodeInfo().Ports.Listener == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+		// Connect the node to all the previous ones
+		for _, n := range enodes {
+			stack.Server().AddPeer(n)
+		}
+		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
+	}
+
+	// Iterate over all the nodes and start mining
+	time.Sleep(3 * time.Second)
+	for _, node := range nodes {
+		if err := node.StartMining(1); err != nil {
+			panic(err)
+		}
+	}
+
+	for {
+
+		// for block 1 to 8, the primary validator is node0
+		// for block 9 to 16, the primary validator is node1
+		// for block 17 to 24, the primary validator is node0
+		// for block 25 to 32, the primary validator is node1
+		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
+
+		// we remove peer connection between node0 and node1
+		if blockHeaderVal0.Number.Uint64() == 9 {
+			stacks[0].Server().RemovePeer(enodes[1])
+		}
+
+		// here, node1 is the primary validator, node0 will sign out-of-turn
+
+		// we add peer connection between node1 and node0
+		if blockHeaderVal0.Number.Uint64() == 14 {
+			stacks[0].Server().AddPeer(enodes[1])
+		}
+
+		// reorg happens here, node1 has higher difficulty, it will replace blocks by node0
+
+		if blockHeaderVal0.Number.Uint64() == 30 {
+
+			break
+		}
+
+	}
+
+	// check block 10 miner ; expected author is node1 signer
+	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(10)
+	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(10)
+	authorVal0, err := nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err := nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 10
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 11 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(11)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(11)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 11
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 12 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(12)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(12)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 12
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 17 miner ; expected author is node0 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(17)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(17)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 17
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[0].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[0].AccountManager().Accounts()[0])
+}
+
+func TestForkWithBlockTime(t *testing.T) {
+
+	cases := []struct {
+		name          string
+		sprint        map[string]uint64
+		blockTime     map[string]uint64
+		change        uint64
+		producerDelay map[string]uint64
+		forkExpected  bool
+	}{
+		{
+			name: "No fork after 2 sprints with producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 128,
+			},
+			blockTime: map[string]uint64{
+				"0":   5,
+				"128": 2,
+				"256": 8,
+			},
+			change: 2,
+			producerDelay: map[string]uint64{
+				"0": 8,
+			},
+			forkExpected: false,
+		},
+		{
+			name: "No Fork after 1 sprint producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 64,
+			},
+			blockTime: map[string]uint64{
+				"0":  5,
+				"64": 2,
+			},
+			change: 1,
+			producerDelay: map[string]uint64{
+				"0": 5,
+			},
+			forkExpected: false,
+		},
+		{
+			name: "Fork after 4 sprints with producer delay < max block time",
+			sprint: map[string]uint64{
+				"0": 16,
+			},
+			blockTime: map[string]uint64{
+				"0":  2,
+				"64": 5,
+			},
+			change: 4,
+			producerDelay: map[string]uint64{
+				"0": 4,
+			},
+			forkExpected: true,
+		},
+	}
+
+	// Create an Ethash network based off of the Ropsten config
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
+	}
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+
+			genesis.Config.Bor.Sprint = test.sprint
+			genesis.Config.Bor.Period = test.blockTime
+			genesis.Config.Bor.BackupMultiplier = test.blockTime
+			genesis.Config.Bor.ProducerDelay = test.producerDelay
+
+			stacks, nodes, _ := setupMiner(t, 2, genesis)
+
+			defer func() {
+				for _, stack := range stacks {
+					stack.Close()
+				}
+			}()
+
+			// Iterate over all the nodes and start mining
+			for _, node := range nodes {
+				if err := node.StartMining(1); err != nil {
+					t.Fatal("Error occured while starting miner", "node", node, "error", err)
+				}
+			}
+			var wg sync.WaitGroup
+			blockHeaders := make([]*types.Header, 2)
+			ticker := time.NewTicker(time.Duration(test.blockTime["0"]) * time.Second)
+			defer ticker.Stop()
+
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+
+				go func(i int) {
+					defer wg.Done()
+
+					for range ticker.C {
+						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint["0"]*test.change + 10)
+						if blockHeaders[i] != nil {
+							break
+						}
+					}
+
+				}(i)
+			}
+
+			wg.Wait()
+
+			// Before the end of sprint
+			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
+			blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
+			assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
+			assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
+
+			author0, err := nodes[0].Engine().Author(blockHeaderVal0)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author1, err := nodes[1].Engine().Author(blockHeaderVal1)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			assert.Equal(t, author0, author1)
+
+			// After the end of sprint
+			author2, err := nodes[0].Engine().Author(blockHeaders[0])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author3, err := nodes[1].Engine().Author(blockHeaders[1])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+
+			if test.forkExpected {
+				assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.NotEqual(t, author2, author3)
+			} else {
+				assert.Equal(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.Equal(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.Equal(t, author2, author3)
+			}
+		})
+
+	}
+
+}
 
 func TestInsertingSpanSizeBlocks(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
@@ -341,13 +673,13 @@ func TestSignerNotFound(t *testing.T) {
 
 // TestEIP1559Transition tests the following:
 //
-// 1. A transaction whose gasFeeCap is greater than the baseFee is valid.
-// 2. Gas accounting for access lists on EIP-1559 transactions is correct.
-// 3. Only the transaction's tip will be received by the coinbase.
-// 4. The transaction sender pays for both the tip and baseFee.
-// 5. The coinbase receives only the partially realized tip when
-//    gasFeeCap - gasTipCap < baseFee.
-// 6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
+//  1. A transaction whose gasFeeCap is greater than the baseFee is valid.
+//  2. Gas accounting for access lists on EIP-1559 transactions is correct.
+//  3. Only the transaction's tip will be received by the coinbase.
+//  4. The transaction sender pays for both the tip and baseFee.
+//  5. The coinbase receives only the partially realized tip when
+//     gasFeeCap - gasTipCap < baseFee.
+//  6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
 func TestEIP1559Transition(t *testing.T) {
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
@@ -741,11 +1073,11 @@ func TestJaipurFork(t *testing.T) {
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
 
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock-1 {
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64()-1 {
 			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
 
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock {
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64() {
 			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
 	}
@@ -777,7 +1109,7 @@ func testEncodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig)
 		header.MixDigest,
 		header.Nonce,
 	}
-	if c.IsJaipur(header.Number.Uint64()) {
+	if c.IsJaipur(header.Number) {
 		if header.BaseFee != nil {
 			enc = append(enc, header.BaseFee)
 		}

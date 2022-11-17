@@ -62,7 +62,7 @@ func TestBorFilters(t *testing.T) {
 		hash4 = common.BytesToHash([]byte("topic4"))
 		db    = NewMockDatabase(ctrl)
 
-		sprint = params.TestChainConfig.Bor.Sprint
+		testBorConfig = params.TestChainConfig.Bor
 	)
 
 	backend := NewMockBackend(ctrl)
@@ -74,7 +74,7 @@ func TestBorFilters(t *testing.T) {
 	// Block 1
 	backend.expectBorReceiptsFromMock([]*common.Hash{nil, &hash1, &hash2, &hash3, &hash4})
 
-	filter := NewBorBlockLogsRangeFilter(backend, sprint, 0, 18, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
+	filter := NewBorBlockLogsRangeFilter(backend, testBorConfig, 0, 18, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})
 	logs, err := filter.Logs(context.Background())
 
 	if err != nil {
@@ -88,7 +88,7 @@ func TestBorFilters(t *testing.T) {
 	// Block 2
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash3})
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 990, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 990, 999, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -102,7 +102,7 @@ func TestBorFilters(t *testing.T) {
 	// Block 3
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, &hash3})
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 992, 1000, []common.Address{addr}, [][]common.Hash{{hash3}})
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 992, 1000, []common.Address{addr}, [][]common.Hash{{hash3}})
 	logs, _ = filter.Logs(context.Background())
 
 	if len(logs) != 1 {
@@ -116,7 +116,7 @@ func TestBorFilters(t *testing.T) {
 	// Block 4
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3})
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 1, 16, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 1, 16, []common.Address{addr}, [][]common.Hash{{hash1, hash2}})
 
 	logs, _ = filter.Logs(context.Background())
 
@@ -128,7 +128,7 @@ func TestBorFilters(t *testing.T) {
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, nil, [][]common.Hash{{failHash}})
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 0, 20, nil, [][]common.Hash{{failHash}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
@@ -139,7 +139,7 @@ func TestBorFilters(t *testing.T) {
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, []common.Address{failAddr}, nil)
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 0, 20, []common.Address{failAddr}, nil)
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
@@ -149,7 +149,7 @@ func TestBorFilters(t *testing.T) {
 	// Block 7
 	backend.expectBorReceiptsFromMock([]*common.Hash{&hash1, &hash2, nil, &hash3, &hash4, nil})
 
-	filter = NewBorBlockLogsRangeFilter(backend, sprint, 0, 20, nil, [][]common.Hash{{failHash}, {hash1}})
+	filter = NewBorBlockLogsRangeFilter(backend, testBorConfig, 0, 20, nil, [][]common.Hash{{failHash}, {hash1}})
 
 	logs, _ = filter.Logs(context.Background())
 	if len(logs) != 0 {
