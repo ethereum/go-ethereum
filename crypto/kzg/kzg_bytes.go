@@ -256,17 +256,17 @@ func TxPeekBlobVersionedHashes(tx []byte) ([]VersionedHash, error) {
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/eip4844/beacon-chain.md#verify_kzg_commitments_against_transactions
 func VerifyKZGCommitmentsAgainstTransactions(transactions [][]byte, kzgCommitments KZGCommitmentSequence) error {
 	var versionedHashes []VersionedHash
-	var err error
 	for _, tx := range transactions {
 		if tx[0] == BlobTxType {
-			versionedHashes, err = TxPeekBlobVersionedHashes(tx)
+			v, err := TxPeekBlobVersionedHashes(tx)
 			if err != nil {
 				return err
 			}
+			versionedHashes = append(versionedHashes, v...)
 		}
 	}
 	if kzgCommitments.Len() != len(versionedHashes) {
-		return errors.New("invalid number of blob versioned hashes")
+		return fmt.Errorf("invalid number of blob versioned hashes: %v vs %v", kzgCommitments.Len(), len(versionedHashes))
 	}
 	for i := 0; i < kzgCommitments.Len(); i++ {
 		h := KZGToVersionedHash(kzgCommitments.At(i))
