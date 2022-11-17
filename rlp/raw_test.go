@@ -60,15 +60,35 @@ func TestCountValues(t *testing.T) {
 	}
 }
 
-func TestSplitTypes(t *testing.T) {
-	if _, _, err := SplitString(unhex("C100")); err != ErrExpectedString {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedString)
+func TestSplitString(t *testing.T) {
+	for i, test := range []string{
+		"C0",
+		"C100",
+		"C3010203",
+		"C88363617483646F67",
+		"F8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitString(unhex(test)); !errors.Is(err, ErrExpectedString) {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedString)
+		}
 	}
-	if _, _, err := SplitList(unhex("01")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
-	}
-	if _, _, err := SplitList(unhex("81FF")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+}
+
+func TestSplitList(t *testing.T) {
+	for i, test := range []string{
+		"80",
+		"00",
+		"01",
+		"8180",
+		"81FF",
+		"820400",
+		"83636174",
+		"83646F67",
+		"B8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitList(unhex(test)); !errors.Is(err, ErrExpectedList) {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedList)
+		}
 	}
 }
 
