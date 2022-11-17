@@ -100,6 +100,10 @@ export const Header: FC = () => {
           borderRight={{ base: '2px', md: 'none' }}
           borderColor='primary'
           onClick={toggleColorMode}
+          _hover={{
+            bg: 'primary',
+            svg: { color: 'bg' }
+          }}
         >
           {isDark ? <SunIcon color='primary' /> : <MoonIcon color='primary' />}
         </Box>
