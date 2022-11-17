@@ -6,8 +6,8 @@ balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec
 #delay=600
 #echo "Wait ${delay} seconds for state-sync..."
 #sleep $delay
-stateSyncFound=false
-checkpointFound=false
+stateSyncFound="false"
+checkpointFound="false"
 
 while true
 do
@@ -26,7 +26,7 @@ do
         #exit 1
     else
         echo "State Sync occured!"
-        stateSyncFound=true   
+        stateSyncFound="true"   
     fi
 
     checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
@@ -36,10 +36,10 @@ do
         #exit 1
     else
         echo "Found checkpoint ID:" $checkpointID
-        checkpointFound=true
+        checkpointFound="true"
     fi
 
-    if (( $stateSyncFound && $checkpointFound )); then
+    if (( $stateSyncFound == "true" & $checkpointFound == "true" )); then
         break
     fi    
 
