@@ -65,10 +65,10 @@ func TestSplitTypes(t *testing.T) {
 		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedString)
 	}
 	if _, _, err := SplitList(unhex("01")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+		t.Errorf("SplitList returned %q, want %q", err, ErrExpectedList)
 	}
 	if _, _, err := SplitList(unhex("81FF")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+		t.Errorf("SplitList returned %q, want %q", err, ErrExpectedList)
 	}
 }
 
