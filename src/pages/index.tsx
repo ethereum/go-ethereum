@@ -1,14 +1,16 @@
 import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 
+import { GopherHomeFront } from '../components/UI/svgs';
+
 import {
-  Gopher,
   HomeHero,
   HomeSection,
   QuickLinks,
   WhatIsEthereum,
   WhyRunANode
 } from '../components/UI/homepage';
+import { GopherHomeLinks } from '../components/UI/svgs';
 
 import {
   CONTRIBUTING_PAGE,
@@ -32,11 +34,11 @@ const HomePage: NextPage = ({}) => {
             <GridItem rowSpan={2}>
               {/* SECTION: What is Geth */}
               <HomeSection
-                imgSrc='/images/pages/gopher-home-front.svg'
-                imgAltText='Gopher greeting'
                 sectionTitle='What is Geth'
                 linkLabel='Get started with Geth'
                 buttonHref={`${DOCS_PAGE}/getting-started`}
+                Svg={GopherHomeFront}
+                ariaLabel='Gopher greeting'
               >
                 <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
                   Geth (go-ethereum) is a{' '}
@@ -142,7 +144,16 @@ const HomePage: NextPage = ({}) => {
             <GridItem w='auto'>
               <Box h='100%'>
                 {/* TODO: replace with animated/video version */}
-                <Gopher />
+                <Stack
+                  justifyContent='center'
+                  alignItems='center'
+                  p={4}
+                  border='2px solid'
+                  borderColor='primary'
+                  h='100%'
+                >
+                  <GopherHomeLinks />
+                </Stack>
               </Box>
             </GridItem>
 

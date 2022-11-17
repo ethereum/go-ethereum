@@ -1,39 +1,32 @@
-import { Box, Image, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, IconProps, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
-import NextLink from 'next/link';
 
+import { ButtonLinkSecondary } from '..';
 interface Props {
-  imgSrc?: string;
-  imgAltText?: string;
   sectionTitle: string;
   linkLabel: string;
   buttonHref: string;
   children?: React.ReactNode;
+  Svg?: React.FC<IconProps>;
+  ariaLabel?: string;
 }
 
 export const HomeSection: FC<Props> = ({
-  imgSrc,
-  imgAltText,
+  Svg,
+  ariaLabel,
   sectionTitle,
   linkLabel,
   buttonHref,
   children
 }) => {
   return (
-    <Stack border='2px solid' borderColor='brand.light.primary' h='100%'>
-      {!!imgSrc && (
-        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='brand.light.primary'>
-          {/* TODO: use NextImage */}
-          <Image src={imgSrc} alt={imgAltText} />
+    <Stack border='2px solid' borderColor='primary' h='100%'>
+      {Svg && (
+        <Stack alignItems='center' p={4} borderBottom='2px solid' borderColor='primary'>
+          <Svg aria-label={ariaLabel} />
         </Stack>
       )}
-
-      <Stack
-        p={4}
-        borderBottom='2px solid'
-        borderColor='brand.light.primary'
-        sx={{ mt: '0 !important' }}
-      >
+      <Stack p={4} borderBottom='2px solid' borderColor='primary' sx={{ mt: '0 !important' }}>
         <Box as='h2' textStyle='h2'>
           {sectionTitle}
         </Box>
@@ -43,20 +36,14 @@ export const HomeSection: FC<Props> = ({
         p={4}
         spacing={4}
         borderBottom='2px solid'
-        borderColor='brand.light.primary'
+        borderColor='primary'
         sx={{ mt: '0 !important' }}
         h='100%'
       >
         {children}
       </Stack>
 
-      <Stack sx={{ mt: '0 !important' }}>
-        <NextLink href={buttonHref} passHref>
-          <Link variant='button-link-secondary' isExternal={buttonHref.startsWith('http')}>
-            <Text textStyle='home-section-link-label'>{linkLabel}</Text>
-          </Link>
-        </NextLink>
-      </Stack>
+      <ButtonLinkSecondary href={buttonHref}>{linkLabel}</ButtonLinkSecondary>
     </Stack>
   );
 };

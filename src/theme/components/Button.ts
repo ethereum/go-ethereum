@@ -5,24 +5,29 @@ export const Button = {
       px: '32px',
       borderRadius: 0,
       width: { base: '188px', md: 'auto' },
-      bg: 'brand.light.primary',
-      _hover: { bg: 'brand.light.secondary' },
+      bg: 'primary',
+      _hover: { bg: 'secondary' },
       _focus: {
-        bg: 'brand.light.primary',
-        boxShadow: 'inset 0 0 0 2px #06fece !important'
+        bg: 'secondary',
+        boxShadow: 'inset 0 0 0 2px var(--chakra-colors-primary) !important'
       },
-      _active: { borderTop: '4px solid', borderColor: 'green.200', pt: '4px' }
+      _active: {
+        bg: 'secondary',
+        borderTop: '4px',
+        borderColor: 'primary',
+        pt: '4px'
+      }
     },
     downloadsHeader: {
       py: '8px',
       px: '32px',
       borderRadius: 0,
       width: { base: '188px', md: 'auto' },
-      bg: 'brand.light.primary',
-      _hover: { bg: 'brand.light.secondary' },
+      bg: 'primary',
+      _hover: { bg: 'secondary' },
       _focus: {
-        bg: 'brand.light.primary',
-        boxShadow: 'inset 0 0 0 2px #06fece !important'
+        bg: 'primary',
+        boxShadow: 'inset 0 0 0 2px var(--chakra-colors-green-200) !important'
       },
       _active: { borderTop: '4px solid', borderColor: 'green.200' }
     }
