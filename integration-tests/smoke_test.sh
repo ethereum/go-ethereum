@@ -3,9 +3,6 @@ set -e
 
 balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
 
-#delay=600
-#echo "Wait ${delay} seconds for state-sync..."
-#sleep $delay
 stateSyncFound="false"
 checkpointFound="false"
 
@@ -23,7 +20,6 @@ do
 
     if (( $balance <= $balanceInit )); then
         echo "Balance in bor network has not increased. Waiting for state sync..."
-        #exit 1
     else
         echo "State Sync occured!"
         stateSyncFound="true"   
@@ -33,7 +29,6 @@ do
 
     if [ $checkpointID == "null" ]; then
         echo "Checkpoint didn't arrive yet! Waiting..."
-        #exit 1
     else
         echo "Found checkpoint ID:" $checkpointID
         checkpointFound="true"
