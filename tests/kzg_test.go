@@ -109,7 +109,7 @@ func TestGoKzg(t *testing.T) {
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := ComputeProof(polynomial, x, kzg.KzgSetupG1)
+	proof := ComputeProof(polynomial, x, kzgSetupG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr

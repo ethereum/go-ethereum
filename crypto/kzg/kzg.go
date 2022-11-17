@@ -36,9 +36,9 @@ var kzgSetupLagrange []bls.G1Point
 var KzgSetupG1 []bls.G1Point
 
 type JSONTrustedSetup struct {
-	SetupG1       []bls.G1Point
-	SetupG2       []bls.G2Point
-	SetupLagrange []bls.G1Point
+	SetupG1       []bls.G1Point `json:"setup_G1"`
+	SetupG2       []bls.G2Point `json:"setup_G2"`
+	SetupLagrange []bls.G1Point `json:"setup_G1_lagrange"`
 }
 
 // Initialize KZG subsystem (load the trusted setup data)
@@ -50,7 +50,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-
 	kzgSetupG2 = parsedSetup.SetupG2
 	kzgSetupLagrange = bitReversalPermutation(parsedSetup.SetupLagrange)
 	KzgSetupG1 = parsedSetup.SetupG1
