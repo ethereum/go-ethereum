@@ -61,41 +61,31 @@ func TestCountValues(t *testing.T) {
 }
 
 func TestSplitString(t *testing.T) {
-	tests := []struct {
-		input string
-		err   error
-	}{
-		{"C0", ErrExpectedString},
-		{"C100", ErrExpectedString},
-		{"C3010203", ErrExpectedString},
-		{"C88363617483646F67", ErrExpectedString},
-		{"F8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974", ErrExpectedString},
-	}
-
-	for i, test := range tests {
-		if _, _, err := SplitString(unhex(test.input)); err != test.err {
-			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
+	for i, test := range []string{
+		"C0",
+		"C100",
+		"C3010203",
+		"C88363617483646F67",
+		"F8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitString(unhex(test)); err != ErrExpectedString {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedString)
 		}
 	}
 }
 
 func TestSplitList(t *testing.T) {
-	tests := []struct {
-		input string
-		err   error
-	}{
-		{"80", ErrExpectedList},
-		{"00", ErrExpectedList},
-		{"8180", ErrExpectedList},
-		{"820400", ErrExpectedList},
-		{"83636174", ErrExpectedList},
-		{"83646F67", ErrExpectedList},
-		{"B8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974", ErrExpectedList},
-	}
-
-	for i, test := range tests {
-		if _, _, err := SplitList(unhex(test.input)); err != test.err {
-			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
+	for i, test := range []string{
+		"80",
+		"00",
+		"8180",
+		"820400",
+		"83636174",
+		"83646F67",
+		"B8384C6F72656D20697073756D20646F6C6F722073697420616D65742C20636F6E7365637465747572206164697069736963696E6720656C6974",
+	} {
+		if _, _, err := SplitList(unhex(test)); err != ErrExpectedList {
+			t.Errorf("test %d: error mismatch: have %q, want %q", i, err, ErrExpectedList)
 		}
 	}
 }
