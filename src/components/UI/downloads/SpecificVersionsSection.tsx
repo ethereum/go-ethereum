@@ -1,5 +1,6 @@
 import { Box, Flex, Image, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
+import { GopherHomeLinks } from '../svgs';
 
 interface Props {
   children: React.ReactNode;
@@ -22,8 +23,7 @@ export const SpecificVersionsSection: FC<Props> = ({ children }) => {
         borderColor='primary'
         flex='none'
       >
-        {/* TODO: use NextImage */}
-        <Image src='/images/pages/gopher-home-side-desktop.svg' alt='Gopher facing right' />
+        <GopherHomeLinks />
       </Flex>
       <Flex flexDir='column'>
         <Stack
