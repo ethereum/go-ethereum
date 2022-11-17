@@ -9,16 +9,17 @@ export const SpecificVersionsSection: FC<Props> = ({ children }) => {
   return (
     <Flex
       id='specificversions'
-      border='2px solid'
-      borderColor='brand.light.primary'
+      border='2px'
+      borderColor='primary'
       flexDir={{ base: 'column', md: 'row' }}
     >
       <Flex
         p={4}
         alignItems='center'
         justifyContent='center'
-        borderBottom={{ base: '2px solid #11866f', md: 'none' }}
-        borderRight={{ base: 'none', md: '2px solid #11866f' }}
+        borderBottom={{ base: '2px', md: 'none' }}
+        borderRight={{ base: 'none', md: '2px' }}
+        borderColor='primary'
         flex='none'
       >
         {/* TODO: use NextImage */}
@@ -27,8 +28,8 @@ export const SpecificVersionsSection: FC<Props> = ({ children }) => {
       <Flex flexDir='column'>
         <Stack
           p={4}
-          borderBottom='2px solid'
-          borderColor='brand.light.primary'
+          borderBottom='2px'
+          borderColor='primary'
           sx={{ mt: '0 !important' }}
         >
           <Box as='h2' textStyle='h2'>
