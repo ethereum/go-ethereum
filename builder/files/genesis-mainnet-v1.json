@@ -15,17 +15,14 @@
     "londonBlock": 23850000,
     "bor": {
       "jaipurBlock": 23850000,
-      "delhiBlock":  36499456,
       "period": {
         "0": 2
       },
       "producerDelay": {
-        "0": 6,
-        "36499456": 4
+        "0": 6
       },
       "sprint": {
-        "0": 64,
-        "36499456": 16
+        "0": 64
       },
       "backupMultiplier": {
         "0": 2
