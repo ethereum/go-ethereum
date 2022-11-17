@@ -41,13 +41,13 @@ export const DownloadsSection: FC<Props> = ({
         </Flex>
 
         {sectionDescription && (
-          <Stack
+          <Center
             p={4}
             borderLeft={{ base: 'none', md: '2px solid #11866f' }}
             borderTop={{ base: '2px solid #11866f', md: 'none' }}
           >
-            <Center>{sectionDescription}</Center>
-          </Stack>
+            {sectionDescription}
+          </Center>
         )}
       </Flex>
 

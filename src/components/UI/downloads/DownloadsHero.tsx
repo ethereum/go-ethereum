@@ -53,7 +53,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           gap={4}
           p={4}
         >
-          <Stack flexDirection={{ base: 'column' }} alignItems={{ base: 'flex-start' }}>
+          <Stack>
             <Box as='h1' textStyle='h1'>
               Download go-ethereum
             </Box>
@@ -62,7 +62,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
               // TODO: move text style to theme
               fontFamily='"JetBrains Mono", monospace'
               lineHeight='21px'
-              mb={8}
+              mb={{base: '4 !important', md: '8 !important'}}
             >
               {currentBuildName} ({currentBuildVersion})
             </Text>
@@ -96,19 +96,20 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
             return (
               <NextLink key={key} href={DOWNLOAD_HEADER_BUTTONS[key].buildURL} passHref>
-                <Button as='a' variant='primary' width={{ base: '100%' }} p={8}>
+                <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16}>
                   <HStack spacing={4}>
                     <Stack alignItems='center'>
                       <Image
                         src={DOWNLOAD_HEADER_BUTTONS[key].image}
                         alt={DOWNLOAD_HEADER_BUTTONS[key].imageAlt}
+                        h='44px'
                       />
                     </Stack>
                     <Box>
                       <Text textStyle='downloads-button-label'>
                         For {DOWNLOAD_HEADER_BUTTONS[key].name}
                       </Text>
-                      <Text textStyle='downloads-button-label'>geth {currentBuildName}</Text>
+                      <Text textStyle='downloads-button-sublabel'>geth {currentBuildVersion}</Text>
                     </Box>
                   </HStack>
                 </Button>

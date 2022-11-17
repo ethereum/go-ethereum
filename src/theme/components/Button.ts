@@ -12,6 +12,19 @@ export const Button = {
         boxShadow: 'inset 0 0 0 2px #06fece !important'
       },
       _active: { borderTop: '4px solid', borderColor: 'green.200', pt: '4px' }
+    },
+    downloadsHeader: {
+      py: '8px',
+      px: '32px',
+      borderRadius: 0,
+      width: { base: '188px', md: 'auto' },
+      bg: 'brand.light.primary',
+      _hover: { bg: 'brand.light.secondary' },
+      _focus: {
+        bg: 'brand.light.primary',
+        boxShadow: 'inset 0 0 0 2px #06fece !important'
+      },
+      _active: { borderTop: '4px solid', borderColor: 'green.200' }
     }
   }
 };
