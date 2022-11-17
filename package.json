@@ -21,12 +21,16 @@
     "@next/mdx": "^12.3.0",
     "focus-visible": "^5.2.0",
     "framer-motion": "^7.3.2",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.0",
     "next": "^13.0.2",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "react-markdown": "^8.0.3",
     "react-syntax-highlighter": "^15.5.0"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.5",
     "@types/node": "18.7.16",
     "@types/react": "18.0.18",
     "@types/react-dom": "18.0.6",
