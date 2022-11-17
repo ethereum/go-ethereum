@@ -209,7 +209,7 @@ See ecRecover to verify the signature.
 
 ## personal_signTransaction
 
-SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/interacting_with_geth/RPC/objects.md) and the second argument is the password, similar to `personal_sendTransaction`.
+SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/interacting_with_geth/RPC/objects) and the second argument is the password, similar to `personal_sendTransaction`.
 
 | Client  | Method invocation                                                |
 | :------ | ---------------------------------------------------------------- |

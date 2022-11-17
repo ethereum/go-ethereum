@@ -8,7 +8,7 @@ The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth 
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
 
-These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/interface/consensus-clients.md) page.
+These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/interface/consensus-clients) page.
 
 **Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 

@@ -72,7 +72,7 @@ InfluxDB is running and configured to store metrics from Geth.
 ## Preparing Geth {#preparing-geth}
 
 After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS` 
-in `geth --help` and in our [metrics page](/pages/docs/monitoring/metrics.md). In this case Geth will be configured to push data into InfluxDB. Basic setup specifies the endpoint where InfluxDB is reachable and authenticates the database.
+in `geth --help` and in our [metrics page](/docs/monitoring/metrics). In this case Geth will be configured to push data into InfluxDB. Basic setup specifies the endpoint where InfluxDB is reachable and authenticates the database.
 
 ```sh
 geth --metrics --metrics.influxdb --metrics.influxdb.endpoint "http://0.0.0.0:8086" --metrics.influxdb.username "geth" --metrics.influxdb.password "chosenpassword"

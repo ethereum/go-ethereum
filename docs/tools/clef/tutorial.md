@@ -208,7 +208,7 @@ For example, well defined rules such as:
 
 ### Rule files
 
-Rules are implemented as Javascript code in `js` files. The ruleset engine includes the same methods as the JSON_RPC defined in the [UI Protocol](/docs/_clef/datatypes.md). The following code snippet demonstrates a rule file that approves a transaction if it satisfies the following conditions:
+Rules are implemented as Javascript code in `js` files. The ruleset engine includes the same methods as the JSON_RPC defined in the [UI Protocol](/docs/_clef/datatypes). The following code snippet demonstrates a rule file that approves a transaction if it satisfies the following conditions:
 
 - the recipient is `0xae967917c465db8578ca9024c205720b1a3651a9`
 - the value is less than 50000000000000000 wei (0.05 ETH)
@@ -568,7 +568,7 @@ cat ~/.clef/02f90c0603f4f2f60188/config.json
 This tutorial has bounced back and forth between demonstrating Clef as a standalone tool by making 'manual` JSON RPC requests from the terminal and integrating it as a backend singer for Geth. Using Clef for account management is considered best practise for Geth users because of the additional
 security benefits it offers over and above what it offered by Geth's built-in accounts module. Clef is far more flexible and composable than Geth's built-in account management tool and can interface directly with hardware wallets, while Apps and wallets can request signatures directly from Clef.
 
-Ultimately, the goal is to deprecate Geth's account management tools completely and replace them with Clef. Until then, users are simply encouraged to choose to use Clef as an optional backend signer for Geth. In addition to the examples on this page, the [Getting started tutorial](/docs/_getting-started/index.md) also demonstrates Clef/Geth integration.
+Ultimately, the goal is to deprecate Geth's account management tools completely and replace them with Clef. Until then, users are simply encouraged to choose to use Clef as an optional backend signer for Geth. In addition to the examples on this page, the [Getting started tutorial](/docs/_getting-started/index) also demonstrates Clef/Geth integration.
 
 ## Summary
 

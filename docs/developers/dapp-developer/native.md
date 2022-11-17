@@ -7,7 +7,7 @@ Ethereum was originally conceptualized to be the base layer for [Web3](https://e
 
 Before long, web-browser-like graphical interfaces (e.g. Mist) were created to extend clients, and client functions were built into websites built using the time-tested HTML/CSS/JS stack. However, to support the most diverse, complex dapps, developers require programmatic access to client functions through an API. This opens up client technologies as re-usable, composable units that can be applied in creative ways by a global community of developers.
 
-To support this, Geth ships official Go packages that can be embedded into third party desktop and server applications. There is also a [mobile API](/docs/developers/dapp-developer/mobile.md) that can be used to embed Geth into mobile applications.
+To support this, Geth ships official Go packages that can be embedded into third party desktop and server applications. There is also a [mobile API](/docs/developers/dapp-developer/mobile) that can be used to embed Geth into mobile applications.
 
 This page provides a high-level overview of the Go API.
 
@@ -39,7 +39,7 @@ All the Geth packages can be downloaded using:
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
-More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/developers/dapp-developer/native-bindings.md) and [Go Account Management](/docs/dapp/native-accounts) pages.
+More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/developers/dapp-developer/native-bindings) and [Go Account Management](/docs/dapp/native-accounts) pages.
 
 ## Tutorial
 

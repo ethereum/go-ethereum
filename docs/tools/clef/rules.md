@@ -25,7 +25,7 @@ The ruleset engine acts as a gatekeeper to the command line interface - it auto-
 
 ![Clef ruleset logic](/images/docs/clef_ruleset.png)
 
-When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/docs/tools/Clef/apis.md). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/docs/tools/Clef/apis.md). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
+When Clef receives a request, the ruleset engine evaluates a Javascript file for each method defined in the internal [UI API docs](/docs/tools/Clef/apis). For example the code snippet below is an example ruleset that calls the function `ApproveTx`. The call to `ApproveTx` is invoking the `ui_approveTx` [JSON_RPC API endpoint](/docs/tools/Clef/apis). Every time an RPC method is invoked the Javascript code is executed in a freshly instantiated virtual machine.
 
 ```js
 function asBig(str) {
