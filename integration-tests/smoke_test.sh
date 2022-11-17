@@ -24,7 +24,7 @@ do
         #exit 1
     else
         echo "State Sync occured!"
-        $count=$count+1    
+        count=$((count+1))    
     fi
 
     checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
@@ -34,7 +34,7 @@ do
         #exit 1
     else
         echo "Found checkpoint ID:" $checkpointID
-        $count=$count+1
+        count=$((count+1))
     fi
 
     if [ $count -eq 2 ]; then
