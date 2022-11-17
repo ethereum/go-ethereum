@@ -8,23 +8,16 @@ import {
   GETH_DISCORD_URL,
   GETH_REPO_URL,
   GETH_TWITTER_URL
-} from '../../constants'
+} from '../../constants';
 
-import {
-  DiscordIcon,
-  GitHubIcon,
-  TwitterIcon
-} from '../UI/icons';
+import { DiscordIcon, GitHubIcon, TwitterIcon } from '../UI/icons';
 
 export const Footer: FC = () => {
   return (
-    <Flex
-      mt={4}
-      direction={{ base: 'column', lg: 'row'}}
-    >
+    <Flex mt={4} direction={{ base: 'column', lg: 'row' }}>
       <Flex
-        direction={{ base: 'column', md: 'row'}}
-        justifyContent={{md: 'space-between'}}
+        direction={{ base: 'column', md: 'row' }}
+        justifyContent={{ md: 'space-between' }}
         border='2px solid'
         borderColor='brand.light.primary'
       >
@@ -177,5 +170,5 @@ export const Footer: FC = () => {
         <Text textStyle='footer-text'>{`© 2013–${new Date().getFullYear()}. The go-ethereum Authors.`}</Text>
       </Stack>
     </Flex>
-  )
-}
+  );
+};

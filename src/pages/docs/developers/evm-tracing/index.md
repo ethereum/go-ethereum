@@ -4,8 +4,10 @@ description: Introduction to tracing EVM transactions using Geth
 ---
 
 ---
+
 title: EVM Tracing
 sort-key: A
+
 ---
 
 Tracing allows users to examine precisely what was executed by the EVM during some specific transaction or set of transactions. There are two different types of [transactions](https://ethereum.org/en/developers/docs/transactions) in Ethereum: value transfers and contract executions. A value transfer just moves ETH from one account to another. A contract interaction executes some code stored at a contract address which can include altering stored data and transacting multiple times with other contracts and externally-owned accounts. A contract execution transaction can therefore be a complicated web of interactions that can be difficult to unpick. The transaction receipt contains a status code that shows whether the transaction succeeded or failed, but more detailed information is not readily available, meaning it is very difficult to know what a contract execution actually did, what data was modified and which addresses were touched. This is the problem that EVM tracing solves. Geth traces transactions by re-running them locally and collecting data about precisely what was executed by the EVM.
@@ -33,13 +35,12 @@ This means there are limits on the transactions that can be traced imposed by th
   availability **cannot** be reasonably assumed.
 
 ![state pruning options](/public/images/state-pruning.png)
- 
-*This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head*
 
- 
+_This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head_
+
 More detailed information about syncing is available on the [sync modes page](/pages/docs/fundamentals/sync-modes.md).
 
-When a trace of a specific transaction is executed, the state is prepared by fetching the state of the parent block from the database. If it is not available, Geth will crawl backwards in time to find the next available state but only up to a limit defined in the `reexec` parameter which defaults to 128 blocks. If no state is available within the `reexec` window then the trace fails with `Error: required historical state unavailable` and the `reexec` parameter must be increased. If a valid state *is* found in the `reexec` window, then Geth sequentially re-executes the transcations in each block between the last available state and the target block. The greater the value of `reexec` the longer the tracing will take because more blocks have to be re-executed to regenerate the target state.
+When a trace of a specific transaction is executed, the state is prepared by fetching the state of the parent block from the database. If it is not available, Geth will crawl backwards in time to find the next available state but only up to a limit defined in the `reexec` parameter which defaults to 128 blocks. If no state is available within the `reexec` window then the trace fails with `Error: required historical state unavailable` and the `reexec` parameter must be increased. If a valid state _is_ found in the `reexec` window, then Geth sequentially re-executes the transcations in each block between the last available state and the target block. The greater the value of `reexec` the longer the tracing will take because more blocks have to be re-executed to regenerate the target state.
 
 The `debug_getAccessibleStates` endpoint is a useful tool for estimating a suitable value for `reexec`. Passing the number of the block that contains the target transaction and a search distance to this endpoint will return the number of blocks behind the current head where the most recent available state exists. This value can be passed to the tracer as `re-exec`.
 
@@ -51,13 +52,12 @@ _There are exceptions to the above rules when running batch traces of entire blo
 
 ### Built-in tracers
 
-The tracing API accepts an optional `tracer` parameter that defines how the data returned to the API call should be processed. If this parameter is ommitted the default tracer is used. The default is the struct (or 'opcode') logger. These raw opcode traces are sometimes useful, but the returned data is very low level and can be too extensive and awkward to read for many use-cases. A full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally. For these reasons, there are a set of non-default built-in tracers that can be named in the API call to return different data from the method. Under the hood, these tracers are Go or Javascript 
+The tracing API accepts an optional `tracer` parameter that defines how the data returned to the API call should be processed. If this parameter is ommitted the default tracer is used. The default is the struct (or 'opcode') logger. These raw opcode traces are sometimes useful, but the returned data is very low level and can be too extensive and awkward to read for many use-cases. A full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally. For these reasons, there are a set of non-default built-in tracers that can be named in the API call to return different data from the method. Under the hood, these tracers are Go or Javascript
 functions that do some specific preprocessing on the trace data before it is returned.
 
-More information about Geth's built-in tracers is available on the 
-[built-in tracers](/pages/docs/developers/evm-tracing/built-in-tracers.md) 
+More information about Geth's built-in tracers is available on the
+[built-in tracers](/pages/docs/developers/evm-tracing/built-in-tracers.md)
 page.
-
 
 ### Custom tracers
 

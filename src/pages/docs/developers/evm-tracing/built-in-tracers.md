@@ -3,7 +3,7 @@ title: Built-in tracers
 description: Explanation of the tracers that come bundled in Geth as part of the tracing API.
 ---
 
-Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call. 
+Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call.
 
 ## Struct/opcode logger
 
@@ -85,14 +85,13 @@ Return:
          }
       },
 
-      ... 
+      ...
 
 ```
 
 ## Native tracers
 
 The following tracers are implement in Go. This means they are much more performant than other tracers that are written in Javascript. The tracers are selected by passing their name to the `tracer` parameter when invoking a tracing API method, e.g. `debug.traceTransaction(<txhash>, { tracer: 'callTracer' })`.
-
 
 ### 4byteTracer
 
@@ -134,7 +133,6 @@ The `callTracer` tracks all the call frames executed during a transaction, inclu
 | output  | string      | return data                          |
 | error   | string      | error, if any                        |
 | calls   | []callframe | list of sub-calls                    |
-
 
 Example Call:
 
@@ -178,7 +176,6 @@ Things to note about the call tracer:
 - Calls to precompiles are also included in the result
 - In case a frame reverts, the field `output` will contain the raw return data, unlike [revertReasonTracer](#revertreasontracer) which parses the data and returns the revert message
 
-
 ### prestateTracer
 
 The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode returns the accounts necessary to execute a given transaction. `diff` mode returns the differences between the transaction's pre and post-state (i.e. what changed because the transaction happened). The `prestateTracer` defaults to `prestate` mode. It reexecutes the given transaction and tracks every part of state that is touched. This is similar to the concept of a [stateless witness](https://ethresear.ch/t/the-stateless-client-concept/172), the difference being this tracer doesn't return any cryptographic proof, rather only the trie leaves. The result is an object. The keys are addresses of accounts. The value is an object with the following fields:
@@ -195,7 +192,15 @@ To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the 
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'prestateTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'prestateTracer' }
+);
 ```
 
 Return:
@@ -244,7 +249,6 @@ Return (same call with `{diffMode: True}`):
 }
 ```
 
-
 ### revertReasonTracer
 
 The `revertReasonTracer` is useful for analyzing failed transactions. If the transaction reverted, the reason for the revert (according to the Solidity contract) is returned. For any other failure, the error message is returned.
@@ -265,7 +269,6 @@ Returns:
 
 This tracer is noop. It returns an empty object and is only meant for testing the setup.
 
-
 ## Javascript tracers
 
 There are also a set of tracers written in Javascript. These are less performant than the Go native tracers because of overheads associated with interpreting the Javascript in Geth's Go environment.
@@ -277,7 +280,15 @@ There are also a set of tracers written in Javascript. These are less performant
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'bigramTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'bigramTracer' }
+);
 ```
 
 Returns:
@@ -371,7 +382,15 @@ Returns:
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'opcountTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'opcountTracer' }
+);
 ```
 
 Returns:
@@ -381,15 +400,25 @@ Returns:
 ```
 
 ### trigram
+
 `trigramTracer` counts the opcode trigrams. Trigrams are the possible combinations of three opcodes this tracer reports how many times each combination is seen during execution.
 
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'trigramTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'trigramTracer' }
+);
 ```
 
 Returns:
+
 ```terminal
 {
   --PUSH1: 1,
@@ -414,17 +443,18 @@ Returns:
 }
 ```
 
-
 ### unigram
 
 `unigramTracer` counts the frequency of occurrance of each opcode.
 
 Example:
+
 ```js
 > debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'unigramTracer'})
 ```
 
 Returns:
+
 ```terminal
 {
   ADD: 36,
@@ -447,10 +477,9 @@ Returns:
 
 ## State overrides
 
-It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address *temporarily just for the duration of the execution* and then a transaction interacting with that address canm be traced.  This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
+It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address _temporarily just for the duration of the execution_ and then a transaction interacting with that address canm be traced. This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
 
-
-To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode. 
+To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode.
 
 ```js
 var code = //contract bytecode
