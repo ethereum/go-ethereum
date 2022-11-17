@@ -15,7 +15,8 @@ const overrides = {
   styles: {
     global: () => ({
       body: {
-        bg: 'bg'
+        bg: 'bg',
+        transition: 'all 200ms linear !important'
       }
     })
   },
