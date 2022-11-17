@@ -113,24 +113,26 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	}
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
-		var mutex sync.Mutex
-		answers := make([]*jsonrpcMessage, 0, len(calls))
-		go func() {
-			// Context timeout is set in node/rpcstack:ServeHTTP.
-			// Only for HTTP requests.
-			<-cp.ctx.Done()
-			log.Info("yooo context dooone\n")
-
-			mutex.Lock()
-			defer mutex.Unlock()
-			for _, msg := range calls {
-				if !msg.isNotification() {
-					answers = append(answers, msg.errorResponse(&timeoutError{}))
-				}
-			}
-			h.conn.writeJSON(cp.ctx, answers)
-		}()
-
+		var (
+			mutex     sync.Mutex
+			timer     *time.Timer
+			responded sync.Once
+			answers   = make([]*jsonrpcMessage, 0, len(calls))
+		)
+		if deadline, ok := cp.ctx.Deadline(); ok {
+			timer = time.AfterFunc(time.Until(deadline), func() {
+				responded.Do(func() {
+					mutex.Lock()
+					defer mutex.Unlock()
+					for _, msg := range calls {
+						if !msg.isNotification() {
+							answers = append(answers, msg.errorResponse(&timeoutError{}))
+						}
+					}
+					h.conn.writeJSON(cp.ctx, answers)
+				})
+			})
+		}
 		for {
 			mutex.Lock()
 			if len(calls) == 0 {
@@ -149,9 +151,14 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 			calls = calls[1:]
 			mutex.Unlock()
 		}
+		if timer != nil {
+			timer.Stop()
+		}
 		h.addSubscriptions(cp.notifiers)
 		if len(answers) > 0 {
-			h.conn.writeJSON(cp.ctx, answers)
+			responded.Do(func() {
+				h.conn.writeJSON(cp.ctx, answers)
+			})
 		}
 		for _, n := range cp.notifiers {
 			n.activate()
