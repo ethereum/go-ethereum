@@ -159,7 +159,6 @@ The sync can be confirmed using [`eth.syncing`](https://ethereum.org/en/develope
 }
 ```
 
-
 There are other log messages that are commonly seen during syncing. For example:
 
 ```sh
@@ -207,10 +206,10 @@ WARN [10-03 |13:10:26.499] Beacon client online, but never received consensus up
 
 The message above indicates that a consensus client is present but not working correctly. The most likely reason for this is that the client is not yet in sync. Waiting for the consensus client to sync should solve the issue.
 
-
 ```sh
 WARN [10-03 | 13:15:56.543] Dropping unsynced node during sync    id = e2fdc0d92d70953 conn = ...
 ```
+
 This message indicates that a peer is being dropped because it is not fully synced. This is normal - the necessary data will be requested from an alternative peer instead.
 
 ## Summary

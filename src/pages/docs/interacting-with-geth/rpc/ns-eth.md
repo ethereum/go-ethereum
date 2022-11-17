@@ -3,8 +3,7 @@ title: eth Namespace
 description: Documentation for the JSON-RPC API "eth" namespace
 ---
 
-
-Documentation for the API methods in the  `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
+Documentation for the API methods in the `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
 
 ### eth_subscribe, eth_unsubscribe
 
@@ -65,6 +64,7 @@ Example:
 The method returns a single `Binary` consisting the return value of the executed contract call.
 
 #### Simple example
+
 **note that this example uses the Rinkeby network, which is now deprecated**
 
 With a synced Rinkeby node with RPC exposed on localhost (`geth --rinkeby --http`) we can make a call against the [CheckpointOracle](https://rinkeby.etherscan.io/address/0xebe8efa441b9302a0d7eaecc277c09d20d684540) to retrieve the list of administrators:

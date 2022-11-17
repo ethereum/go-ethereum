@@ -4,7 +4,7 @@ import { FC } from 'react';
 
 // Components
 import { Header } from '../UI';
-import { Footer } from './Footer'
+import { Footer } from './Footer';
 
 interface Props {
   children?: React.ReactNode;

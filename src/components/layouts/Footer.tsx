@@ -8,155 +8,150 @@ import {
   GETH_DISCORD_URL,
   GETH_REPO_URL,
   GETH_TWITTER_URL
-} from '../../constants'
+} from '../../constants';
 
-import {
-  DiscordIcon,
-  GitHubIcon,
-  TwitterIcon
-} from '../UI/icons';
+import { DiscordIcon, GitHubIcon, TwitterIcon } from '../UI/icons';
 
 export const Footer: FC = () => {
   return (
-    <Flex
-      mt={4}
-      direction={{ base: 'column', lg: 'row'}}
-    >
+    <Flex mt={4} direction={{ base: 'column', lg: 'row' }}>
       <Flex
-        direction={{ base: 'column', md: 'row'}}
-        justifyContent={{md: 'space-between'}}
+        direction={{ base: 'column', md: 'row' }}
+        justifyContent={{ md: 'space-between' }}
         border='2px solid'
         borderColor='brand.light.primary'
       >
         <Flex
+          sx={{ mt: '-2px !important' }}
           borderBottom={{
             base: '2px solid',
             md: 'none'
           }}
           borderColor='brand.light.primary'
         >
-          <NextLink href={DOWNLOADS_PAGE} passHref>
-            <Link
-              flex={1}
-              color='brand.light.primary'
-              _hover={{
-                textDecoration: 'none',
-                bg: 'brand.light.primary',
-                color: 'yellow.50 !important'
-              }}
-              height='full'
-              borderRight='2px solid'
-              borderColor='brand.light.primary'
-            >
-              <Text textStyle='home-section-link-label'>DOWNLOADS</Text>
-            </Link>
-          </NextLink>
+          <Stack
+            flex={1}
+            color='brand.light.primary'
+            _hover={{
+              textDecoration: 'none',
+              bg: 'brand.light.primary',
+              color: 'yellow.50 !important'
+            }}
+            justifyContent='center'
+            borderRight='2px solid'
+            borderColor='brand.light.primary'
+          >
+            <NextLink href={DOWNLOADS_PAGE} passHref>
+              <Link _hover={{ textDecoration: 'none' }}>
+                <Text textStyle='home-section-link-label'>DOWNLOADS</Text>
+              </Link>
+            </NextLink>
+          </Stack>
 
-
-          <NextLink href={DOCS_PAGE} passHref>
-            <Link
-              flex={1}
-              color='brand.light.primary'
-              _hover={{
-                textDecoration: 'none',
-                bg: 'brand.light.primary',
-                color: 'yellow.50 !important'
-              }}
-              height='full'
-              borderRight={{
-                base: 'none',
-                md: '2px solid'
-              }}
-              borderColor='brand.light.primary'
-            >
-              <Text textStyle='home-section-link-label'>DOCUMENTATION</Text>
-            </Link>
-          </NextLink>
+          <Stack
+            flex={1}
+            color='brand.light.primary'
+            _hover={{
+              textDecoration: 'none',
+              bg: 'brand.light.primary',
+              color: 'yellow.50 !important'
+            }}
+            borderRight={{
+              base: 'none',
+              md: '2px solid'
+            }}
+            borderColor='brand.light.primary'
+            justifyContent='center'
+          >
+            <NextLink href={DOCS_PAGE} passHref>
+              <Link _hover={{ textDecoration: 'none' }}>
+                <Text textStyle='home-section-link-label'>DOCUMENTATION</Text>
+              </Link>
+            </NextLink>
+          </Stack>
         </Flex>
 
-        <Flex>
-          <NextLink href={GETH_TWITTER_URL} passHref>
-            <Link
-              isExternal
-              p={4}
-              display='flex'
-              flex={1}
-              data-group
-              borderLeft={{
-                base: 'none',
-                md: '2px solid',
-                lg: 'none'
-              }}
-              borderColor='brand.light.primary !important'
-              
-              _hover={{
-                bg: 'brand.light.primary',
-              }}
-              justifyContent='center'
-            >
-              <TwitterIcon
-                w={6}
-                height={6}
-                margin='auto'
-                _groupHover={{
-                  svg: {
-                    path:{fill: 'yellow.50 !important'}
-                  }
-                }}
-              />
-            </Link>
-          </NextLink>
+        <Flex sx={{ mt: '0 !important' }}>
+          <Stack
+            flex={1}
+            data-group
+            borderLeft={{
+              base: 'none',
+              md: '2px solid',
+              lg: 'none'
+            }}
+            borderColor='brand.light.primary !important'
+            _hover={{
+              bg: 'brand.light.primary'
+            }}
+            alignItems='center'
+            p={4}
+          >
+            <NextLink href={GETH_TWITTER_URL} passHref>
+              <Link isExternal>
+                <TwitterIcon
+                  w={8}
+                  height={8}
+                  _groupHover={{
+                    svg: {
+                      path: { fill: 'yellow.50 !important' }
+                    }
+                  }}
+                />
+              </Link>
+            </NextLink>
+          </Stack>
 
-          <NextLink href={GETH_DISCORD_URL} passHref>
-            <Link
-              isExternal
-              p={4} 
-              data-group 
-              display='flex'
-              flex={1}
-              _hover={{
-                bg: 'brand.light.primary',
-              }}
-              justifyContent='center'
-              borderWidth='2px'
-              borderStyle='none solid'
-              borderColor='brand.light.primary'
-            >
-              <DiscordIcon
-                w={6}
-                height={6} 
-                _groupHover={{
-                  svg: {
-                    path:{fill: 'yellow.50 !important'}
-                  }
-                }}
-              />
-            </Link>
-          </NextLink>
+          <Stack
+            data-group
+            flex={1}
+            _hover={{
+              bg: 'brand.light.primary'
+            }}
+            alignItems='center'
+            borderWidth='2px'
+            borderStyle='none solid'
+            borderColor='brand.light.primary'
+            p={4}
+          >
+            <NextLink href={GETH_DISCORD_URL} passHref>
+              <Link isExternal>
+                <DiscordIcon
+                  w={8}
+                  height={8}
+                  _groupHover={{
+                    svg: {
+                      path: { fill: 'yellow.50 !important' }
+                    }
+                  }}
+                />
+              </Link>
+            </NextLink>
+          </Stack>
 
-          <NextLink href={GETH_REPO_URL} passHref>
-            <Link
-              isExternal
-              p={4}
-              data-group
-              flex={1}
-              display='flex'
-              _hover={{
-                bg: 'brand.light.primary',
-              }}
-              justifyContent='center'
-            >
-              <GitHubIcon
-                w={6}
-                height={6} 
-                _groupHover={{
-                  svg: {
-                    path:{fill: 'yellow.50 !important'}
-                  }
-                }}
-              />
-            </Link>
-          </NextLink>
+          <Stack
+            data-group
+            flex={1}
+            _hover={{
+              bg: 'brand.light.primary'
+            }}
+            alignItems='center'
+            p={4}
+          >
+            <NextLink href={GETH_REPO_URL} passHref>
+              <Link isExternal>
+                <GitHubIcon
+                  w={7}
+                  height={7}
+                  _groupHover={{
+                    svg: {
+                      path: { fill: 'yellow.50 !important' }
+                    }
+                  }}
+                />
+              </Link>
+            </NextLink>
+          </Stack>
         </Flex>
       </Flex>
 
@@ -172,8 +167,8 @@ export const Footer: FC = () => {
         borderColor='brand.light.primary'
         flex={1}
       >
-        <Text textStyle='footer-text'>© 2013–2022. The go-ethereum Authors.</Text>
+        <Text textStyle='footer-text'>{`© 2013–${new Date().getFullYear()}. The go-ethereum Authors.`}</Text>
       </Stack>
     </Flex>
-  )
-}
+  );
+};
