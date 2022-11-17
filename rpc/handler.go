@@ -150,6 +150,13 @@ func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
 	b.answers = nil
 }
 
+func computeTimeout(deadline time.Time) time.Duration {
+	// Return error message before http server cuts connection. See:
+	// https://github.com/golang/go/issues/47229
+	// Note: Timeouts are sanitized to be a minimum of 1 second.
+	return time.Until(deadline) - 100*time.Millisecond
+}
+
 // handleBatch executes all messages in a batch and returns the responses.
 func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
@@ -173,15 +180,20 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
 		var (
-			timer      *time.Timer
-			callBuffer = &batchCallBuffer{calls: calls, answers: make([]*jsonrpcMessage, 0, len(calls))}
+			timer       *time.Timer
+			callBuffer  = &batchCallBuffer{calls: calls, answers: make([]*jsonrpcMessage, 0, len(calls))}
+			ctx, cancel = context.WithCancel(cp.ctx)
 		)
-		if deadline, ok := cp.ctx.Deadline(); ok {
-			timer = time.AfterFunc(time.Until(deadline), func() { callBuffer.timeout(cp.ctx, h.conn) })
+		cp.ctx = ctx
+		if deadline, ok := ctx.Deadline(); ok {
+			timer = time.AfterFunc(computeTimeout(deadline), func() {
+				cancel()
+				callBuffer.timeout(ctx, h.conn)
+			})
 		}
 		for {
 			// No need to handle rest of calls if timed out.
-			if cp.ctx.Err() != nil {
+			if ctx.Err() != nil {
 				break
 			}
 			msg := callBuffer.popCall()
@@ -194,7 +206,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		if timer != nil {
 			timer.Stop()
 		}
-		callBuffer.write(cp.ctx, h.conn)
+		callBuffer.write(ctx, h.conn)
 		h.addSubscriptions(cp.notifiers)
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -209,13 +221,16 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	}
 	h.startCallProc(func(cp *callProc) {
 		var (
-			responded sync.Once
-			timer     *time.Timer
+			responded   sync.Once
+			timer       *time.Timer
+			ctx, cancel = context.WithCancel(cp.ctx)
 		)
-		if deadline, ok := cp.ctx.Deadline(); ok {
-			timer = time.AfterFunc(time.Until(deadline), func() {
+		cp.ctx = ctx
+		if deadline, ok := ctx.Deadline(); ok {
+			timer = time.AfterFunc(computeTimeout(deadline), func() {
+				cancel()
 				responded.Do(func() {
-					h.conn.writeJSON(cp.ctx, msg.errorResponse(&timeoutError{}))
+					h.conn.writeJSON(ctx, msg.errorResponse(&timeoutError{}))
 				})
 			})
 		}
@@ -227,7 +242,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
 			responded.Do(func() {
-				h.conn.writeJSON(cp.ctx, answer)
+				h.conn.writeJSON(ctx, answer)
 			})
 		}
 		for _, n := range cp.notifiers {
