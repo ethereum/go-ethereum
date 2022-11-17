@@ -12,7 +12,7 @@ export const Code: FC<Props> = ({ code }) => {
       (
         <Text
           as='span'
-          background='gray.200'
+          background='code-bg'
           fontFamily='"JetBrains Mono", monospace'
           fontWeight={400}
           fontSize='md'
@@ -28,9 +28,9 @@ export const Code: FC<Props> = ({ code }) => {
       (
         <Stack>
           <ChakraCode
-            overflow="scroll"
+            overflow='hidden'
             p={6}
-            background='gray.800'
+            background='code-bg-contrast'
             color='green.50'
             fontFamily='"JetBrains Mono", monospace'
             fontWeight={400}
