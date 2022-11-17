@@ -3,33 +3,43 @@ set -e
 
 balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
 
-delay=600
+#delay=600
+#echo "Wait ${delay} seconds for state-sync..."
+#sleep $delay
+count=0
+while true
+do
+  
+    balance=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
 
-echo "Wait ${delay} seconds for state-sync..."
-sleep $delay
+    if ! [[ "$balance" =~ ^[0-9]+$ ]]; then
+        echo "Something is wrong! Can't find the balance of first account in bor network."
+        exit 1
+    fi
 
+    echo "Found matic balance on account[0]: " $balance
 
-balance=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'Math.round(web3.fromWei(eth.getBalance(eth.accounts[0])))'")
+    if (( $balance <= $balanceInit )); then
+        echo "Balance in bor network has not increased. Waiting for state sync..."
+        #exit 1
+    else
+        echo "State Sync occured!"
+        $count=$count+1    
+    fi
 
-if ! [[ "$balance" =~ ^[0-9]+$ ]]; then
-    echo "Something is wrong! Can't find the balance of first account in bor network."
-    exit 1
-fi
+    checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
 
-echo "Found matic balance on account[0]: " $balance
+    if [ $checkpointID == "null" ]; then
+        echo "Checkpoint didn't arrive yet! Waiting..."
+        #exit 1
+    else
+        echo "Found checkpoint ID:" $checkpointID
+        $count=$count+1
+    fi
 
-if (( $balance <= $balanceInit )); then
-    echo "Balance in bor network has not increased. This indicates that something is wrong with state sync."
-    exit 1
-fi
+    if [ $count -eq 2 ]; then
+        break
+    fi    
 
-checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
-
-if [ $checkpointID == "null" ]; then
-    echo "Something is wrong! Could not find any checkpoint."
-    exit 1
-else
-    echo "Found checkpoint ID:" $checkpointID
-fi
-
+done
 echo "All tests have passed!"
