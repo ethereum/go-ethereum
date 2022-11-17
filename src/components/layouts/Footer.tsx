@@ -82,7 +82,7 @@ export const Footer: FC = () => {
             }}
             borderColor='brand.light.primary !important'
             _hover={{
-              bg: 'brand.light.primary',
+              bg: 'brand.light.primary'
             }}
             alignItems='center'
             p={4}
@@ -91,10 +91,10 @@ export const Footer: FC = () => {
               <Link isExternal>
                 <TwitterIcon
                   w={8}
-                  height={8} 
+                  height={8}
                   _groupHover={{
                     svg: {
-                      path:{fill: 'yellow.50 !important'}
+                      path: { fill: 'yellow.50 !important' }
                     }
                   }}
                 />
@@ -106,7 +106,7 @@ export const Footer: FC = () => {
             data-group
             flex={1}
             _hover={{
-              bg: 'brand.light.primary',
+              bg: 'brand.light.primary'
             }}
             alignItems='center'
             borderWidth='2px'
@@ -118,10 +118,10 @@ export const Footer: FC = () => {
               <Link isExternal>
                 <DiscordIcon
                   w={8}
-                  height={8} 
+                  height={8}
                   _groupHover={{
                     svg: {
-                      path:{fill: 'yellow.50 !important'}
+                      path: { fill: 'yellow.50 !important' }
                     }
                   }}
                 />
@@ -133,7 +133,7 @@ export const Footer: FC = () => {
             data-group
             flex={1}
             _hover={{
-              bg: 'brand.light.primary',
+              bg: 'brand.light.primary'
             }}
             alignItems='center'
             p={4}
@@ -142,10 +142,10 @@ export const Footer: FC = () => {
               <Link isExternal>
                 <GitHubIcon
                   w={7}
-                  height={7} 
+                  height={7}
                   _groupHover={{
                     svg: {
-                      path:{fill: 'yellow.50 !important'}
+                      path: { fill: 'yellow.50 !important' }
                     }
                   }}
                 />

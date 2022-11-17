@@ -1,21 +1,11 @@
-import {
-  Box,
-  Center,
-  Button,
-  Grid,
-  Image,
-  Link,
-  Stack,
-  HStack,
-  Text
-} from '@chakra-ui/react';
+import { Box, Center, Button, Grid, Image, Link, Stack, HStack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
 import { DOWNLOAD_HEADER_BUTTONS } from '../../../constants';
 
 interface DownloadsHero {
-  currentBuildName: string;
+  currentBuild: string;
   currentBuildVersion: string;
   linuxBuildURL: string;
   macOSBuildURL: string;
@@ -25,7 +15,7 @@ interface DownloadsHero {
 }
 
 export const DownloadsHero: FC<DownloadsHero> = ({
-  currentBuildName,
+  currentBuild,
   currentBuildVersion,
   linuxBuildURL,
   macOSBuildURL,
@@ -62,9 +52,9 @@ export const DownloadsHero: FC<DownloadsHero> = ({
               // TODO: move text style to theme
               fontFamily='"JetBrains Mono", monospace'
               lineHeight='21px'
-              mb={{base: '4 !important', md: '8 !important'}}
+              mb={{ base: '4 !important', md: '8 !important' }}
             >
-              {currentBuildName} ({currentBuildVersion})
+              {currentBuild}
             </Text>
 
             <Text mb={4}>
@@ -80,7 +70,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             px={{ base: 8 }}
             flex={{ base: 'none' }}
             display={{ base: 'block', lg: 'none' }}
-            order={{base: -1, md: 1}}
+            order={{ base: -1, md: 1 }}
           >
             <Center>
               <Image
@@ -120,14 +110,12 @@ export const DownloadsHero: FC<DownloadsHero> = ({
 
         <Box textAlign={'center'}>
           <Link href={releaseNotesURL} isExternal variant='light'>
-            Release notes for {currentBuildName} {currentBuildVersion}
+            Release notes for {currentBuild}
           </Link>
         </Box>
       </Stack>
 
-      <Center
-        display={{ base: 'none', lg: 'flex' }}
-      >
+      <Center display={{ base: 'none', lg: 'flex' }}>
         <Image
           src='/images/pages/gopher-downloads-front-light.svg'
           alt='Gopher plugged in'
