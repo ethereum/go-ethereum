@@ -97,6 +97,7 @@ type batchCallBuffer struct {
 	mutex   sync.Mutex
 	calls   []*jsonrpcMessage
 	answers []*jsonrpcMessage
+	wrote   bool
 }
 
 func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
@@ -143,11 +144,15 @@ func (b *batchCallBuffer) commit(ctx context.Context, conn jsonWriter) {
 
 // write assumes mutex is held.
 func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
+	if b.wrote {
+		return
+	}
 	if len(b.answers) > 0 {
 		conn.writeJSON(ctx, b.answers)
 	}
 	// Prevent double write by normal path after a timeout.
 	b.answers = nil
+	b.wrote = true
 }
 
 func computeTimeout(deadline time.Time) time.Duration {
