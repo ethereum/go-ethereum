@@ -154,7 +154,7 @@ jobs:
             cd matic-cli/devnet/code/contracts
             npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
             cd -
-            bash bor/integration-tests/smoke_test.sh
+            timeout 20m bash bor/integration-tests/smoke_test.sh
 
         - name: Upload logs
           if: always()
