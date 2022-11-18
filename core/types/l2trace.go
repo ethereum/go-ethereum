@@ -21,9 +21,11 @@ var (
 	}
 )
 
-// BlockResult contains block execution traces and results required for rollers.
-type BlockResult struct {
-	BlockTrace       *BlockTrace        `json:"blockTrace"`
+// BlockTrace contains block execution traces and results required for rollers.
+type BlockTrace struct {
+	Coinbase         *AccountWrapper    `json:"coinbase"`
+	Header           *Header            `json:"header"`
+	Transactions     []*TransactionData `json:"transactions"`
 	StorageTrace     *StorageTrace      `json:"storageTrace"`
 	ExecutionResults []*ExecutionResult `json:"executionResults"`
 	MPTWitness       *json.RawMessage   `json:"mptwitness,omitempty"`

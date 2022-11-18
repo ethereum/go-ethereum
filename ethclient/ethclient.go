@@ -325,21 +325,21 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 	return ec.c.EthSubscribe(ctx, ch, "newHeads")
 }
 
-// GetBlockResultByHash returns the BlockResult given the block hash.
-func (ec *Client) GetBlockResultByHash(ctx context.Context, blockHash common.Hash) (*types.BlockResult, error) {
-	blockResult := &types.BlockResult{}
-	return blockResult, ec.c.CallContext(ctx, &blockResult, "scroll_getBlockResultByNumberOrHash", blockHash)
+// GetBlockTraceByHash returns the BlockTrace given the block hash.
+func (ec *Client) GetBlockTraceByHash(ctx context.Context, blockHash common.Hash) (*types.BlockTrace, error) {
+	blockTrace := &types.BlockTrace{}
+	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getBlockTraceByNumberOrHash", blockHash)
 }
 
-// GetBlockResultByNumber returns the BlockResult given the block number.
-func (ec *Client) GetBlockResultByNumber(ctx context.Context, number *big.Int) (*types.BlockResult, error) {
-	blockResult := &types.BlockResult{}
-	return blockResult, ec.c.CallContext(ctx, &blockResult, "scroll_getBlockResultByNumberOrHash", toBlockNumArg(number))
+// GetBlockTraceByNumber returns the BlockTrace given the block number.
+func (ec *Client) GetBlockTraceByNumber(ctx context.Context, number *big.Int) (*types.BlockTrace, error) {
+	blockTrace := &types.BlockTrace{}
+	return blockTrace, ec.c.CallContext(ctx, &blockTrace, "scroll_getBlockTraceByNumberOrHash", toBlockNumArg(number))
 }
 
-// SubscribeNewBlockResult subscribes to block execution trace when a new block is created.
-func (ec *Client) SubscribeNewBlockResult(ctx context.Context, ch chan<- *types.BlockResult) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "newBlockResult")
+// SubscribeNewBlockTrace subscribes to block execution trace when a new block is created.
+func (ec *Client) SubscribeNewBlockTrace(ctx context.Context, ch chan<- *types.BlockTrace) (ethereum.Subscription, error) {
+	return ec.c.EthSubscribe(ctx, ch, "newBlockTrace")
 }
 
 // State Access
