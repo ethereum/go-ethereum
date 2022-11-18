@@ -259,6 +259,8 @@ func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 	dec.UseNumber()
 	encoder := func(v any) error {
 		err := enc.Encode(v)
+		// In case of a timeout error, the response must be written before the HTTP server's write
+		// timeout occurs. So we need to flush the response here.
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
