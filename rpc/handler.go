@@ -106,7 +106,7 @@ func (b *batchCallBuffer) timeout(ctx context.Context, conn jsonWriter) {
 
 	for _, msg := range b.calls {
 		if !msg.isNotification() {
-			b.answers = append(b.answers, msg.errorResponse(&timeoutError{}))
+			b.answers = append(b.answers, msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout}))
 		}
 	}
 
@@ -235,7 +235,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 			timer = time.AfterFunc(computeTimeout(deadline), func() {
 				cancel()
 				responded.Do(func() {
-					h.conn.writeJSON(ctx, msg.errorResponse(&timeoutError{}))
+					h.conn.writeJSON(ctx, msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout}))
 				})
 			})
 		}

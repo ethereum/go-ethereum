@@ -60,8 +60,13 @@ var (
 const (
 	errcodeDefault                  = -32000
 	errcodeNotificationsUnsupported = -32001
+	errcodeTimeout                  = -32002
 	errcodePanic                    = -32603
 	errcodeMarshalError             = -32603
+)
+
+const (
+	errMsgTimeout = "request timed out"
 )
 
 type methodNotFoundError struct{ method string }
@@ -117,10 +122,3 @@ type internalServerError struct {
 func (e *internalServerError) ErrorCode() int { return e.code }
 
 func (e *internalServerError) Error() string { return e.message }
-
-// timeout reached
-type timeoutError struct{}
-
-func (e *timeoutError) ErrorCode() int { return 408 }
-
-func (e *timeoutError) Error() string { return "request timed out" }
