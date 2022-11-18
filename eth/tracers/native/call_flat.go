@@ -18,7 +18,6 @@ package native
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -195,51 +194,36 @@ func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
 
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
-	r, err := t.tracer.GetResult()
-	if err != nil {
-		return nil, err
-	}
-	// raw := (*json.RawMessage)(&r)
-	// input := new(callFrame)
-	// if err := json.Unmarshal(*raw, &input); err != nil {
-	// 	// fmt.Errorf("failed to unmarshal trace result: %v", err)
-	// 	return nil, err
-	// }
-
-	// raw, err := r.MarshalJSON()
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	input := new(callFrame)
-	err = json.Unmarshal(r, &input)
+	traceResultJson, err := t.tracer.GetResult()
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("TypeString", input.Type)
-	// fmt.Println("input", vm.OpCode(input.Type).String())
+	traceResult := new(callFrame)
+	err = json.Unmarshal(traceResultJson, &traceResult)
+	if err != nil {
+		return nil, err
+	}
 
-	// old, _ := json.MarshalIndent(input, "", " ")
-	// fmt.Println("old:", string(old))
+	// not so nice way to read the TypeString from the json
+	traceResultMarshaled := new(callFrameMarshaling)
+	err = json.Unmarshal(traceResultJson, &traceResultMarshaled)
+	if err != nil {
+		return nil, err
+	}
 
-	// // r := input.(callFrame)
+	traceResult.Type = vm.StringToOp(traceResultMarshaled.TypeString)
 
-	// // out := new([]flatCallFrame)
-	// flat, err := t.processOutput(input, []int{})
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// have, _ := json.MarshalIndent(flat, "", " ")
-	// fmt.Println("have:", string(have))
+	flat, err := t.processOutput(traceResult, []int{})
+	if err != nil {
+		return nil, err
+	}
 
-	// res, err := json.Marshal(flat)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	return json.RawMessage(r), t.reason
-	// fmt.Println("res:", err, res)
-	// return r, nil
+	res, err := json.Marshal(flat)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(res), t.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
