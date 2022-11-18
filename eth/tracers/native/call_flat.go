@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,10 +18,9 @@ package native
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"math/big"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,30 +29,32 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
-var parityErrorMapping = map[string]string{
-	"contract creation code storage out of gas": "Out of gas",
-	"out of gas":                      "Out of gas",
-	"gas uint64 overflow":             "Out of gas",
-	"max code size exceeded":          "Out of gas",
-	"invalid jump destination":        "Bad jump destination",
-	"execution reverted":              "Reverted",
-	"return data out of bounds":       "Out of bounds",
-	"stack limit reached 1024 (1023)": "Out of stack",
-	"precompiled failed":              "Built-in failed",
-	"invalid input length":            "Built-in failed",
-}
-
-var parityErrorMappingStartingWith = map[string]string{
-	"invalid opcode:": "Bad instruction",
-	"stack underflow": "Stack underflow",
-}
+// go:generate go run github.com/fjl/gencodec -type flatCallFrame -field-override flatCallFrameMarshaling -out gen_flatcallframe_json.go
 
 func init() {
 	register("flatCallTracer", newFlatCallTracer)
 }
 
+// var parityErrorMapping = map[string]string{
+// 	"contract creation code storage out of gas": "Out of gas",
+// 	"out of gas":                      "Out of gas",
+// 	"gas uint64 overflow":             "Out of gas",
+// 	"max code size exceeded":          "Out of gas",
+// 	"invalid jump destination":        "Bad jump destination",
+// 	"execution reverted":              "Reverted",
+// 	"return data out of bounds":       "Out of bounds",
+// 	"stack limit reached 1024 (1023)": "Out of stack",
+// 	"precompiled failed":              "Built-in failed",
+// 	"invalid input length":            "Built-in failed",
+// }
+
+// var parityErrorMappingStartingWith = map[string]string{
+// 	"invalid opcode:": "Bad instruction",
+// 	"stack underflow": "Stack underflow",
+// }
+
 // callParityFrame is the result of a callParityTracerParity run.
-type callParityFrame struct {
+type flatCallFrame struct {
 	Action              CallTraceParityAction  `json:"action"`
 	BlockHash           *common.Hash           `json:"blockHash"`
 	BlockNumber         uint64                 `json:"blockNumber"`
@@ -67,31 +68,26 @@ type callParityFrame struct {
 	Calls               []callParityFrame      `json:"-"`
 }
 
-type CallTraceParityAction struct {
-	Author         *common.Address `json:"author,omitempty"`
-	RewardType     *string         `json:"rewardType,omitempty"`
-	SelfDestructed *common.Address `json:"address,omitempty"`
-	Balance        *hexutil.Big    `json:"balance,omitempty"`
-	CallType       string          `json:"callType,omitempty"`
-	CreationMethod string          `json:"creationMethod,omitempty"`
-	From           *common.Address `json:"from,omitempty"`
-	Gas            *hexutil.Uint64 `json:"gas,omitempty"`
-	Init           *hexutil.Bytes  `json:"init,omitempty"`
-	Input          *hexutil.Bytes  `json:"input,omitempty"`
-	RefundAddress  *common.Address `json:"refundAddress,omitempty"`
-	To             *common.Address `json:"to,omitempty"`
-	Value          *hexutil.Big    `json:"value,omitempty"`
-}
+// type flatCallFrameMarshaling struct {
+// 	Action              CallTraceParityAction `json:"action"`
+// 	BlockHash           *common.Hash          `json:"-"`
+// 	BlockNumber         uint64                `json:"-"`
+// 	Error               string                `json:"error,omitempty"`
+// 	Result              CallTraceParityResult `json:"result,omitempty"`
+// 	Subtraces           int                   `json:"subtraces"`
+// 	TraceAddress        []int                 `json:"traceAddress"`
+// 	TransactionHash     *common.Hash          `json:"-"`
+// 	TransactionPosition *uint64               `json:"-"`
+// 	Type                string                `json:"type"`
+// 	Time                string                `json:"-"`
+// }
 
-type CallTraceParityResult struct {
-	Address *common.Address `json:"address,omitempty"`
-	Code    *hexutil.Bytes  `json:"code,omitempty"`
-	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
-	Output  *hexutil.Bytes  `json:"output,omitempty"`
-}
-type callParityTracer struct {
+// flatCallTracer is a go implementation of the Tracer interface which
+// runs multiple tracers in one go.
+type flatCallTracer struct {
+	tracer            tracers.Tracer
 	env               *vm.EVM
-	config            callTracerConfig
+	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
 	callstack         []callParityFrame
 	interrupt         uint32           // Atomic flag to signal execution interruption
@@ -99,35 +95,259 @@ type callParityTracer struct {
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
 
-func (t *callParityTracer) CaptureTxStart(gasLimit uint64) {}
+type flatCallTracerConfig struct {
+	// OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
+	// WithLog     bool `json:"withLog"`     // If true, call tracer will collect event logs
+}
 
-func (t *callParityTracer) CaptureTxEnd(restGas uint64) {}
-
-// NewCallParityTracer returns a native go tracer which tracks
-// call frames of a tx, and implements vm.EVMLogger.
+// newFlatCallTracer returns a new mux tracer.
 func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
-	var config callTracerConfig
+	var config flatCallTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, err
 		}
 	}
-	// First callframe contains tx context info
-	// and is populated on start and end.
-	return &callParityTracer{callstack: make([]callParityFrame, 1), config: config}, nil
+
+	tracer, err := tracers.New("callTracer", ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &flatCallTracer{tracer: tracer, ctx: ctx, config: config}, nil
 }
 
-// isPrecompiled returns whether the addr is a precompile. Logic borrowed from newJsTracer in eth/tracers/js/tracer.go
-func (t *callParityTracer) isPrecompiled(addr common.Address) bool {
-	for _, p := range t.activePrecompiles {
-		if p == addr {
-			return true
+// CaptureStart implements the EVMLogger interface to initialize the tracing operation.
+func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.tracer.CaptureStart(env, from, to, create, input, gas, value)
+}
+
+// CaptureEnd is called after the call finishes to finalize the tracing.
+func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, elapsed time.Duration, err error) {
+	t.tracer.CaptureEnd(output, gasUsed, elapsed, err)
+}
+
+// CaptureState implements the EVMLogger interface to trace a single step of VM execution.
+func (t *flatCallTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	t.tracer.CaptureState(pc, op, gas, cost, scope, rData, depth, err)
+}
+
+// CaptureFault implements the EVMLogger interface to trace an execution fault.
+func (t *flatCallTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+	t.tracer.CaptureFault(pc, op, gas, cost, scope, depth, err)
+}
+
+// CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
+func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.tracer.CaptureEnter(typ, from, to, input, gas, value)
+}
+
+// CaptureExit is called when EVM exits a scope, even if the scope didn't
+// execute any code.
+func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	t.tracer.CaptureExit(output, gasUsed, err)
+}
+
+func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {
+	t.tracer.CaptureTxStart(gasLimit)
+}
+
+func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
+	t.tracer.CaptureTxEnd(restGas)
+}
+
+// GetResult returns an empty json object.
+func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
+	r, err := t.tracer.GetResult()
+	if err != nil {
+		return nil, err
+	}
+	// raw := (*json.RawMessage)(&r)
+	// input := new(callFrame)
+	// if err := json.Unmarshal(*raw, &input); err != nil {
+	// 	// fmt.Errorf("failed to unmarshal trace result: %v", err)
+	// 	return nil, err
+	// }
+
+	// raw, err := r.MarshalJSON()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	input := new(callFrame)
+	err = json.Unmarshal(r, &input)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("TypeString", input.Type)
+	// fmt.Println("input", vm.OpCode(input.Type).String())
+
+	// old, _ := json.MarshalIndent(input, "", " ")
+	// fmt.Println("old:", string(old))
+
+	// // r := input.(callFrame)
+
+	// // out := new([]flatCallFrame)
+	// flat, err := t.processOutput(input, []int{})
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// have, _ := json.MarshalIndent(flat, "", " ")
+	// fmt.Println("have:", string(have))
+
+	// res, err := json.Marshal(flat)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	return json.RawMessage(r), t.reason
+	// fmt.Println("res:", err, res)
+	// return r, nil
+}
+
+// Stop terminates execution of the tracer at the first opportune moment.
+func (t *flatCallTracer) Stop(err error) {
+	t.tracer.Stop(err)
+}
+
+func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (output []flatCallFrame, err error) {
+	// fmt.Println("input:", input)
+	// finalize: function(call, extraCtx, traceAddress) {
+	// 	var data;
+	// 	if (call.type == "CREATE" || call.type == "CREATE2") {
+	// 		data = this.createResult(call);
+
+	// 		// update after callResult so as it affects only the root type
+	// 		call.type = "CREATE";
+	// 	} else if (call.type == "SELFDESTRUCT") {
+	// 		call.type = "SUICIDE";
+	// 		data = this.suicideResult(call);
+	// 	} else {
+	// 		data = this.callResult(call);
+
+	// 		// update after callResult so as it affects only the root type
+	// 		if (call.type == "CALLCODE" || call.type == "DELEGATECALL" || call.type == "STATICCALL") {
+	// 			call.type = "CALL";
+	// 		}
+	// 	}
+
+	// 	traceAddress = traceAddress || [];
+	// 	var sorted = {
+	// 		type: call.type.toLowerCase(),
+	// 		action: data.action,
+	// 		result: data.result,
+	// 		error: call.error,
+	// 		traceAddress: traceAddress,
+	// 		subtraces: 0,
+	// 		transactionPosition: extraCtx.transactionPosition,
+	// 		transactionHash: extraCtx.transactionHash,
+	// 		blockNumber: extraCtx.blockNumber,
+	// 		blockHash: extraCtx.blockHash,
+	// 		time: call.time,
+	// 	}
+
+	gasHex := hexutil.Uint64(input.Gas)
+	gasUsedHex := hexutil.Uint64(input.GasUsed)
+	valueHex := hexutil.Big{}
+	if input.Value != nil {
+		valueHex = hexutil.Big(*input.Value)
+	}
+
+	frame := flatCallFrame{
+		Action: CallTraceParityAction{
+			From:  &input.From,
+			Gas:   &gasHex,
+			Value: &valueHex,
+		},
+		Result: &CallTraceParityResult{
+			GasUsed: &gasUsedHex,
+		},
+		// Action: input.Action,
+		Error: input.Error,
+		// Result: input.Result,
+		// Subtraces:    input.Subtraces,
+		TraceAddress: traceAddress,
+		// Type: strings.ToLower(input.Type.String()),
+	}
+
+	// typ := vm.StringToOp(strings.ToUpper(call.Type))
+	if input.Type == vm.CREATE || input.Type == vm.CREATE2 {
+		t.formatCreateResult(&frame, input)
+	} else if input.Type == vm.SELFDESTRUCT {
+		t.formatSuicideResult(&frame, input)
+	} else {
+		t.formatCallResult(&frame, input)
+	}
+
+	t.fillCallFrameFromContext(&frame)
+
+	output = append(output, frame)
+	// 	if (sorted.error !== undefined) {
+	// 		if (this.parityErrorMapping.hasOwnProperty(sorted.error)) {
+	// 			sorted.error = this.parityErrorMapping[sorted.error];
+	// 			delete sorted.result;
+	// 		} else {
+	// 			for (var searchKey in this.parityErrorMappingStartingWith) {
+	// 				if (this.parityErrorMappingStartingWith.hasOwnProperty(searchKey) && sorted.error.indexOf(searchKey) > -1) {
+	// 					sorted.error = this.parityErrorMappingStartingWith[searchKey];
+	// 					delete sorted.result;
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+
+	frame.Subtraces = len(input.Calls)
+
+	if len(input.Calls) > 0 {
+		for i, childCall := range input.Calls {
+			traceAddress = append(traceAddress, i)
+			flat, err := t.processOutput(&childCall, traceAddress)
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, flat...)
 		}
 	}
-	return false
+
+	// 	var calls = call.calls;
+	// 	if (calls !== undefined) {
+	// 		sorted["subtraces"] = calls.length;
+	// 	}
+
+	// 	var results = [sorted];
+
+	// 	if (calls !== undefined) {
+	// 		for (var i=0; i<calls.length; i++) {
+	// 			var childCall = calls[i];
+
+	// 			// Delegatecall uses the value from parent
+	// 			if ((childCall.type == "DELEGATECALL" || childCall.type == "STATICCALL") && typeof childCall.value === "undefined") {
+	// 				childCall.value = call.value;
+	// 			}
+
+	// 			results = results.concat(this.finalize(childCall, extraCtx, traceAddress.concat([i])));
+	// 		}
+	// 	}
+	// 	return results;
+	// },
+
+	// output = append(output, flatCallFrame{
+	// 	// Action:              input.Action,
+	// 	// BlockHash:           input.BlockHash,
+	// 	// BlockNumber:         input.BlockNumber,
+	// 	// Error:               input.Error,
+	// 	// Result:              input.Result,
+	// 	// Subtraces:           input.Subtraces,
+	// 	// TraceAddress:        input.TraceAddress,
+	// 	// TransactionHash:     input.TransactionHash,
+	// 	// TransactionPosition: input.TransactionPosition,
+	// 	Type: strings.ToLower(input.Type.String()),
+	// })
+
+	return output, nil
 }
 
-func (t *callParityTracer) fillCallFrameFromContext(callFrame *callParityFrame) {
+func (t *flatCallTracer) fillCallFrameFromContext(callFrame *flatCallFrame) {
 	if t.ctx != nil {
 		if t.ctx.BlockHash != (common.Hash{}) {
 			callFrame.BlockHash = &t.ctx.BlockHash
@@ -140,210 +360,16 @@ func (t *callParityTracer) fillCallFrameFromContext(callFrame *callParityFrame) 
 	}
 }
 
-func (t *callParityTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
-
-	// Skip any pre-compile invocations, those are just fancy opcodes
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
-
-	inputHex := hexutil.Bytes(common.CopyBytes(input))
-	gasHex := hexutil.Uint64(gas)
-
-	t.callstack[0] = callParityFrame{
-		Type: strings.ToLower(vm.CALL.String()),
-		Action: CallTraceParityAction{
-			From:  &from,
-			To:    &to,
-			Input: &inputHex,
-			Gas:   &gasHex,
-		},
-		Result:      &CallTraceParityResult{},
-		BlockNumber: env.Context.BlockNumber.Uint64(),
-	}
-	if value != nil {
-		valueHex := hexutil.Big(*value)
-		t.callstack[0].Action.Value = &valueHex
-	}
-	if create {
-		t.callstack[0].Type = strings.ToLower(vm.CREATE.String())
-	}
-
-	t.fillCallFrameFromContext(&t.callstack[0])
-}
-
-func (t *callParityTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	if err != nil {
-		t.callstack[0].Error = err.Error()
-		if err.Error() == "execution reverted" && len(output) > 0 {
-			outputHex := hexutil.Bytes(common.CopyBytes(output))
-			t.callstack[0].Result.Output = &outputHex
-		}
-	} else {
-		// TODO (ziogaschr): move back outside of if, makes sense to have it always. Is addition, no API breaks
-		gasUsedHex := hexutil.Uint64(gasUsed)
-		t.callstack[0].Result.GasUsed = &gasUsedHex
-
-		outputHex := hexutil.Bytes(common.CopyBytes(output))
-		t.callstack[0].Result.Output = &outputHex
-	}
-}
-
-func (t *callParityTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-}
-
-func (t *callParityTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
-}
-
-func (t *callParityTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	// Skip if tracing was interrupted
-	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
-		return
-	}
-
-	inputHex := hexutil.Bytes(common.CopyBytes(input))
-	gasHex := hexutil.Uint64(gas)
-
-	call := callParityFrame{
-		Type: strings.ToLower(typ.String()),
-		Action: CallTraceParityAction{
-			From:  &from,
-			To:    &to,
-			Input: &inputHex,
-			Gas:   &gasHex,
-		},
-		Result:      &CallTraceParityResult{},
-		BlockNumber: t.callstack[0].BlockNumber,
-	}
-	valueHex := hexutil.Big{}
-	if value != nil {
-		valueHex = hexutil.Big(*value)
-	}
-	call.Action.Value = &valueHex
-
-	t.fillCallFrameFromContext(&call)
-
-	t.callstack = append(t.callstack, call)
-}
-
-func (t *callParityTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
-	size := len(t.callstack)
-	if size <= 1 {
-		return
-	}
-	// pop call
-	call := t.callstack[size-1]
-	t.callstack = t.callstack[:size-1]
-	size -= 1
-
-	// Skip any pre-compile invocations, those are just fancy opcodes
-	// NOTE: let them captured on `CaptureEnter` method so as we handle internal txs state correctly
-	//			 and drop them here, as it has been removed from the callstack
-	typ := vm.StringToOp(strings.ToUpper(call.Type))
-	if t.isPrecompiled(*call.Action.To) && (typ == vm.CALL || typ == vm.STATICCALL) {
-		return
-	}
-
-	gasUsedHex := hexutil.Uint64(gasUsed)
-	call.Result.GasUsed = &gasUsedHex
-	if err == nil {
-		outputHex := hexutil.Bytes(common.CopyBytes(output))
-		call.Result.Output = &outputHex
-	} else {
-		call.Error = err.Error()
-		typ := vm.StringToOp(strings.ToUpper(call.Type))
-		if typ == vm.CREATE || typ == vm.CREATE2 {
-			call.Action.To = nil
-		}
-	}
-	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
-}
-
-func (t *callParityTracer) Finalize(call callParityFrame, traceAddress []int) ([]callParityFrame, error) {
-	typ := vm.StringToOp(strings.ToUpper(call.Type))
-	if typ == vm.CREATE || typ == vm.CREATE2 {
-		t.formatCreateResult(&call)
-	} else if typ == vm.SELFDESTRUCT {
-		t.formatSuicideResult(&call)
-	} else {
-		t.formatCallResult(&call)
-	}
-
-	// for _, errorContains := range paritySkipTracesForErrors {
-	// 	if strings.Contains(call.Error, errorContains) {
-	// 		return
-	// 	}
-	// }
-
-	t.convertErrorToParity(&call)
-
-	if subtraces := len(call.Calls); subtraces > 0 {
-		call.Subtraces = subtraces
-	}
-
-	call.TraceAddress = traceAddress
-
-	results := []callParityFrame{call}
-
-	for i := 0; i < len(call.Calls); i++ {
-		childCall := call.Calls[i]
-
-		var childTraceAddress []int
-		childTraceAddress = append(childTraceAddress, traceAddress...)
-		childTraceAddress = append(childTraceAddress, i)
-
-		// Delegatecall uses the value from parent, if zero
-		childCallType := vm.StringToOp(strings.ToUpper(childCall.Type))
-		if (childCallType == vm.DELEGATECALL) &&
-			(childCall.Action.Value == nil || childCall.Action.Value.ToInt().Cmp(big.NewInt(0)) == 0) {
-			childCall.Action.Value = call.Action.Value
-		}
-
-		child, err := t.Finalize(childCall, childTraceAddress)
-		if err != nil {
-			return nil, errors.New("failed to parse trace frame")
-		}
-
-		results = append(results, child...)
-	}
-
-	return results, nil
-}
-
-func (t *callParityTracer) GetResult() (json.RawMessage, error) {
-	if len(t.callstack) != 1 {
-		return nil, errors.New("incorrect number of top-level calls")
-	}
-
-	traceAddress := []int{}
-	result, err := t.Finalize(t.callstack[0], traceAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(res), t.reason
-}
-
-func (t *callParityTracer) Stop(err error) {
-	t.reason = err
-	atomic.StoreUint32(&t.interrupt, 1)
-}
-
-func (t *callParityTracer) formatCreateResult(call *callParityFrame) {
+func (t *flatCallTracer) formatCreateResult(call *flatCallFrame, input *callFrame) {
 	call.Type = strings.ToLower(vm.CREATE.String())
 
-	input := call.Action.Input
-	call.Action.Init = input
+	init := hexutil.Bytes(input.Input[:])
+	call.Action.Init = &init
 
-	to := call.Action.To
-	call.Result.Address = to
+	call.Result.Address = &input.To
 
-	call.Result.Code = call.Result.Output
+	code := hexutil.Bytes(input.Output[:])
+	call.Result.Code = &code
 
 	call.Action.To = nil
 	call.Action.Input = nil
@@ -351,30 +377,27 @@ func (t *callParityTracer) formatCreateResult(call *callParityFrame) {
 	call.Result.Output = nil
 }
 
-func (t *callParityTracer) formatCallResult(call *callParityFrame) {
-	call.Action.CallType = call.Type
-
-	typ := vm.StringToOp(strings.ToUpper(call.Type))
+func (t *flatCallTracer) formatCallResult(call *flatCallFrame, input *callFrame) {
+	call.Action.CallType = strings.ToLower(input.Type.String())
 
 	// update after callResult so as it affects only the root type
-	if typ == vm.CALLCODE || typ == vm.DELEGATECALL || typ == vm.STATICCALL {
+	if input.Type == vm.CALLCODE || input.Type == vm.DELEGATECALL || input.Type == vm.STATICCALL {
 		call.Type = strings.ToLower(vm.CALL.String())
 	}
 }
 
-func (t *callParityTracer) formatSuicideResult(call *callParityFrame) {
+func (t *flatCallTracer) formatSuicideResult(call *flatCallFrame, input *callFrame) {
+	// this is using the old opcode, in order we maintain parity compatibility
 	call.Type = "suicide"
 
-	addrFrom := call.Action.From
-	call.Action.SelfDestructed = addrFrom
+	call.Action.SelfDestructed = &input.From
 
-	balanceHex := *call.Action.Value
+	balanceHex := hexutil.Big(*input.Value)
 	call.Action.Balance = &balanceHex
 
 	call.Action.Value = nil
 
-	addrTo := call.Action.To
-	call.Action.RefundAddress = addrTo
+	call.Action.RefundAddress = &input.To
 
 	call.Action.From = nil
 	call.Action.To = nil
@@ -384,7 +407,7 @@ func (t *callParityTracer) formatSuicideResult(call *callParityFrame) {
 	call.Result = nil
 }
 
-func (t *callParityTracer) convertErrorToParity(call *callParityFrame) {
+func (t *flatCallTracer) convertErrorToParity(call *callParityFrame) {
 	if call.Error == "" {
 		return
 	}
