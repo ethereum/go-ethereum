@@ -18,16 +18,20 @@ do
         exit 1
     fi
 
-    if (( $balance > $balanceInit )) && [ $stateSyncFound != "true" ]; then
-        stateSyncTime=$(( SECONDS - start_time ))
-        stateSyncFound="true"   
+    if (( $balance > $balanceInit )); then
+        if [ $stateSyncFound != "true" ]; then 
+            stateSyncTime=$(( SECONDS - start_time ))
+            stateSyncFound="true" 
+        fi      
     fi
 
     checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
 
-    if [ $checkpointID != "null" ] && [ $checkpointFound != "true"]; then
-        checkpointTime=$(( SECONDS - start_time ))
-        checkpointFound="true"
+    if [ $checkpointID != "null" ]; then
+        if [ $checkpointFound != "true" ]; then
+            checkpointTime=$(( SECONDS - start_time ))
+            checkpointFound="true"
+        fi    
     fi
 
     if [ $stateSyncFound == "true" ]  && [ $checkpointFound == "true" ]; then
