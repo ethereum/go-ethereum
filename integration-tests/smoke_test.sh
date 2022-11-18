@@ -16,21 +16,13 @@ do
         exit 1
     fi
 
-    echo "Found matic balance on account[0]: " $balance
-
-    if (( $balance <= $balanceInit )); then
-        echo "Balance in bor network has not increased. Waiting for state sync..."
-    else
-        echo "State Sync occured!"
+    if (( $balance > $balanceInit )); then
         stateSyncFound="true"   
     fi
 
     checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
 
-    if [ $checkpointID == "null" ]; then
-        echo "Checkpoint didn't arrive yet! Waiting..."
-    else
-        echo "Found checkpoint ID:" $checkpointID
+    if [ $checkpointID != "null" ]; then
         checkpointFound="true"
     fi
 
@@ -39,4 +31,4 @@ do
     fi    
 
 done
-echo "All tests have passed!"
+echo "Both state sync and checkpoint went through. All tests have passed!"
