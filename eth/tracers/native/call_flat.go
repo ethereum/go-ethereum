@@ -35,23 +35,23 @@ func init() {
 	register("flatCallTracer", newFlatCallTracer)
 }
 
-// var parityErrorMapping = map[string]string{
-// 	"contract creation code storage out of gas": "Out of gas",
-// 	"out of gas":                      "Out of gas",
-// 	"gas uint64 overflow":             "Out of gas",
-// 	"max code size exceeded":          "Out of gas",
-// 	"invalid jump destination":        "Bad jump destination",
-// 	"execution reverted":              "Reverted",
-// 	"return data out of bounds":       "Out of bounds",
-// 	"stack limit reached 1024 (1023)": "Out of stack",
-// 	"precompiled failed":              "Built-in failed",
-// 	"invalid input length":            "Built-in failed",
-// }
+var parityErrorMapping = map[string]string{
+	"contract creation code storage out of gas": "Out of gas",
+	"out of gas":                      "Out of gas",
+	"gas uint64 overflow":             "Out of gas",
+	"max code size exceeded":          "Out of gas",
+	"invalid jump destination":        "Bad jump destination",
+	"execution reverted":              "Reverted",
+	"return data out of bounds":       "Out of bounds",
+	"stack limit reached 1024 (1023)": "Out of stack",
+	"precompiled failed":              "Built-in failed",
+	"invalid input length":            "Built-in failed",
+}
 
-// var parityErrorMappingStartingWith = map[string]string{
-// 	"invalid opcode:": "Bad instruction",
-// 	"stack underflow": "Stack underflow",
-// }
+var parityErrorMappingStartingWith = map[string]string{
+	"invalid opcode:": "Bad instruction",
+	"stack underflow": "Stack underflow",
+}
 
 // callParityFrame is the result of a callParityTracerParity run.
 type flatCallFrame struct {
@@ -66,6 +66,43 @@ type flatCallFrame struct {
 	TransactionPosition *uint64                `json:"transactionPosition"`
 	Type                string                 `json:"type"`
 	Calls               []callParityFrame      `json:"-"`
+}
+
+// callParityFrame is the result of a callParityTracerParity run.
+type callParityFrame struct {
+	Action              CallTraceParityAction  `json:"action"`
+	BlockHash           *common.Hash           `json:"blockHash"`
+	BlockNumber         uint64                 `json:"blockNumber"`
+	Error               string                 `json:"error,omitempty"`
+	Result              *CallTraceParityResult `json:"result,omitempty"`
+	Subtraces           int                    `json:"subtraces"`
+	TraceAddress        []int                  `json:"traceAddress"`
+	TransactionHash     *common.Hash           `json:"transactionHash"`
+	TransactionPosition *uint64                `json:"transactionPosition"`
+	Type                string                 `json:"type"`
+	Calls               []callParityFrame      `json:"-"`
+}
+type CallTraceParityAction struct {
+	Author         *common.Address `json:"author,omitempty"`
+	RewardType     *string         `json:"rewardType,omitempty"`
+	SelfDestructed *common.Address `json:"address,omitempty"`
+	Balance        *hexutil.Big    `json:"balance,omitempty"`
+	CallType       string          `json:"callType,omitempty"`
+	CreationMethod string          `json:"creationMethod,omitempty"`
+	From           *common.Address `json:"from,omitempty"`
+	Gas            *hexutil.Uint64 `json:"gas,omitempty"`
+	Init           *hexutil.Bytes  `json:"init,omitempty"`
+	Input          *hexutil.Bytes  `json:"input,omitempty"`
+	RefundAddress  *common.Address `json:"refundAddress,omitempty"`
+	To             *common.Address `json:"to,omitempty"`
+	Value          *hexutil.Big    `json:"value,omitempty"`
+}
+
+type CallTraceParityResult struct {
+	Address *common.Address `json:"address,omitempty"`
+	Code    *hexutil.Bytes  `json:"code,omitempty"`
+	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
+	Output  *hexutil.Bytes  `json:"output,omitempty"`
 }
 
 // type flatCallFrameMarshaling struct {
