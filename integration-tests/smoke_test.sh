@@ -5,6 +5,8 @@ balanceInit=$(docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec
 
 stateSyncFound="false"
 checkpointFound="false"
+SECONDS=0
+start_time=$SECONDS
 
 while true
 do
@@ -17,12 +19,14 @@ do
     fi
 
     if (( $balance > $balanceInit )); then
+        stateSyncTime=$(( SECONDS - start_time ))
         stateSyncFound="true"   
     fi
 
     checkpointID=$(curl -sL http://localhost:1317/checkpoints/latest | jq .result.id)
 
     if [ $checkpointID != "null" ]; then
+        checkpointTime=$(( SECONDS - start_time ))
         checkpointFound="true"
     fi
 
@@ -32,3 +36,5 @@ do
 
 done
 echo "Both state sync and checkpoint went through. All tests have passed!"
+echo "Time taken for state sync: $(printf '%02dm:%02ds\n'  $(($stateSyncTime%3600/60)) $(($stateSyncTime%60)))"
+echo "Time taken for checkpoint: $(printf '%02dm:%02ds\n'  $(($checkpointTime%3600/60)) $(($checkpointTime%60)))"
