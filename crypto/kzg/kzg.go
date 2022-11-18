@@ -8,6 +8,7 @@ package kzg
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/protolambda/go-kzg/bls"
-	"github.com/protolambda/ztyp/codec"
 )
 
 const (
@@ -157,6 +157,10 @@ func BytesToBLSField(h [32]byte) *bls.Fr {
 func ComputeAggregatedPolyAndCommitment(blobs Polynomials, commitments KZGCommitmentSequence) ([]bls.Fr, *bls.G1Point, *bls.Fr, error) {
 	// create challenges
 	r, err := HashToBLSField(blobs, commitments)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	powers := ComputePowers(r, len(blobs))
 	if len(powers) == 0 {
 		return nil, nil, nil, errors.New("powers can't be 0 length")
@@ -238,20 +242,23 @@ func EvaluatePolynomialInEvaluationForm(poly []bls.Fr, x *bls.Fr) *bls.Fr {
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/eip4844/polynomial-commitments.md#hash_to_bls_field
 func HashToBLSField(polys Polynomials, comms KZGCommitmentSequence) (*bls.Fr, error) {
 	sha := sha256.New()
-	w := codec.NewEncodingWriter(sha)
-	if err := w.Write([]byte(FIAT_SHAMIR_PROTOCOL_DOMAIN)); err != nil {
+
+	_, err := sha.Write([]byte(FIAT_SHAMIR_PROTOCOL_DOMAIN))
+	if err != nil {
 		return nil, err
 	}
-	if err := w.WriteUint64(params.FieldElementsPerBlob); err != nil {
-		return nil, err
-	}
-	if err := w.WriteUint64(uint64(len(polys))); err != nil {
-		return nil, err
-	}
+
+	bytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytes, uint64(params.FieldElementsPerBlob))
+
+	bytes = make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytes, uint64(len(polys)))
+
 	for _, poly := range polys {
 		for _, fe := range poly {
 			b32 := bls.FrTo32(&fe)
-			if err := w.Write(b32[:]); err != nil {
+			_, err := sha.Write(b32[:])
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -259,7 +266,8 @@ func HashToBLSField(polys Polynomials, comms KZGCommitmentSequence) (*bls.Fr, er
 	l := comms.Len()
 	for i := 0; i < l; i++ {
 		c := comms.At(i)
-		if err := w.Write(c[:]); err != nil {
+		_, err := sha.Write(c[:])
+		if err != nil {
 			return nil, err
 		}
 	}
