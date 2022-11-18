@@ -250,9 +250,17 @@ func HashToBLSField(polys Polynomials, comms KZGCommitmentSequence) (*bls.Fr, er
 
 	bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, uint64(params.FieldElementsPerBlob))
+	_, err = sha.Write(bytes)
+	if err != nil {
+		return nil, err
+	}
 
 	bytes = make([]byte, 8)
 	binary.LittleEndian.PutUint64(bytes, uint64(len(polys)))
+	_, err = sha.Write(bytes)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, poly := range polys {
 		for _, fe := range poly {
