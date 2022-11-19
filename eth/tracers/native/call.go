@@ -275,15 +275,6 @@ func (t *callTracer) Stop(err error) {
 	atomic.StoreUint32(&t.interrupt, 1)
 }
 
-// GetData returns the internal data nested list of call traces
-func (t *callTracer) GetData() (*callFrame, error) {
-	if len(t.callstack) != 1 {
-		return nil, errors.New("incorrect number of top-level calls")
-	}
-
-	return &t.callstack[0], t.reason
-}
-
 // clearFailedLogs clears the logs of a callframe and all its children
 // in case of execution failure.
 func clearFailedLogs(cf *callFrame, parentFailed bool) {
