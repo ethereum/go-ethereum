@@ -24,37 +24,37 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
-// callTraceParity is the result of a callTracerParity run.
-type callTraceParity struct {
-	Action              native.CallTraceParityAction `json:"action"`
-	BlockHash           *common.Hash                 `json:"-"`
-	BlockNumber         uint64                       `json:"-"`
-	Error               string                       `json:"error,omitempty"`
-	Result              native.CallTraceParityResult `json:"result,omitempty"`
-	Subtraces           int                          `json:"subtraces"`
-	TraceAddress        []int                        `json:"traceAddress"`
-	TransactionHash     *common.Hash                 `json:"-"`
-	TransactionPosition *uint64                      `json:"-"`
-	Type                string                       `json:"type"`
-	Time                string                       `json:"-"`
+// flatCallTrace is the result of a callTracerParity run.
+type flatCallTrace struct {
+	Action              native.FlatCallTraceAction `json:"action"`
+	BlockHash           *common.Hash               `json:"-"`
+	BlockNumber         uint64                     `json:"-"`
+	Error               string                     `json:"error,omitempty"`
+	Result              native.FlatCallTraceResult `json:"result,omitempty"`
+	Subtraces           int                        `json:"subtraces"`
+	TraceAddress        []int                      `json:"traceAddress"`
+	TransactionHash     *common.Hash               `json:"-"`
+	TransactionPosition *uint64                    `json:"-"`
+	Type                string                     `json:"type"`
+	Time                string                     `json:"-"`
 }
 
-// callTracerParityTest defines a single test to check the call tracer against.
-type callTracerParityTest struct {
-	Genesis      *core.Genesis      `json:"genesis"`
-	Context      *callContext       `json:"context"`
-	Input        string             `json:"input"`
-	TracerConfig json.RawMessage    `json:"tracerConfig"`
-	Result       *[]callTraceParity `json:"result"`
+// flatCallTracerTest defines a single test to check the call tracer against.
+type flatCallTracerTest struct {
+	Genesis      *core.Genesis    `json:"genesis"`
+	Context      *callContext     `json:"context"`
+	Input        string           `json:"input"`
+	TracerConfig json.RawMessage  `json:"tracerConfig"`
+	Result       *[]flatCallTrace `json:"result"`
 }
 
-func callTracerParityTestRunner(tracerName string, filename string, dirPath string, t testing.TB) error {
+func flatCallTracerTestRunner(tracerName string, filename string, dirPath string, t testing.TB) error {
 	// Call tracer test found, read if from disk
 	blob, err := ioutil.ReadFile(filepath.Join("testdata", dirPath, filename))
 	if err != nil {
 		return fmt.Errorf("failed to read testcase: %v", err)
 	}
-	test := new(callTracerParityTest)
+	test := new(flatCallTracerTest)
 	if err := json.Unmarshal(blob, test); err != nil {
 		return fmt.Errorf("failed to parse testcase: %v", err)
 	}
@@ -80,6 +80,12 @@ func callTracerParityTestRunner(tracerName string, filename string, dirPath stri
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 
+	// txctx := &tracers.Context{
+	// 	BlockHash: blockHash,
+	// 	TxIndex:   task.index,
+	// 	TxHash:    txs[task.index].Hash(),
+	// }
+
 	// Create the tracer, the EVM environment and run it
 	tracer, err := tracers.New(tracerName, new(tracers.Context), test.TracerConfig)
 	if err != nil {
@@ -102,18 +108,18 @@ func callTracerParityTestRunner(tracerName string, filename string, dirPath stri
 	if err != nil {
 		return fmt.Errorf("failed to retrieve trace result: %v", err)
 	}
-	ret := new([]callTraceParity)
+	ret := new([]flatCallTrace)
 	if err := json.Unmarshal(res, ret); err != nil {
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
 
-	if !jsonEqualParity(ret, test.Result) {
+	if !jsonEqualFlat(ret, test.Result) {
 		t.Logf("tracer name: %s", tracerName)
 
 		// uncomment this for easier debugging
-		// have, _ := json.MarshalIndent(ret, "", " ")
-		// want, _ := json.MarshalIndent(test.Result, "", " ")
-		// t.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
+		have, _ := json.MarshalIndent(ret, "", " ")
+		want, _ := json.MarshalIndent(test.Result, "", " ")
+		t.Logf("trace mismatch: \nhave %+v\nwant %+v", string(have), string(want))
 
 		// uncomment this for harder debugging <3 meowsbits
 		lines := deep.Equal(ret, test.Result)
@@ -128,11 +134,11 @@ func callTracerParityTestRunner(tracerName string, filename string, dirPath stri
 
 // Iterates over all the input-output datasets in the tracer parity test harness and
 // runs the Native tracer against them.
-func TestCallTracerParityNative(t *testing.T) {
-	testCallTracerParity("flatCallTracer", "call_tracer_flat", t)
+func TestFlatCallTracerNative(t *testing.T) {
+	testFlatCallTracer("flatCallTracer", "call_tracer_flat", t)
 }
 
-func testCallTracerParity(tracerName string, dirPath string, t *testing.T) {
+func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := ioutil.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -145,7 +151,7 @@ func testCallTracerParity(tracerName string, dirPath string, t *testing.T) {
 		t.Run(camel(strings.TrimSuffix(file.Name(), ".json")), func(t *testing.T) {
 			t.Parallel()
 
-			err := callTracerParityTestRunner(tracerName, file.Name(), dirPath, t)
+			err := flatCallTracerTestRunner(tracerName, file.Name(), dirPath, t)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -155,9 +161,9 @@ func testCallTracerParity(tracerName string, dirPath string, t *testing.T) {
 
 // jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
 // comparison
-func jsonEqualParity(x, y interface{}) bool {
-	xTrace := new([]callTraceParity)
-	yTrace := new([]callTraceParity)
+func jsonEqualFlat(x, y interface{}) bool {
+	xTrace := new([]flatCallTrace)
+	yTrace := new([]flatCallTrace)
 	if xj, err := json.Marshal(x); err == nil {
 		json.Unmarshal(xj, xTrace)
 	} else {
@@ -171,17 +177,17 @@ func jsonEqualParity(x, y interface{}) bool {
 	return reflect.DeepEqual(xTrace, yTrace)
 }
 
-func BenchmarkCallTracerParity(b *testing.B) {
-	files, err := filepath.Glob("testdata/call_tracer_parity/*.json")
+func BenchmarkFlatCallTracer(b *testing.B) {
+	files, err := filepath.Glob("testdata/call_tracer_flat/*.json")
 	if err != nil {
 		b.Fatalf("failed to read testdata: %v", err)
 	}
 
 	for _, file := range files {
-		filename := strings.TrimPrefix(file, "testdata/call_tracer_parity/")
+		filename := strings.TrimPrefix(file, "testdata/call_tracer_flat/")
 		b.Run(camel(strings.TrimSuffix(filename, ".json")), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
-				err := callTracerParityTestRunner("callTracerParity", filename, "call_tracer_parity", b)
+				err := flatCallTracerTestRunner("flatCallTracer", filename, "call_tracer_flat", b)
 				if err != nil {
 					b.Fatal(err)
 				}

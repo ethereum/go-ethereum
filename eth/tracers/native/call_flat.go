@@ -28,8 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
-// go:generate go run github.com/fjl/gencodec -type flatCallFrame -field-override flatCallFrameMarshaling -out gen_flatcallframe_json.go
-
 func init() {
 	register("flatCallTracer", newFlatCallTracer)
 }
@@ -54,34 +52,34 @@ var parityErrorMappingStartingWith = map[string]string{
 
 // callParityFrame is the result of a callParityTracerParity run.
 type flatCallFrame struct {
-	Action              CallTraceParityAction  `json:"action"`
-	BlockHash           *common.Hash           `json:"blockHash"`
-	BlockNumber         uint64                 `json:"blockNumber"`
-	Error               string                 `json:"error,omitempty"`
-	Result              *CallTraceParityResult `json:"result,omitempty"`
-	Subtraces           int                    `json:"subtraces"`
-	TraceAddress        []int                  `json:"traceAddress"`
-	TransactionHash     *common.Hash           `json:"transactionHash"`
-	TransactionPosition *uint64                `json:"transactionPosition"`
-	Type                string                 `json:"type"`
-	Calls               []callParityFrame      `json:"-"`
+	Action              FlatCallTraceAction  `json:"action"`
+	BlockHash           *common.Hash         `json:"blockHash"`
+	BlockNumber         uint64               `json:"blockNumber"`
+	Error               string               `json:"error,omitempty"`
+	Result              *FlatCallTraceResult `json:"result,omitempty"`
+	Subtraces           int                  `json:"subtraces"`
+	TraceAddress        []int                `json:"traceAddress"`
+	TransactionHash     *common.Hash         `json:"transactionHash"`
+	TransactionPosition *uint64              `json:"transactionPosition"`
+	Type                string               `json:"type"`
+	Calls               []callParityFrame    `json:"-"`
 }
 
 // callParityFrame is the result of a callParityTracerParity run.
 type callParityFrame struct {
-	Action              CallTraceParityAction  `json:"action"`
-	BlockHash           *common.Hash           `json:"blockHash"`
-	BlockNumber         uint64                 `json:"blockNumber"`
-	Error               string                 `json:"error,omitempty"`
-	Result              *CallTraceParityResult `json:"result,omitempty"`
-	Subtraces           int                    `json:"subtraces"`
-	TraceAddress        []int                  `json:"traceAddress"`
-	TransactionHash     *common.Hash           `json:"transactionHash"`
-	TransactionPosition *uint64                `json:"transactionPosition"`
-	Type                string                 `json:"type"`
-	Calls               []callParityFrame      `json:"-"`
+	Action              FlatCallTraceAction  `json:"action"`
+	BlockHash           *common.Hash         `json:"blockHash"`
+	BlockNumber         uint64               `json:"blockNumber"`
+	Error               string               `json:"error,omitempty"`
+	Result              *FlatCallTraceResult `json:"result,omitempty"`
+	Subtraces           int                  `json:"subtraces"`
+	TraceAddress        []int                `json:"traceAddress"`
+	TransactionHash     *common.Hash         `json:"transactionHash"`
+	TransactionPosition *uint64              `json:"transactionPosition"`
+	Type                string               `json:"type"`
+	Calls               []callParityFrame    `json:"-"`
 }
-type CallTraceParityAction struct {
+type FlatCallTraceAction struct {
 	Author         *common.Address `json:"author,omitempty"`
 	RewardType     *string         `json:"rewardType,omitempty"`
 	SelfDestructed *common.Address `json:"address,omitempty"`
@@ -97,43 +95,28 @@ type CallTraceParityAction struct {
 	Value          *hexutil.Big    `json:"value,omitempty"`
 }
 
-type CallTraceParityResult struct {
+type FlatCallTraceResult struct {
 	Address *common.Address `json:"address,omitempty"`
 	Code    *hexutil.Bytes  `json:"code,omitempty"`
 	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
 	Output  *hexutil.Bytes  `json:"output,omitempty"`
 }
 
-// type flatCallFrameMarshaling struct {
-// 	Action              CallTraceParityAction `json:"action"`
-// 	BlockHash           *common.Hash          `json:"-"`
-// 	BlockNumber         uint64                `json:"-"`
-// 	Error               string                `json:"error,omitempty"`
-// 	Result              CallTraceParityResult `json:"result,omitempty"`
-// 	Subtraces           int                   `json:"subtraces"`
-// 	TraceAddress        []int                 `json:"traceAddress"`
-// 	TransactionHash     *common.Hash          `json:"-"`
-// 	TransactionPosition *uint64               `json:"-"`
-// 	Type                string                `json:"type"`
-// 	Time                string                `json:"-"`
-// }
-
 // flatCallTracer is a go implementation of the Tracer interface which
 // runs multiple tracers in one go.
 type flatCallTracer struct {
-	tracer            tracers.Tracer
-	env               *vm.EVM
-	config            flatCallTracerConfig
-	ctx               *tracers.Context // Holds tracer context data
-	callstack         []callParityFrame
-	interrupt         uint32           // Atomic flag to signal execution interruption
-	reason            error            // Textual reason for the interruption
-	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
+	tracer tracers.Tracer
+	// env    *vm.EVM
+	config flatCallTracerConfig
+	ctx    *tracers.Context // Holds tracer context data
+	// callstack         []callParityFrame
+	// interrupt         uint32           // Atomic flag to signal execution interruption
+	reason error // Textual reason for the interruption
+	// activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
 
 type flatCallTracerConfig struct {
-	// OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
-	// WithLog     bool `json:"withLog"`     // If true, call tracer will collect event logs
+	ConvertedParityErrors bool `json:"convertedParityErrors"` // If true, call tracer converts errors to parity format
 }
 
 // newFlatCallTracer returns a new mux tracer.
@@ -205,15 +188,6 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 		return nil, err
 	}
 
-	// not so nice way to read the TypeString from the json
-	traceResultMarshaled := new(callFrameMarshaling)
-	err = json.Unmarshal(traceResultJson, &traceResultMarshaled)
-	if err != nil {
-		return nil, err
-	}
-
-	traceResult.Type = vm.StringToOp(traceResultMarshaled.TypeString)
-
 	flat, err := t.processOutput(traceResult, []int{})
 	if err != nil {
 		return nil, err
@@ -232,41 +206,6 @@ func (t *flatCallTracer) Stop(err error) {
 }
 
 func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (output []flatCallFrame, err error) {
-	// fmt.Println("input:", input)
-	// finalize: function(call, extraCtx, traceAddress) {
-	// 	var data;
-	// 	if (call.type == "CREATE" || call.type == "CREATE2") {
-	// 		data = this.createResult(call);
-
-	// 		// update after callResult so as it affects only the root type
-	// 		call.type = "CREATE";
-	// 	} else if (call.type == "SELFDESTRUCT") {
-	// 		call.type = "SUICIDE";
-	// 		data = this.suicideResult(call);
-	// 	} else {
-	// 		data = this.callResult(call);
-
-	// 		// update after callResult so as it affects only the root type
-	// 		if (call.type == "CALLCODE" || call.type == "DELEGATECALL" || call.type == "STATICCALL") {
-	// 			call.type = "CALL";
-	// 		}
-	// 	}
-
-	// 	traceAddress = traceAddress || [];
-	// 	var sorted = {
-	// 		type: call.type.toLowerCase(),
-	// 		action: data.action,
-	// 		result: data.result,
-	// 		error: call.error,
-	// 		traceAddress: traceAddress,
-	// 		subtraces: 0,
-	// 		transactionPosition: extraCtx.transactionPosition,
-	// 		transactionHash: extraCtx.transactionHash,
-	// 		blockNumber: extraCtx.blockNumber,
-	// 		blockHash: extraCtx.blockHash,
-	// 		time: call.time,
-	// 	}
-
 	gasHex := hexutil.Uint64(input.Gas)
 	gasUsedHex := hexutil.Uint64(input.GasUsed)
 	valueHex := hexutil.Big{}
@@ -275,20 +214,18 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 	}
 
 	frame := flatCallFrame{
-		Action: CallTraceParityAction{
+		Type: strings.ToLower(input.Type.String()),
+		Action: FlatCallTraceAction{
 			From:  &input.From,
+			To:    &input.To,
 			Gas:   &gasHex,
 			Value: &valueHex,
 		},
-		Result: &CallTraceParityResult{
+		Result: &FlatCallTraceResult{
 			GasUsed: &gasUsedHex,
 		},
-		// Action: input.Action,
-		Error: input.Error,
-		// Result: input.Result,
-		// Subtraces:    input.Subtraces,
+		Error:        input.Error,
 		TraceAddress: traceAddress,
-		// Type: strings.ToLower(input.Type.String()),
 	}
 
 	// typ := vm.StringToOp(strings.ToUpper(call.Type))
@@ -302,22 +239,13 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 
 	t.fillCallFrameFromContext(&frame)
 
-	output = append(output, frame)
-	// 	if (sorted.error !== undefined) {
-	// 		if (this.parityErrorMapping.hasOwnProperty(sorted.error)) {
-	// 			sorted.error = this.parityErrorMapping[sorted.error];
-	// 			delete sorted.result;
-	// 		} else {
-	// 			for (var searchKey in this.parityErrorMappingStartingWith) {
-	// 				if (this.parityErrorMappingStartingWith.hasOwnProperty(searchKey) && sorted.error.indexOf(searchKey) > -1) {
-	// 					sorted.error = this.parityErrorMappingStartingWith[searchKey];
-	// 					delete sorted.result;
-	// 				}
-	// 			}
-	// 		}
-	// 	}
+	if t.config.ConvertedParityErrors {
+		t.convertErrorToParity(&frame)
+	}
 
 	frame.Subtraces = len(input.Calls)
+
+	output = append(output, frame)
 
 	if len(input.Calls) > 0 {
 		for i, childCall := range input.Calls {
@@ -329,41 +257,6 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 			output = append(output, flat...)
 		}
 	}
-
-	// 	var calls = call.calls;
-	// 	if (calls !== undefined) {
-	// 		sorted["subtraces"] = calls.length;
-	// 	}
-
-	// 	var results = [sorted];
-
-	// 	if (calls !== undefined) {
-	// 		for (var i=0; i<calls.length; i++) {
-	// 			var childCall = calls[i];
-
-	// 			// Delegatecall uses the value from parent
-	// 			if ((childCall.type == "DELEGATECALL" || childCall.type == "STATICCALL") && typeof childCall.value === "undefined") {
-	// 				childCall.value = call.value;
-	// 			}
-
-	// 			results = results.concat(this.finalize(childCall, extraCtx, traceAddress.concat([i])));
-	// 		}
-	// 	}
-	// 	return results;
-	// },
-
-	// output = append(output, flatCallFrame{
-	// 	// Action:              input.Action,
-	// 	// BlockHash:           input.BlockHash,
-	// 	// BlockNumber:         input.BlockNumber,
-	// 	// Error:               input.Error,
-	// 	// Result:              input.Result,
-	// 	// Subtraces:           input.Subtraces,
-	// 	// TraceAddress:        input.TraceAddress,
-	// 	// TransactionHash:     input.TransactionHash,
-	// 	// TransactionPosition: input.TransactionPosition,
-	// 	Type: strings.ToLower(input.Type.String()),
-	// })
 
 	return output, nil
 }
@@ -405,6 +298,12 @@ func (t *flatCallTracer) formatCallResult(call *flatCallFrame, input *callFrame)
 	if input.Type == vm.CALLCODE || input.Type == vm.DELEGATECALL || input.Type == vm.STATICCALL {
 		call.Type = strings.ToLower(vm.CALL.String())
 	}
+
+	actionInput := hexutil.Bytes(input.Input[:])
+	call.Action.Input = &actionInput
+
+	resultOutput := hexutil.Bytes(input.Output[:])
+	call.Result.Output = &resultOutput
 }
 
 func (t *flatCallTracer) formatSuicideResult(call *flatCallFrame, input *callFrame) {
@@ -428,7 +327,7 @@ func (t *flatCallTracer) formatSuicideResult(call *flatCallFrame, input *callFra
 	call.Result = nil
 }
 
-func (t *flatCallTracer) convertErrorToParity(call *callParityFrame) {
+func (t *flatCallTracer) convertErrorToParity(call *flatCallFrame) {
 	if call.Error == "" {
 		return
 	}
