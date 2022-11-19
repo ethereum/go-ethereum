@@ -101,7 +101,7 @@ func (c stringOpCode) MarshalText() ([]byte, error) {
 }
 
 func (c *stringOpCode) UnmarshalJSON(input []byte) error {
-	code := vm.StringToOp(string(input))
+	code := vm.StringToOp(string(input[1 : len(input)-1]))
 	*c = stringOpCode(code)
 	return nil
 }
