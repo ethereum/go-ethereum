@@ -55,6 +55,7 @@ type callLog struct {
 
 // callTrace is the result of a callTracer run.
 type callTrace struct {
+	Type     string          `json:"type"`
 	From     common.Address  `json:"from"`
 	Gas      *hexutil.Uint64 `json:"gas"`
 	GasUsed  *hexutil.Uint64 `json:"gasUsed"`
@@ -66,8 +67,6 @@ type callTrace struct {
 	Calls    []callTrace     `json:"calls,omitempty"`
 	Logs     []callLog       `json:"logs,omitempty"`
 	Value    *hexutil.Big    `json:"value,omitempty"`
-	// Gencodec adds overridden fields at the end
-	Type string `json:"type"`
 }
 
 // callTracerTest defines a single test to check the call tracer against.

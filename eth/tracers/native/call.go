@@ -43,7 +43,7 @@ type callLog struct {
 }
 
 type callFrame struct {
-	Type     vm.OpCode      `json:"-"`
+	Type     vm.OpCode      `json:"type"`
 	From     common.Address `json:"from"`
 	Gas      uint64         `json:"gas"`
 	GasUsed  uint64         `json:"gasUsed"`
@@ -89,13 +89,30 @@ func (f *callFrame) processOutput(output []byte, err error) {
 	}
 }
 
+// stringOpCode is being used to marshal/unmarshal OpCode to/from string which is used by gencodec
+type stringOpCode vm.OpCode
+
+func (c stringOpCode) String() string {
+	return vm.OpCode(c).String()
+}
+
+func (c stringOpCode) MarshalText() ([]byte, error) {
+	return []byte(c.String()), nil
+}
+
+func (c *stringOpCode) UnmarshalJSON(input []byte) error {
+	code := vm.StringToOp(string(input))
+	*c = stringOpCode(code)
+	return nil
+}
+
 type callFrameMarshaling struct {
-	TypeString string `json:"type"`
-	Gas        hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Value      *hexutil.Big
-	Input      hexutil.Bytes
-	Output     hexutil.Bytes
+	Type    stringOpCode `json:"type"`
+	Gas     hexutil.Uint64
+	GasUsed hexutil.Uint64
+	Value   *hexutil.Big
+	Input   hexutil.Bytes
+	Output  hexutil.Bytes
 }
 
 type callTracer struct {
@@ -244,6 +261,10 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
+
+	// resI, err := json.MarshalIndent(t.callstack[0], "", "  ")
+	// fmt.Println("resI:", string(resI))
+
 	res, err := json.Marshal(t.callstack[0])
 	if err != nil {
 		return nil, err
@@ -255,6 +276,15 @@ func (t *callTracer) GetResult() (json.RawMessage, error) {
 func (t *callTracer) Stop(err error) {
 	t.reason = err
 	atomic.StoreUint32(&t.interrupt, 1)
+}
+
+// GetData returns the internal data nested list of call traces
+func (t *callTracer) GetData() (*callFrame, error) {
+	if len(t.callstack) != 1 {
+		return nil, errors.New("incorrect number of top-level calls")
+	}
+
+	return &t.callstack[0], t.reason
 }
 
 // clearFailedLogs clears the logs of a callframe and all its children
