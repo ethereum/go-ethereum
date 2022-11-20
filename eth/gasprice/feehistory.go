@@ -56,7 +56,12 @@ type blockFees struct {
 	err     error
 }
 
-// processedFees contains the results of a processed block and is also used for caching
+type cacheKey struct {
+	number      uint64
+	percentiles string
+}
+
+// processedFees contains the results of a processed block.
 type processedFees struct {
 	reward               []*big.Int
 	baseFee, nextBaseFee *big.Int
@@ -270,13 +275,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks int, unresolvedLast
 					oracle.processBlock(fees, rewardPercentiles)
 					results <- fees
 				} else {
-					cacheKey := struct {
-						number      uint64
-						percentiles string
-					}{blockNumber, string(percentileKey)}
+					cacheKey := cacheKey{number: blockNumber, percentiles: string(percentileKey)}
 
 					if p, ok := oracle.historyCache.Get(cacheKey); ok {
-						fees.results = p.(processedFees)
+						fees.results = p
 						results <- fees
 					} else {
 						if len(rewardPercentiles) != 0 {
