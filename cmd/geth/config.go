@@ -18,15 +18,12 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"gopkg.in/urfave/cli.v1"
-
-	"github.com/BurntSushi/toml"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
