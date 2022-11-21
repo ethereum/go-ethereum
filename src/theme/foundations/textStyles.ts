@@ -1,6 +1,6 @@
 export const textStyles = {
   h1: {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     fontSize: '2.75rem',
     lineHeight: '3.375rem',
@@ -8,7 +8,7 @@ export const textStyles = {
     color: 'body'
   },
   h2: {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 400,
     fontSize: '1.5rem',
     lineHeight: 'auto',
@@ -16,36 +16,36 @@ export const textStyles = {
     color: 'body'
   },
   'header-font': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     fontSize: { base: '0.86rem', sm: '1rem' }
   },
   'homepage-description': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     lineHeight: '21px',
     letterSpacing: '0.05em',
     textAlign: { base: 'center', md: 'left' }
   },
   'homepage-primary-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     color: 'bg',
     fontWeight: 700,
     textTransform: 'uppercase'
   },
   'home-section-link-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
     p: 4
   },
   'quick-link-text': {
-    fontFamily: '"Inter", sans-serif',
+    fontFamily: 'body',
     lineHeight: '26px'
   },
   'quick-link-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -56,28 +56,28 @@ export const textStyles = {
   },
   'hero-text-small': {
     fontSize: '13px',
-    fontFamily: '"Inter", sans-serif'
+    fontFamily: 'body'
   },
   'footer-text': {
-    fontFamily: '"Inter", sans-serif',
+    fontFamily: 'body',
     lineHeight: '22px',
     fontWeight: 400,
     fontSize: '12px'
   },
   'downloads-button-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'md', lg: 'xl' },
     textTransform: 'uppercase'
   },
   'downloads-button-sublabel': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'xs', lg: 'sm' },
     textTransform: 'uppercase'
   },
   'download-tab-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
