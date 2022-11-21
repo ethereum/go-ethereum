@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -37,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // StateTest checks transaction processing without block context.
@@ -217,15 +218,16 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Prepare the EVM.
 	txContext := core.NewEVMTxContext(msg)
-	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
-	context.GetHash = vmTestBlockHash
-	context.BaseFee = baseFee
+	evmContext := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+	evmContext.GetHash = vmTestBlockHash
+	evmContext.BaseFee = baseFee
 	if t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
-		context.Random = &rnd
-		context.Difficulty = big.NewInt(0)
+		evmContext.Random = &rnd
+		evmContext.Difficulty = big.NewInt(0)
 	}
-	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
+
+	evm := vm.NewEVM(evmContext, txContext, statedb, config, vmconfig)
 	// Execute the message.
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool)

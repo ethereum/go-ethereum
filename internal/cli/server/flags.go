@@ -45,7 +45,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "syncmode",
-		Usage:   `Blockchain sync mode ("fast", "full", or "snap")`,
+		Usage:   `Blockchain sync mode (only "full" sync supported)`,
 		Value:   &c.cliConfig.SyncMode,
 		Default: c.cliConfig.SyncMode,
 	})
@@ -62,9 +62,15 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "snapshot",
-		Usage:   `Disables/Enables the snapshot-database mode (default = true)`,
+		Usage:   `Enables the snapshot-database mode (default = true)`,
 		Value:   &c.cliConfig.Snapshot,
 		Default: c.cliConfig.Snapshot,
+	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.logs",
+		Usage:   `Enables bor log retrieval (default = false)`,
+		Value:   &c.cliConfig.BorLogs,
+		Default: c.cliConfig.BorLogs,
 	})
 
 	// heimdall
@@ -299,6 +305,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "Cache",
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "cache.triesinmemory",
+		Usage:   "Number of block states (tries) to keep in memory (default = 128)",
+		Value:   &c.cliConfig.Cache.TriesInMemory,
+		Default: c.cliConfig.Cache.TriesInMemory,
+		Group:   "Cache",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "txlookuplimit",
 		Usage:   "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
 		Value:   &c.cliConfig.Cache.TxLookupLimit,
@@ -350,17 +363,10 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "JsonRPC",
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:    "ws.corsdomain",
-		Usage:   "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value:   &c.cliConfig.JsonRPC.Ws.Cors,
-		Default: c.cliConfig.JsonRPC.Ws.Cors,
-		Group:   "JsonRPC",
-	})
-	f.SliceStringFlag(&flagset.SliceStringFlag{
-		Name:    "ws.vhosts",
-		Usage:   "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value:   &c.cliConfig.JsonRPC.Ws.VHost,
-		Default: c.cliConfig.JsonRPC.Ws.VHost,
+		Name:    "ws.origins",
+		Usage:   "Origins from which to accept websockets requests",
+		Value:   &c.cliConfig.JsonRPC.Ws.Origins,
+		Default: c.cliConfig.JsonRPC.Ws.Origins,
 		Group:   "JsonRPC",
 	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{

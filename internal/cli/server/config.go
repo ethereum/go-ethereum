@@ -62,8 +62,11 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gcmode,optional" toml:"gcmode,optional"`
 
-	// Snapshot disables/enables the snapshot database mode
+	// Snapshot enables the snapshot database mode
 	Snapshot bool `hcl:"snapshot,optional" toml:"snapshot,optional"`
+
+	// BorLogs enables bor log retrieval
+	BorLogs bool `hcl:"bor.logs,optional" toml:"bor.logs,optional"`
 
 	// Ethstats is the address of the ethstats server to send telemetry
 	Ethstats string `hcl:"ethstats,optional" toml:"ethstats,optional"`
@@ -263,6 +266,9 @@ type APIConfig struct {
 
 	// Cors is the list of Cors endpoints
 	Cors []string `hcl:"corsdomain,optional" toml:"corsdomain,optional"`
+
+	// Origins is the list of endpoints to accept requests from (only consumed for websockets)
+	Origins []string `hcl:"origins,optional" toml:"origins,optional"`
 }
 
 type GpoConfig struct {
@@ -361,6 +367,9 @@ type CacheConfig struct {
 
 	// TxLookupLimit sets the maximum number of blocks from head whose tx indices are reserved.
 	TxLookupLimit uint64 `hcl:"txlookuplimit,optional" toml:"txlookuplimit,optional"`
+
+	// Number of block states to keep in memory (default = 128)
+	TriesInMemory uint64 `hcl:"triesinmemory,optional" toml:"triesinmemory,optional"`
 }
 
 type AccountsConfig struct {
@@ -396,7 +405,7 @@ func DefaultConfig() *Config {
 		LogLevel:       "INFO",
 		DataDir:        DefaultDataDir(),
 		P2P: &P2PConfig{
-			MaxPeers:     30,
+			MaxPeers:     50,
 			MaxPendPeers: 50,
 			Bind:         "0.0.0.0",
 			Port:         30303,
@@ -420,6 +429,7 @@ func DefaultConfig() *Config {
 		SyncMode: "full",
 		GcMode:   "full",
 		Snapshot: true,
+		BorLogs:  false,
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
@@ -466,8 +476,7 @@ func DefaultConfig() *Config {
 				Prefix:  "",
 				Host:    "localhost",
 				API:     []string{"net", "web3"},
-				Cors:    []string{"localhost"},
-				VHost:   []string{"localhost"},
+				Origins: []string{"localhost"},
 			},
 			Graphql: &APIConfig{
 				Enabled: false,
@@ -505,6 +514,7 @@ func DefaultConfig() *Config {
 			NoPrefetch:    false,
 			Preimages:     false,
 			TxLookupLimit: 2350000,
+			TriesInMemory: 128,
 		},
 		Accounts: &AccountsConfig{
 			Unlock:              []string{},
@@ -649,6 +659,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.NetworkId = c.chain.NetworkId
 		n.Genesis = c.chain.Genesis
 	}
+
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
@@ -881,6 +892,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		}
 	}
 
+	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
 
 	return &n, nil
@@ -920,7 +932,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		HTTPVirtualHosts:    c.JsonRPC.Http.VHost,
 		HTTPPathPrefix:      c.JsonRPC.Http.Prefix,
 		WSModules:           c.JsonRPC.Ws.API,
-		WSOrigins:           c.JsonRPC.Ws.Cors,
+		WSOrigins:           c.JsonRPC.Ws.Origins,
 		WSPathPrefix:        c.JsonRPC.Ws.Prefix,
 		GraphQLCors:         c.JsonRPC.Graphql.Cors,
 		GraphQLVirtualHosts: c.JsonRPC.Graphql.VHost,

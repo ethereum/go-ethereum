@@ -17,6 +17,7 @@
 package ethash
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
@@ -57,7 +58,11 @@ func TestRemoteNotify(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 	block := types.NewBlockWithHeader(header)
 
-	ethash.Seal(nil, block, nil, nil)
+	err := ethash.Seal(context.Background(), nil, block, nil, nil)
+
+	if err != nil {
+		t.Error("error in sealing block")
+	}
 	select {
 	case work := <-sink:
 		if want := ethash.SealHash(header).Hex(); work[0] != want {
@@ -105,7 +110,11 @@ func TestRemoteNotifyFull(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 	block := types.NewBlockWithHeader(header)
 
-	ethash.Seal(nil, block, nil, nil)
+	err := ethash.Seal(context.Background(), nil, block, nil, nil)
+
+	if err != nil {
+		t.Error("error in sealing block")
+	}
 	select {
 	case work := <-sink:
 		if want := "0x" + strconv.FormatUint(header.Number.Uint64(), 16); work["number"] != want {
@@ -151,7 +160,11 @@ func TestRemoteMultiNotify(t *testing.T) {
 	for i := 0; i < cap(sink); i++ {
 		header := &types.Header{Number: big.NewInt(int64(i)), Difficulty: big.NewInt(100)}
 		block := types.NewBlockWithHeader(header)
-		ethash.Seal(nil, block, results, nil)
+		err := ethash.Seal(context.Background(), nil, block, results, nil)
+
+		if err != nil {
+			t.Error("error in sealing block")
+		}
 	}
 
 	for i := 0; i < cap(sink); i++ {
@@ -167,10 +180,6 @@ func TestRemoteMultiNotify(t *testing.T) {
 // Tests that pushing work packages fast to the miner doesn't cause any data race
 // issues in the notifications. Full pending block body / --miner.notify.full)
 func TestRemoteMultiNotifyFull(t *testing.T) {
-	// TODO: Understand the test case and Identify the reason for failing tests.
-	// Also, make it more deterministic.
-	t.Skip("skipping - non-deterministic test, no dependency on this test for now and not directly relevant to bor")
-
 	// Start a simple web server to capture notifications.
 	sink := make(chan map[string]interface{}, 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -184,6 +193,9 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 		}
 		sink <- work
 	}))
+
+	// Allowing the server to start listening.
+	time.Sleep(2 * time.Second)
 	defer server.Close()
 
 	// Create the custom ethash engine.
@@ -204,7 +216,11 @@ func TestRemoteMultiNotifyFull(t *testing.T) {
 	for i := 0; i < cap(sink); i++ {
 		header := &types.Header{Number: big.NewInt(int64(i)), Difficulty: big.NewInt(100)}
 		block := types.NewBlockWithHeader(header)
-		ethash.Seal(nil, block, results, nil)
+		err := ethash.Seal(context.Background(), nil, block, results, nil)
+
+		if err != nil {
+			t.Error("error in sealing block")
+		}
 	}
 
 	for i := 0; i < cap(sink); i++ {
@@ -270,7 +286,11 @@ func TestStaleSubmission(t *testing.T) {
 
 	for id, c := range testcases {
 		for _, h := range c.headers {
-			ethash.Seal(nil, types.NewBlockWithHeader(h), results, nil)
+			err := ethash.Seal(context.Background(), nil, types.NewBlockWithHeader(h), results, nil)
+
+			if err != nil {
+				t.Error("error in sealing block")
+			}
 		}
 		if res := api.SubmitWork(fakeNonce, ethash.SealHash(c.headers[c.submitIndex]), fakeDigest); res != c.submitRes {
 			t.Errorf("case %d submit result mismatch, want %t, get %t", id+1, c.submitRes, res)

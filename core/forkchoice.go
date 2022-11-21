@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/JekaMas/crand"
+	"github.com/maticnetwork/crand"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"

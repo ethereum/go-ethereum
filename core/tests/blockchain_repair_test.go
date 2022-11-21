@@ -1826,7 +1826,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		sideblocks, _ = core.GenerateChain(params.BorUnittestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, func(i int, b *core.BlockGen) {
 			b.SetCoinbase(testAddress1)
 
-			if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.Sprint) {
+			if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.CalculateSprint(b.Number().Uint64())) {
 				b.SetExtra(back.Genesis.ExtraData)
 			} else {
 				b.SetExtra(make([]byte, 32+crypto.SignatureLength))
@@ -1841,7 +1841,7 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		b.SetCoinbase(miner.TestBankAddress)
 		b.SetDifficulty(big.NewInt(1000000))
 
-		if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.Sprint) {
+		if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.CalculateSprint(b.Number().Uint64())) {
 			b.SetExtra(back.Genesis.ExtraData)
 		} else {
 			b.SetExtra(make([]byte, 32+crypto.SignatureLength))

@@ -16,17 +16,21 @@ The ```bor server``` command runs the Bor client.
 
 - ```config```: File for the config file
 
-- ```syncmode```: Blockchain sync mode ("fast", "full", or "snap")
+- ```syncmode```: Blockchain sync mode (only "full" sync supported)
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive")
 
-- ```requiredblocks```: Comma separated block number-to-hash mappings to enforce (<number>=<hash>)
+- ```eth.requiredblocks```: Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
-- ```snapshot```: Disables/Enables the snapshot-database mode (default = true)
+- ```snapshot```: Enables the snapshot-database mode (default = true)
+
+- ```bor.logs```: Enables bor log retrieval (default = false)
 
 - ```bor.heimdall```: URL of Heimdall service
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose)
+
+- ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
@@ -76,6 +80,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```cache.preimages```: Enable recording the SHA3/keccak preimages of trie keys
 
+- ```cache.triesinmemory```: Number of block states (tries) to keep in memory (default = 128)
+
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
 
 ### JsonRPC Options
@@ -92,9 +98,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
 
-- ```ws.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
-
-- ```ws.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+- ```ws.origins```: Origins from which to accept websockets requests
 
 - ```graphql.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced)
 

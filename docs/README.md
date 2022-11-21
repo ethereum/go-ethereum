@@ -5,18 +5,16 @@
 
 - [Configuration file](./config.md)
 
-## Deprecation notes
+## Additional notes
 
 - The new entrypoint to run the Bor client is ```server```.
 
-```
-$ bor server
-```
+  ```
+  $ bor server <flags>
+  ```
 
-- Toml files to configure nodes are being deprecated. Currently, we only allow for static and trusted nodes to be configured using toml files.
+- Toml files used earlier just to configure static/trusted nodes are being deprecated. Instead, a toml file now can be used instead of flags and can contain all configuration for the node to run. The link to a sample config file is given above. To simply run bor with a configuration file, the following command can be used. 
 
-```
-$ bor server --config ./legacy.toml
-```
-
-- ```Admin```, ```Personal``` and account related endpoints in ```Eth``` are being removed from the JsonRPC interface. Some of this functionality will be moved to the new GRPC server for operational tasks.
+  ```
+  $ bor server --config <path_to_config.toml>
+  ```

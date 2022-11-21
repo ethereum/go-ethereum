@@ -95,7 +95,7 @@ var flagMap = map[string][]string{
 	"override.arrowglacier":            {"notABoolFlag", "No"},
 	"override.terminaltotaldifficulty": {"notABoolFlag", "No"},
 	"verbosity":                        {"notABoolFlag", "YesFV"},
-	"ws.origins":                       {"notABoolFlag", "YesF"},
+	"ws.origins":                       {"notABoolFlag", "No"},
 }
 
 // map from cli flags to corresponding toml tags
@@ -109,8 +109,9 @@ var nameTagMap = map[string]string{
 	"gcmode":                 "gcmode",
 	"eth.requiredblocks":     "eth.requiredblocks",
 	"0-snapshot":             "snapshot",
+	"\"bor.logs\"":           "bor.logs",
 	"url":                    "bor.heimdall",
-	"bor.without":            "bor.withoutheimdall",
+	"\"bor.without\"":        "bor.withoutheimdall",
 	"grpc-address":           "bor.heimdallgRPC",
 	"locals":                 "txpool.locals",
 	"nolocals":               "txpool.nolocals",
@@ -149,8 +150,7 @@ var nameTagMap = map[string]string{
 	"ipcpath":                "ipcpath",
 	"1-corsdomain":           "http.corsdomain",
 	"1-vhosts":               "http.vhosts",
-	"2-corsdomain":           "ws.corsdomain",
-	"2-vhosts":               "ws.vhosts",
+	"origins":                "ws.origins",
 	"3-corsdomain":           "graphql.corsdomain",
 	"3-vhosts":               "graphql.vhosts",
 	"1-enabled":              "http",
@@ -225,12 +225,12 @@ var replacedFlagsMapFlagAndValue = map[string]map[string]map[string]string{
 	},
 }
 
-var replacedFlagsMapFlag = map[string]string{
-	"ws.origins": "ws.corsdomain",
-}
+// Do not remove
+var replacedFlagsMapFlag = map[string]string{}
 
 var currentBoolFlags = []string{
 	"snapshot",
+	"bor.logs",
 	"bor.withoutheimdall",
 	"txpool.nolocals",
 	"mine",

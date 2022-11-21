@@ -3,6 +3,8 @@
 package bor
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -31,7 +34,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
@@ -45,6 +54,8 @@ var (
 	// This account is one the validators for 1st span (0-indexed)
 	key2, _ = crypto.HexToECDSA(privKey2)
 	addr2   = crypto.PubkeyToAddress(key2.PublicKey) // 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
+
+	keys = []*ecdsa.PrivateKey{key, key2}
 )
 
 const (
@@ -63,6 +74,39 @@ const (
 type initializeData struct {
 	genesis  *core.Genesis
 	ethereum *eth.Ethereum
+}
+
+func setupMiner(t *testing.T, n int, genesis *core.Genesis) ([]*node.Node, []*eth.Ethereum, []*enode.Node) {
+	t.Helper()
+
+	// Create an Ethash network based off of the Ropsten config
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
+
+	for i := 0; i < n; i++ {
+		// Start the node and wait until it's up
+		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
+		if err != nil {
+			t.Fatal("Error occured while initialising miner", "error", err)
+		}
+
+		for stack.Server().NodeInfo().Ports.Listener == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+		// Connect the node to all the previous ones
+		for _, n := range enodes {
+			stack.Server().AddPeer(n)
+		}
+		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
+	}
+
+	return stacks, nodes, enodes
 }
 
 func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
@@ -172,8 +216,10 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 		b.addTxWithChain(chain, state, tx, addr)
 	}
 
+	ctx := context.Background()
+
 	// Finalize and seal the block
-	block, _ := _bor.FinalizeAndAssemble(chain, b.header, state, b.txs, nil, b.receipts)
+	block, _ := _bor.FinalizeAndAssemble(ctx, chain, b.header, state, b.txs, nil, b.receipts)
 
 	// Write state changes to db
 	root, err := state.Commit(chain.Config().IsEIP158(b.header.Number))
@@ -187,7 +233,7 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 
 	res := make(chan *types.Block, 1)
 
-	err = _bor.Seal(chain, block, res, nil)
+	err = _bor.Seal(ctx, chain, block, res, nil)
 	if err != nil {
 		// an error case - sign manually
 		sign(t, header, signer, borConfig)
@@ -358,4 +404,96 @@ func IsSprintStart(number uint64) bool {
 
 func IsSprintEnd(number uint64) bool {
 	return (number+1)%sprintSize == 0
+}
+
+func InitGenesis(t *testing.T, faucets []*ecdsa.PrivateKey, fileLocation string, sprintSize uint64) *core.Genesis {
+	t.Helper()
+
+	// sprint size = 8 in genesis
+	genesisData, err := ioutil.ReadFile(fileLocation)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis := &core.Genesis{}
+
+	if err := json.Unmarshal(genesisData, genesis); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genesis.Config.ChainID = big.NewInt(15001)
+	genesis.Config.EIP150Hash = common.Hash{}
+	genesis.Config.Bor.Sprint["0"] = sprintSize
+
+	return genesis
+}
+
+func InitMiner(genesis *core.Genesis, privKey *ecdsa.PrivateKey, withoutHeimdall bool) (*node.Node, *eth.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
+	datadir, _ := ioutil.TempDir("", "")
+
+	config := &node.Config{
+		Name:    "geth",
+		Version: params.Version,
+		DataDir: datadir,
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		},
+		UseLightweightKDF: true,
+	}
+	// Create the node and configure a full Ethereum node on it
+	stack, err := node.New(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
+		Genesis:         genesis,
+		NetworkId:       genesis.Config.ChainID.Uint64(),
+		SyncMode:        downloader.FullSync,
+		DatabaseCache:   256,
+		DatabaseHandles: 256,
+		TxPool:          core.DefaultTxPoolConfig,
+		GPO:             ethconfig.Defaults.GPO,
+		Ethash:          ethconfig.Defaults.Ethash,
+		Miner: miner.Config{
+			Etherbase: crypto.PubkeyToAddress(privKey.PublicKey),
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
+		},
+		WithoutHeimdall: withoutHeimdall,
+	})
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// register backend to account manager with keystore for signing
+	keydir := stack.KeyStoreDir()
+
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	kStore := keystore.NewKeyStore(keydir, n, p)
+
+	_, err = kStore.ImportECDSA(privKey, "")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	acc := kStore.Accounts()[0]
+	err = kStore.Unlock(acc, "")
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// proceed to authorize the local account manager in any case
+	ethBackend.AccountManager().AddBackend(kStore)
+
+	err = stack.Start()
+
+	return stack, ethBackend, err
 }
