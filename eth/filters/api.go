@@ -460,7 +460,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 			return nil, err
 		}
 
-		return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
+		return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), nil
 	}
 
 	return returnLogs(logs), nil
