@@ -197,3 +197,12 @@ func TestParseInteger(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertDataToSlice(t *testing.T) {
+	strSlice := []string{"a", "b", "c"}
+	var it interface{} = strSlice
+	_, err := convertDataToSlice(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
