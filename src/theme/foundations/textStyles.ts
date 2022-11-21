@@ -15,6 +15,50 @@ export const textStyles = {
     letterSpacing: '4%',
     color: 'body'
   },
+  homepageH1: {
+    fontFamily: 'heading',
+    fontWeight: { base: 700, md: 500 },
+    fontSize: { base: '2.75rem', md: '6rem' },
+    outline: '1px solid red',
+    lineHeight: { base: '3.375rem', md: '6rem' }
+  },
+  header1: {
+    fontFamily: 'heading',
+    fontWeight: 700,
+    fontSize: '2.125rem',
+    letterSpacing: '3%',
+    lineHeight: 'auto'
+  },
+  header2: {
+    fontFamily: 'heading',
+    fontSize: '1.75rem',
+    letterSpacing: '4%',
+    lineHeight: 'auto'
+  },
+  header3: {
+    fontFamily: 'heading',
+    fontSize: '1.375rem',
+    letterSpacing: '4%',
+    lineHeight: 'auto'
+  },
+  header4: {
+    fontFamily: 'heading',
+    fontSize: '1.125rem',
+    letterSpacing: '4%',
+    lineHeight: 'auto'
+  },
+  header5: {
+    fontFamily: 'heading',
+    fontSize: '1rem',
+    letterSpacing: '2%',
+    lineHeight: 'auto'
+  },
+  header6: {
+    fontFamily: 'heading',
+    fontSize: '0.875rem',
+    letterSpacing: '2%',
+    lineHeight: 'auto'
+  },
   'header-font': {
     fontFamily: 'heading',
     fontWeight: 700,
