@@ -83,7 +83,7 @@ const Code = ({ className, ...code }: any) => {
   if (className?.startsWith('language-'))
     return (
       <SyntaxHighlighter
-        language='json'
+        language={getProgrammingLanguageName(className)}
         style={isDark ? materialDark : materialLight} // TODO: Update with code light/dark color themes
         customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
       >
