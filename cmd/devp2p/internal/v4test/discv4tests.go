@@ -256,6 +256,7 @@ func WrongPacketType(t *utesting.T) {
 func BondThenPingWithWrongFrom(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
 	defer te.close()
+
 	bond(t, te)
 
 	wrongEndpoint := v4wire.Endpoint{IP: net.ParseIP("192.0.2.0")}
@@ -265,10 +266,25 @@ func BondThenPingWithWrongFrom(t *utesting.T) {
 		To:         te.remoteEndpoint(),
 		Expiration: futureExpiration(),
 	})
-	if reply, _, err := te.read(te.l1); err != nil {
-		t.Fatal(err)
-	} else if err := te.checkPong(reply, pingHash); err != nil {
-		t.Fatal(err)
+
+waitForPong:
+	for {
+		reply, _, err := te.read(te.l1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch reply.Kind() {
+		case v4wire.PongPacket:
+			if err := te.checkPong(reply, pingHash); err != nil {
+				t.Fatal(err)
+			}
+			break waitForPong
+		case v4wire.FindnodePacket:
+			// FINDNODE from the node is acceptable here since the endpoint
+			// verification was performed earlier.
+		default:
+			t.Fatalf("Expected PONG, got %v %v", reply.Name(), reply)
+		}
 	}
 }
 

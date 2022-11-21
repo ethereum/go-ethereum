@@ -67,7 +67,7 @@ func (f callFrame) failed() bool {
 	return len(f.Error) > 0
 }
 
-func (f *callFrame) capture(output []byte, err error) {
+func (f *callFrame) processOutput(output []byte, err error) {
 	output = common.CopyBytes(output)
 	if err == nil {
 		f.Output = output
@@ -99,7 +99,7 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	env       *vm.EVM
+	noopTracer
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
@@ -128,7 +128,6 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	t.env = env
 	t.callstack[0] = callFrame{
 		Type:  vm.CALL,
 		From:  from,
@@ -144,7 +143,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
-	t.callstack[0].capture(output, err)
+	t.callstack[0].processOutput(output, err)
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -155,6 +154,10 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	}
 	// Avoid processing nested calls when only caring about top call
 	if t.config.OnlyTopCall && depth > 0 {
+		return
+	}
+	// Skip if tracing was interrupted
+	if atomic.LoadUint32(&t.interrupt) > 0 {
 		return
 	}
 	switch op {
@@ -179,10 +182,6 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	}
 }
 
-// CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *callTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-}
-
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if t.config.OnlyTopCall {
@@ -190,7 +189,6 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 	}
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
-		t.env.Cancel()
 		return
 	}
 
@@ -221,7 +219,7 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	size -= 1
 
 	call.GasUsed = gasUsed
-	call.capture(output, err)
+	call.processOutput(output, err)
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
