@@ -36,7 +36,7 @@ SyntaxHighlighter.registerLanguage('swift', swift);
 
 const { header1, header2, header3, header4 } = textStyles;
 
-const Table = ({ children }: any) => (
+const MdTable = ({ children }: any) => (
   <Flex maxW='100vw' overflowX='scroll'>
     <Table
       variant='striped'
@@ -160,7 +160,7 @@ const MDXComponents = {
     );
   },
   // tables
-  table: Table,
+  table: MdTable,
   // pre
   pre: ({ children }: any) => {
     return (
