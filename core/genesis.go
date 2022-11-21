@@ -558,6 +558,19 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultBerylbitGenesisBlock returns the Berylbit network genesis block.
+func DefaultBerylbitGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.BerylbitChainConfig,
+		Nonce:      66,
+		ExtraData:  []byte(""),
+		GasLimit:   0x2fefd8,
+		Difficulty: big.NewInt(0x20000),
+		Timestamp:  0,
+		Alloc:      decodePrealloc(berylbitAllocData),
+	}
+}
+
 // DefaultGoerliGenesisBlock returns the Görli network genesis block.
 func DefaultGoerliGenesisBlock() *Genesis {
 	return &Genesis{

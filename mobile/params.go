@@ -51,6 +51,15 @@ func SepoliaGenesis() string {
 }
 
 // RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
+func BerylbitGenesis() string {
+	enc, err := json.Marshal(core.DefaultBerylbitGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
+}
+
+// RinkebyGenesis returns the JSON spec to use for the Rinkeby test network
 func RinkebyGenesis() string {
 	enc, err := json.Marshal(core.DefaultRinkebyGenesisBlock())
 	if err != nil {

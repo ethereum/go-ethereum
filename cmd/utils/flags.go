@@ -145,6 +145,11 @@ var (
 		Usage:    "Rinkeby network: pre-configured proof-of-authority test network",
 		Category: flags.EthCategory,
 	}
+	BerylbitFlag = &cli.BoolFlag{
+		Name:     "berylbit",
+		Usage:    "BerylBit network: pre-configured proof-of-work network",
+		Category: flags.EthCategory,
+	}
 	GoerliFlag = &cli.BoolFlag{
 		Name:     "goerli",
 		Usage:    "Görli network: pre-configured proof-of-authority test network",
@@ -1015,7 +1020,10 @@ var (
 		KilnFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
+	NetworkFlags = append([]cli.Flag{
+		MainnetFlag,
+		BerylbitFlag,
+	}, TestnetFlags...)
 
 	// DatabasePathFlags is the flag group of all database path flags.
 	DatabasePathFlags = []cli.Flag{
@@ -1038,6 +1046,9 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		if ctx.Bool(RinkebyFlag.Name) {
 			return filepath.Join(path, "rinkeby")
+		}
+		if ctx.Bool(BerylbitFlag.Name) {
+			return filepath.Join(path, "berylbit")
 		}
 		if ctx.Bool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
@@ -1099,7 +1110,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	case ctx.Bool(SepoliaFlag.Name):
 		urls = params.SepoliaBootnodes
 	case ctx.Bool(RinkebyFlag.Name):
-		urls = params.RinkebyBootnodes
+		urls = params.RinkebyBootnodes // BERYLBIT TODO :add the berylbit bootnodes here
 	case ctx.Bool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
 	case ctx.Bool(KilnFlag.Name):
@@ -1924,6 +1935,24 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
+	case ctx.Bool(BerylbitFlag.Name):
+		log.Info("")
+		log.Info("--------------------------------------------------------------------------------")
+		log.Info("You are connecting to BerylBit mainnet, the world-class blockchain for")
+		log.Info("meme coin and  of the last remaining proof-of-work in existance.")
+		log.Info("BerylBit is a rug-resistent block chain aiming to keep you safe while trading")
+		log.Info("memecoins. ")
+		log.Info("")
+		log.Info("Join the conversation and help make memecoins a safe and secure space for everyone")
+		log.Info("Link: https://t.me/berylbit")
+		log.Info("--------------------------------------------------------------------------------")
+		log.Info("")
+
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 9012
+		}
+		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
 	case ctx.Bool(RinkebyFlag.Name):
 		log.Warn("")
 		log.Warn("--------------------------------------------------------------------------------")

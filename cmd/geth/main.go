@@ -278,6 +278,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.RopstenFlag.Name):
 		log.Info("Starting Geth on Ropsten testnet...")
 
+	case ctx.IsSet(utils.BerylbitFlag.Name):
+		log.Info("Starting BerylBit mainnet...")
+
 	case ctx.IsSet(utils.RinkebyFlag.Name):
 		log.Info("Starting Geth on Rinkeby testnet...")
 
