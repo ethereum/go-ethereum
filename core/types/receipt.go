@@ -93,7 +93,7 @@ type receiptRLP struct {
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
-	Logs              []*LogForStorage
+	Logs              []*Log
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.

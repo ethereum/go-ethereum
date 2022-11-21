@@ -672,7 +672,7 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
-	Logs              []*types.LogForStorage
+	Logs              []*types.Log
 }
 
 // ReceiptLogs is a barebone version of ReceiptForStorage which only keeps

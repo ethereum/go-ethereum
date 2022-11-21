@@ -85,29 +85,3 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
-
-// LogForStorage is a wrapper around a Log that handles
-// backward compatibility with prior storage formats.
-type LogForStorage Log
-
-// EncodeRLP implements rlp.Encoder.
-func (l *LogForStorage) EncodeRLP(w io.Writer) error {
-	rl := rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data}
-	return rlp.Encode(w, &rl)
-}
-
-// DecodeRLP implements rlp.Decoder.
-//
-// Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
-func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
-	var dec rlpLog
-	if err := s.Decode(&dec); err != nil {
-		return err
-	}
-	*l = LogForStorage{
-		Address: dec.Address,
-		Topics:  dec.Topics,
-		Data:    dec.Data,
-	}
-	return nil
-}
