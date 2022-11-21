@@ -1616,6 +1616,7 @@ type PublicTransactionPoolAPI struct {
 }
 
 // returns block transactions along with state-sync transaction if present
+// nolint: unparam
 func (api *PublicTransactionPoolAPI) getAllBlockTransactions(ctx context.Context, block *types.Block) (types.Transactions, bool) {
 	txs := block.Transactions()
 
