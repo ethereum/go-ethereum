@@ -14,6 +14,7 @@ import sh from 'react-syntax-highlighter/dist/cjs/languages/prism/shell-session'
 import solidity from 'react-syntax-highlighter/dist/cjs/languages/prism/solidity';
 import swift from 'react-syntax-highlighter/dist/cjs/languages/prism/swift';
 
+import { textStyles } from '../theme/foundations';
 // syntax highlighting languages supported
 SyntaxHighlighter.registerLanguage('bash', bash);
 SyntaxHighlighter.registerLanguage('go', go);
@@ -27,6 +28,7 @@ SyntaxHighlighter.registerLanguage('solidity', solidity);
 SyntaxHighlighter.registerLanguage('swift', swift);
 
 import { getProgrammingLanguageName } from '../utils';
+const { header1, header2, header3, header4 } = textStyles
 
 const MDXComponents = {
   // paragraphs
@@ -53,28 +55,28 @@ const MDXComponents = {
   // headings
   h1: ({ children }: any) => {
     return (
-      <Heading as='h1' textAlign='start' fontSize='4xl' mb={5}>
+      <Heading as='h1' textAlign='start' mb={5} {...header1}>
         {children}
       </Heading>
     );
   },
   h2: ({ children }: any) => {
     return (
-      <Heading as='h2' textAlign='start' fontSize='3xl' mb={4}>
+      <Heading as='h2' textAlign='start' mb={4} {...header2}>
         {children}
       </Heading>
     );
   },
   h3: ({ children }: any) => {
     return (
-      <Heading as='h3' fontSize='2xl' mt={5} mb={2.5}>
+      <Heading as='h3' mt={5} mb={2.5} {...header3}>
         {children}
       </Heading>
     );
   },
   h4: ({ children }: any) => {
     return (
-      <Heading as='h4' fontSize='lg' mb={2.5}>
+      <Heading as='h4' mb={2.5} {...header4}>
         {children}
       </Heading>
     );
