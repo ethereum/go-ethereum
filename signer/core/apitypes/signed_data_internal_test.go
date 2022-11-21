@@ -200,8 +200,8 @@ func TestParseInteger(t *testing.T) {
 }
 
 func TestConvertStringDataToSlice(t *testing.T) {
-	strSlice := []string{"a", "b", "c"}
-	var it interface{} = strSlice
+	slice := []string{"a", "b", "c"}
+	var it interface{} = slice
 	_, err := convertDataToSlice(it)
 	if err != nil {
 		t.Fatal(err)
@@ -209,12 +209,12 @@ func TestConvertStringDataToSlice(t *testing.T) {
 }
 
 func TestConvertUint256DataToSlice(t *testing.T) {
-	strSlice := []*math.HexOrDecimal256{
+	slice := []*math.HexOrDecimal256{
 		math.NewHexOrDecimal256(1),
 		math.NewHexOrDecimal256(2),
 		math.NewHexOrDecimal256(3),
 	}
-	var it interface{} = strSlice
+	var it interface{} = slice
 	_, err := convertDataToSlice(it)
 	if err != nil {
 		t.Fatal(err)
@@ -222,12 +222,12 @@ func TestConvertUint256DataToSlice(t *testing.T) {
 }
 
 func TestConvertAddressDataToSlice(t *testing.T) {
-	strSlice := []common.Address{
+	slice := []common.Address{
 		common.HexToAddress("0x0000000000000000000000000000000000000001"),
 		common.HexToAddress("0x0000000000000000000000000000000000000002"),
 		common.HexToAddress("0x0000000000000000000000000000000000000003"),
 	}
-	var it interface{} = strSlice
+	var it interface{} = slice
 	_, err := convertDataToSlice(it)
 	if err != nil {
 		t.Fatal(err)
