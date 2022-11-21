@@ -55,6 +55,9 @@
     "timestamp": "1513681246",
     "totalDifficulty": "7162347056825919"
   },
+  "tracerConfig": {
+    "convertedParityErrors": true
+  },
   "input": "0xf86d808504e3b292008307dfa69433056b5dcac09a9b4becad0e1dcf92c19bd0af76880e92596fd62900008029a0e5f27bb66431f7081bb7f1f242003056d7f3f35414c352cd3d1848b52716dac2a07d0be78980edb0bd2a0678fc53aa90ea9558ce346b0d947967216918ac74ccea",
   "result": [
     {
