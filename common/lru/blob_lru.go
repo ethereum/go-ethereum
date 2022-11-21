@@ -19,33 +19,32 @@ package lru
 import (
 	"math"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/hashicorp/golang-lru/simplelru"
 )
 
-// SizeConstrainedLRU is a wrapper around simplelru.LRU. The simplelru.LRU is capable
-// of item-count constraints, but is not capable of enforcing a byte-size constraint,
-// hence this wrapper.
-// OBS: This cache assumes that items are content-addressed: keys are unique per content.
-// In other words: two Add(..) with the same key K, will always have the same value V.
-type SizeConstrainedLRU struct {
-	size    uint64
-	maxSize uint64
-	lru     *simplelru.LRU
-	lock    sync.RWMutex
+// blobType is the type constraint for values stored in SizeConstrainedCache.
+type blobType interface {
+	~[]byte | ~string
 }
 
-// NewSizeConstrainedLRU creates a new SizeConstrainedLRU.
-func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
-	lru, err := simplelru.NewLRU(math.MaxInt, nil)
-	if err != nil {
-		panic(err)
-	}
-	return &SizeConstrainedLRU{
+// SizeConstrainedCache is a cache where capacity is in bytes (instead of item count). When the cache
+// is at capacity, and a new item is added, older items are evicted until the size
+// constraint is met.
+//
+// OBS: This cache assumes that items are content-addressed: keys are unique per content.
+// In other words: two Add(..) with the same key K, will always have the same value V.
+type SizeConstrainedCache[K comparable, V blobType] struct {
+	size    uint64
+	maxSize uint64
+	lru     BasicLRU[K, V]
+	lock    sync.Mutex
+}
+
+// NewSizeConstrainedCache creates a new size-constrained LRU cache.
+func NewSizeConstrainedCache[K comparable, V blobType](maxSize uint64) *SizeConstrainedCache[K, V] {
+	return &SizeConstrainedCache[K, V]{
 		size:    0,
-		maxSize: max,
-		lru:     lru,
+		maxSize: maxSize,
+		lru:     NewBasicLRU[K, V](math.MaxInt),
 	}
 }
 
@@ -53,7 +52,7 @@ func NewSizeConstrainedLRU(max uint64) *SizeConstrainedLRU {
 // OBS: This cache assumes that items are content-addressed: keys are unique per content.
 // In other words: two Add(..) with the same key K, will always have the same value V.
 // OBS: The value is _not_ copied on Add, so the caller must not modify it afterwards.
-func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
+func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -68,7 +67,7 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 				// list is now empty. Break
 				break
 			}
-			targetSize -= uint64(len(v.([]byte)))
+			targetSize -= uint64(len(v))
 		}
 		c.size = targetSize
 	}
@@ -77,12 +76,9 @@ func (c *SizeConstrainedLRU) Add(key common.Hash, value []byte) (evicted bool) {
 }
 
 // Get looks up a key's value from the cache.
-func (c *SizeConstrainedLRU) Get(key common.Hash) []byte {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-	if v, ok := c.lru.Get(key); ok {
-		return v.([]byte)
-	}
-	return nil
+	return c.lru.Get(key)
 }
