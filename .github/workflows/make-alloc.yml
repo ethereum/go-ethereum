@@ -19,4 +19,4 @@ jobs:
       -
         name: make-alloc
         run: |
-          go run core\mkalloc.go berylbit_genesis.json
+          go run core\mkalloc.go ./berylbit_genesis.json
