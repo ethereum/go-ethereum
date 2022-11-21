@@ -250,6 +250,14 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 	if len(input.Calls) > 0 {
 		for i, childCall := range input.Calls {
 			traceAddress = append(traceAddress, i)
+
+			// Delegatecall uses the value from parent, if zero
+			childCallType := childCall.Type
+			if (childCallType == vm.DELEGATECALL) &&
+				(childCall.Value == nil || childCall.Value.Cmp(big.NewInt(0)) == 0) {
+				childCall.Value = input.Value
+			}
+
 			flat, err := t.processOutput(&childCall, traceAddress)
 			if err != nil {
 				return nil, err
