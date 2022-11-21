@@ -9,7 +9,6 @@ import (
 
 var (
 	BLSModulus *big.Int
-	Domain     [params.FieldElementsPerBlob]*big.Int
 	DomainFr   []bls.Fr
 )
 
@@ -27,8 +26,8 @@ func initDomain() {
 		// We reverse the bits of the index as specified in https://github.com/ethereum/consensus-specs/pull/3011
 		// This effectively permutes the order of the elements in Domain
 		reversedIndex := reverseBits(uint64(i), params.FieldElementsPerBlob)
-		Domain[i] = new(big.Int).Exp(rootOfUnity, big.NewInt(int64(reversedIndex)), BLSModulus)
-		_ = BigToFr(&DomainFr[i], Domain[i])
+		domain := new(big.Int).Exp(rootOfUnity, big.NewInt(int64(reversedIndex)), BLSModulus)
+		_ = bigToFr(&DomainFr[i], domain)
 	}
 }
 
@@ -42,7 +41,7 @@ func frToBig(b *big.Int, val *bls.Fr) {
 	b.SetBytes(v[:])
 }
 
-func BigToFr(out *bls.Fr, in *big.Int) bool {
+func bigToFr(out *bls.Fr, in *big.Int) bool {
 	var b [32]byte
 	inb := in.Bytes()
 	copy(b[32-len(inb):], inb)
@@ -51,17 +50,4 @@ func BigToFr(out *bls.Fr, in *big.Int) bool {
 		b[31-i], b[i] = b[i], b[31-i]
 	}
 	return bls.FrFrom32(out, b)
-}
-
-func blsModInv(out *big.Int, x *big.Int) {
-	if len(x.Bits()) != 0 { // if non-zero
-		out.ModInverse(x, BLSModulus)
-	}
-}
-
-// faster than using big.Int ModDiv
-func blsDiv(out *big.Int, a *big.Int, b *big.Int) {
-	var bInv big.Int
-	blsModInv(&bInv, b)
-	out.Mod(new(big.Int).Mul(a, &bInv), BLSModulus)
 }

@@ -148,7 +148,7 @@ func BytesToBLSField(h [32]byte) *bls.Fr {
 	}
 	zB := new(big.Int).Mod(new(big.Int).SetBytes(b[:]), BLSModulus)
 	out := new(bls.Fr)
-	BigToFr(out, zB)
+	bigToFr(out, zB)
 	return out
 }
 
@@ -211,7 +211,7 @@ func ComputeKZGProof(polynomial []bls.Fr, z *bls.Fr) (KZGProof, error) {
 		bls.SubModFr(&polynomialShifted[i], &polynomial[i], y)
 	}
 	denominatorPoly := make([]bls.Fr, len(polynomial))
-	if len(polynomial) != len(Domain) {
+	if len(polynomial) != len(DomainFr) {
 		return KZGProof{}, errors.New("polynomial has invalid length")
 	}
 	for i := range polynomial {
