@@ -129,8 +129,6 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	// This test is a bit time-sensitive, the miner needs to pick up on the
-	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
 	// The miner needs to pick up on the txs in the pool, so a few retries might be
 	// needed.
 	if _, err := assembleWithTransactions(api, blocks[8].Hash(), &blockParams, blocks[9].Transactions().Len()); err != nil {
