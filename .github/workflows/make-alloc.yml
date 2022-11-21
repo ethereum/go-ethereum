@@ -5,8 +5,8 @@ on:
 
 jobs:
 
-  build-windows:
-    runs-on: windows-latest
+  make-alloc:
+    runs-on: ubuntu-latest
     steps:
       -
         name: Checkout
