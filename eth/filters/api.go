@@ -419,6 +419,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 	borConfig := api.chainConfig.Bor
 
 	var filter *Filter
+
 	var borLogsFilter *BorBlockLogsFilter
 
 	if f.crit.BlockHash != nil {
