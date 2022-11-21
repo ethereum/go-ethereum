@@ -1,7 +1,7 @@
-import { Heading, Link, Stack, Text } from '@chakra-ui/react';
+import { Flex, Heading, Link, Stack, Table, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { nightOwl } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { nightOwl, materialLight, materialDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 import bash from 'react-syntax-highlighter/dist/cjs/languages/prism/bash';
 import go from 'react-syntax-highlighter/dist/cjs/languages/prism/go';
@@ -15,8 +15,11 @@ import solidity from 'react-syntax-highlighter/dist/cjs/languages/prism/solidity
 import swift from 'react-syntax-highlighter/dist/cjs/languages/prism/swift';
 
 import { textStyles } from '../theme/foundations';
+import { getProgrammingLanguageName } from '../utils';
+
 // syntax highlighting languages supported
 SyntaxHighlighter.registerLanguage('bash', bash);
+SyntaxHighlighter.registerLanguage('terminal', bash);
 SyntaxHighlighter.registerLanguage('go', go);
 SyntaxHighlighter.registerLanguage('graphql', graphql);
 SyntaxHighlighter.registerLanguage('java', java);
@@ -27,7 +30,7 @@ SyntaxHighlighter.registerLanguage('sh', sh);
 SyntaxHighlighter.registerLanguage('solidity', solidity);
 SyntaxHighlighter.registerLanguage('swift', swift);
 
-import { getProgrammingLanguageName } from '../utils';
+
 const { header1, header2, header3, header4 } = textStyles
 
 const MDXComponents = {
@@ -81,6 +84,39 @@ const MDXComponents = {
       </Heading>
     );
   },
+  // lists
+  ul: ({ children }: any) => {
+    return (
+      <Stack as='ul' spacing={2} mb={7} _last={{ mb: 0 }}>
+        {children}
+      </Stack>
+    );
+  },
+  ol: ({ children }: any) => {
+    return (
+      <Stack as='ol' spacing={2} mb={7} _last={{ mb: 0 }}>
+        {children}
+      </Stack>
+    );
+  },
+  // tables
+  table: ({ children }: any) => {
+    return (
+      <Flex maxW='100vw' overflowX='scroll'>
+        <Table
+          variant='striped'
+          colorScheme='greenAlpha'
+          border='1px'
+          borderColor='blackAlpha.50'
+          mb={10}
+          size={{ base: 'sm', lg: 'md' }}
+          w='auto'
+        >
+          {children}
+        </Table>
+      </Flex>
+    );
+  },
   // pre
   pre: ({ children }: any) => {
     return (
@@ -88,30 +124,49 @@ const MDXComponents = {
         <pre>{children}</pre>
       </Stack>
     );
-  }
+  },
   // code
-  // code: (code: any) => {
-  //   const language = getProgrammingLanguageName(code);
-
-  //   return !!code.inline ? (
-  //     <Text
-  //       as={'span'}
-  //       padding='0.125em 0.25em'
-  //       color='red.300'
-  //       background='code-bg-contrast'
-  //       borderRadius='0.25em'
-  //       fontFamily='code'
-  //       fontSize='sm'
-  //       overflowY='scroll'
-  //     >
-  //       {code.children[0]}
-  //     </Text>
-  //   ) : (
-  //     <Stack style={nightOwl}>
-  //       {code.children[0]}
-  //     </Stack>
-  //   );
-  // }
+  code: ({ className, ...code }: any) => {
+    const { colorMode } = useColorMode();
+    const isDark = colorMode === 'dark';
+    if (className?.includes("terminal")) return (
+      <SyntaxHighlighter
+        language='bash'
+        style={nightOwl}
+        customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
+      >
+        {code.children}
+      </SyntaxHighlighter>
+    )
+    if (code.inline) return (
+      <Text
+        as={'span'}
+        padding='0.125em 0.25em'
+        color='primary'
+        background='code-bg'
+        borderRadius='0.25em'
+        fontFamily='code'
+        fontSize='sm'
+        overflowY='scroll'
+      >
+        {code.children[0]}
+      </Text>
+    )
+    if (className?.startsWith('language-')) return (
+      <SyntaxHighlighter
+        language='json'
+        style={isDark ? materialDark : materialLight} // TODO: Update with code light/dark color themes
+        customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
+      >
+        {code.children}
+      </SyntaxHighlighter>
+    )
+    return (
+      <Stack>
+        {code.children[0]}
+      </Stack>
+    );
+  }
 };
 
 export default MDXComponents;
