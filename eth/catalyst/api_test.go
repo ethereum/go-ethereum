@@ -93,22 +93,28 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	// This test is a bit time-sensitive, the miner needs to pick up on the
-	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
-	var testErr error
-	for retries := 2; retries > 0; retries-- {
-		if execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams); err != nil {
-			t.Fatalf("error producing block, err=%v", err)
-		} else if have, want := len(execData.Transactions), 1; have != want {
-			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
-		} else {
-			testErr = nil
-			break
-		}
-	}
-	if testErr != nil {
+	// The miner needs to pick up on the txs in the pool, so a few retries might be
+	// needed.
+	if _, testErr := assembleWithTransactions(api, blocks[9].Hash(), &blockParams, 1); testErr != nil {
 		t.Fatal(testErr)
 	}
+}
+
+// assembleWithTransactions tries to assemble a block, retrying until it has 'want',
+// number of transactions in it, or it has retried three times.
+func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1, want int) (execData *beacon.ExecutableDataV1, err error) {
+	for retries := 3; retries > 0; retries-- {
+		execData, err = assembleBlock(api, parentHash, params)
+		if err != nil {
+			return nil, err
+		}
+		if have, want := len(execData.Transactions), want; have != want {
+			err = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+			continue
+		}
+		return execData, nil
+	}
+	return nil, err
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
@@ -123,21 +129,10 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	// This test is a bit time-sensitive, the miner needs to pick up on the
-	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
-	var testErr error
-	for retries := 2; retries > 0; retries-- {
-		if execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams); err != nil {
-			t.Fatalf("error producing block, err=%v", err)
-		} else if have, want := len(execData.Transactions), blocks[9].Transactions().Len(); have != want {
-			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
-		} else {
-			testErr = nil
-			break
-		}
-	}
-	if testErr != nil {
-		t.Fatal(testErr)
+	// The miner needs to pick up on the txs in the pool, so a few retries might be
+	// needed.
+	if _, err := assembleWithTransactions(api, blocks[8].Hash(), &blockParams, blocks[9].Transactions().Len()); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -293,9 +288,9 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleWithTransactions(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
-		})
+		}, 1)
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
@@ -915,17 +910,6 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
-		ethservice.TxPool().AddLocal(types.MustSignNewTx(testKey, types.LatestSigner(ethservice.BlockChain().Config()),
-			&types.DynamicFeeTx{
-				Nonce:     statedb.GetNonce(testAddr),
-				Value:     big.NewInt(0),
-				GasFeeCap: big.NewInt(2 * params.InitialBaseFee),
-				GasTipCap: big.NewInt(2 * params.InitialBaseFee),
-				ChainID:   genesis.Config.ChainID,
-				Gas:       1000000,
-				To:        &common.Address{99},
-			}))
 		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
 		})
