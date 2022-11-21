@@ -416,10 +416,19 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
+	borConfig := api.chainConfig.Bor
+
 	var filter *Filter
+	var borLogsFilter *BorBlockLogsFilter
+
 	if f.crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
+
+		// Block bor filter
+		if api.borLogs {
+			borLogsFilter = NewBorBlockLogsFilter(api.backend, borConfig, *f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
+		}
 	} else {
 		// Convert the RPC block numbers into internal representations
 		begin := rpc.LatestBlockNumber.Int64()
@@ -432,12 +441,27 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
+
+		if api.borLogs {
+			borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, borConfig, begin, end, f.crit.Addresses, f.crit.Topics)
+		}
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	if borLogsFilter != nil {
+		// Run the filter and return all the logs
+		borBlockLogs, err := borLogsFilter.Logs(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
+	}
+
 	return returnLogs(logs), nil
 }
 
