@@ -10,7 +10,7 @@ import (
 type TransactionData struct {
 	IsCreate bool           `json:"isCreate"`
 	From     common.Address `json:"from"`
-	*Transaction
+	Transaction
 }
 
 // NewTraceTransaction returns a transaction that will serialize to the trace
@@ -21,6 +21,6 @@ func NewTraceTransaction(tx *Transaction, blockNumber uint64, config *params.Cha
 	return &TransactionData{
 		From:        from,
 		IsCreate:    tx.To() == nil,
-		Transaction: tx,
+		Transaction: *tx,
 	}
 }
