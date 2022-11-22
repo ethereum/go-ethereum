@@ -76,6 +76,17 @@ export const DOWNLOAD_OPENPGP_DEVELOPER_HEADERS = [
   'Fingerprint'
 ];
 
+// Metadata
+export const SITE_URL = 'https://geth.ethereum.org';
+export const SITE_NAME = 'go-ethereum';
+export const METADATA = {
+  HOME_TITLE: 'Home',
+  HOME_DESCRIPTION:
+    'Go-ethereum website, home for the official Golang execution layer implementation of the Ethereum protocol',
+  DOWNLOADS_TITLE: 'Downloads',
+  DOWNLOADS_DESCRIPTION: 'All Geth releases and builds, available for download'
+};
+
 // GitHub urls
 export const LATEST_GETH_RELEASE_URL =
   'https://api.github.com/repos/ethereum/go-ethereum/releases/latest';
