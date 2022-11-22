@@ -756,3 +756,21 @@ func (api *ConsensusAPI) heartbeat() {
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
+
+// GetPayloadBodiesV1 implements engine_getPayloadBodiesV1 which allows for retrieval of a list
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesV1(hashes []common.Hash) ([]*types.Body, error) {
+	var bodies []*types.Body
+	for _, hash := range hashes {
+		body := api.eth.BlockChain().GetBody(hash)
+		if body == nil {
+			return []*types.Body{}, errors.New("body not found")
+		}
+		// We only want to return the transactions, not uncles
+		if len(body.Uncles) != 0 {
+			body.Uncles = make([]*types.Header, 0)
+		}
+		bodies = append(bodies, body)
+	}
+	return bodies, nil
+}
