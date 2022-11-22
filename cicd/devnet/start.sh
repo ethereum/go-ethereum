@@ -53,6 +53,7 @@ echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"
 echo "Starting nodes with $bootnodes ..."
 
 XDC --ethstats ${netstats} --gcmode=archive \
+--nat extip:${INSTANCE_IP} \
 --bootnodes ${bootnodes} --syncmode full \
 --datadir /work/xdcchain --networkid 551 \
 -port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
