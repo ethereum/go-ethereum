@@ -12,7 +12,7 @@ device and exposing an API that developers can use to build mobile apps on top o
 
 #### Android Studio
 
-Geth for Mobile bundles can be downloaded directly from [the download page](https://geth.ethereum.org/downloads/) and inserted into a project in Android Studio via `File -> New -> New module... -> Import .JAR/.AAR Package`.
+Geth for Mobile bundles can be downloaded directly from [the download page](/downloads) and inserted into a project in Android Studio via `File -> New -> New module... -> Import .JAR/.AAR Package`.
 
 It is also necessary to configure `gradle` to link the mobile library bundle to the application. This can be done by adding a new entry to the `dependencies` section of the `build.gradle` script, pointing it to the module that was just added (named `geth` by default).
 
@@ -47,13 +47,13 @@ Import "build/bin/Geth.framework" to use the library.
 
 ## Mobile API
 
-Similarly to the reusable [Go libraries](/docs/developers/dapp-developer/native-accounts.md), the mobile wrappers focus on three main usage areas:
+Similarly to the reusable [Go libraries](/docs/developers/dapp-developer/native-accounts), the mobile wrappers focus on three main usage areas:
 
 - Simplified client side account management
 - Remote node interfacing via different transports
 - Contract interactions through auto-generated bindings
 
-The Geth mobile API is broadly equivalent to the [Go API](/docs/developers/dapp-developer/native-accounts.md). The source code can be found in the `mobile` section of Geth's
+The Geth mobile API is broadly equivalent to the [Go API](/docs/developers/dapp-developer/native-accounts). The source code can be found in the `mobile` section of Geth's
 [Github](https://github.com/ethereum/go-ethereum/tree/master/mobile).
 
 ## Mobile Account Management

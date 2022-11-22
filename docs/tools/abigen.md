@@ -137,4 +137,4 @@ type Storage struct {
 
 `Storage.go` contains all the bindings required to interact with `Storage.sol` from a Go application.
 
-For instructions on how to deploy this contract to Ethereum from a Go native application read our [Go bindings page](/docs/developers/dapp-developer/native.md). To browse the Abigen source code visit the Geth [Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).
+For instructions on how to deploy this contract to Ethereum from a Go native application read our [Go bindings page](/docs/developers/dapp-developer/native). To browse the Abigen source code visit the Geth [Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/abigen).

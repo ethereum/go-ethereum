@@ -116,7 +116,7 @@ to subscribe to events. HTTP is a familiar and idempotent transport that closes 
 
 ## Engine-API
 
-The Engine-API is a set of RPC methods that enable communication between Geth and the [consensus client](/docs/getting_started/consensus-clients.md). These are not designed to be exposed to the user - instead they are called automatically by the clients when they need to exchange information. The Engine API is enabled by default - the user is not required to pass any instruction to Geth to enable these methods.
+The Engine-API is a set of RPC methods that enable communication between Geth and the [consensus client](/docs/getting_started/consensus-clients). These are not designed to be exposed to the user - instead they are called automatically by the clients when they need to exchange information. The Engine API is enabled by default - the user is not required to pass any instruction to Geth to enable these methods.
 
 Read more in the [Engine API spec](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md).
 

@@ -7,7 +7,7 @@ This guide explains how to set up a private network of multiple Geth nodes. An E
 
 ## Prerequisites
 
-To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/getting_started/Installing-Geth.md)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting_started/getting_started.md)).
+To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/getting_started/Installing-Geth)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting_started/getting_started)).
 
 ## Private Networks
 
@@ -47,7 +47,7 @@ Every blockchain starts with a genesis block. When Geth is run with default sett
 
 Below is an example of a `genesis.json` file for a PoA network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for Clique to work.
 
-The signer account keys can be generated using the [geth account](/docs/fundamentals/account-management.md) command (this command can be run multiple times to create more than one signer key).
+The signer account keys can be generated using the [geth account](/docs/fundamentals/account-management) command (this command can be run multiple times to create more than one signer key).
 
 ```shell
 geth account new --datadir data

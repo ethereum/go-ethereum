@@ -1,4 +1,4 @@
-import { Flex, Link, Stack, Text } from '@chakra-ui/react';
+import { Center, Flex, Link, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -29,7 +29,7 @@ export const Footer: FC = () => {
           }}
           borderColor='primary'
         >
-          <Stack
+          <Center
             flex={1}
             color='primary'
             _hover={{
@@ -37,18 +37,18 @@ export const Footer: FC = () => {
               bg: 'primary',
               color: 'bg !important'
             }}
-            justifyContent='center'
             borderRight='2px solid'
             borderColor='primary'
+            p={4}
           >
             <NextLink href={DOWNLOADS_PAGE} passHref>
               <Link _hover={{ textDecoration: 'none' }}>
-                <Text textStyle='home-section-link-label'>DOWNLOADS</Text>
+                <Text textStyle='footer-link-label'>DOWNLOADS</Text>
               </Link>
             </NextLink>
-          </Stack>
+          </Center>
 
-          <Stack
+          <Center
             flex={1}
             color='primary'
             _hover={{
@@ -61,18 +61,18 @@ export const Footer: FC = () => {
               md: '2px solid'
             }}
             borderColor='primary'
-            justifyContent='center'
+            p={4}
           >
             <NextLink href={DOCS_PAGE} passHref>
               <Link _hover={{ textDecoration: 'none' }}>
-                <Text textStyle='home-section-link-label'>DOCUMENTATION</Text>
+                <Text textStyle='footer-link-label'>DOCUMENTATION</Text>
               </Link>
             </NextLink>
-          </Stack>
+          </Center>
         </Flex>
 
         <Flex sx={{ mt: '0 !important' }}>
-          <Stack
+          <Center
             flex={1}
             data-group
             borderLeft={{
@@ -84,23 +84,21 @@ export const Footer: FC = () => {
             _hover={{
               bg: 'primary'
             }}
-            alignItems='center'
             p={4}
           >
             <NextLink href={GETH_TWITTER_URL} passHref>
               <Link isExternal>
-                <TwitterIcon w={8} height={8} _groupHover={{ color: 'bg' }} color='primary' />
+                <TwitterIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
               </Link>
             </NextLink>
-          </Stack>
+          </Center>
 
-          <Stack
+          <Center
             data-group
             flex={1}
             _hover={{
               bg: 'primary'
             }}
-            alignItems='center'
             borderWidth='2px'
             borderStyle='none solid'
             borderColor='primary'
@@ -108,33 +106,30 @@ export const Footer: FC = () => {
           >
             <NextLink href={GETH_DISCORD_URL} passHref>
               <Link isExternal>
-                <DiscordIcon w={8} height={8} _groupHover={{ color: 'bg' }} color='primary' />
+                <DiscordIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
               </Link>
             </NextLink>
-          </Stack>
+          </Center>
 
-          <Stack
+          <Center
             data-group
             flex={1}
             _hover={{
               bg: 'primary'
             }}
-            alignItems='center'
             p={4}
           >
             <NextLink href={GETH_REPO_URL} passHref>
               <Link isExternal>
-                <GitHubIcon w={7} height={7} _groupHover={{ color: 'bg' }} color='primary' />
+                <GitHubIcon w={7} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
               </Link>
             </NextLink>
-          </Stack>
+          </Center>
         </Flex>
       </Flex>
 
-      <Stack
+      <Center
         p={4}
-        textAlign='center'
-        justifyContent='center'
         borderWidth='2px'
         borderStyle={{
           base: 'none solid solid solid',
@@ -144,7 +139,7 @@ export const Footer: FC = () => {
         flex={1}
       >
         <Text textStyle='footer-text'>{`© 2013–${new Date().getFullYear()}. The go-ethereum Authors.`}</Text>
-      </Stack>
+      </Center>
     </Flex>
   );
 };

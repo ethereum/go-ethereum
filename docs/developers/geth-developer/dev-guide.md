@@ -6,7 +6,7 @@ description: Entry point for developers working on Geth
 This document is the entry point for developers who wish to work on Geth. Developers are people who are interested to build, develop, debug, submit
 a bug report or pull request or otherwise contribute to the Geth source code.
 
-Please see [Contributing](/docs/developers/contributing.md) for the Geth contribution guidelines.
+Please see [Contributing](/docs/developers/contributing) for the Geth contribution guidelines.
 
 ## Building and Testing
 

@@ -20,7 +20,7 @@ For each account, replace NodeId with Node 1, 2, 3 etc. This saves the details a
 
 Geth will prompt for a password. Once provided, the public address of the new account and the location of the secret key file is displayed to the terminal. It is a good idea to copy these details down in a text document because they will be needed later. This account generation step should be repeated until the number of accounts is at least equal to the desired number of nodes on the proof-of-authority network plus a few extra that will act as non-sealing nodes. Make sure the account passwords are also securely backed up for each new account.
 
-See more on the [account management pages](/docs/fundamentals/account-management.md).
+See more on the [account management pages](/docs/fundamentals/account-management).
 
 ## Starting Puppeth
 

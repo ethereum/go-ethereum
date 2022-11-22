@@ -3,7 +3,7 @@ title: 'JavaScript Console 2: Contracts'
 description: Instructions for working with contracts in the Javascript console.
 ---
 
-The [Introduction to the Javascript console](/docs/interacting-with-geth/javascript-console.md) page outlined how a Javascript console can be attached to Geth to provide a more user-friendly interface to Ethereum than interacting directly with the JSON-RPC API. This page will describe how to deploy contracts and interact with contracts using the attached console. This page will assume the Javascript console is attached to a running Geth instance using IPC. Clef should be used to manage accounts.
+The [Introduction to the Javascript console](/docs/interacting-with-geth/javascript-console) page outlined how a Javascript console can be attached to Geth to provide a more user-friendly interface to Ethereum than interacting directly with the JSON-RPC API. This page will describe how to deploy contracts and interact with contracts using the attached console. This page will assume the Javascript console is attached to a running Geth instance using IPC. Clef should be used to manage accounts.
 
 ## Deploying a contract
 
@@ -28,7 +28,7 @@ contract Storage{
 }
 ```
 
-The contract needs to be compiled before Geth can understand it. Compiling the contract creates an [Application Binary Interface](/docs/tools/abigen.md) and the contract bytecode. This requires a Solidity compiler (e.g. `solc`) to be installed on the local machine. Then, compile and save the ABI and bytecode to a new `build` subdirectory using the following terminal commands:
+The contract needs to be compiled before Geth can understand it. Compiling the contract creates an [Application Binary Interface](/docs/tools/abigen) and the contract bytecode. This requires a Solidity compiler (e.g. `solc`) to be installed on the local machine. Then, compile and save the ABI and bytecode to a new `build` subdirectory using the following terminal commands:
 
 ```sh
 cd ~/go-ethereum/storage-contract

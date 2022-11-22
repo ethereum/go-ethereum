@@ -20,7 +20,7 @@ RPC stands for Remote Procedure Call. RPC is a mode of communication between pro
 
 ## What is `jwtsecret`?
 
-The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/docs/getting_started/consensus-clients.md) page.
+The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/docs/getting_started/consensus-clients) page.
 
 ## I noticed my peercount slowly decreasing, and now it is at 0. Restarting doesn't get any peers.
 
@@ -32,7 +32,7 @@ sudo ntpdate -s time.nist.gov
 
 ## I would like to run multiple Geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable".
 
-Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/developers/geth-developer/Private-Network.md) instructions.
+Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/developers/geth-developer/Private-Network) instructions.
 
 ## When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear?
 
@@ -90,8 +90,8 @@ For step-by-step instruction for staking and spinning up a validating node, see 
 
 ## How do I set up a consensus client/validator and connect it to Geth?
 
-These docs mainly cover how to set up Geth, but since the switch to proof-of-stake it is also necessary to run a consensus client in order to track the head of the chain, and a validator in order to participate in proof-of-stake consensus. A validator node is also required to deposit 32 ETH into a specific smart contract. Our [consensus clients page](/docs/getting-started/consensus-clients.md) includes a general overview of how to connect a consensus client to Geth. For step by step instructions for specific clients, see their documentation and also see these helpful [online guides](https://github.com/SomerEsat/ethereum-staking-guides).
+These docs mainly cover how to set up Geth, but since the switch to proof-of-stake it is also necessary to run a consensus client in order to track the head of the chain, and a validator in order to participate in proof-of-stake consensus. A validator node is also required to deposit 32 ETH into a specific smart contract. Our [consensus clients page](/docs/getting-started/consensus-clients) includes a general overview of how to connect a consensus client to Geth. For step by step instructions for specific clients, see their documentation and also see these helpful [online guides](https://github.com/SomerEsat/ethereum-staking-guides).
 
 ## How do I update Geth?
 
-Updating Geth to the latest version simply requires stopping the node, downloading the latest release and restarting the node. Precisely how to download the latest software depends on the installation method - please refer to our [Installation pages](/docs/install-and-build/Installing-Geth.md).
+Updating Geth to the latest version simply requires stopping the node, downloading the latest release and restarting the node. Precisely how to download the latest software depends on the installation method - please refer to our [Installation pages](/docs/install-and-build/Installing-Geth).

@@ -7,7 +7,7 @@ Documentation for the API methods in the `eth` namespace can be found on [ethere
 
 ### eth_subscribe, eth_unsubscribe
 
-These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting_with_geth/RPC/pubsub.md) for more information.
+These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting_with_geth/RPC/pubsub) for more information.
 
 ### eth_call
 
@@ -19,7 +19,7 @@ The method takes 3 parameters: an unsigned transaction object to execute in read
 
 ##### 1. `Object` - Transaction call object
 
-The _transaction call object_ is mandatory. Please see [here](/docs/interacting_with_geth/RPC/objects.md) for details.
+The _transaction call object_ is mandatory. Please see [here](/docs/interacting_with_geth/RPC/objects) for details.
 
 ##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 

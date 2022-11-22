@@ -51,7 +51,7 @@ Validators are responsible for securing the Ethereum blockchain. Validators have
 
 Geth cannot sync until the connected consensus client is synced. This is because Geth needs a target head to sync to. The fastest way to sync a consensus client is using checkpoint sync. To do this, a checkpoint or a url to a checkpoint provider can be provided to the consensus client on startup. There are several sources for these checkpoints. The ideal scenario is to get one from a trusted node operator, organized out-of-band, and verified against a third node or a block explorer or checkpoint provider. Some clients also allow checkpoint syncing by HTTP API access to an existing Beacon node. There are also several [public checkpoint sync endpoints](https://eth-clients.github.io/checkpoint-sync-endpoints/).
 
-Please see the pages on [syncing](/docs/fundamentals/sync-modes.md) for more detail. For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/fundamentals/logs.md) page.
+Please see the pages on [syncing](/docs/fundamentals/sync-modes) for more detail. For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/fundamentals/logs) page.
 
 ## Using Geth
 

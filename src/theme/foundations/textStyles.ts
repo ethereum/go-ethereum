@@ -58,6 +58,13 @@ export const textStyles = {
     fontSize: '13px',
     fontFamily: '"Inter", sans-serif'
   },
+  'footer-link-label': {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    lineHeight: '21.12px',
+    letterSpacing: '2%'
+  },
   'footer-text': {
     fontFamily: '"Inter", sans-serif',
     lineHeight: '22px',

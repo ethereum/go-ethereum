@@ -304,14 +304,14 @@ The output is similar to:
 
 ## Other traces
 
-This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, for specific `eth_call`s or rejected blocks. The full list of trace functions can be explored in the [reference documentation](/docs/interacting_with_geth/RPC/ns-debug.md).
+This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, for specific `eth_call`s or rejected blocks. The full list of trace functions can be explored in the [reference documentation](/docs/interacting_with_geth/RPC/ns-debug).
 
 ## Custom Go tracing
 
 Custom tracers can also be made more performant by writing them in Go. The gain in performance mostly comes from the fact that Geth doesn't need
 to interpret JS code and can execute native functions. Geth comes with several built-in [native tracers](https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/native) which can serve as examples. Please note that unlike JS tracers, Go tracing scripts cannot be simply passed as an argument to the API. They will need to be added to and compiled with the rest of the Geth source code.
 
-In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](/docs/getting_started/Installing-Geth.md) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
+In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](/docs/getting_started/Installing-Geth) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
 
 ```go
 package native

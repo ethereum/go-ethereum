@@ -198,7 +198,7 @@ The above is often seen and misinterpreted as a problem with snap sync. In reali
 WARN [10-03|13:10:26.441] Post-merge network, but no beacon client seen. Please launch one to follow the chain!
 ```
 
-The above message is emitted when Geth is run without a consensus client on a post-merge proof-of-stake network. Since Ethereum moved to proof-of-stake Geth alone is not enough to follow the chain because the consensus logic is now implemented by a separate piece of software called a consensus client. This log message is displayed when the consensus client is missing. Read more about this on our [consensus clients](/docs/interface/consensus-clients.md) page.
+The above message is emitted when Geth is run without a consensus client on a post-merge proof-of-stake network. Since Ethereum moved to proof-of-stake Geth alone is not enough to follow the chain because the consensus logic is now implemented by a separate piece of software called a consensus client. This log message is displayed when the consensus client is missing. Read more about this on our [consensus clients](/docs/interface/consensus-clients) page.
 
 ```sh
 WARN [10-03 |13:10:26.499] Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!

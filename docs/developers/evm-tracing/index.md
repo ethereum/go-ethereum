@@ -38,7 +38,7 @@ This means there are limits on the transactions that can be traced imposed by th
 
 _This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head_
 
-More detailed information about syncing is available on the [sync modes page](/docs/fundamentals/sync-modes.md).
+More detailed information about syncing is available on the [sync modes page](/docs/fundamentals/sync-modes).
 
 When a trace of a specific transaction is executed, the state is prepared by fetching the state of the parent block from the database. If it is not available, Geth will crawl backwards in time to find the next available state but only up to a limit defined in the `reexec` parameter which defaults to 128 blocks. If no state is available within the `reexec` window then the trace fails with `Error: required historical state unavailable` and the `reexec` parameter must be increased. If a valid state _is_ found in the `reexec` window, then Geth sequentially re-executes the transcations in each block between the last available state and the target block. The greater the value of `reexec` the longer the tracing will take because more blocks have to be re-executed to regenerate the target state.
 
@@ -56,14 +56,14 @@ The tracing API accepts an optional `tracer` parameter that defines how the data
 functions that do some specific preprocessing on the trace data before it is returned.
 
 More information about Geth's built-in tracers is available on the
-[built-in tracers](/docs/developers/evm-tracing/built-in-tracers.md)
+[built-in tracers](/docs/developers/evm-tracing/built-in-tracers)
 page.
 
 ### Custom tracers
 
 In addition to built-in tracers, it is possible to provide custom code that hooks to events in the EVM to process and return data in a consumable format. Custom tracers can be written either in Javascript or Go. JS tracers are good for quick prototyping and experimentation as well as for less intensive applications. Go tracers are performant but require the tracer to be compiled together with the Geth source code. This means developers only have to gather the data they actually need, and do any processing at the source.
 
-More information about custom tracers is available on the [custom tracers](/docs/developers/evm-tracing/custom-tracers.md) page.
+More information about custom tracers is available on the [custom tracers](/docs/developers/evm-tracing/custom-tracers) page.
 
 ## Summary
 
