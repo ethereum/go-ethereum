@@ -1515,15 +1515,15 @@ func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 	for _, entry := range strings.Split(peerRequiredBlocks, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid required block entry: %s", entry)
+			Fatalf("Invalid peer required block entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid required block number %s: %v", parts[0], err)
+			Fatalf("Invalid peer required block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid required block hash %s: %v", parts[1], err)
+			Fatalf("Invalid peer required block hash %s: %v", parts[1], err)
 		}
 		cfg.PeerRequiredBlocks[number] = hash
 	}
