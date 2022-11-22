@@ -1067,7 +1067,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add the contents of the optional tx access list (2930)
 //
 // Potential EIPs:
-// - Reset transient storage(1153)
+// - Reset access list (Berlin)
+//   - Add coinbase to access list (EIP-3651)
+// - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
