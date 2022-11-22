@@ -1,11 +1,7 @@
 import { Flex, Heading, Link, Stack, Table, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import {
-  nightOwl,
-  materialLight,
-  materialDark
-} from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { nightOwl, prism } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
 import bash from 'react-syntax-highlighter/dist/cjs/languages/prism/bash';
 import go from 'react-syntax-highlighter/dist/cjs/languages/prism/go';
@@ -36,19 +32,10 @@ SyntaxHighlighter.registerLanguage('swift', swift);
 
 const { header1, header2, header3, header4 } = textStyles;
 
-const Code = ({ className, ...code }: any) => {
+const Code = ({ className, children, ...code }: any) => {
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
-  if (className?.includes('terminal'))
-    return (
-      <SyntaxHighlighter
-        language='bash'
-        style={nightOwl}
-        customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
-      >
-        {code.children}
-      </SyntaxHighlighter>
-    );
+  const isTerminal = className?.includes('terminal') ;
   if (code.inline)
     return (
       <Text
@@ -61,20 +48,21 @@ const Code = ({ className, ...code }: any) => {
         fontSize='sm'
         overflowY='scroll'
       >
-        {code.children[0]}
+        {children[0]}
       </Text>
     );
-  if (className?.startsWith('language-'))
+  if (className?.startsWith('language-')) {
     return (
       <SyntaxHighlighter
         language={getProgrammingLanguageName(className)}
-        style={isDark ? materialDark : materialLight} // TODO: Update with code light/dark color themes
+        style={isTerminal || isDark ? nightOwl : prism} // TODO: Update with code light/dark color themes
         customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
       >
-        {code.children}
+        {children}
       </SyntaxHighlighter>
     );
-  return <Stack>{code.children[0]}</Stack>;
+  }
+  return <Stack>{children[0]}</Stack>;
 };
 
 const MDXComponents = {
@@ -129,20 +117,6 @@ const MDXComponents = {
     );
   },
   // lists
-  ul: ({ children }: any) => {
-    return (
-      <Stack as='ul' spacing={2} mb={7} _last={{ mb: 0 }}>
-        {children}
-      </Stack>
-    );
-  },
-  ol: ({ children }: any) => {
-    return (
-      <Stack as='ol' spacing={2} mb={7} _last={{ mb: 0 }}>
-        {children}
-      </Stack>
-    );
-  },
   // tables
   table: ({ children }: any) => (
     <Flex maxW='min(100%, 100vw)' overflowX='scroll'>

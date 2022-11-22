@@ -1,5 +1,6 @@
 const CLASSNAME_PREFIX = 'language-';
 const DEFAULT = 'bash';
+const TERMINAL = 'terminal';
 const JS = ['javascript', 'js', 'jsx', 'ts', 'tsx'];
 const SH = ['sh', 'shell'];
 const PY = ['python', 'py'];
@@ -13,6 +14,7 @@ export const getProgrammingLanguageName = (code: string) => {
   const hasLanguageNameProperty = code.startsWith(CLASSNAME_PREFIX);
   if (!hasLanguageNameProperty) return DEFAULT;
   const newCode = code.replace(CLASSNAME_PREFIX, '').toLowerCase();
+  if (newCode === TERMINAL) return DEFAULT;
   for (const lang of LANGS) {
     if (lang.includes(code.toLowerCase())) return lang[0];
   }
