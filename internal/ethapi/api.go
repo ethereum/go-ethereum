@@ -1246,6 +1246,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 			}
 		}
 		fields["transactions"] = transactions
+		// inclTx also expands withdrawals
+		fields["withdrawals"] = block.Withdrawals()
 	}
 	uncles := block.Uncles()
 	uncleHashes := make([]common.Hash, len(uncles))
