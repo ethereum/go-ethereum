@@ -7,6 +7,8 @@ import MDXComponents from '../components/';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 import { textStyles } from '../theme/foundations';
+import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
+import gfm from 'remark-gfm';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -73,7 +75,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
     <>
       <main>
         <Heading as='h1' mb={5} {...textStyles.header1}>{frontmatter.title}</Heading>
-        <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>{content}</ReactMarkdown>
       </main>
     </>
   );
