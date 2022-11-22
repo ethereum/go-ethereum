@@ -36,22 +36,6 @@ SyntaxHighlighter.registerLanguage('swift', swift);
 
 const { header1, header2, header3, header4 } = textStyles;
 
-const MdTable = ({ children }: any) => (
-  <Flex maxW='100vw' overflowX='scroll'>
-    <Table
-      variant='striped'
-      colorScheme='greenAlpha'
-      border='1px'
-      borderColor='blackAlpha.50'
-      mb={10}
-      size={{ base: 'sm', lg: 'md' }}
-      w='auto'
-    >
-      {children}
-    </Table>
-  </Flex>
-)
-
 const Code = ({ className, ...code }: any) => {
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
@@ -160,7 +144,22 @@ const MDXComponents = {
     );
   },
   // tables
-  table: MdTable,
+  table: ({ children }: any) => (
+    <Flex maxW='min(100%, 100vw)' overflowX='scroll'>
+      <Table
+        variant='striped'
+        colorScheme='greenAlpha'
+        border='1px'
+        borderColor='blackAlpha.50'
+        mt={6}
+        mb={4}
+        size={{ base: 'sm', lg: 'md' }}
+        w='auto'
+      >
+        {children}
+      </Table>
+    </Flex>
+  ),
   // pre
   pre: ({ children }: any) => {
     return (
