@@ -669,6 +669,7 @@ func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
+// TODO: Re-use the existing definition.
 type storedReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
@@ -727,6 +728,7 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64, config *params.C
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
 

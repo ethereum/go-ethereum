@@ -64,6 +64,7 @@ type logMarshaling struct {
 
 //go:generate go run ../../rlp/rlpgen -type rlpLog -out gen_log_rlp.go
 
+// rlpLog is used to RLP-encode both the consensus and storage formats.
 type rlpLog struct {
 	Address common.Address
 	Topics  []common.Hash
