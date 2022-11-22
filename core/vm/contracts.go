@@ -28,9 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
-	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
 	big2 "github.com/holiman/big"
+	"github.com/protolambda/go-kzg/eth"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -1080,5 +1080,5 @@ func (c *pointEvaluation) RequiredGas(input []byte) uint64 {
 }
 
 func (c *pointEvaluation) Run(input []byte) ([]byte, error) {
-	return kzg.PointEvaluationPrecompile(input)
+	return eth.PointEvaluationPrecompile(input)
 }

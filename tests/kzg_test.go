@@ -1,4 +1,4 @@
-// TODO: Migrate these to crypto/kzg
+// TODO: Migrate these to go-kzg/eth
 package tests
 
 import (
@@ -13,10 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/ethereum/go-ethereum/crypto/kzg"
-
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
+	"github.com/protolambda/go-kzg/eth"
 )
 
 // Helper: Long polynomial division for two polynomials in coefficient form
@@ -150,8 +149,8 @@ func TestVerifyBlobs(t *testing.T) {
 		copy(blob2[i][:], jsonBlobs.KzgBlob2[i*31:(i+1)*31])
 	}
 	// Compute KZG commitments for both of the blobs above
-	kzg1, ok1 := kzg.BlobToKZGCommitment(blob1)
-	kzg2, ok2 := kzg.BlobToKZGCommitment(blob2)
+	kzg1, ok1 := eth.BlobToKZGCommitment(blob1)
+	kzg2, ok2 := eth.BlobToKZGCommitment(blob2)
 	if ok1 == false || ok2 == false {
 		panic("failed to convert blobs")
 	}
@@ -207,21 +206,21 @@ func TestPointEvaluationTestVector(t *testing.T) {
 	}
 
 	// Create a commitment
-	commitmentArray := kzg.PolynomialToKZGCommitment(polynomial)
+	commitmentArray := eth.PolynomialToKZGCommitment(polynomial)
 
 	// Create proof for testing
 	x := uint64(0x42)
 	xFr := new(bls.Fr)
 	bls.AsFr(xFr, x)
-	proofArray, err := kzg.ComputeKZGProof(polynomial, xFr)
+	proofArray, err := eth.ComputeKZGProof(polynomial, xFr)
 
 	// Get actual evaluation at x
-	yFr := kzg.EvaluatePolynomialInEvaluationForm(polynomial, xFr)
+	yFr := eth.EvaluatePolynomialInEvaluationForm(polynomial, xFr)
 	yArray := bls.FrTo32(yFr)
 	xArray := bls.FrTo32(xFr)
 
 	// Verify kzg proof
-	ok, err := kzg.VerifyKZGProof(commitmentArray, xArray, yArray, proofArray)
+	ok, err := eth.VerifyKZGProof(commitmentArray, xArray, yArray, proofArray)
 	if err != nil {
 		t.Fatal(err)
 	}
