@@ -80,7 +80,7 @@ const MDXComponents = {
       <NextLink href={href} passHref>
         <Link
           isExternal={href.startsWith('http') && !href.includes('geth.ethereum.org')}
-          color='primary'
+          variant='light'
         >
           {children}
         </Link>
@@ -97,7 +97,7 @@ const MDXComponents = {
   },
   h2: ({ children }: any) => {
     return (
-      <Heading as='h2' textAlign='start' mb={4} {...header2}>
+      <Heading as='h2' textAlign='start' mt='16 !important' mb={4} {...header2}>
         {children}
       </Heading>
     );
@@ -116,7 +116,6 @@ const MDXComponents = {
       </Heading>
     );
   },
-  // lists
   // tables
   table: ({ children }: any) => (
     <Flex maxW='min(100%, 100vw)' overflowX='scroll'>

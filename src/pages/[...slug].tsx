@@ -2,7 +2,7 @@ import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
 import ReactMarkdown from 'react-markdown';
-import { Heading } from '@chakra-ui/react';
+import { Stack, Heading } from '@chakra-ui/react';
 import MDXComponents from '../components/';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
@@ -74,7 +74,13 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
       <main>
-        <Heading as='h1' mb={5} {...textStyles.header1}>{frontmatter.title}</Heading>
+        <Stack mb={16}>
+          {/* TODO: <BREADCRUMBS/> */}
+          <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
+            {frontmatter.title}
+          </Heading>
+          {/* <Text as='span' mt='0 !important'>last edited {TODO: get last edited date}</Text> */}
+        </Stack>
         <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>{content}</ReactMarkdown>
       </main>
     </>
