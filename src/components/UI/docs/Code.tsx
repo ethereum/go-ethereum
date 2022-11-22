@@ -13,11 +13,7 @@ export const Code: FC<Props> = ({ code }) => {
         <Text
           as='span'
           background='code-bg'
-          fontFamily='"JetBrains Mono", monospace'
-          fontWeight={400}
-          fontSize='md'
-          lineHeight={4}
-          letterSpacing='1%'
+          textStyle='inline-code-snippet'
           pb={2}
           mb={-2}
         >
@@ -28,15 +24,11 @@ export const Code: FC<Props> = ({ code }) => {
       (
         <Stack>
           <ChakraCode
-            overflow='hidden'
+            overflow='auto'
             p={6}
             background='code-bg-contrast'
-            color='green.50'
-            fontFamily='"JetBrains Mono", monospace'
-            fontWeight={400}
-            fontSize='md'
-            lineHeight='21.12px'
-            letterSpacing='1%'
+            textStyle='code-block'
+            color='code-text'
           >
             {code.children[0]}
           </ChakraCode>
