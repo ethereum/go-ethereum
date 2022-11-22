@@ -8,7 +8,7 @@ import {
   DownloadsTable,
   SpecificVersionsSection
 } from '../components/UI/downloads';
-import { DataTable } from '../components/UI';
+import { DataTable, PageMetadata } from '../components/UI';
 
 import {
   ALL_GETH_COMMITS_URL,
@@ -16,6 +16,7 @@ import {
   DOWNLOAD_OPENPGP_BUILD_HEADERS,
   DOWNLOAD_OPENPGP_DEVELOPER_HEADERS,
   GETH_REPO_URL,
+  METADATA,
   LATEST_GETH_RELEASE_URL,
   LATEST_SOURCES_BASE_URL,
   LINUX_BINARY_BASE_URL,
@@ -112,7 +113,10 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
 
   return (
     <>
-      {/* TODO: add PageMetadata */}
+      <PageMetadata
+        title={METADATA.DOWNLOADS_TITLE}
+        description={METADATA.DOWNLOADS_DESCRIPTION}
+      />
 
       <main>
         <Stack spacing={4}>

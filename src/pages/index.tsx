@@ -10,6 +10,7 @@ import {
   WhatIsEthereum,
   WhyRunANode
 } from '../components/UI/homepage';
+import { PageMetadata } from '../components/UI';
 import { GopherHomeLinks } from '../components/UI/svgs';
 
 import {
@@ -18,13 +19,17 @@ import {
   ETHEREUM_FOUNDATION_URL,
   ETHEREUM_ORG_URL,
   GETH_REPO_URL,
-  GO_URL
+  GO_URL,
+  METADATA
 } from '../constants';
 
 const HomePage: NextPage = ({}) => {
   return (
     <>
-      {/* TODO: add PageMetadata */}
+      <PageMetadata
+        title={METADATA.HOME_TITLE}
+        description={METADATA.HOME_DESCRIPTION}
+      />
 
       <main>
         <Stack spacing={4}>

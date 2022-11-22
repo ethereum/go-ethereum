@@ -9,6 +9,7 @@ import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 import { textStyles } from '../theme/foundations';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import gfm from 'remark-gfm';
+import { PageMetadata } from '../components/UI';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -73,6 +74,11 @@ interface Props {
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
+      <PageMetadata
+        title={frontmatter.title}
+        description={frontmatter.description}
+      />
+
       <main>
         <Stack mb={16}>
           {/* TODO: <BREADCRUMBS/> */}
