@@ -1,0 +1,14 @@
+Source: bor-profile
+Version: 0.3.0
+Section: develop
+Priority: standard
+Maintainer: Polygon <release-team@polygon.technology>
+Build-Depends: debhelper-compat (= 13)
+Rules-Requires-Root: yes
+Package: bor-profile
+Architecture: amd64
+Multi-Arch: foreign
+Depends:
+Description: This is the bor package from Polygon Technology.
+
+

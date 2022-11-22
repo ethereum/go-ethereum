@@ -1,0 +1,318 @@
+name: packager
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '**'
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@master
+        with:
+          go-version: 1.19
+      - name: Generate release tag
+        id: tag
+        run: echo "::set-output name=release_tag::bor_$(date +"%Y.%m.%d_%H-%M")"
+
+      - name: Cleaning repo
+        run: make clean
+      - name: Building for amd64
+        run: make bor
+
+      - name: Making directory structure
+        run: mkdir -p packaging/deb/bor/usr/bin
+      - name: Making directory structure for toml
+        run: mkdir -p packaging/deb/bor/var/lib/bor
+      - name: Copying necessary files
+        run: cp -rp build/bin/bor packaging/deb/bor/usr/bin/
+      - name: copying control file
+        run: cp -rp packaging/templates/package_scripts/control packaging/deb/bor/DEBIAN/control
+      - name: removing systemd file for binary
+        run: rm -rf lib/systemd/system/bor.service
+
+      - name: Creating package for binary only bor
+        run: cp -rp packaging/deb/bor packaging/deb/bor-v0.3.0-beta-amd64
+      - name: Running package build
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-v0.3.0-beta-amd64
+
+      - name: Removing the bor binary
+        run: rm -rf packaging/deb/bor/usr/bin/bor
+
+      - name: making directory structure for systemd
+        run: mkdir -p packaging/deb/bor/lib/systemd/system
+      - name: Copying systemd file
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Prepping Mumbai Sentry Node Profile for amd64
+        run:  cp -rp  packaging/deb/bor packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64
+      - name: Putting toml
+        run: cp -rp packaging/templates/testnet-v4/sentry/sentry/bor/config.toml packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/DEBIAN/preinst
+      - name: Copying the postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying systemd file
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/lib/systemd/system/
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Running package build for sentry on amd64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-amd64
+
+      - name: Setting up Mainnet Sentry Config for amd64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64
+      - name: Copying control file
+        run: cp -rp packaging/templates/package_scripts/control packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Putting toml
+        run: cp -rp packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/preinst
+      - name: Copying the postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Building Sentry for amd64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-amd64
+
+      - name: Prepping Bor Validator Profile for amd64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64
+      - name: Copying control file for validator on amd64
+        run: cp -rp packaging/templates/package_scripts/control.validator packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Copying Postinstall script
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying Prerm script
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying Postrm script
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying config.toml for validator for bor
+        run: cp -rp packaging/templates/testnet-v4/sentry/validator/bor/config.toml packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Building bor validator on amd64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-amd64
+
+      - name: Prepping Bor Mainnet Validator for amd64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64
+      - name: Copying control file for validator on arm64
+        run: cp -rp packaging/templates/package_scripts/control.validator packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/preinst
+      - name: Copying Postinstall script
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying config.toml for validator for bor
+        run: cp -rp packaging/templates/mainnet-v1/sentry/validator/bor/config.toml packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Building bor validator on amd64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-amd64
+
+      - name: Creating mumbai archive node profile for amd64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Copying profile preinst file
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/preinst
+      - name: Copying the profile postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying profile prerm file
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying profile postrm file
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying the toml
+        run: cp -rp packaging/templates/testnet-v4/archive/config.toml packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Building profile package
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64
+
+      - name: Creating mainnet archive node profile for amd64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-amd64/DEBIAN/control
+      - name: Copying profile preinst file
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64/DEBIAN/preinst
+      - name: Copying the profile postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64/DEBIAN/postinst
+      - name: Copying profile prerm file
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64/DEBIAN/prerm
+      - name: Copying profile postrm file
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64/DEBIAN/postrm
+      - name: Copying the toml
+        run: cp -rp packaging/templates/mainnet-v1/archive/config.toml packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64/var/lib/bor/
+      - name: Building porfile package
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-amd64
+
+      - name: Cleaning build directory for arm64 build
+        run: make clean
+
+      - name: Removing systemd file
+        run: rm -rf packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Adding requirements for cross compile
+        run: sudo apt-get install g++-aarch64-linux-gnu gcc-aarch64-linux-gnu
+
+      - name: removing systemd file for binary
+        run: rm -rf lib/systemd/system/bor.service
+
+      - name: Building bor for arm64
+        run: GOARCH=arm64 GOOS=linux CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ CGO_ENABLED=1 go build -o build/bin/bor ./cmd/cli/main.go
+
+      - name: Copying bor arm64 for use with packaging
+        run: cp -rp build/bin/bor packaging/deb/bor/usr/bin/
+
+      - name: Creating package for binary only bor
+        run: cp -rp packaging/deb/bor packaging/deb/bor-v0.3.0-beta-arm64
+      - name: Copying control file
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-v0.3.0-beta-arm64/DEBIAN/control
+      - name: Running package build
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-v0.3.0-beta-arm64
+
+      - name: Removing the bor binary
+        run: rm -rf packaging/deb/bor/usr/bin/bor
+
+      - name: Copying systemd file
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Updating the control file to use with the arm64 profile
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
+
+      - name: Setting up Mumbai Sentry Config for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64
+      - name: Copying control file
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Putting toml
+        run: cp -rp packaging/templates/testnet-v4/sentry/sentry/bor/config.toml packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/preinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying the postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Building Sentry for arm64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64
+
+      - name: Setting up Mainnet Sentry Config for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64
+      - name: Copying control file
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Putting toml
+        run: cp -rp packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/preinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying the postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Building Sentry for arm64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-sentry-config_v0.3.0-beta-arm64
+
+      - name: Prepping Bor Mumbai Validator for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64
+      - name: Copying control file for validator on arm64
+        run: cp -rp packaging/templates/package_scripts/control.validator.arm64 packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/preinst
+      - name: Copying Postinstall script
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-sentry-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying config.toml for validator for bor
+        run: cp -rp packaging/templates/testnet-v4/sentry/validator/bor/config.toml packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Building bor validator on arm64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-validator-config_v0.3.0-beta-arm64
+
+      - name: Prepping Bor Mainnet Validator for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64
+      - name: Copying control file for validator on arm64
+        run: cp -rp packaging/templates/package_scripts/control.validator.arm64 packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Copying the preinst
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/preinst
+      - name: Copying Postinstall script
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying the prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying the postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying config.toml for validator for bor
+        run: cp -rp packaging/templates/mainnet-v1/sentry/validator/bor/config.toml packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Building bor validator on arm64
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-validator-config_v0.3.0-beta-arm64
+        
+      - name: Updating the control file to use with the arm64 profile
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
+
+      - name: Creating mumbai archive node profile for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Copying over profile postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying the toml
+        run: cp -rp packaging/templates/testnet-v4/archive/config.toml packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Building profile package
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mumbai-archive-config_v0.3.0-beta-arm64
+
+      - name: Creating mainnet archive node profile for arm64
+        run: cp -rp packaging/deb/bor packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64
+      - name: Copying profile control file
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64/DEBIAN/control
+      - name: Copying over profile postinst
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64/DEBIAN/postinst
+      - name: Copying prerm
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64/DEBIAN/prerm
+      - name: Copying postrm
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64/DEBIAN/postrm
+      - name: Copying the toml
+        run: cp -rp packaging/templates/mainnet-v1/archive/config.toml packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64/var/lib/bor/
+      - name: Building porfile package
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-mainnet-archive-config_v0.3.0-beta-arm64
+
+      - name: Confirming package built
+        run: ls -ltr packaging/deb/ | grep bor
+
+      - name: Release bor Packages
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          files: |
+            packaging/deb/bor**.deb
+            binary/bo**
