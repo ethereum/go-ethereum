@@ -8,8 +8,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/protolambda/go-kzg/eth"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -57,7 +57,7 @@ func (p *KZGCommitment) UnmarshalText(text []byte) error {
 }
 
 func (c KZGCommitment) ComputeVersionedHash() common.Hash {
-	return common.Hash(kzg.KZGToVersionedHash(kzg.KZGCommitment(c)))
+	return common.Hash(eth.KZGToVersionedHash(eth.KZGCommitment(c)))
 }
 
 // Compressed BLS12-381 G1 element
@@ -120,12 +120,12 @@ func (p *BLSFieldElement) UnmarshalText(text []byte) error {
 // Blob data
 type Blob [params.FieldElementsPerBlob]BLSFieldElement
 
-// kzg.Blob interface
+// eth.Blob interface
 func (blob Blob) Len() int {
 	return len(blob)
 }
 
-// kzg.Blob interface
+// eth.Blob interface
 func (blob Blob) At(i int) [32]byte {
 	return [32]byte(blob[i])
 }
@@ -208,13 +208,13 @@ func (blob *Blob) UnmarshalText(text []byte) error {
 
 type BlobKzgs []KZGCommitment
 
-// kzg.KZGCommitmentSequence interface
+// eth.KZGCommitmentSequence interface
 func (bk BlobKzgs) Len() int {
 	return len(bk)
 }
 
-func (bk BlobKzgs) At(i int) kzg.KZGCommitment {
-	return kzg.KZGCommitment(bk[i])
+func (bk BlobKzgs) At(i int) eth.KZGCommitment {
+	return eth.KZGCommitment(bk[i])
 }
 
 func (li *BlobKzgs) Deserialize(dr *codec.DecodingReader) error {
@@ -253,13 +253,13 @@ func (li BlobKzgs) copy() BlobKzgs {
 
 type Blobs []Blob
 
-// kzg.BlobSequence interface
+// eth.BlobSequence interface
 func (blobs Blobs) Len() int {
 	return len(blobs)
 }
 
-// kzg.BlobSequence interface
-func (blobs Blobs) At(i int) kzg.Blob {
+// eth.BlobSequence interface
+func (blobs Blobs) At(i int) eth.Blob {
 	return blobs[i]
 }
 
@@ -306,17 +306,17 @@ func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGComm
 	commitments = make([]KZGCommitment, len(blobs))
 	versionedHashes = make([]common.Hash, len(blobs))
 	for i, blob := range blobs {
-		c, ok := kzg.BlobToKZGCommitment(blob)
+		c, ok := eth.BlobToKZGCommitment(blob)
 		if !ok {
 			return nil, nil, KZGProof{}, errors.New("could not convert blob to commitment")
 		}
 		commitments[i] = KZGCommitment(c)
-		versionedHashes[i] = common.Hash(kzg.KZGToVersionedHash(c))
+		versionedHashes[i] = common.Hash(eth.KZGToVersionedHash(c))
 	}
 
 	var kzgProof KZGProof
 	if len(blobs) != 0 {
-		proof, err := kzg.ComputeAggregateKZGProof(blobs)
+		proof, err := eth.ComputeAggregateKZGProof(blobs)
 		if err != nil {
 			return nil, nil, KZGProof{}, err
 		}
@@ -402,7 +402,7 @@ func (b *BlobTxWrapData) validateBlobTransactionWrapper(inner TxData) error {
 	if l1 > params.MaxBlobsPerBlock {
 		return fmt.Errorf("number of blobs exceeds max: %v", l1)
 	}
-	ok, err := kzg.VerifyAggregateKZGProof(b.Blobs, b.BlobKzgs, kzg.KZGProof(b.KzgAggregatedProof))
+	ok, err := eth.VerifyAggregateKZGProof(b.Blobs, b.BlobKzgs, eth.KZGProof(b.KzgAggregatedProof))
 	if err != nil {
 		return fmt.Errorf("error during proof verification: %v", err)
 	}

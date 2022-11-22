@@ -1,4 +1,4 @@
-// TODO: Migrate these to crypto/kzg
+// TODO: Migrate these to go-kzg/eth
 package tests
 
 import (
@@ -8,16 +8,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	gokzg "github.com/protolambda/go-kzg"
 	"github.com/protolambda/go-kzg/bls"
+	"github.com/protolambda/go-kzg/eth"
 	"github.com/protolambda/ztyp/view"
 )
 
-func randomBlob() kzg.Polynomial {
-	blob := make(kzg.Polynomial, params.FieldElementsPerBlob)
+func randomBlob() eth.Polynomial {
+	blob := make(eth.Polynomial, params.FieldElementsPerBlob)
 	for i := 0; i < len(blob); i++ {
 		blob[i] = *bls.RandomFr()
 	}
@@ -28,7 +28,7 @@ func BenchmarkBlobToKzg(b *testing.B) {
 	blob := randomBlob()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		kzg.PolynomialToKZGCommitment(blob)
+		eth.PolynomialToKZGCommitment(blob)
 	}
 }
 
@@ -41,13 +41,13 @@ func BenchmarkVerifyBlobs(b *testing.B) {
 		for j := range tmp {
 			blobs[i][j] = bls.FrTo32(&tmp[j])
 		}
-		frs, ok := kzg.BlobToPolynomial(blobs[i])
+		frs, ok := eth.BlobToPolynomial(blobs[i])
 		if !ok {
 			b.Fatal("Could not compute commitment")
 		}
-		c := types.KZGCommitment(kzg.PolynomialToKZGCommitment(frs))
+		c := types.KZGCommitment(eth.PolynomialToKZGCommitment(frs))
 		commitments = append(commitments, c)
-		h := common.Hash(kzg.KZGToVersionedHash(kzg.KZGCommitment(c)))
+		h := common.Hash(eth.KZGToVersionedHash(eth.KZGCommitment(c)))
 		hashes = append(hashes, h)
 	}
 	txData := &types.SignedBlobTx{
@@ -97,12 +97,12 @@ func BenchmarkVerifyKZGProof(b *testing.B) {
 
 	// Now let's start testing the kzg module
 	// Create a commitment
-	k := kzg.PolynomialToKZGCommitment(evalPoly)
+	k := eth.PolynomialToKZGCommitment(evalPoly)
 	commitment, _ := bls.FromCompressedG1(k[:])
 
 	// Create proof for testing
 	x := uint64(17)
-	proof := ComputeProof(polynomial, x, kzg.KzgSetupG1)
+	proof := ComputeProof(polynomial, x, eth.KzgSetupG1)
 
 	// Get actual evaluation at x
 	var xFr bls.Fr
@@ -113,7 +113,7 @@ func BenchmarkVerifyKZGProof(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Verify kzg proof
-		if kzg.VerifyKZGProofFromPoints(commitment, &xFr, &value, proof) != true {
+		if eth.VerifyKZGProofFromPoints(commitment, &xFr, &value, proof) != true {
 			b.Fatal("failed proof verification")
 		}
 	}
@@ -136,9 +136,9 @@ func BenchmarkVerifyMultiple(b *testing.B) {
 						blobElements[j] = bls.FrTo32(&blob[j])
 					}
 					blobs = append(blobs, blobElements)
-					c := types.KZGCommitment(kzg.PolynomialToKZGCommitment(blob))
+					c := types.KZGCommitment(eth.PolynomialToKZGCommitment(blob))
 					commitments = append(commitments, c)
-					h := common.Hash(kzg.KZGToVersionedHash(kzg.KZGCommitment(c)))
+					h := common.Hash(eth.KZGToVersionedHash(eth.KZGCommitment(c)))
 					hashes = append(hashes, h)
 				}
 				blobsSet = append(blobsSet, blobs)
