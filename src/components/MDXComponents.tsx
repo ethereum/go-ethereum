@@ -1,7 +1,8 @@
 import { Heading, Link, Stack, Text } from '@chakra-ui/react';
 import NextLink from 'next/link';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { nightOwl } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+
+import { Code } from './UI/docs'
 
 import bash from 'react-syntax-highlighter/dist/cjs/languages/prism/bash';
 import go from 'react-syntax-highlighter/dist/cjs/languages/prism/go';
@@ -25,8 +26,6 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('sh', sh);
 SyntaxHighlighter.registerLanguage('solidity', solidity);
 SyntaxHighlighter.registerLanguage('swift', swift);
-
-import { getProgrammingLanguageName } from '../utils';
 
 const MDXComponents = {
   // paragraphs
@@ -86,10 +85,12 @@ const MDXComponents = {
         <pre>{children}</pre>
       </Stack>
     );
-  }
+  },
   // code
-  // code: (code: any) => {
-  //   const language = getProgrammingLanguageName(code);
+  code: (code: any) => {
+    return (
+      <Code code={code} />
+    )
 
   //   return !!code.inline ? (
   //     <Text
@@ -109,7 +110,7 @@ const MDXComponents = {
   //       {code.children[0]}
   //     </Stack>
   //   );
-  // }
+  }
 };
 
 export default MDXComponents;
