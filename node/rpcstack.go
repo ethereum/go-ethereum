@@ -465,17 +465,28 @@ var gzPool = sync.Pool{
 }
 
 type gzipResponseWriter struct {
-	io.Writer
-	http.ResponseWriter
+	resp http.ResponseWriter
+	gz   *gzip.Writer
+}
+
+func (w *gzipResponseWriter) Header() http.Header {
+	return w.resp.Header()
 }
 
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.Header().Del("Content-Length")
-	w.ResponseWriter.WriteHeader(status)
+	w.resp.Header().Del("Content-Length")
+	w.resp.WriteHeader(status)
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
+	return w.gz.Write(b)
+}
+
+func (w *gzipResponseWriter) Flush() {
+	w.gz.Flush()
+	if f, ok := w.resp.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func newGzipHandler(next http.Handler) http.Handler {
@@ -493,7 +504,8 @@ func newGzipHandler(next http.Handler) http.Handler {
 		gz.Reset(w)
 		defer gz.Close()
 
-		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, Writer: gz}, r)
+		wrapper := &gzipResponseWriter{resp: w, gz: gz}
+		next.ServeHTTP(wrapper, r)
 	})
 }
 
