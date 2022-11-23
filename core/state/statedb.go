@@ -1067,25 +1067,31 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 // - Add the contents of the optional tx access list (2930)
 //
 // Potential EIPs:
-// - Reset transient storage(1153)
-func (s *StateDB) Prepare(rules params.Rules, sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+// - Reset access list (Berlin)
+// - Add coinbase to access list (EIP-3651)
+// - Reset transient storage (EIP-1153)
+func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
-		s.accessList = newAccessList()
+		al := newAccessList()
+		s.accessList = al
 
-		s.AddAddressToAccessList(sender)
+		al.AddAddress(sender)
 		if dst != nil {
-			s.AddAddressToAccessList(*dst)
+			al.AddAddress(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range precompiles {
-			s.AddAddressToAccessList(addr)
+			al.AddAddress(addr)
 		}
 		for _, el := range list {
-			s.AddAddressToAccessList(el.Address)
+			al.AddAddress(el.Address)
 			for _, key := range el.StorageKeys {
-				s.AddSlotToAccessList(el.Address, key)
+				al.AddSlot(el.Address, key)
 			}
+		}
+		if rules.IsShanghai { // EIP-3651: warm coinbase
+			al.AddAddress(coinbase)
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
