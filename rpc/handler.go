@@ -148,18 +148,11 @@ func (b *batchCallBuffer) write(ctx context.Context, conn jsonWriter) {
 		return
 	}
 	if len(b.answers) > 0 {
-		conn.writeJSON(ctx, b.answers)
+		conn.writeJSON(ctx, b.answers, false)
 	}
 	// Prevent double write by normal path after a timeout.
 	b.answers = nil
 	b.wrote = true
-}
-
-func computeTimeout(deadline time.Time) time.Duration {
-	// Return error message before http server cuts connection. See:
-	// https://github.com/golang/go/issues/47229
-	// Note: Timeouts are sanitized to be a minimum of 1 second.
-	return time.Until(deadline) - 100*time.Millisecond
 }
 
 // handleBatch executes all messages in a batch and returns the responses.
@@ -167,7 +160,8 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Emit error response for empty batches:
 	if len(msgs) == 0 {
 		h.startCallProc(func(cp *callProc) {
-			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
+			resp := errorMessage(&invalidRequestError{"empty batch"})
+			h.conn.writeJSON(cp.ctx, resp, true)
 		})
 		return
 	}
@@ -185,20 +179,27 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	// Process calls on a goroutine because they may block indefinitely:
 	h.startCallProc(func(cp *callProc) {
 		var (
-			timer       *time.Timer
-			callBuffer  = &batchCallBuffer{calls: calls, answers: make([]*jsonrpcMessage, 0, len(calls))}
-			ctx, cancel = context.WithCancel(cp.ctx)
+			timer      *time.Timer
+			cancel     context.CancelFunc
+			callBuffer = &batchCallBuffer{calls: calls, answers: make([]*jsonrpcMessage, 0, len(calls))}
 		)
-		cp.ctx = ctx
-		if deadline, ok := ctx.Deadline(); ok {
-			timer = time.AfterFunc(computeTimeout(deadline), func() {
+
+		cp.ctx, cancel = context.WithCancel(cp.ctx)
+		defer cancel()
+
+		// Cancel the request context after timeout and send an error response. Since the
+		// currently-running method might not return immediately on timeout, we must wait
+		// for the timeout concurrently with processing the request.
+		if timeout, ok := getContextRequestTimeout(cp.ctx); ok {
+			timer = time.AfterFunc(timeout, func() {
 				cancel()
-				callBuffer.timeout(ctx, h.conn)
+				callBuffer.timeout(cp.ctx, h.conn)
 			})
 		}
+
 		for {
 			// No need to handle rest of calls if timed out.
-			if ctx.Err() != nil {
+			if cp.ctx.Err() != nil {
 				break
 			}
 			msg := callBuffer.popCall()
@@ -211,7 +212,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		if timer != nil {
 			timer.Stop()
 		}
-		callBuffer.write(ctx, h.conn)
+		callBuffer.write(cp.ctx, h.conn)
 		h.addSubscriptions(cp.notifiers)
 		for _, n := range cp.notifiers {
 			n.activate()
@@ -226,16 +227,22 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 	}
 	h.startCallProc(func(cp *callProc) {
 		var (
-			responded   sync.Once
-			timer       *time.Timer
-			ctx, cancel = context.WithCancel(cp.ctx)
+			responded sync.Once
+			timer     *time.Timer
+			cancel    context.CancelFunc
 		)
-		cp.ctx = ctx
-		if deadline, ok := ctx.Deadline(); ok {
-			timer = time.AfterFunc(computeTimeout(deadline), func() {
+		cp.ctx, cancel = context.WithCancel(cp.ctx)
+		defer cancel()
+
+		// Cancel the request context after timeout and send an error response. Since the
+		// running method might not return immediately on timeout, we must wait for the
+		// timeout concurrently with processing the request.
+		if timeout, ok := getContextRequestTimeout(cp.ctx); ok {
+			timer = time.AfterFunc(timeout, func() {
 				cancel()
 				responded.Do(func() {
-					h.conn.writeJSON(ctx, msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout}))
+					resp := msg.errorResponse(&internalServerError{errcodeTimeout, errMsgTimeout})
+					h.conn.writeJSON(cp.ctx, resp, true)
 				})
 			})
 		}
@@ -247,7 +254,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		h.addSubscriptions(cp.notifiers)
 		if answer != nil {
 			responded.Do(func() {
-				h.conn.writeJSON(ctx, answer)
+				h.conn.writeJSON(cp.ctx, answer, false)
 			})
 		}
 		for _, n := range cp.notifiers {
