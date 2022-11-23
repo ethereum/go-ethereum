@@ -2,11 +2,15 @@ import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
 import ReactMarkdown from 'react-markdown';
-import { Heading } from '@chakra-ui/react';
+import { Heading, Stack } from '@chakra-ui/react';
 import MDXComponents from '../components/';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
+import { useRouter } from 'next/router';
+import { Breadcrumbs } from '../components/docs'
+
 import { PageMetadata } from '../components/UI';
+
 
 const MATTER_OPTIONS = {
   engines: {
@@ -69,6 +73,8 @@ interface Props {
 }
 
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
+  const router = useRouter()
+
   return (
     <>
       <PageMetadata
@@ -77,9 +83,13 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
       />
 
       <main>
-        <Heading as='h1'>{frontmatter.title}</Heading>
+        <Stack py={8} px={4}>
+          <Breadcrumbs router={router} />
 
-        <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+          <Heading as='h1'>{frontmatter.title}</Heading>
+
+          <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+        </Stack>
       </main>
     </>
   );
