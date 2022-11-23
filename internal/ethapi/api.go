@@ -858,14 +858,19 @@ func (s *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Address
 	return res[:], state.Error()
 }
 
-// Exist returns whether an account for a given address exists in the database.
-func (s *BlockChainAPI) Exist(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (bool, error) {
+// GetAccount returns whether an account object from the state for the given block number.
+func (s *BlockChainAPI) GetAccount(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*types.StateAccount, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
-		return false, err
+		return nil, err
 	}
-	exist := state.Exist(address)
-	return exist, state.Error()
+
+	return &types.StateAccount{
+		Nonce:    state.GetNonce(address),
+		Balance:  state.GetBalance(address),
+		Root:     state.GetRoot(address),
+		CodeHash: state.GetCodeHash(address).Bytes(),
+	}, state.Error()
 }
 
 // OverrideAccount indicates the overriding fields of account during the execution
