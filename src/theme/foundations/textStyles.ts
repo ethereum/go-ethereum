@@ -90,6 +90,16 @@ export const textStyles = {
     textAlign: 'center',
     fontSize: 'sm'
   },
+  'header-button': {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontWeight: 700,
+    fontSize: { base: '0.86rem', sm: '1rem' },
+  },
+  'header-mobile-button': {
+    fontFamily: '"JetBrains Mono", monospace',
+    textTransform: 'uppercase',
+    fontSize: '2xl'
+  },
   'inline-code-snippet': {
     fontFamily: '"JetBrains Mono", monospace',
     fontWeight: 400,
