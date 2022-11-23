@@ -1,7 +1,7 @@
 project_name: bor
 
 release:
-  disable: false
+  disable: true
   draft: true
   prerelease: auto
 
