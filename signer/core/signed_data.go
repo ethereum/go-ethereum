@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
@@ -167,6 +168,22 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Clique uses V on the form 0 or 1
 		useEthereumV = false
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}
+	case apitypes.DataTyped.Mime:
+		// EIP-712 conformant typed data
+		var typedData apitypes.TypedData
+		if stringData, ok := data.(string); !ok {
+			return nil, useEthereumV, fmt.Errorf("input for %v must be an hex-encoded string", apitypes.DataTyped.Mime)
+		} else if jsonData, err := hexutil.Decode(stringData); err != nil {
+			return nil, useEthereumV, err
+		} else if err := json.Unmarshal(jsonData, &typedData); err != nil {
+			return nil, useEthereumV, err
+		}
+		messages, err := typedData.Format()
+		if err != nil {
+			return nil, useEthereumV, err
+		}
+		sighash, rawData, err := apitypes.TypedDataAndHash(typedData)
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(rawData), Messages: messages, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19Ethereum Signed Message:\n${message length}${message}")
