@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/protolambda/go-kzg/eth"
 	"github.com/protolambda/ztyp/codec"
-	"github.com/protolambda/ztyp/tree"
 )
 
 // Compressed BLS12-381 G1 element
@@ -35,13 +34,6 @@ func (KZGCommitment) ByteLength() uint64 {
 
 func (KZGCommitment) FixedLength() uint64 {
 	return 48
-}
-
-func (p KZGCommitment) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	var a, b tree.Root
-	copy(a[:], p[0:32])
-	copy(b[:], p[32:48])
-	return hFn(a, b)
 }
 
 func (p KZGCommitment) MarshalText() ([]byte, error) {
@@ -81,13 +73,6 @@ func (KZGProof) ByteLength() uint64 {
 
 func (KZGProof) FixedLength() uint64 {
 	return 48
-}
-
-func (p KZGProof) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	var a, b tree.Root
-	copy(a[:], p[0:32])
-	copy(b[:], p[32:48])
-	return hFn(a, b)
 }
 
 func (p KZGProof) MarshalText() ([]byte, error) {
@@ -158,12 +143,6 @@ func (blob *Blob) ByteLength() (out uint64) {
 
 func (blob *Blob) FixedLength() uint64 {
 	return params.FieldElementsPerBlob * 32
-}
-
-func (blob *Blob) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.ComplexVectorHTR(func(i uint64) tree.HTR {
-		return (*tree.Root)(&blob[i])
-	}, params.FieldElementsPerBlob)
 }
 
 func (blob *Blob) MarshalText() ([]byte, error) {
@@ -239,12 +218,6 @@ func (li BlobKzgs) FixedLength() uint64 {
 	return 0
 }
 
-func (li BlobKzgs) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.ComplexListHTR(func(i uint64) tree.HTR {
-		return &li[i]
-	}, uint64(len(li)), params.MaxBlobsPerBlock)
-}
-
 func (li BlobKzgs) copy() BlobKzgs {
 	cpy := make(BlobKzgs, len(li))
 	copy(cpy, li)
@@ -285,16 +258,6 @@ func (a *Blobs) FixedLength() uint64 {
 	return 0 // it's a list, no fixed length
 }
 
-func (li Blobs) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	length := uint64(len(li))
-	return hFn.ComplexListHTR(func(i uint64) tree.HTR {
-		if i < length {
-			return &li[i]
-		}
-		return nil
-	}, length, params.MaxBlobsPerBlock)
-}
-
 func (blobs Blobs) copy() Blobs {
 	cpy := make(Blobs, len(blobs))
 	copy(cpy, blobs) // each blob element is an array and gets deep-copied
@@ -326,27 +289,6 @@ func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGComm
 	return commitments, versionedHashes, kzgProof, nil
 }
 
-type BlobsAndCommitments struct {
-	Blobs    Blobs
-	BlobKzgs BlobKzgs
-}
-
-func (b *BlobsAndCommitments) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.HashTreeRoot(&b.Blobs, &b.BlobKzgs)
-}
-
-func (b *BlobsAndCommitments) Serialize(w *codec.EncodingWriter) error {
-	return w.Container(&b.Blobs, &b.BlobKzgs)
-}
-
-func (b *BlobsAndCommitments) ByteLength() uint64 {
-	return codec.ContainerLength(&b.Blobs, &b.BlobKzgs)
-}
-
-func (b *BlobsAndCommitments) FixedLength() uint64 {
-	return 0
-}
-
 type BlobTxWrapper struct {
 	Tx                 SignedBlobTx
 	BlobKzgs           BlobKzgs
@@ -368,10 +310,6 @@ func (txw *BlobTxWrapper) ByteLength() uint64 {
 
 func (txw *BlobTxWrapper) FixedLength() uint64 {
 	return 0
-}
-
-func (txw *BlobTxWrapper) HashTreeRoot(hFn tree.HashFn) tree.Root {
-	return hFn.HashTreeRoot(&txw.Tx, &txw.BlobKzgs, &txw.Blobs, &txw.KzgAggregatedProof)
 }
 
 type BlobTxWrapData struct {
