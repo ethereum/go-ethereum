@@ -244,8 +244,6 @@ func TestSignData(t *testing.T) {
 	} else if have := signature; !bytes.Equal(have, want) {
 		t.Fatalf("want %x, have %x", want, have)
 	}
-	t.Logf("Signature: %x", signature)
-
 }
 
 func TestDomainChainId(t *testing.T) {
