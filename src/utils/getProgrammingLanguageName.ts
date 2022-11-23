@@ -1,4 +1,5 @@
-const CLASSNAME_PREFIX = 'language-';
+import { CLASSNAME_PREFIX } from '../constants';
+
 const DEFAULT = 'bash';
 const TERMINAL = 'terminal';
 const JS = ['javascript', 'js', 'jsx', 'ts', 'tsx'];

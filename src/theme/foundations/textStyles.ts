@@ -135,14 +135,14 @@ export const textStyles = {
     fontSize: 'sm'
   },
   'inline-code-snippet': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: 4,
     letterSpacing: '1%'
   },
   'code-block': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: '21.12px',

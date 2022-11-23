@@ -102,3 +102,6 @@ export const WINDOWS_BINARY_BASE_URL =
 
 export const LATEST_SOURCES_BASE_URL = 'https://github.com/ethereum/go-ethereum/archive/';
 export const RELEASE_NOTES_BASE_URL = 'https://github.com/ethereum/go-ethereum/releases/tag/';
+
+// Code snippet class constants
+export const CLASSNAME_PREFIX = 'language-';
