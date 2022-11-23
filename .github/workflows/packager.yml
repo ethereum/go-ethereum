@@ -308,6 +308,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.GIT_TAG }}
+          prerelease: true
           files: |
             packaging/deb/bor**.deb
             binary/bo**
