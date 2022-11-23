@@ -420,6 +420,21 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+	// For creation transaction (evm.depth == 0) EIP-3860 checks are done when calculating intrinsic gas
+	if evm.Config.HasEip3860() && evm.depth != 0 {
+		// Check whether the init code size has been exceeded.
+		len := len(codeAndHash.code)
+		if len > params.MaxInitCodeSize {
+			return nil, address, gas, ErrMaxInitCodeSizeExceeded
+		}
+		// Charge for init code size.
+		initCodeWordGas := toWordSize(uint64(len)) * params.InitCodeWordGas
+		if gas < initCodeWordGas {
+			return nil, address, gas, ErrCodeStoreOutOfGas
+		} else {
+			gas -= initCodeWordGas
+		}
+	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
@@ -434,10 +449,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
-	}
-	// Check whether the init code size has been exceeded.
-	if evm.Config.HasEip3860() && len(codeAndHash.code) > params.MaxInitCodeSize {
-		return nil, address, gas, ErrMaxInitCodeSizeExceeded
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
