@@ -3,6 +3,8 @@ import NextLink from 'next/link';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { nightOwl, prism } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 
+// import { Code } from './UI/docs'
+
 import bash from 'react-syntax-highlighter/dist/cjs/languages/prism/bash';
 import go from 'react-syntax-highlighter/dist/cjs/languages/prism/go';
 import graphql from 'react-syntax-highlighter/dist/cjs/languages/prism/graphql';

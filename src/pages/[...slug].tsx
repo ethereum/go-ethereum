@@ -1,15 +1,20 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import ReactMarkdown from 'react-markdown';
 import { Stack, Heading } from '@chakra-ui/react';
-import MDXComponents from '../components/';
+import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
+import ReactMarkdown from 'react-markdown';
+import gfm from 'remark-gfm';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
-import { textStyles } from '../theme/foundations';
-import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
-import gfm from 'remark-gfm';
+import { useRouter } from 'next/router';
+
+import MDXComponents from '../components/';
+import { Breadcrumbs } from '../components/docs'
 import { PageMetadata } from '../components/UI';
+import { textStyles } from '../theme/foundations';
+
+
 
 const MATTER_OPTIONS = {
   engines: {
@@ -72,6 +77,8 @@ interface Props {
 }
 
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
+  const router = useRouter()
+
   return (
     <>
       <PageMetadata
@@ -81,7 +88,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
 
       <main>
         <Stack mb={16}>
-          {/* TODO: <BREADCRUMBS/> */}
+          <Breadcrumbs router={router} />
           <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
             {frontmatter.title}
           </Heading>
