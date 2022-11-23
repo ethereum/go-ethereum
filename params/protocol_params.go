@@ -163,7 +163,7 @@ const (
 	MaxDataGasPerBlock         = 1 << 21
 	DataGasPerBlob             = 1 << 17
 	TargetDataGasPerBlock      = 1 << 20
-	MinDataGasPrice            = 10e8
+	MinDataGasPrice            = 1
 	DataGasPriceUpdateFraction = 8902606
 	MaxBlobsPerBlock           = MaxDataGasPerBlock / DataGasPerBlob
 
