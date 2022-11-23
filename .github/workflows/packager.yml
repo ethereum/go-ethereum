@@ -2,10 +2,6 @@ name: packager
 
 on:
   push:
-    branches:
-      - 'main'
-    paths:
-      - '**'
     tags:
       - 'v*.*.*'
       - 'v*.*.*-*'
@@ -22,9 +18,8 @@ jobs:
         uses: actions/setup-go@master
         with:
           go-version: 1.19
-      - name: Generate release tag
-        id: tag
-        run: echo "::set-output name=release_tag::bor_$(date +"%Y.%m.%d_%H-%M")"
+      - name: Adding TAG to ENV
+        run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
 
       - name: Cleaning repo
         run: make clean
@@ -309,10 +304,10 @@ jobs:
       - name: Confirming package built
         run: ls -ltr packaging/deb/ | grep bor
 
-      - name: Release bor Packages
+      - name: Pre-Release bor Packages
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
+          tag_name: ${{ env.GIT_TAG }}
           files: |
             packaging/deb/bor**.deb
             binary/bo**
