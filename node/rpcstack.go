@@ -199,9 +199,15 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), h.timeouts.WriteTimeout)
-		defer cancel()
-		r = r.WithContext(ctx)
+		// Ensure the context has a deadline, if one is configured.
+		// We need this deadline so the RPC server can terminate the request
+		// correctly when it times out.
+		if h.timeouts.WriteTimeout > 0 {
+			ctx, cancel := context.WithTimeout(r.Context(), h.timeouts.WriteTimeout)
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
+
 		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
