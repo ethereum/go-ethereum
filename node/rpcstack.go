@@ -464,28 +464,29 @@ var gzPool = sync.Pool{
 }
 
 type gzipResponseWriter struct {
-	resp http.ResponseWriter
 	gz   *gzip.Writer
+	resp http.ResponseWriter
 
-	length    uint64
-	written   uint64
-	hasLength bool
-	inited    bool
+	contentLength uint64 // total length of the uncompressed response
+	written       uint64 // amount of written bytes from the uncompressed response
+	hasLength     bool   // true if uncompressed response had Content-Length
+	inited        bool   // true after initBuffering called first time
 }
 
-func (w *gzipResponseWriter) initBuffering() {
+// initContentLength checks if the uncompressed response has a content-length header.
+func (w *gzipResponseWriter) initContentLength() {
 	if w.inited {
 		return
 	}
+	w.inited = true
 
 	hdr := w.resp.Header()
 	length := hdr.Get("content-length")
 	hdr.Del("content-length")
-
 	if len(length) > 0 {
 		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
 			w.hasLength = true
-			w.length = n
+			w.contentLength = n
 		}
 	}
 }
@@ -495,16 +496,19 @@ func (w *gzipResponseWriter) Header() http.Header {
 }
 
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.initBuffering()
+	w.initContentLength()
 	w.resp.WriteHeader(status)
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	w.initBuffering()
+	w.initContentLength()
 
 	n, err := w.gz.Write(b)
 	w.written += uint64(n)
-	if w.hasLength && w.written >= w.length {
+	if w.hasLength && w.written >= w.contentLength {
+		// The HTTP handler has finished writing the entire uncompressed response. Close
+		// the gzip stream to ensure the footer will be seen by the client if the response
+		// is flushed after this call to write.
 		err = w.gz.Close()
 	}
 	return n, err
