@@ -23,8 +23,9 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -279,6 +280,38 @@ var (
 			},
 			ProducerDelay: 6,
 			Sprint:        64,
+			BackupMultiplier: map[string]uint64{
+				"0": 2,
+			},
+			ValidatorContract:     "0x0000000000000000000000000000000000001000",
+			StateReceiverContract: "0x0000000000000000000000000000000000001001",
+			BurntContract: map[string]string{
+				"0": "0x00000000000000000000000000000000000000000",
+			},
+		},
+	}
+	BorUnittestChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(80001),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Hash:          common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		Bor: &BorConfig{
+			Period: map[string]uint64{
+				"0": 1,
+			},
+			ProducerDelay: 3,
+			Sprint:        32,
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -550,7 +583,9 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 	for k := range field {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	for i := 0; i < len(keys)-1; i++ {
 		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
 		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
@@ -558,6 +593,7 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 			return field[keys[i]]
 		}
 	}
+
 	return field[keys[len(keys)-1]]
 }
 

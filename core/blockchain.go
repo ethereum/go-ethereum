@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -43,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -133,9 +134,9 @@ type CacheConfig struct {
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
-// defaultCacheConfig are the default caching values if none are specified by the
+// DefaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
-var defaultCacheConfig = &CacheConfig{
+var DefaultCacheConfig = &CacheConfig{
 	TrieCleanLimit: 256,
 	TrieDirtyLimit: 256,
 	TrieTimeLimit:  5 * time.Minute,
@@ -222,7 +223,7 @@ type BlockChain struct {
 // and Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
-		cacheConfig = defaultCacheConfig
+		cacheConfig = DefaultCacheConfig
 	}
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)

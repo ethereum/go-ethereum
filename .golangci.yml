@@ -1,6 +1,7 @@
 # This file configures github.com/golangci/golangci-lint.
 
 run:
+  go: '1.18'
   timeout: 20m
   tests: true
   # default is true. Enables skipping of directories:
@@ -8,28 +9,139 @@ run:
   skip-dirs-use-default: true
   skip-files:
     - core/genesis_alloc.go
+    - gen_.*.go
+    - .*_gen.go
 
 linters:
-  disable-all: true
   enable:
-    - deadcode
     - goconst
     - goimports
-    - gosimple
-    - govet
-    - ineffassign
     - misspell
-    # - staticcheck
     - unconvert
-    # - unused
-    - varcheck
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - decorder
+    - durationcheck
+    - errchkjson
+    - errname
+    - exhaustive
+    - exportloopref
+    - gocognit
+    - gofmt
+    # - gomnd
+    - gomoddirectives
+    - gosec
+    - makezero
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    #- nosprintfhostport # TODO: do we use IPv6?
+    - paralleltest
+    - prealloc
+    - predeclared
+    #- promlinter
+    #- revive
+    # - tagliatelle
+    - tenv
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - wsl
+    #- errorlint causes stack overflow. TODO: recheck after each golangci update
 
 linters-settings:
   gofmt:
     simplify: true
+    auto-fix: false
+
   goconst:
     min-len: 3 # minimum length of string constant
-    min-occurrences: 6 # minimum number of occurrences
+    min-occurrences: 2 # minimum number of occurrences
+    numbers: true
+
+  goimports:
+    local-prefixes: github.com/ethereum/go-ethereum
+  
+  nestif:
+    min-complexity: 5
+  
+  prealloc:
+    for-loops: true
+
+  gocritic:
+    # Which checks should be enabled; can't be combined with 'disabled-checks';
+    # See https://go-critic.github.io/overview#checks-overview
+    # To check which checks are enabled run `GL_DEBUG=gocritic ./build/bin/golangci-lint run`
+    # By default list of stable checks is used.
+    enabled-checks:
+      - badLock
+      - filepathJoin	
+      - sortSlice
+      - sprintfQuotedString
+      - syncMapLoadAndDelete
+      - weakCond
+      - boolExprSimplify
+      - httpNoBody
+      - ioutilDeprecated
+      - nestingReduce
+      - preferFilepathJoin
+      - redundantSprint
+      - stringConcatSimplify
+      - timeExprSimplify
+      - typeAssertChain
+      - yodaStyleExpr
+      - truncateCmp
+      - equalFold
+      - preferDecodeRune
+      - preferFprint
+      - preferStringWriter
+      - preferWriteByte
+      - sliceClear
+      #- ruleguard
+
+    # Which checks should be disabled; can't be combined with 'enabled-checks'; default is empty
+    disabled-checks:
+      - regexpMust
+      - exitAfterDefer
+      - dupBranchBody
+      - singleCaseSwitch
+      - unlambda
+      - captLocal
+      - commentFormatting
+      - ifElseChain
+      - importShadow
+      - builtinShadow
+
+    # Enable multiple checks by tags, run `GL_DEBUG=gocritic golangci-lint run` to see all tags and checks.
+    # Empty list by default. See https://github.com/go-critic/go-critic#usage -> section "Tags".
+    enabled-tags:
+      - performance
+      - diagnostic
+      - opinionated
+      - style
+    disabled-tags:
+      - experimental
+  govet:
+    disable:
+      - deepequalerrors
+      - fieldalignment
+      - shadow
+      - unsafeptr
+    check-shadowing: true
+    enable-all: true
+    settings:
+      printf:
+        # Run `go tool vet help printf` to see available settings for `printf` analyzer.
+        funcs:
+          - (github.com/ethereum/go-ethereum/log.Logger).Trace
+          - (github.com/ethereum/go-ethereum/log.Logger).Debug
+          - (github.com/ethereum/go-ethereum/log.Logger).Info
+          - (github.com/ethereum/go-ethereum/log.Logger).Warn
+          - (github.com/ethereum/go-ethereum/log.Logger).Error
+          - (github.com/ethereum/go-ethereum/log.Logger).Crit
 
 issues:
   exclude-rules:
@@ -48,3 +160,28 @@ issues:
     - path: cmd/faucet/
       linters:
         - deadcode
+    # Exclude some linters from running on tests files.
+    - path: test\.go
+      linters:
+        - gosec
+        - unused
+        - deadcode
+        - gocritic
+    - path: cmd/devp2p
+      linters:
+        - gosec
+        - unused
+        - deadcode
+        - gocritic
+    - path: metrics/sample\.go
+      linters:
+        - gosec
+        - gocritic
+    - path: p2p/simulations
+      linters:
+        - gosec
+        - gocritic
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  #new: true
+  new-from-rev: origin/master

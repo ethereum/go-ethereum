@@ -45,12 +45,14 @@ type Merger struct {
 // NewMerger creates a new Merger which stores its transition status in the provided db.
 func NewMerger(db ethdb.KeyValueStore) *Merger {
 	var status transitionStatus
+
 	blob := rawdb.ReadTransitionStatus(db)
 	if len(blob) != 0 {
 		if err := rlp.DecodeBytes(blob, &status); err != nil {
 			log.Crit("Failed to decode the transition status", "err", err)
 		}
 	}
+
 	return &Merger{
 		db:     db,
 		status: status,

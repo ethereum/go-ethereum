@@ -31,11 +31,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -77,15 +79,16 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
-	Database   ethdb.Database            // Database for direct sync insertions
-	Chain      *core.BlockChain          // Blockchain to serve data from
-	TxPool     txPool                    // Transaction pool to propagate from
-	Merger     *consensus.Merger         // The manager for eth1/2 transition
-	Network    uint64                    // Network identifier to adfvertise
-	Sync       downloader.SyncMode       // Whether to snap or full sync
-	BloomCache uint64                    // Megabytes to alloc for snap sync bloom
-	EventMux   *event.TypeMux            // Legacy event mux, deprecate for `feed`
-	Checkpoint *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
+	Database   ethdb.Database              // Database for direct sync insertions
+	Chain      *core.BlockChain            // Blockchain to serve data from
+	TxPool     txPool                      // Transaction pool to propagate from
+	Merger     *consensus.Merger           // The manager for eth1/2 transition
+	Network    uint64                      // Network identifier to adfvertise
+	Sync       downloader.SyncMode         // Whether to snap or full sync
+	BloomCache uint64                      // Megabytes to alloc for snap sync bloom
+	EventMux   *event.TypeMux              //nolint:staticcheck // Legacy event mux, deprecate for `feed`
+	Checkpoint *params.TrustedCheckpoint   // Hard coded checkpoint for sync challenges
+	EthAPI     *ethapi.PublicBlockChainAPI // EthAPI to interact
 
 	PeerRequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 }
@@ -110,6 +113,8 @@ type handler struct {
 	txFetcher    *fetcher.TxFetcher
 	peers        *peerSet
 	merger       *consensus.Merger
+
+	ethAPI *ethapi.PublicBlockChainAPI // EthAPI to interact
 
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
@@ -141,6 +146,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		chain:              config.Chain,
 		peers:              newPeerSet(),
 		merger:             config.Merger,
+		ethAPI:             config.EthAPI,
 		peerRequiredBlocks: config.PeerRequiredBlocks,
 		quitSync:           make(chan struct{}),
 	}
@@ -155,8 +161,15 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// In these cases however it's safe to reenable snap sync.
 		fullBlock, fastBlock := h.chain.CurrentBlock(), h.chain.CurrentFastBlock()
 		if fullBlock.NumberU64() == 0 && fastBlock.NumberU64() > 0 {
-			h.snapSync = uint32(1)
-			log.Warn("Switch sync mode from full sync to snap sync")
+			// Note: Ideally this should never happen with bor, but to be extra
+			// preventive we won't allow it to roll over to snap sync until
+			// we have it working
+
+			// TODO(snap): Uncomment when we have snap sync working
+			// h.snapSync = uint32(1)
+			// log.Warn("Switch sync mode from full sync to snap sync")
+
+			log.Warn("Preventing switching sync mode from full sync to snap sync")
 		}
 	} else {
 		if h.chain.CurrentBlock().NumberU64() > 0 {
@@ -195,7 +208,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync) and its backing state bloom if snap
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success)
+	// todo: it'd better to extract maxCapacity into config
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success, whitelist.NewService(10))
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {

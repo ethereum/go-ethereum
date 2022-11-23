@@ -2,27 +2,37 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test clean
+.PHONY: geth android ios geth-cross evm all test clean docs
+.PHONY: geth-linux geth-linux-386 geth-linux-amd64 geth-linux-mips64 geth-linux-mips64le
+.PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
+.PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
+.PHONY: geth-windows geth-windows-386 geth-windows-amd64
 
-GOBIN = ./build/bin
 GO ?= latest
+GOBIN = $(CURDIR)/build/bin
 GORUN = env GO111MODULE=on go run
 GOPATH = $(shell go env GOPATH)
 
-bor:
-	$(GORUN) build/ci.go install ./cmd/geth
-	mkdir -p $(GOPATH)/bin/
-	cp $(GOBIN)/geth $(GOBIN)/bor
-	cp $(GOBIN)/* $(GOPATH)/bin/
+GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
+GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+GIT_TAG    ?= $(shell git describe --tags `git rev-list --tags="v*" --max-count=1`)
 
-bor-all:
-	$(GORUN) build/ci.go install
+PACKAGE = github.com/ethereum/go-ethereum
+GO_FLAGS += -buildvcs=false
+GO_FLAGS += -ldflags "-X ${PACKAGE}/params.GitCommit=${GIT_COMMIT} -X ${PACKAGE}/params.GitBranch=${GIT_BRANCH} -X ${PACKAGE}/params.GitTag=${GIT_TAG}"
+
+TESTALL = $$(go list ./... | grep -v go-ethereum/cmd/)
+TESTE2E = ./tests/...
+GOTEST = GODEBUG=cgocheck=0 go test $(GO_FLAGS) -p 1
+
+bor:
 	mkdir -p $(GOPATH)/bin/
-	cp $(GOBIN)/geth $(GOBIN)/bor
-	cp $(GOBIN)/* $(GOPATH)/bin/
+	go build -o $(GOBIN)/bor ./cmd/cli/main.go
+	cp $(GOBIN)/bor $(GOPATH)/bin/
+	@echo "Done building."
 
 protoc:
-	protoc --go_out=. --go-grpc_out=. ./command/server/proto/*.proto
+	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -45,11 +55,29 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test:
-	# Skip mobile and cmd tests since they are being deprecated
-	go test -v $$(go list ./... | grep -v go-ethereum/cmd/) -cover -coverprofile=cover.out
+	$(GOTEST) --timeout 5m -shuffle=on -cover -coverprofile=cover.out $(TESTALL)
 
-lint: ## Run linters.
-	$(GORUN) build/ci.go lint
+test-race:
+	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
+
+test-integration:
+	$(GOTEST) --timeout 30m -tags integration $(TESTE2E)
+
+escape:
+	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
+
+lint:
+	@./build/bin/golangci-lint run --config ./.golangci.yml
+
+lintci-deps:
+	rm -f ./build/bin/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
+
+goimports:
+	goimports -local "$(PACKAGE)" -w .
+
+docs:
+	$(GORUN) cmd/clidoc/main.go -d ./docs/cli
 
 clean:
 	env GO111MODULE=on go clean -cache
@@ -59,16 +87,20 @@ clean:
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
 devtools:
-	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
-	env GOBIN= go install github.com/kevinburke/go-bindata/go-bindata@latest
-	env GOBIN= go install github.com/fjl/gencodec@latest
-	env GOBIN= go install github.com/golang/protobuf/protoc-gen-go@latest
-	env GOBIN= go install ./cmd/abigen
+	# Notice! If you adding new binary - add it also to tests/deps/fake.go file
+	$(GOBUILD) -o $(GOBIN)/stringer github.com/golang.org/x/tools/cmd/stringer
+	$(GOBUILD) -o $(GOBIN)/go-bindata github.com/kevinburke/go-bindata/go-bindata
+	$(GOBUILD) -o $(GOBIN)/codecgen github.com/ugorji/go/codec/codecgen
+	$(GOBUILD) -o $(GOBIN)/abigen ./cmd/abigen
+	$(GOBUILD) -o $(GOBIN)/mockgen github.com/golang/mock/mockgen
+	$(GOBUILD) -o $(GOBIN)/protoc-gen-go github.com/golang/protobuf/protoc-gen-go
+	PATH=$(GOBIN):$(PATH) go generate ./common
+	PATH=$(GOBIN):$(PATH) go generate ./core/types
+	PATH=$(GOBIN):$(PATH) go generate ./consensus/bor
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
 
 # Cross Compilation Targets (xgo)
-
 geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
 	@echo "Full cross compilation done:"
 	@ls -ld $(GOBIN)/geth-*

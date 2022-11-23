@@ -17,16 +17,15 @@
 package main
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
-	"reflect"
 	"time"
-	"unicode"
 
 	"gopkg.in/urfave/cli.v1"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -41,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/naoina/toml"
 )
 
 var (
@@ -61,28 +59,6 @@ var (
 	}
 )
 
-// These settings ensure that TOML keys use the same names as Go struct fields.
-var tomlSettings = toml.Config{
-	NormFieldName: func(rt reflect.Type, key string) string {
-		return key
-	},
-	FieldToKey: func(rt reflect.Type, field string) string {
-		return field
-	},
-	MissingField: func(rt reflect.Type, field string) error {
-		id := fmt.Sprintf("%s.%s", rt.String(), field)
-		if deprecated(id) {
-			log.Warn("Config field is deprecated and won't have an effect", "name", id)
-			return nil
-		}
-		var link string
-		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
-		}
-		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
-	},
-}
-
 type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
@@ -95,18 +71,17 @@ type gethConfig struct {
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
-	f, err := os.Open(file)
+	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
-	// Add file name to errors that have a line number.
-	if _, ok := err.(*toml.LineError); ok {
-		err = errors.New(file + ", " + err.Error())
+	tomlData := string(data)
+	if _, err = toml.Decode(tomlData, &cfg); err != nil {
+		return err
 	}
-	return err
+
+	return nil
 }
 
 func defaultNodeConfig() node.Config {
@@ -214,21 +189,9 @@ func dumpConfig(ctx *cli.Context) error {
 		comment += "# Note: this config doesn't contain the genesis block.\n\n"
 	}
 
-	out, err := tomlSettings.Marshal(&cfg)
-	if err != nil {
+	if err := toml.NewEncoder(os.Stdout).Encode(&cfg); err != nil {
 		return err
 	}
-
-	dump := os.Stdout
-	if ctx.NArg() > 0 {
-		dump, err = os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
-		}
-		defer dump.Close()
-	}
-	dump.WriteString(comment)
-	dump.Write(out)
 
 	return nil
 }
@@ -366,7 +329,7 @@ func setDefaultMumbaiGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.TxPool.AccountQueue = 64
 	config.Eth.TxPool.GlobalQueue = 131072
 	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
+	config.Node.P2P.MaxPeers = 50
 	config.Metrics.Enabled = true
 	// --pprof is enabled in 'internal/debug/flags.go'
 }
@@ -389,7 +352,7 @@ func setDefaultBorMainnetGethConfig(ctx *cli.Context, config *gethConfig) {
 	config.Eth.TxPool.AccountQueue = 64
 	config.Eth.TxPool.GlobalQueue = 131072
 	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
+	config.Node.P2P.MaxPeers = 50
 	config.Metrics.Enabled = true
 	// --pprof is enabled in 'internal/debug/flags.go'
 }

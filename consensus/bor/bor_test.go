@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -12,10 +14,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGenesisContractChange(t *testing.T) {
+	t.Parallel()
+
 	addr0 := common.Address{0x1}
 
 	b := &Bor{
@@ -101,6 +104,8 @@ func TestGenesisContractChange(t *testing.T) {
 }
 
 func TestEncodeSigHeaderJaipur(t *testing.T) {
+	t.Parallel()
+
 	// As part of the EIP-1559 fork in mumbai, an incorrect seal hash
 	// was used for Bor that did not included the BaseFee. The Jaipur
 	// block is a hard fork to fix that.

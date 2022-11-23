@@ -6,12 +6,23 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
+
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
 // StatusCommand is the command to output the status of the client
 type StatusCommand struct {
 	*Meta2
+}
+
+// MarkDown implements cli.MarkDown interface
+func (p *StatusCommand) MarkDown() string {
+	items := []string{
+		"# Status",
+		"The ```status``` command outputs the status of the client.",
+	}
+
+	return strings.Join(items, "\n\n")
 }
 
 // Help implements the cli.Command interface
@@ -47,6 +58,7 @@ func (c *StatusCommand) Run(args []string) int {
 	}
 
 	c.UI.Output(printStatus(status))
+
 	return 0
 }
 
@@ -60,6 +72,7 @@ func printStatus(status *proto.StatusResponse) string {
 
 	forks := make([]string, len(status.Forks)+1)
 	forks[0] = "Name|Block|Enabled"
+
 	for i, d := range status.Forks {
 		forks[i+1] = fmt.Sprintf("%s|%d|%v", d.Name, d.Block, !d.Disabled)
 	}
@@ -83,5 +96,6 @@ func printStatus(status *proto.StatusResponse) string {
 		"\nForks",
 		formatList(forks),
 	}
+
 	return strings.Join(full, "\n")
 }

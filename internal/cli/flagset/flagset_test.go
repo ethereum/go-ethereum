@@ -23,14 +23,17 @@ func TestFlagsetBool(t *testing.T) {
 func TestFlagsetSliceString(t *testing.T) {
 	f := NewFlagSet("")
 
-	value := []string{}
+	value := []string{"a", "b", "c"}
 	f.SliceStringFlag(&SliceStringFlag{
-		Name:  "flag",
-		Value: &value,
+		Name:    "flag",
+		Value:   &value,
+		Default: value,
 	})
 
-	assert.NoError(t, f.Parse([]string{"--flag", "a,b", "--flag", "c"}))
+	assert.NoError(t, f.Parse([]string{}))
 	assert.Equal(t, value, []string{"a", "b", "c"})
+	assert.NoError(t, f.Parse([]string{"--flag", "a,b"}))
+	assert.Equal(t, value, []string{"a", "b"})
 }
 
 func TestFlagsetDuration(t *testing.T) {

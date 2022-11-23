@@ -1,20 +1,183 @@
 name: CI
-on: [push, pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.17
-      - name: "Build binaries"
-        run: make all
-      - name: "Run tests"
-        run: make test
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
-        with:
-          file: ./cover.out
+on:
+  push:
+    branches:
+      - "master"
+      - "qa"
+      - "develop"
+  pull_request:
+    branches:
+      - "**"
+    types: [opened, synchronize, edited]
 
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, macos-11 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - uses: actions/checkout@v3
+        - run: |
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.18.x
+
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: sudo apt update && sudo apt install build-essential
+
+        - name: Golang-ci install
+          if: runner.os == 'Linux'
+          run: make lintci-deps
+
+        - uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cache/go-build
+              ~/Library/Caches/go-build
+              ~/go/pkg/mod
+            key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+            restore-keys: ${{ runner.os }}-go-
+
+        - name: Build
+          run: make all
+
+        - name: Lint
+          if: runner.os == 'Linux'
+          run: make lint
+
+        - name: Test
+          run: make test
+
+        #- name: Data race tests
+        #  run: make test-race
+
+        - name: test-integration
+          run: make test-integration
+        
+        - name: Upload coverage to Codecov
+          uses: codecov/codecov-action@v1
+          with:
+            file: ./cover.out
+
+        # # TODO: make it work
+        # - name: Reproducible build test
+        #   run: |
+        #       make geth
+        #       shasum -a256 ./build/bin/geth > bor1.sha256
+        #       make geth
+        #       shasum -a256 ./build/bin/geth > bor2.sha256
+        #       if ! cmp -s bor1.sha256 bor2.sha256; then
+        #         echo >&2 "Reproducible build broken"; cat bor1.sha256; cat bor2.sha256; exit 1
+        #       fi
+
+  integration-tests:
+    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+    runs-on: ${{ matrix.os }}
+    steps:
+        - uses: actions/checkout@v3
+          with:
+            path: bor
+        - name: Checkout submodules
+          run: |
+            cd bor
+            git submodule update --init --recursive --force
+            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+
+        - uses: actions/setup-go@v3
+          with:
+            go-version: 1.18.x
+
+        - name: Checkout matic-cli
+          uses: actions/checkout@v3
+          with:
+            repository: maticnetwork/matic-cli
+            ref: v0.3.0-dev
+            path: matic-cli
+
+        - name: Install dependencies on Linux
+          if: runner.os == 'Linux'
+          run: |
+            sudo apt update
+            sudo apt install build-essential
+            curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash
+            sudo snap install solc
+            sudo apt install python2 jq curl
+            sudo ln -sf /usr/bin/python2 /usr/bin/python
+
+        - uses: actions/setup-node@v3
+          with:
+            node-version: '10.17.0'
+            cache: 'npm'
+            cache-dependency-path: |
+              matic-cli/package-lock.json
+              matic-cli/devnet/code/contracts/package-lock.json
+              matic-cli/devnet/code/genesis-contracts/package-lock.json
+              matic-cli/devnet/code/genesis-contracts/matic-contracts/package-lock.json
+
+        - name: Bootstrap devnet
+          run: |
+            cd matic-cli
+            npm install --prefer-offline --no-audit --progress=false
+            mkdir devnet
+            cd devnet
+            ../bin/matic-cli setup devnet -c ../../bor/.github/matic-cli-config.yml
+
+        - name: Launch devnet
+          run: |
+            cd matic-cli/devnet
+            bash docker-ganache-start.sh
+            bash docker-heimdall-start-all.sh
+            bash docker-bor-setup.sh
+            bash docker-bor-start-all.sh
+            sleep 120 && bash ganache-deployment-bor.sh
+            sleep 120 && bash ganache-deployment-sync.sh
+            sleep 120
+            docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'admin.peers'"
+            docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'eth.blockNumber'"
+
+        - name: Run smoke tests
+          run: |
+            echo "Deposit 100 matic for each account to bor network"
+            cd matic-cli/devnet/code/contracts
+            npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
+            cd -
+            bash bor/integration-tests/smoke_test.sh
+
+        - name: Upload logs
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: logs_${{ github.run_id }}
+            path: |
+              matic-cli/devnet/logs
+
+        - name: Package code and chain data
+          if: always()
+          run: |
+            cd matic-cli/devnet
+            docker compose down --remove-orphans
+            cd -
+            mkdir -p ${{ github.run_id }}/matic-cli
+            sudo mv bor ${{ github.run_id }}
+            sudo mv matic-cli/devnet ${{ github.run_id }}/matic-cli
+            sudo tar czf code.tar.gz ${{ github.run_id }}
+
+        - name: Upload code and chain data
+          if: always()
+          uses: actions/upload-artifact@v3
+          with:
+            name: code_${{ github.run_id }}
+            path: code.tar.gz

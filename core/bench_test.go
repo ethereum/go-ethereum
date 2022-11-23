@@ -305,7 +305,8 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	}
 	makeChainForBench(db, full, count)
 	db.Close()
-	cacheConfig := *defaultCacheConfig
+
+	cacheConfig := *DefaultCacheConfig
 	cacheConfig.TrieDirtyDisabled = true
 
 	b.ReportAllocs()
