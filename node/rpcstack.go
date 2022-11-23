@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -196,6 +197,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	// if http-rpc is enabled, try to serve request
 	rpc := h.httpHandler.Load().(*rpcHandler)
 	if rpc != nil {
@@ -473,6 +475,28 @@ var gzPool = sync.Pool{
 type gzipResponseWriter struct {
 	resp http.ResponseWriter
 	gz   *gzip.Writer
+
+	length    uint64
+	written   uint64
+	hasLength bool
+	inited    bool
+}
+
+func (w *gzipResponseWriter) initBuffering() {
+	if w.inited {
+		return
+	}
+
+	hdr := w.resp.Header()
+	length := hdr.Get("content-length")
+	hdr.Del("content-length")
+
+	if len(length) > 0 {
+		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
+			w.hasLength = true
+			w.length = n
+		}
+	}
 }
 
 func (w *gzipResponseWriter) Header() http.Header {
@@ -480,12 +504,19 @@ func (w *gzipResponseWriter) Header() http.Header {
 }
 
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.resp.Header().Del("Content-Length")
+	w.initBuffering()
 	w.resp.WriteHeader(status)
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.gz.Write(b)
+	w.initBuffering()
+
+	n, err := w.gz.Write(b)
+	w.written += uint64(n)
+	if w.hasLength && w.written >= w.length {
+		err = w.gz.Close()
+	}
+	return n, err
 }
 
 func (w *gzipResponseWriter) Flush() {
@@ -502,11 +533,10 @@ func newGzipHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("content-encoding", "gzip")
 
 		gz := gzPool.Get().(*gzip.Writer)
 		defer gzPool.Put(gz)
-
 		gz.Reset(w)
 		defer gz.Close()
 
