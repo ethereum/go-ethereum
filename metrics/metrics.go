@@ -49,6 +49,9 @@ func init() {
 		// check for existence of `config` flag
 		if flag == configFlag && i < len(os.Args)-1 {
 			configFile = strings.TrimLeft(os.Args[i+1], "-") // find the value of flag
+		} else if len(flag) > 6 && flag[:6] == configFlag {
+			// Checks for `=` separated flag (e.g. config=path)
+			configFile = strings.TrimLeft(flag[6:], "=")
 		}
 
 		for _, enabler := range enablerFlags {
