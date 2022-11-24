@@ -276,9 +276,9 @@ func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 
 		// If this request is wrapped in a handler that might remove Content-Length (such
 		// as the automatic gzip we do in package node), we need to ensure the HTTP server
-		// doesn't perform chunked encoding. When timeout case, the chunked encoding might
-		// not be finished correctly, and some clients will refuse to process the response
-		// when the final chunk is missing.
+		// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
+		// encoding might not be finished correctly, and some clients do not like it when
+		// the final chunk is missing.
 		w.Header().Set("transfer-encoding", "identity")
 
 		_, err = w.Write(encdata)
