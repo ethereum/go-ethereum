@@ -20,18 +20,13 @@ export const SpecificVersionsSection: FC<Props> = ({ children }) => {
         justifyContent='center'
         borderBottom={{ base: '2px', md: 'none' }}
         borderRight={{ base: 'none', md: '2px' }}
-        borderColor='primary'
+        borderColor='primary !important'
         flex='none'
       >
         <GopherHomeLinks />
       </Flex>
       <Flex flexDir='column'>
-        <Stack
-          p={4}
-          borderBottom='2px'
-          borderColor='primary'
-          sx={{ mt: '0 !important' }}
-        >
+        <Stack p={4} borderBottom='2px' borderColor='primary' sx={{ mt: '0 !important' }}>
           <Box as='h2' textStyle='h2'>
             Specific Versions
           </Box>

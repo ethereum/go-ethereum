@@ -1,4 +1,4 @@
-import { Box, Button, Center, Grid, HStack, Image, Link, Stack,Text } from '@chakra-ui/react';
+import { Box, Button, Center, Grid, HStack, Image, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -43,7 +43,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           mb={4}
           templateColumns={{ base: 'repeat(1, 1fr)', md: '1fr 300px', lg: '1fr' }}
           gap={4}
-          p={4}
+          py={4}
         >
           <Stack>
             <Box as='h1' textStyle='h1'>
@@ -66,20 +66,17 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             </Text>
           </Stack>
 
-          <Stack
-            py={{ base: 0 }}
-            px={{ base: 8 }}
+          <Center
+            p={{ base: 0, md: 8 }}
             flex={{ base: 'none' }}
             display={{ base: 'block', lg: 'none' }}
             order={{ base: -1, md: 1 }}
           >
-            <Center>
-              <GopherDownloads aria-label='Gopher plugged in' w={{ md: 96 }} />
-            </Center>
-          </Stack>
+            <GopherDownloads aria-label='Gopher plugged in' w={{ base: '100%' }} />
+          </Center>
         </Grid>
 
-        <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4} mb={4}>
+        <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4}>
           {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
             const { name, buildURL, Svg, ariaLabel } = DOWNLOAD_HEADER_BUTTONS[key];
             return (
@@ -87,12 +84,10 @@ export const DownloadsHero: FC<DownloadsHero> = ({
                 <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16}>
                   <HStack spacing={4}>
                     <Stack alignItems='center'>
-                      <Svg aria-label={ariaLabel} maxH="44px" />
+                      <Svg aria-label={ariaLabel} maxH='44px' />
                     </Stack>
                     <Box>
-                      <Text textStyle='downloads-button-label'>
-                        For {name}
-                      </Text>
+                      <Text textStyle='downloads-button-label'>For {name}</Text>
                       <Text textStyle='downloads-button-sublabel'>geth {currentBuildVersion}</Text>
                     </Box>
                   </HStack>
@@ -102,7 +97,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
           })}
         </Grid>
 
-        <Box textAlign={'center'}>
+        <Box textAlign={'center'} pt={1} pb={2}>
           <Link href={releaseNotesURL} isExternal variant='light'>
             Release notes for {currentBuild}
           </Link>
