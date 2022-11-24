@@ -927,8 +927,7 @@ var (
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
 		Name: "metrics.addr",
-		Usage: `Enable stand-alone metrics HTTP server listening interface.
-Set this flag on the command-line to enable the server.`,
+		Usage: `Enable stand-alone metrics HTTP server listening interface.`,
 		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
