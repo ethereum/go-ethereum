@@ -18,6 +18,7 @@ package utils
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -34,13 +35,19 @@ func TestGetTreeKey(t *testing.T) {
 	n := uint256.NewInt(1)
 	n = n.Lsh(n, 129)
 	n.Add(n, uint256.NewInt(3))
-	GetTreeKey(addr[:], n, 1)
+	tk := GetTreeKey(addr[:], n, 1)
+
+	got := hex.EncodeToString(tk)
+	exp := "f42f932f43faf5d14b292b9009c45c28da61dbf66e20dbedc2e02dfd64ff5a01"
+	if got != exp {
+		t.Fatalf("Generated trie key is incorrect: %s != %s", got, exp)
+	}
 }
 
 func TestConstantPoint(t *testing.T) {
 	var expectedPoly [1]verkle.Fr
 
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	verkle.FromLEBytes(&expectedPoly[0], []byte{2, 64})
 	expected := cfg.CommitToPoly(expectedPoly[:], 1)
 

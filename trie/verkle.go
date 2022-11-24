@@ -105,7 +105,6 @@ func (t *VerkleTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	ck, err := t.TryGet(ckkey[:])
 	if err != nil {
 		return nil, fmt.Errorf("updateStateObject (%x) error: %v", key, err)
-
 	}
 	acc.CodeHash = ck
 
@@ -220,11 +219,11 @@ func (trie *VerkleTrie) TryDelete(key []byte) error {
 // Hash returns the root hash of the trie. It does not write to the database and
 // can be used even if the trie doesn't have one.
 func (trie *VerkleTrie) Hash() common.Hash {
-	return trie.root.ComputeCommitment().Bytes()
+	return trie.root.Commit().Bytes()
 }
 
 func nodeToDBKey(n verkle.VerkleNode) []byte {
-	ret := n.ComputeCommitment().Bytes()
+	ret := n.Commitment().Bytes()
 	return ret[:]
 }
 
@@ -277,6 +276,7 @@ func (trie *VerkleTrie) Copy(db *Database) *VerkleTrie {
 		db:   db,
 	}
 }
+
 func (trie *VerkleTrie) IsVerkle() bool {
 	return true
 }
@@ -306,10 +306,7 @@ func DeserializeAndVerifyVerkleProof(serialized []byte, rootC *verkle.Point, key
 	if err != nil {
 		return fmt.Errorf("could not deserialize proof: %w", err)
 	}
-	cfg, err := verkle.GetConfig()
-	if err != nil {
-		return fmt.Errorf("could not get configuration %w", err)
-	}
+	cfg := verkle.GetConfig()
 	if !verkle.VerifyVerkleProof(proof, cis, indices, yis, cfg) {
 		return errInvalidProof
 	}
