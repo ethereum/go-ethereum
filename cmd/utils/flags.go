@@ -926,8 +926,8 @@ var (
 	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
-		Name: "metrics.addr",
-		Usage: `Enable stand-alone metrics HTTP server listening interface.`,
+		Name:     "metrics.addr",
+		Usage:    `Enable stand-alone metrics HTTP server listening interface.`,
 		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
