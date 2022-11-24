@@ -559,13 +559,13 @@ func (test rpcPrefixTest) check(t *testing.T, node *Node) {
 	}
 
 	for _, path := range test.wantHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp := rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 200 {
 			t.Errorf("Error: %s: bad status code %d, want 200", path, resp.StatusCode)
 		}
 	}
 	for _, path := range test.wantNoHTTP {
-		resp := rpcRequest(t, httpBase+path)
+		resp := rpcRequest(t, httpBase+path, testMethod)
 		if resp.StatusCode != 404 {
 			t.Errorf("Error: %s: bad status code %d, want 404", path, resp.StatusCode)
 		}

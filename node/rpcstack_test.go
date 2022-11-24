@@ -19,6 +19,7 @@ package node
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -34,29 +35,31 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testMethod = "rpc_modules"
+
 // TestCorsHandler makes sure CORS are properly handled on the http server.
 func TestCorsHandler(t *testing.T) {
-	srv := createAndStartServer(t, &httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, &wsConfig{})
+	srv := createAndStartServer(t, &httpConfig{CorsAllowedOrigins: []string{"test", "test.com"}}, false, &wsConfig{}, nil)
 	defer srv.stop()
 	url := "http://" + srv.listenAddr()
 
-	resp := rpcRequest(t, url, "origin", "test.com")
+	resp := rpcRequest(t, url, testMethod, "origin", "test.com")
 	assert.Equal(t, "test.com", resp.Header.Get("Access-Control-Allow-Origin"))
 
-	resp2 := rpcRequest(t, url, "origin", "bad")
+	resp2 := rpcRequest(t, url, testMethod, "origin", "bad")
 	assert.Equal(t, "", resp2.Header.Get("Access-Control-Allow-Origin"))
 }
 
 // TestVhosts makes sure vhosts are properly handled on the http server.
 func TestVhosts(t *testing.T) {
-	srv := createAndStartServer(t, &httpConfig{Vhosts: []string{"test"}}, false, &wsConfig{})
+	srv := createAndStartServer(t, &httpConfig{Vhosts: []string{"test"}}, false, &wsConfig{}, nil)
 	defer srv.stop()
 	url := "http://" + srv.listenAddr()
 
-	resp := rpcRequest(t, url, "host", "test")
+	resp := rpcRequest(t, url, testMethod, "host", "test")
 	assert.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp2 := rpcRequest(t, url, "host", "bad")
+	resp2 := rpcRequest(t, url, testMethod, "host", "bad")
 	assert.Equal(t, resp2.StatusCode, http.StatusForbidden)
 }
 
@@ -145,7 +148,7 @@ func TestWebsocketOrigins(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
+		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)}, nil)
 		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
 			if err := wsRequest(t, url, "Origin", origin); err != nil {
@@ -231,11 +234,14 @@ func Test_checkPath(t *testing.T) {
 	}
 }
 
-func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig) *httpServer {
+func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsConfig, timeouts *rpc.HTTPTimeouts) *httpServer {
 	t.Helper()
 
-	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), rpc.DefaultHTTPTimeouts)
-	assert.NoError(t, srv.enableRPC(nil, *conf))
+	if timeouts == nil {
+		timeouts = &rpc.DefaultHTTPTimeouts
+	}
+	srv := newHTTPServer(testlog.Logger(t, log.LvlDebug), *timeouts)
+	assert.NoError(t, srv.enableRPC(apis(), *conf))
 	if ws {
 		assert.NoError(t, srv.enableWS(nil, *wsConf))
 	}
@@ -266,16 +272,17 @@ func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 }
 
 // rpcRequest performs a JSON-RPC request to the given URL.
-func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response {
+func rpcRequest(t *testing.T, url, method string, extraHeaders ...string) *http.Response {
 	t.Helper()
 
 	// Create the request.
-	body := bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,"method":"rpc_modules","params":[]}`))
+	body := bytes.NewReader([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, method)))
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		t.Fatal("could not create http request:", err)
 	}
 	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept-encoding", "identity")
 
 	// Apply extra headers.
 	if len(extraHeaders)%2 != 0 {
@@ -315,7 +322,7 @@ func TestJWT(t *testing.T) {
 		return ss
 	}
 	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
+		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")}, nil)
 	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
 	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
 
@@ -348,7 +355,7 @@ func TestJWT(t *testing.T) {
 			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
 		}
 		token = tokenFn()
-		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
+		if resp := rpcRequest(t, htUrl, testMethod, "Authorization", token); resp.StatusCode != 200 {
 			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
 		}
 	}
@@ -414,10 +421,43 @@ func TestJWT(t *testing.T) {
 		}
 
 		token = tokenFn()
-		resp := rpcRequest(t, htUrl, "Authorization", token)
+		resp := rpcRequest(t, htUrl, testMethod, "Authorization", token)
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
 	}
 	srv.stop()
+}
+
+func TestHTTPWriteTimeout(t *testing.T) {
+	want := `{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"request timed out"}}`
+	timeouts := rpc.DefaultHTTPTimeouts
+	timeouts.WriteTimeout = time.Second
+	srv := createAndStartServer(t, &httpConfig{Modules: []string{"test"}}, false, &wsConfig{}, &timeouts)
+	url := fmt.Sprintf("http://%v", srv.listenAddr())
+	resp := rpcRequest(t, url, "test_sleep")
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != want {
+		t.Errorf("wrong response. have %s, want %s", string(body), want)
+	}
+}
+
+func apis() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "test",
+			Service:   &testService{},
+		},
+	}
+}
+
+type testService struct {
+}
+
+func (s *testService) Sleep() {
+	time.Sleep(1500 * time.Millisecond)
 }
