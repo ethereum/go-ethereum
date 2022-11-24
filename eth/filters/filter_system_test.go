@@ -50,6 +50,14 @@ type testBackend struct {
 	chainFeed       event.Feed
 }
 
+func (b *testBackend) ChainConfig() *params.ChainConfig {
+	panic("implement me")
+}
+
+func (b *testBackend) CurrentHeader() *types.Header {
+	panic("implement me")
+}
+
 func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
 }

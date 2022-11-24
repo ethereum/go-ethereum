@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"sync"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -188,7 +188,7 @@ func (p *Peer) markTransaction(hash common.Hash) {
 // not be managed directly.
 //
 // The reasons this is public is to allow packages using this protocol to write
-// tests that directly send messages without having to do the asyn queueing.
+// tests that directly send messages without having to do the async queueing.
 func (p *Peer) SendTransactions(txs types.NetworkTransactions) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {
@@ -502,7 +502,7 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 
 // knownCache is a cache for known hashes.
 type knownCache struct {
-	hashes mapset.Set
+	hashes mapset.Set[common.Hash]
 	max    int
 }
 
@@ -510,7 +510,7 @@ type knownCache struct {
 func newKnownCache(max int) *knownCache {
 	return &knownCache{
 		max:    max,
-		hashes: mapset.NewSet(),
+		hashes: mapset.NewSet[common.Hash](),
 	}
 }
 

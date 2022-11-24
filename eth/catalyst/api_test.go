@@ -93,22 +93,28 @@ func TestEth2AssembleBlock(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
-	// This test is a bit time-sensitive, the miner needs to pick up on the
-	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
-	var testErr error
-	for retries := 2; retries > 0; retries-- {
-		if execData, err := assembleBlock(api, blocks[9].Hash(), &blockParams); err != nil {
-			t.Fatalf("error producing block, err=%v", err)
-		} else if have, want := len(execData.Transactions), 1; have != want {
-			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
-		} else {
-			testErr = nil
-			break
-		}
-	}
-	if testErr != nil {
+	// The miner needs to pick up on the txs in the pool, so a few retries might be
+	// needed.
+	if _, testErr := assembleWithTransactions(api, blocks[9].Hash(), &blockParams, 1); testErr != nil {
 		t.Fatal(testErr)
 	}
+}
+
+// assembleWithTransactions tries to assemble a block, retrying until it has 'want',
+// number of transactions in it, or it has retried three times.
+func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1, want int) (execData *beacon.ExecutableDataV1, err error) {
+	for retries := 3; retries > 0; retries-- {
+		execData, err = assembleBlock(api, parentHash, params)
+		if err != nil {
+			return nil, err
+		}
+		if have, want := len(execData.Transactions), want; have != want {
+			err = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+			continue
+		}
+		return execData, nil
+	}
+	return nil, err
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
@@ -123,21 +129,10 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[8].Time() + 5,
 	}
-	// This test is a bit time-sensitive, the miner needs to pick up on the
-	// txs in the pool. Therefore, we retry once if it fails on the first attempt.
-	var testErr error
-	for retries := 2; retries > 0; retries-- {
-		if execData, err := assembleBlock(api, blocks[8].Hash(), &blockParams); err != nil {
-			t.Fatalf("error producing block, err=%v", err)
-		} else if have, want := len(execData.Transactions), blocks[9].Transactions().Len(); have != want {
-			testErr = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
-		} else {
-			testErr = nil
-			break
-		}
-	}
-	if testErr != nil {
-		t.Fatal(testErr)
+	// The miner needs to pick up on the txs in the pool, so a few retries might be
+	// needed.
+	if _, err := assembleWithTransactions(api, blocks[8].Hash(), &blockParams, blocks[9].Transactions().Len()); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -184,7 +179,12 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 	}
 	// give the payload some time to be built
 	time.Sleep(100 * time.Millisecond)
-	payloadID := computePayloadId(fcState.HeadBlockHash, &blockParams)
+	payloadID := (&miner.BuildPayloadArgs{
+		Parent:       fcState.HeadBlockHash,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
+	}).Id()
 	execData, err := api.GetPayloadV1(payloadID)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
@@ -288,9 +288,9 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleWithTransactions(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
-		})
+		}, 1)
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
@@ -562,41 +562,55 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 	var (
 		api    = NewConsensusAPI(ethservice)
 		parent = ethservice.BlockChain().CurrentBlock()
+		signer = types.LatestSigner(ethservice.BlockChain().Config())
 		// This EVM code generates a log when the contract is created.
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
-		nonce := statedb.GetNonce(testAddr)
-		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().AddLocal(tx)
-
-		params := beacon.PayloadAttributesV1{
-			Timestamp:             parent.Time() + 1,
-			Random:                crypto.Keccak256Hash([]byte{byte(i)}),
-			SuggestedFeeRecipient: parent.Coinbase(),
-		}
-
-		fcState := beacon.ForkchoiceStateV1{
-			HeadBlockHash:      parent.Hash(),
-			SafeBlockHash:      common.Hash{},
-			FinalizedBlockHash: common.Hash{},
-		}
-		resp, err := api.ForkchoiceUpdatedV1(fcState, &params)
-		if err != nil {
-			t.Fatalf("error preparing payload, err=%v", err)
-		}
-		if resp.PayloadStatus.Status != beacon.VALID {
-			t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
-		}
-		// give the payload some time to be built
-		time.Sleep(100 * time.Millisecond)
-		payload, err := api.GetPayloadV1(*resp.PayloadID)
-		if err != nil {
-			t.Fatalf("can't get payload: %v", err)
-		}
-		if len(payload.Transactions) == 0 {
-			t.Fatalf("payload should not be empty")
+		tx := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
+			Nonce:    statedb.GetNonce(testAddr),
+			Value:    new(big.Int),
+			Gas:      1000000,
+			GasPrice: big.NewInt(2 * params.InitialBaseFee),
+			Data:     logCode,
+		})
+		ethservice.TxPool().AddRemotesSync([]*types.Transaction{tx})
+		var (
+			params = beacon.PayloadAttributesV1{
+				Timestamp:             parent.Time() + 1,
+				Random:                crypto.Keccak256Hash([]byte{byte(i)}),
+				SuggestedFeeRecipient: parent.Coinbase(),
+			}
+			fcState = beacon.ForkchoiceStateV1{
+				HeadBlockHash:      parent.Hash(),
+				SafeBlockHash:      common.Hash{},
+				FinalizedBlockHash: common.Hash{},
+			}
+			payload *beacon.ExecutableDataV1
+			resp    beacon.ForkChoiceResponse
+			err     error
+		)
+		for i := 0; ; i++ {
+			if resp, err = api.ForkchoiceUpdatedV1(fcState, &params); err != nil {
+				t.Fatalf("error preparing payload, err=%v", err)
+			}
+			if resp.PayloadStatus.Status != beacon.VALID {
+				t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
+			}
+			// give the payload some time to be built
+			time.Sleep(50 * time.Millisecond)
+			if payload, err = api.GetPayloadV1(*resp.PayloadID); err != nil {
+				t.Fatalf("can't get payload: %v", err)
+			}
+			if len(payload.Transactions) > 0 {
+				break
+			}
+			// No luck this time we need to update the params and try again.
+			params.Timestamp = params.Timestamp + 1
+			if i > 10 {
+				t.Fatalf("payload should not be empty")
+			}
 		}
 		execResp, err := api.NewPayloadV1(*payload)
 		if err != nil {
@@ -897,17 +911,6 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 	)
 	for i := 0; i < 10; i++ {
-		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
-		ethservice.TxPool().AddLocal(types.MustSignNewTx(testKey, types.LatestSigner(ethservice.BlockChain().Config()),
-			&types.DynamicFeeTx{
-				Nonce:     statedb.GetNonce(testAddr),
-				Value:     big.NewInt(0),
-				GasFeeCap: big.NewInt(2 * params.InitialBaseFee),
-				GasTipCap: big.NewInt(2 * params.InitialBaseFee),
-				ChainID:   genesis.Config.ChainID,
-				Gas:       1000000,
-				To:        &common.Address{99},
-			}))
 		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
 		})

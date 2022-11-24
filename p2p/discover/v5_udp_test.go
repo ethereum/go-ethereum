@@ -161,7 +161,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	defer test.close()
 
 	// Create test nodes and insert them into the table.
-	nodes253 := nodesAtDistance(test.table.self().ID(), 253, 10)
+	nodes253 := nodesAtDistance(test.table.self().ID(), 253, 16)
 	nodes249 := nodesAtDistance(test.table.self().ID(), 249, 4)
 	nodes248 := nodesAtDistance(test.table.self().ID(), 248, 10)
 	fillTable(test.table, wrapNodes(nodes253))
@@ -186,7 +186,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 
 	// This request gets all the distance-253 nodes.
 	test.packetIn(&v5wire.Findnode{ReqID: []byte{4}, Distances: []uint{253}})
-	test.expectNodes([]byte{4}, 4, nodes253)
+	test.expectNodes([]byte{4}, 1, nodes253)
 
 	// This request gets all the distance-249 nodes and some more at 248 because
 	// the bucket at 249 is not full.
@@ -194,7 +194,7 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	var nodes []*enode.Node
 	nodes = append(nodes, nodes249...)
 	nodes = append(nodes, nodes248[:10]...)
-	test.expectNodes([]byte{5}, 5, nodes)
+	test.expectNodes([]byte{5}, 1, nodes)
 }
 
 func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes []*enode.Node) {
@@ -207,9 +207,6 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 		test.waitPacketOut(func(p *v5wire.Nodes, addr *net.UDPAddr, _ v5wire.Nonce) {
 			if !bytes.Equal(p.ReqID, wantReqID) {
 				test.t.Fatalf("wrong request ID %v in response, want %v", p.ReqID, wantReqID)
-			}
-			if len(p.Nodes) > 3 {
-				test.t.Fatalf("too many nodes in response")
 			}
 			if p.Total != wantTotal {
 				test.t.Fatalf("wrong total response count %d, want %d", p.Total, wantTotal)
