@@ -10,7 +10,7 @@ within the bounds of the local hardware (e.g. every month or so for a 1TB disk).
 
 To prune a Geth node at least 40 GB of free disk space is recommended. This means pruning cannot be used to save a hard drive that has been completely filled. A good rule of thumb is to prune before the node fills ~80% of the available disk space.
 
-## Pruning rules
+## Pruning rules {#pruning-rules}
 
 1. Do not try to prune an archive node. Archive nodes need to maintain ALL historic data by definition.
 2. Ensure there is at least 40 GB of storage space still available on the disk that will be pruned. Failures have been reported with ~25GB of free space.
@@ -20,7 +20,7 @@ To prune a Geth node at least 40 GB of free disk space is recommended. This mean
 
 With these rules satisfied, Geth's database can be pruned.
 
-## How pruning works
+## How pruning works {#how-pruning-works}
 
 Pruning uses snapshots of the state database as an indicator to determine which nodes in the state trie can be kept and which ones are stale and can be discarded. Geth identifies the target state trie based on a stored snapshot layer which has at least 128 block confirmations on top (for surviving reorgs) data that isn't part of the target state trie or genesis state.
 
@@ -32,7 +32,7 @@ Geth prunes the database in three stages:
 
 There may be a period of >1 hour during the Compacting Database stage with no log messages at all. This is normal, and the pruning should be left to run until finally a log message containing the phrase `State pruning successful` appears (i.e. do not restart Geth yet!). That message indicates that the pruning is complete and Geth can be started.
 
-## Pruning command
+## Pruning command {#pruning-command}
 
 For a normal Geth node, Geth should be stopped and the following command executed to start a offline state prune:
 
@@ -51,11 +51,11 @@ sudo systemctl start geth # restart geth
 
 The pruning could take 4-5 hours to complete. Once finished, restart Geth.
 
-## Troubleshooting
+## Troubleshooting {#troubleshooting}
 
 Messages about "state snapshot generation" indicate that a snapshot is not fully generated. This suggests either the `--datadir` is not correct or Geth ran out of time to complete the snapshot generation and the pruning began before the snapshot was completed. In either case, the best course of action is to stop Geth, run it normally again (no pruning) until the snapshot is definitely complete and at least 128 blocks exist on top of it, then try pruning again.
 
-## Further Reading
+## Further Reading {#further-reading}
 
 [Ethereum Foundation blog post for Geth v1.10.0](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/)
 

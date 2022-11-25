@@ -7,7 +7,7 @@ Tracing allows users to examine precisely what was executed by the EVM during so
 
 Also see this [Devcon 2022 talk](https://www.youtube.com/watch?v=b8RdmGsilfU) on tracing in Geth.
 
-## State availability
+## State availability {#state-availability}
 
 In its simplest form, tracing a transaction entails requesting the Ethereum node to reexecute the desired transaction with varying degrees of data collection and have it return an aggregated summary. In order for a Geth node to reexecute a transaction, all historical state accessed by the transaction must be available. This includes:
 
@@ -44,16 +44,16 @@ It is also possible to force Geth to store the state for specific sequences of b
 
 _There are exceptions to the above rules when running batch traces of entire blocks or chain segments. Those will be detailed later._
 
-## Types of trace
+## Types of trace {#types-of-trace}
 
-### Basic traces
+### Basic traces {#basic-traces}
 
 The simplest type of transaction trace that Geth can generate are raw EVM opcode traces. For every EVM instruction the transaction executes, a structured log entry is emitted, containing all contextual metadata deemed useful. This includes the *program counter*, *opcode name*, *opcode cost*, *remaining gas*, *execution depth* and any *occurred error*. The structured logs can optionally also contain the content of the *execution stack*, *execution memory* and *contract storage*.
 
 Read more about Geth's basic traces on the [basic traces page](/docs/evm-tracing/basic-traces).
 
 
-### Built-in tracers
+### Built-in tracers {#built-in-tracers}
 
 The tracing API accepts an optional `tracer` parameter that defines how the data returned to the API call should be processed. If this parameter is ommitted the default tracer is used. The default is the struct (or 'opcode') logger. These raw opcode traces are sometimes useful, but the returned data is very low level and can be too extensive and awkward to read for many use-cases. A full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally. For these reasons, there are a set of non-default built-in tracers that can be named in the API call to return different data from the method. Under the hood, these tracers are Go or Javascript 
 functions that do some specific preprocessing on the trace data before it is returned.
@@ -61,13 +61,13 @@ functions that do some specific preprocessing on the trace data before it is ret
 More information about Geth's built-in tracers is available on the [built-in tracers](/docs/evm-tracing/builtin-tracers) page.
 
 
-### Custom tracers
+### Custom tracers {#custom-tracers}
 
 In addition to built-in tracers, it is possible to provide custom code that hooks to events in the EVM to process and return data in a consumable format. Custom tracers can be written either in Javascript or Go. JS tracers are good for quick prototyping and experimentation as well as for less intensive applications. Go tracers are performant but require the tracer to be compiled together with the Geth source code. This means developers only have to gather the data they actually need, and do any processing at the source.
 
 More information about custom tracers is available on the [custom tracers](/docs/evm-tracing/custom-tracer) page.
 
 
-## Summary
+## Summary {#summary}
 
 This page gave an introduction to the concept of tracing and explained issues around state availability. More detailed information on Geth's built-in and custom tracers can be found on their dedicated pages.

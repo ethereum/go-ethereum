@@ -6,7 +6,7 @@ description: Explanation of the tracers that come bundled in Geth as part of the
 Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call. 
 
 
-## Struct/opcode logger
+## Struct/opcode logger {#struct-opcode-logger}
 
 The struct logger (aka opcode logger) is a native Go tracer which executes a transaction and emits the opcode and execution context at every step. This is the tracer that will be used when no name is passed to the API, e.g. `debug.traceTransaction(<txhash>)`. The following information is emitted at each step:
 
@@ -90,12 +90,12 @@ Return:
 
 ```
 
-## Native tracers
+## Native tracers {#native-tracers}
 
 The following tracers are implement in Go. This means they are much more performant than other tracers that are written in Javascript. The tracers are selected by passing their name to the `tracer` parameter when invoking a tracing API method, e.g. `debug.traceTransaction(<txhash>, { tracer: 'callTracer' })`.
 
 
-### 4byteTracer
+### 4byteTracer {#4byte-tracer}
 
 Solidity contract functions are 
 [addressed](https://docs.soliditylang.org/en/develop/abi-spec.html#function-selector) using the first four four byte of the Keccak-256 hash of their signature. Therefore when calling the function of a contract, the caller must send this function selector as well as the ABI-encoded arguments as call data.
@@ -120,7 +120,7 @@ Return:
 }
 ```
 
-### callTracer
+### callTracer {#call-tracer}
 
 The `callTracer` tracks all the call frames executed during a transaction, including depth 0. The result will be a nested list of call frames, resembling how EVM works. They form a tree with the top-level call at root and sub-calls as children of the higher levels. Each call frame has the following fields:
 
@@ -188,7 +188,7 @@ Things to note about the call tracer:
 > debug.traceTransaction('0xc73e70f6d60e63a71dabf90b9983f2cdd56b0cb7bcf1a205f638d630a95bba73', { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
 ```
 
-### prestateTracer
+### prestateTracer {#prestate-tracer}
 
 The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode returns the accounts necessary to execute a given transaction. `diff` mode returns the differences between the transaction's pre and post-state (i.e. what changed because the transaction happened). The `prestateTracer` defaults to `prestate` mode. It reexecutes the given transaction and tracks every part of state that is touched. This is similar to the concept of a [stateless witness](https://ethresear.ch/t/the-stateless-client-concept/172), the difference being this tracer doesn't return any cryptographic proof, rather only the trie leaves. The result is an object. The keys are addresses of accounts. The value is an object with the following fields:
 
@@ -253,16 +253,16 @@ Return (same call with `{diffMode: True}`):
 }
 ```
 
-### noopTracer
+### noopTracer {#noop-tracer}
 
 This tracer is noop. It returns an empty object and is only meant for testing the setup.
 
 
-## Javascript tracers
+## Javascript tracers {#js-tracers}
 
 There are also a set of tracers written in Javascript. These are less performant than the Go native tracers because of overheads associated with interpreting the Javascript in Geth's Go environment.
 
-### bigram
+### bigram {#bigram}
 
 `bigramTracer` counts the opcode bigrams, i.e. how many times 2 opcodes were executed one after the other.
 
@@ -299,7 +299,7 @@ Returns:
 
 ```
 
-### evmdis
+### evmdis {#evmdis}
 
 `evmdisTracer` returns sufficient information from a trace to perform [evmdis](https://github.com/Arachnid/evmdis)-style disassembly
 
@@ -356,7 +356,7 @@ Returns:
 ...
 ```
 
-### opcount
+### opcount {#opcount}
 
 `opcountTracer` counts the total number of opcodes executed and simply returns the number.
 
@@ -372,7 +372,8 @@ Returns:
 1384
 ```
 
-### trigram
+### trigram {#trigram}
+
 `trigramTracer` counts the opcode trigrams. Trigrams are the possible combinations of three opcodes this tracer reports how many times each combination is seen during execution.
 
 Example:
@@ -407,7 +408,7 @@ Returns:
 ```
 
 
-### unigram
+### unigram {#unigram}
 
 `unigramTracer` counts the frequency of occurrance of each opcode.
 
@@ -437,7 +438,7 @@ Returns:
 
 ```
 
-## State overrides
+## State overrides {#state-overrides}
 
 It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address *temporarily just for the duration of the execution* and then a transaction interacting with that address canm be traced.  This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
 
@@ -449,6 +450,6 @@ var tracer = //tracer name
 debug.traceCall({from: , to: , input: }, 'latest', {stateOverrides: {'0x...': {code: code}}, tracer: tracer})
 ```
 
-## Summary
+## Summary {#summary}
 
 This page showed how to use the tracers that come bundled with Geth. There are a set written in Go and a set written in Javascript. They are invoked by passing their names when calling an API method. State overrides can be used in combination with tracers to examine precisely what the EVM will do in some hypothetical scenario.

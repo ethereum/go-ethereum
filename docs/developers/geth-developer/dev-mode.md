@@ -14,13 +14,13 @@ It is often convenient for developers to work in an environment where changes to
 
 This configuration enables developers to experiment with Geth's source code or develop new applications without having to sync to a pre-existing public network. Blocks are only mined when there are pending transactions. Developers can break things on this network without affecting other users. This page will demonstrate how to spin up a local Geth testnet and a simple smart contract will be deployed to it using the Remix online integrated development environment (IDE).
 
-## Prerequisites
+## Prerequisites {#prerequisites}
 
 It is assumed that the user has a working Geth installation (see [installation guide](/docs/install-and-build/installing-geth)).
 It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/getting-started).
 Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart contract deployment](https://ethereum.org/en/developers/tutorials/deploying-your-first-smart-contract/) would be useful.
 
-## Start Geth in Dev Mode
+## Start Geth in Dev Mode {#start-geth-in-dev-mode}
 
 Starting Geth in developer mode is as simple as providing the `--dev` flag. It is also possible to create a realistic block creation frequency by setting `--dev.period 13` instead of creating blocks only when transactions are pending. There are also additional configuration options required to follow this tutorial.
 
@@ -166,7 +166,7 @@ The transaction details are displayed as follows:
 
 Now that the user account is funded with ether, a contract can be created ready to deploy to the Geth node.
 
-## A simple smart contract
+## A simple smart contract {#simple-smart-contract}
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
 
@@ -192,7 +192,7 @@ contract Storage{
 
 Solidity is a high-level language that makes code executable by the Ethereum virtual machine (EVM) readable to humans. This means that there is an intermediate step between writing code in Solidity and deploying it to Ethereum. This step is called "compilation" and it converts human-readable code into EVM-executable byte-code. This byte-code is then included in a transaction sent from the Geth node during contract deployment. This can all be done directly from the Geth Javascript console; however this tutorial uses an online IDE called Remix to handle the compilation and deployment of the contract to the local Geth node.
 
-## Compile and deploy using Remix
+## Compile and deploy using Remix {#compile-and-deploy}
 
 In a web browser, open <https://remix.ethereum.org>. This opens an online smart contract development environment. On the left-hand side of the screen there is a side-bar menu that toggles between several toolboxes that are displayed in a vertical panel. On the right hand side of the screen there is an editor and a terminal. This layout is similar to the default layout of many other IDEs such as [VSCode](https://code.visualstudio.com/). The contract defined in the previous section, `Storage.sol` is already available in the `Contracts` directory in Remix. It can be opened and reviewed in the editor.
 
@@ -218,7 +218,7 @@ INFO [05-09|12:27:09.681] Successfully sealed new block            number=2 seal
 INFO [05-09|12:27:09.681] 🔨 mined potential block                  number=2 hash=e927bc..f2c8ed
 ```
 
-## Interact with contract using Remix
+## Interact with contract using Remix {#interact-with-contract}
 
 The contract is now deployed on a local testnet version of the Etheruem blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
 
@@ -275,7 +275,7 @@ This returns a value that looks like the following:
 
 The returned value is a left-padded hexadecimal value. For example, the return value `0x000000000000000000000000000000000000000000000000000000000000000038` corresponds to a value of `56` entered as a uint256 to Remix. After converting from hexadecimal string to decimal number the returned value should be equal to that provided to Remix in the previous step.
 
-## Reusing --datadir
+## Reusing --datadir {#reusing-datadir}
 
 This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode.
 
@@ -283,7 +283,7 @@ This tutorial used an ephemeral blockchain that is completely destroyed and star
 geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org"
 ```
 
-## Re-using accounts
+## Re-using accounts {#reusing-accounts}
 
 Geth will fail to start in dev-mode if keys have been manually created or imported into the keystore in the `--datadir` directory. This is because the account cannot be automatically unlocked. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
 
@@ -295,6 +295,6 @@ geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain 
 
 **Note** that this is an edge-case that applies when both the `--datadir` and `--dev` flags are used and a key has been manually created or imported into the keystore.
 
-## Summary
+## Summary {#summary}
 
 This tutorial has demonstrated how to spin up a local developer network using Geth. Having started this development network, a simple contract was deployed to the developer network. Then, Remix was connected to the local Geth node and used to deploy and interact with a contract. Remix was used to add a value to the contract storage and then the value was retrieved using Remix and also using the lower level commands in the Javascript console.

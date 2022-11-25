@@ -11,7 +11,7 @@ Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/
 
 {% include note.html content=" Geth light clients **do not currently work** on proof-of-stake Ethereum. New light clients that work with the proof-of-stake consensus engine are expected to ship soon!" %}
 
-## Light node vs full node
+## Light node vs full node {#light-node-vs-full-node}
 
 Running Geth in light mode has the following advantages for users:
 
@@ -25,7 +25,7 @@ However, the cost of this performance increase is that a light Geth node depends
 
 A light client can be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. However they have different security guarantees than full nodes. Because they don't keep local copies of the Ethereum state, light nodes can't validate the blocks in the same way as the full nodes. Instead they fetch block headers by requesting them from full nodes and check their proof-of-work (PoW), assuming the heaviest chain is valid. This means that it is sensible to wait until a few additional blocks have been confirmed before trusting the validity of a recently-mined transaction.
 
-### Running a light server
+### Running a light server {#running-light-server}
 
 Full node operators that choose to enable light serving altruistically enable other users to run light clients. This is good for Ethereum because it makes it easier for a wider population of users to interact with Ethereum without using trusted intermediaries. However, there is naturally a limit to how much resource a node operator is able and willing to dedicate to serving light clients. Therefore, the command that enables light serving requires arguments that define the upper bound on resource allocation. The value given is in percent of a processing thread, for example `--light.serve 300` enables light-serving and dedicates three processing threads to it.
 
@@ -37,7 +37,7 @@ The whole command for starting Geth with a light server could look as follows:
 geth --light.serve 50 --txlookuplimit 0
 ```
 
-### Running a light client
+### Running a light client {#running-light-client}
 
 Running a light client simply requires Geth to be started in light mode. It is likely that a user would also want to interact with the light node using, for example, RPC. This can be enabled using the `--http` command.
 
@@ -49,7 +49,7 @@ Data can be requested from this light Geth instance in the same way as for a ful
 
 It's also possible to send transactions. However, light clients are not connected directly to Ethereum Mainnet but to a network of light servers that connect to Ethereum Mainnet. This means a transaction submitted by a light client is received first by a light server that then propagates it to full-node peers on the light-client's behalf. This reliance on honest light-servers is one of the trust compromises that comes along with running a light node instead of a full node.
 
-### Ultra light clients
+### Ultra light clients {#ultra-light-client}
 
 Geth has an even lighter sync mode called ultra light client (ULC). The difference between light mode and ultra-light mode is that a ULC doesn't check the PoW in block headers. There is an assumption that the ULC has access to one or more trusted light servers. This option has the greatest trust assumptions but the smallest resource requirement.
 
@@ -59,6 +59,6 @@ To start an ultra-light client, the enode addresses of the trusted light servers
 geth --syncmode light --ulc.servers "enode://...,enode://..." --http --http.api "eth,debug"
 ```
 
-## Summary
+## Summary {#summary}
 
 Running a full node is the most trustless way to interact with Ethereum. However, Geth provides a low-resource "light" mode that can be run on modest computers and requires much less disk space. The trade-offs are additional trust assumptions and a small pool of light-serving peers to connect to.

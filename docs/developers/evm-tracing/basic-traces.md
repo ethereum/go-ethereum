@@ -41,7 +41,7 @@ An example log for a single opcode entry has the following format:
 }
 ```
 
-### Generating basic traces
+### Generating basic traces {#generating-basic-traces}
 
 To generate a raw EVM opcode trace, Geth provides a few [RPC API endpoints](/docs/rpc/ns-debug). The most commonly used is [`debug_traceTransaction`](/docs/rpc/ns-debug#debug_tracetransaction).
 
@@ -83,7 +83,7 @@ Alternatively, disabling *EVM Stack*, *EVM Memory*, *Storage* and *Return data* 
 $ curl -H "Content-Type: application/json" -d '{"id": 1, "method": "debug_traceTransaction", "params": ["0xfc9359e49278b7ba99f59edac0e3de49956e46e530a53c15aa71226b7aa92c6f", {"disableStack": true, "disableStorage": true}]}' localhost:8545
 ```
 
-### Limits of basic traces
+### Limits of basic traces {#list-of-basic-traces}
 
 Although the raw opcode traces generated above are useful, having an individual log entry for every single opcode is too low level for most use cases, 
 and will require developers to create additional tools to post-process the traces. Additionally, a full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally.
@@ -91,7 +91,7 @@ and will require developers to create additional tools to post-process the trace
 To avoid those issues, Geth supports running custom JavaScript tracers *within* the Ethereum node, which have full access to the EVM stack, memory and contract storage. This means developers only have to gather the data they actually need, and do any processing at the source.
 
 
-## Summary
+## Summary {#summary}
 
 This page described how to do basic traces in Geth. Basic traces are very low level and can generate lots of data that might not all be useful. Therefore, it is also possible to use a set of built-in tracers or write custom ones in Javascript or Go.
 

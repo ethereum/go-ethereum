@@ -13,19 +13,19 @@ Ethereum wasn't always secured this way. Originally, a proof-of-work based conse
 Much more information about mining, including details about the specific algorithm
 ("Ethash") used by Ethereum nodes is available on [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash).
 
-## CPU vs GPU
+## CPU vs GPU {#cpu-vs-gpu}
 
 Ethereum mining used an algorithm called ["Ethash"](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash). Geth includes a CPU miner which runs Ethash within the Geth process. Everything required to mine on a CPU is bundled with Geth. However, to mine using GPUs an additional piece of third-party software is required. The most commonly used GPU mining software is [Ethminer](https://github.com/ethereum-mining/ethminer).
 
 Regardless of the mining method, the blockchain must be fully synced before mining is started, otherwise the miner will build on an outdated side chain,meaning block rewards will not be recognized by the main network.
 
-## GPU Mining
+## GPU Mining {#gpu-mining}
 
-### Installing Ethminer
+### Installing Ethminer {#installing-ethminer}
 
 The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer Github](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
 
-### Using Ethminer with Geth
+### Using Ethminer with Geth {#using-ethminer}
 
 An account to receive block rewards must first be defined. The address of the account is all that is required to start mining - the mining rewards will be credited to that address. This can be an existing address or one that is newly created by Geth. More detailed instructions on creating and importing accounts are available on the [Account Management](/docs/interface/managing-your-accounts) page.
 
@@ -95,7 +95,7 @@ Note that the Geth command `miner.hashrate` only works for CPU mining - it alway
 
 More verbose logs can be configured using `-v` and a value between 0-9. The Ethash algorithm is [memory-hard](https://crypto.stackexchange.com/questions/84002/memory-hard-vs-memory-bound-functions) and requires a large dataset to be loaded into memory. Each GPU requires 4-5 GB of RAM. The error message `Error GPU mining. GPU memory fragmentation?` indicates that there is insufficient memory available.
 
-## CPU Mining with Geth
+## CPU Mining with Geth {#cpu-mining-with-geth}
 
 When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores).
 
@@ -175,6 +175,6 @@ in its own local blockchain the account balance appears higher because the block
 
 The logs show locally mined blocks confirmed after 5 blocks.
 
-## Summary
+## Summary {#summary}
 
 The page describes how to start Geth as a mining node. Mining can be done on CPUs - in which case Geth's built-in miner can be used - or on GPUs which requires third party software. Mining is **no longer used to secure Ethereum Mainnet**.

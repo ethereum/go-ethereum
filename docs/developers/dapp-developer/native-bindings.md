@@ -9,15 +9,15 @@ Interacting with a contract on the Ethereum blockchain from Go is already possib
 
 This page provides an introduction to generating Go contract bindings and using them in a simple Go application.
 
-## Prerequisites
+## Prerequisites {#prerequisites}
 
 This page is fairly beginner-friendly and designed for people starting out with writing Go native dapps. The core concepts will be introduced gradually as a developer would encounter them. However, some basic familiarity with [Ethereum](https://ethereum.org), [Solidity](https://docs.soliditylang.org/en/v0.8.15/) and [Go](https://go.dev/) is assumed.
 
-## What is an ABI?
+## What is an ABI? {#what-is-an-abi}
 
 Ethereum smart contracts have a schema that defines its functions and return types in the form of a JSON file. This JSON file is known as an _Application Binary Interface_, or ABI. The ABI acts as a specification for precisely how to encode data sent to a contract and how to decode the data the contract sends back. The ABI is the only essential piece of information required to generate Go bindings. Go developers can then use the bindings to interact with the contract from their Go application without having to deal directly with data encoding and decoding. An ABI is generated when a contract is compiled.
 
-## Abigen: Go binding generator
+## Abigen: Go binding generator {#abigen}
 
 Geth includes a source code generator called `abigen` that can convert Ethereum ABI definitions into easy to use, type-safe Go packages. With a valid Go development environment set up and the go-ethereum repository checked out correctly, `abigen` can be built as follows:
 
@@ -26,7 +26,7 @@ $ cd $GOPATH/src/github.com/ethereum/go-ethereum
 $ go build ./cmd/abigen
 ```
 
-### Generating the bindings
+### Generating the bindings {#generating-bindings}
 
 To demonstrate the binding generator a contract is required. The contract `Storage.sol` implements two very simple functions: `store` updates a user-defined `uint256` to the contract's storage, and `retrieve` displays the value stored in the contract to the user. The Solidity code is as follows:
 
@@ -152,8 +152,8 @@ type Storage struct {
 `Storage.go` contains all the bindings required to interact with `Storage.sol` from a Go application. However, this isn't very useful unless the contract is actually deployed on Ethereum or one of Ethereum's testnets. The following sections will demonstrate how to deploy the contract to
 an Ethereum testnet and interact with it using the Go bindings.
 
-### Deploying contracts to Ethereum
-
+### Deploying contracts to Ethereum {#deploying-contracts}
+ 
 In the previous section, the contract ABI was sufficient for generating the contract bindings from its ABI. However, deploying the contract requires some additional information in the form of the compiled bytecode.
 
 The bytecode is obtained by running the compiler again but this passing the `--bin` flag, e.g.
@@ -267,7 +267,7 @@ Note that `DeployStorage` returns four variables:
 
 - `err`: a variable that handles errors in case of a deployment failure
 
-### Accessing an Ethereum contract
+### Accessing an Ethereum contract {#accessing-contracts}
 
 To interact with a contract already deployed on the blockchain, the deployment `address` is required and a `backend` through which to access Ethereum must be defined. The binding generator provides an RPC backend out-of-the-box that can be used to attach to an existing Ethereum node via IPC, HTTP or WebSockets.
 
@@ -369,7 +369,7 @@ The output will be something like:
 Value: 56
 ```
 
-### Transacting with an Ethereum contract
+### Transacting with an Ethereum contract {#transacting-with-contract}
 
 Invoking a method that changes contract state (i.e. transacting) is a bit more involved, as a live transaction needs to be authorized and broadcast into the network. **Go bindings require local signing of transactions and do not delegate this to a remote node.** This is to keep accounts private within dapps, and not shared (by default) between them.
 
@@ -434,7 +434,7 @@ Similar to the method invocations in the previous section which only read contra
 
 The two mandatory fields are automatically set by the `bind` package if the auth options are constructed using `bind.NewTransactor`. The nonce and gas related fields are automatically derived by the binding if they are not set. Unset values are assumed to be zero.
 
-### Pre-configured contract sessions
+### Pre-configured contract sessions {#preconfigured-sessions}
 
 Reading and state modifying contract-calls require a mandatory first parameter which can authorize and fine tune some of the internal parameters. However, most of the time the same accounts and parameters will be used to issue many transactions, so constructing the call/transact options individually quickly becomes unwieldy.
 
@@ -459,7 +459,7 @@ session := &StorageSession{
 session.Store(big.NewInt(69))
 ```
 
-## Bind Solidity directly
+## Bind Solidity directly {#binding-solidity}
 
 In the past, abigen allowed compilation and binding of a Solidity source file directly to a Go package in a single step. This feature has been discontinued from [v1.10.18](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.18) onwards due to maintenance synchronization challenges with the compiler in Geth.
 
@@ -469,7 +469,7 @@ The compilation and binding steps can be joined together into a pipeline, for ex
 solc Storage.sol --combined-json abi,bin | abigen --pkg main --type storage --out Storage.go --combined-json -
 ```
 
-### Project integration (`go generate`)
+### Project integration (`go generate`) {#project-integration}
 
 The `abigen` command was made in such a way as to integrate easily into existing Go toolchains: instead of having to remember the exact command needed to bind an Ethereum contract into a Go project, `go generate` can handle all the fine details.
 
@@ -481,7 +481,7 @@ Place the binding generation command into a Go source file before the package de
 
 After which whenever the Solidity contract is modified, instead of needing to remember and run the above command, we can simply call `go generate` on the package (or even the entire source tree via `go generate ./...`), and it will correctly generate the new bindings for us.
 
-## Blockchain simulator
+## Blockchain simulator {#blockchain-simulator}
 
 Being able to deploy and access deployed Ethereum contracts from native Go code is a powerful feature. However, using public testnets as a backend does not lend itself well to _automated unit testing_. Therefore, Geth also implements a _simulated blockchain_ that can be set as a backend to native contracts the same way as a live RPC backend, using the command `backends.NewSimulatedBackend(genesisAccounts)`. The code snippet below shows how this can be used as a backend in a Go application.
 
@@ -525,6 +525,6 @@ func main() {
 }
 ```
 
-## Summary
+## Summary {#summary}
 
 To make interacting with Ethereum contracts easier for Go developers, Geth provides tools that generate contract bindings automatically. This makes contract functions available in Go native applications.

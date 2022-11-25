@@ -5,7 +5,7 @@ description: Documentation for the JSON-RPC API "admin" namespace
 
 The `admin` API gives access to several non-standard RPC methods, which allows fine grained control over a Geth instance, including but not limited to network peer and RPC endpoint management.
 
-## admin_addPeer
+## admin_addPeer {#admin-addpeer}
 
 The `addPeer` administrative method requests adding a new remote node to the list of tracked static nodes. The node will try to maintain connectivity to these nodes at all times, reconnecting every once in a while if the remote connection goes down.
 
@@ -24,7 +24,7 @@ The method accepts a single argument, the [`enode`](https://ethereum.org/en/deve
 true
 ```
 
-## admin_addTrustedPeer
+## admin_addTrustedPeer {#admin-addtrustedpeer}
 
 Adds the given node to a reserved trusted list which allows the node to always connect, even if the slots are full. It returns a `BOOL` to indicate whether the peer was successfully added to the list.
 
@@ -33,7 +33,7 @@ Adds the given node to a reserved trusted list which allows the node to always c
 | Console | `admin.addTrustedPeer(url)`                           |
 | RPC     | `{"method": "admin_addTrustedPeer", "params": [url]}` |
 
-## admin_datadir
+## admin_datadir {#admin-datadir}
 
 The `datadir` administrative property can be queried for the absolute path the running Geth node currently uses to store all its databases.
 
@@ -50,7 +50,7 @@ The `datadir` administrative property can be queried for the absolute path the r
 "/home/john/.ethereum"
 ```
 
-## admin_exportChain
+## admin_exportChain {#admin-exportchain}
 
 Exports the current blockchain into a local file. It optionally takes a first and last block number, in which case it exports only that range of blocks. It returns a boolean indicating whether the operation succeeded.
 
@@ -59,7 +59,7 @@ Exports the current blockchain into a local file. It optionally takes a first an
 | Console | `admin.exportChain(file, first, last)`                                |
 | RPC     | `{"method": "admin_exportChain", "params": [string, uint64, uint64]}` |
 
-## admin_importChain
+## admin_importChain {#admin-importchain}
 
 Imports an exported list of blocks from a local file. Importing involves processing the blocks and inserting them into the canonical chain. The state from the parent block of this range is required. It returns a boolean indicating whether the operation succeeded.
 
@@ -68,7 +68,7 @@ Imports an exported list of blocks from a local file. Importing involves process
 | Console | `admin.importChain(file)`                             |
 | RPC     | `{"method": "admin_importChain", "params": [string]}` |
 
-## admin_nodeInfo
+## admin_nodeInfo {#admin-nodeinfo}
 
 The `nodeInfo` administrative property can be queried for all the information known about the running Geth node at the networking granularity. These include general information about the node itself as a participant of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
@@ -103,7 +103,7 @@ The `nodeInfo` administrative property can be queried for all the information kn
 }
 ```
 
-## admin_peerEvents
+## admin_peerEvents {#admin-peerevents}
 
 PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer events from the node's p2p server. The type of events emitted by the server are as follows:
 
@@ -112,7 +112,7 @@ PeerEvents creates an [RPC subscription](/docs/rpc/pubsub) which receives peer e
 - `msgsend`: emitted when a message is successfully sent to a peer
 - `msgrecv`: emitted when a message is received from a peer
 
-## admin_peers
+## admin_peers {#admin-peers}
 
 The `peers` administrative property can be queried for all the information known about the connected remote nodes at the networking granularity. These include general information about the nodes themselves as participants of the [ÐΞVp2p](https://github.com/ethereum/devp2p/blob/master/caps/eth.md) P2P overlay protocol, as well as specialized information added by each of the running application protocols (e.g. `eth`, `les`, `shh`, `bzz`).
 
@@ -159,7 +159,7 @@ The `peers` administrative property can be queried for all the information known
 }]
 ```
 
-## admin_removePeer
+## admin_removePeer {#admin-removepeer}
 
 Disconnects from a remote node if the connection exists. It returns a boolean indicating validations succeeded. Note a `true` value doesn't necessarily mean that there was a connection which was disconnected.
 
@@ -168,7 +168,7 @@ Disconnects from a remote node if the connection exists. It returns a boolean in
 | Console | `admin.removePeer(url)`                              |
 | RPC     | `{"method": "admin_removePeer", "params": [string]}` |
 
-## admin_removeTrustedPeer
+## admin_removeTrustedPeer {#admin-removetrustedpeer}
 
 Removes a remote node from the trusted peer set, but it does not disconnect it automatically. It returns a boolean indicating validations succeeded.
 
@@ -177,8 +177,8 @@ Removes a remote node from the trusted peer set, but it does not disconnect it a
 | Console | `admin.removeTrustedPeer(url)`                              |
 | RPC     | `{"method": "admin_removeTrustedPeer", "params": [string]}` |
 
-## admin_startHTTP
-
+## admin_startHTTP {#admin-starthttp}
+ 
 The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/rpc/server) webserver to handle client requests. All the parameters are optional:
 
 - `host`: network interface to open the listener socket on (defaults to `"localhost"`)
@@ -201,7 +201,7 @@ The method returns a boolean flag specifying whether the HTTP RPC listener was o
 true
 ```
 
-## admin_startWS
+## admin_startWS {#admin-startws}
 
 The `startWS` administrative method starts an WebSocket based [JSON RPC](https://www.jsonrpc.org/specification) API webserver to handle client requests. All the parameters are optional:
 
@@ -225,7 +225,7 @@ The method returns a boolean flag specifying whether the WebSocket RPC listener 
 true
 ```
 
-## admin_stopHTTP
+## admin_stopHTTP {#admin-stophttp}
 
 The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint. As the node can only have a single HTTP endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 
@@ -242,7 +242,7 @@ The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint
 true
 ```
 
-## admin_stopWS
+## admin_stopWS {#admin-stopws}
 
 The `stopWS` administrative method closes the currently open WebSocket RPC endpoint. As the node can only have a single WebSocket endpoint running, this method takes no parameters, returning a boolean whether the endpoint was closed or not.
 

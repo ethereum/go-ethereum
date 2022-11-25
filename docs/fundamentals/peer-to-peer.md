@@ -20,7 +20,7 @@ geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
 geth --goerli --config goerli.toml
 ```
 
-## Finding peers
+## Finding peers {#finding-peers}
 
 Geth continuously attempts to connect to other nodes on the network until it has enough peers. If UPnP (Universal Plug and Play) is enabled at the router or Ethereum is run on an Internet-facing server, it will also accept connections from other nodes. Geth finds peers using the [discovery protocol](https://ethereum.org/en/developers/docs/networking-layer/#discovery). In the discovery protocol, nodes exchange connectivity details and then establish sessions ([RLPx](https://github.com/ethereum/devp2p/blob/master/rlpx.md)). If the nodes support compatible sub-protocols they can start exchanging Ethereum data [on the wire](https://ethereum.org/en/developers/docs/networking-layer/#wire-protocol).
 
@@ -32,7 +32,7 @@ geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pub
 
 There are scenarios where disabling the discovery process is useful, for example for running a local test node or an experimental test network with known, fixed nodes. This can be achieved by passing the `--nodiscover` flag to Geth at startup.
 
-## Connectivity problems
+## Connectivity problems {#connectivity-problems}
 
 There are occasions when Geth simply fails to connect to peers. The common reasons for this are:
 
@@ -44,7 +44,7 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
-## Checking Connectivity
+## Checking Connectivity {#checking-connectivity}
 
 The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
@@ -104,11 +104,11 @@ The `admin` module also includes functions for gathering information about the l
 }
 ```
 
-## Custom Networks
+## Custom Networks {#custom-networks}
 
 It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
 
-## Static nodes
+## Static nodes {#static-nodes}
 
 Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
 
@@ -132,7 +132,7 @@ admin.addPeer(
 );
 ```
 
-## Peer limit
+## Peer limit {#peer-limit}
 
 It is sometimes desirable to cap the number of peers Geth will connect to in order to limit on the computational and bandwidth cost associated with running a node. By default, the limit is 50 peers, however, this can be updated by passing a value to `--maxpeers`:
 
@@ -140,7 +140,7 @@ It is sometimes desirable to cap the number of peers Geth will connect to in ord
 geth <otherflags> --maxpeers 15
 ```
 
-## Trusted nodes
+## Trusted nodes {#trusted-nodes}
 
 Trusted nodes can be added to `config.toml` in the same way as for static nodes. Add the trusted node's enode address to the `TrustedNodes` field in `config.toml` before starting Geth with `--config config.toml`.
 
@@ -151,7 +151,7 @@ admin.addTrustedPeer(
   'enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303'
 );
 ```
-
-## Summary
+ 
+## Summary {#summary}
 
 Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks. Remember that to connect to a proof-of-stake network (e.g. Ethereum Mainnet, Goerli, Sepolia) a consensus client is also required.

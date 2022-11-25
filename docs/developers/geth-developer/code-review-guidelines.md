@@ -5,7 +5,7 @@ description: Explanation of how code PRs are reviewed
 
 The only way to get code into Geth is to submit a pull request (PR). Those pull requests need to be reviewed by someone. This document is a guide that explains our expectations around PRs for both authors and reviewers.
 
-## Terminology
+## Terminology {#terminology}
 
 - The **author** of a pull request is the entity who wrote the diff and submitted it to GitHub.
 
@@ -13,7 +13,7 @@ The only way to get code into Geth is to submit a pull request (PR). Those pull 
 - The **reviewer** is the person assigned to review the diff. The reviewer must be a team member.
 - The **code owner** is the person responsible for the subsystem being modified by the PR.
 
-## The Process
+## The Process {#process}
 
 The first decision to make for any PR is whether it's worth including at all. This decision lies primarily with the code owner, but may be negotiated with team members.
 
@@ -23,11 +23,11 @@ We expect that reviewers check the style and functionality of the PR, providing 
 
 When communicating with authors, be polite and respectful.
 
-### Code Style
+### Code Style {#code-style}
 
 We expect `gofmt`ed code. For contributions of significant size, we expect authors to understand and use the guidelines in [Effective Go](https://golang.org/doc/effective_go.html). Authors should avoid common mistakes explained in the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments) page.
 
-### Functional Checks
+### Functional Checks {#functional-checks}
 
 For PRs that fix an issue, reviewers should try reproduce the issue and verify that the pull request actually fixes it. Authors can help with this by including a unit test that fails without (and passes with) the change.
 
@@ -35,13 +35,13 @@ For PRs adding new features, reviewers should attempt to use the feature and com
 
 We expect appropriate unit test coverage. Reviewers should verify that new code is covered by unit tests.
 
-### CI
+### CI {#ci}
 
 Code submitted must pass all unit tests and static analysis ("lint") checks. We use Travis CI to test code on Linux, macOS and AppVeyor to test code on Microsoft Windows.
 
 For failing CI builds, the issue may not be related to the PR itself. Such failures are usually related to flakey tests. These failures can be ignored (authors don't need to fix unrelated issues), but please file a GH issue so the test gets fixed eventually.
 
-### Commit Messages
+### Commit Messages {#commit-messages}
 
 Commit messages on the master branch should follow the rule below. PR authors are not required to use any particular style because the message can be modified at merge time. Enforcing commit message style is the responsibility of the person merging the PR.
 
@@ -59,7 +59,7 @@ Longer explanation of the change in the commit. You can use multiple sentences h
 issue notices, e.g. "Fixes #42353".
 ```
 
-### Special Situations And How To Deal With Them
+### Special Situations And How To Deal With Them {#special-situations}
 
 Reviewers may find themselves in one of the sitations below. Here's how to deal with them:
 

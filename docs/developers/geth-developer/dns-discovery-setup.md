@@ -7,7 +7,7 @@ This document explains how to set up an [EIP 1459](https://eips.ethereum.org/EIP
 
 DNS-based node lists can serve as a fallback option when connectivity to the discovery DHT is unavailable. In this guide, node lists will be reated by crawling the discovery DHT, then publishing the resulting node sets under chosen DNS names.
 
-## Installing the devp2p command
+## Installing the devp2p command {#installing-devp2p}
 
 `cmd/devp2p` is a developer utility and is not included in the Geth distribution. You can install this command using `go get`:
 
@@ -21,7 +21,7 @@ To create a signing key, the `ethkey` utility is needed.
 go get github.com/ethereum/go-ethereum/cmd/ethkey
 ```
 
-## Crawling the v4 DHT
+## Crawling the v4 DHT {#crawling-v4-dht}
 
 Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p is a batch process which runs for a set amount of time. You should should schedule this command to run at a regular interval. To create a node list, run
 
@@ -35,7 +35,7 @@ add newly-found nodes to the set, and remove nodes which are no longer alive. Th
 of the node set improves with each run because the number of revalidations is tracked
 alongside each node in the set.
 
-## Creating sub-lists through filtering
+## Creating sub-lists through filtering {#creating-sublists}
 
 Once `all-nodes.json` has been created and the set contains a sizeable number of nodes,
 useful sub-sets of nodes can be extracted using the `devp2p nodeset filter` command. This
@@ -63,7 +63,7 @@ The following filter flags are available:
 - `-min-age <duration>` restricts the result to nodes which have been live for the
   given duration.
 
-## Creating DNS trees
+## Creating DNS trees {#creating-dns-trees}
 
 To turn a node list into a DNS node tree, the list needs to be signed. To do this, a key pair is required. To create the key file in the correct format, the cmd/ethkey utility should be used. Choose a strong password to encrypt the key on disk!
 
@@ -79,7 +79,7 @@ devp2p dns sign mainnet.nodes.example.org dnskey.json
 
 The resulting DNS tree metadata is stored in the `mainnet.nodes.example.org/enrtree-info.json` file.
 
-## Publishing DNS trees
+## Publishing DNS trees {#publishing-dns-trees}
 
 Now that the tree is signed, it can be published to a DNS provider. cmd/devp2p currently supports publishing to CloudFlare DNS and Amazon Route53.TXT records can also be exported as a JSON file and published independently.
 
@@ -91,7 +91,7 @@ devp2p dns to-cloudflare mainnet.nodes.example.org
 
 Note that this command uses the domain name specified during signing. Any existing records below this name will be erased by cmd/devp2p.
 
-## Using DNS trees with Geth
+## Using DNS trees with Geth {#using-dns-trees}
 
 Once a tree is available through a DNS name, Geth can use it with the `--discovery.dns` command line flag. Node trees are referenced using the `enrtree://` URL scheme. The URL of the tree can be found in the `enrtree-info.json` file created by `devp2p dns sign`. Pass the URL as an argument to the flag in order to make use of the published tree.
 
