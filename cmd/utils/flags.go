@@ -1504,7 +1504,7 @@ func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 
 	if peerRequiredBlocks == "" {
 		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
-			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
+			log.Warn("The flag --whitelist is deprecated and will be removed, please use --eth.requiredblocks")
 			peerRequiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
 		} else {
 			return

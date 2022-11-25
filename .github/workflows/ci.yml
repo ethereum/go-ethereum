@@ -143,7 +143,9 @@ jobs:
             bash docker-heimdall-start-all.sh
             bash docker-bor-setup.sh
             bash docker-bor-start-all.sh
+            cd code/
             timeout 2m bash bor/integration-tests/bor_health.sh
+            cd -
             bash ganache-deployment-bor.sh
             bash ganache-deployment-sync.sh
 
