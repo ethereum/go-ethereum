@@ -318,7 +318,7 @@ func (f *Freezer) Sync() error {
 	return nil
 }
 
-// validate checks that every table has the same length.
+// validate checks that every table has the same boundary.
 // Used instead of `repair` in readonly mode.
 func (f *Freezer) validate() error {
 	if len(f.tables) == 0 {
@@ -329,14 +329,14 @@ func (f *Freezer) validate() error {
 		tail uint64
 		name string
 	)
-	// Hack to get length of any table
+	// Hack to get boundary of any table
 	for kind, table := range f.tables {
 		head = atomic.LoadUint64(&table.items)
 		tail = atomic.LoadUint64(&table.itemHidden)
 		name = kind
 		break
 	}
-	// Now check every table against that length
+	// Now check every table against those boundaries.
 	for kind, table := range f.tables {
 		if head != atomic.LoadUint64(&table.items) {
 			return fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, atomic.LoadUint64(&table.items), head)
