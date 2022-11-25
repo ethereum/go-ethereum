@@ -325,23 +325,28 @@ func (f *Freezer) validate() error {
 		return nil
 	}
 	var (
-		length uint64
-		name   string
+		head uint64
+		tail uint64
+		name string
 	)
 	// Hack to get length of any table
 	for kind, table := range f.tables {
-		length = atomic.LoadUint64(&table.items)
+		head = atomic.LoadUint64(&table.items)
+		tail = atomic.LoadUint64(&table.itemHidden)
 		name = kind
 		break
 	}
 	// Now check every table against that length
 	for kind, table := range f.tables {
-		items := atomic.LoadUint64(&table.items)
-		if length != items {
-			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
+		if head != atomic.LoadUint64(&table.items) {
+			return fmt.Errorf("freezer tables %s and %s have differing head: %d != %d", kind, name, atomic.LoadUint64(&table.items), head)
+		}
+		if tail != atomic.LoadUint64(&table.itemHidden) {
+			return fmt.Errorf("freezer tables %s and %s have differing tail: %d != %d", kind, name, atomic.LoadUint64(&table.itemHidden), tail)
 		}
 	}
-	atomic.StoreUint64(&f.frozen, length)
+	atomic.StoreUint64(&f.frozen, head)
+	atomic.StoreUint64(&f.tail, tail)
 	return nil
 }
 
