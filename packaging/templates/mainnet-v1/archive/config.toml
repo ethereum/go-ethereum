@@ -45,7 +45,7 @@ gcmode = "archive"
     # pricebump = 10
 
 [miner]
-    gaslimit = 20000000
+    gaslimit = 30000000
     gasprice = "30000000000"
     # mine = false
     # etherbase = ""
@@ -79,11 +79,11 @@ gcmode = "archive"
         # vhosts = ["*"]
         # corsdomain = ["*"]
 
-# [gpo]
+[gpo]
     # blocks = 20
     # percentile = 60
     # maxprice = "5000000000000"
-    # ignoreprice = "2"
+    ignoreprice = "30000000000"
 
 [telemetry]
     metrics = true
@@ -102,8 +102,8 @@ gcmode = "archive"
         # organization = ""
     # [telemetry.influx.tags]
 
-# [cache]
-    # cache = 1024
+[cache]
+    cache = 4096
     # gc = 25
     # snapshot = 10
     # database = 50

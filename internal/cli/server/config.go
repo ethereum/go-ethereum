@@ -428,7 +428,7 @@ func DefaultConfig() *Config {
 			NoLocals:     false,
 			Journal:      "transactions.rlp",
 			Rejournal:    1 * time.Hour,
-			PriceLimit:   30000000000,
+			PriceLimit:   1, // geth's default
 			PriceBump:    10,
 			AccountSlots: 16,
 			GlobalSlots:  32768,
@@ -439,8 +439,8 @@ func DefaultConfig() *Config {
 		Sealer: &SealerConfig{
 			Enabled:   false,
 			Etherbase: "",
-			GasCeil:   30_000_000,
-			GasPrice:  big.NewInt(1 * params.GWei),
+			GasCeil:   30_000_000,                  // geth's default
+			GasPrice:  big.NewInt(1 * params.GWei), // geth's default
 			ExtraData: "",
 		},
 		Gpo: &GpoConfig{
@@ -497,7 +497,7 @@ func DefaultConfig() *Config {
 			},
 		},
 		Cache: &CacheConfig{
-			Cache:         1024,
+			Cache:         1024, // geth's default (suitable for mumbai)
 			PercDatabase:  50,
 			PercTrie:      15,
 			PercGc:        25,
@@ -624,13 +624,6 @@ func (c *Config) loadChain() error {
 	// preload some default values that depend on the chain file
 	if c.P2P.Discovery.DNS == nil {
 		c.P2P.Discovery.DNS = c.chain.DNS
-	}
-
-	// depending on the chain we have different cache values
-	if c.Chain == "mainnet" {
-		c.Cache.Cache = 4096
-	} else {
-		c.Cache.Cache = 1024
 	}
 
 	return nil
