@@ -10,3 +10,6 @@ do
         break
     fi
 done
+
+echo $peers
+echo $block
