@@ -3,7 +3,7 @@ title: Account Management with Clef
 description: Guide to basic account management using Geth's built-in tools
 ---
 
-Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
+Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
 ## Initialize Clef
 
@@ -108,7 +108,7 @@ Make sure to backup keystore and passwords in a safe location.
 
 The accounts in the keystore can be listed to the terminal using a simple CLI command as follows:
 
-```
+```sh
 clef list-accounts --keystore <path-to-keystore>
 ```
 
@@ -130,7 +130,7 @@ Accounts can also be listed in the Javascript console using `eth.accounts`, whic
 
 As well as individual account, any wallets managed by Clef can be listed (which will also print the wallet status and the address and URl of any accounts they contain. This uses the `list-wallets` CLI command.
 
-```
+```sh
 clef list-wallets --keystore <path-to-keystore>
 ```
 

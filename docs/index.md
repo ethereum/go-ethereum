@@ -1,9 +1,7 @@
 ---
-title: Welcome to go-ethereum documentation
+title: Welcome to go-ethereum
 description: Documentation for the go-ethereum client
 ---
-
-## Welcome to go-ethereum
 
 Go-ethereum (aka Geth) is an Ethereum client built in [Golang](https://go.dev). It is one of the original and most popular Ethereum clients.
 These documentation pages are intended to help users download, install and use Geth.
@@ -12,9 +10,7 @@ These documentation pages are intended to help users download, install and use G
 
 First, make sure you have sufficient [hardware](/docs/getting-started/hardware-requirements), then [download](/downloads) and [install](/docs/getting-started/installing-geth) Geth. Make sure you are familiar with the [security considerations](/docs/fundamentals/security) and have your firewall set up.
 
-If you are just starting out with Geth, head to the [Getting started](/docs/getting-started/) page. That page guides a new user through some basic functions of Geth such as creating and securing accounts and making a transaction using Geth's built-in account tools.
-
-A more secure but slightly more advanced setup is to use an external signer instead of Geth's built-in account manager. We have a [getting started](/docs/getting-started/getting-started-with-clef) guide for that too.
+If you are just starting out with Geth, head to the [Getting started](/docs/getting-started/) page. That page guides new users through some basic functions of Geth such as creating and securing accounts and making a transaction.
 
 Then, it is recommended to read the material in the [Fundamentals](/docs/fundamentals) section - these pages will help build a foundational understanding of how Geth works from a user perspective and under the hood.
 

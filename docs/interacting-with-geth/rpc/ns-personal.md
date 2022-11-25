@@ -3,6 +3,9 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
+{% include note.html content="The personal namespace will be deprecated in the very near future. All the methods in the personal namespace have equivalents in Clef or Geth" %}
+
+
 The personal API manages private keys in the key store.
 
 ## personal_deriveAccount

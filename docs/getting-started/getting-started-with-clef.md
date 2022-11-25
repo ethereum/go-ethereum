@@ -1,11 +1,13 @@
 ---
-title: Geth and Clef
-description: Guide to getting up and running with Geth using Clef as an external account management and signing tool.
+title: Getting started with Geth
+description: Guide to getting up and running with Geth using Clef.
 ---
 
-This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](/docs/getting_started/Installing-Geth) pages. Geth also needs to be connected to a consensus client in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/content/docs/fundamentals/security).
+This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](/docs/getting_started/Installing-Geth) pages. 
 
-This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/docs/tools/Clef/Tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team and is intended to eventually replace the account management tool built in to Geth.
+Geth also needs to be connected to a [consensus client](docs/getting-started/consensus-clients.md) in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/docs/fundamentals/security).
+
+This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/docs/tools/Clef/Tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team.
 
 ## Prerequisites
 
@@ -25,8 +27,7 @@ consensus client is [here](/docs/getting_started/consensus-clients).
 
 Geth is an Ethereum client written in Go. This means running Geth turns a computer into an Ethereum node. Ethereum is a peer-to-peer network where information is shared directly between nodes rather than being managed by a central server. Every 12 seconds one node is randomly selected to generate a new block containing a list of transactions that nodes receiving the block should execute. This "block proposer" node sends the new block to its peers. On receiving a new block, each node checks that it is valid and adds it to their database. The sequence of discrete blocks is called a "blockchain".
 
-The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum and the data stored by each smart contract. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum,
-it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guide the user through creating an account, funding it with ether and sending some to another address.
+The information provided in each block is used by Geth to update its "state" - the ether balance of each account on Ethereum and the data stored by each smart contract. There are two types of account: externally-owned accounts (EOAs) and contract accounts. Contract accounts execute contract code when they receive transactions. EOAs are accounts that users manage locally in order to sign and submit transactions. Each EOA is a public-private key pair, where the public key is used to derive a unique address for the user and the private key is used to protect the account and securely sign messages. Therefore, in order to use Ethereum, it is first necessary to generate an EOA (hereafter, "account"). This tutorial will guide the user through creating an account, funding it with ether and sending some to another address.
 
 Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs/accounts/).
 
@@ -79,10 +80,10 @@ It is important to save the account address and the password somewhere secure. T
 
 The previous commands used Clef's `newaccount` function to add new key pairs to the keystore. Clef uses the private key(s) saved in the keystore is used to sign transactions. In order to do this, Clef needs to be started and left running while Geth is running simultaneously, so that the two programs can communicate between one another.
 
-To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config directory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial Chain ID 5 is used which is that of the Goerli testnet. It is very important that this chain ID parameter is set to 5. The following command starts Clef on Goerli:
+To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config directory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial Chain ID 11155111 is used which is that of the Sepolia testnet. It is very important that this chain ID parameter is set to 11155111 - Clef uses the chain ID to sign messages so it must be correct. The following command starts Clef on Sepolia:
 
 ```shell
-clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 5
+clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 11155111
 ```
 
 After running the command above, Clef requests the user to type “ok” to proceed. On typing "ok" and pressing enter, Clef returns the following to the terminal:
@@ -110,25 +111,26 @@ This result indicates that Clef is running. This terminal should be left running
 
 ## Step 3: Start Geth
 
-Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Goerli, an Ethereum testnet. Testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), signer (points Geth to Clef), the network ID and the sync mode. For this tutorial, snap sync is recommended (see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The final argument passed to Geth is the `--http` flag. This enables the http-rpc server that allows external programs to interact with Geth by sending it http requests. By default the http server is only exposed locally using port 8545: `localhost:8545`.
+Geth is the Ethereum client that will connect the computer to the Ethereum network. In this tutorial the network is Sepolia, an Ethereum testnet. Testnets are used to test Ethereum client software and smart contracts in an environment where no real-world value is at risk. To start Geth, run the Geth executable file passing argument that define the data directory (where Geth should save blockchain data), signer (points Geth to Clef), the network ID and the sync mode. For this tutorial, snap sync is recommended (see [here](https://blog.ethereum.org/2021/03/03/geth-v1-10-0/) for reasons why). The final argument passed to Geth is the `--http` flag. This enables the http-rpc server that allows external programs to interact with Geth by sending it http requests. By default the http server is only exposed locally using port 8545: `localhost:8545`. It is also necessary to authorize some traffic for the consensus client which is done using `--authrpc` and also to set up a JWT secret token in a known location, using `--jwt-secret`.
 
 The following command should be run in a new terminal, separate to the one running Clef:
 
 ```shell
-geth --datadir geth-tutorial --signer=geth-tutorial/clef/clef.ipc --goerli --syncmode snap --http
+geth --sepolia --datadir geth-tutorial --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret geth-tutorial/jwtsecret --http --http.api eth,net --signer=geth-tutorial/clef/clef.ipc --http
 ```
 
-Running the above command starts Geth. The terminal should rapidly fill with status updates, starting with:
+Running the above command starts Geth. Geth will not sync the blockchain correctly unless there is also a consensus client that can pass Geth a valid head to sync up to. In a separate terminal, start a consensus client. Once the consensus client gets in sync, Geth will start to sync too.
+
+The terminal should rapidly fill with status updates that look similar to those below. To check the meaning of the logs, refer to the [logs page](docs/fundamentals/logs.md).
 
 ```terminal
-INFO [02-10|13:59:06.649] Starting Geth on goerli testnet...
-INFO [02-10|13:59:06.649] Dropping default light client cache      provided=1024 updated=128
+INFO [02-10|13:59:06.649] Starting Geth on sepolia testnet...
 INFO [02-10|13:59:06.652] Maximum peer count                       ETH=50 LES=0 total=50
 INFO [02-10|13:59:06.655] Using external signer                    url=geth-tutorial/clef/clef.ipc
 INFO [02-10|13:59:06.660] Set global gas cap                       cap=50,000,000
 INFO [02-10|13:59:06.661] Allocated cache and file handles         database=/.../geth-tutorial/geth/chaindata cache=64.00MiB handles=5120
 INFO [02-10|13:59:06.855] Persisted trie from memory database      nodes=361 size=51.17KiB time="643.54µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
-INFO [02-10|13:59:06.855] Initialised chain configuration          config="{ChainID: 5 Homestead: 0 DAO: nil DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 1561651, Muir Glacier: nil, Berlin: 4460644, London: 5062605, Arrow Glacier: nil, MergeFork: nil, Engine: clique}"
+INFO [02-10|13:59:06.855] Initialised chain configuration          config="{ChainID: 11155111 Homestead: 0 DAO: nil DAOSupport: true EIP150: 0 EIP155: 0 EIP158: 0 Byzantium: 0 Constantinople: 0 Petersburg: 0 Istanbul: 1561651, Muir Glacier: nil, Berlin: 4460644, London: 5062605, Arrow Glacier: nil, MergeFork: nil, Engine: clique}"
 INFO [02-10|13:59:06.862] Added trusted checkpoint                 block=5,799,935 hash=2de018..c32427
 INFO [02-10|13:59:06.863] Loaded most recent local header          number=6,340,934 hash=483cf5..858315 td=9,321,576 age=2d9h29m
 INFO [02-10|13:59:06.867] Configured checkpoint oracle             address=0x18CA0E045F0D772a851BC7e48357Bcaab0a0795D signers=5 threshold=2
@@ -139,12 +141,9 @@ INFO [02-10|13:59:06.995] New local node record                    seq=1,644,272
 INFO [02-10|13:59:06.996] Started P2P networking                   self=enode://4b80ebd341b5308f7a6b61d91aa0ea31bd5fc9e0a6a5483e59fd4ea84e0646b13ecd289e31e00821ccedece0bf4b9189c474371af7393093138f546ac23ef93e@127.0.0.1:30303
 INFO [02-10|13:59:06.997] IPC endpoint opened                      url=/.../geth-tutorial/geth.ipc
 INFO [02-10|13:59:06.998] HTTP server started                      endpoint=127.0.0.1:8545 prefix= cors= vhosts=localhost
-WARN [02-10|13:59:06.998] Light client mode is an experimental feature
-WARN [02-10|13:59:06.999] Failed to open wallet                    url=extapi://geth-tutorial/clef/cle.. err="operation not supported on external signers"
-INFO [02-10|13:59:08.793] Block synchronisation started
 ```
 
-This indicates that Geth has started up and is searching for peers to connect to. Once it finds peers it can request block headers from them, starting at the genesis block for the Goerli blockchain. Geth continues to download blocks sequentially, saving the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
+By default, Geth uses snap-sync which download blocks sequentially from a relatively recent block, not the genesis block. It saves the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. One the sequence of headers has been verified, Geth downloads the block bodies and state data before starting the "state healing" phase to update the state for newly arriving data. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
 
 ```terminal
 INFO [04-29][15:54:09.238] Looking for peers             peercount=2 tried=0 static=0
@@ -152,21 +151,27 @@ INFO [04-29][15:54:19.393] Imported new block headers    count=2 elapsed=1.127ms
 INFO [04-29][15:54:19:656] Imported new block receipts   count=698  elapsed=4.464ms number=994566 hash=56dc44..007c93 age=13h9m9s
 ```
 
-These logs indicate that Geth is running as expected. Sending an empty Curl request to the http server provides a quick way to confirm that this too has been started without any issues. In a third terminal, the following command can be run:
+This message will be displayed periodically until state healing has finished:
+
+```
+INFO [10-20|20:20:09.510] State heal in progress                   accounts=313,309@17.95MiB slots=363,525@28.77MiB codes=7222@50.73MiB nodes=49,616,912@12.67GiB pending=29805
+```
+When state healing is finished, the node is in sync and ready to use.
+
+Sending an empty Curl request to the http server provides a quick way to confirm that this too has been started without any issues. In a third terminal, the following command can be run:
 
 ```shell
 curl http://localhost:8545
 ```
 
-If there is no error message reported to the terminal, everything is OK. Geth must be running in order for a user to interact with the Ethereum network. If this terminal is closed down then Geth must be restarted in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir <other commands>`.
+If there is no error message reported to the terminal, everything is OK. Geth must be running and synced in order for a user to interact with the Ethereum network. If the terminal running Geth is closed down then Geth must be restarted again in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir <other commands>`.
 
-{% include note.html content="Snap syncing Goerli will take some time and until the sync is finished you can't use the node to transfer funds. You can also try doing a [light sync](interface/les) which will be much quicker but depends on light servers being available to serve your node the data it needs." %}
 
 ## Step 4: Get Testnet Ether
 
 In order to make some transactions, the user must fund their account with ether. On Ethereum mainnet, ether can only be obtained in three ways: 1) by receiving it as a reward for mining/validating; 2) receiving it in a transfer from another Ethereum user or contract; 3) receiving it from an exchange, 3) having paid for it with fiat money. On Ethereum testnets, the ether has no real world value so it 4) can be made freely available via faucets. Faucets allow users to request a transfer of testnet ether to their account.
 
-The address generated by Clef in Step 1 can be pasted into the Paradigm Multifaucet faucet [here](https://fauceth.komputing.org/?chain=1115511). This requires a Twitter login as proof of personhood. The faucets adds ether to the given address on multiple testnets simultaneously, including Goerli. In the next steps Geth will be used to check that the ether has been sent to the given address and send some of it to the second address created earlier.
+The address generated by Clef in Step 1 can be pasted into the Paradigm Multifaucet faucet [here](https://faucet.sepolia.dev/). The faucets adds Sepolia ETH (not real ETH) to the given address. In the next steps Geth will be used to check that the ether has been sent to the given address and send some of it to the second address created earlier.
 
 ## Step 5: Interact with Geth
 
@@ -197,7 +202,7 @@ at block: 6354736 (Thu Feb 10 2022 14:01:46 GMT+0100 (WAT))
 To exit, press ctrl-d or type exit
 ```
 
-The console is now active and connected to Geth. It can now be used to interact with the Ethereum (Goerli) network.
+The console is now active and connected to Geth. It can now be used to interact with the Ethereum (Sepolia) network.
 
 ### List of accounts
 
@@ -234,23 +239,23 @@ Entering `y` approves the request from the console. In the terminal running the 
 ["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec", "0xce8dba5e4157c2b284d8853afeeea259344c1653"]
 ```
 
-It is also possible for this request to time out if the Clef approval took too long - in this case simply repeat the request and approval.
+It is also possible for this request to time out if the Clef approval took too long - in this case simply repeat the request and approval. Accoutns can also be listed directly from Clef by opening a new terminal and running `clef list-accounts --keystore <path-to-keystore>`.
 
 ### Checking account balance.
 
-Having confirmed that the two addresses created earlier are indeed in the keystore and accessible through the Javascript console, it is possible to retrieve information about how much ether they own. The Goerli faucet should have sent 1 ETH to the address provided, meaning that the balance of one of the accounts should be 1 ether and the other should be 0. The following command displays the account balance in the console:
+Having confirmed that the two addresses created earlier are indeed in the keystore and accessible through the Javascript console, it is possible to retrieve information about how much ether they own. The Sepolia faucet should have sent 0.05 ETH to the address provided, meaning that the balance of one of the accounts should be at least 0.05 ether and the other should be 0. There are other faucets available that may dispense more ETH per request, and multipel requests can be made to accumulate more ETH. The following command displays the account balance in the console:
 
 ```javascript
 web3.fromWei(eth.getBalance('0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC'), 'ether');
 ```
 
-There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 10<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result (for the account that received faucet funds):
+There are actually two instructions sent in the above command. The inner one is the `getBalance` function from the `eth` namespace. This takes the account address as its only argument. By default, this returns the account balance in units of Wei. There are 10<sup>18</sup> Wei to one ether. To present the result in units of ether, `getBalance` is wrapped in the `fromWei` function from the `web3` namespace. Running this command should provide the following result, assuming the account balance is 1 ETH:
 
 ```terminal
 1
 ```
 
-Repeating the command for the other account should yield:
+Repeating the command for the other (empty) account should yield:
 
 ```terminal
 0
@@ -292,7 +297,6 @@ Additional HTTP header data, provided by the external caller:
 Approve? [y/N]:
 
 Please enter the password for account 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
-
 ```
 
 After approving the transaction, the following confirmation screen in displayed in the Clef terminal:
@@ -313,7 +317,7 @@ Transaction signed:
     "r": "0x66e5d23ad156e04363e68b986d3a09e879f7fe6c84993cef800bc3b7ba8af072",
     "s": "0x647ff82be943ea4738600c831c4a19879f212eb77e32896c05055174045da1bc",
     "to": "0xce8dba5e4157c2b284d8853afeeea259344c1653",
-    "chainId": "0x5",
+    "chainId": "0xaa36a7",
     "accessList": [],
     "hash": "0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb"
   }
@@ -325,11 +329,11 @@ In the Javascript console, the transaction hash is displayed. This will be used 
 "0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb"
 ```
 
-It is also advised to check the account balances using Geth by repeating the instructions from earlier. At this point in the tutorial, the two accounts in the Clef keystore should have balances just below 0.9 ether (because 0.1 ether has been transferred out and some small amount paid in transaction gas) and 0.1 ether.
+It is also advised to check the account balances using Geth by repeating the instructions from earlier. At this point in the tutorial, the balances of the two accounts in the Clef keystore should have changed by ~0.1 ETH (the sender's balance will have decremented by a little over 0.1 ETH because some small was amount paid in transaction gas).
 
 ### Checking the transaction hash
 
-The transaction hash is a unique identifier for this specific transaction that can be used later to retrieve the transaction details. For example, the transaction details can be viewed by pasting this hash into the [Goerli block explorer](https://goerli.etherscan.io/). The same information can also be retrieved directly from the Geth node. The hash returned in the previous step can be provided as an argument to `eth.getTransaction` to return the transaction information:
+The transaction hash is a unique identifier for this specific transaction that can be used later to retrieve the transaction details. For example, the transaction details can be viewed by pasting this hash into the [Sepolia block explorer](https://sepolia.etherscan.io/). The same information can also be retrieved directly from the Geth node. The hash returned in the previous step can be provided as an argument to `eth.getTransaction` to return the transaction information:
 
 ```javascript
 eth.getTransaction('0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb');
@@ -342,7 +346,7 @@ This returns the following response (although the actual values for each field w
   accessList: [],
   blockHash: "0x1c5d3f8dd997b302935391b57dc3e4fffd1fa2088ef2836d51f844f993eb39c4",
   blockNumber: 6355150,
-  chainId: "0x5",
+  chainId: "0xaa36a7",
   from: "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec",
   gas: 21000,
   gasPrice: 2425000023,
@@ -367,8 +371,7 @@ Up to this point this tutorial has interacted with Geth using the convenience li
 
 ### Checking account balance
 
-The command below returns the balance of the given account. This is a HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function
-arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
+The command below returns the balance of the given account. This is a HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
 
 ```shell
 curl -X POST http://127.0.0.1:8545 \
@@ -428,4 +431,4 @@ This requires approval in Clef. Once the password for the sender account has bee
 
 ## Summary
 
-This tutorial has demonstrated how to generate accounts using Clef, fund them with testnet ether and use those accounts to interact with Ethereum (Goerli) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using the web3.js library via the Geth console and using the JSON-RPC directly using Curl. For more detailed information about Clef, please see [the Clef docs](/docs/tools/Clef/Tutorial).
+This tutorial has demonstrated how to generate accounts using Clef, fund them with testnet ether and use those accounts to interact with Ethereum (Sepolia) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using the web3.js library via the Geth console and using the JSON-RPC directly using Curl. For more detailed information about Clef, please see [the Clef docs](/docs/tools/Clef/Tutorial).
