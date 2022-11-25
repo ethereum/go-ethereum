@@ -93,7 +93,8 @@ func updateMetricsFromConfig(path string) {
 
 	conf := &CliConfig{}
 
-	if _, err := toml.Decode(tomlData, &conf); err != nil || conf == nil {
+	_, err = toml.Decode(tomlData, &conf)
+	if err != nil || conf == nil || conf.Telemetry == nil {
 		return
 	}
 
