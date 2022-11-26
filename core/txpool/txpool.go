@@ -657,13 +657,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
 	}
-	// Ensure the transaction has more gas than the basic tx fee.
-	rules := core.IntrinsicGasChainRules{
-		Homestead: true,
-		EIP2028:   pool.istanbul,
-		EIP4844:   pool.eip4844,
-	}
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
 	if err != nil {
 		return err
 	}

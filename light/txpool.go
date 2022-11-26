@@ -70,7 +70,6 @@ type TxPool struct {
 
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
-	eip4844  bool // Fork indicator whether we are in the eip4844 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transactions to the
@@ -318,7 +317,6 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.istanbul = pool.config.IsIstanbul(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
-	pool.eip4844 = pool.config.IsSharding(next)
 }
 
 // Stop stops the light transaction pool
@@ -386,12 +384,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Should supply enough intrinsic gas
-	rules := core.IntrinsicGasChainRules{
-		Homestead: true,
-		EIP2028:   pool.istanbul,
-		EIP4844:   pool.eip4844,
-	}
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
 	if err != nil {
 		return err
 	}
