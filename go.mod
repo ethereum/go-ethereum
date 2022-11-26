@@ -40,7 +40,6 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.2.0
-	github.com/jwasinger/mont-arith v0.0.0-20221018033223-868425c4f501
 	github.com/karalabe/usb v0.0.2
 	github.com/mattn/go-colorable v0.1.8
 	github.com/mattn/go-isatty v0.0.12
@@ -86,6 +85,7 @@ require (
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
+	github.com/jwasinger/evmmax-arith v0.0.0-20221126221533-4eb7408a979d // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect

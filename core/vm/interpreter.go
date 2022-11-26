@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/jwasinger/mont-arith"
+	"github.com/jwasinger/evmmax-arith"
 )
 
 // Config are the configuration options for the Interpreter
@@ -43,7 +43,7 @@ type ScopeContext struct {
 	Memory      *Memory
 	Stack       *Stack
 	Contract    *Contract
-	EVMMAXField *mont_arith.Field
+	EVMMAXField *evmmax_arith.Field
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports

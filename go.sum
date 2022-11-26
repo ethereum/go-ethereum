@@ -261,6 +261,10 @@ github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfV
 github.com/julienschmidt/httprouter v1.2.0 h1:TDTW5Yz1mjftljbcKqRcrYhd4XeOoI98t+9HbQbYf7g=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/jung-kurt/gofpdf v1.0.3-0.20190309125859-24315acbbda5/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
+github.com/jwasinger/evmmax-arith v0.0.0-20221126215030-7034ed986265 h1:Ws7L+I0Fdh9CqMROd8GW7/5tZGXV4ldDINCWcekSlrM=
+github.com/jwasinger/evmmax-arith v0.0.0-20221126215030-7034ed986265/go.mod h1:RthFtToYugGeuK/FRwRVNnULLaJdS8m7ZX73igQD59I=
+github.com/jwasinger/evmmax-arith v0.0.0-20221126221533-4eb7408a979d h1:EQ4OgwM/SDYc9v4vxxhL+mqJVIpUIDxMPqEwMWf6b48=
+github.com/jwasinger/evmmax-arith v0.0.0-20221126221533-4eb7408a979d/go.mod h1:RthFtToYugGeuK/FRwRVNnULLaJdS8m7ZX73igQD59I=
 github.com/jwasinger/mont-arith v0.0.0-20220816060920-21890eeb532b h1:28qLc0ORl37RduM8MpxngzLU2/BDURc6oAZM7AKFcO4=
 github.com/jwasinger/mont-arith v0.0.0-20220816060920-21890eeb532b/go.mod h1:KOXteDvHwyJRnuXw/e5n8tN4NmBRKHP5Zg24KSA/7mo=
 github.com/jwasinger/mont-arith v0.0.0-20221018033223-868425c4f501 h1:pDf3JMdUMZKM3xA76BI1L4B3sJRMOUE5MW7U70ZiZBE=

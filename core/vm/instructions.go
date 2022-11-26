@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"github.com/jwasinger/mont-arith"
+	"github.com/jwasinger/evmmax-arith"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -89,10 +89,9 @@ func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	mod_limbs := mod_limbs_stack.Uint64()
 
 	mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_limbs)*8)
-	modLimbs := mont_arith.IntToLimbs(mont_arith.LEBytesToInt(mod_bytes), uint(mod_limbs))
 
-	scope.EVMMAXField = mont_arith.NewField(mont_arith.DefaultPreset())
-	if err := scope.EVMMAXField.SetMod(modLimbs); err != nil {
+	scope.EVMMAXField = evmmax_arith.NewField(evmmax_arith.Asm384Preset())
+	if err := scope.EVMMAXField.SetMod(mod_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil
@@ -152,18 +151,6 @@ func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-func uint64_array_to_le_bytes(val []uint64) []byte {
-	res := make([]byte, len(val)*8)
-	for i := 0; i < len(val); i++ {
-		res[i*8] = byte(val[i])
-		res[i*8+1] = byte(val[i] >> 8)
-		res[i*8+2] = byte(val[i] >> 16)
-		res[i*8+3] = byte(val[i] >> 24)
-	}
-
-	return res
-}
-
 func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	elemSize := scope.EVMMAXField.ElementSize
 
@@ -172,7 +159,7 @@ func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 
 	out_bytes := scope.Memory.GetPtr(int64(output_offset), int64(elemSize))
 	input_bytes := scope.Memory.GetPtr(int64(input_offset), int64(elemSize))
-	r_squared_bytes := uint64_array_to_le_bytes(scope.EVMMAXField.RSquared())
+	r_squared_bytes := scope.EVMMAXField.RSquared()
 
 	if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, input_bytes, r_squared_bytes); err != nil {
 		return nil, ErrOutOfGas

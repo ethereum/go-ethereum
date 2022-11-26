@@ -463,7 +463,7 @@ func gasEVMMAXArith(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64,
 	z_offset := scope.Contract.Code[pc+1]
 	x_offset := scope.Contract.Code[pc+2]
 	y_offset := scope.Contract.Code[pc+3]
-	if uint64(max(z_offset, max(x_offset, y_offset)))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	if uint64(max(z_offset, max(x_offset, y_offset)))*scope.EVMMAXField.ElementSize+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
@@ -494,7 +494,7 @@ func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 
 	output_offset := scope.Stack.Back(0).Bytes()[0]
 	input_offset := scope.Stack.Back(1).Bytes()[0]
-	if uint64(max(input_offset, output_offset))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	if uint64(max(input_offset, output_offset))*scope.EVMMAXField.ElementSize+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
