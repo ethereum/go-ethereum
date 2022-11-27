@@ -497,9 +497,14 @@ func (tx *Transaction) Hash() common.Hash {
 	}
 
 	var h common.Hash
-	if tx.Type() == LegacyTxType {
+	switch tx.Type() {
+	case LegacyTxType:
 		h = rlpHash(tx.inner)
-	} else {
+	case BlobTxType:
+		// TODO(eip-4844): We should remove this ugly switch by making hash()
+		// a part of the TxData interface
+		h = prefixedSSZHash(tx.Type(), &tx.inner.(*SignedBlobTx).Message)
+	default:
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
 	tx.hash.Store(h)
