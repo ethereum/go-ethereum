@@ -1,7 +1,7 @@
 import { Flex, Heading, Link, Stack, Table, Text } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
-import { Code } from './UI/docs'
+import { Code } from './UI/docs';
 import { textStyles } from '../theme/foundations';
 
 const { header1, header2, header3, header4 } = textStyles;
@@ -75,15 +75,13 @@ const MDXComponents = {
     </Flex>
   ),
   // pre
-  pre: ({ children }: any) => {
-    return (
-      <Stack mb={5}>
-        <pre>{children}</pre>
-      </Stack>
-    );
-  },
+  pre: ({ children }: any) => (
+    <Stack mb={5}>
+      <pre>{children}</pre>
+    </Stack>
+  ),
   // code
-  code: Code
+  code: ({ children, ...props }: any) => <Code {...props}>{children}</Code>
 };
 
 export default MDXComponents;

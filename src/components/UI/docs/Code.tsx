@@ -32,17 +32,17 @@ SyntaxHighlighter.registerLanguage('sh', sh);
 SyntaxHighlighter.registerLanguage('solidity', solidity);
 SyntaxHighlighter.registerLanguage('swift', swift);
 
-
 interface Props {
-  className: string
-  children: React.ReactNode
-  [key: string]: any
+  className: string;
+  children: string[];
+  inline?: boolean;
 }
-export const Code: React.FC<Props> = ({ className, children, ...code }: any) => {
+export const Code: React.FC<Props> = ({ className, children, inline }) => {
   const { colorMode } = useColorMode();
   const isDark = colorMode === 'dark';
-  const isTerminal = className?.includes('terminal') ;
-  if (code.inline)
+  const isTerminal = className?.includes('terminal');
+  const [content] = children;
+  if (inline)
     return (
       <Text
         as='span'
@@ -52,22 +52,17 @@ export const Code: React.FC<Props> = ({ className, children, ...code }: any) => 
         borderRadius='0.25em'
         textStyle='inline-code-snippet'
       >
-        {children[0]}
+        {content}
       </Text>
     );
   if (isTerminal)
-      return (
-        <Stack>
-          <ChakraCode
-            overflow='auto'
-            p={6}
-            background='terminal-bg'
-            color='terminal-text'
-          >
-            {children[0]}
-          </ChakraCode>
-        </Stack>
-      );
+    return (
+      <Stack>
+        <ChakraCode overflow='auto' p={6} background='terminal-bg' color='terminal-text'>
+          {content}
+        </ChakraCode>
+      </Stack>
+    );
   if (className?.startsWith(CLASSNAME_PREFIX))
     return (
       <SyntaxHighlighter
@@ -75,8 +70,8 @@ export const Code: React.FC<Props> = ({ className, children, ...code }: any) => 
         style={isDark ? nightOwl : prism}
         customStyle={{ borderRadius: '0.5rem', padding: '1rem' }}
       >
-        {children}
+        {content}
       </SyntaxHighlighter>
     );
-  return <Stack>{children[0]}</Stack>;
+  return <Stack>{content}</Stack>;
 };
