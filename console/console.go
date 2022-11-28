@@ -203,16 +203,18 @@ var defaultAPIs = map[string]string{"eth": "1.0", "net": "1.0", "debug": "1.0"}
 
 // initExtensions loads and registers web3.js extensions.
 func (c *Console) initExtensions() error {
-	// Compute aliases from server-provided modules.
+	const methodNotFound = -32601
 	apis, err := c.client.SupportedModules()
 	if err != nil {
-		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == -32601 {
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == methodNotFound {
 			log.Warn("Server does not support method rpc_modules, using default API list.")
 			apis = defaultAPIs
 		} else {
 			return err
 		}
 	}
+
+	// Compute aliases from server-provided modules.
 	aliases := map[string]struct{}{"eth": {}, "personal": {}}
 	for api := range apis {
 		if api == "web3" {
