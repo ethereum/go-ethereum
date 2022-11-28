@@ -3,6 +3,7 @@ import { FC } from 'react';
 import NextLink from 'next/link';
 
 import { HamburgerIcon, LensIcon, MoonIcon, SunIcon } from '../UI/icons';
+import { Search } from '../UI'
 import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../constants';
 
 export const Header: FC = () => {
@@ -74,23 +75,11 @@ export const Header: FC = () => {
 
         {/* SEARCH */}
         <Stack
-          p={4}
           display={{ base: 'none', md: 'block' }}
           borderRight='2px'
           borderColor='primary'
         >
-          <InputGroup>
-            <Input
-              variant='unstyled'
-              placeholder='search'
-              size='md'
-              _placeholder={{ color: 'primary', fontStyle: 'italic' }}
-            />
-
-            <Stack pl={4} justifyContent='center' alignItems='center'>
-              <LensIcon color='primary' />
-            </Stack>
-          </InputGroup>
+          <Search />
         </Stack>
 
         {/* DARK MODE SWITCH */}
