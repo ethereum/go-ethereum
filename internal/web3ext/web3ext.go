@@ -600,6 +600,11 @@ web3._extend({
 			call: 'eth_getLogs',
 			params: 1,
 		}),
+		new web3._extend.Method({
+			name: 'call',
+			call: 'eth_call',
+			params: 3,
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
