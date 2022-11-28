@@ -4,53 +4,53 @@ export const textStyles = {
     fontWeight: 700,
     fontSize: '2.75rem',
     lineHeight: '3.375rem',
-    letterSpacing: '5%',
+    letterSpacing: '0.05em',
     color: 'body'
   },
   h2: {
     fontFamily: 'heading',
     fontWeight: 400,
     fontSize: '1.5rem',
-    lineHeight: 'auto',
-    letterSpacing: '4%',
+    lineHeight: 'normal',
+    letterSpacing: '0.04em',
     color: 'body'
   },
   header1: {
     fontFamily: 'heading',
     fontWeight: 700,
     fontSize: '2.125rem',
-    letterSpacing: '3%',
-    lineHeight: 'auto'
+    letterSpacing: '0.03em',
+    lineHeight: 'normal'
   },
   header2: {
     fontFamily: 'heading',
     fontSize: '1.75rem',
-    letterSpacing: '4%',
-    lineHeight: 'auto'
+    letterSpacing: '0.04em',
+    lineHeight: 'normal'
   },
   header3: {
     fontFamily: 'heading',
     fontSize: '1.375rem',
-    letterSpacing: '4%',
-    lineHeight: 'auto'
+    letterSpacing: '0.04em',
+    lineHeight: 'normal'
   },
   header4: {
     fontFamily: 'heading',
     fontSize: '1.125rem',
-    letterSpacing: '4%',
-    lineHeight: 'auto'
+    letterSpacing: '0.04em',
+    lineHeight: 'normal'
   },
   header5: {
     fontFamily: 'heading',
     fontSize: '1rem',
-    letterSpacing: '2%',
-    lineHeight: 'auto'
+    letterSpacing: '0.02em',
+    lineHeight: 'normal'
   },
   header6: {
     fontFamily: 'heading',
     fontSize: '0.875rem',
-    letterSpacing: '2%',
-    lineHeight: 'auto'
+    letterSpacing: '0.02em',
+    lineHeight: 'normal'
   },
   'header-font': {
     fontFamily: 'heading',
@@ -100,7 +100,7 @@ export const textStyles = {
     fontWeight: 700,
     textTransform: 'uppercase',
     lineHeight: '21.12px',
-    letterSpacing: '2%'
+    letterSpacing: '0.02em'
   },
   'footer-text': {
     fontFamily: 'body',
@@ -142,14 +142,14 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: 4,
-    letterSpacing: '1%'
+    letterSpacing: '0.01em'
   },
   'code-block': {
     fontFamily: 'heading',
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: '21.12px',
-    letterSpacing: '1%'
+    letterSpacing: '0.01em'
   },
   // TODO: refactor w/ semantic tokens for light/dark mode
   'link-light': {},
