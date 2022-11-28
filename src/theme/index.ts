@@ -1,6 +1,6 @@
 import { extendTheme } from '@chakra-ui/react';
 
-import { config, colors, shadows, sizes, textStyles } from './foundations';
+import { config, colors, fonts, shadows, sizes, textStyles } from './foundations';
 import { Button, Link } from './components';
 
 const overrides = {
@@ -10,6 +10,7 @@ const overrides = {
     Button,
     Link
   },
+  fonts,
   shadows,
   sizes,
   styles: {
@@ -17,6 +18,9 @@ const overrides = {
       body: {
         bg: 'bg',
         transition: 'all 200ms linear !important'
+      },
+      code: {
+        fontFamily: 'code !important'
       }
     })
   },
@@ -28,9 +32,9 @@ const overrides = {
       'button-bg': { _light: 'green.50', _dark: 'green.900' },
       body: { _light: 'gray.800', _dark: 'yellow.50' },
       'code-bg': { _light: 'gray.200', _dark: 'gray.700' },
-      'code-bg-contrast': { _light: 'gray.800', _dark: 'gray.900' },
-      'code-text': { _light: 'green.50', _dark: 'green.50' },
-      bg: { _light: 'yellow.50', _dark: 'gray.800' },
+      'terminal-bg': { _light: 'gray.800', _dark: 'gray.900' },
+      'terminal-text': { _light: 'green.50', _dark: 'green.200' },
+      bg: { _light: 'yellow.50', _dark: 'gray.800' }
     }
   }
 };
