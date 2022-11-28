@@ -19,7 +19,7 @@ export const textStyles = {
     fontFamily: 'heading',
     fontWeight: 700,
     fontSize: '2.125rem',
-    letterSpacing: '0.03em',
+    letterSpacing: '0.04em',
     lineHeight: 'normal'
   },
   header2: {
