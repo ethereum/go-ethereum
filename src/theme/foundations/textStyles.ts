@@ -18,19 +18,19 @@ export const textStyles = {
   header1: {
     fontFamily: 'heading',
     fontWeight: 700,
-    fontSize: '2.125rem',
+    fontSize: { base: '1.875rem', md: '2.125rem' },
     letterSpacing: '0.04em',
     lineHeight: 'normal'
   },
   header2: {
     fontFamily: 'heading',
-    fontSize: '1.75rem',
+    fontSize: { base: '1.5rem', md: '1.75rem' },
     letterSpacing: '0.04em',
     lineHeight: 'normal'
   },
   header3: {
     fontFamily: 'heading',
-    fontSize: '1.375rem',
+    fontSize: { base: '1.25rem', md: '1.375rem' },
     letterSpacing: '0.04em',
     lineHeight: 'normal'
   },
