@@ -211,7 +211,7 @@ Example call (use the following as a template for `<data>` in `curl --data <data
 
 ### personal_signTransaction
 
-`personal_signTransaction` was used to create and sign a transaction from the given arguments. The transaction was returned in RLP-form, not broadcast to other nodes. The equivalent method is Clef's `account_signTransaction` from the external API. The arguments are a transaction object (`{"from": , "to": , "gas": , "maxPriorityFeePerGas": , "MaxFeePerGas": , "value": , "data": , "nonce": }`)) and a method signature
+`personal_signTransaction` was used to create and sign a transaction from the given arguments. The transaction was returned in RLP-form, not broadcast to other nodes. The equivalent method is Clef's `account_signTransaction` from the external API. The arguments are a transaction object (`{"from": , "to": , "gas": , "maxPriorityFeePerGas": , "MaxFeePerGas": , "value": , "data": , "nonce": }`)) and an optional method signature that enables Clef to decode the calldata and show the user the methods, arguments and values being sent.
 
 Example call (terminal):
 

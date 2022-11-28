@@ -5,312 +5,9 @@ description: Introduction to writing custom tracers for Geth
 
 In addition to the default opcode tracer and the built-in tracers, Geth offers the possibility to write custom code that hook to events in the EVM to process and return the data in a consumable format. Custom tracers can be written either in Javascript or Go. JS tracers are good for quick prototyping and experimentation as well as for less intensive applications. Go tracers are performant but require the tracer to be compiled together with the Geth source code.
 
-## Custom Javascript tracing {#custom-js-tracing}
+## Custom Go tracing
 
-Transaction traces include the complete status of the EVM at every point during the transaction execution, which can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace filters are available to isolate the useful information. Detailed information about `debug_traceTransaction` and its component parts is available in the [reference documentation](/docs/rpc/ns-debug#debug_tracetransaction).
-
-### A simple filter {#simple-filter}
-
-Filters are Javascript functions that select information from the trace to persist and discard based on some conditions. The following Javascript function returns only the sequence of opcodes executed by the transaction as a comma-separated list. The function could be written directly in the Javascript console, but it is cleaner to write it in a separate re-usable file and load it into the console.
-
-1. Create a file, `filterTrace_1.js`, with this content:
-
-   ```javascript
-   tracer = function (tx) {
-     return debug.traceTransaction(tx, {
-       tracer:
-         '{' +
-         'retVal: [],' +
-         'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
-         'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-         'result: function(ctx,db) {return this.retVal}' +
-         '}'
-     }); // return debug.traceTransaction ...
-   }; // tracer = function ...
-   ```
-
-2. Run the [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console).
-3. Get the hash of a recent transaction from a node or block explorer.
-
-4. Run this command to run the script:
-
-   ```javascript
-   loadScript('filterTrace_1.js');
-   ```
-
-5. Run the tracer from the script. Be patient, it could take a long time.
-
-   ```javascript
-   tracer('<hash of transaction>');
-   ```
-
-   The bottom of the output looks similar to:
-
-   ```sh
-   "3366:POP", "3367:JUMP", "1355:JUMPDEST", "1356:PUSH1", "1358:MLOAD", "1359:DUP1", "1360:DUP3", "1361:ISZERO", "1362:ISZERO",
-   "1363:ISZERO", "1364:ISZERO", "1365:DUP2", "1366:MSTORE", "1367:PUSH1", "1369:ADD", "1370:SWAP2", "1371:POP", "1372:POP", "1373:PUSH1",
-   "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"
-   ```
-
-6. Run this line to get a more readable output with each string in its own line.
-
-   ```javascript
-   console.log(JSON.stringify(tracer('<hash of transaction>'), null, 2));
-   ```
-
-More information about the `JSON.stringify` function is available [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify).
-
-The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](https://geth.ethereum.org/docs/dapp/tracing), but with a new parameter, `tracer`. This parameter takes the JavaScript object formated as a string. In the case of the trace above, it is:
-
-```javascript
-{
-   retVal: [],
-   step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},
-   fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},
-   result: function(ctx,db) {return this.retVal}
-}
-```
-
-This object has three member functions:
-
-- `step`, called for each opcode.
-- `fault`, called if there is a problem in the execution.
-- `result`, called to produce the results that are returned by `debug.traceTransaction` 
-- after the execution is done.
-
-In this case, `retVal` is used to store the list of strings to return in `result`.
-
-The `step` function adds to `retVal` the program counter and the name of the opcode there. Then, in `result`, this list is returned to be sent to the caller.
-
-### Filtering with conditions {#filtering-with-conditions}
-
-For actual filtered tracing we need an `if` statement to only log relevant information. For example, to isolate the transaction's interaction with storage, the following tracer could be used:
-
-```javascript
-tracer = function (tx) {
-  return debug.traceTransaction(tx, {
-    tracer:
-      '{' +
-      'retVal: [],' +
-      'step: function(log,db) {' +
-      '   if(log.op.toNumber() == 0x54) ' +
-      '     this.retVal.push(log.getPC() + ": SLOAD");' +
-      '   if(log.op.toNumber() == 0x55) ' +
-      '     this.retVal.push(log.getPC() + ": SSTORE");' +
-      '},' +
-      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-      'result: function(ctx,db) {return this.retVal}' +
-      '}'
-  }); // return debug.traceTransaction ...
-}; // tracer = function ...
-```
-
-The `step` function here looks at the opcode number of the op, and only pushes an entry if the opcode is `SLOAD` or `SSTORE` ([here is a list of EVM opcodes and their numbers](https://github.com/wolflo/evm-opcodes)). We could have used `log.op.toString()` instead, but it is faster to compare numbers rather than strings.
-
-The output looks similar to this:
-
-```javascript
-[
-  "5921: SLOAD",
-  .
-  .
-  .
-  "2413: SSTORE",
-  "2420: SLOAD",
-  "2475: SSTORE",
-  "6094: SSTORE"
-]
-```
-
-### Stack Information {#stack-information}
-
-The trace above reports the program counter (PC) and whether the program read from storage or wrote to it. That alone isn't particularly useful. To know more, the `log.stack.peek` function can be used to peek into the stack. `log.stack.peek(0)` is the stack top, `log.stack.peek(1)` the entry below it, etc.
-
-The values returned by `log.stack.peek` are Go `big.Int` objects. By default they are converted to JavaScript floating point numbers, so you need `toString(16)` to get them as hexadecimals, which is how 256-bit values such as storage cells and their content are normally represented.
-
-#### Storage Information {#storage-information}
-
-The function below provides a trace of all the storage operations and their parameters. This gives a more complete picture of the program's interaction with storage.
-
-```javascript
-tracer = function (tx) {
-  return debug.traceTransaction(tx, {
-    tracer:
-      '{' +
-      'retVal: [],' +
-      'step: function(log,db) {' +
-      '   if(log.op.toNumber() == 0x54) ' +
-      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-      '        log.stack.peek(0).toString(16));' +
-      '   if(log.op.toNumber() == 0x55) ' +
-      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-      '        log.stack.peek(0).toString(16) + " <- " +' +
-      '        log.stack.peek(1).toString(16));' +
-      '},' +
-      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-      'result: function(ctx,db) {return this.retVal}' +
-      '}'
-  }); // return debug.traceTransaction ...
-}; // tracer = function ...
-```
-
-The output is similar to:
-
-```javascript
-[
-  "5921: SLOAD 0",
-  .
-  .
-  .
-  "2413: SSTORE 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d <- fb8629ad13d9a12456",
-  "2420: SLOAD cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870",
-  "2475: SSTORE cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870 <- 358c3de691bd19",
-  "6094: SSTORE 0 <- 1"
-]
-```
-
-#### Operation Results {#operation-results}
-
-One piece of information missing from the function above is the result on an `SLOAD` operation. The state we get inside `log` is the state prior to the execution of the opcode, so that value is not known yet. For more operations we can figure it out for ourselves, but we don't have access to the
-storage, so here we can't.
-
-The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.
-
-```javascript
-tracer = function (tx) {
-  return debug.traceTransaction(tx, {
-    tracer:
-      '{' +
-      'retVal: [],' +
-      'afterSload: false,' +
-      'step: function(log,db) {' +
-      '   if(this.afterSload) {' +
-      '     this.retVal.push("    Result: " + ' +
-      '          log.stack.peek(0).toString(16)); ' +
-      '     this.afterSload = false; ' +
-      '   } ' +
-      '   if(log.op.toNumber() == 0x54) {' +
-      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-      '        log.stack.peek(0).toString(16));' +
-      '        this.afterSload = true; ' +
-      '   } ' +
-      '   if(log.op.toNumber() == 0x55) ' +
-      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-      '        log.stack.peek(0).toString(16) + " <- " +' +
-      '        log.stack.peek(1).toString(16));' +
-      '},' +
-      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-      'result: function(ctx,db) {return this.retVal}' +
-      '}'
-  }); // return debug.traceTransaction ...
-}; // tracer = function ...
-```
-
-The output now contains the result in the line that follows the `SLOAD`.
-
-```javascript
-[
-  "5921: SLOAD 0",
-  "    Result: 1",
-  .
-  .
-  .
-  "2413: SSTORE 3f0af0a7a3ed17f5ba6a93e0a2a05e766ed67bf82195d2dd15feead3749a575d <- fb8629ad13d9a12456",
-  "2420: SLOAD cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870",
-  "    Result: 0",
-  "2475: SSTORE cc39b177dd3a7f50d4c09527584048378a692aed24d31d2eabeddb7f3c041870 <- 358c3de691bd19",
-  "6094: SSTORE 0 <- 1"
-]
-```
-
-### Dealing With Calls Between Contracts {#calls-between-contracts}
-
-So the storage has been treated as if there are only 2<sup>256</sup> cells. However, that is not true. Contracts can call other contracts, and then the storage involved is the storage of the other contract. We can see the address of the current contract in `log.contract.getAddress()`. This value is the execution context - the contract whose storage we are using - even when code from another contract is executed (by using
-[`CALLCODE` or `DELEGATECALL`](https://docs.soliditylang.org/en/v0.8.14/introduction-to-smart-contracts.html#delegatecall-callcode-and-libraries)).
-
-However, `log.contract.getAddress()` returns an array of bytes. To convert this to the familiar hexadecimal representation of Ethereum addresses, `this.byteHex()` and `array2Hex()` can be used.
-
-```javascript
-tracer = function (tx) {
-  return debug.traceTransaction(tx, {
-    tracer:
-      '{' +
-      'retVal: [],' +
-      'afterSload: false,' +
-      'callStack: [],' +
-      'byte2Hex: function(byte) {' +
-      '  if (byte < 0x10) ' +
-      '      return "0" + byte.toString(16); ' +
-      '  return byte.toString(16); ' +
-      '},' +
-      'array2Hex: function(arr) {' +
-      '  var retVal = ""; ' +
-      '  for (var i=0; i<arr.length; i++) ' +
-      '    retVal += this.byte2Hex(arr[i]); ' +
-      '  return retVal; ' +
-      '}, ' +
-      'getAddr: function(log) {' +
-      '  return this.array2Hex(log.contract.getAddress());' +
-      '}, ' +
-      'step: function(log,db) {' +
-      '   var opcode = log.op.toNumber();' +
-      // SLOAD
-      '   if (opcode == 0x54) {' +
-      '     this.retVal.push(log.getPC() + ": SLOAD " + ' +
-      '        this.getAddr(log) + ":" + ' +
-      '        log.stack.peek(0).toString(16));' +
-      '        this.afterSload = true; ' +
-      '   } ' +
-      // SLOAD Result
-      '   if (this.afterSload) {' +
-      '     this.retVal.push("    Result: " + ' +
-      '          log.stack.peek(0).toString(16)); ' +
-      '     this.afterSload = false; ' +
-      '   } ' +
-      // SSTORE
-      '   if (opcode == 0x55) ' +
-      '     this.retVal.push(log.getPC() + ": SSTORE " +' +
-      '        this.getAddr(log) + ":" + ' +
-      '        log.stack.peek(0).toString(16) + " <- " +' +
-      '        log.stack.peek(1).toString(16));' +
-      // End of step
-      '},' +
-      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-      'result: function(ctx,db) {return this.retVal}' +
-      '}'
-  }); // return debug.traceTransaction ...
-}; // tracer = function ...
-```
-
-The output is similar to:
-
-```javascript
-[
-  "423: SLOAD 22ff293e14f1ec3a09b137e9e06084afd63addf9:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
-  "    Result: 360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
-  "10778: SLOAD 22ff293e14f1ec3a09b137e9e06084afd63addf9:6",
-  "    Result: 6",
-  .
-  .
-  .
-  "13529: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:8328de571f86baa080836c50543c740196dbc109d42041802573ba9a13efa340",
-  "    Result: 8328de571f86baa080836c50543c740196dbc109d42041802573ba9a13efa340",
-  "423: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
-  "    Result: 360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
-  "13529: SLOAD f2d68898557ccb2cf4c10c3ef2b034b2a69dad00:b38558064d8dd9c883d2a8c80c604667ddb90a324bc70b1bac4e70d90b148ed4",
-  "    Result: b38558064d8dd9c883d2a8c80c604667ddb90a324bc70b1bac4e70d90b148ed4",
-  "11041: SSTORE 22ff293e14f1ec3a09b137e9e06084afd63addf9:6 <- 0"
-]
-```
-
-## Other traces {#other-traces}
-
-This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, for specific `eth_call`s or rejected blocks. The full list of trace functions can be explored in the [reference documentation](/content/docs/interacting_with_geth/RPC/ns-debug.md).
-
-## Custom Go tracing {#custom-go-tracing}
-
-Custom tracers can also be made more performant by writing them in Go. The gain in performance mostly comes from the fact that Geth doesn't need
-to interpret JS code and can execute native functions. Geth comes with several built-in [native tracers](https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/native) which can serve as examples. Please note that unlike JS tracers, Go tracing scripts cannot be simply passed as an argument to the API. They will need to be added to and compiled with the rest of the Geth source code.
+Custom tracers can also be made more performant by writing them in Go. The gain in performance mostly comes from the fact that Geth doesn't need to interpret JS code and can execute native functions. Geth comes with several built-in [native tracers](https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/native) which can serve as examples. Please note that unlike JS tracers, Go tracing scripts cannot be simply passed as an argument to the API. They will need to be added to and compiled with the rest of the Geth source code.
 
 In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](/content/docs/getting_started/Installing-Geth.md) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
 
@@ -402,7 +99,7 @@ Every method of the [EVMLogger interface](https://pkg.go.dev/github.com/ethereum
 
 To test out this tracer the source is first compiled with `make geth`. Then in the console it can be invoked through the usual API methods by passing in the name it was registered under:
 
-```console
+```sh
 > debug.traceTransaction('0x7ae446a7897c056023a8104d254237a8d97783a92900a7b0f7db668a9432f384', { tracer: 'opcounter' })
 {
     ADD: 4,
@@ -412,6 +109,167 @@ To test out this tracer the source is first compiled with `make geth`. Then in t
 }
 ```
 
-## Summary {#summary}
+## Custom Javascript tracing
+
+Transaction traces include the complete status of the EVM at every point during the transaction execution, which can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace filters are available to isolate the useful information.
+
+Specifying the `tracer` option in one of the tracing methods (see list in [reference](/docs/rpc/ns-debug)) enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
+
+### Setup
+
+`setup` is invoked once, in the beginning when the tracer is being constructed by Geth for a given transaction. It takes in one argument `config`. `config` is tracer-specific and allows users to pass in options to the tracer. `config` is to be JSON-decoded for usage and its default value is `"{}"`.
+
+The `config` in the following example is the `onlyTopCall` option available in the `callTracer`:
+
+```js
+debug.traceTransaction('<txhash>, { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
+```
+
+The config in the following example is the `diffMode` option available in the `prestateTracer`:
+
+```js
+debug.traceTransaction('<txhash>, { tracer: 'prestateTracer': tracerConfig: { diffMode: true } })
+```
+
+### Step
+
+`step` is a function that takes two arguments, `log` and `db`, and is called for each step of the EVM, or when an error occurs, as the specified transaction is traced.
+
+`log` has the following fields:
+
+- `op`: Object, an OpCode object representing the current opcode
+- `stack`: Object, a structure representing the EVM execution stack
+- `memory`: Object, a structure representing the contract's memory space
+- `contract`: Object, an object representing the account executing the current operation
+
+and the following methods:
+
+- `getPC()` - returns a Number with the current program counter
+- `getGas()` - returns a Number with the amount of gas remaining
+- `getCost()` - returns the cost of the opcode as a Number
+- `getDepth()` - returns the execution depth as a Number
+- `getRefund()` - returns the amount to be refunded as a Number
+- `getError()` - returns information about the error if one occured, otherwise returns `undefined`
+
+If error is non-empty, all other fields should be ignored.
+
+For efficiency, the same `log` object is reused on each execution step, updated with current values; make sure to copy values you want to preserve beyond the current call. For instance, this step function will not work:
+
+```js
+function(log) {
+  this.logs.append(log);
+}
+```
+
+But this step function will:
+
+```js
+function(log) {
+  this.logs.append({gas: log.getGas(), pc: log.getPC(), ...});
+}
+```
+
+`log.op` has the following methods:
+
+- `isPush()` - returns true if the opcode is a PUSHn
+- `toString()` - returns the string representation of the opcode
+- `toNumber()` - returns the opcode's number
+
+`log.memory` has the following methods:
+
+- `slice(start, stop)` - returns the specified segment of memory as a byte slice
+- `getUint(offset)` - returns the 32 bytes at the given offset
+- `length()` - returns the memory size
+
+`log.stack` has the following methods:
+
+- `peek(idx)` - returns the idx-th element from the top of the stack (0 is the topmost element) as a big.Int
+- `length()` - returns the number of elements in the stack
+
+`log.contract` has the following methods:
+
+- `getCaller()` - returns the address of the caller
+- `getAddress()` - returns the address of the current contract
+- `getValue()` - returns the amount of value sent from caller to contract as a big.Int
+- `getInput()` - returns the input data passed to the contract
+
+`db` has the following methods:
+
+- `getBalance(address)` - returns a `big.Int` with the specified account's balance
+- `getNonce(address)` - returns a Number with the specified account's nonce
+- `getCode(address)` - returns a byte slice with the code for the specified account
+- `getState(address, hash)` - returns the state value for the specified account and the specified hash
+- `exists(address)` - returns true if the specified address exists
+
+If the step function throws an exception or executes an illegal operation at any point, it will not be called on any further VM steps, and the error will be returned to the caller.
+
+### Result
+
+`result` is a function that takes two arguments `ctx` and `db`, and is expected to return a JSON-serializable value to return to the RPC caller.
+
+`ctx` is the context in which the transaction is executing and has the following fields:
+
+- `type` - String, one of the two values `CALL` and `CREATE`
+- `from` - Address, sender of the transaction
+- `to` - Address, target of the transaction
+- `input` - Buffer, input transaction data
+- `gas` - Number, gas budget of the transaction
+- `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
+- `gasPrice` - Number, gas price configured in the transaction being executed
+- `intrinsicGas` - Number, intrinsic gas for the transaction being executed
+- `value` - big.Int, amount to be transferred in wei
+- `block` - Number, block number
+- `output` - Buffer, value returned from EVM
+- `time` - String, execution runtime
+
+And these fields are only available for tracing mined transactions (i.e. not available when doing `debug_traceCall`):
+
+- `blockHash` - Buffer, hash of the block that holds the transaction being executed
+- `txIndex` - Number, index of the transaction being executed in the block
+- `txHash` - Buffer, hash of the transaction being executed
+
+### Fault
+
+`fault` is a function that takes two arguments, `log` and `db`, just like `step` and is invoked when an error happens during the execution of an opcode which wasn't reported in `step`. The method `log.getError()` has information about the error.
+
+### Enter & Exit
+
+`enter` and `exit` are respectively invoked on stepping in and out of an internal call. More specifically they are invoked on the `CALL` variants, `CREATE` variants and also for the transfer implied by a `SELFDESTRUCT`.
+
+`enter` takes a `callFrame` object as argument which has the following methods:
+
+- `getType()` - returns a string which has the type of the call frame
+- `getFrom()` - returns the address of the call frame sender
+- `getTo()` - returns the address of the call frame target
+- `getInput()` - returns the input as a buffer
+- `getGas()` - returns a Number which has the amount of gas provided for the frame
+- `getValue()` - returns a `big.Int` with the amount to be transferred only if available, otherwise `undefined`
+
+`exit` takes in a `frameResult` object which has the following methods:
+
+- `getGasUsed()` - returns amount of gas used throughout the frame as a Number
+- `getOutput()` - returns the output as a buffer
+` -getError()` - returns an error if one occured during execution and `undefined` otherwise 
+
+### Usage
+
+Note that several values are Golang big.Int objects, not JavaScript numbers or JS bigints. As such, they have the same interface as described in the godocs. Their default serialization to JSON is as a Javascript number; to serialize large numbers accurately call `.String()` on them. For convenience, `big.NewInt(x)` is provided, and will convert a uint to a Go BigInt.
+
+Usage example, returns the top element of the stack at each CALL opcode only:
+
+```js
+debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
+```
+
+## Other traces
+
+This tutorial has focused on `debug_traceTransaction()` which reports information 
+about individual transactions. There are also RPC endpoints that provide different 
+information, including tracing the EVM execution within a block, between two blocks, 
+for specific `eth_call`s or rejected blocks. The full list of trace functions can 
+be explored in the [reference documentation](/content/docs/interacting_with_geth/RPC/ns-debug.md).
+
+
+## Summary
 
 This page described how to write custom tracers for Geth. Custom tracers can be written in Javascript or Go.
