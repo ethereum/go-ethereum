@@ -5,7 +5,7 @@ description: How to backup and restore keyfiles and blockchain data
 
 **Keep secure backups of your keystore and password!**
 
-## Data Directory
+## Data Directory {#data-directory}
 
 All data relating to a specific Geth instance gets written inside a data directory. The default data directory locations are platform specific:
 
@@ -19,7 +19,7 @@ To configure the location of the data directory, the `--datadir` parameter can b
 
 It is important to backup the files in the keystore securely. These files are encrypted using an account password. This needs to be securely backed up too. There is no way to decrypt the keys without the password!
 
-## Cleanup
+## Cleanup {#cleanup}
 
 Geth's blockchain and state databases can be removed with:
 
@@ -29,7 +29,7 @@ geth removedb
 
 This is useful for deleting an old chain and sync'ing to a new one. It only affects data directories that can be re-created on synchronisation and does not touch the keystore.
 
-## Blockchain Import/Export
+## Blockchain Import/Export {#blockchain-import-export}
 
 Export the blockchain in binary format with:
 

@@ -7,13 +7,11 @@ import ReactMarkdown from 'react-markdown';
 import gfm from 'remark-gfm';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
-import { useRouter } from 'next/router';
 
 import MDXComponents from '../components/';
 import { Breadcrumbs } from '../components/docs'
 import { PageMetadata } from '../components/UI';
 import { textStyles } from '../theme/foundations';
-
 
 
 const MATTER_OPTIONS = {
@@ -77,18 +75,13 @@ interface Props {
 }
 
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
-  const router = useRouter()
-
   return (
     <>
-      <PageMetadata
-        title={frontmatter.title}
-        description={frontmatter.description}
-      />
+      <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
         <Stack mb={16}>
-          <Breadcrumbs router={router} />
+          <Breadcrumbs />
           <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
             {frontmatter.title}
           </Heading>

@@ -133,14 +133,14 @@ For a Geth monitoring dashboard, copy the URL of [this dashboard](https://grafan
 ![Grafana 1](/public/images/docs/grafana.png)
 
 
-## Customization
+## Customization {#customization}
 
 The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to 
 [Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
 
 Some users might also be interested in automatic [alerting](https://grafana.com/docs/grafana/latest/alerting/), which sets up alert notifications that are sent automatically when metrics reach certain values. Various communication channels are supported.
 
-## Summary
+## Summary {#summary}
 
 This page has outlined how to set up a simple node monitoring dashboard using Grafana.
 

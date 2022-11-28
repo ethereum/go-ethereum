@@ -8,7 +8,7 @@ The user is guided through the process by a command line wizard.
 
 Puppeth comes bundled with Geth. The binary for Puppeth is built along with the other command line tools when the user runs `make all`. By default the binaries are saved to `build/bin`. This page demonstrates how to start a private proof-of-authority network with all the nodes running on the local machine. Other configurations are also possible, for example nodes can be spread over multiple (virtual) machines and the consensus mechanism can be proof-of-work.
 
-## Creating accounts
+## Creating accounts {#creating-accounts}
 
 To run a Clique network, authorized nodes must seal each block. This requires accounts to exist that can be pre-authorized in the genesis block. These accounts should be created before Puppeth is started. The accounts can be created using Geth's built in account manager as follows:
 
@@ -22,7 +22,7 @@ Geth will prompt for a password. Once provided, the public address of the new ac
 
 See more on the [account management pages](/docs/fundamentals/account-management).
 
-## Starting Puppeth
+## Starting Puppeth {#starting-puppeth}
 
 Starting Puppeth is as easy as running `puppeth` in the terminal:
 
@@ -117,7 +117,7 @@ Which folder to save the genesis specs into? (default = current)
 
 At this point a genesis configuration has been created and backed up. There are a few more componments that are required to start the network.
 
-## Network components
+## Network components {#network-components}
 
 Puppeth includes wizards for adding several network components:
 
@@ -132,35 +132,35 @@ Puppeth includes wizards for adding several network components:
 
 These are all accessed by starting Puppeth and selecting `4. Deploy network components` from the main menu. They should be deployed in the numerical order in which they are listed in the `Network components` submenu.
 
-### Ethstats
+### Ethstats {#ethstats}
 
 Ethstats is a network monitoring service. The Ethstats server must already be installed (see [instructions](https://github.com/cubedro/eth-netstats)) and running so that its IP address can be provided to Puppeth. The IP address of each node is also required. The wizard guides the user through providing the IP addresses and ports for Ethstats and the local nodes and setting a password for the Ethstats API.
 
-### Bootnodes
+### Bootnodes {#bootnodes}
 
 Bootnodes are nodes with hardcoded addresses that allow new nodes entering the network to immediately find peers to connect to. This makes peer discovery faster. The wizard guides the user through providing IP addresses for nodes on the network that will be used as bootnodes.
 
-### Sealer
+### Sealer {#sealer}
 
 The sealer nodes must be specified. These validate the network by sealing blocks. The wizard prompts the user to provide the IP addresses for the sealer nodes along with their keyfiles and unlock passwords. Some additional information is also set for the bootnodes including their gas limit - the higher the gas limit the more work the node has to do to validate each block. To match Ethereum set it to 15,000,000. The gas price can be anything, but since it is a private test network it may as well be small, say 1 GWei.
 
 Puppeth will display the details of each node in a table in the terminal.
 
-### Explorer
+### Explorer {#explorer}
 
 For proof-of-work networks a block explorer akin to [etherscan](etherscan.io) can be created using the Puppeth wizard.
 
-### Faucet
+### Faucet {#faucet}
 
 A faucet is an app that allows accounts to request ether to be sent to them. This can be created easily by following the wizard. The wizard prompts the user for details related to which node will act as a server for the faucet, how much ether to release per request, intervals between releases and some optional security features.
 
-### Dashboard
+### Dashboard {#dashboard}
 
 The dashboard wizard pulls together the pieces from the already-defined network components into a single dashboard that can be navigated to in a web browser. The wizard guides the user through the necessary steps. Optionally, the explorer and faucet apps can be deployed here too.
 
 The dashboard can then be viewed by navigating to the node's ip address and the defined port in a web browser.
 
-## Starting the network
+## Starting the network {#starting-network}
 
 Start instances of Geth for each node
 
@@ -168,7 +168,7 @@ Start instances of Geth for each node
 geth --datadir Node1 --port 30301 --bootnodes <enr> --networkid <testnetwork ID> -unlock <node 1 address> --mine
 ```
 
-## Summary
+## Summary {#summary}
 
 Puppeth is a command line wizard that guides a user through the various stages of setting up a private network using proof-of-authority or proof-of-work consensus engine. Various network components can be added that optimize the network or enable network monitoring.
 

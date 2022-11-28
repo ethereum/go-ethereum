@@ -7,7 +7,7 @@ A Geth node continually reports messages to the console allowing users to monito
 
 Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth Github](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-descrining that they do not require additional explanation.
 
-## Configuring log messages
+## Configuring log messages {#configuring-log-messages}
 
 Log messages are displayed to the console by default. The messages can be tuned to be more or less detailed by passing `--verbosity` and a value between 0 and 6 to Geth at startup:
 
@@ -29,7 +29,7 @@ Log messages can also be redirected so they are saved to a text file instead of 
 geth --verbosity 5 >> /path/eth.log 2>&1
 ```
 
-### Startup
+### Startup {#startup}
 
 When Geth starts up it immediately reports a fairly long page of configuration details and status reports that allow the user to confirm Geth is on the right network and operating in its intended modes. The basic structure of a log message is as follows:
 
@@ -114,7 +114,7 @@ INFO [10-04|10:21:03.100] Looking for peers                        peercount=0 t
 
 The logs above relate to Geth starting up its peer-to-peer components and seeking other nodes to connect to. The long address reported to `Started P2P networking` is the nodes own enode address. The `IPC Endpoint` is the location of the node's IPC file that can be used to connect a Javascript console. There is a log message confirming that a JWT secret was generated and reporting its path. This is required to authenticate communication between Geth and the consensus client. There are also messages here reporting on the HTTP server that can be used to send requests to Geth. There should be two HTTP servers - one for interacting with Geth (defaults to `localhost:8545`) and one for communication with the consensus client (defaults to `localhost:8551`).
 
-### Syncing
+### Syncing {#syncing}
 
 The default for Geth is to sync in snap mode. This requires a block header to be provided to Geth by the consensus client. The header is then used as a target to sync to. Geth requests block headers from its peers that are parents of the target until there is a continuous chain of sequential headers of sufficient length. Then, Geth requests block bodies and receipts for each header and simultaneously starts downloading state data. This state data is stored in the form of a [Patricia Merkle Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/). Only the leaves of the trie are downloaded, the full trie structure is then locally regenerated from the leaves up. Meanwhile, the blockchain continues to progress and the target header is updated. This means some of the regenerated state data needs to be updated. This is known as _healing_.
 
@@ -174,7 +174,7 @@ INFO [10-03|15:34:01.336] Forkchoice requested sync to new head    number=15,670
 
 The message above indicates that the fork choice algorithm, which is run by the consensus client, has identified a new target Geth should sync up to. This redirects the sync to prevent syncing to an outdated target and is a natural part of syncing a live blockchain.
 
-## Transaction logs
+## Transaction logs {#transaction-logs}
 
 Transactions submitted over local IPC, Websockets or HTTP connections are reported in the console logs. For example, a simple ETH transaction appears in the console logs as follows:
 
@@ -184,7 +184,7 @@ INFO [09-06|01:31:59.910] Submitted transaction             hash=0x2893b70483bf1
 
 Other user actions have similar log messages that are displayed to the console.
 
-## Common warnings
+## Common warnings {#common-warnings}
 
 There are many warnings that can be emitted by Geth as part of its normal operation. However, some are asked about especially frequently on the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU) channel.
 
@@ -212,6 +212,6 @@ WARN [10-03 | 13:15:56.543] Dropping unsynced node during sync    id = e2fdc0d92
 
 This message indicates that a peer is being dropped because it is not fully synced. This is normal - the necessary data will be requested from an alternative peer instead.
 
-## Summary
+## Summary {#summary}
 
 There are a wide range of log messages that are emitted while Geth is running. The level of detail in the logs can be configured using the `verbosity` flag at startup. This page has outlined some of the common messages users can expect to see when Geth is run with default verbosity, without attempting to be comprehensive. For more, please see the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU).

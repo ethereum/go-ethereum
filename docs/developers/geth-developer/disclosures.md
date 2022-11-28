@@ -19,7 +19,7 @@ Vulnerabilies typically take two forms:
 
 In most cases so far, vulnerabilities in Geth have been of the second type, where the health of the network is a concern, rather than individual node operators. For such issues, Geth reserves the right to silently patch and ship fixes in new releases.
 
-### Why silent patches
+### Why silent patches {#why-slient-patches}
 
 In the case of Ethereum, it takes a lot of time (weeks, months) to get node operators to update even to a scheduled hard fork. If we were to highlight that a release contains important consensus or DoS fixes, there is always a risk of someone trying to beat node operators to the punch, and exploit the vulnerability. Delaying a potential attack sufficiently to make the majority of node operators immune may be worth the temporary loss of transparency.
 
@@ -27,7 +27,7 @@ The primary goal for the Geth team is the health of the Ethereum network as a wh
 
 At certain times, it's better to remain silent. This practice is also followed by other projects such as [Monero](https://www.getmonero.org/2017/05/17/disclosure-of-a-major-bug-in-cryptonote-based-currencies.html), [ZCash](https://electriccoin.co/blog/zcash-counterfeiting-vulnerability-successfully-remediated/) and [Bitcoin](https://www.coindesk.com/the-latest-bitcoin-bug-was-so-bad-developers-kept-its-full-details-a-secret).
 
-### Public transparency
+### Public transparency {#public-transparency}
 
 As of November 2020, our policy going forward is:
 
@@ -39,7 +39,7 @@ We hope that this provides sufficient balance between transparency versus the ne
 
 In keeping with this policy, we have taken inspiration from [Solidity bug disclosure](https://solidity.readthedocs.io/en/develop/bugs.html) - see below.
 
-## Disclosed vulnerabilities
+## Disclosed vulnerabilities {#disclosed-vulnerabilities}
 
 There is a JSON-formatted list ([`vulnerabilities.json`](/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
 
@@ -74,12 +74,12 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 - `CVE`
   - The assigned `CVE` identifier, if available (optional)
 
-### What about Github security advisories
+### What about Github security advisories {#github-security-advisories}
 
 We prefer to not rely on Github as the only/primary publishing protocol for security advisories, but we plan to use the Github-advisory process as a second channel for disseminating vulnerability-information.
 
 Advisories published via Github can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
 
-## Bug Bounties
+## Bug Bounties {#bug-bounties}
 
 The Ethereum Foundation run a bug bounty program to reward responsible disclosures of bugs in client software and specs. The details are provided on [ethereum.org](https://ethereum.org/en/bug-bounty/).

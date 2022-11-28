@@ -7,11 +7,11 @@ Geth includes a variety of optional metrics that can be reported to the user. Ho
 
 The goal of the Geth metrics system is that - similar to logs - arbitrary metric collections can be added to any part of the code without requiring fancy constructs to analyze them (counter variables, public interfaces, crossing over the APIs, console hooks, etc). Instead, metrics should be "updated" whenever and wherever needed and be automatically collected, surfaced through the APIs, queryable and visualizable for analysis.
 
-## Metric types
+## Metric types {#metric-types}
 
 Geth's metrics can be classified into four types: meters, timers, counters and guages.
 
-### Meters
+### Meters {#meters}
 
 Analogous to physical meters (electricity, water, etc), Geth's meters are capable of measuring the _amount_ of "things" that pass through and at the _rate_ at which they do. A meter doesn't have a specific unit of measure (byte, block, malloc, etc), it just counts arbitrary _events_. At any point in time a meter can report:
 
@@ -20,7 +20,7 @@ Analogous to physical meters (electricity, water, etc), Geth's meters are capabl
 - _Weighted throughput rate_ in the last _1_, _5_ and _15_ minutes (events / second)
   ("weighted" means that recent seconds count more that in older ones\*)
 
-### Timers
+### Timers {#timers}
 
 Timers are extensions of _meters_, the _duration_ of an event is collected alongside a log of its occurrence. Similarly to meters, a timer can also measure arbitrary events but each requires a duration to be assigned individually. In addition generating all of the meter report types, a timer also reports:
 
@@ -30,15 +30,15 @@ Timers are extensions of _meters_, the _duration_ of an event is collected along
 - Percentile 80: general performance (these should be optimised)
 - Percentile 95: worst case outliers (rare, just handle gracefully)
 
-### Counters:
+### Counters: {#counters}
 
 A counter is a single int64 value that can be incremented and decremented. The current value of the counter can be queried.
 
-### Gauges:
+### Gauges: {#guages}
 
 A gauge is a single int64 value. Its value can increment and decrement - as with a counter - but can also be set arbitrarily.
 
-## Querying metrics
+## Querying metrics {#querying-metrics}
 
 Geth collects metrics if the `--metrics` flag is provided at startup. Those metrics are available via an HTTP server if the `--metrics.addr` flag is also provided. By default the metrics are served at `127.0.0.1:6060/debug/metrics` but a custom IP address can be provided. A custom port can also be provided to the `--metrics.port` flag. More computationally expensive metrics are toggled on or off by providing or omitting the `--metrics.expensive` flag. For example, to serve all metrics at the default address and port:
 
@@ -79,7 +79,7 @@ Geth also supports dumping metrics directly into an influx database. In order to
 --metrics.influxdb.organization value  InfluxDB organization name (v2 only) (default: "geth")
 ```
 
-## Creating and updating metrics
+## Creating and updating metrics {#creating-and-updating-metrics}
 
 Metrics can be added easily in the Geth source code:
 
@@ -107,6 +107,6 @@ timer.UpdateSince(time) // Record an event that started at `time`
 timer.Time(function)    // Measure and record the execution of `function`
 ```
 
-## Summary
+## Summary {#summary}
 
 Geth can be configured to report metrics to an HTTP server or database. These functions are disabled by default but can be configured by passing the appropriate commands on startup. Users can easily create custom metrics by adding them to the Geth source code, following the instructions on this page.

@@ -8,11 +8,11 @@ a bug report or pull request or otherwise contribute to the Geth source code.
 
 Please see [Contributing](/docs/developers/contributing) for the Geth contribution guidelines.
 
-## Building and Testing
+## Building and Testing {#building-and-testing}
 
 Developers should use a recent version of Go for building and testing. We use the go toolchain for development, which you can get from the [Go downloads page](https://golang.org/doc/install). Geth is a Go module, and uses the [Go modules system](https://github.com/golang/go/wiki/Modules) to manage dependencies. Using `GOPATH` is not required to build go-ethereum.
 
-### Building Executables
+### Building Executables {#building-executables}
 
 Switch to the go-ethereum repository root directory. All code can be built using the go tool, placing the resulting binary in `$GOPATH/bin`.
 
@@ -28,7 +28,7 @@ go install -v ./cmd/geth
 
 Cross compilation is not recommended, please build Geth for the host architecture.
 
-### Testing
+### Testing {#testing}
 
 Testing a package:
 
@@ -52,7 +52,7 @@ go test -v -bench . -run BenchmarkJoin
 
 For more information, see the [go test flags](https://golang.org/cmd/go/#hdr-Testing_flags) documentation.
 
-### Getting Stack Traces
+### Getting Stack Traces {#getting-stack-traces}
 
 A stack trace provides a very detailed look into the current state of the geth node. It helps us to debug issues easier as it contains information about what is currently done by the node. Stack traces can be created by running `debug.stacks()` in the Geth console. If the node was started without the console command or with a script in the background, the following command can be used to dump the stack trace into a file.
 
@@ -142,6 +142,6 @@ killall -QUIT geth
 
 This will dump stack traces for each instance to their respective log file.
 
-## Where to go next
+## Where to go next {#where-next}
 
 Read the remaning pages in the Geth developer section, and get building!

@@ -6,9 +6,9 @@ description: More advanced ways to set up Clef for additional security
 Clef is a signer and account management tool that is external to Geth. This means it can be run as a separate process or even on a separate machine to the one running Geth, for example on secure hardware that is not connected to any external network, or on secure virtual machines.
 This page describes how Clef can be used with Qubes OS to provide a more secure setup than a normal laptop. Using Clef with USBArmory hardware is also briefly described.
 
-## Qubes OS
+## Qubes OS {#qubes-os}
 
-### Background
+### Background {#background}
 
 The Qubes operating system configures a set of virtual machines for different purposes such as:
 
@@ -27,11 +27,11 @@ A couple of dedicated virtual machines handle externalities:
 
 The goal of this document is to describe how we can set up Clef to provide secure transaction signing from a `vault` vm, to another networked qube which runs Dapps.
 
-### Setup
+### Setup {#setup}
 
 There are two ways that this can be achieved: integrated via Qubes or integrated via networking.
 
-#### 1. Qubes Integrated
+#### 1. Qubes Integrated {#qubes-integrated}
 
 Qubes provides a facility for inter-qubes communication via `qrexec`. A qube can request to make a cross-qube RPC request to another qube. The OS then asks the user if the call is permitted.
 
@@ -41,7 +41,7 @@ A policy-file can be created to allow such interaction. On the `target` domain, 
 
 This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented. Clef can be set up in the same way:
 
-##### Server
+##### Server {#server}
 
 ![Clef via qrexec](/images/docs/clef_qubes_qrexec.png)
 
@@ -80,7 +80,7 @@ sudo chmod +x /etc/qubes-rpc/ qubes.Clefsign
 
 This setup uses [gtksigner](https://github.com/holiman/gtksigner), which is a very minimal GTK-based UI that works well with minimal requirements.
 
-##### Client
+##### Client {#client}
 
 On the `client` qube, a listener is required to receive the request from the Dapp, and proxy it.
 
@@ -109,7 +109,7 @@ with socketserver.TCPServer(("",PORT), Dispatcher) as httpd:
     httpd.serve_forever()
 ```
 
-#### Testing
+#### Testing {#testing}
 
 To test the flow, with `debian-work` as the `target`:
 
@@ -142,7 +142,7 @@ Make the request over http (`client` qube):
 
 And it should show the same popups again.
 
-##### Pros and cons
+##### Pros and cons {#pros-and-cons}
 
 The benefits of this setup are:
 
@@ -161,13 +161,13 @@ However, it comes with a couple of drawbacks:
   - One qubes-specific where the user specifies the `target` vm
   - One clef-specific to approve the transaction
 
-#### 2. Network integrated
+#### 2. Network integrated {#network-integrated}
 
 The second way to set up Clef on a qubes system is to allow networking, and have Clef listen to a port which is accessible from other qubes.
 
 ![Clef via http](/images/docs/clef_qubes_http.png)
 
-## USBArmory
+## USBArmory {#usb-armory}
 
 The [USB armory](https://inversepath.com/usbarmory) is an open source hardware design with an 800 MHz ARM processor. It is a pocket-sized computer. When inserted into a laptop, it identifies itself as a USB network interface, basically adding another network to your computer that can be used to SSH into the device.
 
@@ -175,6 +175,6 @@ Running Clef off a USB armory means that the armory can be used as a very versat
 
 Needless to say, while this model should be fairly secure against remote attacks, an attacker with physical access to the USB Armory would trivially be able to extract the contents of the device filesystem.
 
-## Summary
+## Summary {#summary}
 
 This page introduced two ways to setup Clef that give additional security compared to running on a normal laptop.

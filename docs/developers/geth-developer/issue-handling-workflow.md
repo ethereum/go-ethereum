@@ -3,7 +3,7 @@ title: Issue Handling Workflow
 description: Instructions for managing Github issues
 ---
 
-## Draft proposal
+## Draft proposal {#draft-proposal}
 
 - Keep the number of open issues under 820
 
@@ -47,7 +47,7 @@ It's ok to not set a due date for a milestone, but once you release it, close it
 
 Optionally, use a project board to collect issues of a larger effort that has an end state and overarches multiple releases.
 
-## Workflow
+## Workflow {#workflow}
 
 The Geth core team hold a weekly or bi-weekly triage meeting. Issues are preselected by [labelling them "status:triage" and sorted the oldest ones first](https://github.com/ethereum/go-ethereum/issues?q=is%3Aopen+is%3Aissue+label%3Astatus%3Atriage+sort%3Acreated-asc). This is when the team goes through the new issues and do one of the following
 

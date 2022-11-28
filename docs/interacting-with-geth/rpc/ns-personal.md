@@ -3,9 +3,11 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
-The personal API manages private keys in the key store.
+{% include note.html content="The personal namespace will be deprecated in the very near future." %}
 
-## personal_deriveAccount
+The personal API managed private keys in the key store. It is deprecated in favour of using [Clef](/docs/tools/clef/Introduction.md) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns_personal_deprecation.md) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate tousing Clef for account interactions.
+
+## personal_deriveAccount {#personal-deriveaccount}
 
 Requests a HD wallet to derive a new account, optionally pinning it for later reuse.
 
@@ -14,7 +16,7 @@ Requests a HD wallet to derive a new account, optionally pinning it for later re
 | Console | `personal.deriveAccount(url, path, pin)`                                 |
 | RPC     | `{"method": "personal_deriveAccount", "params": [string, string, bool]}` |
 
-## personal_importRawKey
+## personal_importRawKey {#personal-importrawkey}
 
 Imports the given unencrypted private key (hex string) into the key store, encrypting it with the passphrase.
 
@@ -25,7 +27,7 @@ Returns the address of the new account.
 | Console | `personal.importRawKey(keydata, passphrase)`                      |
 | RPC     | `{"method": "personal_importRawKey", "params": [string, string]}` |
 
-## personal_initializeWallets
+## personal_initializeWallets {#personal-intializewallets}
 
 Initializes a new wallet at the provided URL by generating and returning a new private key.
 
@@ -34,7 +36,7 @@ Initializes a new wallet at the provided URL by generating and returning a new p
 | Console | `personal.initializeWallet(url)`                              |
 | RPC     | `{"method": "personal_initializeWallet", "params": [string]}` |
 
-## personal_listAccounts
+## personal_listAccounts {#personal-listaccounts}
 
 Returns all the Ethereum account addresses of all keys in the key store.
 
@@ -50,7 +52,7 @@ Returns all the Ethereum account addresses of all keys in the key store.
 ["0x5e97870f263700f46aa00d967821199b9bc5a120", "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"]
 ```
 
-## personal_listWallets
+## personal_listWallets {#personal-listwallets}
 
 Returns a list of wallets this node manages.
 
@@ -73,7 +75,7 @@ Returns a list of wallets this node manages.
 }]
 ```
 
-## personal_lockAccount
+## personal_lockAccount {#personal-lockaccount}
 
 Removes the private key with given address from memory. The account can no longer be used to send transactions.
 
@@ -82,7 +84,7 @@ Removes the private key with given address from memory. The account can no longe
 | Console | `personal.lockAccount(address)`                          |
 | RPC     | `{"method": "personal_lockAccount", "params": [string]}` |
 
-## personal_newAccount
+## personal_newAccount {#personal-newaccount}
 
 Generates a new private key and stores it in the key store directory. The key file is encrypted with the given passphrase.
 Returns the address of the new account. At the geth console, `newAccount` will prompt for a passphrase when it is not supplied as the argument.
@@ -108,7 +110,7 @@ The passphrase can also be supplied as a string.
 "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"
 ```
 
-## personal_openWallet
+## personal_openWallet {#personal-openwallet}
 
 Initiates a hardware wallet opening procedure by establishing a USB connection and then attempting to authenticate via the provided passphrase. Note,
 the method may return an extra challenge requiring a second open (e.g. the Trezor PIN matrix challenge).
@@ -118,7 +120,7 @@ the method may return an extra challenge requiring a second open (e.g. the Trezo
 | Console | `personal.openWallet(url, passphrase)`                          |
 | RPC     | `{"method": "personal_openWallet", "params": [string, string]}` |
 
-## personal_unlockAccount
+## personal_unlockAccount {#personal-unlockaccount}
 
 Decrypts the key with the given address from the key store.
 
@@ -157,7 +159,7 @@ Passphrase:
 true
 ```
 
-## personal_unpair
+## personal_unpair {#personal-unpair}
 
 Deletes a pairing between wallet and Geth.
 
@@ -166,7 +168,7 @@ Deletes a pairing between wallet and Geth.
 | Console | `personal.unpair(url, pin)`                                 |
 | RPC     | `{"method": "personal_unpair", "params": [string, string]}` |
 
-## personal_sendTransaction
+## personal_sendTransaction {#personal-sendtransaction}
 
 Validate the given passphrase and submit transaction.
 
@@ -186,7 +188,7 @@ undefined
 0x8474441674cdd47b35b875fd1a530b800b51a5264b9975fb21129eeb8c18582f
 ```
 
-## personal_sign
+## personal_sign {#personal-sign}
 
 The sign method calculates an Ethereum specific signature with:
 `sign(keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))`.
@@ -207,7 +209,7 @@ See ecRecover to verify the signature.
 "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b"
 ```
 
-## personal_signTransaction
+## personal_signTransaction {#personal-signtransaction}
 
 SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/interacting_with_geth/RPC/objects) and the second argument is the password, similar to `personal_sendTransaction`.
 
@@ -216,7 +218,7 @@ SignTransaction will create a transaction from the given arguments and tries to 
 | Console | `personal.signTransaction(tx, passphrase)`                       |
 | RPC     | `{"method": "personal_signTransaction", "params": [tx, string]}` |
 
-## personal_ecRecover
+## personal_ecRecover {#personal-ecrecover}
 
 `ecRecover` returns the address associated with the private key that was used to calculate the signature in `personal_sign`.
 

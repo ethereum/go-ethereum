@@ -14,7 +14,7 @@ This can be configured using the public Ethstats server for Ethereum mainnet or 
 public testnets, or using a local copy of Ethstats for private networks. This page will
 demonstrate how to set up an Ethstats dashboard for private and public networks.
 
-## Prerequisites
+## Prerequisites {#prerequisites}
 
 To follow the instructions on this page the following are required:
 
@@ -23,7 +23,7 @@ To follow the instructions on this page the following are required:
 - NPM
 - Git
 
-## Ethstats
+## Ethstats {#ethstats}
 
 Ethstats has three components:
 
@@ -40,7 +40,7 @@ Note that the Ethstats dashboard is not a reliable source of information about t
 network because submitting data to the Ethstats server is voluntary and has to be configured by
 individual nodes. Therefore, many nodes are omitted from the summary statistics.
 
-## How to use
+## How to use {#how-to-use}
 
 To report statistics about the local node to Ethstats, an Ethstats server and Ethstats client both have
 to be installed alongside Geth. There are several options for installing Ethstats clients and servers,
@@ -64,7 +64,7 @@ geth <other commands> --ethstats node1:secret:127.0.0.1:9000
 The local node will then report to Ethstats, and the statistics will be displayed in a dashboard that can be
 accessed via the web browser.
 
-## Note on WS_secret
+## Note on WS_secret {#note-on-ws-secret}
 
 The `WS_secret` parameter is required for connecting to an Ethstats server. For a local network this can be user-defined
 on startup by providing it as an environment variable. However, for Ethereum mainnet and the public testnets predefined

@@ -5,7 +5,7 @@ description: Instructions for working with contracts in the Javascript console.
 
 The [Introduction to the Javascript console](/docs/interacting-with-geth/javascript-console) page outlined how a Javascript console can be attached to Geth to provide a more user-friendly interface to Ethereum than interacting directly with the JSON-RPC API. This page will describe how to deploy contracts and interact with contracts using the attached console. This page will assume the Javascript console is attached to a running Geth instance using IPC. Clef should be used to manage accounts.
 
-## Deploying a contract
+## Deploying a contract {#deploying-a-contract}
 
 First we need a contract to deploy. We can use the well-known `Storage.sol` contract written in Solidity. The following Solidity code can be copied and pasted into a text editor and saved as `go-ethereum/storage-contract/Storage.sol`.
 
@@ -128,6 +128,6 @@ contract.set.sendTransaction(42, { from: eth.accounts[0], gas: 1000000 });
 contract.retrieve().call() >> 2;
 ```
 
-## Summary
+## Summary {#summary}
 
 This page demonstrated how to create, compile, deploy and interact with an Ethereum smart contract using Geth's Javascript console.

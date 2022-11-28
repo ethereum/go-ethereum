@@ -13,7 +13,7 @@ This page provides a high-level overview of the Go API.
 
 _Note, this guide will assume some familiarity with Go development. It does not cover general topics about Go project layouts, import paths or any other standard methodologies. If you are new to Go, consider reading [Getting Started with Go](https://github.com/golang/go/wiki#getting-started-with-go) first._
 
-## Overview
+## Overview {#overview}
 
 Geth's reusable Go libraries focus on three main usage areas:
 
@@ -27,7 +27,7 @@ Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in a
 
 [![Peter's Devcon2 talk](/images/docs/devcon2_labelled.webp)](https://www.youtube.com/watch?v=R0Ia1U9Gxjg)
 
-## Go packages
+## Go packages {#go-packages}
 
 The `go-ethereum` library is distributed as a collection of standard Go packages straight from go-ethereum's GitHub repository. The packages can be used directly via the official Go toolkit, without needing any third party tools.
 
@@ -41,11 +41,11 @@ $ go get -d github.com/ethereum/go-ethereum/...
 
 More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/developers/dapp-developer/native-bindings) and [Go Account Management](/docs/dapp/native-accounts) pages.
 
-## Tutorial
+## Tutorial {#tutorial}
 
 This section includes some basic usage examples for the `ethclient` and `gethclient` packages available as part of the Go API. The `ethclient` package provides a client that implements the full Ethereum JSON-RPC API, whereas `gethclient` offers the Geth-specific API.
 
-### Instantiating a client
+### Instantiating a client {#instantiating-a-client}
 
 The client is an instance of the `Client` struct which has associated functions that wrap requests to the Ethereum or Geth RPC API endpoints.
 
@@ -60,13 +60,13 @@ if err != nil {
 _ = cl
 ```
 
-### Interacting with the client
+### Interacting with the client {#interacting-with-a-client}
 
 The client can now be used to handle requests to the Geth node using the full JSON-RPC API. For example, the function `BlockNumer()` wraps a call to the `eth_blockNumber` endpoint. The function `SendTransaction` wraps a call to `eth_sendTransaction`. The full list of client methods can be found [here](https://pkg.go.dev/github.com/ethereum/go-ethereum/ethclient#Client).
 
 Frequently, the functions take an instance of the `Context` type as their leading argument. This defines context about requests sent from the application such as deadlines, cancellation signals etc. More information on this can be found in the [Go documentation](https://pkg.go.dev/golang.org/x/net/context). An empty context instance can be created using `Context.Background()`.
 
-### Querying client for data
+### Querying client for data {#querying-client-for-data}
 
 A simple starting point is to fetch the chain ID from the client. This e.g. is needed when signing a transaction as is to be seen in the next section.
 
@@ -84,7 +84,7 @@ addr := common.HexToAddress("0xb02A2EdA1b317FBd16760128836B0Ac59B560e9D")
 nonce, err := cl.NonceAt(context.Background(), addr, big.NewInt(14000000))
 ```
 
-### Querying past events
+### Querying past events {#querying-past-events}
 
 Contracts emit events during execution which can be queried from the client. The parameters for the event one is interested in have to be filled out in the `ethereum.FilterQuery` object. This includes which event topics are of interested, from which contracts and during which range of blocks. The example below queries `Transfer` events of all ERC-20 tokens for the last 10 blocks:
 
@@ -104,7 +104,7 @@ if err != nil {
 }
 ```
 
-### Sending a transaction
+### Sending a transaction {#sending-a-transaction}
 
 Sending a transaction is achieved using the `SendTransaction()` function. `SendTransaction` takes an instance of `context.Context` as its leading argument and a signed transaction as its second argument. The signed transaction must be generated in advance. Building the signed transaction is a multi-stage process that requires first generating a key pair if none exists already, retrieving some chain data and defining sender and recipient
 addresses. Then these data can be collected into a transaction object and signed. The resulting signed transaction can then be passed to `SendTransaction`.
@@ -172,7 +172,7 @@ func sendTransaction(cl *ethclient.Client) error {
 }
 ```
 
-### gethclient
+### gethclient {#geth-client}
 
 An instance of `gethclient` can be used in exactly the same way as `ethclient`. However, `gethclient` includes Geth-specific API methods. These additional methods are:
 
@@ -191,6 +191,6 @@ _Note that both `ethclient` and `gethclient` have a `CallContract()` function - 
 
 Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [Github](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [Github](https://github.com/MariusVanDerWijden/web3go).
 
-## Summary
+## Summary {#summary}
 
 There are a wide variety of Go APIs available for dapp developers that abstract away the complexity of interacting with Ethereum using a set of composable, reusable functions provided by Geth.

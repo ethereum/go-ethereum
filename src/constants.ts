@@ -2,6 +2,8 @@ import React from 'react';
 import { IconProps } from '@chakra-ui/react';
 import { WindowsLogo, MacosLogo, LinuxPenguin, SourceBranch } from './components/UI/icons';
 
+export const BORDER_WIDTH = '2px';
+
 // internal pages
 export const DOWNLOADS_PAGE = '/downloads';
 export const DOCS_PAGE = '/docs';

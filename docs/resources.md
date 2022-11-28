@@ -5,13 +5,13 @@ description: Read, watch and listen more about Geth and Ethereum
 
 Here are more resources for a deeper understanding of Geth and related topics.
 
-## Read
+## Read {#read}
 
 [Geth team AMA: August 2022](https://www.reddit.com/r/cryptoall/comments/wpr6dk/ama_we_are_the_go_ethereum_geth_team_18_august/)
 
 [Ethereum stack exchange](https://ethereum.stackexchange.com/)
 
-## Watch
+## Watch {#watch}
 
 [Geth team AMA at Devcon 6, Bogota](https://youtu.be/Wr_SHOmz4lc?t=10714)
 

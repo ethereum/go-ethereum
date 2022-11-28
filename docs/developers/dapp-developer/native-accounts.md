@@ -7,7 +7,7 @@ Geth provides a simple, yet thorough accounts package that includes all the tool
 
 **Note Geth's built-in account management is convenient and straightforward to use, but best practise is to use the external tool _Clef_ for key management.**
 
-## Encrypted keystores
+## Encrypted keystores {#encrypted-keystores}
 
 Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be stored encrypted so that even if the mobile device is accessed by a malicious third party the keys are still hidden under an additional layer of security. Geth provides a keystore that enables developers to store keys securely. The Geth keystore uses [Scrypt](https://pkg.go.dev/golang.org/x/crypto/scrypt) to store keys that are encoded using the [`secp256k1`](https://www.secg.org/sec2-v2.pdf) elliptic curve. Accounts are stored on disk in the [Web3 Secret Storage](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) format. Developers should be aware of these implementation details
 but are not required to deeply understand the cryptographic primitives in order to use the keystore.
@@ -37,7 +37,7 @@ The path to the keystore folder needs to be a location that is writable by the l
 
 The last two arguments of [`keystore.NewKeyStore`](https://godoc.org/github.com/ethereum/go-ethereum/accounts/keystore#NewKeyStore) are the crypto parameters defining how resource-intensive the keystore encryption should be. The options are [`accounts.StandardScryptN, accounts.StandardScryptP`, `accounts.LightScryptN, accounts.LightScryptP`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#pkg-constants) or custom values (requiring understanding of the underlying cryptography). The _standard_ version is recommended.
 
-## Account lifecycle
+## Account lifecycle {#account-lifecycle}
 
 Once an encrypted keystore for Ethereum accounts exists it, it can be used to manage accounts for the entire account lifecycle requirements of a Go native application. This includes the basic functionality of creating new accounts and deleting existing ones as well as updating access credentials, exporting existing accounts, and importing them on other devices.
 
@@ -81,7 +81,7 @@ impAcc, _ := ks.Import(jsonAcc, "Export password", "Import password")
 
 _Although instances of [`accounts.Account`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Account) can be used to access various information about specific Ethereum accounts, they do not contain any sensitive data (such as passphrases or private keys), rather they act solely as identifiers for client code and the keystore._
 
-## Signing authorization
+## Signing authorization {#signing-authorization}
 
 Account objects do not hold the sensitive private keys of the associated Ethereum accounts. Account objects are placeholders that identify the cryptographic keys. All operations that require authorization (e.g. transaction signing) are performed by the account manager after granting it access to the private keys.
 
@@ -119,6 +119,6 @@ signature, _ = ks.SignHash(signer, txHash.Bytes())
 
 Note that [`SignWithPassphrase`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.SignWithPassphrase) takes an [`accounts.Account`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Account) as the signer, whereas [`Sign`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.Sign) takes only a [`common.Address`](https://godoc.org/github.com/ethereum/go-ethereum/common#Address). The reason for this is that an [`accounts.Account`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Account) object may also contain a custom key-path, allowing [`SignWithPassphrase`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.SignWithPassphrase) to sign using accounts outside of the keystore; however [`Sign`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.Sign) relies on accounts already unlocked within the keystore, so it cannot specify custom paths.
 
-## Summary
+## Summary {#summary}
 
 Account management is a fundamental pillar of Ethereum development. Geth's Go API provides the tools required to integrate best-practise account security into Go native applications using a simple set of Go functions.
