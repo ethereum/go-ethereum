@@ -10,7 +10,7 @@ const MDXComponents = {
   // paragraphs
   p: ({ children }: any) => {
     return (
-      <Text mb={7} size='sm' lineHeight={1.5}>
+      <Text mb={7} lineHeight={1.5}>
         {children}
       </Text>
     );
