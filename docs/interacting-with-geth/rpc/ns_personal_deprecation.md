@@ -88,7 +88,7 @@ curl --data '{"id": 1, "jsonrpc": "2.0", "method": "account_new", "params": []}'
 
 Example call (Clef command):
 
-```sh1
+```sh
 clef newaccount
 ```
 
