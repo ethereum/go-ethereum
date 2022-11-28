@@ -499,6 +499,7 @@ Returns the storage at the given block height and transaction index. The result 
 ### debug_traceBadBlock
 
 Returns the structured logs created during the execution of EVM against a block pulled from the pool of bad ones and returns them as a JSON object.
+For the second parameter see [TraceConfig](#traceconfig) reference.
 
 | Client  | Method invocation                                              |
 | :------ | -------------------------------------------------------------- |
@@ -509,11 +510,11 @@ Returns the structured logs created during the execution of EVM against a block 
 
 The `traceBlock` method will return a full stack trace of all invoked opcodes of all transaction
 that were included in this block. **Note**, the parent of this block must be present or it will
-fail.
+fail. For the second parameter see [TraceConfig](#traceconfig) reference.
 
 | Client  | Method invocation                                                        |
 | :------ | ------------------------------------------------------------------------ |
-| Go      | `debug.TraceBlock(blockRlp []byte, config. *vm.Config) BlockTraceResult` |
+| Go      | `debug.TraceBlock(blockRlp []byte, config *TraceConfig) BlockTraceResult` |
 | Console | `debug.traceBlock(tblockRlp, [options])`                                 |
 | RPC     | `{"method": "debug_traceBlock", "params": [blockRlp, {}]}`               |
 
@@ -559,11 +560,11 @@ References:
 ### debug_traceBlockByNumber
 
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a block number and will replay the
-block that is already present in the database.
+block that is already present in the database. For the second parameter see [TraceConfig](#traceconfig) reference.
 
 | Client  | Method invocation                                                              |
 | :------ | ------------------------------------------------------------------------------ |
-| Go      | `debug.TraceBlockByNumber(number uint64, config. *vm.Config) BlockTraceResult` |
+| Go      | `debug.TraceBlockByNumber(number uint64, config *TraceConfig) BlockTraceResult` |
 | Console | `debug.traceBlockByNumber(number, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockByNumber", "params": [number, {}]}`               |
 
@@ -573,11 +574,11 @@ References:
 ### debug_traceBlockByHash
 
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a block hash and will replay the
-block that is already present in the database.
+block that is already present in the database. For the second parameter see [TraceConfig](#traceconfig) reference.
 
 | Client  | Method invocation                                                               |
 | :------ | ------------------------------------------------------------------------------- |
-| Go      | `debug.TraceBlockByHash(hash common.Hash, config. *vm.Config) BlockTraceResult` |
+| Go      | `debug.TraceBlockByHash(hash common.Hash, config *TraceConfig) BlockTraceResult` |
 | Console | `debug.traceBlockByHash(hash, [options])`                                       |
 | RPC     | `{"method": "debug_traceBlockByHash", "params": [hash {}]}`                     |
 
@@ -588,10 +589,11 @@ References:
 ### debug_traceBlockFromFile
 
 Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a file containing the RLP of the block.
+For the second parameter see [TraceConfig](#traceconfig) reference.
 
 | Client  | Method invocation                                                                |
 | :------ | -------------------------------------------------------------------------------- |
-| Go      | `debug.TraceBlockFromFile(fileName string, config. *vm.Config) BlockTraceResult` |
+| Go      | `debug.TraceBlockFromFile(fileName string, config *TraceConfig) BlockTraceResult` |
 | Console | `debug.traceBlockFromFile(fileName, [options])`                                  |
 | RPC     | `{"method": "debug_traceBlockFromFile", "params": [fileName, {}]}`               |
 
@@ -600,7 +602,7 @@ References:
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. A tracer can be specified as a third argument, similar to `debug_traceTransaction`. It returns the same output as `debug_traceTransaction`.
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceConfig](#traceconfig). The method returns the same output as `debug_traceTransaction`.
 
 | Client  | Method invocation                                                                                                           |
 | :-----: | --------------------------------------------------------------------------------------------------------------------------- |
@@ -691,6 +693,15 @@ as it was executed on the network. It will replay any transaction that may have 
 to this one before it will finally attempt to execute the transaction that corresponds to the given
 hash.
 
+| Client  | Method invocation                                                                            |
+| :------ | -------------------------------------------------------------------------------------------- |
+| Go      | `debug.TraceTransaction(txHash common.Hash, config *TraceConfig) (*ExecutionResult, error)` |
+| Console | `debug.traceTransaction(txHash, [options])`                                                  |
+| RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
+
+
+#### TraceConfig
+
 In addition to the hash of the transaction you may give it a secondary *optional* argument, which
 specifies the options for this specific call. The possible options are:
 
@@ -703,12 +714,7 @@ If set, the previous four arguments will be ignored.
   If set, the previous four arguments will be ignored.
 * `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. 
   Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
-
-| Client  | Method invocation                                                                            |
-| :------ | -------------------------------------------------------------------------------------------- |
-| Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResult, error)` |
-| Console | `debug.traceTransaction(txHash, [options])`                                                  |
-| RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
+* `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/evm-tracing/builtin-tracers#config).
 
 Geth comes with a bundle of [built-in tracers](/docs/evm-tracing/builtin-tracers), each providing various data about a transaction.
 This method defaults to the [struct logger](/docs/evm-tracing/builtin-tracers#structopcode-logger). The `tracer` field of
