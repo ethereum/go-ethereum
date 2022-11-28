@@ -9,10 +9,9 @@ import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 
 import MDXComponents from '../components/';
-import { Breadcrumbs } from '../components/docs'
+import { Breadcrumbs } from '../components/docs';
 import { PageMetadata } from '../components/UI';
 import { textStyles } from '../theme/foundations';
-
 
 const MATTER_OPTIONS = {
   engines: {
@@ -87,7 +86,9 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
           </Heading>
           {/* <Text as='span' mt='0 !important'>last edited {TODO: get last edited date}</Text> */}
         </Stack>
-        <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>{content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>
+          {content}
+        </ReactMarkdown>
       </main>
     </>
   );

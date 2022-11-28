@@ -137,7 +137,7 @@ export const textStyles = {
   'header-button': {
     fontFamily: '"JetBrains Mono", monospace',
     fontWeight: 700,
-    fontSize: { base: '0.86rem', sm: '1rem' },
+    fontSize: { base: '0.86rem', sm: '1rem' }
   },
   'header-mobile-button': {
     fontFamily: '"JetBrains Mono", monospace',
