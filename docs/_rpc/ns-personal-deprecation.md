@@ -1,9 +1,12 @@
 ---
-title: ns-personal deprecation notes
+title: ns_personal deprecation notes
 sort_key: L
 ---
 
-The JSON-RPC API's `personal` namespace has historically been used to manage accounts and sign transactions and data over RPC. However, it is being deprecated in favour of using [Clef](docs/clef/Introduction.md) as an external signer and account manager. One of the major changes is moving away from indiscriminate locking and unlocking of accounts and instead using Clef to explicitly approve or deny specific actions. This page shows the suggested replacement for each method in `personal`.
+The JSON-RPC API's `personal` namespace has historically been used to manage accounts and sign transactions and data over RPC. However, it is being deprecated in favour of using [Clef](docs/clef/Introduction.md) as an external signer and account manager. One of the major benefits of this that it enables moving away from indiscriminate locking and unlocking of accounts and instead using Clef to explicitly approve or deny specific actions. This page shows the suggested replacement for each method in `personal`. It is recommended to migrate away from `ns_personal` and towards a Clef-centic workflow now.
+
+* TOC
+{:toc}
 
 ## Methods without replacements
 
