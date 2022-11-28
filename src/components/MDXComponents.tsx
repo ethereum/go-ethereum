@@ -80,7 +80,14 @@ const MDXComponents = {
     </Stack>
   ),
   // code
-  code: ({ children, ...props }: any) => <Code {...props}>{children}</Code>
+  code: ({ children, ...props }: any) => <Code {...props}>{children}</Code>,
+  // list
+  ul: ({children}: any) => {
+    return <UnorderedList mb={7} px={4}>{children}</UnorderedList>
+  },
+  li: ({ children }: any) => {
+    return <ListItem color='primary'>{children}</ListItem>
+  }
 };
 
 export default MDXComponents;
