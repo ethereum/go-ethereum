@@ -65,8 +65,7 @@ const MDXComponents = {
         colorScheme='greenAlpha'
         border='1px'
         borderColor='blackAlpha.50'
-        mt={6}
-        mb={4}
+        my={6}
         size={{ base: 'sm', lg: 'md' }}
         w='auto'
       >
