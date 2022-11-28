@@ -19,9 +19,9 @@ export const HomeHero: FC = () => {
           textStyle='h1'
           mb={{ base: 2, md: 4 }}
           textAlign={{ base: 'center', md: 'left' }}
-          fontSize={{ base: '5xl', md: '8xl' }}
-          lineHeight={{ md: '6rem' }}
-          fontWeight='500'
+          fontSize={{ base: '2.75rem', md: '8xl' }}
+          lineHeight={{ base: '3.375rem', md: '6rem' }}
+          fontWeight={{ base: 700, md: 500 }}
         >
           go-ethereum
         </Box>
