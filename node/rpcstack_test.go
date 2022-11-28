@@ -19,7 +19,7 @@ package node
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -275,8 +275,24 @@ func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
 func rpcRequest(t *testing.T, url, method string, extraHeaders ...string) *http.Response {
 	t.Helper()
 
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, method)
+	return baseRpcRequest(t, url, body, extraHeaders...)
+}
+
+func batchRpcRequest(t *testing.T, url string, methods []string, extraHeaders ...string) *http.Response {
+	reqs := make([]string, len(methods))
+	for i, m := range methods {
+		reqs[i] = fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, m)
+	}
+	body := fmt.Sprintf(`[%s]`, strings.Join(reqs, ","))
+	return baseRpcRequest(t, url, body, extraHeaders...)
+}
+
+func baseRpcRequest(t *testing.T, url, bodyStr string, extraHeaders ...string) *http.Response {
+	t.Helper()
+
 	// Create the request.
-	body := bytes.NewReader([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"%s","params":[]}`, method)))
+	body := bytes.NewReader([]byte(bodyStr))
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		t.Fatal("could not create http request:", err)
@@ -430,20 +446,42 @@ func TestJWT(t *testing.T) {
 }
 
 func TestHTTPWriteTimeout(t *testing.T) {
-	want := `{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"request timed out"}}`
+	const (
+		timeoutRes = `{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"request timed out"}}`
+		greetRes   = `{"jsonrpc":"2.0","id":1,"result":"Hello"}`
+	)
+	// Set-up server
 	timeouts := rpc.DefaultHTTPTimeouts
 	timeouts.WriteTimeout = time.Second
 	srv := createAndStartServer(t, &httpConfig{Modules: []string{"test"}}, false, &wsConfig{}, &timeouts)
 	url := fmt.Sprintf("http://%v", srv.listenAddr())
-	resp := rpcRequest(t, url, "test_sleep")
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(body) != want {
-		t.Errorf("wrong response. have %s, want %s", string(body), want)
-	}
+
+	// Send normal request
+	t.Run("message", func(t *testing.T) {
+		resp := rpcRequest(t, url, "test_sleep")
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != timeoutRes {
+			t.Errorf("wrong response. have %s, want %s", string(body), timeoutRes)
+		}
+	})
+
+	// Batch request
+	t.Run("batch", func(t *testing.T) {
+		want := fmt.Sprintf("[%s,%s,%s]", greetRes, timeoutRes, timeoutRes)
+		resp := batchRpcRequest(t, url, []string{"test_greet", "test_sleep", "test_greet"})
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != want {
+			t.Errorf("wrong response. have %s, want %s", string(body), want)
+		}
+	})
 }
 
 func apis() []rpc.API {
@@ -456,6 +494,10 @@ func apis() []rpc.API {
 }
 
 type testService struct {
+}
+
+func (s *testService) Greet() string {
+	return "Hello"
 }
 
 func (s *testService) Sleep() {
