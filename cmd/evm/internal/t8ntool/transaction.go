@@ -138,16 +138,9 @@ func Transaction(ctx *cli.Context) error {
 		} else {
 			r.Address = sender
 		}
-		// Check intrinsic gas assuming no excess data gas
-		// NOTE: We set excess_data_gas prestate to zero. So this may not accurately compute the
-		// intrinsic gas unless the tool is updated to take in an excess_data_gas parameter.
-
-		rules := core.IntrinsicGasChainRules{
-			Homestead: chainConfig.IsHomestead(new(big.Int)),
-			EIP2028:   chainConfig.IsIstanbul(new(big.Int)),
-			EIP4844:   chainConfig.IsSharding(new(big.Int)),
-		}
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, rules); err != nil {
+		// Check intrinsic gas
+		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int))); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue

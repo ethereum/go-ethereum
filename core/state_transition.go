@@ -89,13 +89,6 @@ type ExecutionResult struct {
 	ReturnData []byte // Returned data from evm(function result or data supplied with revert opcode)
 }
 
-// IntrinsicGasChainRules specifies the rules used when computing the intrinsic gas
-type IntrinsicGasChainRules struct {
-	Homestead bool
-	EIP2028   bool
-	EIP4844   bool
-}
-
 // Unwrap returns the internal evm error which allows us for further
 // analysis outside.
 func (result *ExecutionResult) Unwrap() error {
@@ -124,10 +117,10 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, rules IntrinsicGasChainRules) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if isContractCreation && rules.Homestead {
+	if isContractCreation && isHomestead {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
@@ -143,7 +136,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 		}
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
-		if rules.EIP2028 {
+		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
@@ -341,13 +334,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		contractCreation = msg.To() == nil
 	)
 
-	intrinsicGasRules := IntrinsicGasChainRules{
-		Homestead: rules.IsHomestead,
-		EIP2028:   rules.IsIstanbul,
-		EIP4844:   rules.IsSharding,
-	}
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data(), st.msg.AccessList(), contractCreation, intrinsicGasRules)
+	gas, err := IntrinsicGas(msg.Data(), st.msg.AccessList(), contractCreation, rules.IsHomestead, rules.IsIstanbul)
 	if err != nil {
 		return nil, err
 	}
