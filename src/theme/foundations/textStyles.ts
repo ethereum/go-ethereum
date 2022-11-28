@@ -15,13 +15,6 @@ export const textStyles = {
     letterSpacing: '4%',
     color: 'body'
   },
-  homepageH1: {
-    fontFamily: 'heading',
-    fontWeight: { base: 700, md: 500 },
-    fontSize: { base: '2.75rem', md: '6rem' },
-    outline: '1px solid red',
-    lineHeight: { base: '3.375rem', md: '6rem' }
-  },
   header1: {
     fontFamily: 'heading',
     fontWeight: 700,

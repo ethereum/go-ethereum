@@ -10,7 +10,7 @@ export const Breadcrumbs: FC = () => {
   pathSplit = pathSplit.splice(1, pathSplit.length);
 
   return (
-    <Breadcrumb mb={10}>
+    <Breadcrumb>
       {pathSplit.map((path: string, idx: number) => {
         return (
           <BreadcrumbItem key={path}>
