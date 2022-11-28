@@ -202,6 +202,9 @@ func (p *peer) MarkSyncInfo(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
+		p.knownTxs.Pop()
+	}
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
@@ -211,6 +214,10 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendOrderTransactions(txs types.OrderTransactions) error {
+	for p.knownOrderTxs.Cardinality() >= maxKnownOrderTxs {
+		p.knownOrderTxs.Pop()
+	}
+
 	for _, tx := range txs {
 		p.knownOrderTxs.Add(tx.Hash())
 	}
@@ -220,6 +227,10 @@ func (p *peer) SendOrderTransactions(txs types.OrderTransactions) error {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendLendingTransactions(txs types.LendingTransactions) error {
+	for p.knownLendingTxs.Cardinality() >= maxKnownLendingTxs {
+		p.knownLendingTxs.Pop()
+	}
+
 	for _, tx := range txs {
 		p.knownLendingTxs.Add(tx.Hash())
 	}
@@ -229,6 +240,10 @@ func (p *peer) SendLendingTransactions(txs types.LendingTransactions) error {
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
+	}
+
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
 	}
@@ -242,6 +257,10 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
+	}
+
 	p.knownBlocks.Add(block.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
@@ -299,6 +318,10 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 }
 
 func (p *peer) SendVote(vote *types.Vote) error {
+	for p.knownVote.Cardinality() >= maxKnownVote {
+		p.knownVote.Pop()
+	}
+
 	p.knownVote.Add(vote.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, VoteMsg, vote)
@@ -313,6 +336,10 @@ func (p *peer) AsyncSendVote() {
 }
 */
 func (p *peer) SendTimeout(timeout *types.Timeout) error {
+	for p.knownTimeout.Cardinality() >= maxKnownTimeout {
+		p.knownTimeout.Pop()
+	}
+
 	p.knownTimeout.Add(timeout.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, TimeoutMsg, timeout)
@@ -327,6 +354,10 @@ func (p *peer) AsyncSendTimeout() {
 }
 */
 func (p *peer) SendSyncInfo(syncInfo *types.SyncInfo) error {
+	for p.knownSyncInfo.Cardinality() >= maxKnownSyncInfo {
+		p.knownSyncInfo.Pop()
+	}
+
 	p.knownSyncInfo.Add(syncInfo.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, SyncInfoMsg, syncInfo)
