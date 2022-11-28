@@ -1,4 +1,14 @@
-import { Flex, Heading, Link, Stack, Table, Text } from '@chakra-ui/react';
+import {
+  Flex,
+  Heading,
+  Link,
+  ListItem,
+  OrderedList,
+  Stack,
+  Table,
+  Text,
+  UnorderedList
+} from '@chakra-ui/react';
 import NextLink from 'next/link';
 
 import { Code } from './UI/docs';
@@ -84,6 +94,9 @@ const MDXComponents = {
   // list
   ul: ({children}: any) => {
     return <UnorderedList mb={7} px={4}>{children}</UnorderedList>
+  },
+  ol: ({children}: any) => {
+    return <OrderedList mb={7} px={4}>{children}</OrderedList>
   },
   li: ({ children }: any) => {
     return <ListItem color='primary'>{children}</ListItem>
