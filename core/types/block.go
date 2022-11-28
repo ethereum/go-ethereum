@@ -138,11 +138,18 @@ var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
-	var baseFeeBits int
+	var feeBits int
 	if h.BaseFee != nil {
-		baseFeeBits = h.BaseFee.BitLen()
+		feeBits = h.BaseFee.BitLen()
 	}
-	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+baseFeeBits)/8)
+	if h.ExcessDataGas != nil {
+		feeBits += h.ExcessDataGas.BitLen()
+	}
+	var withdrawalBytes int
+	if h.WithdrawalsHash != nil {
+		withdrawalBytes = common.HashLength
+	}
+	return headerSize + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+feeBits)/8+withdrawalBytes)
 }
 
 // SanityCheck checks a few basic things -- these checks are way beyond what
@@ -164,6 +171,11 @@ func (h *Header) SanityCheck() error {
 	if h.BaseFee != nil {
 		if bfLen := h.BaseFee.BitLen(); bfLen > 256 {
 			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
+		}
+	}
+	if h.ExcessDataGas != nil {
+		if bfLen := h.ExcessDataGas.BitLen(); bfLen > 256 {
+			return fmt.Errorf("too large excess data gas: bitlen %d", bfLen)
 		}
 	}
 	return nil
