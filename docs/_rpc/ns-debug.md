@@ -698,7 +698,8 @@ specifies the options for this specific call. The possible options are:
 * `disableStack`: `BOOL`. Setting this to true will disable stack capture (default = false).
 * `enableMemory`: `BOOL`. Setting this to true will enable memory capture (default = false).
 * `enableReturnData`: `BOOL`. Setting this to true will enable return data capture (default = false).
-* `tracer`: `STRING`. Setting this will enable JavaScript-based transaction tracing, described below. 
+* `tracer`: `STRING`. Name for built-in tracer or Javascript expression. See below for more details.
+If set, the previous four arguments will be ignored. 
   If set, the previous four arguments will be ignored.
 * `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls. 
   Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
@@ -708,6 +709,11 @@ specifies the options for this specific call. The possible options are:
 | Go      | `debug.TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResult, error)` |
 | Console | `debug.traceTransaction(txHash, [options])`                                                  |
 | RPC     | `{"method": "debug_traceTransaction", "params": [txHash, {}]}`                               |
+
+Geth comes with a bundle of [built-in tracers](/docs/evm-tracing/builtin-tracers), each providing various data about a transaction.
+This method defaults to the [struct logger](/docs/evm-tracing/builtin-tracers#structopcode-logger). The `tracer` field of
+the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/evm-tracing/custom-tracer) can be implemented
+in either Go or Javascript.
 
 #### Example
 
@@ -744,162 +750,6 @@ specifies the options for this specific call. The possible options are:
       }
   }]
 ```
-
-
-#### JavaScript-based tracing
-
-Specifying the `tracer` option in the second argument enables JavaScript-based tracing. 
-In this mode, `tracer` is interpreted as a JavaScript expression that is expected to 
-evaluate to an object which must expose the `result` and `fault` methods. There exist 
-4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` 
-must be present or omitted together.
-
-##### Setup
-
-`setup` is invoked once, in the beginning when the tracer is being constructed by Geth 
-for a given transaction. It takes in one argument `config`. `config` is tracer-specific and
-allows users to pass in options to the tracer. `config` is to be JSON-decoded for usage and 
-its default value is `"{}"`.
-
-The `config` in the following example is the `onlyTopCall` option available in the
-`callTracer`:
-
-```js
-debug.traceTransaction('<txhash>, { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
-```
-
-The config in the following example is the `diffMode` option available
-in the `prestateTracer`:
-
-```js
-debug.traceTransaction('<txhash>, { tracer: 'prestateTracer': tracerConfig: { diffMode: true } })
-```
-
-##### Step
-
-`step` is a function that takes two arguments, `log` and `db`, and is called for each step 
-of the EVM, or when an error occurs, as the specified transaction is traced.
-
-`log` has the following fields:
-
- - `op`: Object, an OpCode object representing the current opcode
- - `stack`: Object, a structure representing the EVM execution stack
- - `memory`: Object, a structure representing the contract's memory space
- - `contract`: Object, an object representing the account executing the current operation
-
-and the following methods:
-
- - `getPC()` - returns a Number with the current program counter
- - `getGas()` - returns a Number with the amount of gas remaining
- - `getCost()` - returns the cost of the opcode as a Number
- - `getDepth()` - returns the execution depth as a Number
- - `getRefund()` - returns the amount to be refunded as a Number
- - `getError()` - returns information about the error if one occured, otherwise returns `undefined`
-
-If error is non-empty, all other fields should be ignored.
-
-For efficiency, the same `log` object is reused on each execution step, updated with current values; make sure to copy values you want to preserve beyond the current call. For instance, this step function will not work:
-
-    function(log) {
-      this.logs.append(log);
-    }
-
-But this step function will:
-
-    function(log) {
-      this.logs.append({gas: log.getGas(), pc: log.getPC(), ...});
-    }
-
-`log.op` has the following methods:
-
- - `isPush()` - returns true if the opcode is a PUSHn
- - `toString()` - returns the string representation of the opcode
- - `toNumber()` - returns the opcode's number
-
-`log.memory` has the following methods:
-
- - `slice(start, stop)` - returns the specified segment of memory as a byte slice
- - `getUint(offset)` - returns the 32 bytes at the given offset
- - `length()` - returns the memory size
-
-`log.stack` has the following methods:
-
- - `peek(idx)` - returns the idx-th element from the top of the stack (0 is the topmost element) as a big.Int
- - `length()` - returns the number of elements in the stack
-
-`log.contract` has the following methods:
-
-- `getCaller()` - returns the address of the caller
-- `getAddress()` - returns the address of the current contract
-- `getValue()` - returns the amount of value sent from caller to contract as a big.Int
-- `getInput()` - returns the input data passed to the contract
-
-`db` has the following methods:
-
- - `getBalance(address)` - returns a `big.Int` with the specified account's balance
- - `getNonce(address)` - returns a Number with the specified account's nonce
- - `getCode(address)` - returns a byte slice with the code for the specified account
- - `getState(address, hash)` - returns the state value for the specified account and the specified hash
- - `exists(address)` - returns true if the specified address exists
-
-If the step function throws an exception or executes an illegal operation at any point, it will not be called on any further VM steps, and the error will be returned to the caller.
-
-##### Result
-
-`result` is a function that takes two arguments `ctx` and `db`, and is expected to return a JSON-serializable value to return to the RPC caller.
-
-`ctx` is the context in which the transaction is executing and has the following fields:
-
-- `type` - String, one of the two values `CALL` and `CREATE`
-- `from` - Address, sender of the transaction
-- `to` - Address, target of the transaction
-- `input` - Buffer, input transaction data
-- `gas` - Number, gas budget of the transaction
-- `gasUsed` - Number, amount of gas used in executing the transaction (excludes txdata costs)
-- `gasPrice` - Number, gas price configured in the transaction being executed
-- `intrinsicGas` - Number, intrinsic gas for the transaction being executed
-- `value` - big.Int, amount to be transferred in wei
-- `block` - Number, block number
-- `output` - Buffer, value returned from EVM
-- `time` - String, execution runtime
-
-And these fields are only available for tracing mined transactions (i.e. not available when doing `debug_traceCall`):
-
-- `blockHash` - Buffer, hash of the block that holds the transaction being executed
-- `txIndex` - Number, index of the transaction being executed in the block
-- `txHash` - Buffer, hash of the transaction being executed
-
-##### Fault
-
-`fault` is a function that takes two arguments, `log` and `db`, just like `step` and is invoked when an error happens during the execution of an opcode which wasn't reported in `step`. The method `log.getError()` has information about the error.
-
-##### Enter & Exit
-
-`enter` and `exit` are respectively invoked on stepping in and out of an internal call. More specifically they are invoked on the `CALL` variants, `CREATE` variants and also for the transfer implied by a `SELFDESTRUCT`.
-
-`enter` takes a `callFrame` object as argument which has the following methods:
-
-- `getType()` - returns a string which has the type of the call frame
-- `getFrom()` - returns the address of the call frame sender
-- `getTo()` - returns the address of the call frame target
-- `getInput()` - returns the input as a buffer
-- `getGas()` - returns a Number which has the amount of gas provided for the frame
-- `getValue()` - returns a `big.Int` with the amount to be transferred only if available, otherwise `undefined`
-
-`exit` takes in a `frameResult` object which has the following methods:
-
-- `getGasUsed()` - returns amount of gas used throughout the frame as a Number
-- `getOutput()` - returns the output as a buffer
-` -getError()` - returns an error if one occured during execution and `undefined` otherwise 
-
-##### Usage
-
-Note that several values are Golang big.Int objects, not JavaScript numbers or JS bigints. As such, they have the same interface as described in the godocs. Their default serialization to JSON is as a Javascript number; to serialize large numbers accurately call `.String()` on them. For convenience, `big.NewInt(x)` is provided, and will convert a uint to a Go BigInt.
-
-Usage example, returns the top element of the stack at each CALL opcode only:
-
-    debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
-
 
 ### debug_verbosity
 
