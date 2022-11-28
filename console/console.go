@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
@@ -198,12 +199,19 @@ func (c *Console) initWeb3(bridge *bridge) error {
 	return err
 }
 
+var defaultAPIs = map[string]string{"eth": "1.0", "net": "1.0", "debug": "1.0"}
+
 // initExtensions loads and registers web3.js extensions.
 func (c *Console) initExtensions() error {
 	// Compute aliases from server-provided modules.
 	apis, err := c.client.SupportedModules()
 	if err != nil {
-		return fmt.Errorf("api modules: %v", err)
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == -32601 {
+			log.Warn("Server does not support method rpc_modules, using default API list.")
+			apis = defaultAPIs
+		} else {
+			return err
+		}
 	}
 	aliases := map[string]struct{}{"eth": {}, "personal": {}}
 	for api := range apis {
