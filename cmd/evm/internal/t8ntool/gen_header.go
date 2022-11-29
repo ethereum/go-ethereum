@@ -34,7 +34,7 @@ func (h header) MarshalJSON() ([]byte, error) {
 		MixDigest       common.Hash           `json:"mixHash"`
 		Nonce           *types.BlockNonce     `json:"nonce"`
 		BaseFee         *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
-		WithdrawalsHash *common.Hash          `json:"withdrawalsRoog" rlp:"optional"`
+		WithdrawalsHash *common.Hash          `json:"withdrawalsRoot" rlp:"optional"`
 		ExcessDataGas   *big.Int              `json:"excessDataGas"   rlp:"optional"`
 	}
 	var enc header
@@ -78,7 +78,7 @@ func (h *header) UnmarshalJSON(input []byte) error {
 		MixDigest       *common.Hash          `json:"mixHash"`
 		Nonce           *types.BlockNonce     `json:"nonce"`
 		BaseFee         *math.HexOrDecimal256 `json:"baseFeePerGas" rlp:"optional"`
-		WithdrawalsHash *common.Hash          `json:"withdrawalsRoog" rlp:"optional"`
+		WithdrawalsHash *common.Hash          `json:"withdrawalsRoot" rlp:"optional"`
 		ExcessDataGas   *big.Int              `json:"excessDataGas"   rlp:"optional"`
 	}
 	var dec header

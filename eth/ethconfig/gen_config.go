@@ -64,7 +64,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		CheckpointOracle                      *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideTerminalTotalDifficulty       *big.Int                       `toml:",omitempty"`
 		OverrideTerminalTotalDifficultyPassed *bool                          `toml:",omitempty"`
-		FullSyncTarget                        *types.Block
+		SyncTarget                            *types.Block
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -111,7 +111,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideTerminalTotalDifficulty = c.OverrideTerminalTotalDifficulty
 	enc.OverrideTerminalTotalDifficultyPassed = c.OverrideTerminalTotalDifficultyPassed
-	enc.FullSyncTarget = c.SyncTarget
+	enc.SyncTarget = c.SyncTarget
 	return &enc, nil
 }
 
@@ -162,7 +162,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		CheckpointOracle                      *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideTerminalTotalDifficulty       *big.Int                       `toml:",omitempty"`
 		OverrideTerminalTotalDifficultyPassed *bool                          `toml:",omitempty"`
-		FullSyncTarget                        *types.Block
+		SyncTarget                            *types.Block
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -300,8 +300,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.OverrideTerminalTotalDifficultyPassed != nil {
 		c.OverrideTerminalTotalDifficultyPassed = dec.OverrideTerminalTotalDifficultyPassed
 	}
-	if dec.FullSyncTarget != nil {
-		c.SyncTarget = dec.FullSyncTarget
+	if dec.SyncTarget != nil {
+		c.SyncTarget = dec.SyncTarget
 	}
 	return nil
 }
