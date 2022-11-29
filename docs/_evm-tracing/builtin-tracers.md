@@ -210,7 +210,14 @@ Things to note about the call tracer:
 - In case a frame reverts, the field `output` will contain the raw return data
 - In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
 
-`callTracer` has an option to only trace the main (top-level) call and none of the sub-calls. This avoids extra processing for each call frame if only the top-level call info are required. Here's how it can be configured:
+#### Config
+
+`callTracer` accepts two options:
+
+- `onlyTopCall: true` instructs the tracer to only process the main (top-level) call and none of the sub-calls. This avoids extra processing for each call frame if only the top-level call info are required.
+- `withLog: true` instructs the tracer to also collect the logs emitted during each call.
+
+Example invokation with the `onlyTopCall` flag:
 
 ```terminal
 > debug.traceTransaction('0xc73e70f6d60e63a71dabf90b9983f2cdd56b0cb7bcf1a205f638d630a95bba73', { tracer: 'callTracer', tracerConfig: { onlyTopCall: true } })
