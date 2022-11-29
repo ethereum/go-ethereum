@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 var _ = (*payloadAttributesMarshaling)(nil)
@@ -15,14 +16,18 @@ var _ = (*payloadAttributesMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (p PayloadAttributesV1) MarshalJSON() ([]byte, error) {
 	type PayloadAttributesV1 struct {
-		Timestamp             hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
-		Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
-		SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
+		Timestamp             hexutil.Uint64  `json:"timestamp"     gencodec:"required"`
+		Random                common.Hash     `json:"prevRandao"        gencodec:"required"`
+		SuggestedFeeRecipient common.Address  `json:"suggestedFeeRecipient"  gencodec:"required"`
+		BlockMetadata         *BlockMetadata  `json:"blockMetadata" gencodec:"required"`
+		L1Origin              *rawdb.L1Origin `json:"l1Origin" gencodec:"required"`
 	}
 	var enc PayloadAttributesV1
 	enc.Timestamp = hexutil.Uint64(p.Timestamp)
 	enc.Random = p.Random
 	enc.SuggestedFeeRecipient = p.SuggestedFeeRecipient
+	enc.BlockMetadata = p.BlockMetadata
+	enc.L1Origin = p.L1Origin
 	return json.Marshal(&enc)
 }
 
@@ -32,6 +37,8 @@ func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 		Timestamp             *hexutil.Uint64 `json:"timestamp"     gencodec:"required"`
 		Random                *common.Hash    `json:"prevRandao"        gencodec:"required"`
 		SuggestedFeeRecipient *common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
+		BlockMetadata         *BlockMetadata  `json:"blockMetadata" gencodec:"required"`
+		L1Origin              *rawdb.L1Origin `json:"l1Origin" gencodec:"required"`
 	}
 	var dec PayloadAttributesV1
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -49,5 +56,13 @@ func (p *PayloadAttributesV1) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'suggestedFeeRecipient' for PayloadAttributesV1")
 	}
 	p.SuggestedFeeRecipient = *dec.SuggestedFeeRecipient
+	if dec.BlockMetadata == nil {
+		return errors.New("missing required field 'blockMetadata' for PayloadAttributesV1")
+	}
+	p.BlockMetadata = dec.BlockMetadata
+	if dec.L1Origin == nil {
+		return errors.New("missing required field 'l1Origin' for PayloadAttributesV1")
+	}
+	p.L1Origin = dec.L1Origin
 	return nil
 }

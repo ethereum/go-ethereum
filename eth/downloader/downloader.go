@@ -259,6 +259,12 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	}
 	progress, pending := d.SnapSyncer.Progress()
 
+	// CHANGE(taiko): try to read the L1Origin from database.
+	l1Origin, _ := rawdb.ReadHeadL1Origin(d.stateDB)
+	if l1Origin != nil {
+		current = l1Origin.Uint64()
+	}
+
 	return ethereum.SyncProgress{
 		StartingBlock:       d.syncStatsChainOrigin,
 		CurrentBlock:        current,

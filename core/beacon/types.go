@@ -22,10 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+//go:generate go run github.com/fjl/gencodec -type BlockMetadata -field-override blockMetadataMarshaling -out gen_blockmetadata.go
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributesV1 -field-override payloadAttributesMarshaling -out gen_blockparams.go
 
 // PayloadAttributesV1 structure described at https://github.com/ethereum/execution-apis/pull/74
@@ -33,6 +35,32 @@ type PayloadAttributesV1 struct {
 	Timestamp             uint64         `json:"timestamp"     gencodec:"required"`
 	Random                common.Hash    `json:"prevRandao"        gencodec:"required"`
 	SuggestedFeeRecipient common.Address `json:"suggestedFeeRecipient"  gencodec:"required"`
+
+	// CHANGE(taiko): extra fields.
+	BlockMetadata *BlockMetadata  `json:"blockMetadata" gencodec:"required"`
+	L1Origin      *rawdb.L1Origin `json:"l1Origin" gencodec:"required"`
+}
+
+// CHANGE(taiko): BlockMetadata represents a `BlockMetadata` struct defined in
+// protocol's `LibData`.
+type BlockMetadata struct {
+	// Fields defined in `LibData.blockMetadata`.
+	Beneficiary common.Address `json:"beneficiary"     gencodec:"required"`
+	GasLimit    uint64         `json:"gasLimit"     gencodec:"required"`
+	Timestamp   uint64         `json:"timestamp"     gencodec:"required"`
+	MixHash     common.Hash    `json:"mixHash"     gencodec:"required"`
+	ExtraData   []byte         `json:"extraData"     gencodec:"required"`
+
+	// Extra fields required in go-taiko.
+	TxList         []byte   `json:"txList"     gencodec:"required"`
+	HighestBlockID *big.Int `json:"highestBlockID"     gencodec:"required"`
+}
+
+// CHANGE(taiko): JSON type overrides for BlockMetadata.
+type blockMetadataMarshaling struct {
+	Timestamp hexutil.Uint64
+	TxList    hexutil.Bytes
+	ExtraData hexutil.Bytes
 }
 
 // JSON type overrides for PayloadAttributesV1.
@@ -55,7 +83,7 @@ type ExecutableDataV1 struct {
 	GasUsed       uint64         `json:"gasUsed"       gencodec:"required"`
 	Timestamp     uint64         `json:"timestamp"     gencodec:"required"`
 	ExtraData     []byte         `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
+	BaseFeePerGas *big.Int       `json:"-"             gencodec:"required"` // CHANGE(taiko): disable EIP-1559 temporarily
 	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
 }

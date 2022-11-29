@@ -143,14 +143,21 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-// 		we return success, which can be used to check if the engine API is enabled
+//
+//	we return success, which can be used to check if the engine API is enabled
+//
 // If the total difficulty was not reached:
-// 		we return INVALID
+//
+//	we return INVALID
+//
 // If the finalizedBlockHash is set:
-// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
+//	we check if we have the finalizedBlockHash in our db, if not we start a sync
+//
 // We try to set our blockchain to the headBlock
 // If there are payloadAttributes:
-// 		we try to assemble a block with the payloadAttributes and return its payloadID
+//
+//	we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
@@ -223,6 +230,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 			PayloadID:     id,
 		}
 	}
+
+	// CHANGE(taiko): check whether --taiko flag is set.
+	isTaiko := api.eth.BlockChain().Config().Taiko
+
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
@@ -232,7 +243,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		// If the specified head matches with our local head, do nothing and keep
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
-	} else {
+	} else if !isTaiko { // CHANGE(taiko): reorg is allowed in L2.
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
 		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().NumberU64())
@@ -276,6 +287,35 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 	// sealed by the beacon client. The payload will be requested later, and we
 	// might replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
+		// CHANGE(taiko): create a L2 block by Taiko protocol.
+		if isTaiko {
+			// No need to check payloadAttribute here, because all its fields are
+			// marked as required.
+			block, err := api.eth.Miner().SealBlockWith(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.BlockMetadata)
+			if err != nil {
+				log.Error("Failed to create sealing block", "err", err)
+				return valid(nil), beacon.InvalidPayloadAttributes.With(err)
+			}
+
+			// Cache the mined block for later use.
+			id := computePayloadId(update.HeadBlockHash, payloadAttributes)
+			api.localBlocks.put(id, &payload{done: true, block: block})
+
+			// L1Origin **MUST NOT** be nil, it's a required field in PayloadAttributesV1.
+			l1Origin := payloadAttributes.L1Origin
+
+			// Set the block hash before inserting the L1Origin into database.
+			l1Origin.L2BlockHash = block.Hash()
+
+			// Write L1Origin.
+			rawdb.WriteL1Origin(api.eth.ChainDb(), l1Origin.BlockID, l1Origin)
+			// Write the head L1Origin.
+			rawdb.WriteHeadL1Origin(api.eth.ChainDb(), l1Origin.BlockID)
+			api.eth.Downloader().SetSyncProgress(l1Origin.BlockID.Uint64(), payloadAttributes.BlockMetadata.HighestBlockID.Uint64())
+
+			return valid(&id), nil
+		}
+
 		// Create an empty block first which can be used as a fallback
 		empty, err := api.eth.Miner().GetSealingBlockSync(update.HeadBlockHash, payloadAttributes.Timestamp, payloadAttributes.SuggestedFeeRecipient, payloadAttributes.Random, true)
 		if err != nil {
@@ -385,9 +425,18 @@ func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableDataV1) (beacon.Pa
 		log.Error("Ignoring pre-merge parent block", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
 		return beacon.INVALID_TERMINAL_BLOCK, nil
 	}
-	if block.Time() <= parent.Time() {
-		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
-		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+	// CHANGE(taiko): a block that has the same timestamp as its parents is
+	// allowed in Taiko protocol.
+	if api.eth.BlockChain().Config().Taiko {
+		if block.Time() < parent.Time() {
+			log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
+			return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+		}
+	} else {
+		if block.Time() <= parent.Time() {
+			log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
+			return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+		}
 	}
 	// Another cornercase: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something
