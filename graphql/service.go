@@ -60,8 +60,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			responded.Do(func() {
 				msg := []byte("request timed out")
 				w.Header().Set("content-length", strconv.Itoa(len(msg)))
-				w.Write(msg)
 				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(msg)
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
 				}
