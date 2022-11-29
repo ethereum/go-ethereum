@@ -1,7 +1,7 @@
 import { Box, Grid, GridItem, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 
-import { ButtonLinkSecondary } from '..'
+import { ButtonLinkSecondary } from '..';
 import { GopherHomeNodes } from '../svgs/GopherHomeNodes';
 import { ETHEREUM_ORG_RUN_A_NODE_URL } from '../../../constants';
 

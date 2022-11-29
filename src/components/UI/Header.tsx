@@ -36,14 +36,12 @@ export const Header: FC = () => {
 
       <Flex>
         {/* HEADER BUTTONS */}
-        <Stack display={{base: 'none', md: 'block'}}>
+        <Stack display={{ base: 'none', md: 'block' }}>
           <HeaderButtons />
         </Stack>
 
         {/* SEARCH */}
-        <Stack
-          display={{ base: 'none', md: 'block' }}
-        >
+        <Stack display={{ base: 'none', md: 'block' }}>
           <Search />
         </Stack>
 
@@ -65,7 +63,6 @@ export const Header: FC = () => {
 
       {/* MOBILE MENU */}
       <MobileMenu />
-
     </Flex>
   );
 };

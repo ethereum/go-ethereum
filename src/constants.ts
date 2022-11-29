@@ -54,8 +54,8 @@ export const DOWNLOAD_HEADER_BUTTONS: {
     buildURL: ''
   }
 };
-export const DOWNLOAD_TABS = ['Linux', 'macOS', 'Windows', 'iOS', 'Android'];
-export const DOWNLOAD_TAB_COLUMN_HEADERS = [
+export const DOWNLOADS_TABLE_TABS = ['Linux', 'macOS', 'Windows', 'iOS', 'Android'];
+export const DOWNLOADS_TABLE_TAB_COLUMN_HEADERS = [
   'Release',
   'Commit',
   'Kind',
@@ -65,13 +65,13 @@ export const DOWNLOAD_TAB_COLUMN_HEADERS = [
   'Signature',
   'Checksum (MD5)'
 ];
-export const DOWNLOAD_OPENPGP_BUILD_HEADERS = [
+export const DOWNLOADS_OPENPGP_BUILD_HEADERS = [
   'Build Server',
   'Unique ID',
   'OpenPGP Key',
   'Fingerprint'
 ];
-export const DOWNLOAD_OPENPGP_DEVELOPER_HEADERS = [
+export const DOWNLOADS_OPENPGP_DEVELOPER_HEADERS = [
   'Developer',
   'Unique ID',
   'OpenPGP Key',
@@ -92,9 +92,11 @@ export const METADATA = {
 // GitHub urls
 export const LATEST_GETH_RELEASE_URL =
   'https://api.github.com/repos/ethereum/go-ethereum/releases/latest';
-export const ALL_GETH_RELEASES_URL = 'https://api.github.com/repos/ethereum/go-ethereum/releases';
 export const ALL_GETH_COMMITS_URL = 'https://api.github.com/repos/ethereum/go-ethereum/commits/';
+export const RELEASE_COMMIT_BASE_URL = 'https://github.com/ethereum/go-ethereum/tree/';
 
+// Binaries urls
+export const BINARIES_BASE_URL = 'https://gethstore.blob.core.windows.net/builds/';
 export const LINUX_BINARY_BASE_URL =
   'https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-';
 export const MACOS_BINARY_BASE_URL =
@@ -102,7 +104,37 @@ export const MACOS_BINARY_BASE_URL =
 export const WINDOWS_BINARY_BASE_URL =
   'https://gethstore.blob.core.windows.net/builds/geth-windows-amd64-';
 
+// Blobs urls
+// linux
+export const ALL_LINUX_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-linux';
+export const ALL_LINUX_ALLTOOLS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-linux';
+
+// macOS
+export const ALL_MACOS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-darwin';
+export const ALL_MACOS_ALLTOOLS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-darwin';
+
+// windows
+export const ALL_WINDOWS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-windows';
+export const ALL_WINDOWS_ALLTOOLS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-windows';
+
+// android
+export const ALL_ANDROID_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-android-all';
+
+// iOS
+export const ALL_IOS_GETH_RELEASES_URL =
+  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-ios-all';
+
+// Sources urls
 export const LATEST_SOURCES_BASE_URL = 'https://github.com/ethereum/go-ethereum/archive/';
+
+// Release notes urls
 export const RELEASE_NOTES_BASE_URL = 'https://github.com/ethereum/go-ethereum/releases/tag/';
 
 // Code snippet class constants
