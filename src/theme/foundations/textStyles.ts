@@ -10,7 +10,7 @@ export const textStyles = {
   h2: {
     fontFamily: 'heading',
     fontWeight: 400,
-    fontSize: '1.5rem',
+    fontSize: '1.75rem',
     lineHeight: 'normal',
     letterSpacing: '0.04em',
     color: 'body'
