@@ -89,7 +89,7 @@ eth.getBalance(personal.listAccounts[0])
 To send a transaction (without global account unlocking):
 
 ```js
-eth.sendTransaction({to: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.5, "ether")})
+eth.sendTransaction({ from: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.5, "ether")})
 ```
 
 It is also possible to load pre-written Javascript files into the console by passing the `--preload` flag
