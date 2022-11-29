@@ -375,7 +375,7 @@ func getStaticTrustedNodes(args []string) {
 			fmt.Println("only TOML config file is supported through CLI")
 		}
 	} else {
-		path := "~/.bor/data/bor/static-nodes.json"
+		path := "./static-nodes.json"
 		if !checkFileExists(path) {
 			return
 		}

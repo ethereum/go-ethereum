@@ -24,6 +24,14 @@ then
 fi
 read -p "* Your validator address (e.g. 0xca67a8D767e45056DC92384b488E9Af654d78DE2), or press Enter to skip if running a sentry node: " ADD
 
+if [[ -f $HOME/.bor/data/bor/static-nodes.json ]]
+then
+cp $HOME/.bor/data/bor/static-nodes.json ./static-nodes.json
+else
+read -p "* You dont have '~/.bor/data/bor/static-nodes.json' file. If you want to use static nodes, enter the path to 'static-nodes.json' here (press Enter to skip): " STAT
+if [[ -f $STAT ]]; then cp $STAT ./static-nodes.json; fi
+fi
+
 printf "\nThank you, your inputs are:\n"
 echo "Path to start.sh: "$startPath
 echo "Address: "$ADD
@@ -112,5 +120,10 @@ sed "s%bor --%go run getconfig.go ${confPath} --%" $startPath > $tmpDir/3305fe26
 chmod +x $tmpDir/3305fe263dd4a999d58f96deb064e21bb70123d9.sh
 $tmpDir/3305fe263dd4a999d58f96deb064e21bb70123d9.sh $ADD
 rm $tmpDir/3305fe263dd4a999d58f96deb064e21bb70123d9.sh
+
+if [[ -f $HOME/.bor/data/bor/static-nodes.json ]]
+then
+rm ./static-nodes.json
+fi
 
 exit 0
