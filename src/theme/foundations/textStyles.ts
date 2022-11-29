@@ -4,7 +4,7 @@ export const textStyles = {
     fontWeight: 700,
     fontSize: '2.75rem',
     lineHeight: '3.375rem',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.04em',
     color: 'body'
   },
   h2: {
@@ -47,20 +47,21 @@ export const textStyles = {
   header5: {
     fontFamily: 'heading',
     fontSize: '1rem',
-    letterSpacing: '0.02em',
+    letterSpacing: '0.04em',
     lineHeight: 'normal',
     color: 'body'
   },
   header6: {
     fontFamily: 'heading',
     fontSize: '0.875rem',
-    letterSpacing: '0.02em',
+    letterSpacing: '0.04em',
     lineHeight: 'normal',
     color: 'body'
   },
   'header-font': {
     fontFamily: 'heading',
     fontWeight: 700,
+    letterSpacing: '0.04em',
     fontSize: { base: '0.86rem', sm: '1rem' },
     color: 'body'
   },
