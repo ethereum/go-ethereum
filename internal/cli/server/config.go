@@ -435,11 +435,7 @@ func DefaultConfig() *Config {
 			NoLocals:     false,
 			Journal:      "transactions.rlp",
 			Rejournal:    1 * time.Hour,
-<<<<<<< HEAD
-			PriceLimit:   1,
-=======
 			PriceLimit:   1, // geth's default
->>>>>>> 3e7160997a79c890b1f271b2e1c03a0c2eeeb303
 			PriceBump:    10,
 			AccountSlots: 16,
 			GlobalSlots:  32768,
