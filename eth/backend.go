@@ -216,7 +216,11 @@ func New(ctx *node.ServiceContext, config *Config, XDCXServ *XDCx.XDCX, lendingS
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, ctx.GetConfig().AnnounceTxs)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	eth.ApiBackend = &EthApiBackend{eth, nil}
+	if eth.chainConfig.XDPoS != nil {
+		eth.ApiBackend = &EthApiBackend{eth, nil, eth.engine.(*XDPoS.XDPoS)}
+	} else {
+		eth.ApiBackend = &EthApiBackend{eth, nil, nil}
+	}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
