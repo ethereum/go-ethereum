@@ -26,10 +26,7 @@ import {
 const HomePage: NextPage = ({}) => {
   return (
     <>
-      <PageMetadata
-        title={METADATA.HOME_TITLE}
-        description={METADATA.HOME_DESCRIPTION}
-      />
+      <PageMetadata title={METADATA.HOME_TITLE} description={METADATA.HOME_DESCRIPTION} />
 
       <main>
         <Stack spacing={4}>
@@ -45,7 +42,7 @@ const HomePage: NextPage = ({}) => {
                 Svg={GopherHomeFront}
                 ariaLabel='Gopher greeting'
               >
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Geth (go-ethereum) is a{' '}
                   <Link href={GO_URL} isExternal variant='light'>
                     Go
@@ -57,13 +54,13 @@ const HomePage: NextPage = ({}) => {
                   - a gateway into the decentralized web.
                 </Text>
 
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Geth has been a core part of Etheruem since the very beginning. Geth was one of
                   the original Ethereum implementations making it the most battle-hardened and
                   tested client.
                 </Text>
 
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Geth is an Ethereum{' '}
                   <Text as='span' fontStyle='italic'>
                     execution client
@@ -76,7 +73,7 @@ const HomePage: NextPage = ({}) => {
                   .
                 </Text>
 
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Running Geth alongside a consensus client turns a computer into an Ethereum node.
                 </Text>
               </HomeSection>
@@ -85,7 +82,7 @@ const HomePage: NextPage = ({}) => {
             <GridItem>
               {/* SECTION: What is Ethereum (has different styles than the other sections so it uses a different component) */}
               <WhatIsEthereum>
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Ethereum is a technology for building apps and organizations, holding assets,
                   transacting and communicating without being controlled by a central authority. It
                   is the base of a new, decentralized internet.
@@ -96,13 +93,13 @@ const HomePage: NextPage = ({}) => {
             <GridItem>
               {/* SECTION: Why run a node (has different styles than the other sections so it uses a different component) */}
               <WhyRunANode>
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   Running your own node enables you to use Ethereum in a truly private,
                   self-sufficient and trustless manner. You don&apos;t need to trust information you
                   receive because you can verify the data yourself using your Geth instance.
                 </Text>
 
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px' fontWeight={700}>
+                <Text textStyle='quick-link-text' fontWeight={700}>
                   &ldquo;Don&apos;t trust, verify&rdquo;
                 </Text>
               </WhyRunANode>
@@ -117,7 +114,7 @@ const HomePage: NextPage = ({}) => {
                 linkLabel='Read our contribution guidelines'
                 buttonHref={CONTRIBUTING_PAGE}
               >
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   We welcome contributions from anyone on the internet, and are grateful for even
                   the smallest of fixes! If you&apos;d like to contribute to the Geth source code,
                   please fork the{' '}
@@ -137,7 +134,7 @@ const HomePage: NextPage = ({}) => {
                 linkLabel='Read more about the Ethereum Foundation'
                 buttonHref={ETHEREUM_FOUNDATION_URL}
               >
-                <Text fontFamily='"Inter", sans-serif' lineHeight='26px'>
+                <Text textStyle='quick-link-text'>
                   The Geth team comprises 10 developers distributed across the world. The Geth team
                   is funded exclusively by The Ethereum Foundation.
                 </Text>

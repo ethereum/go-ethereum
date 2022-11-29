@@ -54,11 +54,12 @@ export const DownloadsHero: FC<DownloadsHero> = ({
               fontFamily='"JetBrains Mono", monospace'
               lineHeight='21px'
               mb={{ base: '4 !important', md: '8 !important' }}
+              color='body'
             >
               {currentBuild}
             </Text>
 
-            <Text mb={4}>
+            <Text mb={4} color='body'>
               You can download the latest 64-bit stable release of Geth for our primary platforms
               below. Packages for all supported platforms, as well as develop builds, can be found
               further down the page. If you&apos;re looking to install Geth and/or associated tools
