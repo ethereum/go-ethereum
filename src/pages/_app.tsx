@@ -1,5 +1,6 @@
 import { ChakraProvider } from '@chakra-ui/react';
 import { AppProps } from 'next/app';
+import Head from 'next/head';
 
 import { Layout } from '../components/layouts';
 
@@ -15,6 +16,11 @@ export default function App({ Component, pageProps }: AppProps) {
     <ChakraProvider theme={theme}>
       <MDXProvider components={MDXComponents}>
         <Layout>
+          <Head>
+            <meta name='viewport' content='width=device-width, initial-scale=1' />
+            <link rel='icon' type='image/x-icon' href='/favicon.ico' />
+          </Head>
+
           <Component {...pageProps} />
         </Layout>
       </MDXProvider>

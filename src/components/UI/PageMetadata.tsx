@@ -43,7 +43,7 @@ export const PageMetadata: React.FC<Props> = ({ title, description, image }) => 
       <meta name='twitter:description' content={description} />
       {/* patch to force a cache invalidation of twitter's card bot */}
       <meta name='twitter:image' content={`${ogImage}/#`} />
-      <link rel='icon' href='/images/favicon.png' />
+      <link rel='icon' href='/favicon.ico' />
     </Head>
   );
 };
