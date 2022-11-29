@@ -43,7 +43,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	// TODO: pipe-down the HTTPWriteTimeout to here
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	response := h.Schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
