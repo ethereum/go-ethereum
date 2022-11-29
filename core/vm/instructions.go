@@ -413,16 +413,6 @@ func touchChunkOnReadAndChargeGas(chunks trie.ChunkedCode, offset uint64, evals 
 		panic("overflow when adding gas")
 	}
 
-	if len(code) > 0 {
-		if deployment {
-			accesses.SetLeafValue(index[:], nil)
-		} else {
-			if uint64(len(chunks)) >= (chunknr+1)*32 {
-				accesses.SetLeafValue(index[:], chunks[chunknr*32:(chunknr+1)*32])
-			}
-		}
-	}
-
 	return statelessGasCharged
 }
 
@@ -458,13 +448,6 @@ func touchEachChunksOnReadAndChargeGas(offset, size uint64, contract *Contract, 
 			statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, accesses.TouchAddressOnReadAndComputeGas(index))
 			if overflow {
 				panic("overflow when adding gas")
-			}
-			if len(code) > 0 {
-				if deployment {
-					accesses.SetLeafValue(index[:], nil)
-				} else {
-					accesses.SetLeafValue(index[:], contract.Chunks[32*i:(i+1)*32])
-				}
 			}
 
 			accesses.SetCachedCodeChunk(contract.Address().Bytes(), i)

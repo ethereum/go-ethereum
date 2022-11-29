@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/gballet/go-verkle"
 )
 
 // BlockGen creates blocks for testing.
@@ -297,23 +298,26 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 		panic(err)
 	}
 	if genesis.Config != nil && genesis.Config.IsCancun(genesis.ToBlock().Number()) {
-		blocks, receipts := GenerateVerkleChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
+		blocks, receipts, _, _ := GenerateVerkleChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 		return db, blocks, receipts
 	}
 	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(), engine, db, n, gen)
 	return db, blocks, receipts
 }
 
-func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, [][]byte, [][]verkle.KeyValuePair) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
+	proofs := make([][]byte, 0, n)
+	keyvals := make([][]verkle.KeyValuePair, 0, n)
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 		preState := statedb.Copy()
+		fmt.Println("prestate", preState.GetTrie().(*trie.VerkleTrie).ToDot())
 
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
@@ -358,28 +362,23 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			// building the proof. Ultimately, node
 			// resolution can be done with a prefetcher
 			// or from GetCommitmentsAlongPath.
-			kvs := statedb.Witness().KeyVals()
+			kvs := make(map[string][]byte)
 			keys := statedb.Witness().Keys()
 			for _, key := range keys {
-				_, err := vtr.TryGet(key)
+				v, err := vtr.TryGet(key)
 				if err != nil {
 					panic(err)
 				}
-
-				// Sanity check: ensure all flagged addresses have an associated
-				// value: keys is built from Chunks and kvs from InitialValue.
-				if _, exists := kvs[string(key)]; !exists {
-					panic(fmt.Sprintf("address not in access witness: %x", key))
-				}
-			}
-
-			// sanity check: ensure all values correspond to a flagged key by
-			// comparing the lengths of both structures: they should be equal
-			if len(kvs) != len(keys) {
-				panic("keys without a value in witness")
+				kvs[string(key)] = v
 			}
 
 			vtr.Hash()
+			p, k, err := vtr.ProveAndSerialize(statedb.Witness().Keys(), kvs)
+			if err != nil {
+				panic(err)
+			}
+			proofs = append(proofs, p)
+			keyvals = append(keyvals, k)
 			return block, b.receipts
 		}
 		return nil, nil
@@ -396,7 +395,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		parent = block
 		snaps = statedb.Snaps()
 	}
-	return blocks, receipts
+	return blocks, receipts, proofs, keyvals
 }
 
 func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {

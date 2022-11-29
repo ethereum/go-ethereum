@@ -18,7 +18,6 @@ package state
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
@@ -107,24 +106,6 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, data types.StateAccount) *stateObject {
-	if db.trie.IsVerkle() {
-		var nonce, balance, version []byte
-
-		// preserve nil as a balance value, it means it's not in the tree
-		// use is as a heuristic for the nonce being null as well
-		if data.Balance != nil {
-			nonce = make([]byte, 32)
-			balance = make([]byte, 32)
-			version = make([]byte, 32)
-			for i, b := range data.Balance.Bytes() {
-				balance[len(data.Balance.Bytes())-1-i] = b
-			}
-
-			binary.LittleEndian.PutUint64(nonce[:8], data.Nonce)
-		}
-		db.witness.SetGetObjectTouchedLeaves(address.Bytes(), version, balance[:], nonce[:], data.CodeHash)
-	}
-
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -270,20 +251,6 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 			s.setError(err)
 		}
 		value.SetBytes(content)
-	}
-
-	// Capture the initial value of the location in the verkle proof witness
-	if s.db.GetTrie().IsVerkle() {
-		if err != nil {
-			return common.Hash{}
-		}
-		loc := new(uint256.Int).SetBytes(key[:])
-		index := trieUtils.GetTreeKeyStorageSlotWithEvaluatedAddress(s.pointEval, loc)
-		if len(enc) > 0 {
-			s.db.Witness().SetLeafValue(index, value.Bytes())
-		} else {
-			s.db.Witness().SetLeafValue(index, nil)
-		}
 	}
 
 	s.originStorage[key] = value
@@ -525,20 +492,11 @@ func (s *stateObject) Code(db Database) []byte {
 		return s.code
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
-		if s.db.GetTrie().IsVerkle() {
-			// Mark the code size and code hash as empty
-			s.db.witness.SetObjectCodeTouchedLeaves(s.address.Bytes(), nil, nil)
-		}
 		return nil
 	}
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
-	}
-	if s.db.GetTrie().IsVerkle() {
-		var cs [32]byte
-		binary.LittleEndian.PutUint64(cs[:8], uint64(len(code)))
-		s.db.witness.SetObjectCodeTouchedLeaves(s.address.Bytes(), cs[:], s.CodeHash())
 	}
 	s.code = code
 	return code
@@ -553,19 +511,12 @@ func (s *stateObject) CodeSize(db Database) int {
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
 		if s.db.trie.IsVerkle() {
-			var sz [32]byte
-			s.db.witness.SetLeafValuesMessageCall(s.address.Bytes(), sz[:])
 		}
 		return 0
 	}
 	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
-	}
-	if s.db.trie.IsVerkle() {
-		var sz [32]byte
-		binary.LittleEndian.PutUint64(sz[:8], uint64(size))
-		s.db.witness.SetLeafValuesMessageCall(s.address.Bytes(), sz[:])
 	}
 	return size
 }

@@ -210,32 +210,32 @@ func TestGenesis_Commit(t *testing.T) {
 	}
 }
 
-func TestReadWriteGenesisAlloc(t *testing.T) {
-	var (
-		db    = rawdb.NewMemoryDatabase()
-		alloc = &GenesisAlloc{
-			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
-			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
-		}
-		hash, _ = alloc.deriveHash()
-	)
-	alloc.flush(db)
+// func TestReadWriteGenesisAlloc(t *testing.T) {
+// 	var (
+// 		db    = rawdb.NewMemoryDatabase()
+// 		alloc = &GenesisAlloc{
+// 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+// 			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
+// 		}
+// 		hash, _ = alloc.deriveHash()
+// 	)
+// 	alloc.flush(db)
 
-	var reload GenesisAlloc
-	err := reload.UnmarshalJSON(rawdb.ReadGenesisStateSpec(db, hash))
-	if err != nil {
-		t.Fatalf("Failed to load genesis state %v", err)
-	}
-	if len(reload) != len(*alloc) {
-		t.Fatal("Unexpected genesis allocation")
-	}
-	for addr, account := range reload {
-		want, ok := (*alloc)[addr]
-		if !ok {
-			t.Fatal("Account is not found")
-		}
-		if !reflect.DeepEqual(want, account) {
-			t.Fatal("Unexpected account")
-		}
-	}
-}
+// 	var reload GenesisAlloc
+// 	err := reload.UnmarshalJSON(rawdb.ReadGenesisStateSpec(db, hash))
+// 	if err != nil {
+// 		t.Fatalf("Failed to load genesis state %v", err)
+// 	}
+// 	if len(reload) != len(*alloc) {
+// 		t.Fatal("Unexpected genesis allocation")
+// 	}
+// 	for addr, account := range reload {
+// 		want, ok := (*alloc)[addr]
+// 		if !ok {
+// 			t.Fatal("Account is not found")
+// 		}
+// 		if !reflect.DeepEqual(want, account) {
+// 			t.Fatal("Unexpected account")
+// 		}
+// 	}
+// }

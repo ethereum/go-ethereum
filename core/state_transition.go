@@ -324,8 +324,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber) {
-		var originBalance, originNonceBytes []byte
-
 		targetAddr := msg.To()
 		originAddr := msg.From()
 
@@ -333,10 +331,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if !tryConsumeGas(&st.gas, statelessGasOrigin) {
 			return nil, fmt.Errorf("%w: Insufficient funds to cover witness access costs for transaction: have %d, want %d", ErrInsufficientBalanceWitness, st.gas, gas)
 		}
-		originBalance = st.evm.StateDB.GetBalanceLittleEndian(originAddr)
 		originNonce := st.evm.StateDB.GetNonce(originAddr)
-		originNonceBytes = st.evm.StateDB.GetNonceLittleEndian(originAddr)
-		st.evm.Accesses.SetTxOriginTouchedLeaves(originAddr.Bytes(), originBalance, originNonceBytes, st.evm.StateDB.GetCodeSize(originAddr))
 
 		if msg.To() != nil {
 			statelessGasDest := st.evm.Accesses.TouchTxExistingAndComputeGas(targetAddr.Bytes(), msg.Value().Sign() != 0)

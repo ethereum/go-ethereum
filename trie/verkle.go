@@ -143,10 +143,9 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		leaf := verkle.NewLeafNode(stem, values)
-		err = root.InsertStem(stem, leaf, flusher, true)
-		// case *verkle.StatelessNode:
-		// 	err = root.InsertAtStem(stem, values, flusher, true)
+		err = root.InsertStem(stem, values, flusher)
+	case *verkle.StatelessNode:
+		err = root.InsertAtStem(stem, values, flusher, true)
 	}
 	if err != nil {
 		return fmt.Errorf("TryUpdateAccount (%x) error: %v", key, err)
@@ -157,10 +156,18 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 }
 
 func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) {
-	leaf := verkle.NewLeafNode(key[:31], values)
-	trie.root.(*verkle.InternalNode).InsertStem(key, leaf, func(h []byte) ([]byte, error) {
-		return trie.db.diskdb.Get(h)
-	}, false /* catch a code overwrite */)
+	resolver :=
+		func(h []byte) ([]byte, error) {
+			return trie.db.diskdb.Get(h)
+		}
+	switch root := trie.root.(type) {
+	case *verkle.InternalNode:
+		root.InsertStem(key, values, resolver)
+	case *verkle.StatelessNode:
+		root.InsertAtStem(key, values, resolver, true)
+	default:
+		panic("invalid root type")
+	}
 }
 
 // TryUpdate associates key with value in the trie. If value has length zero, any
@@ -231,10 +238,16 @@ func nodeToDBKey(n verkle.VerkleNode) []byte {
 // and external (for account tries) references.
 func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *NodeSet, error) {
 	flush := make(chan verkle.VerkleNode)
+	resolver := func(n verkle.VerkleNode) {
+		flush <- n
+	}
 	go func() {
-		trie.root.(*verkle.InternalNode).Flush(func(n verkle.VerkleNode) {
-			flush <- n
-		})
+		switch root := trie.root.(type) {
+		case *verkle.InternalNode:
+			root.Flush(resolver)
+		case *verkle.StatelessNode:
+			root.Flush(resolver)
+		}
 		close(flush)
 	}()
 	var commitCount int
@@ -301,7 +314,9 @@ func addKey(s set, key []byte) {
 	s[string(key)] = struct{}{}
 }
 
-func DeserializeAndVerifyVerkleProof(serialized []byte, rootC *verkle.Point, keyvals []verkle.KeyValuePair) error {
+func DeserializeAndVerifyVerkleProof(serialized []byte, root []byte, keyvals []verkle.KeyValuePair) error {
+	rootC := new(verkle.Point)
+	rootC.SetBytesTrusted(root)
 	proof, cis, indices, yis, err := deserializeVerkleProof(serialized, rootC, keyvals)
 	if err != nil {
 		return fmt.Errorf("could not deserialize proof: %w", err)
