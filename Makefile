@@ -37,7 +37,7 @@ protoc:
 generate-mocks:
 	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
 	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
-	
+
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
@@ -196,7 +196,7 @@ geth-windows-amd64:
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
 
 PACKAGE_NAME          := github.com/maticnetwork/bor
-GOLANG_CROSS_VERSION  ?= v1.18.1
+GOLANG_CROSS_VERSION  ?= v1.19.1
 
 .PHONY: release-dry-run
 release-dry-run:
