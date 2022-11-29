@@ -362,8 +362,8 @@ func validateRequest(r *http.Request) (int, error) {
 	return http.StatusUnsupportedMediaType, err
 }
 
-// getContextRequestTimeout returns the request timeout derived from the given context.
-func getContextRequestTimeout(ctx context.Context) (time.Duration, bool) {
+// GetContextRequestTimeout returns the request timeout derived from the given context.
+func GetContextRequestTimeout(ctx context.Context) (time.Duration, bool) {
 	timeout := time.Duration(math.MaxInt64)
 	hasTimeout := false
 	setTimeout := func(d time.Duration) {
