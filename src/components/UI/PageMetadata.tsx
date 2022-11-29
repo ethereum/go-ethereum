@@ -13,7 +13,7 @@ export const PageMetadata: React.FC<Props> = ({ title, description, image }) => 
   const router = useRouter();
   const url = `${SITE_URL}${router.asPath}`;
   const fullTitle = `${title} | ${SITE_NAME}`;
-  const defaultOgImage = `${SITE_URL}/images/pages/gopher-downloads-front-light.svg`; // TODO: update with right image
+  const defaultOgImage = `${SITE_URL}/images/metadata-gopher.png`;
   const ogImage = !image ? defaultOgImage : `${SITE_URL}${image}`;
 
   return (
