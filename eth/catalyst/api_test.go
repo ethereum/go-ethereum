@@ -90,7 +90,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
 	ethservice.TxPool().AddLocal(tx)
-	blockParams := beacon.PayloadAttributesV1{
+	blockParams := beacon.PayloadAttributes{
 		Timestamp: blocks[9].Time() + 5,
 	}
 	// The miner needs to pick up on the txs in the pool, so a few retries might be
@@ -102,7 +102,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 
 // assembleWithTransactions tries to assemble a block, retrying until it has 'want',
 // number of transactions in it, or it has retried three times.
-func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1, want int) (execData *beacon.ExecutableDataV1, err error) {
+func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributes, want int) (execData *beacon.ExecutableData, err error) {
 	for retries := 3; retries > 0; retries-- {
 		execData, err = assembleBlock(api, parentHash, params)
 		if err != nil {
@@ -126,7 +126,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	api.eth.TxPool().AddRemotesSync(blocks[9].Transactions())
-	blockParams := beacon.PayloadAttributesV1{
+	blockParams := beacon.PayloadAttributes{
 		Timestamp: blocks[8].Time() + 5,
 	}
 	// The miner needs to pick up on the txs in the pool, so a few retries might be
@@ -165,7 +165,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	ethservice.TxPool().AddLocals(blocks[9].Transactions())
-	blockParams := beacon.PayloadAttributesV1{
+	blockParams := beacon.PayloadAttributes{
 		Timestamp: blocks[8].Time() + 5,
 	}
 	fcState := beacon.ForkchoiceStateV1{
@@ -244,7 +244,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("Timestamp test: %v", i), func(t *testing.T) {
-			params := beacon.PayloadAttributesV1{
+			params := beacon.PayloadAttributes{
 				Timestamp:             test.time,
 				Random:                crypto.Keccak256Hash([]byte{byte(123)}),
 				SuggestedFeeRecipient: parent.Coinbase(),
@@ -288,7 +288,7 @@ func TestEth2NewBlock(t *testing.T) {
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		ethservice.TxPool().AddLocal(tx)
 
-		execData, err := assembleWithTransactions(api, parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleWithTransactions(api, parent.Hash(), &beacon.PayloadAttributes{
 			Timestamp: parent.Time() + 5,
 		}, 1)
 		if err != nil {
@@ -330,7 +330,7 @@ func TestEth2NewBlock(t *testing.T) {
 	)
 	parent = preMergeBlocks[len(preMergeBlocks)-1]
 	for i := 0; i < 10; i++ {
-		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributes{
 			Timestamp: parent.Time() + 6,
 		})
 		if err != nil {
@@ -577,7 +577,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 		})
 		ethservice.TxPool().AddRemotesSync([]*types.Transaction{tx})
 		var (
-			params = beacon.PayloadAttributesV1{
+			params = beacon.PayloadAttributes{
 				Timestamp:             parent.Time() + 1,
 				Random:                crypto.Keccak256Hash([]byte{byte(i)}),
 				SuggestedFeeRecipient: parent.Coinbase(),
@@ -587,7 +587,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				SafeBlockHash:      common.Hash{},
 				FinalizedBlockHash: common.Hash{},
 			}
-			payload *beacon.ExecutableDataV1
+			payload *beacon.ExecutableData
 			resp    beacon.ForkChoiceResponse
 			err     error
 		)
@@ -634,7 +634,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 	}
 }
 
-func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributesV1) (*beacon.ExecutableDataV1, error) {
+func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.PayloadAttributes) (*beacon.ExecutableData, error) {
 	args := &miner.BuildPayloadArgs{
 		Parent:       parentHash,
 		Timestamp:    params.Timestamp,
@@ -708,8 +708,8 @@ func TestEmptyBlocks(t *testing.T) {
 	}
 }
 
-func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *beacon.ExecutableDataV1 {
-	params := beacon.PayloadAttributesV1{
+func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *beacon.ExecutableData {
+	params := beacon.PayloadAttributes{
 		Timestamp:             parent.Time() + 1,
 		Random:                crypto.Keccak256Hash([]byte{byte(1)}),
 		SuggestedFeeRecipient: parent.Coinbase(),
@@ -724,7 +724,7 @@ func getNewPayload(t *testing.T, api *ConsensusAPI, parent *types.Block) *beacon
 
 // setBlockhash sets the blockhash of a modified ExecutableData.
 // Can be used to make modified payloads look valid.
-func setBlockhash(data *beacon.ExecutableDataV1) *beacon.ExecutableDataV1 {
+func setBlockhash(data *beacon.ExecutableData) *beacon.ExecutableData {
 	txs, _ := decodeTransactions(data.Transactions)
 	number := big.NewInt(0)
 	number.SetUint64(data.Number)
@@ -784,7 +784,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 	setupBlocks(t, ethserviceA, 10, commonAncestor, func(parent *types.Block) {})
 	commonAncestor = ethserviceA.BlockChain().CurrentBlock()
 
-	var invalidChain []*beacon.ExecutableDataV1
+	var invalidChain []*beacon.ExecutableData
 	// create a valid payload (P1)
 	//payload1 := getNewPayload(t, apiA, commonAncestor)
 	//invalidChain = append(invalidChain, payload1)
@@ -911,7 +911,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 	)
 	for i := 0; i < 10; i++ {
-		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributesV1{
+		execData, err := assembleBlock(api, parent.Hash(), &beacon.PayloadAttributes{
 			Timestamp: parent.Time() + 5,
 		})
 		if err != nil {
