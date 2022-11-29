@@ -153,7 +153,7 @@ type Storage struct {
 an Ethereum testnet and interact with it using the Go bindings.
 
 ### Deploying contracts to Ethereum {#deploying-contracts}
- 
+
 In the previous section, the contract ABI was sufficient for generating the contract bindings from its ABI. However, deploying the contract requires some additional information in the form of the compiled bytecode.
 
 The bytecode is obtained by running the compiler again but this passing the `--bin` flag, e.g.

@@ -13,15 +13,15 @@ Filters are Javascript functions that select information from the trace to persi
 
 ```js
 tracer = function (tx) {
-    return debug.traceTransaction(tx, {
+  return debug.traceTransaction(tx, {
     tracer:
-        '{' +
-        'retVal: [],' +
-        'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
-        'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
-        'result: function(ctx,db) {return this.retVal}' +
-        '}'
-    }); // return debug.traceTransaction ...
+      '{' +
+      'retVal: [],' +
+      'step: function(log,db) {this.retVal.push(log.getPC() + ":" + log.op.toString())},' +
+      'fault: function(log,db) {this.retVal.push("FAULT: " + JSON.stringify(log))},' +
+      'result: function(ctx,db) {return this.retVal}' +
+      '}'
+  }); // return debug.traceTransaction ...
 }; // tracer = function ...
 ```
 
@@ -71,7 +71,7 @@ This object has three member functions:
 
 - `step`, called for each opcode.
 - `fault`, called if there is a problem in the execution.
-- `result`, called to produce the results that are returned by `debug.traceTransaction` 
+- `result`, called to produce the results that are returned by `debug.traceTransaction`
 - after the execution is done.
 
 In this case, `retVal` is used to store the list of strings to return in `result`.

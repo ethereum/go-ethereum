@@ -18,11 +18,7 @@ export const QuickLinks: FC = () => {
         sx={{ mt: '0 !important' }}
       >
         {/* get started */}
-        <GridItem
-          borderRight='2px solid'
-          borderBottom='2px solid'
-          borderColor='primary'
-        >
+        <GridItem borderRight='2px solid' borderBottom='2px solid' borderColor='primary'>
           <Stack p={4} h='100%'>
             <Text textStyle='quick-link-text' mb={-1}>
               Don&apos;t know where to start?
@@ -60,11 +56,7 @@ export const QuickLinks: FC = () => {
         </GridItem>
 
         {/* faq */}
-        <GridItem
-          borderRight='2px solid'
-          borderBottom='2px solid'
-          borderColor='primary'
-        >
+        <GridItem borderRight='2px solid' borderBottom='2px solid' borderColor='primary'>
           <Stack p={4} h='100%'>
             <Text textStyle='quick-link-text' mb={-1}>
               Have doubts?

@@ -3,7 +3,7 @@ title: Getting started with Geth
 description: Guide to getting up and running with Geth using Clef.
 ---
 
-This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](/docs/getting_started/Installing-Geth) pages. 
+This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](/docs/getting_started/Installing-Geth) pages.
 
 Geth also needs to be connected to a [consensus client](docs/getting-started/consensus-clients.md) in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/docs/fundamentals/security).
 
@@ -156,6 +156,7 @@ This message will be displayed periodically until state healing has finished:
 ```
 INFO [10-20|20:20:09.510] State heal in progress                   accounts=313,309@17.95MiB slots=363,525@28.77MiB codes=7222@50.73MiB nodes=49,616,912@12.67GiB pending=29805
 ```
+
 When state healing is finished, the node is in sync and ready to use.
 
 Sending an empty Curl request to the http server provides a quick way to confirm that this too has been started without any issues. In a third terminal, the following command can be run:
@@ -165,7 +166,6 @@ curl http://localhost:8545
 ```
 
 If there is no error message reported to the terminal, everything is OK. Geth must be running and synced in order for a user to interact with the Ethereum network. If the terminal running Geth is closed down then Geth must be restarted again in a new terminal. Geth can be started and stopped easily, but it must be running for any interaction with Ethereum to take place. To shut down Geth, simply press `CTRL+C` in the Geth terminal. To start it again, run the previous command `geth --datadir <other commands>`.
-
 
 ## Step 4: Get Testnet Ether {#get-test-eth}
 

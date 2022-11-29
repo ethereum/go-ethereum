@@ -3,8 +3,7 @@ title: Built-in tracers
 description: Explanation of the tracers that come bundled in Geth as part of the tracing API.
 ---
 
-Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call. 
-
+Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call.
 
 ## Struct/opcode logger {#struct-opcode-logger}
 
@@ -86,7 +85,7 @@ Return:
          }
       },
 
-      ... 
+      ...
 
 ```
 
@@ -94,10 +93,9 @@ Return:
 
 The following tracers are implement in Go. This means they are much more performant than other tracers that are written in Javascript. The tracers are selected by passing their name to the `tracer` parameter when invoking a tracing API method, e.g. `debug.traceTransaction(<txhash>, { tracer: 'callTracer' })`.
 
-
 ### 4byteTracer {#4byte-tracer}
 
-Solidity contract functions are 
+Solidity contract functions are
 [addressed](https://docs.soliditylang.org/en/develop/abi-spec.html#function-selector) using the first four four byte of the Keccak-256 hash of their signature. Therefore when calling the function of a contract, the caller must send this function selector as well as the ABI-encoded arguments as call data.
 
 The `4byteTracer` collects the function selectors of every function executed in the lifetime of a transaction, along with the size of the supplied call data. The result is a `map[string]int` where the keys are `SELECTOR-CALLDATASIZE` and the values are number of occurances of this key. For example:
@@ -137,7 +135,6 @@ The `callTracer` tracks all the call frames executed during a transaction, inclu
 | error        | string      | error, if any                        |
 | revertReason | string      | Solidity revert reason, if any       |
 | calls        | []callframe | list of sub-calls                    |
-
 
 Example Call:
 
@@ -211,7 +208,15 @@ To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the 
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'prestateTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'prestateTracer' }
+);
 ```
 
 Return:
@@ -264,7 +269,6 @@ Return (same call with `{diffMode: True}`):
 
 This tracer is noop. It returns an empty object and is only meant for testing the setup.
 
-
 ## Javascript tracers {#js-tracers}
 
 There are also a set of tracers written in Javascript. These are less performant than the Go native tracers because of overheads associated with interpreting the Javascript in Geth's Go environment.
@@ -276,7 +280,15 @@ There are also a set of tracers written in Javascript. These are less performant
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'bigramTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'bigramTracer' }
+);
 ```
 
 Returns:
@@ -370,7 +382,15 @@ Returns:
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'opcountTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'opcountTracer' }
+);
 ```
 
 Returns:
@@ -386,10 +406,19 @@ Returns:
 Example:
 
 ```js
-debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'trigramTracer'})
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'trigramTracer' }
+);
 ```
 
 Returns:
+
 ```terminal
 {
   --PUSH1: 1,
@@ -414,17 +443,18 @@ Returns:
 }
 ```
 
-
 ### unigram {#unigram}
 
 `unigramTracer` counts the frequency of occurrance of each opcode.
 
 Example:
+
 ```js
 > debug.traceCall({from: "0x35a9f94af726f07b5162df7e828cc9dc8439e7d0", to: "0xc8ba32cab1757528daf49033e3673fae77dcf05d", data: "0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000"}, 'latest', {tracer: 'unigramTracer'})
 ```
 
 Returns:
+
 ```terminal
 {
   ADD: 36,
@@ -447,9 +477,9 @@ Returns:
 
 ## State overrides {#state-overrides}
 
-It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address *temporarily just for the duration of the execution* and then a transaction interacting with that address canm be traced.  This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
+It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call`. For example, some new byetcode could be deployed to some address _temporarily just for the duration of the execution_ and then a transaction interacting with that address canm be traced. This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
 
-To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode. 
+To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode.
 
 ```js
 var code = //contract bytecode
