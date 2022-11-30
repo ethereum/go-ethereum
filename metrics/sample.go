@@ -33,9 +33,7 @@ type Sample interface {
 }
 
 func NewBoundedHistogramSample() Sample {
-	return ResettingSample(
-		NewExpDecaySample(1028, 0.015),
-	)
+	return NewSlidingTimeWindowArraySample(time.Minute * 1)
 }
 
 // ExpDecaySample is an exponentially-decaying sample using a forward-decaying
