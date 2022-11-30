@@ -541,7 +541,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 // SupportsSubscriptions reports whether subscriptions are supported by the client
 // transport. When this returns false, Subscribe and related methods will return
 // ErrNotificationsUnsupported.
-func (c *Client) SupportsSubscription() bool {
+func (c *Client) SupportsSubscriptions() bool {
 	return !c.isHTTP
 }
 
