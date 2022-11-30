@@ -1,4 +1,4 @@
-import { Center, Code, Flex, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
+import { Code, Flex, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
 import type { GetStaticProps, NextPage } from 'next';
 import { useState } from 'react';
 import { XMLParser } from 'fast-xml-parser';
@@ -18,11 +18,10 @@ import {
   GETH_REPO_URL,
   METADATA,
   LATEST_SOURCES_BASE_URL,
-  RELEASE_NOTES_BASE_URL
+  RELEASE_NOTES_BASE_URL,
+  DOWNLOADS_OPENPGP_SIGNATURES,
+  DOWNLOADS_DEVELOPERS_DATA
 } from '../constants';
-
-import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
-import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
 import {
   fetchLatestReleaseCommit,
@@ -483,16 +482,17 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             }
             sectionTitle='OpenPGP Signatures'
           >
-            {/* TODO: swap for real data */}
             <Stack borderBottom='2px solid' borderColor='primary'>
-              <DataTable columnHeaders={DOWNLOADS_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
+              <DataTable
+                columnHeaders={DOWNLOADS_OPENPGP_BUILD_HEADERS}
+                data={DOWNLOADS_OPENPGP_SIGNATURES}
+              />
             </Stack>
 
-            {/* TODO: swap for real data */}
             <Stack>
               <DataTable
                 columnHeaders={DOWNLOADS_OPENPGP_DEVELOPER_HEADERS}
-                data={pgpDeveloperTestData}
+                data={DOWNLOADS_DEVELOPERS_DATA}
               />
             </Stack>
           </DownloadsSection>
@@ -512,9 +512,10 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'}>
-                {/* TODO: These keys depends on the binary */}
-                <Code p={4}>gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC</Code>
+              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+                <Code p={4} bg='code-bg'>
+                  gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC
+                </Code>
               </Stack>
             </Flex>
 
@@ -532,9 +533,10 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'}>
-                {/* TODO: These are developer keys, do we need to change? */}
-                <Code p={4}>gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2</Code>
+              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+                <Code p={4} bg='code-bg'>
+                  gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2
+                </Code>
               </Stack>
             </Flex>
 
@@ -554,8 +556,9 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               </Stack>
 
               <Stack flex={1} w={'100%'}>
-                {/* TODO: These keys depends on the binary */}
-                <Code p={4}>gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc</Code>
+                <Code p={4} bg='code-bg'>
+                  gpg --verify geth-linux-amd64-1.5.0-d0c820ac.tar.gz.asc
+                </Code>
               </Stack>
             </Flex>
           </DownloadsSection>

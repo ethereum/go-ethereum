@@ -31,7 +31,7 @@ const overrides = {
       secondary: { _light: 'green.800', _dark: 'green.600' },
       'button-bg': { _light: 'green.50', _dark: 'green.900' },
       body: { _light: 'gray.800', _dark: 'yellow.50' },
-      'code-bg': { _light: 'gray.200', _dark: 'gray.700' },
+      'code-bg': { _light: 'gray.200', _dark: 'gray.900' },
       'terminal-bg': { _light: 'gray.800', _dark: 'gray.900' },
       'terminal-text': { _light: 'green.50', _dark: 'green.200' },
       bg: { _light: 'yellow.50', _dark: 'gray.800' }
