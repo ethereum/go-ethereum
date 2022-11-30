@@ -160,8 +160,12 @@ svg[aria-label="Algolia"] * {
   /* Mobile modal styling */
   .DocSearch-Container, .DocSearch-Modal {
     position: fixed;
-    inset: 1rem 1.875rem;
-    max-width: calc(100vw - 3.75rem);
+    inset: 1rem;
+    max-width: calc(100vw - 2rem);
     max-height: calc(100vh - 2rem);
+  }
+
+  .DocSearch-Cancel {
+    color: var(--chakra-colors-primary);
   }  
 }
