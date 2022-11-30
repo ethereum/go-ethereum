@@ -17,7 +17,7 @@ For this two-client structure to work, consensus clients must be able to pass bu
 
 As an execution client, Geth is responsible for creating the execution payloads - the list of transactions, updated state trie plus other execution related data - that consensus clients include in their blocks. Geth is also responsible for re-executing transactions that arrive in new blocks to ensure they are valid. Executing transactions is done on Geth's embedded computer, known as the Ethereum Virtual Machine (EVM).
 
-Geth also offers a user-interface to Ethereum by exposing a set of [RPC methods](/developers/docs/apis/json-rpc) that enable users to query the Ethereum blockchain, submit transactions and deploy smart contracts. Often, the RPC calls are abstracted by a library such as [Web3js](https://web3js.readthedocs.io/en/v1.8.0/) or [Web3py](https://web3py.readthedocs.io/en/v5/) for example in Geth's built-in Javascript console, development frameworks or web-apps.
+Geth also offers a user-interface to Ethereum by exposing a set of [RPC methods](/docs/interacting-with-geth/rpc/) that enable users to query the Ethereum blockchain, submit transactions and deploy smart contracts. Often, the RPC calls are abstracted by a library such as [Web3js](https://web3js.readthedocs.io/en/v1.8.0/) or [Web3py](https://web3py.readthedocs.io/en/v5/) for example in Geth's built-in Javascript console, development frameworks or web-apps.
 
 ## What does the consensus client do? {#consensus-client}
 

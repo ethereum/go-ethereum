@@ -148,7 +148,7 @@ Puppeth will display the details of each node in a table in the terminal.
 
 ### Explorer {#explorer}
 
-For proof-of-work networks a block explorer akin to [etherscan](etherscan.io) can be created using the Puppeth wizard.
+For proof-of-work networks a block explorer akin to [etherscan](https://etherscan.io/) can be created using the Puppeth wizard.
 
 ### Faucet {#faucet}
 

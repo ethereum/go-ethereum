@@ -128,7 +128,7 @@ INFO [07-28|10:30:18.658] Imported new block headers               count=1    el
 INFO [07-28|10:30:21.665] Imported new state entries
 ```
 
-For state sync, Geth reports when the state heal is in progress. This can takea long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
+For state sync, Geth reports when the state heal is in progress. This can take a long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
 
 ```terminal
 INFO [07-28|10:30:21.965] State heal in progress                   accounts=169,633@7.48MiB  slots=57314@4.17MiB    codes=4895@38.14MiB nodes=43,293,196@11.70GiB pending=112,626
@@ -198,7 +198,7 @@ The above is often seen and misinterpreted as a problem with snap sync. In reali
 WARN [10-03|13:10:26.441] Post-merge network, but no beacon client seen. Please launch one to follow the chain!
 ```
 
-The above message is emitted when Geth is run without a consensus client on a post-merge proof-of-stake network. Since Ethereum moved to proof-of-stake Geth alone is not enough to follow the chain because the consensus logic is now implemented by a separate piece of software called a consensus client. This log message is displayed when the consensus client is missing. Read more about this on our [consensus clients](/docs/interface/consensus-clients) page.
+The above message is emitted when Geth is run without a consensus client on a post-merge proof-of-stake network. Since Ethereum moved to proof-of-stake Geth alone is not enough to follow the chain because the consensus logic is now implemented by a separate piece of software called a consensus client. This log message is displayed when the consensus client is missing. Read more about this on our [consensus clients](/docs/getting-started/consensus-clients) page.
 
 ```sh
 WARN [10-03 |13:10:26.499] Beacon client online, but never received consensus updates. Please ensure your beacon client is operational to follow the chain!

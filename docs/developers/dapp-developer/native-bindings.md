@@ -193,7 +193,8 @@ View the full file [here](https://gist.github.com/jmcook1186/91124cfcbc7f22dcd3b
 
 The new `DeployStorage()` function can be used to deploy the contract to an Ethereum testnet from a Go application. To do this requires incorporating the bindings into a Go application that also handles account management, authorization and Ethereum backend to deploy the contract through. Specifically, this requires:
 
-1. A running Geth node connected to an Ethereum testnet (recommended Goerli)
+1. A running Geth node connected to an Ethereum testnet
+
 2. An account in the keystore prefunded with enough ETH to cover gas costs for deploying and interacting with the contract
 
 Assuming these prerequisites exist, a new `ethclient` can be instantiated with the local Geth node's ipc file, providing access to the testnet from the Go application. The key can be instantiated as a variable in the application by copying the JSON object from the keyfile in the keystore.

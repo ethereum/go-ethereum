@@ -41,4 +41,4 @@ In this case there's no dependency between the requests. Often the retrieved dat
 - First to download the list of transaction hashes for all of the blocks in our desired range
 - And then to download the list of receipts objects for all of the transaction hashes
 
-For use-cases which depend on several JSON-RPC endpoints the batching approach can get easily complicated. In that case Geth offers a [GraphQL API](./graphql) which is more suitable.
+For use-cases which depend on several JSON-RPC endpoints the batching approach can get easily complicated. In that case Geth offers a [GraphQL API](/docs/interacting-with-geth/rpc/graphql) which is more suitable.

@@ -39,7 +39,7 @@ All the Geth packages can be downloaded using:
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
-More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/developers/dapp-developer/native-bindings) and [Go Account Management](/docs/dapp/native-accounts) pages.
+More Go API support for dapp developers can be found on the [Go Contract Bindings](/docs/developers/dapp-developer/native-bindings) and [Go Account Management](/docs/developers/dapp-developer/native-accounts) pages.
 
 ## Tutorial {#tutorial}
 

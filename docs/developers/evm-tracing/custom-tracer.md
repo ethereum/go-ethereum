@@ -9,7 +9,7 @@ In addition to the default opcode tracer and the built-in tracers, Geth offers t
 
 Custom tracers can also be made more performant by writing them in Go. The gain in performance mostly comes from the fact that Geth doesn't need to interpret JS code and can execute native functions. Geth comes with several built-in [native tracers](https://github.com/ethereum/go-ethereum/tree/master/eth/tracers/native) which can serve as examples. Please note that unlike JS tracers, Go tracing scripts cannot be simply passed as an argument to the API. They will need to be added to and compiled with the rest of the Geth source code.
 
-In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](/content/docs/getting_started/Installing-Geth.md) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
+In this section a simple native tracer that counts the number of opcodes will be covered. First follow the instructions to [clone and build](/docs/getting-started/installing-geth) Geth from source code. Next save the following snippet as a `.go` file and add it to `eth/tracers/native`:
 
 ```go
 package native
@@ -113,7 +113,7 @@ To test out this tracer the source is first compiled with `make geth`. Then in t
 
 Transaction traces include the complete status of the EVM at every point during the transaction execution, which can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace filters are available to isolate the useful information.
 
-Specifying the `tracer` option in one of the tracing methods (see list in [reference](/docs/rpc/ns-debug)) enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
+Specifying the `tracer` option in one of the tracing methods (see list in [reference](/docs/interacting-with-geth/rpc/ns-debug)) enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
 
 ### Setup
 
@@ -266,11 +266,7 @@ debug.traceTransaction(txhash, {
 
 ## Other traces
 
-This tutorial has focused on `debug_traceTransaction()` which reports information
-about individual transactions. There are also RPC endpoints that provide different
-information, including tracing the EVM execution within a block, between two blocks,
-for specific `eth_call`s or rejected blocks. The full list of trace functions can
-be explored in the [reference documentation](/content/docs/interacting_with_geth/RPC/ns-debug.md).
+This tutorial has focused on `debug_traceTransaction()` which reports information about individual transactions. There are also RPC endpoints that provide different information, including tracing the EVM execution within a block, between two blocks, for specific `eth_call`s or rejected blocks. The full list of trace functions can be explored in the [reference documentation](/docs/interacting-with-geth/rpc/ns-debug).
 
 ## Summary
 

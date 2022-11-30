@@ -199,7 +199,7 @@ Retrieves and returns the RLP encoded block by number.
 | Console | `debug.getBlockRlp(number, [options])`                |
 | RPC     | `{"method": "debug_getBlockRlp", "params": [number]}` |
 
-References: [RLP](https://github.com/ethereum/wiki/wiki/RLP)
+References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
 ### debug_getHeaderRlp
 
@@ -334,7 +334,7 @@ Sets the current head of the local chain by block number. **Note**, this is a de
 | RPC     | `{"method": "debug_setHead", "params": [number]}` |
 
 References:
-[Ethash](https://eth.wiki/en/concepts/ethash/ethash)
+[Ethash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash/)
 
 ### debug_setMutexProfileFraction
 
@@ -475,7 +475,7 @@ The `traceBlock` method will return a full stack trace of all invoked opcodes of
 | RPC     | `{"method": "debug_traceBlock", "params": [blockRlp, {}]}`                |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
 #### Example
 
@@ -524,7 +524,7 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByNumber` accepts a
 | RPC     | `{"method": "debug_traceBlockByNumber", "params": [number, {}]}`                |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
 ### debug_traceBlockByHash
 
@@ -537,7 +537,7 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockByHash` accepts a b
 | RPC     | `{"method": "debug_traceBlockByHash", "params": [hash {}]}`                      |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
 ### debug_traceBlockFromFile
 
@@ -550,11 +550,11 @@ Similar to [debug_traceBlock](#debug_traceblock), `traceBlockFromFile` accepts a
 | RPC     | `{"method": "debug_traceBlockFromFile", "params": [fileName, {}]}`                |
 
 References:
-[RLP](https://github.com/ethereum/wiki/wiki/RLP)
+[RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
 ### debug_traceCall
 
-The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceConfig](#traceconfig). The method returns the same output as `debug_traceTransaction`.
+The `debug_traceCall` method lets you run an `eth_call` within the context of the given block execution using the final state of parent block as the base. The first argument (just as in `eth_call`) is a [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object). The block can be specified either by hash or by number as the second argument. The trace can be configured similar to `debug_traceTransaction`, see [TraceConfig](#traceconfig). The method returns the same output as `debug_traceTransaction`.
 
 | Client  | Method invocation                                                                                                           |
 | :-----: | --------------------------------------------------------------------------------------------------------------------------- |
@@ -638,7 +638,7 @@ Returns the structured logs created during the execution of EVM between two bloc
 const res = provider.send('debug_subscribe', ['traceChain', '0x3f3a2a', '0x3f3a2b'])`
 ```
 
-please refer to the [subscription page](https://geth.ethereum.org/docs/rpc/pubsub) for more details.
+please refer to the [subscription page](/docs/interacting-with-geth/rpc/pubsub) for more details.
 
 ### debug_traceTransaction
 
@@ -667,9 +667,9 @@ If set, the previous four arguments will be ignored.
 
 - `timeout`: `STRING`. Overrides the default timeout of 5 seconds for JavaScript-based tracing calls.
   Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
-- `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/evm-tracing/builtin-tracers#config).
+- `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/developers/evm-tracing/built-in-tracers#config).
 
-Geth comes with a bundle of [built-in tracers](/docs/evm-tracing/builtin-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/evm-tracing/builtin-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
+Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing//built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
 
 #### Example
 

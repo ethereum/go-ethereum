@@ -13,9 +13,13 @@ To prune a Geth node at least 40 GB of free disk space is recommended. This mean
 ## Pruning rules {#pruning-rules}
 
 1. Do not try to prune an archive node. Archive nodes need to maintain ALL historic data by definition.
+   
 2. Ensure there is at least 40 GB of storage space still available on the disk that will be pruned. Failures have been reported with ~25GB of free space.
+   
 3. Geth is at least `v1.10` ideally > `v1.10.3`
+   
 4. Geth is fully sync'd
+   
 5. Geth has finished creating a snapshot that is at least 128 blocks old. This is true when "state snapshot generation" is no longer reported in the logs.
 
 With these rules satisfied, Geth's database can be pruned.

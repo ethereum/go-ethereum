@@ -3,7 +3,7 @@ title: Account Management with Clef
 description: Guide to basic account management using Geth's built-in tools
 ---
 
-Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
+Geth uses an external signer called [Clef](/docs/tools/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
 ## Initialize Clef {#initializing-clef}
 

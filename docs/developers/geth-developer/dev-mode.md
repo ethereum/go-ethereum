@@ -6,17 +6,22 @@ description: Instructions for setting up Geth in developer mode
 It is often convenient for developers to work in an environment where changes to client or application software can be deployed and tested rapidly and without putting real-world users or assets at risk. For this purpose, Geth has a `--dev` flag that spins up Geth in "developer mode". This creates a single-node Ethereum test network with no connections to any external peers. It exists solely on the local machine. Starting Geth in developer mode does the following:
 
 - Initializes the data directory with a testing genesis block
+  
 - Sets max peers to 0 (meaning Geth does not search for peers)
+  
 - Turns off discovery by other nodes (meaning the node is invisible to other nodes)
+  
 - Sets the gas price to 0 (no cost to send transactions)
+  
 - Uses the Clique proof-of-authority consensus engine which allows blocks to be mined as-needed without excessive CPU and memory consumption
+  
 - Uses on-demand block generation, producing blocks when transactions are waiting to be mined
 
 This configuration enables developers to experiment with Geth's source code or develop new applications without having to sync to a pre-existing public network. Blocks are only mined when there are pending transactions. Developers can break things on this network without affecting other users. This page will demonstrate how to spin up a local Geth testnet and a simple smart contract will be deployed to it using the Remix online integrated development environment (IDE).
 
 ## Prerequisites {#prerequisites}
 
-It is assumed that the user has a working Geth installation (see [installation guide](/docs/install-and-build/installing-geth)).
+It is assumed that the user has a working Geth installation (see [installation guide](/docs/getting-started/installing-geth)).
 It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/getting-started).
 Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart contract deployment](https://ethereum.org/en/developers/tutorials/deploying-your-first-smart-contract/) would be useful.
 
@@ -170,7 +175,7 @@ Now that the user account is funded with ether, a contract can be created ready 
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
 
-```solidity
+```javascript
 pragma solidity >=0.7.0;
 
 contract Storage{
