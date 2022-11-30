@@ -42,7 +42,7 @@ export const Header: FC = () => {
         </Stack>
 
         {/* SEARCH */}
-        <Stack display={{ base: 'none', md: 'block' }}>
+        <Stack display={{ base: 'none', md: 'block' }} borderRight='2px' borderColor='primary'>
           <Search />
         </Stack>
 
