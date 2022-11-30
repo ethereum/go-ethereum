@@ -140,6 +140,8 @@ svg[aria-label="Algolia"] * {
   font-size: var(--chakra-fontSizes-md)
 }
 
+}
+
 @media (max-width: 768px) {
   /* Search field in mobile menu */
   .DocSearch-Button {
