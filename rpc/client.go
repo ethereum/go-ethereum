@@ -538,6 +538,13 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	return op.sub, nil
 }
 
+// SupportsSubscriptions reports whether subscriptions are supported by the client
+// transport. When this returns false, Subscribe and related methods will return
+// ErrNotificationsUnsupported.
+func (c *Client) SupportsSubscription() bool {
+	return !c.isHTTP
+}
+
 func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMessage, error) {
 	msg := &jsonrpcMessage{Version: vsn, ID: c.nextID(), Method: method}
 	if paramsIn != nil { // prevent sending "params":null
@@ -715,8 +722,4 @@ func (c *Client) read(codec ServerCodec) {
 		}
 		c.readOp <- readOp{msgs, batch}
 	}
-}
-
-func (c *Client) SupportsSubscription() bool {
-	return !c.isHTTP
 }
