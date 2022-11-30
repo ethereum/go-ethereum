@@ -588,8 +588,13 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
-func (ec *Client) SupportsSubscription() bool {
-	return ec.c.SupportsSubscription()
+// SupportSubscriptions reports whether the client transport supports publish/subscribe
+// APIs.
+//
+// Note that calls to SubscribeNewHeads and other subscription-based methods can still
+// fail even when this returns true, because the server might not support the mechanism.
+func (ec *Client) SupportsSubscriptions() bool {
+	return ec.c.SupportsSubscriptions()
 }
 
 func toBlockNumArg(number *big.Int) string {
