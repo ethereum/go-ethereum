@@ -19,7 +19,7 @@ The method accepts a single argument, the [`enode`](https://ethereum.org/en/deve
 
 ### Example
 
-```javascript
+```js
 > admin.addPeer("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303")
 true
 ```
@@ -45,7 +45,7 @@ The `datadir` administrative property can be queried for the absolute path the r
 
 ### Example
 
-```javascript
+```js
 > admin.datadir
 "/home/john/.ethereum"
 ```
@@ -80,7 +80,7 @@ The `nodeInfo` administrative property can be queried for all the information kn
 
 ### Example
 
-```javascript
+```js
 > admin.nodeInfo
 {
   enode: "enode://44826a5d6a55f88a18298bca4773fca5749cdc3a5c9f308aa7d810e9b31123f3e7c5fba0b1d70aac5308426f47df2a128a6747040a3815cc7dd7167d03be320d@[::]:30303",
@@ -124,7 +124,7 @@ The `peers` administrative property can be queried for all the information known
 
 ### Example
 
-```javascript
+```js
 > admin.peers
 [{
     caps: ["eth/61", "eth/62", "eth/63"],
@@ -196,7 +196,7 @@ The method returns a boolean flag specifying whether the HTTP RPC listener was o
 
 ### Example
 
-```javascript
+```js
 > admin.startHTTP("127.0.0.1", 8545)
 true
 ```
@@ -220,7 +220,7 @@ The method returns a boolean flag specifying whether the WebSocket RPC listener 
 
 ### Example
 
-```javascript
+```js
 > admin.startWS("127.0.0.1", 8546)
 true
 ```
@@ -237,7 +237,7 @@ The `stopHTTP` administrative method closes the currently open HTTP RPC endpoint
 
 ### Example
 
-```javascript
+```js
 > admin.stopHTTP()
 true
 ```
@@ -254,7 +254,7 @@ The `stopWS` administrative method closes the currently open WebSocket RPC endpo
 
 ### Example
 
-```javascript
+```js
 > admin.stopWS()
 true
 ```

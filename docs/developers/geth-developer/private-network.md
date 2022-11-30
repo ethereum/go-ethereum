@@ -17,7 +17,7 @@ A private network is composed of multiple Ethereum nodes that can only connect t
 
 Ethereum Mainnet has Network ID = 1. There are also many other networks that Geth can connect to by providing alternative Chain IDs, some are testnets and others are alternative networks built from forks of the Geth source code. Providing a network ID that is not already being used by an existing network or testnet means the nodes using that network ID can only connect to each other, creating a private network. A list of current network IDs is available at [Chainlist.org](https://chainlist.org/). The network ID is controlled using the `networkid` flag, e.g.
 
-```shell
+```sh
 geth --networkid 12345
 ```
 
@@ -49,7 +49,7 @@ Below is an example of a `genesis.json` file for a PoA network. The `config` sec
 
 The signer account keys can be generated using the [geth account](/docs/fundamentals/account-management) command (this command can be run multiple times to create more than one signer key).
 
-```shell
+```sh
 geth account new --datadir data
 ```
 
@@ -117,13 +117,13 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
 
 To create a blockchain node that uses this genesis block, first use `geth init` to import and sets the canonical genesis block for the new chain. This requires the path to `genesis.json` to be passed as an argument.
 
-```shell
+```sh
 geth init --datadir data genesis.json
 ```
 
 When Geth is started using `--datadir data` the genesis block defined in `genesis.json` will be used. For example:
 
-```shell
+```sh
 geth --datadir data --networkid 12345
 ```
 
@@ -143,7 +143,7 @@ The modification to `genesis.json` is as follows:
 
 The upgrade command is:
 
-```shell
+```sh
 geth init --datadir data genesis.json
 ```
 
@@ -155,13 +155,13 @@ To configure a bootstrap node, the IP address of the machine the bootstrap node 
 
 The bootstrap node IP is set using the `--nat` flag (the command below contains an example address - replace it with the correct one).
 
-```shell
+```sh
 geth --datadir data --networkid 15 --nat extip:172.16.254.4
 ```
 
 The 'node record' of the bootnode can be extracted using the JS console:
 
-```shell
+```sh
 geth attach data/geth.ipc --exec admin.nodeInfo.enr
 ```
 
@@ -174,7 +174,7 @@ This command should print a base64 string such as the following example. Other n
 If the nodes are intended to connect across the Internet, the bootnode and all other nodes must have public IP addresses assigned, and both TCP and UDP traffic can pass their firewalls. If Internet connectivity is not required or all member nodes connect using well-known IPs, Geth should be set up to restrict peer-to-peer connectivity to an IP subnet. Doing so will further isolate the network and prevents cross-connecting with other blockchain networks in case the nodes are reachable from the Internet. Use the
 `--netrestrict` flag to configure a whitelist of IP networks:
 
-```shell
+```sh
 geth <other-flags> --netrestrict 172.16.254.0/24
 ```
 
@@ -186,13 +186,13 @@ Before running a member node, it must be initialized with the same genesis file 
 
 For example, using data directory (example: `data2`) and listening port (example: `30305`):
 
-```shell
+```sh
 geth --datadir data2 --networkid 12345 --port 30305 --bootnodes <bootstrap-node-record>
 ```
 
 With the member node running, it is possible to check that it is connected to the bootstrap node or any other node in the network by attaching a console and running `admin.peers`. It may take up to a few seconds for the nodes to get connected.
 
-```shell
+```sh
 geth attach data2/geth.ipc --exec admin.peers
 ```
 
@@ -200,7 +200,7 @@ geth attach data2/geth.ipc --exec admin.peers
 
 To set up Geth for signing blocks in Clique, a signer account must be available. The account must already be available as a keyfile in the keystore. To use it for signing blocks, it must be unlocked. The following command, for address `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82` will prompt for the account password, then start signing blocks:
 
-```shell
+```sh
 geth <other-flags> --unlock 0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82 --mine
 ```
 
@@ -210,7 +210,7 @@ Mining can be further configured by changing the default gas limit blocks conver
 
 For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for mining, it can be run with all the usual flags plus the following to configure mining:
 
-```shell
+```sh
 geth <other-flags> --mine --miner.threads=1 --miner.etherbase=0xf41c74c9ae680c1aa78f42e5647a62f353b7bdde
 ```
 
@@ -220,13 +220,13 @@ This will start mining bocks and transactions on a single CPU thread, crediting 
 
 This section will run through the commands for setting up a simple private network of two nodes. Both nodes will run on the local machine using the same genesis block and network ID. The data directories for each node will be named `node1` and `node2`.
 
-```shell
+```sh
 `mkdir node1 node2`
 ```
 
 Each node will have an associated account that will receive some ether at launch. The following command creates an account for Node 1:
 
-```shell
+```sh
 geth --datadir node1 account new
 ```
 
@@ -286,7 +286,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
 
 The nodes can now be set up using `geth init` as follows:
 
-```shell
+```sh
 geth init --datadir node1 genesis.json
 ```
 
@@ -308,13 +308,13 @@ INFO [05-13|15:41:47.558] Successfully wrote genesis state         database=chai
 
 The next step is to configure a bootnode. This can be any node, but for this tutorial the developer tool `bootnode` will be used to quickly and easily configure a dedicated bootnode. First the bootnode requires a key, which can be created with the following command, which will save a key to `boot.key`:
 
-```shell
+```sh
 bootnode -genkey boot.key
 ```
 
 This key can then be used to generate a bootnode as follows:
 
-```
+```sh
 bootnode -nodekey boot.key -addr :30305
 ```
 
@@ -329,7 +329,7 @@ INFO [05-13|15:50:03.645] New local node record                    seq=1,652,453
 
 The two nodes can now be started. Open separate terminals for each node, leaving the bootnode running in the original terminal. In each terminal, run the following command (replacing `node1` with `node2` where appropriate, and giving each node a different port ID. The account address and password file for node 1 must also be provided:
 
-```shell
+```sh
 ./geth --datadir node1 --port 30306 --bootnodes enode://f7aba85ba369923bffd3438b4c8fde6b1f02b1c23ea0aac825ed7eac38e6230e5cadcf868e73b0e28710f4c9f685ca71a86a4911461637ae9ab2bd852939b77f@127.0.0.1:0?discport=30305  --networkid 123454321 --unlock 0xC1B2c0dFD381e6aC08f34816172d6343Decbb12b --password node1/password.txt
 ```
 
@@ -434,13 +434,13 @@ This should return the following:
 
 The account associated with Node 1 was supposed to be funded with some ether at the chain genesis. This can be checked easily using `eth.getBalance()`:
 
-```shell
+```sh
 eth.getBalance(eth.accounts[0])
 ```
 
 This account can then be unlocked and some ether sent to Node 2, using the following commands:
 
-```javascript
+```js
 // send some Wei
 eth.sendTransaction({
   to: '0xc94d95a5106270775351eecfe43f97e8e75e59e8',

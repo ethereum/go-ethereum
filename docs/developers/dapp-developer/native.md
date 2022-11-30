@@ -35,7 +35,7 @@ The canonical import path for Geth is `github.com/ethereum/go-ethereum`, with al
 
 All the Geth packages can be downloaded using:
 
-```
+```sh
 $ go get -d github.com/ethereum/go-ethereum/...
 ```
 
@@ -176,7 +176,7 @@ func sendTransaction(cl *ethclient.Client) error {
 
 An instance of `gethclient` can be used in exactly the same way as `ethclient`. However, `gethclient` includes Geth-specific API methods. These additional methods are:
 
-```shell
+```sh
 CallContract()
 CreatAccessList()
 GCStats()

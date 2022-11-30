@@ -29,7 +29,7 @@ Note that the fields `memory`, `stack`, `returnData`, and `storage` have dynamic
 
 It is also possible to configure the trace by passing Boolean (true/false) values for four parameters that tweak the verbosity of the trace. By default, the _EVM memory_ and _Return data_ are not reported but the _EVM stack_ and _EVM storage_ are. To report the maximum amount of data:
 
-```shell
+```sh
 enableMemory: true
 disableStack: false
 disableStorage: false
@@ -442,7 +442,6 @@ Returns:
   DUP13: 2,
   ...
   }
-
 ```
 
 ## State overrides {#state-overrides}

@@ -66,7 +66,7 @@ Clef will request the new password in the terminal.
 
 The same can be achieved using raw JSON requests (this example send the request to Clef's exposed HTTP port using curl):
 
-```shell
+```sh
 curl -X POST --data '{"id": 0, "jsonrpc": "2.0", "method": "account_new", "params": []}' http://localhost:8550 -H "Content-Type: application/json"
 ```
 
@@ -149,7 +149,7 @@ It is also possible to create an account by importing an existing private key. F
 
 Geth requires the private key to be stored as a file which contains the private key as unencrypted canonical elliptic curve bytes encoded into hex (i.e. plain text key without leading 0x). The new account is then saved in encrypted format, protected by a passphrase the user provides on request. As always, this passphrase must be securely and safely backed up - there is no way to retrieve or reset it if it is forgotten!
 
-```shell
+```sh
 $ geth account import --datadir /some-dir ./keyfile
 ```
 
@@ -166,7 +166,7 @@ This import/export process is **not necessary** for users transferring accounts 
 
 It is also possible to import an account in non-interactive mode by saving the account password as plaintext in a `.txt` file and passing its path with the `--password` flag on startup.
 
-```shell
+```sh
 geth account import --password path/password.txt path/keyfile
 ```
 
@@ -198,13 +198,13 @@ This will cause Clef to prompt for a new password, twice, and then the Clef mast
 
 Geth's `account update` subcommand can also be used to update the account password:
 
-```shell
+```sh
 geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b
 ```
 
 Alternatively, in non-interactive mode the path to a password file containing the account password in unencrypted plaintext can be passed with the `--password` flag:
 
-```shell
+```sh
 geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/password.txt
 ```
 
@@ -218,7 +218,7 @@ With Clef, indiscriminate account unlocking is no longer a feature. Instead, Cle
 
 Transactions can be sent using raw JSON requests to Geth or using `web3js` in the Javascript console. Either way, with Clef acting as the signer the transactions will not get sent until approval is given in Clef. The following code snippet shows how a transaction could be sent between two accounts in the keystore using the Javascript console.
 
-```shell
+```sh
 var tx = {from: eth.accounts[1], to: eth.accounts[2], value: web3.toWei(5, "ether")}
 
 # this will hang until approval is given in the Clef console

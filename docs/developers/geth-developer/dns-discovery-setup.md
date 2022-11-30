@@ -11,13 +11,13 @@ DNS-based node lists can serve as a fallback option when connectivity to the dis
 
 `cmd/devp2p` is a developer utility and is not included in the Geth distribution. You can install this command using `go get`:
 
-```shell
+```sh
 go get github.com/ethereum/go-ethereum/cmd/devp2p
 ```
 
 To create a signing key, the `ethkey` utility is needed.
 
-```shell
+```sh
 go get github.com/ethereum/go-ethereum/cmd/ethkey
 ```
 
@@ -25,7 +25,7 @@ go get github.com/ethereum/go-ethereum/cmd/ethkey
 
 Our first step is to compile a list of all reachable nodes. The DHT crawler in cmd/devp2p is a batch process which runs for a set amount of time. You should should schedule this command to run at a regular interval. To create a node list, run
 
-```shell
+```sh
 devp2p discv4 crawl -timeout 30m all-nodes.json
 ```
 
@@ -45,13 +45,13 @@ To create a filtered node set, first create a new directory to hold the output s
 can use any directory name, though it's good practice to use the DNS domain name as the
 name of this directory.
 
-```shell
+```sh
 mkdir mainnet.nodes.example.org
 ```
 
 Then, to create the output set containing Ethereum mainnet nodes only, run
 
-```shell
+```sh
 devp2p nodeset filter all-nodes.json -eth-network mainnet > mainnet.nodes.example.org/nodes.json
 ```
 
@@ -67,13 +67,13 @@ The following filter flags are available:
 
 To turn a node list into a DNS node tree, the list needs to be signed. To do this, a key pair is required. To create the key file in the correct format, the cmd/ethkey utility should be used. Choose a strong password to encrypt the key on disk!
 
-```shell
+```sh
 ethkey generate dnskey.json
 ```
 
 Now use `devp2p dns sign` to update the signature of the node list. If the list's directory name differs from the name it will be published at,specify the DNS name the using the `-domain` flag. This command will prompt for the key file password and update the tree signature.
 
-```shell
+```sh
 devp2p dns sign mainnet.nodes.example.org dnskey.json
 ```
 
@@ -85,7 +85,7 @@ Now that the tree is signed, it can be published to a DNS provider. cmd/devp2p c
 
 To publish to CloudFlare, first create an API token in the management console. cmd/devp2p expects the API token in the `CLOUDFLARE_API_TOKEN` environment variable. Now use the following command to upload DNS TXT records via the CloudFlare API:
 
-```shell
+```sh
 devp2p dns to-cloudflare mainnet.nodes.example.org
 ```
 
@@ -95,6 +95,6 @@ Note that this command uses the domain name specified during signing. Any existi
 
 Once a tree is available through a DNS name, Geth can use it with the `--discovery.dns` command line flag. Node trees are referenced using the `enrtree://` URL scheme. The URL of the tree can be found in the `enrtree-info.json` file created by `devp2p dns sign`. Pass the URL as an argument to the flag in order to make use of the published tree.
 
-```shell
+```sh
 geth --discovery.dns "enrtree://AMBMWDM3J6UY3M32TMMROUNLX6Y3YTLVC3DC6HN2AVG5NHNSAXDW6@mainnet.nodes.example.org"
 ```

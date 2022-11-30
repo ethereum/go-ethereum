@@ -5,7 +5,7 @@ description: How to interact with Geth using Javascript
 
 Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed.
 
-```
+```sh
 curl --data '{"jsonrpc":"2.0","method":"eth_getBalance", "params": ["0x9b1d35635cc34752ca54713bb99d38614f63c955", "latest"], "id":2}' -H "Content-Type: application/json" localhost:8545
 ```
 
@@ -24,7 +24,7 @@ The purpose of Geth's Javascript console is to provide a built-in environment to
 
 There are two ways to start an interactive session using Geth console. The first is to provide the `console` command when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
 
-```shell
+```sh
 # to mute logs
 geth <other flags> console 2> /dev/null
 
@@ -34,7 +34,7 @@ geth <other flags> console --verbosity 3 2> geth-logs.log
 
 Alternatively, a Javascript console can be attached to an existing Geth instance (i.e. one that is running in another terminal or remotely). In this case, `geth attach` can be used to open a Javascript console connected to the Geth node. It is also necessary to define the method used to connect the console to the node. Geth supports websockets, HTTP or local IPC. To use HTTP or Websockets, these must be enabled at the node by providing the following flags at startup:
 
-```shell
+```sh
 # enable websockets
 geth <other flags> --ws
 
@@ -44,7 +44,7 @@ geth <other flags> --http
 
 The commands above use default HTTP/WS endpoints and only enables the default JSON-RPC libraries. To update the Websockets or HTTP endpoints used, or to add support for additional libraries, the `.addr` `.port` and `.api` flags can be used as follows:
 
-```shell
+```sh
 # define a custom http adress, custom http port and enable libraries
 geth <other commands> --http --http.addr 192.60.52.21 --http.port 8552 --http.api eth,web3,admin
 
@@ -56,7 +56,7 @@ It is important to note that by default **some functionality, including account 
 
 The Javascript console can also be connected to a Geth node using IPC. When Geth is started, a `geth.ipc` file is automatically generated and saved to the data directory. This file, or a custom path to a specific ipc file can be passed to `geth attach` as follows:
 
-```shell
+```sh
 geth attach datadir/geth.ipc
 ```
 
@@ -99,7 +99,7 @@ It is also possible to load pre-written Javascript files into the console by pas
 when starting the console. This is useful for setting up complex contract objects or loading frequently-used
 functions.
 
-```shell
+```sh
 geth console --preload "/my/scripts/folder/utils.js"
 ```
 
@@ -114,17 +114,17 @@ to `geth attach` or `geth console`. The result is displayed directly in the term
 
 For example, to display the accounts in the keystore:
 
-```shell
+```sh
 geth attach --exec eth.accounts
 ```
 
-```shell
+```sh
 geth attach --exec eth.blockNumber
 ```
 
 The same syntax can be used to execute a local script file with more complex statements on a remote node over http, for example:
 
-```shell
+```sh
 geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
 
 geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("checkbalances.js")'

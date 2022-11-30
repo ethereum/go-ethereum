@@ -47,7 +47,7 @@ Returns all the Ethereum account addresses of all keys in the key store.
 
 ### Example
 
-```javascript
+```js
 > personal.listAccounts
 ["0x5e97870f263700f46aa00d967821199b9bc5a120", "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"]
 ```
@@ -63,7 +63,7 @@ Returns a list of wallets this node manages.
 
 ### Example
 
-```javascript
+```js
 > personal.listWallets
 [{
   accounts: [{
@@ -96,7 +96,7 @@ Returns the address of the new account. At the geth console, `newAccount` will p
 
 ### Example
 
-```javascript
+```js
 > personal.newAccount()
 Passphrase:
 Repeat passphrase:
@@ -105,7 +105,7 @@ Repeat passphrase:
 
 The passphrase can also be supplied as a string.
 
-```javascript
+```js
 > personal.newAccount("h4ck3r")
 "0x3d80b31a78c30fc628f20b2c89d7ddbf6e53cedc"
 ```
@@ -136,7 +136,7 @@ The account can be used with `eth_sign` and `eth_sendTransaction` while it is un
 
 ### Examples
 
-```javascript
+```js
 > personal.unlockAccount("0x5e97870f263700f46aa00d967821199b9bc5a120")
 Unlock account 0x5e97870f263700f46aa00d967821199b9bc5a120
 Passphrase:
@@ -145,14 +145,14 @@ true
 
 Supplying the passphrase and unlock duration as arguments:
 
-```javascript
+```js
 > personal.unlockAccount("0x5e97870f263700f46aa00d967821199b9bc5a120", "foo", 30)
 true
 ```
 
 To type in the passphrase and still override the default unlock duration, pass `null` as the passphrase.
 
-```
+```js
 > personal.unlockAccount("0x5e97870f263700f46aa00d967821199b9bc5a120", null, 30)
 Unlock account 0x5e97870f263700f46aa00d967821199b9bc5a120
 Passphrase:
@@ -181,7 +181,7 @@ The transaction is the same argument as for `eth_sendTransaction` (i.e. [transac
 
 ### Examples
 
-```javascript
+```js
 > var tx = {from: "0x391694e7e0b0cce554cb130d723a9d27458f9298", to: "0xafa3f8684e54059998bc3a7b0d2b0da075154d66", value: web3.toWei(1.23, "ether")}
 undefined
 > personal.sendTransaction(tx, "passphrase")
@@ -204,7 +204,7 @@ See ecRecover to verify the signature.
 
 ### Examples
 
-```javascript
+```js
 > personal.sign("0xdeadbeaf", "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83", "")
 "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b"
 ```
@@ -229,7 +229,7 @@ SignTransaction will create a transaction from the given arguments and tries to 
 
 ### Examples
 
-```javascript
+```js
 > personal.sign("0xdeadbeaf", "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83", "")
 "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b"
 > personal.ecRecover("0xdeadbeaf", "0xa3f20717a250c2b0b729b7e5becbff67fdaef7e0699da4de7ca5895b02a170a12d887fd3b17bfdce3481f10bea41f45ba9f709d39ce8325427b57afcfc994cee1b")

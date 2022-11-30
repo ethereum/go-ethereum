@@ -31,19 +31,19 @@ An account to receive block rewards must first be defined. The address of the ac
 
 The account address can be provided to `--mining.etherbase` when Geth is started. This instructs Geth to direct any block rewards to this address. Once started, Geth will sync the blockchain. If Geth has not connected to this network before, or if the data directory has been deleted, this can take several days. Also, enable HTTP traffic with the `--http` command.
 
-```shell
+```sh
 geth --http --miner.etherbase 0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10
 ```
 
 The progress of the blockchain syncing can be monitored by attaching a JavaScript console in another terminal. More detailed information about the console can be found on the [Javascript Console](/docs/interface/javascript-console) page. To attach and open a console:
 
-```shell
+```sh
 geth attach http://127.0.0.1:8545
 ```
 
 Then in the console, to check the sync progress:
 
-```shell
+```sh
 eth.syncing
 ```
 
@@ -71,12 +71,12 @@ If the sync is progressing correctly the output will look similar to the followi
 
 Once the blockchain is synced, mining can begin. In order to begin mining, Ethminer must be run and connected to Geth in a new terminal. OpenCL can be used for a wide range of GPUs, CUDA can be used specifically for Nvidia GPUs:
 
-```shell
+```sh
 #OpenCL
 ethminer -v 9 -G -P http://127.0.0.1:8545
 ```
 
-```shell
+```sh
 #CUDA
 ethminer -v -U -P http://127.0.0.1:8545
 ```
@@ -99,7 +99,7 @@ More verbose logs can be configured using `-v` and a value between 0-9. The Etha
 
 When Geth is started it is not mining by default. Unless it is specifically instructed to mine, it acts only as a node, not a miner. Geth starts as a (CPU) miner if the `--mine` flag is provided. The `--miner.threads` parameter can be used to set the number parallel mining threads (defaulting to the total number of processor cores).
 
-```shell
+```sh
 geth --mine --miner.threads=4
 ```
 
@@ -116,13 +116,13 @@ Note that mining only makes sense if you are in sync with the network (since you
 
 Like with GPU mining, an etherbase account must be set. This defaults to the primary account in the keystore but can be set to an alternative address using the `--miner.etherbase` command:
 
-```shell
+```sh
 geth --miner.etherbase '0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10' --mine
 ```
 
 If there is no account available an account wil be created and automatically configured to be the coinbase. The Javascript console can be used to reset the etherbase account at runtime:
 
-```shell
+```sh
 miner.setEtherbase(eth.accounts[2])
 ```
 
@@ -130,20 +130,20 @@ Note that your etherbase does not need to be an address of a local account, it j
 
 There is an option to add extra data (32 bytes only) to the mined blocks. By convention this is interpreted as a unicode string, so it can be used to add a short vanity tag using `miner.setExtra` in the Javascript console.
 
-```shell
+```sh
 miner.setExtra("ΞTHΞЯSPHΞЯΞ")
 ```
 
 The console can also be used to check the current hashrate in units H/s (Hash operations per second):
 
-```shell
+```sh
 eth.hashrate
  712000
 ```
 
 After some blocks have been mined, the etherbase account balance with be >0. Assuming the etherbase is a local account:
 
-```shell
+```sh
 eth.getBalance(eth.coinbase).toNumber();
  '34698870000000'
 ```

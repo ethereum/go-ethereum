@@ -16,7 +16,7 @@ Retrieves a snapshot of all clique state at a given block.
 
 Example:
 
-```javascript
+```js
 > clique.getSnapshot(5463755)
 {
   hash: "0x018194fc50ca62d973e2f85cffef1e6811278ffd2040a4460537f8dbec3d5efc",
@@ -120,7 +120,7 @@ This is a debugging method which returns statistics about signer activity for th
 
 Example:
 
-```
+```js
 > clique.status()
 {
   inturnPercent: 100,

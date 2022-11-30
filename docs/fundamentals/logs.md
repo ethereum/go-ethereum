@@ -33,7 +33,7 @@ geth --verbosity 5 >> /path/eth.log 2>&1
 
 When Geth starts up it immediately reports a fairly long page of configuration details and status reports that allow the user to confirm Geth is on the right network and operating in its intended modes. The basic structure of a log message is as follows:
 
-```
+```sh
 MESSAGE_TYPE [MONTH-DAY][TIME] MESSAGE VALUE
 ```
 
@@ -41,7 +41,7 @@ Where `MESSAGE_TYPE` can be `INFO`, `WARN`, `ERROR` or `DEBUG`. These tags categ
 
 The messages displayed on startup break down as follows:
 
-```
+```terminal
 INFO [10-04|10:20:52.028] Starting Geth on Ethereum mainnet...
 INFO [10-04|10:20:52.028] Bumping default cache on mainnet         provided=1024 updated=4096
 INFO [10-04|10:20:52.030] Maximum peer count                       ETH=50 LES=0 total=50
@@ -59,7 +59,7 @@ INFO [10-04|10:20:52.372] Persisted trie from memory database      nodes=12356 s
 
 The logs above show the user that the node is connecting to Ethereum Mainnet and some low level configuration details. The cache size is bumped to the Mainnet default (4096). The maximum peer count is the highest number of peers this node is allowed to connect to and can be used to control the bandwidth requirements of the node. Logs relating to `ethash` are out of date since Ethereum moved to proof-of-stake based consensus and can safely be ignored.
 
-```
+```terminal
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 INFO [10-04|10:20:52.386] Chain ID:  1 (mainnet)
 INFO [10-04|10:20:52.386] Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)
@@ -83,7 +83,7 @@ INFO [10-04|10:20:52.387]  - Gray Glacier:                15050000 (https://gith
 
 The above block of messages are related to past Ethereum hard forks. The names are the names of the hard forks and the numbers are the blocks at which the hard fork occurs. This means that blocks with numbers that exceed these values have the configuration required by that hard fork. The specification of each hard fork is available at the provided links (and more information is available on [ethereum.org](https://ethereum.org/en/history/)). The message `Consensus: Beacon (proof-of-stake), merged from Ethash (proof-of-work)` indicates that the node requires a Beacon node to follow the canonical chain - Geth cannot participate in consensus on its own.
 
-```
+```terminal
 INFO [10-04|10:20:52.387] Merge configured:
 INFO [10-04|10:20:52.387]  - Hard-fork specification:    https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md
 INFO [10-04|10:20:52.387]  - Network known to be merged: true
@@ -97,7 +97,7 @@ WARN [10-04|10:20:52.388] Engine API enabled                       protocol=eth
 
 The messages above relate to [The Merge](https://ethereum.org/en/upgrades/merge/). The Merge was Ethereum's transition from proof-of-work to proof-of-stake based consensus. In Geth, The Merge came in the form of the Paris hard fork which was triggered at a [terminal total difficulty](https://ethereum.org/en/glossary/#terminal-total-difficulty) of 58750000000000000000000 instead of a preconfigured block number like previous hard forks. The hard fork specification is linked in the log message. The message `network known to be merged: true` indicates that the node is following a chain that has passed the terminal total difficulty and undergone the Paris hard fork. Since September 15 2022 this will always be true for nodes on Ethereum Mainnet (and the merged testnets Sepolia and Goerli). The warning `Engine API enabled` informs the user that Geth is exposing the set of API methods required for communication with a consensus client.
 
-```
+```terminal
 INFO [10-04|10:20:52.389] Starting peer-to-peer node               instance=Geth/v1.11.0-unstable-e004e7d2-20220926/linux-amd64/go1.19.1
 INFO [10-04|10:20:52.409] New local node record                    seq=1,664,875,252,408 id=9aa0e5b14ccd75ec ip=127.0.0.1 udp=30303 tcp=30303
 INFO [10-04|10:20:52.409] Started P2P networking                   self=enode://1ef45ab610c2893b70483bf1791b550e5a93763058b0abf7c6d9e6201e07212d61c4896d64de07342c9df734650e3b40812c2dc01f894b6c385acd180ed30fc8@127.0.0.1:30303
@@ -120,7 +120,7 @@ The default for Geth is to sync in snap mode. This requires a block header to be
 
 Assuming Geth has a synced consensus client and some peers it will start importing headers, block bodies and receipts. The log messages for data downloading look as follows:
 
-```
+```terminal
 INFO [07-28|10:29:49.681] Block synchronisation started
 INFO [07-28|10:29:50.427] Imported new block headers               count=1    elapsed=253.434ms number=12,914,945 hash=ee1a08..9ce38a
 INFO [07-28|10:30:00.224] Imported new block receipts              count=64   elapsed=13.703s   number=12,914,881 hash=fef964..d789fc age=18m5s     size=7.69MiB
@@ -130,7 +130,7 @@ INFO [07-28|10:30:21.665] Imported new state entries
 
 For state sync, Geth reports when the state heal is in progress. This can takea long time. The log message includes values for the number of `accounts`, `slots`, `codes` and `nodes` that were downloaded in the current healing phase, and the pending field is the number of state entires waiting to be downloaded. The `pending` value is not necessarily the number of state entries remaining until the healing is finished. As the blockchain progresses the state trie is updated and therefore the data that needs to be downloaded to heal the trie can increase as well as decrease over time. Ultimately, the state should heal faster than the blockchain progresses so the node can get in sync. When the state healing is finished there is a post-sync snapshot generation phase. The node is not in sync until the state healing phase is over. If the node is still regularly reporting `State heal in progress` it is not yet in sync - the state healing is still ongoing.
 
-```
+```terminal
 INFO [07-28|10:30:21.965] State heal in progress                   accounts=169,633@7.48MiB  slots=57314@4.17MiB    codes=4895@38.14MiB nodes=43,293,196@11.70GiB pending=112,626
 INFO [09-06|01:31:59.885] Rebuilding state snapshot
 INFO [09-06|01:31:59.910] Resuming state snapshot generation root=bc64d4..fc1edd accounts=0 slots=0 storage=0.00B dangling=0 elapsed=18.838ms
