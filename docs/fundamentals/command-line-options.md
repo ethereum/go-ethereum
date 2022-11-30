@@ -10,7 +10,7 @@ obtained at any time from your Geth instance by running:
 geth --help
 ```
 
-## Commands
+## Commands {#commands}
 
 ```
 NAME:

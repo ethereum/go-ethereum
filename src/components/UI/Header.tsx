@@ -1,16 +1,25 @@
-import { Box, Flex, Input, InputGroup, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import { FC } from 'react';
+import { Box, Flex, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
-import { HamburgerIcon, LensIcon, MoonIcon, SunIcon } from '../UI/icons';
 import { Search } from '../UI'
-import { DOCS_PAGE, DOWNLOADS_PAGE } from '../../constants';
+import { MoonIcon, SunIcon } from '../UI/icons';
+
+import { HeaderButtons } from './';
+import { MobileMenu } from '../layouts';
 
 export const Header: FC = () => {
   const { colorMode, toggleColorMode } = useColorMode();
   const isDark = colorMode === 'dark';
+
   return (
-    <Flex mb={4} border='2px solid' borderColor='primary' justifyContent='space-between'>
+    <Flex
+      mb={4}
+      border='2px'
+      borderColor='primary'
+      justifyContent='space-between'
+      position='relative'
+    >
       <Stack
         p={4}
         justifyContent='center'
@@ -27,58 +36,13 @@ export const Header: FC = () => {
       </Stack>
 
       <Flex>
-        {/* DOWNLOADS */}
-        <Stack
-          p={4}
-          justifyContent='center'
-          borderRight='2px'
-          borderColor='primary'
-          display={{ base: 'none', md: 'block' }}
-          color='primary'
-          _hover={{
-            textDecoration: 'none',
-            bg: 'primary',
-            color: 'bg !important'
-          }}
-        >
-          <NextLink href={DOWNLOADS_PAGE} passHref>
-            <Link _hover={{ textDecoration: 'none' }}>
-              <Text textStyle='header-font' textTransform='uppercase'>
-                downloads
-              </Text>
-            </Link>
-          </NextLink>
-        </Stack>
-
-        {/* DOCUMENTATION */}
-        <Stack
-          p={4}
-          justifyContent='center'
-          borderRight='2px'
-          borderColor='primary'
-          display={{ base: 'none', md: 'block' }}
-          color='primary'
-          _hover={{
-            textDecoration: 'none',
-            bg: 'primary',
-            color: 'bg !important'
-          }}
-        >
-          <NextLink href={DOCS_PAGE} passHref>
-            <Link _hover={{ textDecoration: 'none' }}>
-              <Text textStyle='header-font' textTransform='uppercase'>
-                documentation
-              </Text>
-            </Link>
-          </NextLink>
+        {/* HEADER BUTTONS */}
+        <Stack display={{ base: 'none', md: 'block' }}>
+          <HeaderButtons />
         </Stack>
 
         {/* SEARCH */}
-        <Stack
-          display={{ base: 'none', md: 'block' }}
-          borderRight='2px'
-          borderColor='primary'
-        >
+        <Stack display={{ base: 'none', md: 'block' }}>
           <Search />
         </Stack>
 
@@ -96,12 +60,10 @@ export const Header: FC = () => {
         >
           {isDark ? <SunIcon color='primary' /> : <MoonIcon color='primary' />}
         </Box>
-
-        {/* HAMBURGER MENU */}
-        <Box p={4} display={{ base: 'block', md: 'none' }}>
-          <HamburgerIcon color='primary' />
-        </Box>
       </Flex>
+
+      {/* MOBILE MENU */}
+      <MobileMenu />
     </Flex>
   );
 };

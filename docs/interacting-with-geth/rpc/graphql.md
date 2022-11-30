@@ -17,7 +17,7 @@ Now queries can be raised against `http://localhost:8545/graphql`. To change the
 geth --http --http.port 9545 --graphql
 ```
 
-## GraphiQL
+## GraphiQL {#graphiql}
 
 An easy way to try out queries is the GraphiQL interface shipped with Geth. To open it visit `http://localhost:8545/graphql/ui`. To see how this works let's read the sender, recipient and value of all transactions in block number 6000000. In GraphiQL:
 
@@ -40,7 +40,7 @@ query txInfo {
 
 GraphiQL also provides a way to explore the schema Geth provides to help you formulate your queries, which you can see on the right sidebar. Under the title `Root Types` click on `Query` to see the high-level types and their fields.
 
-## Query
+## Query {#query}
 
 Reading out data from Geth is the biggest use-case for GraphQL. In addition to using the UI queries can also be sent programmatically. The official GraphQL[docs](https://graphql.org/code/) explain how to find bindings for many languages, or send http requests from the terminal using tools such as Curl.
 

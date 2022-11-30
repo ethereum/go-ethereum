@@ -5,7 +5,7 @@ description: Documentation for the JSON-RPC API "txpool" namespace
 
 The `txpool` API gives access to several non-standard RPC methods to inspect the contents of the transaction pool containing all the currently pending transactions as well as the ones queued for future processing.
 
-## txpool_content
+## txpool_content {#txpool-content}
 
 The `content` inspection property can be queried to list the exact details of all the transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only.
 
@@ -104,7 +104,7 @@ Please note, there may be multiple transactions associated with the same account
 }
 ```
 
-## txpool_contentFrom
+## txpool_contentFrom {#txpool-contentfrom}
 
 Retrieves the transactions contained within the txpool, returning pending as well as queued transactions of this address, grouped by nonce.
 
@@ -113,7 +113,7 @@ Retrieves the transactions contained within the txpool, returning pending as wel
 | Console | `txpool.contentFrom(address)`                          |
 |   RPC   | `{"method": "txpool_contentFrom, "params": [string]"}` |
 
-## txpool_inspect
+## txpool_inspect {#txpool-inspect}
 
 The `inspect` inspection property can be queried to list a textual summary of all the transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only. This is a method specifically tailored to developers to quickly see the transactions in the pool and find any potential issues.
 
@@ -182,7 +182,7 @@ Please note, there may be multiple transactions associated with the same account
 }
 ```
 
-## txpool_status
+## txpool_status {#txpool-status}
 
 The `status` inspection property can be queried for the number of transactions currently pending for inclusion in the next block(s), as well as the ones that are being scheduled for future execution only.
 

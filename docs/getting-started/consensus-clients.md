@@ -7,7 +7,7 @@ Geth is an [execution client](https://ethereum.org/en/glossary/#execution-client
 
 There are five consensus clients available, all of which connect to Geth in the same way. This page will outline how Geth can be set up with a consensus client to form a complete Ethereum node.
 
-## Configuring Geth
+## Configuring Geth {#configuring-geth}
 
 Geth can be downloaded and installed according to the instructions on the [Installing Geth](/docs/install-and-build/installing-geth) page. In order to connect to a consensus client, Geth must expose a port for the inter-client RPC connection.
 
@@ -21,7 +21,7 @@ A complete command to start Geth so that it can connect to a consensus client lo
 geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret
 ```
 
-## Consensus clients
+## Consensus clients {#consensus-clients}
 
 There are currently five consensus clients that can be run alongside Geth. These are:
 
@@ -43,17 +43,17 @@ The consensus client also needs the path to Geth's `jwt-secret` in order to auth
 
 The consensus clients all expose a [Beacon API](https://ethereum.github.io/beacon-APIs) that can be used to check the status of the Beacon client or download blocks and consensus data by sending requests using tools such as [Curl](https://curl.se). More information on this can be found in the documentation for each consensus client.
 
-## Validators
+## Validators {#validators}
 
 Validators are responsible for securing the Ethereum blockchain. Validators have staked at least 32 ETH into a deposit contract and run validator software. Each of the consensus clients have their own validator software that is described in detail in their respective documentation. The easiest way to handle staking and validator key generation is to use the Ethereum Foundation [Staking Launchpad](https://launchpad.ethereum.org/). The Launchpad guides users through the process of generating validator keys and connecting the validator to the consensus client.
 
-## Syncing
+## Syncing {#syncing}
 
 Geth cannot sync until the connected consensus client is synced. This is because Geth needs a target head to sync to. The fastest way to sync a consensus client is using checkpoint sync. To do this, a checkpoint or a url to a checkpoint provider can be provided to the consensus client on startup. There are several sources for these checkpoints. The ideal scenario is to get one from a trusted node operator, organized out-of-band, and verified against a third node or a block explorer or checkpoint provider. Some clients also allow checkpoint syncing by HTTP API access to an existing Beacon node. There are also several [public checkpoint sync endpoints](https://eth-clients.github.io/checkpoint-sync-endpoints/).
 
 Please see the pages on [syncing](/docs/fundamentals/sync-modes) for more detail. For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/fundamentals/logs) page.
 
-## Using Geth
+## Using Geth {#using-geth}
 
 Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started
 using the following command in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
@@ -62,6 +62,6 @@ using the following command in a separate terminal (assuming Geth's IPC file is 
 geth attach datadir/geth.ipc
 ```
 
-## Summary
+## Summary {#summary}
 
 Now that Ethereum has implemented proof-of-stake, Geth users are required to install and run a consensus client. Otherwise, Geth will not be able to track the head of the chain. There are five consensus clients to choose from. This page provided an overview of how to choose a consensus client and configure Geth to connect to it.

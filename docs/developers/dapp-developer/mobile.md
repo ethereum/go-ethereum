@@ -6,11 +6,11 @@ description: Introduction to mobile development with Geth
 Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. This is because being able to verify data, follow the chain and submit transactions without relying on centralized intermediaries is critical for censorship resistant access to the network. Doing so on a mobile device is the most convenient route for many users. This relies on Geth running a [light client](/docs/interface/les) on the mobile
 device and exposing an API that developers can use to build mobile apps on top of Geth. This page outlines how to download Geth for mobile and how to get started with managing Ethereum accounts in mobile applications. Ethereum mobile development is relatively nascent, but there is an active developer community. For further information on Geth mobile development visit the #mobile channel in the [Geth discord](https://discord.gg/wQdpS5aA).
 
-## Download and install
+## Download and install {#download-and-install}
 
-### Android
+### Android {#android}
 
-#### Android Studio
+#### Android Studio {#android-studio}
 
 Geth for Mobile bundles can be downloaded directly from [the download page](/downloads) and inserted into a project in Android Studio via `File -> New -> New module... -> Import .JAR/.AAR Package`.
 
@@ -23,7 +23,7 @@ dependencies {
 }
 ```
 
-#### Manual build
+#### Manual build {#manual-build}
 
 Geth can also be built it locally using a `make` command. This will create an Android archive called `geth.aar` in the `build/bin` folder that can be imported into Android Studio as described above.
 
@@ -34,7 +34,7 @@ Done building.
 Import "build/bin/geth.aar" to use the library.
 ```
 
-### iOS
+### iOS {#ios}
 
 Geth must be downloaded and built locally for IoS. Building locally is achieved using the `make` command. This will create an iOS XCode framework called `Geth.framework` in the `build/bin` folder that can be imported into XCode as described above.
 
@@ -45,7 +45,7 @@ Done building.
 Import "build/bin/Geth.framework" to use the library.
 ```
 
-## Mobile API
+## Mobile API {#mobile-api}
 
 Similarly to the reusable [Go libraries](/docs/developers/dapp-developer/native-accounts), the mobile wrappers focus on three main usage areas:
 
@@ -56,14 +56,14 @@ Similarly to the reusable [Go libraries](/docs/developers/dapp-developer/native-
 The Geth mobile API is broadly equivalent to the [Go API](/docs/developers/dapp-developer/native-accounts). The source code can be found in the `mobile` section of Geth's
 [Github](https://github.com/ethereum/go-ethereum/tree/master/mobile).
 
-## Mobile Account Management
+## Mobile Account Management {#mobile-account-management}
 
 Best practise for account management is to do it client-side, with all sensitive information self-contained inside the local application. This ensures the developer/user retains fine-grained control over the access permissions for user-data instead of outsourcing security
 to a third party.
 
 To support this, Geth provides an accounts library that includes the tools required for secure account management via encrypted keystores and passphrase protected accounts, similarly to running a full Geth node.
 
-### Encrypted keystores
+### Encrypted keystores {#encrypted-keystores}
 
 Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be stored encrypted so that even if the mobile device is accessed by a malicious third party the keys are still hidden under an additional layer of security. Geth provides a keystore that enables developers to store keys securely using the [`secp256k1` elliptic curve](https://www.secg.org/sec2-v2.pdf), implemented using [`libsecp256k`](https://github.com/bitcoin-core/secp256k1) and wrapped by [Geth accounts](https://godoc.org/github.com/ethereum/go-ethereum/accounts).
 
@@ -75,7 +75,7 @@ should be aware that there is a security trade-off.
 - _standard_ needs 256MB memory and 1 second processing on a modern CPU to access a key
 - _light_ needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
 
-### Keystores on Android (Java)
+### Keystores on Android (Java) {#keystores-on-android}
 
 The encrypted keystore on Android is implemented by the `KeyStore` class from the `org.ethereum.geth` package. The configuration constants are located in the `Geth` abstract class, similarly from the `org.ethereum.geth` package. Hence to do client side account management on Android, two classes should be imported into the Java code:
 
@@ -94,7 +94,7 @@ The keystore should be in a location writable by the local mobile application bu
 
 The last two arguments of the `KeyStore` constructor are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `Geth.StandardScryptN, Geth.StandardScryptP`, `Geth.LightScryptN, Geth.LightScryptP` or custom numbers. The _light_ version is recommended.
 
-### Keystores on iOS (Swift 3)
+### Keystores on iOS (Swift 3) {#keystores-on-ios}
 
 The encrypted keystore on iOS is implemented by the `GethKeyStore` class from the `Geth` framework. The configuration constants are located in the same namespace as global variables. Hence to do client side account management on iOS, `Geth` framework should be
 imported into the Swift code:
@@ -114,7 +114,7 @@ The keystore folder needs to be in a location writable by the local mobile appli
 
 The last two arguments of the `GethNewKeyStore` factory method are the crypto parameters defining how resource-intensive the keystore encryption should be. The choices are `GethStandardScryptN, GethStandardScryptP`, `GethLightScryptN, GethLightScryptP` or custom numbers. The _light_ version is recommended.
 
-### Account lifecycle
+### Account lifecycle {#account-lifecycle}
 
 The encyrpted keystore can be used for the entire account lifecycle requirements of a mobile application. This includes the basic functionality of creating new accounts and deleting existing ones as well as more advanced functions like updating access credentials and account
 import/export.
@@ -131,7 +131,7 @@ This individuality means that any operation requiring access to an account will 
 
 _Please note, there is no recovery mechanisms for losing the passphrases. The cryptographic properties of the encrypted keystore (if using the provided parameters) guarantee that account credentials cannot be brute forced in any meaningful time._
 
-### Accounts on Android (Java)
+### Accounts on Android (Java) {#accounts-on-android}
 
 An Ethereum account on Android is implemented by the `Account` class from the `org.ethereum.geth` package. Assuming an instance of a `KeyStore` called `ks` exists, all of the described lifecycle operations can be executed with a handful of function calls:
 
@@ -156,7 +156,7 @@ Account impAcc = ks.importKey(jsonAcc, "Export password", "Import password");
 
 Although instances of `Account` can be used to access various information about specific Ethereum accounts, they do not contain any sensitive data (such as passphrases or private keys), rather they act solely as identifiers for client code and the keystore.
 
-### Accounts on iOS (Swift 3)
+### Accounts on iOS (Swift 3) {#accounts-on-ios}
 
 An Ethereum account on iOS is implemented by the `GethAccount` class from the `Geth` framework. Assuming an instance of a `GethKeyStore` called `ks` exists, all of the described lifecycle operations can be executed with a handful of function calls:
 
@@ -181,7 +181,7 @@ let impAcc  = try! ks?.importKey(jsonKey, passphrase: "Export password", newPass
 
 Although instances of `GethAccount` can be used to access various information about specific Ethereum accounts, they do not contain any sensitive data (such as passphrases or private keys), rather they act solely as identifiers for client code and the keystore.
 
-## Signing authorization
+## Signing authorization {#signing-authorization}
 
 As mentioned above, account objects do not hold the sensitive private keys of the associated Ethereum accounts - they are merely placeholders to identify the cryptographic keys with. All operations that require authorization (e.g. transaction signing) are performed by the account manager after granting it access to the private keys.
 
@@ -191,7 +191,7 @@ There are a few different ways one can authorize the account manager to execute 
 
 - **Multiple authorizations**: A more complex way of signing transactions via the keystore is to unlock the account via its passphrase once, and allow the account manager to cache the decrypted private key, enabling all subsequent signing requests tocomplete without the passphrase. The lifetime of the cached private key may be managed manually (by explicitly locking the account back up) or automatically (by providing a timeout during unlock). This mechanism is useful for scenarios where the user may need to sign many transactions or the application would need to do so without requiring user input. The crucial aspect to remember is that **anyone with access to the account manager can sign transactions while a particular account is unlocked** (e.g. device left unattended; application running untrusted code).
 
-### Signing on Android (Java)
+### Signing on Android (Java) {#signing-on-android}
 
 Assuming an instance of a `KeyStore` called `ks` exists, a new account to sign transactions can be created using its `newAccount` method. For this demonstation a hard-coded example transaction is created to sign:
 
@@ -220,7 +220,7 @@ ks.timedUnlock(signer, "Signer password", 1000000000);
 signed = ks.signTx(signer, tx, chain);
 ```
 
-### Signing on iOS (Swift 3)
+### Signing on iOS (Swift 3) {#signing-on-ios}
 
 Assuming an instance of a `GethKeyStore` called `ks` exists, a new account can be created to sign transactions with its `newAccount` method. For
 this demonstation a hard-coded example transaction is created to sign:
@@ -251,6 +251,6 @@ try! ks?.timedUnlock(signer, passphrase: "Signer password", timeout: 1000000000)
 signed = try! ks?.signTx(signer, tx: tx, chainID: chain)
 ```
 
-## Summary
+## Summary {#summary}
 
 This page introduced Geth for mobile. In addition to download and installation instructions, basic account management was demonstrated for mobile applications on iOS and Android.

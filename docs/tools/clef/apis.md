@@ -5,7 +5,7 @@ description: Reference documentation for the Clef APIs
 
 Clef uses two separate APIs. The **external API** is an untrusted set of JSON-RPC methods that can be called by a user. The **internal API** is a set of JSON-RPC methods that can be called by a UI. The UI could be Clef's native command line interface or a custom UI.
 
-## External API
+## External API {#external-api}
 
 Clef listens to HTTP requests on `http.addr`:`http.port` (or to IPC on `ipcpath`), with the same JSON-RPC standard as Geth. The messages are expected to be [JSON-RPC 2.0 standard](https://www.jsonrpc.org/specification).
 
@@ -23,9 +23,9 @@ The External API encoding is as follows:
 
 All hex encoded values must be prefixed with `0x`.
 
-### Methods
+### Methods {#methods}
 
-#### account_new
+#### account_new {#accountnew}
 
 ##### Create new password protected account
 
@@ -60,7 +60,7 @@ Response
 }
 ```
 
-#### account_list
+#### account_list {#account-list}
 
 ##### List available accounts
 
@@ -98,7 +98,7 @@ Response
 }
 ```
 
-#### account_signTransaction
+#### account_signTransaction {#account-signtransaction}
 
 ##### Sign transactions
 
@@ -281,7 +281,7 @@ Bash example:
 {"jsonrpc":"2.0","id":67,"result":{"raw":"0xf88380018203339407a565b7ed7d7a678680a4c162885bedbb695fe080a44401a6e4000000000000000000000000000000000000000000000000000000000000001226a0223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20ea02aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","tx":{"nonce":"0x0","gasPrice":"0x1","gas":"0x333","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0","value":"0x0","input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012","v":"0x26","r":"0x223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20e","s":"0x2aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","hash":"0xeba2df809e7a612a0a0d444ccfa5c839624bdc00dd29e3340d46df3870f8a30e"}}}
 ```
 
-#### account_signData
+#### account_signData {#account-signdata}
 
 ##### Sign data
 
@@ -321,7 +321,7 @@ Response
 }
 ```
 
-#### account_signTypedData
+#### account_signTypedData {#account-signtypeddata}
 
 ##### Sign data
 
@@ -423,7 +423,7 @@ Response
 }
 ```
 
-#### account_ecRecover
+#### account_ecRecover {#account-ecrecover}
 
 ##### Recover the signing address
 
@@ -462,7 +462,7 @@ Response
 }
 ```
 
-#### account_version
+#### account_version {#accountversion}
 
 ##### Get external API version
 
@@ -497,7 +497,7 @@ Response
 }
 ```
 
-## Internal (UI) API
+## Internal (UI) API {#internalapi}
 
 Clef has one native console-based UI, for operation without any standalone tools. However, there is also an API to communicate with an external UI. To enable that UI, the signer needs to be started with the `--stdio-ui` option, which allocates `stdin` / `stdout` for the UI API.
 
@@ -523,9 +523,9 @@ See the [ui API changelog](https://github.com/ethereum/go-ethereum/blob/master/c
 Whereas the `json` specification allows for linebreaks, linebreaks **should not** be used in this communication channel, to make
 things simpler for both parties.
 
-### Methods
+### Methods {#methods}
 
-#### ApproveTx / `ui_approveTx`
+#### ApproveTx / `ui_approveTx` {#approvetx}
 
 Invoked when there's a transaction for approval.
 
@@ -656,7 +656,7 @@ One which has missing `to`, but with no `data`:
 }
 ```
 
-#### ApproveListing / `ui_approveListing`
+#### ApproveListing / `ui_approveListing` {#approvelisting}
 
 Invoked when a request for account listing has been made.
 
@@ -689,7 +689,7 @@ Invoked when a request for account listing has been made.
 }
 ```
 
-#### ApproveSignData / `ui_approveSignData`
+#### ApproveSignData / `ui_approveSignData` {#approvesigndata}
 
 ##### Sample call
 
@@ -720,7 +720,7 @@ Invoked when a request for account listing has been made.
 }
 ```
 
-#### ApproveNewAccount / `ui_approveNewAccount`
+#### ApproveNewAccount / `ui_approveNewAccount` {#approvenewaccount}
 
 Invoked when a request for creating a new account has been made.
 
@@ -743,7 +743,7 @@ Invoked when a request for creating a new account has been made.
 }
 ```
 
-#### ShowInfo / `ui_showInfo`
+#### ShowInfo / `ui_showInfo` {#showinfo}
 
 The UI should show the info (a single message) to the user. Does not expect response.
 
@@ -758,7 +758,7 @@ The UI should show the info (a single message) to the user. Does not expect resp
 }
 ```
 
-#### ShowError / `ui_showError`
+#### ShowError / `ui_showError` {#showerror}
 
 The UI should show the error (a single message) to the user. Does not expect response.
 
@@ -771,7 +771,7 @@ The UI should show the error (a single message) to the user. Does not expect res
 }
 ```
 
-#### OnApprovedTx / `ui_onApprovedTx`
+#### OnApprovedTx / `ui_onApprovedTx` {#onapprovedtx}
 
 `OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller. The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
 
@@ -806,7 +806,7 @@ Example call:
 }
 ```
 
-#### OnSignerStartup / `ui_onSignerStartup`
+#### OnSignerStartup / `ui_onSignerStartup` {#onsignerstartup}
 
 This method provides the UI with information about what API version the signer uses (both internal and external) as well as build-info and external API,
 in k/v-form.
@@ -831,7 +831,7 @@ Example call:
 }
 ```
 
-#### OnInputRequired / `ui_onInputRequired`
+#### OnInputRequired / `ui_onInputRequired` {#oninputrequired}
 
 Invoked when Clef requires user input (e.g. a password).
 

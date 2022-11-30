@@ -3,9 +3,9 @@ title: Account Management with Clef
 description: Guide to basic account management using Geth's built-in tools
 ---
 
-Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone pieve of software that runs independently of, but connects to, a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
+Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
-## Initialize Clef
+## Initialize Clef {#initializing-clef}
 
 The first time Clef is used it needs to be initialized with a master seed that unlocks Clef's secure vault and a path where the vault should be located. Clef will use the vault to store passwords for keystores, javascript auto-signing rules and hashes of rule files. To initialize Clef, pass a vault path to `clef init`, for example to store it in a new directory inside `/home/user/go-ethereum`:
 
@@ -15,7 +15,7 @@ clef init /home/user/go-ethereum/clefdata
 
 It is extremely important to remember the master seed and keep it secure. It allows access to the accounts under Clef's management.
 
-## Connecting Geth and Clef
+## Connecting Geth and Clef {#connecting-geth-and-clef}
 
 Clef and Geth should be started separately but with complementary configurations so that they can communicate. This requires Clef to know the `chain_id` of the network Geth will connect to so that this information can be included in any signatures. Clef also needs to know the location of the keystore where accounts are (or will be) stored. This is usually in a subdirectory inside Geth's data directory. Clef is also given a data directory which is also often placed conveniently inside Geth's data directory. To enable communication with Clef using Curl, `--http` can be passed which will start an HTTP server on `localhost:8550` by default. To start Clef configured for a Geth node connecting to the Sepolia testnet:
 
@@ -50,11 +50,11 @@ geth --sepolia --datadir sepolia <other flags> --signer=sepolia-data/clef/clef.i
 
 Remember that it is also necessary to have a consensus client running too, which requires `--http` and several `authrpc` values to be provided to Geth. A complete set of startup commands for the Geth-Lodestar client combinaton plus Clef is provided as an example in this [Gist](https://gist.github.com/jmcook1186/ea5de9215ecedb1b0105bcfa9c30d44c) - adapt it for different client combinations and configurations.
 
-## Interacting with Clef
+## Interacting with Clef {#interacting-with-clef}
 
 There are two modes of interaction with Clef. One is direct interaction, which is achieved by passing requests by HTTP or IPC with JSON-RPC data as defined in Clef's external API. This is the way to do things in Clef that don't require Geth, such as creating and listing accounts, or signing data offline. The other way is via Geth. With Geth started with Clef as an external signer, requests made to Geth that touch account data will route via Clef for approval. By default, the user approves or denies interactions manually by typing `y` or `n` into the Clef console when prompted, but custom rules can also be created to automate common tasks.
 
-### Creating accounts
+### Creating accounts {#creating-accounts}
 
 New accounts can be created using Clef's `account new` method. This generates a new key pair and adds them to the given `keystore` directory:
 
@@ -104,11 +104,11 @@ access to the key and all associated funds!
 Make sure to backup keystore and passwords in a safe location.
 ```
 
-### Listing accounts
+### Listing accounts {#listing-accounts}
 
 The accounts in the keystore can be listed to the terminal using a simple CLI command as follows:
 
-```
+```sh
 clef list-accounts --keystore <path-to-keystore>
 ```
 
@@ -130,7 +130,7 @@ Accounts can also be listed in the Javascript console using `eth.accounts`, whic
 
 As well as individual account, any wallets managed by Clef can be listed (which will also print the wallet status and the address and URl of any accounts they contain. This uses the `list-wallets` CLI command.
 
-```
+```sh
 clef list-wallets --keystore <path-to-keystore>
 ```
 
@@ -143,7 +143,7 @@ which returns:
   - Account 0: 0x8Ef15919F852A8034688a71d8b57Ab0187364009 (keystore:///home/user/go-ethereum/testdata/keystore/UTC--2022-11-01T17-05-11.100536003Z--8ef15919f852a8034688a71d8b57ab0187364009)
 ```
 
-### Import a keyfile
+### Import a keyfile {#importing-a-keyfile}
 
 It is also possible to create an account by importing an existing private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. It is possible to do this using Clef, but currently the method is not externally exposed and requires implementing a UI. There is a Python UI on the Geth Github that could be used as an example or it can be done using the default console UI. However, for now the most straightforward way to import an accoutn from a private key is to use Geth's `account import`.
 
@@ -178,7 +178,7 @@ cat > /path/to/password
 <type password here>
 ```
 
-### Import a presale wallet
+### Import a presale wallet {#import-presale-wallet}
 
 Assuming the password is known, importing a presale wallet is very easy. Geth's `wallet import` commands are used, passing the path to the wallet.
 
@@ -186,7 +186,7 @@ Assuming the password is known, importing a presale wallet is very easy. Geth's 
 geth wallet import /path/presale.wallet
 ```
 
-## Updating accounts
+## Updating accounts {#updating-accounts}
 
 Clef can be used to set and remove passwords for an existing keystore file. To set a new password, pass the account address to `setpw`:
 
@@ -210,11 +210,11 @@ geth account update a94f5374fce5edbc8e2a8697c15331677e6ebf0b --password path/pas
 
 Updating the account using `geth account update` replaces the original file with a new one - this means the original file is no longer available after it has been updated. This can be used to update a key file to the latest format.
 
-## Unlocking accounts
+## Unlocking accounts {#unlocking-accounts}
 
 With Clef, indiscriminate account unlocking is no longer a feature. Instead, Clef unlocks are locked until actions are explicitly approved manually by a user, unless they conform to some specific scenario that has been encoded in a ruleset. Please refer to our Clef docs for instructions for how to create rulesets.
 
-### Transactions
+### Transactions {#transactions}
 
 Transactions can be sent using raw JSON requests to Geth or using `web3js` in the Javascript console. Either way, with Clef acting as the signer the transactions will not get sent until approval is given in Clef. The following code snippet shows how a transaction could be sent between two accounts in the keystore using the Javascript console.
 
@@ -225,6 +225,6 @@ var tx = {from: eth.accounts[1], to: eth.accounts[2], value: web3.toWei(5, "ethe
 eth.sendTransaction(tx)
 ```
 
-## Summary
+## Summary {#summary}
 
 This page has demonstrated how to manage accounts using Clef and Geth's account management tools. Accounts are stored encrypted by a password. It is critical that the account passwords and the keystore directory are safely and securely backed up.

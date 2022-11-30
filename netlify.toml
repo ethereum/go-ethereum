@@ -1,0 +1,4 @@
+# https://docs.netlify.com/integrations/frameworks/next-js/incremental-static-regeneration/
+
+[functions]
+  included_files = ["src/**"]

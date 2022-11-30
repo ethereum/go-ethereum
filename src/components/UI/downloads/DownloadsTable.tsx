@@ -1,20 +1,43 @@
 import { Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
 import { FC } from 'react';
 
-import { DOWNLOAD_TABS, DOWNLOAD_TAB_COLUMN_HEADERS } from '../../../constants';
-
 import { DataTable } from '../../UI';
 
+import { DOWNLOADS_TABLE_TABS, DOWNLOADS_TABLE_TAB_COLUMN_HEADERS } from '../../../constants';
+import { ReleaseData } from '../../../types';
+
 interface Props {
-  data: any;
+  linuxData: ReleaseData[];
+  macOSData: ReleaseData[];
+  windowsData: ReleaseData[];
+  iOSData: ReleaseData[];
+  androidData: ReleaseData[];
+  amountOfReleasesToShow: number;
+  setTotalReleases: (idx: number) => void;
 }
 
-export const DownloadsTable: FC<Props> = ({ data }) => {
+export const DownloadsTable: FC<Props> = ({
+  linuxData,
+  macOSData,
+  windowsData,
+  iOSData,
+  androidData,
+  amountOfReleasesToShow,
+  setTotalReleases
+}) => {
+  const totalReleases = [
+    linuxData.length,
+    macOSData.length,
+    windowsData.length,
+    iOSData.length,
+    androidData.length
+  ];
+
   return (
     <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid' borderColor='primary'>
-      <Tabs variant='unstyled'>
+      <Tabs variant='unstyled' onChange={idx => setTotalReleases(totalReleases[idx])}>
         <TabList color='primary' bg='button-bg'>
-          {DOWNLOAD_TABS.map((tab, idx) => {
+          {DOWNLOADS_TABLE_TABS.map((tab, idx) => {
             return (
               <Tab
                 key={tab}
@@ -25,7 +48,7 @@ export const DownloadsTable: FC<Props> = ({ data }) => {
                   color: 'bg'
                 }}
                 borderBottom='2px solid'
-                borderRight={idx === DOWNLOAD_TABS.length - 1 ? 'none' : '2px solid'}
+                borderRight={idx === DOWNLOADS_TABLE_TABS.length - 1 ? 'none' : '2px solid'}
                 borderColor='primary'
               >
                 <Text textStyle='download-tab-label'>{tab}</Text>
@@ -33,21 +56,37 @@ export const DownloadsTable: FC<Props> = ({ data }) => {
             );
           })}
         </TabList>
+
         <TabPanels>
           <TabPanel p={0}>
-            <DataTable columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS} data={data} />
+            <DataTable
+              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
+              data={linuxData.slice(0, amountOfReleasesToShow)}
+            />
           </TabPanel>
           <TabPanel p={0}>
-            <DataTable columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS} data={data} />
+            <DataTable
+              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
+              data={macOSData.slice(0, amountOfReleasesToShow)}
+            />
           </TabPanel>
           <TabPanel p={0}>
-            <DataTable columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS} data={data} />
+            <DataTable
+              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
+              data={windowsData.slice(0, amountOfReleasesToShow)}
+            />
           </TabPanel>
           <TabPanel p={0}>
-            <DataTable columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS} data={data} />
+            <DataTable
+              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
+              data={iOSData.slice(0, amountOfReleasesToShow)}
+            />
           </TabPanel>
           <TabPanel p={0}>
-            <DataTable columnHeaders={DOWNLOAD_TAB_COLUMN_HEADERS} data={data} />
+            <DataTable
+              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
+              data={androidData.slice(0, amountOfReleasesToShow)}
+            />
           </TabPanel>
         </TabPanels>
       </Tabs>

@@ -13,7 +13,7 @@ export const PageMetadata: React.FC<Props> = ({ title, description, image }) => 
   const router = useRouter();
   const url = `${SITE_URL}${router.asPath}`;
   const fullTitle = `${title} | ${SITE_NAME}`;
-  const defaultOgImage = `${SITE_URL}/images/pages/gopher-downloads-front-light.svg`; // TODO: update with right image
+  const defaultOgImage = `${SITE_URL}/images/metadata-gopher.png`;
   const ogImage = !image ? defaultOgImage : `${SITE_URL}${image}`;
 
   return (
@@ -43,7 +43,10 @@ export const PageMetadata: React.FC<Props> = ({ title, description, image }) => 
       <meta name='twitter:description' content={description} />
       {/* patch to force a cache invalidation of twitter's card bot */}
       <meta name='twitter:image' content={`${ogImage}/#`} />
-      <link rel='icon' href='/images/favicon.png' />
+      {/* viewport */}
+      <meta name='viewport' content='width=device-width, initial-scale=1' />
+      {/* favicon */}
+      <link rel='icon' type='image/x-icon' href='/favicon.ico' />
     </Head>
   );
 };

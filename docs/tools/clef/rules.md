@@ -19,7 +19,7 @@ Because the rules are Javascript files they can be customized to implement any a
 
 This page will explain how rules are implemented in Clef and how best to manage credentials when automatic rulesets are enabled.
 
-## Rule Implementation
+## Rule Implementation {#rule-implementation}
 
 The ruleset engine acts as a gatekeeper to the command line interface - it auto-approves any requests that meet the conditions defined in a set of authenticated rule files. This prevents the user from having to manually approve or reject every request - instead they can define common patterns in a rule file and abstract that task away to the ruleset engine. The general architecture is as follows:
 
@@ -83,7 +83,7 @@ There are some additional noteworthy implementation details that are important f
 - The regular expression engine (re2/regexp) in Otto VM is not fully compatible with the [ECMA5 specification](https://tc39.es/ecma262/#sec-intro).
 - [Strict mode](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Strict_mode) is not supported. "use strict" will parse but it does nothing.
 
-## Credential management
+## Credential management {#credential-management}
 
 The ability to auto-approve transaction requires that the signer has the necessary credentials, i.e. account passwords, to decrypt keyfiles. These are stored encrypted as follows:
 
@@ -98,13 +98,13 @@ The `signer` uses the `seed` to:
 
 `config.json` stores the hashes of any attested rulesets. `credentials.json` stores encrypted account passwords. The masterseed is required to decrypt these files. The decrypted account passwords can then be used to decrypt keyfiles.
 
-## Security
+## Security {#security}
 
-### The Javascript VM
+### The Javascript VM {#javascript-vm}
 
 The downside of the very flexible rule implementation included in Clef is that the `signer` binary needs to contain a Javascript engine. This is an additional attack surface. The only viable attack is for an adversary to somehow extract cryptographic keys from memory during the Javascript VM execution. The hash-based rule attestation condition means the actual Javascript code executed by the Javascript engine is not a viable attack surface -- since if the attacker can control the ruleset, a much simpler attack would be to surreptitiously insert an attested "always-approve" rule instead of attempting to exploit the Javascript virtual machine. The Javascript engine is quite simple to implement and there are currently no known security vulnerabilities, not have there been any security problems identified for the similar Javascript VM implemented in Geth.
 
-### Writing rules
+### Writing rules {#writing-rules}
 
 Since the user has complete freedom to write custom rules, it is plausible that those rules could create unintended security vulnerabilities. This can only really be protected by coding very carefully and trying to test rulesets (e.g. on a private testnet) before implementing them on a public network.
 
@@ -112,13 +112,13 @@ Javascript is very flexible but also easy to write incorrectly. For example, use
 
 It’s unclear whether any other language would be more secure - there is alwas the possibility of implementing an insecure rule.
 
-### Credential security
+### Credential security {#credential-security}
 
 Clef implements a secure, encrypted vault for storing sensitive data. This vault is encrypted using a `masterseed` which the user is responsible for storing and backing up safely and securely. Since this `masterseed` is used to decrypt the secure vault, and its security is not handled by Clef, it could represent a security vulnerability if the user does not implement best practise in keeping it safe.
 
 The same is also true for keys. Keys are not stored by Clef, they are only accessed using account passwords that Clef does store in its vault. The keys themselves are stored in an external `keystore` whose security is the responsibility of the user. If the keys are compromised, the account is not safe irrespective of the security benefits derived from Clef.
 
-## Ruleset examples
+## Ruleset examples {#ruleset-examples}
 
 Below are some examples of `ruleset.js` files.
 
@@ -236,6 +236,6 @@ function OnApprovedTx(resp) {
 }
 ```
 
-## Summary
+## Summary {#summary}
 
 Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.

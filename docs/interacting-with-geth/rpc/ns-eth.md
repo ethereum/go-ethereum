@@ -5,11 +5,11 @@ description: Documentation for the JSON-RPC API "eth" namespace
 
 Documentation for the API methods in the `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
 
-### eth_subscribe, eth_unsubscribe
+### eth_subscribe, eth_unsubscribe {#eth-subscribe-unsubscribe}
 
 These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting_with_geth/RPC/pubsub) for more information.
 
-### eth_call
+### eth_call {#eth-call}
 
 Executes a new message call immediately, without creating a transaction on the block chain. The `eth_call` method can be used to query internal contract state, to execute validations coded into a contract or even to test what the effect of a transaction would be without running it live.
 
@@ -136,7 +136,7 @@ And the result is the Ethereum ABI encoded threshold number:
 
 Just for the sake of completeness, decoded the response is: `2`.
 
-### eth_createAccessList
+### eth_createAccessList {#eth-createaccesslist}
 
 This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 

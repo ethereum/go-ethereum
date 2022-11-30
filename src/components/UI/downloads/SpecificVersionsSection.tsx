@@ -1,4 +1,4 @@
-import { Box, Flex, Image, Stack } from '@chakra-ui/react';
+import { Box, Flex, Grid, GridItem, Image, Stack } from '@chakra-ui/react';
 import { FC } from 'react';
 import { GopherHomeLinks } from '../svgs';
 
@@ -8,36 +8,33 @@ interface Props {
 
 export const SpecificVersionsSection: FC<Props> = ({ children }) => {
   return (
-    <Flex
-      id='specificversions'
-      border='2px'
-      borderColor='primary'
-      flexDir={{ base: 'column', md: 'row' }}
-    >
-      <Flex
-        p={4}
-        alignItems='center'
-        justifyContent='center'
-        borderBottom={{ base: '2px', md: 'none' }}
-        borderRight={{ base: 'none', md: '2px' }}
-        borderColor='primary'
-        flex='none'
-      >
-        <GopherHomeLinks />
-      </Flex>
-      <Flex flexDir='column'>
-        <Stack
-          p={4}
-          borderBottom='2px'
-          borderColor='primary'
-          sx={{ mt: '0 !important' }}
-        >
-          <Box as='h2' textStyle='h2'>
-            Specific Versions
-          </Box>
-        </Stack>
-        {children}
-      </Flex>
-    </Flex>
+    <Grid id='specificversions' templateColumns={{ base: '1fr', md: '300px 1fr' }} gap={4}>
+      <GridItem w='auto'>
+        <Box h='100%'>
+          {/* TODO: replace with animated/video version */}
+          <Stack
+            justifyContent='center'
+            alignItems='center'
+            p={4}
+            border='2px solid'
+            borderColor='primary'
+            h='100%'
+          >
+            <GopherHomeLinks />
+          </Stack>
+        </Box>
+      </GridItem>
+
+      <GridItem>
+        <Flex flexDir='column' border='2px solid' borderColor='primary' pb={6}>
+          <Stack p={4} borderBottom='2px' borderColor='primary' sx={{ mt: '0 !important' }}>
+            <Box as='h2' textStyle='h2'>
+              Specific Versions
+            </Box>
+          </Stack>
+          {children}
+        </Flex>
+      </GridItem>
+    </Grid>
   );
 };

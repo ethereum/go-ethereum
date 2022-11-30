@@ -20,7 +20,7 @@ The purpose of Geth's Javascript console is to provide a built-in environment to
 
 {% include note.html content="The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.js documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/rpc/server)." %}
 
-## Starting the console
+## Starting the console {#starting-the-console}
 
 There are two ways to start an interactive session using Geth console. The first is to provide the `console` command when Geth is started up. This starts the node and runs the console in the same terminal. It is therefore convenient to suppress the logs from the node to prevent them from obscuring the console. If the logs are not needed, they can be redirected to the `dev/null` path, effectively muting them. Alternatively, if the logs are required they can be redirected to a text file. The level of detail provided in the logs can be adjusted by providing a value between 1-6 to the `--verbosity` flag as in the example below:
 
@@ -75,7 +75,7 @@ To exit, press ctrl-d or type exit
 >
 ```
 
-## Interactive use
+## Interactive use {#interactive-use}
 
 Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/rpc/server). For example:
 
@@ -107,7 +107,7 @@ Once the interactive session is over, the console can be closed down by typing `
 
 Remember that interactions that touch accounts need approval in Clef - either manually or by writing a custom ruleset.
 
-## Non-interactive Use: Script Mode
+## Non-interactive Use: Script Mode {#non-interactive-use}
 
 It is also possible to execute JavaScript code non-interactively by passing the `--exec` and a JSON-RPC-API endpoint
 to `geth attach` or `geth console`. The result is displayed directly in the terminal rather than in an interactive Javascript console.
@@ -133,10 +133,10 @@ geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("che
 The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()`
 that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
 
-## Timers
+## Timers {#timers}
 
 In addition to the full functionality of JS (as per ECMA5), the Ethereum Javascript Runtime Environment (JSRE) is augmented with various timers. It implements `setInterval`, `clearInterval`, `setTimeout`, `clearTimeout` which some users will be familiar with from browser windows. It also provides implementation for `admin.sleep(seconds)` and a block based timer, `admin.sleepBlocks(n)` which sleeps till the number of new blocks added is equal to or greater than `n`.
 
-## Caveats
+## Caveats {#caveats}
 
 Geth's console is built using the [GoJa JS Virtual Machine](https://github.com/dop251/goja) which is compatible with ECMAScript 5.1. This does not support promises or `async` functions. Web3js depends upon the `bignumber.js` library. This is auto-loaded into the console.

@@ -3,7 +3,7 @@ title: Geth fundamentals
 description: Documentation for foundational Geth topics
 ---
 
-## Geth fundamentals
+## Geth fundamentals {#geth-fundamentals}
 
 This section includes documentation for foundational topics in Geth. The pages here will help you to understand how Geth works from a user perspective and under the hood.
 

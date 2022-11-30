@@ -6,7 +6,7 @@ description: Introduction to the JSON_RPC server
 Interacting with Geth requires sending requests to specific JSON-RPC API methods. Geth supports all standard [JSON-RPC API](https://github.com/ethereum/execution-apis) endpoints.
 The RPC requests must be sent to the node and the response returned to the client using some transport protocol. This page outlines the available transport protocols in Geth, providing the information users require to choose a transport protocol for a specific user scenario.
 
-## Introduction
+## Introduction {#introduction}
 
 JSON-RPC is provided on multiple transports. Geth supports JSON-RPC over HTTP, WebSocket and Unix Domain Sockets. Transports must be enabled through
 command-line flags.
@@ -16,11 +16,11 @@ the namespace, an underscore, and the actual method name within the namespace. F
 
 Access to RPC methods can be enabled on a per-namespace basis. Find documentation for individual namespaces in the sidebar.
 
-## Transports
+## Transports {#transports}
 
 There are three transport protocols available in Geth: IPC, HTTP and Websockets.
 
-### HTTP Server
+### HTTP Server {#http-server}
 
 [HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP) is a unidirectional transport protocol that connects a client and server. The client sends a request to the server, and the server returns a response back to the client. An HTTP connection is closed after the response for a given request is sent.
 
@@ -56,7 +56,7 @@ The `--http.corsdomain` command also acceptsd wildcards that enable access to th
 --http.corsdomain '*'
 ```
 
-### WebSocket Server
+### WebSocket Server {#websockets-server}
 
 Websocket is a bidirectional transport protocol. A Websocket connection is maintained by client and server until it is explicitly terminated by one. Most modern browsers support Websocket which means it has good tooling.
 
@@ -80,7 +80,7 @@ As with `--http.corsdomain`, using the wildcard `--ws.origins '*'` allows access
 
 {% include note.html content=" By default, **account unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
 
-### IPC Server
+### IPC Server {#ipc-server}
 
 IPC is normally available for use in local environments where the node and the console exist on the same machine. Geth creates a pipe in the computers local file system (at `ipcpath`) that configures a connection between node and console. The `geth.ipc` file can also be used by other processes on the same machine to interact with Geth.
 
@@ -101,7 +101,7 @@ On Windows, IPC is provided via named pipes. The default location of the geth pi
 The location of the socket can be customized using the `--ipcpath` flag. IPC can be disabled
 using the `--ipcdisable` flag.
 
-## Choosing a transport protocol
+## Choosing a transport protocol {#choosing-transport-protocol}
 
 The following table summarizes the relative strengths and weaknesses of each transport protocol so that users can make informed decisions about which to use.
 
@@ -114,12 +114,12 @@ The following table summarizes the relative strengths and weaknesses of each tra
 As a general rule IPC is most secure because it is limited to interactions on the local machine and cannot be exposed to external traffic. It can also be used
 to subscribe to events. HTTP is a familiar and idempotent transport that closes connections between requests and can therefore have lower overall overheads if the number of requests is fairly low. Websockets provides a continuous open channel that can enable event subscriptions and streaming and handle large volumes of requests with smaller per-message overheads.
 
-## Engine-API
+## Engine-API {#engine-api}
 
 The Engine-API is a set of RPC methods that enable communication between Geth and the [consensus client](/docs/getting_started/consensus-clients). These are not designed to be exposed to the user - instead they are called automatically by the clients when they need to exchange information. The Engine API is enabled by default - the user is not required to pass any instruction to Geth to enable these methods.
 
 Read more in the [Engine API spec](https://github.com/ethereum/execution-apis/blob/main/src/engine/specification.md).
 
-## Summary
+## Summary {#summary}
 
 RPC requests to a Geth node can be made using three different transport protocols. The protocols are enabled at startup using their respective flags. The right choice of transport protocol depends on the specific use case.

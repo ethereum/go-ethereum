@@ -44,7 +44,7 @@ export const DownloadsSection: FC<Props> = ({
             p={4}
             borderLeft={{ base: 'none', md: '2px' }}
             borderTop={{ base: '2px', md: 'none' }}
-            borderColor='primary'
+            borderColor='primary !important'
           >
             {sectionDescription}
           </Center>

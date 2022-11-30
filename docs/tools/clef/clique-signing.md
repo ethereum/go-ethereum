@@ -9,11 +9,11 @@ However, using the `--unlock` flag is generally a highly dangerous thing to do b
 
 Clef provides a way to safely circumvent `--unlock` while maintaining a enough automation for the network to be useable.
 
-## Prerequisites
+## Prerequisites {#prerequisites}
 
 It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/docs/developers/geth-developer/private-network) and [Introduction to Clef](/docs/tools/Clef/introduction) pages.
 
-## Prepping a Clique network
+## Prepping a Clique network {#prepping-clique-network}
 
 First of all, set up a rudimentary testnet to have something to sign. Create a new keystore (password `testtesttest`)
 
@@ -76,7 +76,7 @@ INFO [06-16|11:14:54.125] Successfully wrote genesis state         database=ligh
 
 At this point a Geth has been initiated with a genesis configuration.
 
-## Prepping Clef
+## Prepping Clef {#prepping-clef}
 
 In order to make use of `clef` for signing:
 
@@ -107,7 +107,7 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 
 After this operation, `clef` has it's own vault where it can store secrets and attestations.
 
-## Storing passwords in `clef`
+## Storing passwords in `clef` {#storing-passwords}
 
 With that done, `clef` can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. `clef` asks for the password, and it also asks for the master-password, in order to update and store the new secrets inside the vault.
 
@@ -125,7 +125,7 @@ INFO [06-16|11:27:09.153] Credential store updated                 set=0x9CD932F
 
 At this point, if Clef is used as a sealer, each block would require manual approval, but without needing to provide the password.
 
-### Testing stored password
+### Testing stored password {#testing-stored-password}
 
 To test that the stored password is correct and being properly handled by Clef, first start `clef`:
 
@@ -188,7 +188,7 @@ INFO [06-16|11:36:46.714] Successfully sealed new block            number=1 seal
 
 This mode of operation offers quite a poor UX because each block to be sealed requires manual approval. That is fixed in the following section.
 
-## Using rules to approve blocks
+## Using rules to approve blocks {#using-rules}
 
 Clef rules allow a piece of Javascript take over the Approve/Deny decision. The Javascript snippet has access to the same information as the manual operator.
 
@@ -339,7 +339,7 @@ DEBUG[06-16|14:20:33.584] Served account_signData                  reqid=5 durat
 
 ```
 
-## Refinements
+## Refinements {#refinements}
 
 If an attacker find the Clef "external" interface (which would only happen if you start it with `http` enabled), they
 
@@ -392,7 +392,7 @@ DEBUG[06-16|22:26:45.317] Served account_signData                  reqid=4 durat
 
 This might be a bit over-the-top, security-wise, and may cause problems if, for some reason, a clique-deadlock needs to be resolved by rolling back and continuing on a side-chain. It is mainly meant as a demonstration that rules can use Javascript and statefulness to construct very intricate signing logic.
 
-## TLDR quick-version
+## TLDR quick-version {#tldr-version}
 
 Creation and attestation is a one-off event:
 
@@ -434,6 +434,6 @@ clef --keystore ./ddir/keystore \
 
 For Geth, the only change is to provide `--signer <path to clef ipc>`.
 
-## Summary
+## Summary {#summary}
 
 Clef can be used as a signer that automatically seals Clique blocks. This is a much more secure option than unlocking accounts using Geth's built-in account manager.

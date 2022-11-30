@@ -5,7 +5,7 @@ description: Documentation for the JSON-RPC API "clique" namespace
 
 The `clique` API provides access to the state of the clique consensus engine. This API cna be used to manage signer votes and to check the health of a private network.
 
-## clique_getSnapshot
+## clique_getSnapshot {#clique-getsnapshot}
 
 Retrieves a snapshot of all clique state at a given block.
 
@@ -41,7 +41,7 @@ Example:
 }
 ```
 
-## clique_getSnapshotAtHash
+## clique_getSnapshotAtHash {#clique-getsnapshotathash}
 
 Retrieves the state snapshot at a given block.
 
@@ -50,7 +50,7 @@ Retrieves the state snapshot at a given block.
 | Console | `clique.getSnapshotAtHash(blockHash)`                           |
 | RPC     | `{"method": "clique_getSnapshotAtHash", "params": [blockHash]}` |
 
-## clique_getSigner
+## clique_getSigner {#clique-getsigner}
 
 Returns the signer for a specific clique block. Can be called with either a blocknumber, blockhash or an rlp encoded blob. The RLP encoded blob can either be a block or a header.
 
@@ -59,7 +59,7 @@ Returns the signer for a specific clique block. Can be called with either a bloc
 | Console | `clique.getSigner(blockNrOrHashOrRlp)`               |
 | RPC     | `{"method": "clique_getSigner", "params": [string]}` |
 
-## clique_getSigners
+## clique_getSigners {#clique-getsigners}
 
 Retrieves the list of authorized signers at the specified block number.
 
@@ -68,7 +68,7 @@ Retrieves the list of authorized signers at the specified block number.
 | Console | `clique.getSigners(blockNumber)`                           |
 | RPC     | `{"method": "clique_getSigners", "params": [blockNumber]}` |
 
-## clique_getSignersAtHash
+## clique_getSignersAtHash {#clique-getsignersathash}
 
 Retrieves the list of authorized signers at the specified block hash.
 
@@ -77,7 +77,7 @@ Retrieves the list of authorized signers at the specified block hash.
 | Console | `clique.getSignersAtHash(blockHash)`                        |
 | RPC     | `{"method": "clique_getSignersAtHash", "params": [string]}` |
 
-## clique_proposals
+## clique_proposals {#clique-proposals}
 
 Returns the current proposals the node is voting on.
 
@@ -86,7 +86,7 @@ Returns the current proposals the node is voting on.
 | Console | `clique.proposals()`                           |
 | RPC     | `{"method": "clique_proposals", "params": []}` |
 
-## clique_propose
+## clique_propose {#clique-propose}
 
 Adds a new authorization proposal that the signer will attempt to push through. If the `auth` parameter is true, the local signer votes for the given address to be included in the set of authorized signers. With `auth` set to `false`, the vote is against the address.
 
@@ -95,7 +95,7 @@ Adds a new authorization proposal that the signer will attempt to push through. 
 | Console | `clique.propose(address, auth)`                           |
 | RPC     | `{"method": "clique_propose", "params": [address, auth]}` |
 
-## clique_discard
+## clique_discard {#clique-discard}
 
 This method drops a currently running proposal. The signer will not cast further votes (either for or against) the address.
 
@@ -104,7 +104,7 @@ This method drops a currently running proposal. The signer will not cast further
 | Console | `clique.discard(address)`                           |
 | RPC     | `{"method": "clique_discard", "params": [address]}` |
 
-## clique_status
+## clique_status {#clique-status}
 
 This is a debugging method which returns statistics about signer activity for the last 64 blocks. The returned object contains the following fields:
 

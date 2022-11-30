@@ -1,12 +1,17 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
+import { Stack, Heading } from '@chakra-ui/react';
+import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
-import { Heading } from '@chakra-ui/react';
-import MDXComponents from '../components/';
+import gfm from 'remark-gfm';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
+
+import MDXComponents from '../components/';
+import { Breadcrumbs } from '../components/docs';
 import { PageMetadata } from '../components/UI';
+import { textStyles } from '../theme/foundations';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -71,15 +76,19 @@ interface Props {
 const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
   return (
     <>
-      <PageMetadata
-        title={frontmatter.title}
-        description={frontmatter.description}
-      />
+      <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
-        <Heading as='h1'>{frontmatter.title}</Heading>
-
-        <ReactMarkdown components={MDXComponents}>{content}</ReactMarkdown>
+        <Stack mb={16}>
+          <Breadcrumbs />
+          <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
+            {frontmatter.title}
+          </Heading>
+          {/* <Text as='span' mt='0 !important'>last edited {TODO: get last edited date}</Text> */}
+        </Stack>
+        <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>
+          {content}
+        </ReactMarkdown>
       </main>
     </>
   );

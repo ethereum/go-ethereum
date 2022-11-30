@@ -5,7 +5,7 @@ description: Beginner tutorial for using Clef as an external signer for Geth
 
 This page provides a step-by-step walkthrough tutorial demonstrating some common uses of Clef. This includes manual approvals and automated rules. Clef is presented both as a standalone general signer with requests made via RPC and also as a backend signer for Geth.
 
-## Initializing Clef
+## Initializing Clef {#initializing-clef}
 
 First things first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with a password:
 
@@ -46,7 +46,7 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 
 _For readability purposes, we'll remove the WARNING printout, user confirmation and the unlocking of the master seed in the rest of this document._
 
-## Remote interactions
+## Remote interactions {#remote-interactions}
 
 This tutorial will use Clef with Geth on the Goerli testnet. The accounts used will be in the Goerli keystore with the path `~/go-ethereum/goerli-data/keystore`. The tutorial assumes there are two accounts in this keystore. Instructions for creating accounts can be found on the [Account managament page](/docs/interface/managing-your-accounts). Note that Clef can also interact with hardware wallets, although that is not demonstrated here.
 
@@ -198,7 +198,7 @@ Approve? [y/N]
 
 Approving this transaction causes Clef to prompt the user to provide the password for the sender account. Providing the password enables the transaction to be signed and sent to Geth for broadcasting to the network. The details of the signed transaction are displayed in the console. Account passwords can also be stored in Clef's encrypted vault so that they do not have to be manually entered - [more on this below](#account-passwords).
 
-## Automatic rules
+## Automatic rules {#automatic-rules}
 
 For most users, manually confirming every transaction is the right way to use Clef because a human-in-the-loop can review every action. However, there are cases when it makes sense to set up some rules which permit Clef to sign a transaction without prompting the user.
 For example, well defined rules such as:
@@ -206,7 +206,7 @@ For example, well defined rules such as:
 - Auto-approve transactions with Uniswap v2, with value between 0.1 and 0.5 ETH per 24h period
 - Auto-approve transactions to address `0xD9C9Cd5f6779558b6e0eD4e6Acf6b1947E7fA1F3` as long as gas < 44k and gasPrice < 80Gwei can be encoded and interpreted by Clef's built-in ruleset engine.
 
-### Rule files
+### Rule files {#rule-files}
 
 Rules are implemented as Javascript code in `js` files. The ruleset engine includes the same methods as the JSON_RPC defined in the [UI Protocol](/docs/_clef/datatypes). The following code snippet demonstrates a rule file that approves a transaction if it satisfies the following conditions:
 
@@ -257,7 +257,7 @@ There are three possible outcomes to this ruleset that are handled in different 
 | Unexpected value | Pass decision to UI for manual approval |
 | Nothing          | Pass decision to UI for manual approval |
 
-### Attestations
+### Attestations {#attestations}
 
 Clef will not just accept and run arbitrary scripts - that would create an attack vector because a malicious party could change the rule file.Instead, the user explicitly _attests_ to a rule file, which involves injecting the file's SHA256 hash into Clef's secure store. The following code snippet shows how to calculate a SHA256 hash for a file named `rules.js` and pass it to Clef. Note that Clef will prompt the user to provide the master password because the Clef store has to be decrypted in order to add the attestation to it.
 
@@ -271,7 +271,7 @@ clef attest 645b58e4f945e24d0221714ff29f6aa8e860382ced43490529db1695f5fcc71c
 
 Once this attestation has been added to the Clef store, it can be used to automatically approve interactions that satisfy the conditions encoded in `rules.js` in Clef.
 
-### Account passwords
+### Account passwords {#account-passwords}
 
 The rules described in `rules.js` above require access to the accounts in the Clef keystore which are protected by user-defined passwords. The signer therefore requires access to these passwords in order to automatically unlock the keystore and sign data and transactions using the accounts.
 
@@ -295,7 +295,7 @@ INFO [07-01|14:05:56.031] Credential store updated   key=0xd9c9cd5f6779558b6e0ed
 
 Note that Clef does not really 'unlock' an account, it just abstracts the process of providing the password away from the end-user in specific, predefined scenarios. If an account password exists in the Clef vault and the rule evaluates to "Approve" then Clef decrypts the password, uses it to decrypt the key, does the requested signing and then re-locks the account.
 
-### Implementing rules
+### Implementing rules {#implementing-rules}
 
 Clef can be instructed to run an attested rule file simply by passing the path to `rules.js` to the `--rules` flag:
 
@@ -357,7 +357,7 @@ eth.sendTransaction(tx);
 
 These latter two transactions, that do not satisfy the encoded rules in `rules.js`, are not automatically approved, but instead pass the decision back to the UI for manual approval by the user.
 
-### Summary of basic usage
+### Summary of basic usage {#summary-of-usage}
 
 To summarize, the steps required to run Clef with an automated ruleset that requires account access is as follows:
 
@@ -373,7 +373,7 @@ To summarize, the steps required to run Clef with an automated ruleset that requ
 
 **6)** Make requests directly to Clef using the external API or connect to Geth by passing `--signer=<path to clef.ipc>` at Geth startup
 
-## More rules
+## More rules {#more-rules}
 
 Since rules are defined as Javascript code, rulesets of arbitrary complexity can be created and they can impose conditions on any part of a transaction, not only the recipient and value. A simple example is implementing a "whitelist" of recipients where transactions that have those
 accounts in the `to` field are automatically signed (for example perhaps transactions between a user's own accounts might be whitelisted):
@@ -505,7 +505,7 @@ t=2022-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=response data
 
 More examples, including a ruleset for a rate-limited window, are available on the [Clef Github](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md#example-1-ruleset-for-a-rate-limited-window) and on the [Rules page](/docs/tools/Clef/rules).
 
-## Under the hood
+## Under the hood {#under-the-hood}
 
 The examples on this page have provided step-by-step instructions for various operations using Clef. However, they have not provided much detail as to what is happening under the hood. This section will provide some more details about how Clef organizes itself locally.
 
@@ -563,14 +563,14 @@ cat ~/.clef/02f90c0603f4f2f60188/config.json
 {"0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3": {"iv": "6SC062CfaUW8uSqH","c":"C+S5kaJyrarrxrAESs4EmPjL5zmg5tRh0Q=="}}
 ```
 
-## Geth integration
+## Geth integration {#geth-integration}
 
 This tutorial has bounced back and forth between demonstrating Clef as a standalone tool by making 'manual` JSON RPC requests from the terminal and integrating it as a backend singer for Geth. Using Clef for account management is considered best practise for Geth users because of the additional
 security benefits it offers over and above what it offered by Geth's built-in accounts module. Clef is far more flexible and composable than Geth's built-in account management tool and can interface directly with hardware wallets, while Apps and wallets can request signatures directly from Clef.
 
 Ultimately, the goal is to deprecate Geth's account management tools completely and replace them with Clef. Until then, users are simply encouraged to choose to use Clef as an optional backend signer for Geth. In addition to the examples on this page, the [Getting started tutorial](/docs/_getting-started/index) also demonstrates Clef/Geth integration.
 
-## Summary
+## Summary {#summary}
 
 This page includes step-by-step instructions for basic and intermediate uses of Clef, including using it as a standalone app and a backend signer for Geth. Further information is available on our other Clef pages, including [Introduction](/docs/clef/introduction), [Setup](/docs/clef/setup),
 [Rules](/docs/clef/rules), [Communication Datatypes](/docs/clef/datatypes) and [Communication APIs](/docs/clef/apis). Also see the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.

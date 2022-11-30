@@ -12,7 +12,7 @@ interface Props {
 
 export const Layout: FC<Props> = ({ children }) => {
   return (
-    <Container maxW={{ base: 'container.sm', md: 'container.2xl' }} my={7}>
+    <Container maxW={{ base: 'container.sm', md: 'container.2xl' }} my={{ base: 4, md: 7 }}>
       <Header />
 
       {children}

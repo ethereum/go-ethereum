@@ -71,7 +71,7 @@ InfluxDB is running and configured to store metrics from Geth.
 
 ## Preparing Geth {#preparing-geth}
 
-After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS` 
+After setting up database, metrics need to be enabled in Geth. Various options are available, as documented in the `METRICS AND STATS OPTIONS`
 in `geth --help` and in our [metrics page](/docs/monitoring/metrics). In this case Geth will be configured to push data into InfluxDB. Basic setup specifies the endpoint where InfluxDB is reachable and authenticates the database.
 
 ```sh
@@ -132,16 +132,15 @@ For a Geth monitoring dashboard, copy the URL of [this dashboard](https://grafan
 
 ![Grafana 1](/public/images/docs/grafana.png)
 
+## Customization {#customization}
 
-## Customization
-
-The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to 
+The dashboards can be customized further. Each panel can be edited, moved, removed or added. To learn more about how dashboards work, refer to
 [Grafana's documentation](https://grafana.com/docs/grafana/latest/dashboards/).
 
 Some users might also be interested in automatic [alerting](https://grafana.com/docs/grafana/latest/alerting/), which sets up alert notifications that are sent automatically when metrics reach certain values. Various communication channels are supported.
 
-## Summary
+## Summary {#summary}
 
 This page has outlined how to set up a simple node monitoring dashboard using Grafana.
 
-***NB: this page was adapted from a tutorial on ethereum.org written by Mario Havel***
+**_NB: this page was adapted from a tutorial on ethereum.org written by Mario Havel_**
