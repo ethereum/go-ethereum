@@ -3,8 +3,11 @@ package utils
 import (
 	"os"
 
+	"github.com/ethereum/go-ethereum/core"
+	taikoGenesis "github.com/ethereum/go-ethereum/core/taiko_genesis"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -32,4 +35,21 @@ func RegisterTaikoAPIs(stack *node.Node, cfg *ethconfig.Config, backend *eth.Eth
 			Public:    true,
 		},
 	})
+}
+
+func SetTaikoDevelopNetwork(cfg *ethconfig.Config) {
+	var allocJSON []byte
+	switch cfg.NetworkId {
+	case params.TaikoAlpha1NetworkID.Uint64():
+		allocJSON = taikoGenesis.Alpha1GenesisAllocJSON
+	case params.TaikoAlpha2NetworkID.Uint64():
+		allocJSON = taikoGenesis.Alpha2GenesisAllocJSON
+	default:
+		log.Crit("can not find alloc json file for network")
+	}
+	var alloc core.GenesisAlloc
+	if err := alloc.UnmarshalJSON(allocJSON); err != nil {
+		log.Crit("unmarshal alloc json error", "error", err)
+	}
+	cfg.Genesis.Alloc = alloc
 }
