@@ -518,7 +518,7 @@ func (n *handshakeTestNode) init(key *ecdsa.PrivateKey, ip net.IP, clock mclock.
 	db, _ := enode.OpenDB("")
 	n.ln = enode.NewLocalNode(db, key)
 	n.ln.SetStaticIP(ip)
-	n.c = NewCodec(n.ln, key, clock, protocolID)
+	n.c = NewCodec(n.ln, key, clock, nil)
 }
 
 func (n *handshakeTestNode) encode(t testing.TB, to handshakeTestNode, p Packet) ([]byte, Nonce) {

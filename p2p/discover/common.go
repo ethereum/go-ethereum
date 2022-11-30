@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -46,12 +45,15 @@ type Config struct {
 	PrivateKey *ecdsa.PrivateKey
 
 	// These settings are optional:
-	NetRestrict  *netutil.Netlist   // list of allowed IP networks
-	Bootnodes    []*enode.Node      // list of bootstrap nodes
-	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
-	Log          log.Logger         // if set, log messages go here
+	NetRestrict *netutil.Netlist  // list of allowed IP networks
+	Bootnodes   []*enode.Node     // list of bootstrap nodes
+	Unhandled   chan<- ReadPacket // unhandled packets are sent on this channel
+	Log         log.Logger        // if set, log messages go here
+
+	// V5ProtocolID configures the discv5 protocol identifier.
+	V5ProtocolID *[6]byte
+
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
-	V5Config     V5Config           // DiscV5 settings
 	Clock        mclock.Clock
 }
 
@@ -64,9 +66,6 @@ func (cfg Config) withDefaults() Config {
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = mclock.System{}
-	}
-	if cfg.V5Config.ProtocolID == nil {
-		cfg.V5Config.ProtocolID = &v5wire.DefaultProtocolID
 	}
 	return cfg
 }

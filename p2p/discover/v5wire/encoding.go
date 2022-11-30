@@ -151,13 +151,16 @@ type Codec struct {
 }
 
 // NewCodec creates a wire codec.
-func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, protocolID [6]byte) *Codec {
+func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, protocolID *[6]byte) *Codec {
 	c := &Codec{
 		sha256:     sha256.New(),
 		localnode:  ln,
 		privkey:    key,
 		sc:         NewSessionCache(1024, clock),
-		protocolID: protocolID,
+		protocolID: DefaultProtocolID,
+	}
+	if protocolID != nil {
+		c.protocolID = *protocolID
 	}
 	return c
 }
