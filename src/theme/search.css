@@ -1,0 +1,35 @@
+/* Search field on desktop nav bar */
+.DocSearch-Button {
+  border-radius: 0;
+  height: 100%;
+  background: none;
+  margin: 0;
+  padding: 1rem;
+  width: 200px;
+  gap: 1rem;
+}
+.DocSearch-Button:hover {
+  background: none;
+}
+.DocSearch-Button-Container {
+  flex: 1;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+.DocSearch-Button-Keys kbd {
+  background: none;
+  border: 1px solid var(--chakra-colors-primary);
+  color: var(--chakra-colors-primary);
+  box-shadow: none;
+  padding: 0.125rem;
+}
+.DocSearch-Button-Placeholder {
+  text-align: start;
+  text-transform: lowercase;
+  font-style: italic;
+  color: var(--chakra-colors-primary);
+  font-weight: 400;
+  width: 100%;
+  flex: 1;
+}
+

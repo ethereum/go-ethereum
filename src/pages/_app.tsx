@@ -10,6 +10,9 @@ import theme from '../theme';
 import { MDXProvider } from '@mdx-js/react';
 import MDXComponents from '../components/';
 
+// Algolia search css styling
+import '../theme/search.css';
+
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <ChakraProvider theme={theme}>
