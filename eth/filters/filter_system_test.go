@@ -99,6 +99,13 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 	return rawdb.ReadHeader(b.db, hash, *number), nil
 }
 
+func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := rawdb.ReadBody(b.db, hash, uint64(number)); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
 		return rawdb.ReadReceipts(b.db, hash, *number, params.TestChainConfig), nil

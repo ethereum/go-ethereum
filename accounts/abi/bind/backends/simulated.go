@@ -872,6 +872,13 @@ func (fb *filterBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*t
 	return fb.bc.GetHeaderByHash(hash), nil
 }
 
+func (fb *filterBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := fb.bc.GetBody(hash); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 func (fb *filterBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return fb.backend.pendingBlock, fb.backend.pendingReceipts
 }
