@@ -2,7 +2,7 @@ import { FC } from 'react';
 import { Box, Flex, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
-import { Search } from '../UI'
+import { Search } from '../UI';
 import { MoonIcon, SunIcon } from '../UI/icons';
 
 import { HeaderButtons } from './';

@@ -76,7 +76,7 @@
   background: var(--chakra-colors-bg);
 }
 
-svg[aria-label="Algolia"] * {
+svg[aria-label='Algolia'] * {
   fill: var(--chakra-colors-body);
 }
 
@@ -86,16 +86,16 @@ svg[aria-label="Algolia"] * {
   border-radius: 0;
 }
 
-.DocSearch-Hit[aria-selected="true"] a {
+.DocSearch-Hit[aria-selected='true'] a {
   background: var(--chakra-colors-secondary);
   color: var(--chakra-colors-button-bg);
 }
 
-.DocSearch-Hit[aria-selected="false"] a {
+.DocSearch-Hit[aria-selected='false'] a {
   background: var(--chakra-colors-button-bg);
 }
 
-.DocSearch-Hit[aria-selected="false"] > a > div > div.DocSearch-Hit-icon > svg > path {
+.DocSearch-Hit[aria-selected='false'] > a > div > div.DocSearch-Hit-icon > svg > path {
   color: var(--chakra-colors-body);
 }
 
@@ -120,8 +120,8 @@ svg[aria-label="Algolia"] * {
   border-radius: 0;
 }
 
-.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper svg,
-.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper span,
+.DocSearch-Hit[aria-selected='true'] > a > div > div.DocSearch-Hit-content-wrapper svg,
+.DocSearch-Hit[aria-selected='true'] > a > div > div.DocSearch-Hit-content-wrapper span,
 .DocSearch-Hit-title mark,
 .DocSearch-Hit-path mark,
 .DocSearch-Prefill {
@@ -137,7 +137,7 @@ svg[aria-label="Algolia"] * {
 
 .DocSearch-Input::placeholder {
   font-style: italic;
-  font-size: var(--chakra-fontSizes-md)
+  font-size: var(--chakra-fontSizes-md);
 }
 
 .DocSearch-Container--Stalled .DocSearch-MagnifierLabel,
@@ -155,7 +155,7 @@ svg[aria-label="Algolia"] * {
 
   .DocSearch-Button::before {
     position: absolute;
-    content: "search";
+    content: 'search';
     font-size: var(--chakra-fontSizes-md);
     color: var(--chakra-colors-bg);
     inset: 0;
@@ -168,7 +168,8 @@ svg[aria-label="Algolia"] * {
   }
 
   /* Mobile modal styling */
-  .DocSearch-Container, .DocSearch-Modal {
+  .DocSearch-Container,
+  .DocSearch-Modal {
     position: fixed;
     inset: 1rem;
     max-width: calc(100vw - 2rem);
@@ -177,5 +178,5 @@ svg[aria-label="Algolia"] * {
 
   .DocSearch-Cancel {
     color: var(--chakra-colors-primary);
-  }  
+  }
 }

@@ -1,4 +1,12 @@
-import { Box, Flex, Modal, ModalContent, ModalOverlay, Stack, useDisclosure } from '@chakra-ui/react';
+import {
+  Box,
+  Flex,
+  Modal,
+  ModalContent,
+  ModalOverlay,
+  Stack,
+  useDisclosure
+} from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
 
 import { HamburgerIcon } from '../UI/icons';
