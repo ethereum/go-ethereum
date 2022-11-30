@@ -1,7 +1,7 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import { Stack, Heading } from '@chakra-ui/react';
+import { Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
 import gfm from 'remark-gfm';
@@ -12,6 +12,7 @@ import MDXComponents from '../components/';
 import { Breadcrumbs } from '../components/docs';
 import { PageMetadata } from '../components/UI';
 import { textStyles } from '../theme/foundations';
+import { getParsedDate } from '../utils';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -49,11 +50,14 @@ export const getStaticProps: GetStaticProps = async context => {
   const { slug } = context.params as ParsedUrlQuery;
   const filePath = (slug as string[])!.join('/');
   let file;
+  let lastModified;
 
   try {
     file = fs.readFileSync(`${filePath}.md`, 'utf-8');
+    lastModified = fs.statSync(`${filePath}.md`);
   } catch {
     file = fs.readFileSync(`${filePath}/index.md`, 'utf-8');
+    lastModified = fs.statSync(`${filePath}/index.md`);
   }
 
   const { data: frontmatter, content } = matter(file, MATTER_OPTIONS);
@@ -61,7 +65,12 @@ export const getStaticProps: GetStaticProps = async context => {
   return {
     props: {
       frontmatter,
-      content
+      content,
+      lastModified: getParsedDate(lastModified.mtime, {
+        month: 'numeric',
+        day: 'numeric',
+        year: 'numeric'
+      })
     }
   };
 };
@@ -71,9 +80,10 @@ interface Props {
     [key: string]: string;
   };
   content: string;
+  lastModified: string;
 }
 
-const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
+const DocPage: NextPage<Props> = ({ frontmatter, content, lastModified }) => {
   return (
     <>
       <PageMetadata title={frontmatter.title} description={frontmatter.description} />
@@ -84,7 +94,9 @@ const DocPage: NextPage<Props> = ({ frontmatter, content }) => {
           <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
             {frontmatter.title}
           </Heading>
-          {/* <Text as='span' mt='0 !important'>last edited {TODO: get last edited date}</Text> */}
+          <Text as='span' mt='0 !important'>
+            last edited {lastModified}
+          </Text>
         </Stack>
         <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>
           {content}
