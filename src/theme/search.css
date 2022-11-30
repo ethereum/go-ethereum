@@ -7,10 +7,19 @@
   padding: 1rem;
   width: 200px;
   gap: 1rem;
+  --docsearch-searchbox-shadow: transparent;
+  --docsearch-searchbox-focus-background: transparent;
 }
 
 .DocSearch-Button:hover {
-  background: none;
+  background: var(--chakra-colors-primary);
+}
+
+.DocSearch-Button:hover svg path,
+.DocSearch-Button:hover kbd,
+.DocSearch-Button:hover span {
+  color: var(--chakra-colors-bg);
+  border-color: var(--chakra-colors-bg);
 }
 
 .DocSearch-Button-Container {
@@ -147,10 +156,6 @@ svg[aria-label="Algolia"] * {
     inset: 0;
     text-align: start;
     padding: 2rem 1rem;
-  }
-
-  .DocSearch-Button:active, .DocSearch-Button:focus, .DocSearch-Button:hover {
-    background: var(--chakra-colors-primary);
   }
 
   .DocSearch-Search-Icon * {
