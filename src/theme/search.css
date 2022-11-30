@@ -42,6 +42,10 @@
 }
 
 /* Algolia search modal styling */
+.DocSearch-Container {
+  z-index: 1400;
+}
+
 .DocSearch-Modal {
   border-radius: 0;
   background: var(--chakra-colors-bg);
@@ -127,8 +131,8 @@ svg[aria-label="Algolia"] * {
   font-size: var(--chakra-fontSizes-md)
 }
 
-/* Search field in mobile menu */
 @media (max-width: 768px) {
+  /* Search field in mobile menu */
   .DocSearch-Button {
     padding: 2rem 1rem;
     width: 100%;
@@ -145,7 +149,19 @@ svg[aria-label="Algolia"] * {
     padding: 2rem 1rem;
   }
 
+  .DocSearch-Button:active, .DocSearch-Button:focus, .DocSearch-Button:hover {
+    background: var(--chakra-colors-primary);
+  }
+
   .DocSearch-Search-Icon * {
     color: var(--chakra-colors-bg);
   }
+
+  /* Mobile modal styling */
+  .DocSearch-Container, .DocSearch-Modal {
+    position: fixed;
+    inset: 1rem 1.875rem;
+    max-width: calc(100vw - 3.75rem);
+    max-height: calc(100vh - 2rem);
+  }  
 }

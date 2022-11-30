@@ -41,6 +41,7 @@ export const MobileMenu: React.FC = () => {
             border={BORDER_WIDTH}
             overflow='hidden'
             direction='column'
+            display={{ md: 'none' }}
           >
             <Flex borderBottom={BORDER_WIDTH} justify='flex-end'>
               {/* CLOSE ICON */}
