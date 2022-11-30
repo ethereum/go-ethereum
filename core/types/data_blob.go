@@ -277,14 +277,11 @@ func (blobs Blobs) ComputeCommitmentsAndAggregatedProof() (commitments []KZGComm
 		versionedHashes[i] = common.Hash(eth.KZGToVersionedHash(c))
 	}
 
-	var kzgProof KZGProof
-	if len(blobs) != 0 {
-		proof, err := eth.ComputeAggregateKZGProof(blobs)
-		if err != nil {
-			return nil, nil, KZGProof{}, err
-		}
-		kzgProof = KZGProof(proof)
+	proof, err := eth.ComputeAggregateKZGProof(blobs)
+	if err != nil {
+		return nil, nil, KZGProof{}, err
 	}
+	var kzgProof = KZGProof(proof)
 
 	return commitments, versionedHashes, kzgProof, nil
 }
