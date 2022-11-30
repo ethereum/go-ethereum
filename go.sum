@@ -370,6 +370,8 @@ github.com/protolambda/go-kzg v0.0.0-20221121235515-3f3e1ef6beb7 h1:yzqsT6UIT17b
 github.com/protolambda/go-kzg v0.0.0-20221121235515-3f3e1ef6beb7/go.mod h1:7EhkBJFo/qJ9sToiW5baPqbyPo/TadVHn4iNdpwEW/w=
 github.com/protolambda/go-kzg v0.0.0-20221122014024-bb3fa3695412 h1:MQBDul/k5XDDYF5fVn18lNwkWKxpK93FbYeaum1b1UE=
 github.com/protolambda/go-kzg v0.0.0-20221122014024-bb3fa3695412/go.mod h1:7EhkBJFo/qJ9sToiW5baPqbyPo/TadVHn4iNdpwEW/w=
+github.com/protolambda/go-kzg v0.0.0-20221129234330-612948a21fb0 h1:DDaoou46n4krrbtDkymmqFAx2iqxatt2Sk+B1ZOM45A=
+github.com/protolambda/go-kzg v0.0.0-20221129234330-612948a21fb0/go.mod h1:7EhkBJFo/qJ9sToiW5baPqbyPo/TadVHn4iNdpwEW/w=
 github.com/protolambda/ztyp v0.2.1 h1:+rfw75/Zh8EopNlG652TGDXlLgJflj6XWxJ9yCVpJws=
 github.com/protolambda/ztyp v0.2.1/go.mod h1:9bYgKGqg3wJqT9ac1gI2hnVb0STQq7p/1lapqrqY1dU=
 github.com/retailnext/hllpp v1.0.1-0.20180308014038-101a6d2f8b52/go.mod h1:RDpi1RftBQPUCDRw6SmxeaREsAaRKnOclghuzp/WRzc=
