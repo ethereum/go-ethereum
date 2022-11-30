@@ -142,11 +142,11 @@ jobs:
             bash docker-heimdall-start-all.sh
             bash docker-bor-setup.sh
             bash docker-bor-start-all.sh
-            sleep 120 && bash ganache-deployment-bor.sh
-            sleep 120 && bash ganache-deployment-sync.sh
-            sleep 120
-            docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'admin.peers'"
-            docker exec bor0 bash -c "bor attach /root/.bor/data/bor.ipc -exec 'eth.blockNumber'"
+            cd -
+            timeout 2m bash bor/integration-tests/bor_health.sh
+            cd -
+            bash ganache-deployment-bor.sh
+            bash ganache-deployment-sync.sh
 
         - name: Run smoke tests
           run: |
