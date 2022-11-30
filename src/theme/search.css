@@ -140,6 +140,9 @@ svg[aria-label="Algolia"] * {
   font-size: var(--chakra-fontSizes-md)
 }
 
+.DocSearch-Container--Stalled .DocSearch-MagnifierLabel,
+.DocSearch-Container--Stalled .DocSearch-LoadingIndicator {
+  color: var(--chakra-colors-bg);
 }
 
 @media (max-width: 768px) {
