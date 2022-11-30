@@ -33,3 +33,88 @@
   flex: 1;
 }
 
+/* Algolia search modal styling */
+.DocSearch-Search-Icon *,
+.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper svg,
+.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper span,
+.DocSearch-Hit-title mark,
+.DocSearch-Prefill {
+  color: var(--chakra-colors-primary);
+}
+
+.DocSearch-Logo {
+  text-transform: uppercase;
+}
+
+.DocSearch-Commands kbd {
+  background: var(--chakra-colors-button-bg);
+  border: 1px solid var(--chakra-colors-primary);
+  border-radius: 0;
+  color: var(--chakra-colors-primary);
+  box-shadow: none;
+}
+
+.DocSearch-Footer {
+  background: var(--chakra-colors-bg);
+}
+
+svg[aria-label="Algolia"] * {
+  fill: var(--chakra-colors-body);
+}
+
+.DocSearch-Modal {
+  border-radius: 0;
+  background: var(--chakra-colors-bg);
+}
+
+.DocSearch-Form {
+  box-shadow: inset 0 0 0 2px var(--chakra-colors-primary);
+  background: var(--chakra-colors-secondary);
+  border-radius: 0;
+}
+
+.DocSearch-Hit[aria-selected="true"] a {
+  background: var(--chakra-colors-secondary);
+  color: var(--chakra-colors-button-bg);
+}
+
+.DocSearch-Hit[aria-selected="false"] a {
+  background: var(--chakra-colors-button-bg);
+}
+
+.DocSearch-Hit[aria-selected="false"] > a > div > div.DocSearch-Hit-icon > svg > path {
+  color: var(--chakra-colors-body);
+}
+
+.DocSearch-Hit-source,
+.DocSearch-Label {
+  color: var(--chakra-colors-body);
+  font-family: var(--chakra-fonts-heading);
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+.DocSearch-Hit-source {
+  background: var(--chakra-colors-bg);
+  padding-block: var(--chakra-space-2);
+}
+
+.DocSearch-Input,
+.DocSearch-Input::placeholder,
+.DocSearch-Form > label > svg > path,
+.DocSearch-Reset {
+  color: var(--chakra-colors-bg);
+}
+
+.DocSearch-Input::placeholder {
+  font-style: italic;
+  font-size: var(--chakra-fontSizes-md)
+}
+
+.DocSearch-Hit {
+  padding-bottom: var(--chakra-space-2);
+}
+
+.DocSearch-Hit a {
+  border-radius: 0;
+}
