@@ -38,6 +38,7 @@
 .DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper svg,
 .DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper span,
 .DocSearch-Hit-title mark,
+.DocSearch-Hit-path mark,
 .DocSearch-Prefill {
   color: var(--chakra-colors-primary);
 }
