@@ -9,7 +9,7 @@ The JSON-RPC API's `personal` namespace has historically been used to manage acc
 
 ### personal_unlockAccount
 
-There is no need for a direct replacement for `personal_unlockAccount`. Using Clef to manually approve actions or to attest custom rulesets is a much more secure way to interact with accounts without needing to indiscriminately unlock accounts. 
+There is no need for a direct replacement for `personal_unlockAccount`. Using Clef to manually approve actions or to attest custom rulesets is a much more secure way to interact with accounts without needing to indiscriminately unlock accounts.
 
 ### personal_lockAccount
 
@@ -38,7 +38,7 @@ curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1
 
 ```js
 // eth_accounts in Geth's JS console
-eth.accounts
+eth.accounts;
 ```
 
 ```sh
@@ -68,8 +68,8 @@ curl --data '{"id": 4, "jsonrpc": "2.0", "method": "account_ecRecover","params":
 clef importraw <private-key-as-hex-string>
 ```
 
-
 ### personal_listWallets
+
 As opposed to `listAccounts`, this method lists full details, including usb path or keystore-file paths. The equivalent method is `clef_listWallets`. This method can be called from the terminal using:
 
 ```sh
@@ -100,18 +100,19 @@ Both require manual approval in Clef unless a custom ruleset is in place.
 
 ### personal_sendTransaction
 
-`personal_sendTransaction` ws used to sign and submit a transaction. This can be done using `eth_sendTransaction`, requiring manual approval in Clef. 
+`personal_sendTransaction` ws used to sign and submit a transaction. This can be done using `eth_sendTransaction`, requiring manual approval in Clef.
 
 Example call (Javascript console):
 
 ```js
 // this command requires 2x approval in Clef because it loads account data via eth.accounts[0]
 // and eth.accounts[1]
-var tx = {from: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.1, "ether")}
+var tx = { from: eth.accounts[0], to: eth.accounts[1], value: web3.toWei(0.1, 'ether') };
 
 // then send the transaction
-eth.sendTransaction(tx)
+eth.sendTransaction(tx);
 ```
+
 Example call (terminal)
 
 ```sh
@@ -218,4 +219,3 @@ Example call (terminal):
 ```sh
 curl --data '{"id": 2, "jsonrpc": "2.0", "method": "account_signTransaction", "params": [{"from": "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db", "gas": "0x55555","gasPrice": "0x1234", "input": "0xabcd", "nonce": "0x0", "to": "0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value": "0x1234"}]}' -X POST -H "Content-Type: application/json" localhost:8550
 ```
-

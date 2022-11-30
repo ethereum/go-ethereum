@@ -92,14 +92,22 @@ const MDXComponents = {
   // code
   code: ({ children, ...props }: any) => <Code {...props}>{children}</Code>,
   // list
-  ul: ({children}: any) => {
-    return <UnorderedList mb={7} px={4}>{children}</UnorderedList>
+  ul: ({ children }: any) => {
+    return (
+      <UnorderedList mb={7} px={4}>
+        {children}
+      </UnorderedList>
+    );
   },
-  ol: ({children}: any) => {
-    return <OrderedList mb={7} px={4}>{children}</OrderedList>
+  ol: ({ children }: any) => {
+    return (
+      <OrderedList mb={7} px={4}>
+        {children}
+      </OrderedList>
+    );
   },
   li: ({ children }: any) => {
-    return <ListItem color='primary'>{children}</ListItem>
+    return <ListItem color='primary'>{children}</ListItem>;
   }
 };
 

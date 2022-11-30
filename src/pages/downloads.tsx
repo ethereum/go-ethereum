@@ -1,6 +1,7 @@
 import { Center, Code, Flex, Link, ListItem, Stack, Text, UnorderedList } from '@chakra-ui/react';
-import type { GetServerSideProps, NextPage } from 'next';
+import type { GetStaticProps, NextPage } from 'next';
 import { useState } from 'react';
+import { XMLParser } from 'fast-xml-parser';
 
 import {
   DownloadsHero,
@@ -11,49 +12,43 @@ import {
 import { DataTable, PageMetadata } from '../components/UI';
 
 import {
-  ALL_GETH_COMMITS_URL,
   DEFAULT_BUILD_AMOUNT_TO_SHOW,
-  DOWNLOAD_OPENPGP_BUILD_HEADERS,
-  DOWNLOAD_OPENPGP_DEVELOPER_HEADERS,
+  DOWNLOADS_OPENPGP_BUILD_HEADERS,
+  DOWNLOADS_OPENPGP_DEVELOPER_HEADERS,
   GETH_REPO_URL,
   METADATA,
-  LATEST_GETH_RELEASE_URL,
   LATEST_SOURCES_BASE_URL,
-  LINUX_BINARY_BASE_URL,
-  MACOS_BINARY_BASE_URL,
-  RELEASE_NOTES_BASE_URL,
-  WINDOWS_BINARY_BASE_URL
+  RELEASE_NOTES_BASE_URL
 } from '../constants';
 
-import { testDownloadData } from '../data/test/download-testdata';
 import { pgpBuildTestData } from '../data/test/pgpbuild-testdata';
 import { pgpDeveloperTestData } from '../data/test/pgpdeveloper-testdata';
 
-export const getServerSideProps: GetServerSideProps = async () => {
-  // Latest release name & version number
-  const { versionNumber, releaseName } = await fetch(LATEST_GETH_RELEASE_URL)
-    .then(response => response.json())
-    .then(release => {
-      return {
-        versionNumber: release.tag_name,
-        releaseName: release.name
-      };
-    });
+import {
+  fetchLatestReleaseCommit,
+  fetchLatestReleaseVersionAndName,
+  fetchXMLData,
+  getLatestBinaryURL,
+  getSortedReleases,
+  mapReleasesData
+} from '../utils';
+import { LatestReleasesData, ReleaseData } from '../types';
+
+// This function gets called at build time on server-side.
+// It'll be called again if a new request comes in after 1hr, so data is refreshed periodically
+// More info: https://nextjs.org/docs/basic-features/data-fetching/incremental-static-regeneration
+export const getStaticProps: GetStaticProps = async () => {
+  // ==== LATEST RELEASES DATA ====
+
+  // Latest version number & release name
+  const { versionNumber, releaseName } = await fetchLatestReleaseVersionAndName();
   // Latest release commit hash
-  const commit = await fetch(`${ALL_GETH_COMMITS_URL}/${versionNumber}`)
-    .then(response => response.json())
-    .then(commit => commit.sha.slice(0, 8));
+  const commit = await fetchLatestReleaseCommit(versionNumber);
 
   // Latest binaries urls
-  const LATEST_LINUX_BINARY_URL = `${LINUX_BINARY_BASE_URL}${versionNumber.slice(
-    1
-  )}-${commit}.tar.gz`;
-  const LATEST_MACOS_BINARY_URL = `${MACOS_BINARY_BASE_URL}${versionNumber.slice(
-    1
-  )}-${commit}.tar.gz`;
-  const LATEST_WINDOWS_BINARY_URL = `${WINDOWS_BINARY_BASE_URL}${versionNumber.slice(
-    1
-  )}-${commit}.exe`;
+  const LATEST_LINUX_BINARY_URL = getLatestBinaryURL('linux', versionNumber, commit);
+  const LATEST_MACOS_BINARY_URL = getLatestBinaryURL('darwin', versionNumber, commit);
+  const LATEST_WINDOWS_BINARY_URL = getLatestBinaryURL('windows', versionNumber, commit);
 
   // Sources urls
   const LATEST_SOURCES_URL = `${LATEST_SOURCES_BASE_URL}${versionNumber}.tar.gz`;
@@ -71,63 +66,249 @@ export const getServerSideProps: GetServerSideProps = async () => {
     }
   };
 
-  return {
-    props: {
-      data: { LATEST_RELEASES_DATA }
-    }
-  };
+  // ==== ALL RELEASES DATA ====
+
+  // 1) fetch XML data
+  try {
+    const [
+      ALL_LINUX_RELEASES_XML_DATA,
+      ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA,
+      ALL_MACOS_RELEASES_XML_DATA,
+      ALL_MACOS_ALL_TOOLS_RELEASES_XML_DATA,
+      ALL_WINDOWS_RELEASES_XML_DATA,
+      ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA,
+      ALL_ANDROID_RELEASES_XML_DATA,
+      ALL_IOS_RELEASES_XML_DATA
+    ] = await fetchXMLData();
+
+    // 2) XML data parsing
+    const parser = new XMLParser();
+
+    // linux
+    const linuxJson = parser.parse(ALL_LINUX_RELEASES_XML_DATA);
+    const ALL_LINUX_BLOBS_JSON_DATA = linuxJson.EnumerationResults.Blobs.Blob;
+
+    const linuxAllToolsJson = parser.parse(ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA);
+    const ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA = linuxAllToolsJson.EnumerationResults.Blobs.Blob;
+
+    // macOS
+    const macOSJson = parser.parse(ALL_MACOS_RELEASES_XML_DATA);
+    const ALL_MACOS_BLOBS_JSON_DATA = macOSJson.EnumerationResults.Blobs.Blob;
+
+    const macOSAllToolsJson = parser.parse(ALL_MACOS_ALL_TOOLS_RELEASES_XML_DATA);
+    const ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA = macOSAllToolsJson.EnumerationResults.Blobs.Blob;
+
+    // windows
+    const windowsJson = parser.parse(ALL_WINDOWS_RELEASES_XML_DATA);
+    const ALL_WINDOWS_BLOBS_JSON_DATA = windowsJson.EnumerationResults.Blobs.Blob;
+
+    const windowsAllToolsJson = parser.parse(ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA);
+    const ALL_WINDOWS_ALL_TOOLS_BLOBS_JSON_DATA = windowsAllToolsJson.EnumerationResults.Blobs.Blob;
+
+    // android
+    const androidJson = parser.parse(ALL_ANDROID_RELEASES_XML_DATA);
+    const ALL_ANDROID_BLOBS_JSON_DATA = androidJson.EnumerationResults.Blobs.Blob;
+
+    // iOS
+    const iOSJson = parser.parse(ALL_IOS_RELEASES_XML_DATA);
+    const ALL_IOS_BLOBS_JSON_DATA = iOSJson.EnumerationResults.Blobs.Blob;
+
+    // 3) get blobs
+    // linux
+    const LINUX_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const LINUX_ALLTOOLS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const LINUX_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+    const LINUX_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+
+    // macOS
+    const MACOS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_MACOS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const MACOS_ALLTOOLS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const MACOS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_MACOS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+    const MACOS_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+
+    // windows
+    const WINDOWS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_WINDOWS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const WINDOWS_ALLTOOLS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_WINDOWS_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const WINDOWS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_WINDOWS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+    const WINDOWS_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_WINDOWS_ALL_TOOLS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+
+    // android
+    const ANDROID_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_ANDROID_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const ANDROID_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_ANDROID_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+
+    // iOS
+    const IOS_STABLE_RELEASES_DATA = mapReleasesData({
+      blobsList: ALL_IOS_BLOBS_JSON_DATA,
+      isStableRelease: true
+    });
+    const IOS_DEV_BUILDS_DATA = mapReleasesData({
+      blobsList: ALL_IOS_BLOBS_JSON_DATA,
+      isStableRelease: false
+    });
+
+    return {
+      props: {
+        data: {
+          // latest
+          LATEST_RELEASES_DATA,
+          // linux
+          ALL_LINUX_STABLE_RELEASES: getSortedReleases(
+            LINUX_STABLE_RELEASES_DATA,
+            LINUX_ALLTOOLS_STABLE_RELEASES_DATA
+          ),
+          ALL_LINUX_DEV_BUILDS: getSortedReleases(
+            LINUX_DEV_BUILDS_DATA,
+            LINUX_ALLTOOLS_DEV_BUILDS_DATA
+          ),
+          // macOS
+          ALL_MACOS_STABLE_RELEASES: getSortedReleases(
+            MACOS_STABLE_RELEASES_DATA,
+            MACOS_ALLTOOLS_STABLE_RELEASES_DATA
+          ),
+          ALL_MACOS_DEV_BUILDS: getSortedReleases(
+            MACOS_DEV_BUILDS_DATA,
+            MACOS_ALLTOOLS_DEV_BUILDS_DATA
+          ),
+          // windows
+          ALL_WINDOWS_STABLE_RELEASES: getSortedReleases(
+            WINDOWS_STABLE_RELEASES_DATA,
+            WINDOWS_ALLTOOLS_STABLE_RELEASES_DATA
+          ),
+          ALL_WINDOWS_DEV_BUILDS: getSortedReleases(
+            WINDOWS_DEV_BUILDS_DATA,
+            WINDOWS_ALLTOOLS_DEV_BUILDS_DATA
+          ),
+          // android
+          ALL_ANDROID_STABLE_RELEASES: getSortedReleases(ANDROID_STABLE_RELEASES_DATA),
+          ALL_ANDROID_DEV_BUILDS: getSortedReleases(ANDROID_DEV_BUILDS_DATA),
+          // iOS
+          ALL_IOS_STABLE_RELEASES: getSortedReleases(IOS_STABLE_RELEASES_DATA),
+          ALL_IOS_DEV_BUILDS: getSortedReleases(IOS_DEV_BUILDS_DATA)
+        }
+      },
+      // using ISR here (https://nextjs.org/docs/basic-features/data-fetching/incremental-static-regeneration)
+      revalidate: 3600 // 1hr in seconds
+    };
+  } catch (error) {
+    console.error(error);
+
+    return { notFound: true };
+  }
 };
 
 interface Props {
   data: {
-    // TODO: define interfaces after adding the rest of the logic
-    LATEST_RELEASES_DATA: {
-      versionNumber: string;
-      releaseName: string;
-      urls: {
-        LATEST_LINUX_BINARY_URL: string;
-        LATEST_MACOS_BINARY_URL: string;
-        LATEST_WINDOWS_BINARY_URL: string;
-        LATEST_SOURCES_URL: string;
-        RELEASE_NOTES_URL: string;
-      };
-    };
+    // latest
+    LATEST_RELEASES_DATA: LatestReleasesData;
+    // linux
+    ALL_LINUX_STABLE_RELEASES: ReleaseData[];
+    ALL_LINUX_DEV_BUILDS: ReleaseData[];
+    // macOS
+    ALL_MACOS_STABLE_RELEASES: ReleaseData[];
+    ALL_MACOS_DEV_BUILDS: ReleaseData[];
+    // windows
+    ALL_WINDOWS_STABLE_RELEASES: ReleaseData[];
+    ALL_WINDOWS_DEV_BUILDS: ReleaseData[];
+    // android
+    ALL_ANDROID_STABLE_RELEASES: ReleaseData[];
+    ALL_ANDROID_DEV_BUILDS: ReleaseData[];
+    // iOS
+    ALL_IOS_STABLE_RELEASES: ReleaseData[];
+    ALL_IOS_DEV_BUILDS: ReleaseData[];
   };
 }
 
 const DownloadsPage: NextPage<Props> = ({ data }) => {
-  const [amountStableReleases, updateAmountStables] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
-  const [amountDevelopBuilds, updateAmountDevelopBuilds] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
+  const {
+    // latest
+    LATEST_RELEASES_DATA,
+    // linux
+    ALL_LINUX_STABLE_RELEASES,
+    ALL_LINUX_DEV_BUILDS,
+    // macOS
+    ALL_MACOS_STABLE_RELEASES,
+    ALL_MACOS_DEV_BUILDS,
+    // windows
+    ALL_WINDOWS_STABLE_RELEASES,
+    ALL_WINDOWS_DEV_BUILDS,
+    // android
+    ALL_ANDROID_STABLE_RELEASES,
+    ALL_ANDROID_DEV_BUILDS,
+    // iOS
+    ALL_IOS_STABLE_RELEASES,
+    ALL_IOS_DEV_BUILDS
+  } = data;
+
+  const [amountStableReleases, setAmountStableReleases] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
+  const [amountDevBuilds, setAmountDevBuilds] = useState(DEFAULT_BUILD_AMOUNT_TO_SHOW);
+
+  const [totalStableReleases, setTotalStableReleases] = useState(ALL_LINUX_STABLE_RELEASES.length);
+  const [totalDevBuilds, setTotalDevBuilds] = useState(ALL_LINUX_DEV_BUILDS.length);
 
   const showMoreStableReleases = () => {
-    updateAmountStables(amountStableReleases + 10);
+    setAmountStableReleases(amountStableReleases + 10);
   };
 
-  const showMoreDevelopBuilds = () => {
-    updateAmountDevelopBuilds(amountDevelopBuilds + 10);
+  const showMoreDevBuilds = () => {
+    setAmountDevBuilds(amountDevBuilds + 10);
   };
-
-  const {
-    LATEST_RELEASES_DATA: { releaseName, versionNumber, urls }
-  } = data;
 
   return (
     <>
-      <PageMetadata
-        title={METADATA.DOWNLOADS_TITLE}
-        description={METADATA.DOWNLOADS_DESCRIPTION}
-      />
+      <PageMetadata title={METADATA.DOWNLOADS_TITLE} description={METADATA.DOWNLOADS_DESCRIPTION} />
 
       <main>
         <Stack spacing={4}>
           <DownloadsHero
-            currentBuild={releaseName}
-            currentBuildVersion={versionNumber}
-            linuxBuildURL={urls.LATEST_LINUX_BINARY_URL}
-            macOSBuildURL={urls.LATEST_MACOS_BINARY_URL}
-            windowsBuildURL={urls.LATEST_WINDOWS_BINARY_URL}
-            sourceCodeURL={urls.LATEST_SOURCES_URL}
-            releaseNotesURL={urls.RELEASE_NOTES_URL}
+            currentBuild={LATEST_RELEASES_DATA.releaseName}
+            currentBuildVersion={LATEST_RELEASES_DATA.versionNumber}
+            linuxBuildURL={LATEST_RELEASES_DATA.urls.LATEST_LINUX_BINARY_URL}
+            macOSBuildURL={LATEST_RELEASES_DATA.urls.LATEST_MACOS_BINARY_URL}
+            windowsBuildURL={LATEST_RELEASES_DATA.urls.LATEST_WINDOWS_BINARY_URL}
+            sourceCodeURL={LATEST_RELEASES_DATA.urls.LATEST_SOURCES_URL}
+            releaseNotesURL={LATEST_RELEASES_DATA.urls.RELEASE_NOTES_URL}
           />
 
           <SpecificVersionsSection>
@@ -168,6 +349,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             </Stack>
           </SpecificVersionsSection>
 
+          {/* STABLE RELEASES */}
           <DownloadsSection
             id='stablereleases'
             sectionDescription={
@@ -181,42 +363,59 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             }
             sectionTitle='Stable releases'
           >
-            {/* TODO: swap test data for real data */}
-            <DownloadsTable data={testDownloadData.slice(0, amountStableReleases)} />
-
+            <DownloadsTable
+              linuxData={ALL_LINUX_STABLE_RELEASES}
+              macOSData={ALL_MACOS_STABLE_RELEASES}
+              windowsData={ALL_WINDOWS_STABLE_RELEASES}
+              iOSData={ALL_IOS_STABLE_RELEASES}
+              androidData={ALL_ANDROID_STABLE_RELEASES}
+              amountOfReleasesToShow={amountStableReleases}
+              setTotalReleases={setTotalStableReleases}
+            />
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
               justifyContent='space-between'
+              alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }}>
-                <Center>
-                  {/* TODO: swap testDownloadData with actual data */}
-                  <Text>
-                    Showing {amountStableReleases} latest releases of a total{' '}
-                    {testDownloadData.length} releases
-                  </Text>
-                </Center>
+              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
+                <Text textStyle='hero-text-small'>
+                  {totalStableReleases > 0
+                    ? `Showing ${Math.min(
+                        amountStableReleases,
+                        totalStableReleases
+                      )} latest releases of
+                    a total ${totalStableReleases} releases`
+                    : `No releases`}
+                </Text>
               </Stack>
-              <Stack
-                sx={{ mt: '0 !important' }}
-                borderLeft={{ base: 'none', md: '2px solid #11866f' }}
-              >
-                <Link as='button' variant='button-link-secondary' onClick={showMoreStableReleases}>
-                  <Text
-                    fontFamily='"JetBrains Mono", monospace'
-                    fontWeight={700}
-                    textTransform='uppercase'
-                    textAlign='center'
-                    p={4}
+
+              {totalStableReleases > amountStableReleases && (
+                <Stack
+                  sx={{ mt: '0 !important' }}
+                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                >
+                  <Link
+                    as='button'
+                    variant='button-link-secondary'
+                    onClick={showMoreStableReleases}
                   >
-                    Show older releases
-                  </Text>
-                </Link>
-              </Stack>
+                    <Text
+                      fontFamily='"JetBrains Mono", monospace'
+                      fontWeight={700}
+                      textTransform='uppercase'
+                      textAlign='center'
+                      p={4}
+                    >
+                      Show older releases
+                    </Text>
+                  </Link>
+                </Stack>
+              )}
             </Flex>
           </DownloadsSection>
 
+          {/* DEV BUILDS */}
           <DownloadsSection
             id='developbuilds'
             sectionDescription={
@@ -230,39 +429,48 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             }
             sectionTitle='Develop builds'
           >
-            {/* TODO: swap for real data */}
-            <DownloadsTable data={testDownloadData.slice(0, amountDevelopBuilds)} />
-
+            <DownloadsTable
+              linuxData={ALL_LINUX_DEV_BUILDS}
+              macOSData={ALL_MACOS_DEV_BUILDS}
+              windowsData={ALL_WINDOWS_DEV_BUILDS}
+              iOSData={ALL_IOS_DEV_BUILDS}
+              androidData={ALL_ANDROID_DEV_BUILDS}
+              amountOfReleasesToShow={amountDevBuilds}
+              setTotalReleases={setTotalDevBuilds}
+            />
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
               justifyContent='space-between'
+              alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }}>
-                <Center>
-                  {/* TODO: swap testDownloadData with actual data */}
-                  <Text>
-                    Showing {amountDevelopBuilds} latest releases of a total{' '}
-                    {testDownloadData.length} releases
-                  </Text>
-                </Center>
+              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
+                <Text textStyle='hero-text-small'>
+                  {totalDevBuilds > 0
+                    ? `Showing ${Math.min(amountDevBuilds, totalDevBuilds)} latest releases of
+                    a total ${totalDevBuilds} releases`
+                    : `No releases`}
+                </Text>
               </Stack>
-              <Stack
-                sx={{ mt: '0 !important' }}
-                borderLeft={{ base: 'none', md: '2px solid #11866f' }}
-              >
-                <Link as='button' variant='button-link-secondary' onClick={showMoreDevelopBuilds}>
-                  <Text
-                    fontFamily='"JetBrains Mono", monospace'
-                    fontWeight={700}
-                    textTransform='uppercase'
-                    textAlign='center'
-                    p={4}
-                  >
-                    Show older releases
-                  </Text>
-                </Link>
-              </Stack>
+
+              {totalDevBuilds > amountDevBuilds && (
+                <Stack
+                  sx={{ mt: '0 !important' }}
+                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                >
+                  <Link as='button' variant='button-link-secondary' onClick={showMoreDevBuilds}>
+                    <Text
+                      fontFamily='"JetBrains Mono", monospace'
+                      fontWeight={700}
+                      textTransform='uppercase'
+                      textAlign='center'
+                      p={4}
+                    >
+                      Show older releases
+                    </Text>
+                  </Link>
+                </Stack>
+              )}
             </Flex>
           </DownloadsSection>
 
@@ -277,13 +485,13 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
           >
             {/* TODO: swap for real data */}
             <Stack borderBottom='2px solid' borderColor='primary'>
-              <DataTable columnHeaders={DOWNLOAD_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
+              <DataTable columnHeaders={DOWNLOADS_OPENPGP_BUILD_HEADERS} data={pgpBuildTestData} />
             </Stack>
 
             {/* TODO: swap for real data */}
             <Stack>
               <DataTable
-                columnHeaders={DOWNLOAD_OPENPGP_DEVELOPER_HEADERS}
+                columnHeaders={DOWNLOADS_OPENPGP_DEVELOPER_HEADERS}
                 data={pgpDeveloperTestData}
               />
             </Stack>

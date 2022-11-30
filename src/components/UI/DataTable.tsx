@@ -1,8 +1,11 @@
-import { Table, Thead, Tr, Th, TableContainer, Text, Tbody, Td } from '@chakra-ui/react';
+import { Link, Table, Thead, Tr, Th, TableContainer, Text, Tbody, Td } from '@chakra-ui/react';
 import { FC } from 'react';
+import { ReleaseData } from '../../types';
+import { getParsedDate } from '../../utils';
 
 interface Props {
   columnHeaders: string[];
+  // TODO: update data type
   data: any;
 }
 
@@ -41,20 +44,44 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
             })}
           </Tr>
         </Thead>
+
         <Tbody>
-          {data.map((item: any, idx: number) => {
+          {data.map((r: ReleaseData, idx: number) => {
             return (
               <Tr
                 key={idx}
-                // TODO: Get new background color from nuno for hover
                 transition={'all 0.5s'}
                 _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
               >
-                {columnHeaders.map((columnHeader, idx) => {
-                  // TODO: Make the font size smaller (refer to design system)
+                {Object.entries(r).map((item, idx) => {
+                  const objectItems = ['release', 'commit', 'signature'];
+
+                  if (objectItems.includes(item[0])) {
+                    const label = item[1].label;
+                    const url = item[1].url;
+
+                    return (
+                      <Td key={idx} px={4} textStyle='hero-text-small'>
+                        <Link _hover={{ textDecoration: 'none' }} href={url} isExternal>
+                          <Text color='primary'>
+                            {item[0] === 'commit' ? `${label}...` : label}
+                          </Text>
+                        </Link>
+                      </Td>
+                    );
+                  }
+
+                  if (item[0] === 'published') {
+                    return (
+                      <Td key={idx} px={4} textStyle='hero-text-small'>
+                        <Text>{getParsedDate(item[1])}</Text>
+                      </Td>
+                    );
+                  }
+
                   return (
-                    <Td key={idx} px={4} fontSize='13px'>
-                      {item[columnHeader.toLowerCase()]}
+                    <Td key={idx} px={4} textStyle='hero-text-small'>
+                      <Text>{item[1]}</Text>
                     </Td>
                   );
                 })}

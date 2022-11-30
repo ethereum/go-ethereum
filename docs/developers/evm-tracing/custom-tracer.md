@@ -249,7 +249,7 @@ And these fields are only available for tracing mined transactions (i.e. not ava
 
 - `getGasUsed()` - returns amount of gas used throughout the frame as a Number
 - `getOutput()` - returns the output as a buffer
-` -getError()` - returns an error if one occured during execution and `undefined` otherwise 
+  ` -getError()` - returns an error if one occured during execution and `undefined` otherwise
 
 ### Usage
 
@@ -258,17 +258,19 @@ Note that several values are Golang big.Int objects, not JavaScript numbers or J
 Usage example, returns the top element of the stack at each CALL opcode only:
 
 ```js
-debug.traceTransaction(txhash, {tracer: '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'});
+debug.traceTransaction(txhash, {
+  tracer:
+    '{data: [], fault: function(log) {}, step: function(log) { if(log.op.toString() == "CALL") this.data.push(log.stack.peek(0)); }, result: function() { return this.data; }}'
+});
 ```
 
 ## Other traces
 
-This tutorial has focused on `debug_traceTransaction()` which reports information 
-about individual transactions. There are also RPC endpoints that provide different 
-information, including tracing the EVM execution within a block, between two blocks, 
-for specific `eth_call`s or rejected blocks. The full list of trace functions can 
+This tutorial has focused on `debug_traceTransaction()` which reports information
+about individual transactions. There are also RPC endpoints that provide different
+information, including tracing the EVM execution within a block, between two blocks,
+for specific `eth_call`s or rejected blocks. The full list of trace functions can
 be explored in the [reference documentation](/content/docs/interacting_with_geth/RPC/ns-debug.md).
-
 
 ## Summary
 
