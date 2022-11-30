@@ -104,20 +104,20 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*balance), nil
 }
 
-func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
+func (a *Account) TransactionCount(ctx context.Context) (Long, error) {
 	// Ask transaction pool for the nonce which includes pending transactions
 	if blockNr, ok := a.blockNrOrHash.Number(); ok && blockNr == rpc.PendingBlockNumber {
 		nonce, err := a.r.backend.GetPoolNonce(ctx, a.address)
 		if err != nil {
 			return 0, err
 		}
-		return hexutil.Uint64(nonce), nil
+		return Long(nonce), nil
 	}
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(state.GetNonce(a.address)), nil
+	return Long(state.GetNonce(a.address)), nil
 }
 
 func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
