@@ -8,14 +8,17 @@
   width: 200px;
   gap: 1rem;
 }
+
 .DocSearch-Button:hover {
   background: none;
 }
+
 .DocSearch-Button-Container {
   flex: 1;
   flex-direction: row-reverse;
   justify-content: space-between;
 }
+
 .DocSearch-Button-Keys kbd {
   background: none;
   border: 1px solid var(--chakra-colors-primary);
@@ -23,6 +26,7 @@
   box-shadow: none;
   padding: 0.125rem;
 }
+
 .DocSearch-Button-Placeholder {
   text-align: start;
   text-transform: lowercase;
@@ -33,14 +37,14 @@
   flex: 1;
 }
 
-/* Algolia search modal styling */
-.DocSearch-Search-Icon *,
-.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper svg,
-.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper span,
-.DocSearch-Hit-title mark,
-.DocSearch-Hit-path mark,
-.DocSearch-Prefill {
+.DocSearch-Search-Icon * {
   color: var(--chakra-colors-primary);
+}
+
+/* Algolia search modal styling */
+.DocSearch-Modal {
+  border-radius: 0;
+  background: var(--chakra-colors-bg);
 }
 
 .DocSearch-Logo {
@@ -61,11 +65,6 @@
 
 svg[aria-label="Algolia"] * {
   fill: var(--chakra-colors-body);
-}
-
-.DocSearch-Modal {
-  border-radius: 0;
-  background: var(--chakra-colors-bg);
 }
 
 .DocSearch-Form {
@@ -100,6 +99,22 @@ svg[aria-label="Algolia"] * {
   padding-block: var(--chakra-space-2);
 }
 
+.DocSearch-Hit {
+  padding-bottom: var(--chakra-space-2);
+}
+
+.DocSearch-Hit a {
+  border-radius: 0;
+}
+
+.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper svg,
+.DocSearch-Hit[aria-selected="true"] > a > div > div.DocSearch-Hit-content-wrapper span,
+.DocSearch-Hit-title mark,
+.DocSearch-Hit-path mark,
+.DocSearch-Prefill {
+  color: var(--chakra-colors-primary);
+}
+
 .DocSearch-Input,
 .DocSearch-Input::placeholder,
 .DocSearch-Form > label > svg > path,
@@ -112,10 +127,25 @@ svg[aria-label="Algolia"] * {
   font-size: var(--chakra-fontSizes-md)
 }
 
-.DocSearch-Hit {
-  padding-bottom: var(--chakra-space-2);
-}
+/* Search field in mobile menu */
+@media (max-width: 768px) {
+  .DocSearch-Button {
+    padding: 2rem 1rem;
+    width: 100%;
+    position: relative;
+  }
 
-.DocSearch-Hit a {
-  border-radius: 0;
+  .DocSearch-Button::before {
+    position: absolute;
+    content: "search";
+    font-size: var(--chakra-fontSizes-md);
+    color: var(--chakra-colors-bg);
+    inset: 0;
+    text-align: start;
+    padding: 2rem 1rem;
+  }
+
+  .DocSearch-Search-Icon * {
+    color: var(--chakra-colors-bg);
+  }
 }
