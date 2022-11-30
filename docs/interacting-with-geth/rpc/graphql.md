@@ -7,13 +7,13 @@ In addition to the [JSON-RPC APIs](/docs/interacting_with_geth/RPC/server), Geth
 
 The GraphQL endpoint piggybacks on the HTTP transport used by JSON-RPC. Hence the relevant `--http` flags and the `--graphql` flag should be passed to Geth:
 
-```bash
+```sh
 geth --http --graphql
 ```
 
 Now queries can be raised against `http://localhost:8545/graphql`. To change the port, provide a custom port number to `--http.port`, e.g.:
 
-```bash
+```sh
 geth --http --http.port 9545 --graphql
 ```
 
@@ -46,20 +46,20 @@ Reading out data from Geth is the biggest use-case for GraphQL. In addition to u
 
 For example, the code snippet below shows how to obtain the latest block number using Curl. Note the use of a JSON object for the data section:
 
-```bash
+```sh
 ❯ curl -X POST http://localhost:8545/graphql -H "Content-Type: application/json" --data '{ "query": "query { block { number } }" }'
 {"data":{"block":{"number":6004069}}}
 ```
 
 Alternatively store the JSON-ified query in a file (let's call it `block-num.query`) and do:
 
-```bash
+```sh
 ❯ curl -X POST http://localhost:8545/graphql -H "Content-Type: application/json" --data '@block-num.query'
 ```
 
 Executing a simple query in JS looks as follows. Here the lightweight library `graphql-request` is used to perform the request. Note the use of variables instead of hardcoding the block number in the query:
 
-```javascript
+```js
 const { request, gql } = require('graphql-request');
 
 const query = gql`

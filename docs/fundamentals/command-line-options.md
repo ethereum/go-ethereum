@@ -12,7 +12,7 @@ geth --help
 
 ## Commands {#commands}
 
-```
+```sh
 NAME:
    geth - the go-ethereum command line interface
 

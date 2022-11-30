@@ -9,9 +9,10 @@ This page provides a step-by-step walkthrough tutorial demonstrating some common
 
 First things first, Clef needs to store some data itself. Since that data might be sensitive (passwords, signing rules, accounts), Clef's entire storage is encrypted. To support encrypting data, the first step is to initialize Clef with a random master seed, itself too encrypted with a password:
 
-```text
+```sh
 $ clef init
-
+```
+```terminal
 WARNING!
 
 Clef is an account management tool. It may, like any software, contain bugs.
@@ -193,7 +194,6 @@ Additional HTTP header data, provided by the external caller:
 ---------------------------------------------
 
 Approve? [y/N]
-
 ```
 
 Approving this transaction causes Clef to prompt the user to provide the password for the sender account. Providing the password enables the transaction to be signed and sent to Geth for broadcasting to the network. The details of the signed transaction are displayed in the console. Account passwords can also be stored in Clef's encrypted vault so that they do not have to be manually entered - [more on this below](#account-passwords).
@@ -305,7 +305,7 @@ clef --keystore go-ethereum/goerli-data/ --configdir go-ethereum/goerli-data/cle
 
 The following logs will be displayed in the terminal:
 
-```
+```terminal
 INFO [07-01|13:39:49.726] Rule engine configured                   file=rules.js
 INFO [07-01|13:39:49.726] Starting signer                          chainid=5 keystore=$go-ethereum/goerli-data/ light-kdf=false advanced=false
 DEBUG[07-01|13:39:49.726] FS scan times                            list=35.15µs set=4.251µs diff=2.766µs
@@ -488,14 +488,14 @@ This returns a `Request denied` message as follows:
 
 Meanwhile, in the output logs in the Clef terminal:
 
-```text
+```terminal
 INFO [02-21|14:42:41] Op approved
 INFO [02-21|14:42:56] Op rejected
 ```
 
 The signer also stores all traffic over the external API in a log file. The last 4 lines shows the two requests and their responses:
 
-```text
+```terminal
 $ tail -n 4 audit.log
 t=2022-07-01T15:52:14+0300 lvl=info msg=SignData   api=signer type=request  metadata="{\"remote\":\"NA\",\"local\":\"NA\",\"scheme\":\"NA\",\"User-Agent\":\"\",\"Origin\":\"\"}" addr="0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3 [chksum INVALID]" data=0x202062617a6f6e6b2062617a2067617a0a content-type=data/plain
 t=2022-07-01T15:52:14+0300 lvl=info msg=SignData   api=signer type=response data=0x636c656664656d6f7465787474686174696e636c7564657377656e2d6d65726765 error=nil

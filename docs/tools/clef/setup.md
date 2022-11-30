@@ -47,7 +47,7 @@ This is how [Split GPG](https://www.qubes-os.org/doc/split-gpg/) is implemented.
 
 On the `target` qubes, we need to define the RPC service.
 
-```bash
+```sh
 #!/bin/bash
 
 SIGNER_BIN="/home/user/tools/clef/clef"
@@ -73,7 +73,7 @@ It would have been possible to send data directly to the `/home/user/.clef/.clef
 
 To enable the service:
 
-```bash
+```sh
 sudo cp qubes.Clefsign /etc/qubes-rpc/
 sudo chmod +x /etc/qubes-rpc/ qubes.Clefsign
 ```
@@ -113,7 +113,7 @@ with socketserver.TCPServer(("",PORT), Dispatcher) as httpd:
 
 To test the flow, with `debian-work` as the `target`:
 
-```bash
+```sh
 $ cat newaccnt.json
 { "id": 0, "jsonrpc": "2.0","method": "account_new","params": []}
 
@@ -130,13 +130,13 @@ Followed by a GTK-dialog to approve the operation:
 
 To test the full flow, start the client wrapper on the `client` qube:
 
-```
+```sh
 [user@work qubes]$ python3 qubes-client.py
 ```
 
 Make the request over http (`client` qube):
 
-```
+```sh
 [user@work clef]$ cat newaccnt.json | curl -X POST -d @- http://localhost:8550
 ```
 

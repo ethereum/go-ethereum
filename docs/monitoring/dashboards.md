@@ -56,7 +56,7 @@ create user geth with password choosepassword
 
 Verify created entries with:
 
-```
+```sh
 show databases
 show users
 ```

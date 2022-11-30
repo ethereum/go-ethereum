@@ -16,13 +16,13 @@ Developers should use a recent version of Go for building and testing. We use th
 
 Switch to the go-ethereum repository root directory. All code can be built using the go tool, placing the resulting binary in `$GOPATH/bin`.
 
-```text
+```sh
 go install -v ./...
 ```
 
 go-ethereum exectuables can be built individually. To build just geth, use:
 
-```text
+```sh
 go install -v ./cmd/geth
 ```
 
@@ -32,13 +32,13 @@ Cross compilation is not recommended, please build Geth for the host architectur
 
 Testing a package:
 
-```
+```sh
 go test -v ./eth
 ```
 
 Running an individual test:
 
-```
+```sh
 go test -v ./eth -run TestMethod
 ```
 
@@ -46,7 +46,7 @@ go test -v ./eth -run TestMethod
 
 Running benchmarks, eg.:
 
-```
+```sh
 go test -v -bench . -run BenchmarkJoin
 ```
 
@@ -56,7 +56,7 @@ For more information, see the [go test flags](https://golang.org/cmd/go/#hdr-Tes
 
 A stack trace provides a very detailed look into the current state of the geth node. It helps us to debug issues easier as it contains information about what is currently done by the node. Stack traces can be created by running `debug.stacks()` in the Geth console. If the node was started without the console command or with a script in the background, the following command can be used to dump the stack trace into a file.
 
-```
+```sh
 geth attach <path-to-geth.ipc> --exec "debug.stacks()" > stacktrace.txt
 ```
 
@@ -128,7 +128,7 @@ If Geth is started with the `--pprof` option, a debugging HTTP server is made av
 
 Note that if multiple instances of Geth exist, port `6060` will only work for the first instance that was launched. To generate stacktraces for other instances, they should be started up with alternative pprof ports. Ensure `stderr` is being redirected to a logfile.
 
-```
+```sh
 geth -port=30300 -verbosity 5 --pprof --pprof.port 6060 2>> /tmp/00.glog
 geth -port=30301 -verbosity 5 --pprof --pprof.port 6061 2>> /tmp/01.glog
 geth -port=30302 -verbosity 5 --pprof --pprof.port 6062 2>> /tmp/02.glog
@@ -136,7 +136,7 @@ geth -port=30302 -verbosity 5 --pprof --pprof.port 6062 2>> /tmp/02.glog
 
 Alternatively to kill the clients (in case they hang or stalled syncing, etc) and have the stacktrace too, use the `-QUIT` signal with `kill`:
 
-```
+```sh
 killall -QUIT geth
 ```
 

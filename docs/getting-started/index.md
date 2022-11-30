@@ -37,7 +37,7 @@ There are several methods for generating accounts in Geth. This tutorial demonst
 
 An account is a pair of keys (public and private). Clef needs to know where to save these keys to so that they can be retrieved later. This information is passed to Clef as an argument. This is achieved using the following command:
 
-```shell
+```sh
 clef newaccount --keystore geth-tutorial/keystore
 ```
 
@@ -82,7 +82,7 @@ The previous commands used Clef's `newaccount` function to add new key pairs to 
 
 To start Clef, run the Clef executable passing as arguments the keystore file location, config directory location and a chain ID. The config directory was automatically created inside the `geth-tutorial` directory during the previous step. The [chain ID](https://chainlist.org/) is an integer that defines which Ethereum network to connect to. Ethereum mainnet has chain ID 1. In this tutorial Chain ID 11155111 is used which is that of the Sepolia testnet. It is very important that this chain ID parameter is set to 11155111 - Clef uses the chain ID to sign messages so it must be correct. The following command starts Clef on Sepolia:
 
-```shell
+```sh
 clef --keystore geth-tutorial/keystore --configdir geth-tutorial/clef --chainid 11155111
 ```
 
@@ -115,7 +115,7 @@ Geth is the Ethereum client that will connect the computer to the Ethereum netwo
 
 The following command should be run in a new terminal, separate to the one running Clef:
 
-```shell
+```sh
 geth --sepolia --datadir geth-tutorial --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret geth-tutorial/jwtsecret --http --http.api eth,net --signer=geth-tutorial/clef/clef.ipc --http
 ```
 
@@ -153,7 +153,7 @@ INFO [04-29][15:54:19:656] Imported new block receipts   count=698  elapsed=4.46
 
 This message will be displayed periodically until state healing has finished:
 
-```
+```sh
 INFO [10-20|20:20:09.510] State heal in progress                   accounts=313,309@17.95MiB slots=363,525@28.77MiB codes=7222@50.73MiB nodes=49,616,912@12.67GiB pending=29805
 ```
 
@@ -161,7 +161,7 @@ When state healing is finished, the node is in sync and ready to use.
 
 Sending an empty Curl request to the http server provides a quick way to confirm that this too has been started without any issues. In a third terminal, the following command can be run:
 
-```shell
+```sh
 curl http://localhost:8545
 ```
 
@@ -186,7 +186,7 @@ Geth provides a Javascript console that exposes the Web3.js API. This means that
 
 This tutorial will use the HTTP option. Note that the terminals running Geth and Clef should both still be active. In a new (third) terminal, the following command can be run to start the console and connect it to Geth using the exposed http port:
 
-```shell
+```sh
 geth attach http://127.0.0.1:8545
 ```
 
@@ -208,7 +208,7 @@ The console is now active and connected to Geth. It can now be used to interact 
 
 In this tutorial, the accounts are managed using Clef. This means that requesting information about the accounts requires explicit approval in Clef, which should still be running in its own terminal. Earlier in this tutorial, two accounts were created using Clef. The following command will display the addresses of those two accounts and any others that might have been added to the keystore before or since.
 
-```javascript
+```js
 eth.accounts;
 ```
 
@@ -245,7 +245,7 @@ It is also possible for this request to time out if the Clef approval took too l
 
 Having confirmed that the two addresses created earlier are indeed in the keystore and accessible through the Javascript console, it is possible to retrieve information about how much ether they own. The Sepolia faucet should have sent 0.05 ETH to the address provided, meaning that the balance of one of the accounts should be at least 0.05 ether and the other should be 0. There are other faucets available that may dispense more ETH per request, and multipel requests can be made to accumulate more ETH. The following command displays the account balance in the console:
 
-```javascript
+```js
 web3.fromWei(eth.getBalance('0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC'), 'ether');
 ```
 
@@ -265,7 +265,7 @@ Repeating the command for the other (empty) account should yield:
 
 The command `eth.sendTransaction` can be used to send some ether from one address to another. This command takes three arguments: `from`, `to` and `value`. These define the sender and recipient addresses (as strings) and the amount of Wei to transfer. It is far less error prone to enter the transaction value in units of ether rather than Wei, so the value field can take the return value from the `toWei` function. The following command, run in the Javascript console, sends 0.1 ether from one of the accounts in the Clef keystore to the other. Note that the addresses here are examples - the user must replace the address in the `from` field with the address currently owning 1 ether, and the address in the `to` field with the address currently holding 0 ether.
 
-```javascript
+```js
 eth.sendTransaction({
   from: '0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec',
   to: '0xce8dba5e4157c2b284d8853afeeea259344c1653',
@@ -335,7 +335,7 @@ It is also advised to check the account balances using Geth by repeating the ins
 
 The transaction hash is a unique identifier for this specific transaction that can be used later to retrieve the transaction details. For example, the transaction details can be viewed by pasting this hash into the [Sepolia block explorer](https://sepolia.etherscan.io/). The same information can also be retrieved directly from the Geth node. The hash returned in the previous step can be provided as an argument to `eth.getTransaction` to return the transaction information:
 
-```javascript
+```js
 eth.getTransaction('0x99d489d0bd984915fd370b307c2d39320860950666aac3f261921113ae4f95bb');
 ```
 
@@ -373,7 +373,7 @@ Up to this point this tutorial has interacted with Geth using the convenience li
 
 The command below returns the balance of the given account. This is a HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
 
-```shell
+```sh
 curl -X POST http://127.0.0.1:8545 \
   -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0", "method":"eth_getBalance", "params":["0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","latest"], "id":1}'
@@ -387,7 +387,7 @@ A successful call will return a response like the one below:
 
 The balance is in the `result` field in the returned JSON object. However, it is denominated in Wei and presented as a hexadecimal string. There are many options for converting this value to a decimal in units of ether, for example by opening a Python console and running:
 
-```python
+```py
 0xc7d54951f87f7c0 / 1e18
 ```
 
@@ -401,7 +401,7 @@ This returns the balance in ether:
 
 The curl command below returns the list of all accounts.
 
-```shell
+```sh
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
    --data '{"jsonrpc":"2.0", "method":"eth_accounts","params":[], "id":1}'
@@ -417,7 +417,7 @@ This requires approval in Clef. Once approved, the following information is retu
 
 Sending a transaction between accounts can also be achieved using Curl. Notice that the value of the transaction is a hexadecimal string in units of Wei. To transfer 0.1 ether, it is first necessary to convert this to Wei by multiplying by 10<sup>18</sup> then converting to hex. 0.1 ether is `"0x16345785d8a0000"` in hex. As before, update the `to` and `from` fields with the addresses in the Clef keystore.
 
-```shell
+```sh
 curl -X POST http://127.0.0.1:8545 \
     -H "Content-Type: application/json" \
    --data '{"jsonrpc":"2.0", "method":"eth_sendTransaction", "params":[{"from": "0xca57f3b40b42fcce3c37b8d18adbca5260ca72ec","to": "0xce8dba5e4157c2b284d8853afeeea259344c1653","value": "0x16345785d8a0000"}], "id":1}'

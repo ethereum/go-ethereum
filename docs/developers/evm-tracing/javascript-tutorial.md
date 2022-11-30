@@ -172,7 +172,7 @@ storage, so here we can't.
 
 The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.
 
-```javascript
+```js
 tracer = function (tx) {
   return debug.traceTransaction(tx, {
     tracer:
@@ -204,7 +204,7 @@ tracer = function (tx) {
 
 The output now contains the result in the line that follows the `SLOAD`.
 
-```javascript
+```js
 [
   "5921: SLOAD 0",
   "    Result: 1",

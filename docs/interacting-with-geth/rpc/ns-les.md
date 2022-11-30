@@ -17,7 +17,7 @@ Get information about currently connected and total/individual allowed connectio
 
 ### Example
 
-```javascript
+```js
 > les.serverInfo
 {
   freeClientCapacity: 16000,
@@ -41,7 +41,7 @@ Get individual client information (connection, balance, pricing) on the specifie
 
 ### Example
 
-```javascript
+```js
 > les.clientInfo([])
 {
   37078bf8ea160a2b3d129bb4f3a930ce002356f83b820f467a07c1fe291531ea: {
@@ -113,7 +113,7 @@ Get individual client information on clients with a positive balance in the spec
 
 ### Example
 
-```javascript
+```js
 > les.priorityClientInfo("0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000", 100)
 {
   37078bf8ea160a2b3d129bb4f3a930ce002356f83b820f467a07c1fe291531ea: {
@@ -208,7 +208,7 @@ Add signed value to the token balance of the specified client and update its `me
 
 ### Example
 
-```javascript
+```js
 > les.addBalance("0x6a47fe7bb23fd335df52ef1690f37ab44265a537b1d18eb616a3e77f898d9e77", 1000000000, "qwerty")
 [968379616, 1968379616]
 ```
@@ -225,7 +225,7 @@ Set capacity and pricing factors for the specified list of connected clients or 
 
 ### Example
 
-```javascript
+```js
 > les.setClientParams(["0x6a47fe7bb23fd335df52ef1690f37ab44265a537b1d18eb616a3e77f898d9e77"], {
 	"capacity": 100000,
 	"pricing/timeFactor": 0,
@@ -250,7 +250,7 @@ Set default pricing factors for subsequently connected clients.
 
 ### Example
 
-```javascript
+```js
 > les.setDefaultParams({
 	"pricing/timeFactor": 0,
 	"pricing/capacityFactor": 1000000000,
@@ -274,7 +274,7 @@ Get the index and hashes of the latest known checkpoint.
 
 ### Example
 
-```javascript
+```js
 > les.latestCheckpoint
 ["0x110", "0x6eedf8142d06730b391bfcbd32e9bbc369ab0b46ae226287ed5b29505a376164", "0x191bb2265a69c30201a616ae0d65a4ceb5937c2f0c94b125ff55343d707463e5", "0xf58409088a5cb2425350a59d854d546d37b1e7bef8bbf6afee7fd15f943d626a"]
 ```
@@ -291,7 +291,7 @@ Get checkpoint hashes by index.
 
 ### Example
 
-```javascript
+```js
 > les.getCheckpoint(256)
 ["0x93eb4af0b224b1097e09181c2e51536fe0a3bf3bb4d93e9a69cab9eb3e28c75f", "0x0eb055e384cf58bc72ca20ca5e2b37d8d4115dce80ab4a19b72b776502c4dd5b", "0xda6c02f7c51f9ecc3eca71331a7eaad724e5a0f4f906ce9251a2f59e3115dd6a"]
 ```
@@ -308,7 +308,7 @@ Get the address of the checkpoint oracle contract.
 
 ### Example
 
-```javascript
+```js
 > les.checkpointContractAddress
 "0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"
 ```

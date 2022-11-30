@@ -33,7 +33,7 @@ Recent versions of Geth (>`1.9.14`) unindex older transactions to save disk spac
 
 The whole command for starting Geth with a light server could look as follows:
 
-```shell
+```sh
 geth --light.serve 50 --txlookuplimit 0
 ```
 
@@ -41,7 +41,7 @@ geth --light.serve 50 --txlookuplimit 0
 
 Running a light client simply requires Geth to be started in light mode. It is likely that a user would also want to interact with the light node using, for example, RPC. This can be enabled using the `--http` command.
 
-```shell
+```sh
 geth --syncmode light --http --http.api "eth,debug"
 ```
 

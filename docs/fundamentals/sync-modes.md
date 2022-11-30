@@ -13,7 +13,7 @@ There are two types of full node that use different mechanisms to sync up to the
 
 Snap sync starts froma relatively recent block and syncs from there to the head of the chain, keeping only the most recent 128 block states in memory. The block header to sync up to is provided by the consensus client. Between the initial sync block and the 128 most recent blocks, the node stores occasional snapshots that can be used to rebuild any intermediate state "on-the-fly". The difference between the snap-synced node and a full block-by-block synced node is that a snap synced node started from an initial checkpoint that was more recent than the genesis block. Snap sync is much faster than a full block-by-block sync from genesis. To start a node with snap sync pass `--syncmode snap` at startup.
 
-![state pruning options](/public/images/docs/state-pruning.png)
+![state pruning options](/images/docs/state-pruning.png)
 _This image shows the state stored by each sync-mode - red indicates stored state. The full width of each line represents origin to present head_
 
 Snap sync works by first downloading the headers for a chunk of blocks. Once the headers have been verified, the block bodies and receipts for those blocks are downloaded. In parallel, Geth also sync begins state-sync. In state-sync, Geth first downloads the leaves of the state trie for each block without the intermediate nodes along with a range proof. The state trie is then regenerated locally.
@@ -47,10 +47,6 @@ It is also possible to create a partial/recent archive node where the node was s
 A light node syncs very quickly and stores the bare minimum of blockchain data. Light nodes only process block headers, not entire blocks. This greatly reduces the computation time, storage and bandwidth required relative to a full node. This means light nodes are suitable for resource-constrained devices and can catch up to the head of the chain much faster when they are new or have been offline for a while. The trade-off is that light nodes rely heavily on data served by altruistic full nodes. A light client can be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light nodes can't validate blocks in the same way as full nodes - they receive a proof from the full node and verify it against their local header chain. To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce so light nodes can struggle to find peers. **Light nodes are not currently working on proof-of-stake Ethereum**.
 
 Read more about light nodes on our [LES page](/docs/interface/les).
-
-The following diagram shows how Geth stores state data in the different sync modes:
-
-![state pruning options](/public/images/docs/state-pruning.png)
 
 ## Consensus layer syncing {#consensus-layer-syncing}
 

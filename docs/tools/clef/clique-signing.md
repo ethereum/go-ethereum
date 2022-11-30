@@ -66,8 +66,10 @@ Create a genesis with that account as a sealer:
 
 Initiate Geth:
 
-```
+```sh
 $ geth  --datadir ./ddir init genesis.json
+```
+```terminal
 ...
 INFO [06-16|11:14:54.123] Writing custom genesis block
 INFO [06-16|11:14:54.125] Persisted trie from memory database      nodes=1 size=153.00B time="64.715µs"  gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
@@ -85,9 +87,10 @@ In order to make use of `clef` for signing:
 
 These two things are independent of each other. First of all, however, `clef` must be initiated (for this example the password is `clefclefclef`)
 
-```
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn init
-
+```
+```terminal
 The master seed of clef will be locked with a password.
 Please specify a password. Do not forget this password!
 Password:
@@ -111,9 +114,10 @@ After this operation, `clef` has it's own vault where it can store secrets and a
 
 With that done, `clef` can be made aware of the password. To do this `setpw <address>` is invoked to store a password for a given address. `clef` asks for the password, and it also asks for the master-password, in order to update and store the new secrets inside the vault.
 
-```
+```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
-
+```
+```terminal
 Please enter a password to store for this address:
 Password:
 Repeat password:
@@ -161,7 +165,7 @@ DEBUG[06-16|11:36:42.499] Served account_list                      reqid=2 durat
 
 After this, Geth will start asking `clef` to sign things:
 
-```
+```terminal
 -------- Sign data request--------------
 Account:  0x9CD932F670F7eDe5dE86F756A6D02548e5899f47 [chksum ok]
 messages:

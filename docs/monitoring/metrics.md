@@ -42,14 +42,14 @@ A gauge is a single int64 value. Its value can increment and decrement - as with
 
 Geth collects metrics if the `--metrics` flag is provided at startup. Those metrics are available via an HTTP server if the `--metrics.addr` flag is also provided. By default the metrics are served at `127.0.0.1:6060/debug/metrics` but a custom IP address can be provided. A custom port can also be provided to the `--metrics.port` flag. More computationally expensive metrics are toggled on or off by providing or omitting the `--metrics.expensive` flag. For example, to serve all metrics at the default address and port:
 
-```
+```sh
 geth <other commands> --metrics --metrics.addr 127.0.0.1 --metrics.expensive
 ```
 
 Navigating the browser to the given metrics address displays all the available metrics in the form
 of JSON data that looks similar to:
 
-```
+```sh
 chain/account/commits.50-percentile:        374072
 chain/account/commits.75-percentile:        830356
 chain/account/commits.95-percentile:        1783005.3999976
@@ -67,7 +67,7 @@ Any developer is free to add, remove or modify the available metrics as they see
 
 Geth also supports dumping metrics directly into an influx database. In order to activate this, the `--metrics.influxdb` flag must be provided at startup. The API endpoint,username, password and other influxdb tags can also be provided. The available tags are:
 
-```
+```sh
 --metrics.influxdb.endpoint value      InfluxDB API endpoint to report metrics to (default: "http://localhost:8086")
 --metrics.influxdb.database value      InfluxDB database name to push reported metrics to (default: "geth")
 --metrics.influxdb.username value      Username to authorize access to the database (default: "test")

@@ -26,7 +26,7 @@ Starting Geth in developer mode is as simple as providing the `--dev` flag. It i
 
 Remix will be used to deploy a smart contract to the node which requires information to be exchanged externally to Geth's own domain. To permit this, enable `http` and the `net` namespace must be enabled and the Remix URL must be provided to `--http.corsdomain`. For this tutorial some other namespaces will also be enabled. The full command is as follows:
 
-```shell
+```sh
 geth --dev --http --http.api eth,web3,net --http.corsdomain "http://remix.ethereum.org"
 ```
 
@@ -71,7 +71,7 @@ INFO [05-09|10:49:03.316] Commit new sealing work                  number=1 seal
 
 This terminal must be left running throughout the entire tutorial. In a second terminal, attach a Javascript console. By default the `ipc` file is saved in the `datadir`:
 
-```shell
+```sh
 geth attach <datadir>/geth.ipc
 ```
 
@@ -91,7 +91,7 @@ To exit, press ctrl-d or type exit
 
 For simplicity this tutorial uses Geth's built-in account management. First, the existing accounts can be displayed using `eth.accounts`:
 
-```shell
+```sh
 eth.accounts
 ```
 
@@ -104,7 +104,7 @@ true
 
 The following command can be used to query the balance. The return value is in units of Wei, which is divided by 1<sup>18</sup> to give units of ether. This can be done explicitly or by calling the `web3.FromWei()` function:
 
-```shell
+```sh
 eth.getBalance(eth.coinbase)/1e18
 
 // or
@@ -120,7 +120,7 @@ Using `web3.fromWei()` is less error prone because the correct multiplier is bui
 
 A new account can be created using Clef. Some of the ether from the coinbase can then be transferred across to it. A new account is generated using the `newaccount` function on the command line:
 
-```shell
+```sh
 clef newaccount --keystore <path-to-keystore>
 ```
 
@@ -128,13 +128,13 @@ The terminal will display a request for a password, twice. Once provided, a new 
 
 To reconfirm the account creation, running `eth.accounts` in the Javascript console should display an array containing two account addresses, one being the coinbase and the other being the newly generated address. The following command transfers 50 ETH from the coinbase to the new account:
 
-```shell
+```sh
 eth.sendTransaction({from: eth.coinbase, to: eth.accounts[1], value: web3.toWei(50, "ether")})
 ```
 
 A transaction hash will be returned to the console. This transaction hash will also be displayed in the logs in the Geth console, followed by logs confirming that a new block was mined (remember in the local development network blocks are mined when transactions are pending). The transaction details can be displayed in the Javascript console by passing the transaction hash to `eth.getTransaction()`:
 
-```shell
+```sh
 eth.getTransaction("0x62044d2cab405388891ee6d53747817f34c0f00341cde548c0ce9834e9718f27")
 ```
 
@@ -263,7 +263,7 @@ The transaction hash can be used to retrieve the transaction details using the G
 
 The `from` address is the account that sent the transaction, the `to` address is the deployment address of the contract. The value entered into Remix is now in storage at that contract address. This can be retrieved using Remix by calling the `retrieve` function - to do this simply click the `retrieve` button. Alternatively, it can be retrieved using `web3.getStorageAt` using the Geth Javascript console. The following command returns the value in the contract storage (replace the given address with the correct one displayed in the Geth logs).
 
-```shell
+```sh
 web3.eth.getStorageAt("0x407d73d8a49eeb85d32cf465507dd71d507100c1", 0)
 ```
 
@@ -279,7 +279,7 @@ The returned value is a left-padded hexadecimal value. For example, the return v
 
 This tutorial used an ephemeral blockchain that is completely destroyed and started afresh during each dev-mode session. However, it is also possible to create persistent blockchain and account data that can be reused across multiple sessions. This is done by providing the `--datadir` flag and a directory name when starting Geth in dev-mode.
 
-```shell
+```sh
 geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org"
 ```
 
@@ -287,10 +287,8 @@ geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain 
 
 Geth will fail to start in dev-mode if keys have been manually created or imported into the keystore in the `--datadir` directory. This is because the account cannot be automatically unlocked. To resolve this issue, the password defined when the account was created can be saved to a text file and its path passed to the `--password` flag on starting Geth, for example if `password.txt` is saved in the top-level `go-ethereum` directory:
 
-```shell
-
+```sh
 geth --datadir dev-chain --dev --http --http.api web3,eth,net --http.corsdomain "remix.ethereum.org" --password password.txt
-
 ```
 
 **Note** that this is an edge-case that applies when both the `--datadir` and `--dev` flags are used and a key has been manually created or imported into the keystore.

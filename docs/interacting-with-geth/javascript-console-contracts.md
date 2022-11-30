@@ -9,7 +9,7 @@ The [Introduction to the Javascript console](/docs/interacting-with-geth/javascr
 
 First we need a contract to deploy. We can use the well-known `Storage.sol` contract written in Solidity. The following Solidity code can be copied and pasted into a text editor and saved as `go-ethereum/storage-contract/Storage.sol`.
 
-```Solidity
+```js
 // SPDX License-Identifier: GPL 3.0
 
 pragma solidity ^0.8.0;

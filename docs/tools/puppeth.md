@@ -164,7 +164,7 @@ The dashboard can then be viewed by navigating to the node's ip address and the 
 
 Start instances of Geth for each node
 
-```
+```sh
 geth --datadir Node1 --port 30301 --bootnodes <enr> --networkid <testnetwork ID> -unlock <node 1 address> --mine
 ```
 
