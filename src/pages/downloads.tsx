@@ -504,6 +504,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
@@ -512,7 +513,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+              <Stack flex={1} w={'100%'}>
                 <Code p={4} bg='code-bg'>
                   gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC
                 </Code>
@@ -525,6 +526,8 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
+              sx={{ mt: '0 !important' }}
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
@@ -533,7 +536,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+              <Stack flex={1} w={'100%'}>
                 <Code p={4} bg='code-bg'>
                   gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2
                 </Code>
@@ -542,10 +545,11 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
 
             <Flex
               p={4}
-              borderBottom='2px'
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
+              sx={{ mt: '0 !important' }}
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
