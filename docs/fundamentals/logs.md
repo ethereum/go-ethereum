@@ -5,7 +5,7 @@ description: Geth's log messages explained
 
 A Geth node continually reports messages to the console allowing users to monitor Geth's current status in real-time. The logs indicate when Geth is running normally and indicates when some attention is required. However, reading these logs can be difficult for new users. This page will help to interpret the log messages to better understand what Geth is doing.
 
-Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth Github](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-descrining that they do not require additional explanation.
+Note that there are a large number of log messages covering a wide range of possible scenarios for a Geth node. This page will only address a subset of commonly seen messages. For more, see the [Geth GitHub](https://github.com/ethereum/go-ethereum), [Discord](https://discord.gg/WHNkYDsAKU) or search on [ethereum.stackexchange](https://ethereum.stackexchange.com/). Log messages are usually sufficiently self-descrining that they do not require additional explanation.
 
 ## Configuring log messages {#configuring-log-messages}
 
@@ -186,7 +186,7 @@ Other user actions have similar log messages that are displayed to the console.
 
 ## Common warnings {#common-warnings}
 
-There are many warnings that can be emitted by Geth as part of its normal operation. However, some are asked about especially frequently on the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU) channel.
+There are many warnings that can be emitted by Geth as part of its normal operation. However, some are asked about especially frequently on the [Geth GitHub](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU) channel.
 
 ```sh
 WARN [10-03|18:00:40.413] Unexpected trienode heal packet          peer=9f0e8fbf         reqid=6,915,308,639,612,522,441
@@ -214,4 +214,4 @@ This message indicates that a peer is being dropped because it is not fully sync
 
 ## Summary {#summary}
 
-There are a wide range of log messages that are emitted while Geth is running. The level of detail in the logs can be configured using the `verbosity` flag at startup. This page has outlined some of the common messages users can expect to see when Geth is run with default verbosity, without attempting to be comprehensive. For more, please see the [Geth Github](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU).
+There are a wide range of log messages that are emitted while Geth is running. The level of detail in the logs can be configured using the `verbosity` flag at startup. This page has outlined some of the common messages users can expect to see when Geth is run with default verbosity, without attempting to be comprehensive. For more, please see the [Geth GitHub](https://github.com/ethereum/go-ethereum) and [Discord](https://discord.gg/WHNkYDsAKU).

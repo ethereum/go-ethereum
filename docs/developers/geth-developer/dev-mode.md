@@ -220,7 +220,7 @@ INFO [05-09|12:27:09.681] 🔨 mined potential block                  number=2 h
 
 ## Interact with contract using Remix {#interact-with-contract}
 
-The contract is now deployed on a local testnet version of the Etheruem blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
+The contract is now deployed on a local testnet version of the Ethereum blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
 
 After deploying the contract in Remix, the `Deployed Contracts` tab in the sidebar automatically populates with the public functions exposed by `Storage.sol`. To send a value to the contract storage, type a number in the field adjacent to the `store` button, then click the button.
 

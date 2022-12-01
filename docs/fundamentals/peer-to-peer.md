@@ -106,7 +106,7 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks {#custom-networks}
 
-It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/developers/geth-developer/private-network).
+It is often useful for developers to connect to private test networks rather than public testnets or Ethereum mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/developers/geth-developer/private-network).
 
 ## Static nodes {#static-nodes}
 

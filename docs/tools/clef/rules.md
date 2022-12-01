@@ -238,4 +238,4 @@ function OnApprovedTx(resp) {
 
 ## Summary {#summary}
 
-Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
+Rules are sets of conditions encoded in Javascript files that enable certain actions to be auto-approved by Clef. This page outlined the implementation details and security considerations that will help to build suitrable ruleset files. See the [Clef GitHub](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
