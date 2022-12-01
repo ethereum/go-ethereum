@@ -231,7 +231,11 @@ func BlockToExecutableData(block *types.Block) *ExecutableData {
 
 func BlockToBlobData(block *types.Block) (*BlobsBundle, error) {
 	blockHash := block.Hash()
-	blobsBundle := &BlobsBundle{BlockHash: blockHash}
+	blobsBundle := &BlobsBundle{
+		BlockHash: blockHash,
+		Blobs:     []types.Blob{},
+		KZGs:      []types.KZGCommitment{},
+	}
 	for i, tx := range block.Transactions() {
 		if tx.Type() == types.BlobTxType {
 			versionedHashes, kzgs, blobs, aggProof := tx.BlobWrapData()
