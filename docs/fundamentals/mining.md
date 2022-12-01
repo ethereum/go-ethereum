@@ -3,7 +3,7 @@ title: Proof-of-work mining with Ethash
 description: Introduction to proof-of-work mining with Geth
 ---
 
-{% include note.html content=" Proof-of-work mining is no longer used to secure Ethereum Mainnet. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet." %}
+<Note>Proof-of-work mining is no longer used to secure Ethereum Mainnet. The information below is included because the Ethash code is still part of Geth and it could be used to create a private proof-of-work network or testnet.</Note>
 
 Blockchains grow when individual nodes create valid blocks and distribute them to their peers who check the blocks and add them to their own local databases.
 Nodes that add blocks are rewarded with ether payouts. On Ethereum Mainnet, the proof-of-stake consensus engine randomly selects a node to produce each block.
@@ -23,11 +23,11 @@ Regardless of the mining method, the blockchain must be fully synced before mini
 
 ### Installing Ethminer {#installing-ethminer}
 
-The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer Github](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
+The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer GitHub](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
 
 ### Using Ethminer with Geth {#using-ethminer}
 
-An account to receive block rewards must first be defined. The address of the account is all that is required to start mining - the mining rewards will be credited to that address. This can be an existing address or one that is newly created by Geth. More detailed instructions on creating and importing accounts are available on the [Account Management](/docs/interface/managing-your-accounts) page.
+An account to receive block rewards must first be defined. The address of the account is all that is required to start mining - the mining rewards will be credited to that address. This can be an existing address or one that is newly created by Geth. More detailed instructions on creating and importing accounts are available on the [Account Management](/docs/fundamentals/account-management) page.
 
 The account address can be provided to `--mining.etherbase` when Geth is started. This instructs Geth to direct any block rewards to this address. Once started, Geth will sync the blockchain. If Geth has not connected to this network before, or if the data directory has been deleted, this can take several days. Also, enable HTTP traffic with the `--http` command.
 
@@ -35,7 +35,7 @@ The account address can be provided to `--mining.etherbase` when Geth is started
 geth --http --miner.etherbase 0xC95767AC46EA2A9162F0734651d6cF17e5BfcF10
 ```
 
-The progress of the blockchain syncing can be monitored by attaching a JavaScript console in another terminal. More detailed information about the console can be found on the [Javascript Console](/docs/interface/javascript-console) page. To attach and open a console:
+The progress of the blockchain syncing can be monitored by attaching a JavaScript console in another terminal. More detailed information about the console can be found on the [Javascript Console](/docs/interacting-with-geth/javascript-console) page. To attach and open a console:
 
 ```sh
 geth attach http://127.0.0.1:8545
@@ -103,7 +103,7 @@ When Geth is started it is not mining by default. Unless it is specifically inst
 geth --mine --miner.threads=4
 ```
 
-CPU mining can also be started and stopped at runtime using the [console](/docs/interface/javascript-console). The command `miner.start` takes an optional parameter for the number of miner threads.
+CPU mining can also be started and stopped at runtime using the [console](/docs/interacting-with-geth/javascript-console). The command `miner.start` takes an optional parameter for the number of miner threads.
 
 ```js
 miner.start(8);

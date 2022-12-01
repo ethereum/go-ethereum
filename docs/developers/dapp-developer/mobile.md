@@ -54,7 +54,7 @@ Similarly to the reusable [Go libraries](/docs/developers/dapp-developer/native-
 - Contract interactions through auto-generated bindings
 
 The Geth mobile API is broadly equivalent to the [Go API](/docs/developers/dapp-developer/native-accounts). The source code can be found in the `mobile` section of Geth's
-[Github](https://github.com/ethereum/go-ethereum/tree/master/mobile).
+[GitHub](https://github.com/ethereum/go-ethereum/tree/master/mobile).
 
 ## Mobile Account Management {#mobile-account-management}
 

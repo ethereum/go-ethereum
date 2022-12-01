@@ -3,12 +3,12 @@ title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simpyl by passing:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/developers/geth-developer/private-network.md) and [local testnets](/docs/developers/geth-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simpyl by passing:
 
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
 
-These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/interface/consensus-clients) page.
+These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/getting-started/consensus-clients) page.
 
 **Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
@@ -40,13 +40,13 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - Some firewall configurations can prohibit UDP traffic. The static nodes feature or `admin.addPeer()` on the console can be used to configure connections manually.
 
-- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
+- Running Geth in [light mode](/docs/fundamentals/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
 ## Checking Connectivity {#checking-connectivity}
 
-The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
+The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interacting-with-geth/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
 ```js
 > net.listening
@@ -106,7 +106,7 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks {#custom-networks}
 
-It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
+It is often useful for developers to connect to private test networks rather than public testnets or Ethereum mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/developers/geth-developer/private-network).
 
 ## Static nodes {#static-nodes}
 

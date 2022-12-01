@@ -7,7 +7,7 @@ Documentation for the API methods in the `eth` namespace can be found on [ethere
 
 ### eth_subscribe, eth_unsubscribe {#eth-subscribe-unsubscribe}
 
-These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting_with_geth/RPC/pubsub) for more information.
+These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting-with-geth/rpc/pubsub) for more information.
 
 ### eth_call {#eth-call}
 
@@ -19,7 +19,7 @@ The method takes 3 parameters: an unsigned transaction object to execute in read
 
 ##### 1. `Object` - Transaction call object
 
-The _transaction call object_ is mandatory. Please see [here](/docs/interacting_with_geth/RPC/objects) for details.
+The _transaction call object_ is mandatory. Please see [here](/docs/interacting-with-geth/rpc/objects) for details.
 
 ##### 2. `Quantity | Tag` - Block number or the string `latest` or `pending`
 
@@ -41,6 +41,7 @@ The goal of the _state override set_ is manyfold:
 
 - It can be used by DApps to reduce the amount of contract code needed to be deployed on chain. Code that simply returns internal state or does pre-defined validations can be kept off chain and fed to the node on-demand.
 - It can be used for smart contract analysis by extending the code deployed on chain with custom methods and invoking them. This avoids having to download and reconstruct the entire state in a sandbox to run custom code against.
+
 - It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
 
 Example:
@@ -138,7 +139,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 ### eth_createAccessList {#eth-createaccesslist}
 
-This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
+This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
 #### Parameters
 

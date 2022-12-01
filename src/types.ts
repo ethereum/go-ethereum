@@ -34,3 +34,19 @@ export interface ReleaseParams {
   blobsList: string[];
   isStableRelease: boolean;
 }
+
+export interface NavLink {
+  id: string;
+  to?: string;
+  items?: NavLink[];
+}
+
+export interface OpenPGPSignaturesData {
+  'build server': string;
+  'unique id': string;
+  'openpgp key': {
+    label: string;
+    url: string;
+  };
+  fingerprint: string;
+}

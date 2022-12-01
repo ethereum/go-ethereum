@@ -3,7 +3,7 @@ title: Built-in tracers
 description: Explanation of the tracers that come bundled in Geth as part of the tracing API.
 ---
 
-Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call.
+Geth comes bundled with a choice of tracers that can be invoked via the [tracing API](/docs/interacting-with-geth/rpc/ns-debug). Some of these built-in tracers are implemented natively in Go, and others in Javascript. The default tracer is the opcode logger (otherwise known as struct logger) which is the default tracer for all the methods. Other tracers have to be specified by passing their name to the `tracer` parameter in the API call.
 
 ## Struct/opcode logger {#struct-opcode-logger}
 
@@ -177,6 +177,7 @@ Things to note about the call tracer:
 
 - Calls to precompiles are also included in the result
 - In case a frame reverts, the field `output` will contain the raw return data
+
 - In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
 
 #### Config

@@ -65,7 +65,7 @@ Run `devp2p dns to-cloudflare <directory>` to publish a tree to CloudFlare DNS.
 
 Run `devp2p dns to-route53 <directory>` to publish a tree to Amazon Route53.
 
-More information about these commands can be found in the [DNS Discovery Setup Guide](/docs/developers/dns-discovery-setup).
+More information about these commands can be found in the [DNS Discovery Setup Guide](/docs/developers/geth-developer/dns-discovery-setup).
 
 ## Node Set Utilities {#node-set-utilities}
 

@@ -3,9 +3,9 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
-{% include note.html content="The personal namespace will be deprecated in the very near future." %}
+<Note>The personal namespace will be deprecated in the very near future.</Note>
 
-The personal API managed private keys in the key store. It is deprecated in favour of using [Clef](/docs/tools/clef/Introduction.md) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns_personal_deprecation.md) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate tousing Clef for account interactions.
+The personal API managed private keys in the key store. It is deprecated in favour of using [Clef](/docs/tools/clef/Introduction) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns_personal_deprecation) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate tousing Clef for account interactions.
 
 ## personal_deriveAccount {#personal-deriveaccount}
 
@@ -172,7 +172,7 @@ Deletes a pairing between wallet and Geth.
 
 Validate the given passphrase and submit transaction.
 
-The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
+The transaction is the same argument as for `eth_sendTransaction` (i.e. [transaction object](/docs/interacting-with-geth/rpc/objects#transaction-call-object)) and contains the `from` address. If the passphrase can be used to decrypt the private key belogging to `tx.from` the transaction is verified, signed and send onto the network. The account is not unlocked globally in the node and cannot be used in other RPC calls.
 
 | Client  | Method invocation                                                |
 | :------ | ---------------------------------------------------------------- |
@@ -211,7 +211,7 @@ See ecRecover to verify the signature.
 
 ## personal_signTransaction {#personal-signtransaction}
 
-SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/interacting_with_geth/RPC/objects) and the second argument is the password, similar to `personal_sendTransaction`.
+SignTransaction will create a transaction from the given arguments and tries to sign it with the key associated with `tx.from`. If the given passwd isn't able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast to other nodes. The first argument is a [transaction object](/docs/interacting-with-geth/rpc/objects) and the second argument is the password, similar to `personal_sendTransaction`.
 
 | Client  | Method invocation                                                |
 | :------ | ---------------------------------------------------------------- |

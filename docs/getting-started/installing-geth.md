@@ -258,7 +258,7 @@ C:\Users\xxx\src\github.com\ethereum\go-ethereum> go install -v ./cmd/...
 
 ### FreeBSD {#freeBSD}
 
-To build Geth from source code on FreeBSD, the Geth Github repository can be cloned into a local directory.
+To build Geth from source code on FreeBSD, the Geth GitHub repository can be cloned into a local directory.
 
 ```sh
 git clone https://github.com/ethereum/go-ethereum
@@ -303,7 +303,7 @@ make geth
 
 These commands create a Geth executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
 
-To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth Github repository. then rebuild and restart the node.
+To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth GitHub repository. then rebuild and restart the node.
 
 ```sh
 cd go-ethereum

@@ -1,5 +1,5 @@
 ---
-title: resources
+title: Resources
 description: Read, watch and listen more about Geth and Ethereum
 ---
 

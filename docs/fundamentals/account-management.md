@@ -3,7 +3,7 @@ title: Account Management with Clef
 description: Guide to basic account management using Geth's built-in tools
 ---
 
-Geth uses an external signer called [Clef](/docs/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
+Geth uses an external signer called [Clef](/docs/tools/clef/introduction) to manage accounts. This is a standalone piece of software that runs independently of - but connects to - a Geth instance. Clef handles account creation, key management and signing transactions/data. This page explains how to use Clef to create and manage accounts for use with Geth. More information about Clef, including advanced setup options, are available in our dedicated Clef docs.
 
 ## Initialize Clef {#initializing-clef}
 
@@ -78,7 +78,7 @@ The console will hang because Clef is waiting for manual approval. Switch to the
 
 It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
-{% include note.html content=" If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**" %}
+<Note>If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**</Note>
 
 The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
 
@@ -145,7 +145,7 @@ which returns:
 
 ### Import a keyfile {#importing-a-keyfile}
 
-It is also possible to create an account by importing an existing private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. It is possible to do this using Clef, but currently the method is not externally exposed and requires implementing a UI. There is a Python UI on the Geth Github that could be used as an example or it can be done using the default console UI. However, for now the most straightforward way to import an accoutn from a private key is to use Geth's `account import`.
+It is also possible to create an account by importing an existing private key. For example, a user might already have some ether at an address they created using a browser wallet and now wish to use a new Geth node to interact with their funds. In this case, the private key can be exported from the browser wallet and imported into Geth. It is possible to do this using Clef, but currently the method is not externally exposed and requires implementing a UI. There is a Python UI on the Geth GitHub that could be used as an example or it can be done using the default console UI. However, for now the most straightforward way to import an accoutn from a private key is to use Geth's `account import`.
 
 Geth requires the private key to be stored as a file which contains the private key as unencrypted canonical elliptic curve bytes encoded into hex (i.e. plain text key without leading 0x). The new account is then saved in encrypted format, protected by a passphrase the user provides on request. As always, this passphrase must be securely and safely backed up - there is no way to retrieve or reset it if it is forgotten!
 

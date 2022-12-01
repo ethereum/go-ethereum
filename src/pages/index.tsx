@@ -55,7 +55,7 @@ const HomePage: NextPage = ({}) => {
                 </Text>
 
                 <Text textStyle='quick-link-text'>
-                  Geth has been a core part of Etheruem since the very beginning. Geth was one of
+                  Geth has been a core part of Ethereum since the very beginning. Geth was one of
                   the original Ethereum implementations making it the most battle-hardened and
                   tested client.
                 </Text>
@@ -119,7 +119,7 @@ const HomePage: NextPage = ({}) => {
                   the smallest of fixes! If you&apos;d like to contribute to the Geth source code,
                   please fork the{' '}
                   <Link href={GETH_REPO_URL} isExternal variant='light'>
-                    Github repository
+                    GitHub repository
                   </Link>
                   , fix, commit and send a pull request for the maintainers to review and merge into
                   the main code base.

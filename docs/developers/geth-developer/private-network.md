@@ -7,7 +7,7 @@ This guide explains how to set up a private network of multiple Geth nodes. An E
 
 ## Prerequisites {#prerequisites}
 
-To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/getting_started/Installing-Geth)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting_started/getting_started)).
+To follow the tutorial on this page it is necessary to have a working Geth installation (instructions [here](/docs/getting-started/installing-geth)). It is also helpful to understand Geth fundamentals (see [Getting Started](/docs/getting-started)).
 
 ## Private Networks {#private-networks}
 

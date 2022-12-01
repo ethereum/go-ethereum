@@ -49,3 +49,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+
+## Adding a new documentation page
+
+Documentation pages are located in the `/docs` folder in the root directory of the project.
+
+When you want to add a new page, add the new file in the appropriate folder in the `/docs` page. `index.md` files will be the default page for a directory, and `{pagename}.md` will define subpages for a directory.
+
+After adding this page, you will need to add it `/src/data/documentation-links.yaml` which adds documentation structure which you will see on the left sidebar in the documentation pages.

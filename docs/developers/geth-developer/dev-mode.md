@@ -16,7 +16,7 @@ This configuration enables developers to experiment with Geth's source code or d
 
 ## Prerequisites {#prerequisites}
 
-It is assumed that the user has a working Geth installation (see [installation guide](/docs/install-and-build/installing-geth)).
+It is assumed that the user has a working Geth installation (see [installation guide](/docs/getting-started/installing-geth)).
 It would also be helpful to have basic knowledge of Geth and the Geth console. See [Getting Started](/docs/getting-started).
 Some basic knowledge of [Solidity](https://docs.soliditylang.org/) and [smart contract deployment](https://ethereum.org/en/developers/tutorials/deploying-your-first-smart-contract/) would be useful.
 
@@ -170,7 +170,7 @@ Now that the user account is funded with ether, a contract can be created ready 
 
 This tutorial will make use of a classic example smart contract, `Storage.sol`. This contract exposes two public functions, one to add a value to the contract storage and one to view the stored value. The contract, written in Solidity, is provided below:
 
-```solidity
+```javascript
 pragma solidity >=0.7.0;
 
 contract Storage{
@@ -220,7 +220,7 @@ INFO [05-09|12:27:09.681] 🔨 mined potential block                  number=2 h
 
 ## Interact with contract using Remix {#interact-with-contract}
 
-The contract is now deployed on a local testnet version of the Etheruem blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
+The contract is now deployed on a local testnet version of the Ethereum blockchain. This means there is a contract address that contains executable bytecode that can be invoked by sending transactions with instructions, also in bytecode, to that address. Again, this can all be achieved by constructing transactions directly in the Geth console or even by making external http requests using tools such as Curl. Here, Remix is used to retrieve the value, then the same action is taken using the Javascript console.
 
 After deploying the contract in Remix, the `Deployed Contracts` tab in the sidebar automatically populates with the public functions exposed by `Storage.sol`. To send a value to the contract storage, type a number in the field adjacent to the `store` button, then click the button.
 

@@ -3,9 +3,9 @@ title: FAQ
 description: Frequently asked questions related to Geth
 ---
 
-### Where can I get more information? {#where-can-i-get-more-information}
+## Where can I get more information? {#where-can-i-get-more-information}
 
-This page contains answers to common questions about Geth. Source code and README documentation can be found on the Geth [Github](https://github.com/ethereum/go-ethereum). You can also ask questions on Geth's [Discord channel](https://discord.gg/WHNkYDsAKU) or keep up to date with Geth on [Twitter](https://twitter.com/go_ethereum). Information about Ethereum in general can be found at [ethereum.org](https://ethereum.org).
+This page contains answers to common questions about Geth. Source code and README documentation can be found on the Geth [GitHub](https://github.com/ethereum/go-ethereum). You can also ask questions on Geth's [Discord server](https://discord.gg/WHNkYDsAKU) or keep up to date with Geth on [Twitter](https://twitter.com/go_ethereum). Information about Ethereum in general can be found at [ethereum.org](https://ethereum.org).
 
 The Geth team have also recently started to run AMA's on Reddit:
 
@@ -20,7 +20,7 @@ RPC stands for Remote Procedure Call. RPC is a mode of communication between pro
 
 ## What is `jwtsecret`? {#what-is-jwtsecret}
 
-The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [Connecting to consensus clients](/docs/getting_started/consensus-clients) page.
+The `jwtsecret` file is required to create an authenticated connection between Geth and a consensus client. JWT stands for JSON Web Token - it is signed using a secret key. The signed token acts as a shared secret used to check that information is sent to and received from the correct peer. Read about how to create `jwt-secret` in Geth on our [consensus clients](/docs/getting-started/consensus-clients) page.
 
 ## I noticed my peercount slowly decreasing, and now it is at 0. Restarting doesn't get any peers. {#where-are-my-peers}
 
@@ -32,7 +32,7 @@ sudo ntpdate -s time.nist.gov
 
 ## I would like to run multiple Geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable". {#multiple-geth-instances}
 
-Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/developers/geth-developer/Private-Network) instructions.
+Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](/docs/developers/geth-developer/private-network) instructions.
 
 ## When I try to use the --password command line flag, I get the error "Could not decrypt key with given passphrase" but the password is correct. Why does this error appear? {#could-not-decrypt-key}
 
@@ -94,4 +94,4 @@ These docs mainly cover how to set up Geth, but since the switch to proof-of-sta
 
 ## How do I update Geth? {#how-to-update-geth}
 
-Updating Geth to the latest version simply requires stopping the node, downloading the latest release and restarting the node. Precisely how to download the latest software depends on the installation method - please refer to our [Installation pages](/docs/install-and-build/Installing-Geth).
+Updating Geth to the latest version simply requires stopping the node, downloading the latest release and restarting the node. Precisely how to download the latest software depends on the installation method - please refer to our [Installation pages](/docs/getting-started/installing-geth).

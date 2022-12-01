@@ -41,9 +41,9 @@ In keeping with this policy, we have taken inspiration from [Solidity bug disclo
 
 ## Disclosed vulnerabilities {#disclosed-vulnerabilities}
 
-There is a JSON-formatted list ([`vulnerabilities.json`](/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
+There is a JSON-formatted list ([`vulnerabilities.json`](/public/docs/vulnerabilities/vulnerabilities.json)) of some of the known security-relevant vulnerabilities concerning Geth.
 
-As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](vulnerabilities.json.minisig), and cross-check the data against it's own version number.
+As of version `1.9.25`, Geth has a built-in command to check whether it is affected by any publically disclosed vulnerability, using the command `geth version-check`. This command will fetch the latest json file (and the accompanying [signature-file](/public/docs/vulnerabilities/vulnerabilities.json.minisig), and cross-check the data against it's own version number.
 
 The list of vulnerabilities was started in November 2020, and covers mainly `v1.9.7` and forward.
 
@@ -74,11 +74,11 @@ The JSON file of known vulnerabilities below is a list of objects, one for each 
 - `CVE`
   - The assigned `CVE` identifier, if available (optional)
 
-### What about Github security advisories {#github-security-advisories}
+### What about GitHub security advisories {#github-security-advisories}
 
-We prefer to not rely on Github as the only/primary publishing protocol for security advisories, but we plan to use the Github-advisory process as a second channel for disseminating vulnerability-information.
+We prefer to not rely on GitHub as the only/primary publishing protocol for security advisories, but we plan to use the GitHub-advisory process as a second channel for disseminating vulnerability-information.
 
-Advisories published via Github can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
+Advisories published via GitHub can be accessed [here](https://github.com/ethereum/go-ethereum/security/advisories?state=published).
 
 ## Bug Bounties {#bug-bounties}
 

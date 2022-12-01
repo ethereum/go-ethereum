@@ -130,7 +130,7 @@ Grafana is now set up to read data from InfluxDB. Now a dashboard can be created
 
 For a Geth monitoring dashboard, copy the URL of [this dashboard](https://grafana.com/grafana/dashboards/13877/) and paste it in the "Import page" in Grafana. After saving the dashboard, it should look like this:
 
-![Grafana 1](/public/images/docs/grafana.png)
+![Grafana 1](/images/docs/grafana.png)
 
 ## Customization {#customization}
 

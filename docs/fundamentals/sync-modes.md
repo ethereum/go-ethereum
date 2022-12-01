@@ -46,7 +46,7 @@ It is also possible to create a partial/recent archive node where the node was s
 
 A light node syncs very quickly and stores the bare minimum of blockchain data. Light nodes only process block headers, not entire blocks. This greatly reduces the computation time, storage and bandwidth required relative to a full node. This means light nodes are suitable for resource-constrained devices and can catch up to the head of the chain much faster when they are new or have been offline for a while. The trade-off is that light nodes rely heavily on data served by altruistic full nodes. A light client can be used to query data from Ethereum and submit transactions, acting as a locally-hosted Ethereum wallet. However, because they don't keep local copies of the Ethereum state, light nodes can't validate blocks in the same way as full nodes - they receive a proof from the full node and verify it against their local header chain. To start a node in light mode, pass `--syncmode light`. Be aware that full nodes serving light data are relative scarce so light nodes can struggle to find peers. **Light nodes are not currently working on proof-of-stake Ethereum**.
 
-Read more about light nodes on our [LES page](/docs/interface/les).
+Read more about light nodes on our [LES page](/docs/fundamentals/les).
 
 ## Consensus layer syncing {#consensus-layer-syncing}
 
@@ -66,7 +66,7 @@ Read more in the [optimistic sync specs](https://github.com/ethereum/consensus-s
 
 Alternatively, the consensus client can grab a checkpoint from a trusted source which provides a target state to sync up to, before switching to full sync and verifying each block in turn. In this mode, the node trusts that the checkpoint is correct. There are many possible sources for this checkpoint - the gold standard would be to get it out-of-band from another trusted friend, but it could also come from block explorers or [public APIs/web apps](https://eth-clients.github.io/checkpoint-sync-endpoints/). Checkpoint sync is very fast - a consensus cleint should be able to sync in a few minutes using this method.
 
-For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/interface/logs) page.
+For troubleshooting, please see the `Syncing` section on the [console log messages](/docs/fundamentals/logs) page.
 
 ## Summary {#summary}
 

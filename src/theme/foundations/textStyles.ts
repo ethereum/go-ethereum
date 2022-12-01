@@ -107,7 +107,7 @@ export const textStyles = {
     color: 'body'
   },
   'footer-link-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     lineHeight: '21.12px',
@@ -139,13 +139,28 @@ export const textStyles = {
     textAlign: 'center',
     fontSize: 'sm'
   },
+  'docs-nav-dropdown': {
+    fontFamily: 'heading',
+    fontWeight: 400,
+    fontSize: '18px',
+    lineHeight: 6,
+    letterSpacing: '4%',
+    textAlign: 'left'
+  },
+  'docs-nav-links': {
+    fontFamily: 'heading',
+    weight: 400,
+    fontSize: 'md',
+    lineHeight: 8,
+    letterSpacing: '0.01em'
+  },
   'header-button': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     fontSize: { base: '0.86rem', sm: '1rem' }
   },
   'header-mobile-button': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     textTransform: 'uppercase',
     fontSize: '2xl'
   },
@@ -163,8 +178,25 @@ export const textStyles = {
     lineHeight: '21.12px',
     letterSpacing: '0.01rem'
   },
-  // TODO: refactor w/ semantic tokens for light/dark mode
-  'link-light': {},
-  // TODO: refactor w/ semantic tokens for light/dark mode
-  'text-light': {}
+  'document-nav-title': {
+    fontFamily: 'heading',
+    fontWeight: 400,
+    fontSize: 'md',
+    lineHeight: '21.12px',
+    letterSpacing: '2%'
+  },
+  'document-nav-link': {
+    fontFamily: 'body',
+    fontWeight: 400,
+    fontSize: '13px',
+    lineHeight: 5,
+    letterSpacing: '1%',
+    mb: 4
+  },
+  'note-text': {
+    fontFamily: 'body',
+    fontWeight: 400,
+    fontSize: 'md',
+    lineHeight: '26px'
+  }
 };

@@ -69,6 +69,7 @@ Initiate Geth:
 ```sh
 $ geth  --datadir ./ddir init genesis.json
 ```
+
 ```terminal
 ...
 INFO [06-16|11:14:54.123] Writing custom genesis block
@@ -90,6 +91,7 @@ These two things are independent of each other. First of all, however, `clef` mu
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn init
 ```
+
 ```terminal
 The master seed of clef will be locked with a password.
 Please specify a password. Do not forget this password!
@@ -117,6 +119,7 @@ With that done, `clef` can be made aware of the password. To do this `setpw <add
 ```sh
 $ clef --keystore ./ddir/keystore --configdir ./clef --chainid 15 --suppress-bootwarn setpw 0x9CD932F670F7eDe5dE86F756A6D02548e5899f47
 ```
+
 ```terminal
 Please enter a password to store for this address:
 Password:
