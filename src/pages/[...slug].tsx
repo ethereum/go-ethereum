@@ -1,16 +1,24 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import { Stack, Heading, Text } from '@chakra-ui/react';
+import { Flex, Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
+import { useRouter } from 'next/router';
+import { useEffect } from 'react';
 import gfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 
-import MDXComponents from '../components/';
-import { Breadcrumbs } from '../components/docs';
+import MDComponents from '../components/UI/docs';
+import { Breadcrumbs, DocsNav, DocumentNav } from '../components/UI/docs';
 import { PageMetadata } from '../components/UI';
+
+import { NavLink } from '../types';
+
+import { getFileList } from '../utils/getFileList';
+
 import { textStyles } from '../theme/foundations';
 import { getParsedDate } from '../utils';
 
@@ -22,21 +30,6 @@ const MATTER_OPTIONS = {
 
 // This method crawls for all valid docs paths
 export const getStaticPaths: GetStaticPaths = () => {
-  const getFileList = (dirName: string) => {
-    let files: string[] = [];
-    const items = fs.readdirSync(dirName, { withFileTypes: true });
-
-    for (const item of items) {
-      if (item.isDirectory()) {
-        files = [...files, ...getFileList(`${dirName}/${item.name}`)];
-      } else {
-        files.push(`/${dirName}/${item.name}`);
-      }
-    }
-
-    return files.map(file => file.replace('.md', '')).map(file => file.replace('/index', ''));
-  };
-
   const paths: string[] = getFileList('docs'); // This is folder that get crawled for valid docs paths. Change if this path changes.
 
   return {
@@ -52,6 +45,8 @@ export const getStaticProps: GetStaticProps = async context => {
   let file;
   let lastModified;
 
+  const navLinks = yaml.load(fs.readFileSync('src/data/documentation-links.yaml', 'utf8'));
+
   try {
     file = fs.readFileSync(`${filePath}.md`, 'utf-8');
     lastModified = fs.statSync(`${filePath}.md`);
@@ -66,6 +61,7 @@ export const getStaticProps: GetStaticProps = async context => {
     props: {
       frontmatter,
       content,
+      navLinks,
       lastModified: getParsedDate(lastModified.mtime, {
         month: 'numeric',
         day: 'numeric',
@@ -80,27 +76,62 @@ interface Props {
     [key: string]: string;
   };
   content: string;
+  navLinks: NavLink[];
   lastModified: string;
 }
 
-const DocPage: NextPage<Props> = ({ frontmatter, content, lastModified }) => {
+const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified }) => {
+  const router = useRouter();
+
+  useEffect(() => {
+    const id = router.asPath.split('#')[1];
+    const element = document.getElementById(id);
+
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [router.asPath]);
+
   return (
     <>
       <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
-        <Stack mb={16}>
-          <Breadcrumbs />
-          <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
-            {frontmatter.title}
-          </Heading>
-          <Text as='span' mt='0 !important'>
-            last edited {lastModified}
-          </Text>
-        </Stack>
-        <ReactMarkdown remarkPlugins={[gfm]} components={ChakraUIRenderer(MDXComponents)}>
-          {content}
-        </ReactMarkdown>
+        <Flex direction={{ base: 'column', lg: 'row' }} gap={{ base: 4, lg: 8 }}>
+          <Stack>
+            <DocsNav navLinks={navLinks} />
+          </Stack>
+
+          <Stack pb={4} width='100%'>
+            <Stack mb={16}>
+              <Breadcrumbs />
+              <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
+                {frontmatter.title}
+              </Heading>
+              <Text as='span' mt='0 !important'>
+                last edited {lastModified}
+              </Text>
+            </Stack>
+
+            <Flex width='100%' placeContent='space-between'>
+              <Stack maxW='768px'>
+                <ReactMarkdown
+                  remarkPlugins={[gfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={ChakraUIRenderer(MDComponents)}
+                >
+                  {content}
+                </ReactMarkdown>
+              </Stack>
+
+              <Stack display={{ base: 'none', xl: 'block' }} w={48}>
+                <DocumentNav content={content} />
+              </Stack>
+            </Flex>
+          </Stack>
+        </Flex>
       </main>
     </>
   );

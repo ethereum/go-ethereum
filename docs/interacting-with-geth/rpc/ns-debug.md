@@ -29,7 +29,7 @@ The location is specified as `<filename>:<line>`.
 
 Example:
 
-``` js
+```js
 > debug.backtraceAt("server.go:443")
 ```
 
@@ -579,13 +579,16 @@ No specific call options:
 Tracing a call with a destination and specific sender, disabling the storage and memory output (less data returned over RPC)
 
 ```js
-debug.traceCall({
-	"from": "0xdeadbeef29292929192939494959594933929292",
-	"to": "0xde929f939d939d393f939393f93939f393929023",
-	"gas": "0x7a120",
-	"data": "0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810"
-	},
-	"latest", {"disableStorage": true, "disableMemory": true})
+debug.traceCall(
+  {
+    from: '0xdeadbeef29292929192939494959594933929292',
+    to: '0xde929f939d939d393f939393f93939f393929023',
+    gas: '0x7a120',
+    data: '0xf00d4b5d00000000000000000000000001291230982139282304923482304912923823920000000000000000000000001293123098123928310239129839291010293810'
+  },
+  'latest',
+  { disableStorage: true, disableMemory: true }
+);
 ```
 
 It is possible to supply 'overrides' for both state-data (accounts/storage) and block data (number, timestamp etc). In the example below, a call which executes `NUMBER` is performed, and the overridden number is placed on the stack:
@@ -731,26 +734,26 @@ Sets the logging verbosity pattern.
 
 If you want to see messages from a particular Go package (directory) and all subdirectories, use:
 
-``` js
+```js
 > debug.vmodule("eth/*=6")
 ```
 
 If you want to restrict messages to a particular package (e.g. p2p) but exclude subdirectories, use:
 
-``` js
+```js
 > debug.vmodule("p2p=6")
 ```
 
 If you want to see log messages from a particular source file, use
 
-``` js
+```js
 > debug.vmodule("server.go=6")
 ```
 
 You can compose these basic patterns. If you want to see all output from peer.go in a package below eth (eth/peer.go, eth/downloader/peer.go) as well as output from package p2p at level <= 5, use:
 
-``` js
-debug.vmodule("eth/*/peer.go=6,p2p=5")
+```js
+debug.vmodule('eth/*/peer.go=6,p2p=5');
 ```
 
 ### debug_writeBlockProfile

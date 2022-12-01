@@ -4,7 +4,7 @@ import { MDXProvider } from '@mdx-js/react';
 
 import { Layout } from '../components/layouts';
 
-import MDXComponents from '../components/';
+import MDComponents from '../components/UI/docs';
 
 import 'focus-visible/dist/focus-visible';
 import theme from '../theme';
@@ -12,7 +12,7 @@ import theme from '../theme';
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <ChakraProvider theme={theme}>
-      <MDXProvider components={MDXComponents}>
+      <MDXProvider components={MDComponents}>
         <Layout>
           <Component {...pageProps} />
         </Layout>

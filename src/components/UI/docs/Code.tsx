@@ -73,5 +73,11 @@ export const Code: React.FC<Props> = ({ className, children, inline }) => {
         {content}
       </SyntaxHighlighter>
     );
-  return <Stack>{content}</Stack>;
+  return (
+    <Stack>
+      <ChakraCode overflow='auto' p={6} background='terminal-bg' color='terminal-text'>
+        {content}
+      </ChakraCode>
+    </Stack>
+  );
 };

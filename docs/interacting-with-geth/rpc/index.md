@@ -78,7 +78,7 @@ geth --ws --ws.origins http://myapp.example.com
 
 As with `--http.corsdomain`, using the wildcard `--ws.origins '*'` allows access from any origin.
 
-{% include note.html content=" By default, **account unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**" %}
+<Note>By default, **account unlocking is forbidden when HTTP or Websocket access is enabled** (i.e. by passing `--http` or `ws` flag). This is because an attacker that manages to access the node via the externally-exposed HTTP/WS port can then control the unlocked account. It is possible to force account unlock by including the `--allow-insecure-unlock` flag but this is unsafe and **not recommended** except for expert users that completely understand how it can be used safely. This is not a hypothetical risk: **there are bots that continually scan for http-enabled Ethereum nodes to attack**</Note>
 
 ### IPC Server {#ipc-server}
 

@@ -176,7 +176,6 @@ Return:
 Things to note about the call tracer:
 
 - Calls to precompiles are also included in the result
-  
 - In case a frame reverts, the field `output` will contain the raw return data
 
 - In case the top level frame reverts, its `revertReason` field will contain the parsed reason of revert as returned by the Solidity contract
@@ -186,7 +185,6 @@ Things to note about the call tracer:
 `callTracer` accepts two options:
 
 - `onlyTopCall: true` instructs the tracer to only process the main (top-level) call and none of the sub-calls. This avoids extra processing for each call frame if only the top-level call info are required.
-  
 - `withLog: true` instructs the tracer to also collect the logs emitted during each call.
 
 Example invokation with the `onlyTopCall` flag:

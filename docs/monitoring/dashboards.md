@@ -10,7 +10,6 @@ There are several ways to monitor the performance of a Geth node. Insights into 
 To follow along with the instructions on this page it will be useful to have:
 
 - a running Geth instance.
-  
 - basic working knowlegde of bash/terminal.
 
 [This video](https://www.youtube.com/watch?v=cOBab8IJMYI) provides an excellent introduction to Geth monitoring.

@@ -35,6 +35,12 @@ export interface ReleaseParams {
   isStableRelease: boolean;
 }
 
+export interface NavLink {
+  id: string;
+  to?: string;
+  items?: NavLink[];
+}
+
 export interface OpenPGPSignaturesData {
   'build server': string;
   'unique id': string;

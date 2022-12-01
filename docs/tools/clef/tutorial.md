@@ -12,6 +12,7 @@ First things first, Clef needs to store some data itself. Since that data might 
 ```sh
 $ clef init
 ```
+
 ```terminal
 WARNING!
 
@@ -134,7 +135,7 @@ geth attach goerli-data/geth.ipc
 A simple request to list the accounts in the keystore will cause the Javascript console to hang.
 
 ```js
-eth.accounts
+eth.accounts;
 ```
 
 Switching to the Clef terminal reveals that this is because the request is awaiting explicit confirmation from the user. The log is identical to the one shown above, when the same request for account information was made to Clef via Netcat:

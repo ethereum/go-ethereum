@@ -3,7 +3,7 @@ title: Pruning
 description: Instructions for pruning a Geth node
 ---
 
-{% include note.html content="Offline pruning is only for the hash-based state scheme. Soon, we will have a path-based state scheme which enables the pruning by default. Once the hash-based state scheme is no longer supported, offline pruning will be deprecated." %}
+<Note>Offline pruning is only for the hash-based state scheme. Soon, we will have a path-based state scheme which enables the pruning by default. Once the hash-based state scheme is no longer supported, offline pruning will be deprecated.</Note>
 
 A snap-sync'd Geth node currently requires more than 650 GB of disk space to store the historic blockchain data. With default cache size the database grows by about 14 GB/week. This means that Geth users will rapidly run out of space on 1TB hard drives. To solve this problem without needing to purchase additional hardware, Geth can be pruned. Pruning is the process of erasing older data to save disk space. Since Geth `v1.10`, users have been able to trigger a snapshot offline prune to bring the total storage back down to the original ~650 GB in about 4-5 hours. This has to be done periodically to keep the total disk storage
 within the bounds of the local hardware (e.g. every month or so for a 1TB disk).
@@ -13,13 +13,9 @@ To prune a Geth node at least 40 GB of free disk space is recommended. This mean
 ## Pruning rules {#pruning-rules}
 
 1. Do not try to prune an archive node. Archive nodes need to maintain ALL historic data by definition.
-   
 2. Ensure there is at least 40 GB of storage space still available on the disk that will be pruned. Failures have been reported with ~25GB of free space.
-   
 3. Geth is at least `v1.10` ideally > `v1.10.3`
-   
 4. Geth is fully sync'd
-   
 5. Geth has finished creating a snapshot that is at least 128 blocks old. This is true when "state snapshot generation" is no longer reported in the logs.
 
 With these rules satisfied, Geth's database can be pruned.

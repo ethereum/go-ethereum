@@ -50,11 +50,11 @@ each with detailed installation instructions. They all share the common trait th
 started with a specific URL that can be passed to Geth.
 
 [EthNetStats "Classic"](https://github.com/ethereum/eth-netstats)
- 
+
 [EthNet Intelligence API](https://github.com/ethereum/eth-net-intelligence-api)
- 
+
 [Goerli Ethstats client](https://github.com/goerli/ethstats-client)
- 
+
 [Goerli Ethstats server](https://github.com/goerli/ethstats-server)
 
 If enabled, Geth spins up a minimal Ethstats reporting daemon that pushes statistics about the

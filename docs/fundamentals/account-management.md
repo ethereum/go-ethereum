@@ -78,7 +78,7 @@ The console will hang because Clef is waiting for manual approval. Switch to the
 
 It is critical to backup the account password safely and securely as it cannot be retrieved or reset.
 
-{% include note.html content=" If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**" %}
+<Note>If the password provided on account creation is lost or forgotten, there is no way to retrive it and the account will simply stay locked forever. The password MUST be backed up safely and securely! **IT IS CRITICAL TO BACKUP THE KEYSTORE AND REMEMBER PASSWORDS**</Note>
 
 The newly generated key files can be viewed in `<datadir>/keystore/`. The file naming format is `UTC--<date>--<address>` where `date` is the date and time of key creation formatted according to [UTC 8601](https://www.iso.org/iso-8601-date-and-time-format.html) with zero time offset and seconds precise to eight decimal places. `address` is the 40 hexadecimal characters that make up the account address without a leading `0x`, for example:
 
