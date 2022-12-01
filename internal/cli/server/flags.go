@@ -11,7 +11,7 @@ func (c *Command) Flags() *flagset.Flagset {
 
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "chain",
-		Usage:   "Name of the chain to sync",
+		Usage:   "Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file",
 		Value:   &c.cliConfig.Chain,
 		Default: c.cliConfig.Chain,
 	})
@@ -35,7 +35,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
-		Usage: "Path of the directory to store keystores",
+		Usage: "Path of the directory where keystores are located",
 		Value: &c.cliConfig.KeyStoreDir,
 	})
 	f.StringFlag(&flagset.StringFlag{
@@ -176,7 +176,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "miner.etherbase",
-		Usage:   "Public address for block mining rewards (default = first account)",
+		Usage:   "Public address for block mining rewards",
 		Value:   &c.cliConfig.Sealer.Etherbase,
 		Default: c.cliConfig.Sealer.Etherbase,
 		Group:   "Sealer",
@@ -190,7 +190,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "miner.gaslimit",
-		Usage:   "Target gas ceiling for mined blocks",
+		Usage:   "Target gas ceiling (gas limit) for mined blocks",
 		Value:   &c.cliConfig.Sealer.GasCeil,
 		Default: c.cliConfig.Sealer.GasCeil,
 		Group:   "Sealer",
@@ -485,7 +485,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "maxpendpeers",
-		Usage:   "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Usage:   "Maximum number of pending connection attempts",
 		Value:   &c.cliConfig.P2P.MaxPendPeers,
 		Default: c.cliConfig.P2P.MaxPendPeers,
 		Group:   "P2P",
