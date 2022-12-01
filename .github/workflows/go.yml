@@ -5,53 +5,44 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master, verkle-trie-proof-in-block-rebased, verkle-trie-post-merge, beverly-hills-head, 'verkle/replay-change-with-tree-group-tryupdate' ]
+  workflow_dispatch:
 
 jobs:
-
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.18
-
-    - name: Build
-      run: go build -v ./...
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      - name: Build
+        run: go build -v ./...
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      - name: Download golangci-lint
+        run: wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
+      - name: Lint
+        run: ./bin/golangci-lint run
+      - name: Vet
+        run: go vet
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.18
-
-    - name: Download golangci-lint
-      run: wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
-
-    - name: Lint
-      run: ./bin/golangci-lint run
-
-    - name: Vet
-      run: go vet
-  
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.18
-
-    - name: Download precomputed points
-      run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagonv2/precomp -Otrie/utils/precomp
-
-    - name: Test
-      run: go test ./...
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      - name: Download precomputed points
+        run: wget -nv https://github.com/gballet/go-verkle/releases/download/banderwagonv2/precomp -Otrie/utils/precomp
+      - name: Test
+        run: go test ./...
