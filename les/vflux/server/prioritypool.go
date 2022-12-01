@@ -77,8 +77,8 @@ type priorityPool struct {
 	// temporary state if tempState is not empty
 	tempState              []*ppNodeInfo
 	activeCount, activeCap uint64
-	activeQueue            *prque.LazyQueue
-	inactiveQueue          *prque.Prque
+	activeQueue            *prque.LazyQueue[*ppNodeInfo]
+	inactiveQueue          *prque.Prque[*ppNodeInfo]
 }
 
 // ppNodeInfo is the internal node descriptor of priorityPool
@@ -250,13 +250,13 @@ func (pp *priorityPool) Limits() (uint64, uint64) {
 }
 
 // inactiveSetIndex callback updates ppNodeInfo item index in inactiveQueue
-func inactiveSetIndex(a interface{}, index int) {
-	a.(*ppNodeInfo).inactiveIndex = index
+func inactiveSetIndex(a *ppNodeInfo, index int) {
+	a.inactiveIndex = index
 }
 
 // activeSetIndex callback updates ppNodeInfo item index in activeQueue
-func activeSetIndex(a interface{}, index int) {
-	a.(*ppNodeInfo).activeIndex = index
+func activeSetIndex(a *ppNodeInfo, index int) {
+	a.activeIndex = index
 }
 
 // invertPriority inverts a priority value. The active queue uses inverted priorities
@@ -269,8 +269,7 @@ func invertPriority(p int64) int64 {
 }
 
 // activePriority callback returns actual priority of ppNodeInfo item in activeQueue
-func activePriority(a interface{}) int64 {
-	c := a.(*ppNodeInfo)
+func activePriority(c *ppNodeInfo) int64 {
 	if c.bias == 0 {
 		return invertPriority(c.nodePriority.priority(c.tempCapacity))
 	} else {
@@ -279,8 +278,7 @@ func activePriority(a interface{}) int64 {
 }
 
 // activeMaxPriority callback returns estimated maximum priority of ppNodeInfo item in activeQueue
-func (pp *priorityPool) activeMaxPriority(a interface{}, until mclock.AbsTime) int64 {
-	c := a.(*ppNodeInfo)
+func (pp *priorityPool) activeMaxPriority(c *ppNodeInfo, until mclock.AbsTime) int64 {
 	future := time.Duration(until - pp.clock.Now())
 	if future < 0 {
 		future = 0
@@ -414,8 +412,7 @@ func (pp *priorityPool) enforceLimits() (*ppNodeInfo, int64) {
 		c                 *ppNodeInfo
 		maxActivePriority int64
 	)
-	pp.activeQueue.MultiPop(func(data interface{}, priority int64) bool {
-		c = data.(*ppNodeInfo)
+	pp.activeQueue.MultiPop(func(c *ppNodeInfo, priority int64) bool {
 		pp.setTempState(c)
 		maxActivePriority = priority
 		if c.tempCapacity == c.minTarget || pp.activeCount > pp.maxCount {
@@ -496,7 +493,7 @@ func (pp *priorityPool) updateFlags(updates []capUpdate) {
 // tryActivate tries to activate inactive nodes if possible
 func (pp *priorityPool) tryActivate(commit bool) []capUpdate {
 	for pp.inactiveQueue.Size() > 0 {
-		c := pp.inactiveQueue.PopItem().(*ppNodeInfo)
+		c := pp.inactiveQueue.PopItem()
 		pp.setTempState(c)
 		pp.setTempBias(c, pp.activeBias)
 		pp.setTempCapacity(c, pp.minCap)
