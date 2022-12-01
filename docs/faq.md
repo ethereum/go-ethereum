@@ -5,7 +5,7 @@ description: Frequently asked questions related to Geth
 
 ## Where can I get more information? {#where-can-i-get-more-information}
 
-This page contains answers to common questions about Geth. Source code and README documentation can be found on the Geth [GitHub](https://github.com/ethereum/go-ethereum). You can also ask questions on Geth's [Discord channel](https://discord.gg/WHNkYDsAKU) or keep up to date with Geth on [Twitter](https://twitter.com/go_ethereum). Information about Ethereum in general can be found at [ethereum.org](https://ethereum.org).
+This page contains answers to common questions about Geth. Source code and README documentation can be found on the Geth [GitHub](https://github.com/ethereum/go-ethereum). You can also ask questions on Geth's [Discord server](https://discord.gg/WHNkYDsAKU) or keep up to date with Geth on [Twitter](https://twitter.com/go_ethereum). Information about Ethereum in general can be found at [ethereum.org](https://ethereum.org).
 
 The Geth team have also recently started to run AMA's on Reddit:
 
