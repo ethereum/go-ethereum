@@ -1,4 +1,4 @@
-import { Box, Button, Center, Grid, HStack, Image, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Button, Center, Grid, HStack, Link, Stack, Text } from '@chakra-ui/react';
 import { FC } from 'react';
 import NextLink from 'next/link';
 
@@ -32,7 +32,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
 
   return (
     <Grid
-      border='3px solid'
+      border='2px solid'
       borderColor='primary'
       p={4}
       templateColumns={{ base: 'repeat(1, 1fr)', lg: '1fr 430px' }}
