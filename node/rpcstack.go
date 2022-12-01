@@ -470,7 +470,8 @@ type gzipResponseWriter struct {
 	contentLength uint64 // total length of the uncompressed response
 	written       uint64 // amount of written bytes from the uncompressed response
 	hasLength     bool   // true if uncompressed response had Content-Length
-	inited        bool   // true after initBuffering called first time
+	inited        bool   // true after initContentLength called first time
+	chunked       bool   // true if response will be chunked
 }
 
 // initContentLength checks if the uncompressed response has a content-length header.
@@ -481,8 +482,12 @@ func (w *gzipResponseWriter) initContentLength() {
 	w.inited = true
 
 	hdr := w.resp.Header()
+	w.chunked = hdr.Get("transfer-encoding") != "identity"
 	length := hdr.Get("content-length")
-	hdr.Del("content-length")
+	if w.chunked {
+		hdr.Del("content-length")
+	}
+
 	if len(length) > 0 {
 		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
 			w.hasLength = true
@@ -502,6 +507,13 @@ func (w *gzipResponseWriter) WriteHeader(status int) {
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	w.initContentLength()
+	// We don't compress error responses (e.g. timeout). They have to be delievered immediately
+	// and non-chunked. To serve a one-off compressed response,
+	// we need to know the length of the compressed output, which we don't.
+	if !w.chunked {
+		w.resp.Header().Del("content-encoding")
+		return w.resp.Write(b)
+	}
 
 	n, err := w.gz.Write(b)
 	w.written += uint64(n)
