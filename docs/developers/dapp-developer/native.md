@@ -21,7 +21,7 @@ Geth's reusable Go libraries focus on three main usage areas:
 - Remote node interfacing via different transports
 - Contract interactions through auto-generated bindings
 
-The libraries are updated synchronously with the Geth Github repository. The Go libraries can be viewed in full at [Go Packages](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
+The libraries are updated synchronously with the Geth GitHub repository. The Go libraries can be viewed in full at [Go Packages](https://pkg.go.dev/github.com/ethereum/go-ethereum#section-directories).
 
 Péter Szilágyi (@karalabe) gave a high level overview of the Go libraries in a talk at DevCon2 in Shanghai in 2016. The slides are still a useful resource ([available here](https://ethereum.karalabe.com/talks/2016-devcon.html)) and the talk itself can be viewed by clicking the image below (it is also archived on [IPFS](https://ipfs.io/ipfs/QmQRuKPKWWJAamrMqAp9rytX6Q4NvcXUKkhvu3kuREKqXR)).
 
@@ -189,7 +189,7 @@ SubscribePendingTransactions()
 
 _Note that both `ethclient` and `gethclient` have a `CallContract()` function - the difference is that the `gethclient` version includes an `overrides` argument._
 
-Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [Github](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [Github](https://github.com/MariusVanDerWijden/web3go).
+Details relating to these endpoints can be found at [pkg.go.dev](https://pkg.go.dev/github.com/ethereum/go-ethereum@v1.10.19/ethclient/gethclient) or the Geth [GitHub](https://github.com/ethereum/go-ethereum/tree/master/ethclient). The code snippets in this tutorial were adapted from a more more in-depth set of examples available on [GitHub](https://github.com/MariusVanDerWijden/web3go).
 
 ## Summary {#summary}
 

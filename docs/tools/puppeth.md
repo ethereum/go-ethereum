@@ -172,4 +172,4 @@ geth --datadir Node1 --port 30301 --bootnodes <enr> --networkid <testnetwork ID>
 
 Puppeth is a command line wizard that guides a user through the various stages of setting up a private network using proof-of-authority or proof-of-work consensus engine. Various network components can be added that optimize the network or enable network monitoring.
 
-[Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/puppeth)
+[GitHub repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/puppeth)

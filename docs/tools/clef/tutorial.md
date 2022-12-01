@@ -504,7 +504,7 @@ t=2022-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=request  meta
 t=2022-07-01T15:52:23+0300 lvl=info msg=SignData   api=signer type=response data=                                     error="Request denied"
 ```
 
-More examples, including a ruleset for a rate-limited window, are available on the [Clef Github](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md#example-1-ruleset-for-a-rate-limited-window) and on the [Rules page](/docs/tools/clef/rules).
+More examples, including a ruleset for a rate-limited window, are available on the [Clef GitHub](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/rules.md#example-1-ruleset-for-a-rate-limited-window) and on the [Rules page](/docs/tools/clef/rules).
 
 ## Under the hood {#under-the-hood}
 
@@ -574,4 +574,4 @@ Ultimately, the goal is to deprecate Geth's account management tools completely 
 ## Summary {#summary}
 
 This page includes step-by-step instructions for basic and intermediate uses of Clef, including using it as a standalone app and a backend signer for Geth. Further information is available on our other Clef pages, including [Introduction](/docs/clef/introduction), [Setup](/docs/tools/clef/setup),
-[Rules](/docs/tools/clef/rules), [Communication Datatypes](/docs/clef/datatypes) and [Communication APIs](/docs/tools/clef/apis). Also see the [Clef Github](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
+[Rules](/docs/tools/clef/rules), [Communication Datatypes](/docs/clef/datatypes) and [Communication APIs](/docs/tools/clef/apis). Also see the [Clef GitHub](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.

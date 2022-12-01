@@ -7,7 +7,7 @@ We welcome contributions from anyone on the internet, and are grateful for even 
 
 ## Contributing to the Geth source code {#contributing-to-source-code}
 
-If you'd like to contribute to the Geth source code, please fork the [Github repository](https://github.com/ethereum/go-ethereum), fix, commit and send a pull request for the maintainers to review and merge into the main code base. If you wish to submit more complex changes though, please check up with the core devs first on our Discord Server to ensure those changes are in line with the general philosophy of the project and/or get some early feedback which can make both your efforts much lighter as well as our review and merge procedures quick and simple.
+If you'd like to contribute to the Geth source code, please fork the [GitHub repository](https://github.com/ethereum/go-ethereum), fix, commit and send a pull request for the maintainers to review and merge into the main code base. If you wish to submit more complex changes though, please check up with the core devs first on our Discord Server to ensure those changes are in line with the general philosophy of the project and/or get some early feedback which can make both your efforts much lighter as well as our review and merge procedures quick and simple.
 
 Please make sure your contributions adhere to our coding guidelines:
 
@@ -25,7 +25,7 @@ We encourage an early pull request approach, meaning pull requests are created a
 
 ## Contributing to the Geth website {#contributing-to-website}
 
-The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please for the Geth website Github repository and raise pull requests for the maintainers to review and merge.
+The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please for the Geth website GitHub repository and raise pull requests for the maintainers to review and merge.
 
 ## License {#license}
 

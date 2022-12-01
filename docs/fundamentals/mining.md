@@ -23,7 +23,7 @@ Regardless of the mining method, the blockchain must be fully synced before mini
 
 ### Installing Ethminer {#installing-ethminer}
 
-The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer Github](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
+The Ethminer software can be installed from a downloaded binary or built from source. The relevant downloads and installation instructions are available from the [Ethminer GitHub](https://github.com/ethereum-mining/ethminer/#build). Standalone executables are available for Linux, macOS and Windows.
 
 ### Using Ethminer with Geth {#using-ethminer}
 

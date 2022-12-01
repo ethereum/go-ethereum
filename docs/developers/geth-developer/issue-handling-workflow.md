@@ -1,6 +1,6 @@
 ---
 title: Issue Handling Workflow
-description: Instructions for managing Github issues
+description: Instructions for managing GitHub issues
 ---
 
 ## Draft proposal {#draft-proposal}

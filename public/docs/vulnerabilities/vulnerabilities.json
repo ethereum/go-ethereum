@@ -135,7 +135,7 @@
     "name": "DoS via malicious `snap/1` request",
     "uid": "GETH-2021-03",
     "summary": "A vulnerable node is susceptible to crash when processing a maliciously crafted message from a peer, via the snap/1 protocol. The crash can be triggered by sending a malicious snap/1 GetTrieNodes package.",
-    "description": "The `snap/1` protocol handler contains two vulnerabilities related to the `GetTrieNodes` packet, which can be exploited to crash the node. Full details are available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v)",
+    "description": "The `snap/1` protocol handler contains two vulnerabilities related to the `GetTrieNodes` packet, which can be exploited to crash the node. Full details are available at the GitHub security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-59hh-656j-3p7v",
       "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities",
@@ -152,7 +152,7 @@
     "name": "DoS via malicious p2p message",
     "uid": "GETH-2022-01",
     "summary": "A vulnerable node can crash via p2p messages sent from an attacker node, if running with non-default log options.",
-    "description": "A vulnerable node, if configured to use high verbosity logging, can be made to crash when handling specially crafted p2p messages sent from an attacker node. Full details are available at the Github security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-wjxw-gh3m-7pm5)",
+    "description": "A vulnerable node, if configured to use high verbosity logging, can be made to crash when handling specially crafted p2p messages sent from an attacker node. Full details are available at the GitHub security [advisory](https://github.com/ethereum/go-ethereum/security/advisories/GHSA-wjxw-gh3m-7pm5)",
     "links": [
       "https://github.com/ethereum/go-ethereum/security/advisories/GHSA-wjxw-gh3m-7pm5",
       "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities",
