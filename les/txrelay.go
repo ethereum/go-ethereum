@@ -114,8 +114,11 @@ func (ltrx *lesTxRelay) send(txs types.Transactions, count int) {
 	}
 
 	for p, list := range sendTo {
+		ll := make(types.NetworkTransactions, len(list))
+		for i := range list {
+			ll[i] = types.NewNetworkTransaction(list[i])
+		}
 		pp := p
-		ll := list
 		enc, _ := rlp.EncodeToBytes(ll)
 
 		reqID := rand.Uint64()

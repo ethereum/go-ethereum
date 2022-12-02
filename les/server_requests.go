@@ -523,7 +523,7 @@ func handleSendTx(msg Decoder) (serveRequestFn, uint64, uint64, error) {
 				if backend.AddTxsSync() {
 					addFn = backend.TxPool().AddRemotesSync
 				}
-				if errs := addFn([]*types.Transaction{tx}); errs[0] != nil {
+				if errs := addFn([]*types.Transaction{tx.Tx}); errs[0] != nil {
 					stats[i].Error = errs[0].Error()
 					continue
 				}
