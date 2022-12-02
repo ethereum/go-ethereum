@@ -12,6 +12,12 @@ import {
 
 import { DiscordIcon, GitHubIcon, TwitterIcon } from '../UI/icons';
 
+const hoverStyles = {
+  textDecoration: 'none',
+  bg: 'primary',
+  color: 'bg !important'
+};
+
 export const Footer: FC = () => {
   return (
     <Flex mt={4} direction={{ base: 'column', lg: 'row' }}>
@@ -32,11 +38,7 @@ export const Footer: FC = () => {
           <Center
             flex={1}
             color='primary'
-            _hover={{
-              textDecoration: 'none',
-              bg: 'primary',
-              color: 'bg !important'
-            }}
+            _hover={hoverStyles}
             borderRight='2px solid'
             borderColor='primary'
             p={4}
@@ -51,11 +53,7 @@ export const Footer: FC = () => {
           <Center
             flex={1}
             color='primary'
-            _hover={{
-              textDecoration: 'none',
-              bg: 'primary',
-              color: 'bg !important'
-            }}
+            _hover={hoverStyles}
             borderRight={{
               base: 'none',
               md: '2px solid'
@@ -81,9 +79,7 @@ export const Footer: FC = () => {
               lg: 'none'
             }}
             borderColor='primary !important'
-            _hover={{
-              bg: 'primary'
-            }}
+            _hover={hoverStyles}
             p={4}
           >
             <NextLink href={GETH_TWITTER_URL} passHref>
@@ -96,9 +92,7 @@ export const Footer: FC = () => {
           <Center
             data-group
             flex={1}
-            _hover={{
-              bg: 'primary'
-            }}
+            _hover={hoverStyles}
             borderWidth='2px'
             borderStyle='none solid'
             borderColor='primary'
@@ -114,9 +108,7 @@ export const Footer: FC = () => {
           <Center
             data-group
             flex={1}
-            _hover={{
-              bg: 'primary'
-            }}
+            _hover={hoverStyles}
             p={4}
           >
             <NextLink href={GETH_REPO_URL} passHref>
