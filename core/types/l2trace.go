@@ -165,9 +165,9 @@ type TransactionData struct {
 	S        *hexutil.Big    `json:"s"`
 }
 
-// NewTraceTransaction returns a transaction that will serialize to the trace
+// NewTransactionData returns a transaction that will serialize to the trace
 // representation, with the given location metadata set (if available).
-func NewTraceTransaction(tx *Transaction, blockNumber uint64, config *params.ChainConfig) *TransactionData {
+func NewTransactionData(tx *Transaction, blockNumber uint64, config *params.ChainConfig) *TransactionData {
 	signer := MakeSigner(config, big.NewInt(0).SetUint64(blockNumber))
 	from, _ := Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
