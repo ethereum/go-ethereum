@@ -78,7 +78,7 @@ type ClientManager struct {
 	// recharge queue is a priority queue with currently recharging client nodes
 	// as elements. The priority value is rcFullIntValue which allows to quickly
 	// determine which client will first finish recharge.
-	rcQueue *prque.Prque[*ClientNode]
+	rcQueue *prque.Prque[int64, *ClientNode]
 }
 
 // NewClientManager returns a new client manager.
@@ -107,7 +107,7 @@ type ClientManager struct {
 func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager {
 	cm := &ClientManager{
 		clock:         clock,
-		rcQueue:       prque.NewWrapAround(func(a *ClientNode, i int) { a.queueIndex = i }),
+		rcQueue:       prque.New[int64, *ClientNode](func(a *ClientNode, i int) { a.queueIndex = i }),
 		capLastUpdate: clock.Now(),
 		stop:          make(chan chan struct{}),
 	}

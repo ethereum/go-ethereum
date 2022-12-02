@@ -38,10 +38,10 @@ type servingQueue struct {
 	setThreadsCh            chan int
 
 	wg          sync.WaitGroup
-	threadCount int                        // number of currently running threads
-	queue       *prque.Prque[*servingTask] // priority queue for waiting or suspended tasks
-	best        *servingTask               // the highest priority task (not included in the queue)
-	suspendBias int64                      // priority bias against suspending an already running task
+	threadCount int                               // number of currently running threads
+	queue       *prque.Prque[int64, *servingTask] // priority queue for waiting or suspended tasks
+	best        *servingTask                      // the highest priority task (not included in the queue)
+	suspendBias int64                             // priority bias against suspending an already running task
 }
 
 // servingTask represents a request serving task. Tasks can be implemented to
@@ -123,7 +123,7 @@ func (t *servingTask) waitOrStop() bool {
 // newServingQueue returns a new servingQueue
 func newServingQueue(suspendBias int64, utilTarget float64) *servingQueue {
 	sq := &servingQueue{
-		queue:          prque.NewWrapAround[*servingTask](nil),
+		queue:          prque.New[int64, *servingTask](nil),
 		suspendBias:    suspendBias,
 		queueAddCh:     make(chan *servingTask, 100),
 		queueBestCh:    make(chan *servingTask),

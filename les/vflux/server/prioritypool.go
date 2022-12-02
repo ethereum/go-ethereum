@@ -77,8 +77,8 @@ type priorityPool struct {
 	// temporary state if tempState is not empty
 	tempState              []*ppNodeInfo
 	activeCount, activeCap uint64
-	activeQueue            *prque.LazyQueue[*ppNodeInfo]
-	inactiveQueue          *prque.Prque[*ppNodeInfo]
+	activeQueue            *prque.LazyQueue[int64, *ppNodeInfo]
+	inactiveQueue          *prque.Prque[int64, *ppNodeInfo]
 }
 
 // ppNodeInfo is the internal node descriptor of priorityPool
@@ -104,7 +104,7 @@ func newPriorityPool(ns *nodestate.NodeStateMachine, setup *serverSetup, clock m
 		setup:           setup,
 		ns:              ns,
 		clock:           clock,
-		inactiveQueue:   prque.New(inactiveSetIndex),
+		inactiveQueue:   prque.New[int64, *ppNodeInfo](inactiveSetIndex),
 		minCap:          minCap,
 		activeBias:      activeBias,
 		capacityStepDiv: capacityStepDiv,

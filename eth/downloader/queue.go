@@ -115,7 +115,7 @@ type queue struct {
 	// Headers are "special", they download in batches, supported by a skeleton chain
 	headerHead      common.Hash                    // Hash of the last queued header to verify order
 	headerTaskPool  map[uint64]*types.Header       // Pending header retrieval tasks, mapping starting indexes to skeleton headers
-	headerTaskQueue *prque.Prque[uint64]           // Priority queue of the skeleton indexes to fetch the filling headers for
+	headerTaskQueue *prque.Prque[int64, uint64]    // Priority queue of the skeleton indexes to fetch the filling headers for
 	headerPeerMiss  map[string]map[uint64]struct{} // Set of per-peer header batches known to be unavailable
 	headerPendPool  map[string]*fetchRequest       // Currently pending header retrieval operations
 	headerResults   []*types.Header                // Result cache accumulating the completed headers
@@ -125,15 +125,15 @@ type queue struct {
 	headerContCh    chan bool                      // Channel to notify when header download finishes
 
 	// All data retrievals below are based on an already assembles header chain
-	blockTaskPool  map[common.Hash]*types.Header // Pending block (body) retrieval tasks, mapping hashes to headers
-	blockTaskQueue *prque.Prque[*types.Header]   // Priority queue of the headers to fetch the blocks (bodies) for
-	blockPendPool  map[string]*fetchRequest      // Currently pending block (body) retrieval operations
-	blockWakeCh    chan bool                     // Channel to notify the block fetcher of new tasks
+	blockTaskPool  map[common.Hash]*types.Header      // Pending block (body) retrieval tasks, mapping hashes to headers
+	blockTaskQueue *prque.Prque[int64, *types.Header] // Priority queue of the headers to fetch the blocks (bodies) for
+	blockPendPool  map[string]*fetchRequest           // Currently pending block (body) retrieval operations
+	blockWakeCh    chan bool                          // Channel to notify the block fetcher of new tasks
 
-	receiptTaskPool  map[common.Hash]*types.Header // Pending receipt retrieval tasks, mapping hashes to headers
-	receiptTaskQueue *prque.Prque[*types.Header]   // Priority queue of the headers to fetch the receipts for
-	receiptPendPool  map[string]*fetchRequest      // Currently pending receipt retrieval operations
-	receiptWakeCh    chan bool                     // Channel to notify when receipt fetcher of new tasks
+	receiptTaskPool  map[common.Hash]*types.Header      // Pending receipt retrieval tasks, mapping hashes to headers
+	receiptTaskQueue *prque.Prque[int64, *types.Header] // Priority queue of the headers to fetch the receipts for
+	receiptPendPool  map[string]*fetchRequest           // Currently pending receipt retrieval operations
+	receiptWakeCh    chan bool                          // Channel to notify when receipt fetcher of new tasks
 
 	resultCache *resultStore       // Downloaded but not yet delivered fetch results
 	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
@@ -150,9 +150,9 @@ func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
 		headerContCh:     make(chan bool, 1),
-		blockTaskQueue:   prque.New[*types.Header](nil),
+		blockTaskQueue:   prque.New[int64, *types.Header](nil),
 		blockWakeCh:      make(chan bool, 1),
-		receiptTaskQueue: prque.New[*types.Header](nil),
+		receiptTaskQueue: prque.New[int64, *types.Header](nil),
 		receiptWakeCh:    make(chan bool, 1),
 		active:           sync.NewCond(lock),
 		lock:             lock,
@@ -258,7 +258,7 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	}
 	// Schedule all the header retrieval tasks for the skeleton assembly
 	q.headerTaskPool = make(map[uint64]*types.Header)
-	q.headerTaskQueue = prque.New[uint64](nil)
+	q.headerTaskQueue = prque.New[int64, uint64](nil)
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
 	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
 	q.headerHashes = make([]common.Hash, len(skeleton)*MaxHeaderFetch)
@@ -485,7 +485,7 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 //	item     - the fetchRequest
 //	progress - whether any progress was made
 //	throttle - if the caller should throttle for a while
-func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque[*types.Header],
+func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque[int64, *types.Header],
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
 	// downloading something (sanity check not to corrupt state)
@@ -646,10 +646,10 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 
 	// Return any non-satisfied requests to the pool
 	if req.From > 0 {
-		taskQueue.(*prque.Prque[uint64]).Push(req.From, -int64(req.From))
+		taskQueue.(*prque.Prque[int64, uint64]).Push(req.From, -int64(req.From))
 	}
 	for _, header := range req.Headers {
-		taskQueue.(*prque.Prque[*types.Header]).Push(header, -int64(header.Number.Uint64()))
+		taskQueue.(*prque.Prque[int64, *types.Header]).Push(header, -int64(header.Number.Uint64()))
 	}
 	return len(req.Headers)
 }
@@ -826,7 +826,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 // reason this lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
-	taskQueue *prque.Prque[*types.Header], pendPool map[string]*fetchRequest,
+	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
 	reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {

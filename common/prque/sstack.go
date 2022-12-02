@@ -10,6 +10,8 @@
 
 package prque
 
+import "golang.org/x/exp/constraints"
+
 // The size of a block of data
 const blockSize = 4096
 
@@ -17,9 +19,9 @@ const blockSize = 4096
 //
 // Note: priorities can "wrap around" the int64 range, a comes before b if (a.priority - b.priority) > 0.
 // The difference between the lowest and highest priorities in the queue at any point should be less than 2^63.
-type item[V any] struct {
+type item[P constraints.Ordered, V any] struct {
 	value    V
-	priority int64
+	priority P
 }
 
 // SetIndexCallback is called when the element is moved to a new index.
@@ -30,33 +32,31 @@ type SetIndexCallback[V any] func(data V, index int)
 // Internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
-type sstack[V any] struct {
-	setIndex   SetIndexCallback[V]
-	size       int
-	capacity   int
-	offset     int
-	wrapAround bool
+type sstack[P constraints.Ordered, V any] struct {
+	setIndex SetIndexCallback[V]
+	size     int
+	capacity int
+	offset   int
 
-	blocks [][]*item[V]
-	active []*item[V]
+	blocks [][]*item[P, V]
+	active []*item[P, V]
 }
 
 // Creates a new, empty stack.
-func newSstack[V any](setIndex SetIndexCallback[V], wrapAround bool) *sstack[V] {
-	result := new(sstack[V])
+func newSstack[P constraints.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V] {
+	result := new(sstack[P, V])
 	result.setIndex = setIndex
-	result.active = make([]*item[V], blockSize)
-	result.blocks = [][]*item[V]{result.active}
+	result.active = make([]*item[P, V], blockSize)
+	result.blocks = [][]*item[P, V]{result.active}
 	result.capacity = blockSize
-	result.wrapAround = wrapAround
 	return result
 }
 
 // Pushes a value onto the stack, expanding it if necessary. Required by
 // heap.Interface.
-func (s *sstack[V]) Push(data any) {
+func (s *sstack[P, V]) Push(data any) {
 	if s.size == s.capacity {
-		s.active = make([]*item[V], blockSize)
+		s.active = make([]*item[P, V], blockSize)
 		s.blocks = append(s.blocks, s.active)
 		s.capacity += blockSize
 		s.offset = 0
@@ -65,16 +65,16 @@ func (s *sstack[V]) Push(data any) {
 		s.offset = 0
 	}
 	if s.setIndex != nil {
-		s.setIndex(data.(*item[V]).value, s.size)
+		s.setIndex(data.(*item[P, V]).value, s.size)
 	}
-	s.active[s.offset] = data.(*item[V])
+	s.active[s.offset] = data.(*item[P, V])
 	s.offset++
 	s.size++
 }
 
 // Pops a value off the stack and returns it. Currently no shrinking is done.
 // Required by heap.Interface.
-func (s *sstack[V]) Pop() (res any) {
+func (s *sstack[P, V]) Pop() (res any) {
 	s.size--
 	s.offset--
 	if s.offset < 0 {
@@ -83,28 +83,24 @@ func (s *sstack[V]) Pop() (res any) {
 	}
 	res, s.active[s.offset] = s.active[s.offset], nil
 	if s.setIndex != nil {
-		s.setIndex(res.(*item[V]).value, -1)
+		s.setIndex(res.(*item[P, V]).value, -1)
 	}
 	return
 }
 
 // Returns the length of the stack. Required by sort.Interface.
-func (s *sstack[V]) Len() int {
+func (s *sstack[P, V]) Len() int {
 	return s.size
 }
 
 // Compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
-func (s *sstack[V]) Less(i, j int) bool {
-	a, b := s.blocks[i/blockSize][i%blockSize].priority, s.blocks[j/blockSize][j%blockSize].priority
-	if s.wrapAround {
-		return a-b > 0
-	}
-	return a > b
+func (s *sstack[P, V]) Less(i, j int) bool {
+	return s.blocks[i/blockSize][i%blockSize].priority > s.blocks[j/blockSize][j%blockSize].priority
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.
-func (s *sstack[V]) Swap(i, j int) {
+func (s *sstack[P, V]) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
 	a, b := s.blocks[jb][jo], s.blocks[ib][io]
 	if s.setIndex != nil {
@@ -115,6 +111,6 @@ func (s *sstack[V]) Swap(i, j int) {
 }
 
 // Resets the stack, effectively clearing its contents.
-func (s *sstack[V]) Reset() {
-	*s = *newSstack(s.setIndex, false)
+func (s *sstack[P, V]) Reset() {
+	*s = *newSstack[P, V](s.setIndex)
 }
