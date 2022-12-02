@@ -287,11 +287,11 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
   const [totalDevBuilds, setTotalDevBuilds] = useState(ALL_LINUX_DEV_BUILDS.length);
 
   const showMoreStableReleases = () => {
-    setAmountStableReleases(amountStableReleases + 10);
+    setAmountStableReleases(amountStableReleases + 12);
   };
 
   const showMoreDevBuilds = () => {
-    setAmountDevBuilds(amountDevBuilds + 10);
+    setAmountDevBuilds(amountDevBuilds + 12);
   };
 
   return (
