@@ -75,6 +75,7 @@ type ClientManager struct {
 	// (totalRecharge / sumRecharge)*FixedPointMultiplier or 0 if sumRecharge==0
 	rcLastUpdate   mclock.AbsTime // last time the recharge integrator was updated
 	rcLastIntValue int64          // last updated value of the recharge integrator
+	priorityOffset int64          // offset for prque priority values ensures that all priorities stay in the int64 range
 	// recharge queue is a priority queue with currently recharging client nodes
 	// as elements. The priority value is rcFullIntValue which allows to quickly
 	// determine which client will first finish recharge.
@@ -294,7 +295,7 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		if dt < dtNext {
 			// not finished yet, put it back, update integrator according
 			// to current bonusRatio and return
-			cm.rcQueue.Push(rcqNode, -rcqNode.rcFullIntValue)
+			cm.addToQueue(rcqNode)
 			cm.rcLastIntValue += int64(bonusRatio * float64(dt))
 			return
 		}
@@ -306,6 +307,20 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		}
 		cm.rcLastIntValue = rcqNode.rcFullIntValue
 	}
+}
+
+func (cm *ClientManager) addToQueue(node *ClientNode) {
+	if cm.priorityOffset-node.rcFullIntValue < -0x4000000000000000 {
+		cm.priorityOffset += 0x4000000000000000
+		// recreate priority queue with new offset to avoid overflow; should happen very rarely
+		newRcQueue := prque.New[int64, *ClientNode](func(a *ClientNode, i int) { a.queueIndex = i })
+		for cm.rcQueue.Size() > 0 {
+			n := cm.rcQueue.PopItem()
+			newRcQueue.Push(n, cm.priorityOffset-n.rcFullIntValue)
+		}
+		cm.rcQueue = newRcQueue
+	}
+	cm.rcQueue.Push(node, cm.priorityOffset-node.rcFullIntValue)
 }
 
 // updateNodeRc updates a node's corrBufValue and adds an external correction value.
@@ -344,7 +359,7 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		}
 		node.rcLastIntValue = cm.rcLastIntValue
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)
-		cm.rcQueue.Push(node, -node.rcFullIntValue)
+		cm.addToQueue(node)
 	}
 }
 
