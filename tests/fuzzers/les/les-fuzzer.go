@@ -380,7 +380,7 @@ func Fuzz(input []byte) int {
 			f.doFuzz(l.GetHelperTrieProofsMsg, req)
 
 		case 6:
-			req := &l.SendTxPacket{Txs: make([]*types.Transaction, f.randomInt(l.MaxTxSend+1))}
+			req := &l.SendTxPacket{Txs: make([]*types.NetworkTransaction, f.randomInt(l.MaxTxSend+1))}
 			signer := types.HomesteadSigner{}
 			for i := range req.Txs {
 				var nonce uint64
@@ -390,7 +390,8 @@ func Fuzz(input []byte) int {
 					nonce = f.nonce
 					f.nonce += 1
 				}
-				req.Txs[i], _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
+                tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
+                req.Txs[i] = types.NewNetworkTransaction(tx)
 			}
 			f.doFuzz(l.SendTxV2Msg, req)
 
