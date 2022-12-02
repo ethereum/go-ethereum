@@ -479,11 +479,7 @@ func (g *Genesis) ToBlock() *types.Block {
 			}
 		}
 		if g.Config.IsSharding(common.Big0) {
-			if g.ExcessDataGas != nil {
-				head.ExcessDataGas = g.ExcessDataGas
-			} else {
-				head.ExcessDataGas = new(big.Int)
-			}
+			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))

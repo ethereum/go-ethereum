@@ -1212,6 +1212,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.BaseFee != nil {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
+	if head.WithdrawalsHash != nil {
+		result["withdrawalsRoot"] = *head.WithdrawalsHash
+	}
 	if head.ExcessDataGas != nil {
 		result["excessDataGas"] = (*hexutil.Big)(head.ExcessDataGas)
 	}
