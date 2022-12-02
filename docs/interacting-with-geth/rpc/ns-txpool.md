@@ -21,7 +21,7 @@ Please note, there may be multiple transactions associated with the same account
 
 ### Example
 
-```javascript
+```js
 > txpool.content
 {
   pending: {
@@ -129,7 +129,7 @@ Please note, there may be multiple transactions associated with the same account
 
 ### Example
 
-```javascript
+```js
 > txpool.inspect
 {
   pending: {
@@ -196,7 +196,7 @@ The result is an object with two fields `pending` and `queued`, each of which is
 
 ### Example
 
-```javascript
+```js
 > txpool.status
 {
   pending: 10,

@@ -1,15 +1,19 @@
 import { Link, Table, Thead, Tr, Th, TableContainer, Text, Tbody, Td } from '@chakra-ui/react';
 import { FC } from 'react';
-import { ReleaseData } from '../../types';
+import { OpenPGPSignaturesData, ReleaseData } from '../../types';
 import { getParsedDate } from '../../utils';
 
 interface Props {
   columnHeaders: string[];
-  // TODO: update data type
   data: any;
 }
 
 export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
+  // {} is a backup object for initial render where data is still undefined, to avoid errors
+  const dataType = Object.keys(data[0] || {})?.includes('release')
+    ? 'Releases'
+    : 'OpenPGP Signatures';
+
   return (
     <TableContainer
       // Note: This wont work on firefox, we are ok with this.
@@ -46,48 +50,81 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
         </Thead>
 
         <Tbody>
-          {data.map((r: ReleaseData, idx: number) => {
-            return (
-              <Tr
-                key={idx}
-                transition={'all 0.5s'}
-                _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
-              >
-                {Object.entries(r).map((item, idx) => {
-                  const objectItems = ['release', 'commit', 'signature'];
+          {dataType === 'Releases' &&
+            data.map((r: ReleaseData, idx: number) => {
+              return (
+                <Tr
+                  key={idx}
+                  transition={'all 0.5s'}
+                  _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
+                >
+                  {Object.entries(r).map((item, idx) => {
+                    const objectItems = ['release', 'commit', 'signature'];
 
-                  if (objectItems.includes(item[0])) {
-                    const label = item[1].label;
-                    const url = item[1].url;
+                    if (objectItems.includes(item[0])) {
+                      const label = item[1].label;
+                      const url = item[1].url;
+
+                      return (
+                        <Td key={idx} px={4} textStyle='hero-text-small'>
+                          <Link _hover={{ textDecoration: 'none' }} href={url} isExternal>
+                            <Text color='primary'>
+                              {item[0] === 'commit' ? `${label}...` : label}
+                            </Text>
+                          </Link>
+                        </Td>
+                      );
+                    }
+
+                    if (item[0] === 'published') {
+                      return (
+                        <Td key={idx} px={4} textStyle='hero-text-small'>
+                          <Text>{getParsedDate(item[1])}</Text>
+                        </Td>
+                      );
+                    }
 
                     return (
                       <Td key={idx} px={4} textStyle='hero-text-small'>
-                        <Link _hover={{ textDecoration: 'none' }} href={url} isExternal>
-                          <Text color='primary'>
-                            {item[0] === 'commit' ? `${label}...` : label}
-                          </Text>
-                        </Link>
+                        <Text>{item[1]}</Text>
                       </Td>
                     );
-                  }
+                  })}
+                </Tr>
+              );
+            })}
 
-                  if (item[0] === 'published') {
+          {dataType === 'OpenPGP Signatures' &&
+            data.map((o: OpenPGPSignaturesData, idx: number) => {
+              return (
+                <Tr
+                  key={idx}
+                  transition={'all 0.5s'}
+                  _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
+                >
+                  {Object.entries(o).map((item, idx) => {
+                    if (item[0] === 'openpgp key') {
+                      const label = item[1].label;
+                      const url = item[1].url;
+
+                      return (
+                        <Td key={idx} px={4} textStyle='hero-text-small'>
+                          <Link _hover={{ textDecoration: 'none' }} href={url} isExternal>
+                            <Text color='primary'>{label}</Text>
+                          </Link>
+                        </Td>
+                      );
+                    }
+
                     return (
                       <Td key={idx} px={4} textStyle='hero-text-small'>
-                        <Text>{getParsedDate(item[1])}</Text>
+                        <Text>{item[1]}</Text>
                       </Td>
                     );
-                  }
-
-                  return (
-                    <Td key={idx} px={4} textStyle='hero-text-small'>
-                      <Text>{item[1]}</Text>
-                    </Td>
-                  );
-                })}
-              </Tr>
-            );
-          })}
+                  })}
+                </Tr>
+              );
+            })}
         </Tbody>
       </Table>
     </TableContainer>

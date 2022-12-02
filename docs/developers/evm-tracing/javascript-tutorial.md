@@ -3,7 +3,7 @@ title: Tutorial for Javascript tracing
 description: Javascript tracing tutorial
 ---
 
-Geth supports tracing via [custom Javascript tracers](/docs/evm-tracing/custom-tracer#custom-javascript-tracing). This document provides a tutorial with examples on how to achieve this.
+Geth supports tracing via [custom Javascript tracers](/docs/developers/evm-tracing/custom-tracer#custom-javascript-tracing). This document provides a tutorial with examples on how to achieve this.
 
 ### A simple filter
 
@@ -25,16 +25,16 @@ tracer = function (tx) {
 }; // tracer = function ...
 ```
 
-2. Run the [JavaScript console](https://geth.ethereum.org/docs/interface/javascript-console).
-3. Get the hash of a recent transaction from a node or block explorer.
+1. Run the [JavaScript console](/docs/interacting-with-geth/javascript-console).
+2. Get the hash of a recent transaction from a node or block explorer.
 
-4. Run this command to run the script:
+3. Run this command to run the script:
 
    ```js
    loadScript('filterTrace_1.js');
    ```
 
-5. Run the tracer from the script. Be patient, it could take a long time.
+4. Run the tracer from the script. Be patient, it could take a long time.
 
    ```js
    tracer('<hash of transaction>');
@@ -48,7 +48,7 @@ tracer = function (tx) {
    "1375:MLOAD", "1376:DUP1", "1377:SWAP2", "1378:SUB", "1379:SWAP1", "1380:RETURN"
    ```
 
-6. Run this line to get a more readable output with each string in its own line.
+5. Run this line to get a more readable output with each string in its own line.
 
    ```js
    console.log(JSON.stringify(tracer('<hash of transaction>'), null, 2));
@@ -56,7 +56,7 @@ tracer = function (tx) {
 
 More information about the `JSON.stringify` function is available [here](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify).
 
-The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](https://geth.ethereum.org/docs/dapp/tracing), but with a new parameter, `tracer`. This parameter takes the JavaScript object formated as a string. In the case of the trace above, it is:
+The commands above worked by calling the same `debug.traceTransaction` function that was previously explained in [basic traces](/docs/developers/evm-tracing/basic-traces), but with a new parameter, `tracer`. This parameter takes the JavaScript object formated as a string. In the case of the trace above, it is:
 
 ```js
 {
@@ -172,7 +172,7 @@ storage, so here we can't.
 
 The solution is to have a flag, `afterSload`, which is only true in the opcode right after an `SLOAD`, when we can see the result at the top of the stack.
 
-```javascript
+```js
 tracer = function (tx) {
   return debug.traceTransaction(tx, {
     tracer:
@@ -204,7 +204,7 @@ tracer = function (tx) {
 
 The output now contains the result in the line that follows the `SLOAD`.
 
-```javascript
+```js
 [
   "5921: SLOAD 0",
   "    Result: 1",

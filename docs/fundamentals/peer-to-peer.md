@@ -3,16 +3,16 @@ title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/getting-started/private-net) and [local testnets](/docs/getting-started/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simpyl by passing:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/developers/geth-developer/private-network) and [local testnets](/docs/developers/geth-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simpyl by passing:
 
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
 
-These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/interface/consensus-clients) page.
+These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/getting-started/consensus-clients) page.
 
 **Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
-```shell
+```sh
 # Generate desired config file. You must specify testnet here.
 geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
 
@@ -26,7 +26,7 @@ Geth continuously attempts to connect to other nodes on the network until it has
 
 A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnode` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
 
-```shell
+```sh
 geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pubkey3@ip3:port3
 ```
 
@@ -40,15 +40,15 @@ There are occasions when Geth simply fails to connect to peers. The common reaso
 
 - Some firewall configurations can prohibit UDP traffic. The static nodes feature or `admin.addPeer()` on the console can be used to configure connections manually.
 
-- Running Geth in [light mode](/docs/interface/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
+- Running Geth in [light mode](/docs/fundamentals/les) often leads to connectivity issues because there are few nodes running light servers. There is no easy fix for this except to switch Geth out of light mode. **Note that light mode does not curently work on proof-of-stake networks**.
 
 - The public test network Geth is connecting to might be deprecated or have a low number of active nodes that are hard to find. In this case, the best action is to switch to an alternative test network.
 
 ## Checking Connectivity {#checking-connectivity}
 
-The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interface/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
+The `net` module has two attributes that enable checking node connectivity from the [interactive Javascript console](/docs/interacting-with-geth/javascript-console). These are `net.listening` which reports whether the Geth node is listening for inbound requests, and `peerCount` which returns the number of active peers the node is connected to.
 
-```javascript
+```js
 > net.listening
 true
 
@@ -58,7 +58,7 @@ true
 
 Functions in the `admin` module provide more information about the connected peers, including their IP address, port number, supported protocols etc. Calling `admin.peers` returns this information for all connected peers.
 
-```
+```sh
 > admin.peers
 [{
   ID: 'a4de274d3a159e10c2c9a68c326511236381b84c9ec52e72ad732eb0b2b1a2277938f78593cdbe734e6002bf23114d434a085d260514ab336d4acdc312db671b',
@@ -90,7 +90,7 @@ Functions in the `admin` module provide more information about the connected pee
 
 The `admin` module also includes functions for gathering information about the local node rather than its peers. For example, `admin.nodeInfo` returns the name and connectivity details for the local node.
 
-```
+```sh
 > admin.nodeInfo
 {
   Name: 'Geth/v0.9.14/darwin/go1.4.2',
@@ -106,13 +106,13 @@ The `admin` module also includes functions for gathering information about the l
 
 ## Custom Networks {#custom-networks}
 
-It is often useful for developers to connect to private test networks rather than public testnets or Etheruem mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/interface/private-network).
+It is often useful for developers to connect to private test networks rather than public testnets or Ethereum mainnet. These sandbox environments allow block creation without competing against other miners, easy minting of test ether and give freedom to break things without real-world consequences. A private network is started by providing a value to `--networkid` that is not used by any other existing public network ([Chainlist](https://chainlist.org)) and creating a custom `genesis.json` file. Detailed instructions for this are available on the [Private Networks page](/docs/developers/geth-developer/private-network).
 
 ## Static nodes {#static-nodes}
 
 Geth also supports static nodes. Static nodes are specific peers that are always connected to. Geth reconnects to these peers automatically when it is restarted. Specific nodes are defined to be static nodes by adding their enode addresses to a config file. The easiest way to create this config file is to run:
 
-```
+```sh
 geth --datadir <datadir> dumpconfig > config.toml
 ```
 
@@ -126,7 +126,7 @@ Ensure the other lines in `config.toml` are also set correctly before starting G
 
 Static nodes can also be added at runtime in the Javascript console by passing an enode address to `admin.addPeer()`:
 
-```javascript
+```js
 admin.addPeer(
   'enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303'
 );
@@ -136,7 +136,7 @@ admin.addPeer(
 
 It is sometimes desirable to cap the number of peers Geth will connect to in order to limit on the computational and bandwidth cost associated with running a node. By default, the limit is 50 peers, however, this can be updated by passing a value to `--maxpeers`:
 
-```shell
+```sh
 geth <otherflags> --maxpeers 15
 ```
 
@@ -146,7 +146,7 @@ Trusted nodes can be added to `config.toml` in the same way as for static nodes.
 
 Nodes can be added using the `admin.addTrustedPeer()` call in the Javascript console and removed using `admin.removeTrustedPeer()` call.
 
-```javascript
+```js
 admin.addTrustedPeer(
   'enode://f4642fa65af50cfdea8fa7414a5def7bb7991478b768e296f5e4a54e8b995de102e0ceae2e826f293c481b5325f89be6d207b003382e18a8ecba66fbaf6416c0@33.4.2.1:30303'
 );

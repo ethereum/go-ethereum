@@ -5,7 +5,7 @@ description: How to make batch requests using JSON-RPC API
 
 The JSON-RPC [specification](https://www.jsonrpc.org/specification#batch) outlines how clients can send multiple requests at the same time by filling the request objects in an array. This feature is implemented by Geth's API and can be used to cut network delays. Batching offers visible speed-ups specially when used for fetching larger amounts of mostly independent data objects. Below is an example for fetching a list of blocks in JS:
 
-```javascript
+```js
 import fetch from 'node-fetch';
 
 async function main() {
@@ -41,4 +41,4 @@ In this case there's no dependency between the requests. Often the retrieved dat
 - First to download the list of transaction hashes for all of the blocks in our desired range
 - And then to download the list of receipts objects for all of the transaction hashes
 
-For use-cases which depend on several JSON-RPC endpoints the batching approach can get easily complicated. In that case Geth offers a [GraphQL API](./graphql) which is more suitable.
+For use-cases which depend on several JSON-RPC endpoints the batching approach can get easily complicated. In that case Geth offers a [GraphQL API](/docs/interacting-with-geth/rpc/graphql) which is more suitable.

@@ -148,7 +148,7 @@ Puppeth will display the details of each node in a table in the terminal.
 
 ### Explorer {#explorer}
 
-For proof-of-work networks a block explorer akin to [etherscan](etherscan.io) can be created using the Puppeth wizard.
+For proof-of-work networks a block explorer akin to [etherscan](https://etherscan.io/) can be created using the Puppeth wizard.
 
 ### Faucet {#faucet}
 
@@ -164,7 +164,7 @@ The dashboard can then be viewed by navigating to the node's ip address and the 
 
 Start instances of Geth for each node
 
-```
+```sh
 geth --datadir Node1 --port 30301 --bootnodes <enr> --networkid <testnetwork ID> -unlock <node 1 address> --mine
 ```
 
@@ -172,4 +172,4 @@ geth --datadir Node1 --port 30301 --bootnodes <enr> --networkid <testnetwork ID>
 
 Puppeth is a command line wizard that guides a user through the various stages of setting up a private network using proof-of-authority or proof-of-work consensus engine. Various network components can be added that optimize the network or enable network monitoring.
 
-[Github repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/puppeth)
+[GitHub repository](https://github.com/ethereum/go-ethereum/tree/master/cmd/puppeth)

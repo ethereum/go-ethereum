@@ -9,7 +9,7 @@ There are five consensus clients available, all of which connect to Geth in the 
 
 ## Configuring Geth {#configuring-geth}
 
-Geth can be downloaded and installed according to the instructions on the [Installing Geth](/docs/install-and-build/installing-geth) page. In order to connect to a consensus client, Geth must expose a port for the inter-client RPC connection.
+Geth can be downloaded and installed according to the instructions on the [Installing Geth](/docs/getting-started/installing-geth) page. In order to connect to a consensus client, Geth must expose a port for the inter-client RPC connection.
 
 The RPC connection must be authenticated using a `jwtsecret` file. This is created and saved to `<datadir>/geth/jwtsecret` by default but can also be created and saved to a custom location or it can be self-generated and provided to Geth by passing the file path to `--authrpc.jwtsecret`. The `jwtsecret` file is required by both Geth and the consensus client.
 
@@ -17,7 +17,7 @@ The authorization must then be applied to a specific address/port. This is achie
 
 A complete command to start Geth so that it can connect to a consensus client looks as follows:
 
-```shell
+```sh
 geth --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret /tmp/jwtsecret
 ```
 
@@ -55,10 +55,10 @@ Please see the pages on [syncing](/docs/fundamentals/sync-modes) for more detail
 
 ## Using Geth {#using-geth}
 
-Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interface/javascript-console). The Javascript console can be started
+Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interacting-with-geth/javascript-console). The Javascript console can be started
 using the following command in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
 
-```shell
+```sh
 geth attach datadir/geth.ipc
 ```
 

@@ -3,13 +3,13 @@ title: Light client
 description: Introduction to Geth's light sync mode
 ---
 
-{% include note.html content="Light nodes do not currently work on proof-of-stake Ethereum, but new proof-of-stake light clients are expected to ship soon!" %}
+<Note>Light nodes do not currently work on proof-of-stake Ethereum, but new proof-of-stake light clients are expected to ship soon!</Note>
 
 Running a full node is the most trustless, private, decentralized and censorship resistant way to interact with Ethereum. It is also the best choice for the health of the network, because a decentralized network relies on having many individual nodes that independently verify the head of the chain. In a full node a copy of the blockchain is stored locally enabling users to verify incoming data against a local source of truth. However, running a full node requires a lot of disk space and non-negligible CPU allocation and takes hours (for snap sync) or days (for full sync) to sync the blockchain from genesis. Geth also offers a light mode that overcomes these issues and provides some of the benefits of running a node but requires only a fraction of the resources.
 
 Read more about the reasons to run nodes on [ethereum.org](https://ethereum.org/en/run-a-node/).
 
-{% include note.html content=" Geth light clients **do not currently work** on proof-of-stake Ethereum. New light clients that work with the proof-of-stake consensus engine are expected to ship soon!" %}
+<Note>Geth light clients **do not currently work** on proof-of-stake Ethereum. New light clients that work with the proof-of-stake consensus engine are expected to ship soon!</Note>
 
 ## Light node vs full node {#light-node-vs-full-node}
 
@@ -33,7 +33,7 @@ Recent versions of Geth (>`1.9.14`) unindex older transactions to save disk spac
 
 The whole command for starting Geth with a light server could look as follows:
 
-```shell
+```sh
 geth --light.serve 50 --txlookuplimit 0
 ```
 
@@ -41,11 +41,11 @@ geth --light.serve 50 --txlookuplimit 0
 
 Running a light client simply requires Geth to be started in light mode. It is likely that a user would also want to interact with the light node using, for example, RPC. This can be enabled using the `--http` command.
 
-```shell
+```sh
 geth --syncmode light --http --http.api "eth,debug"
 ```
 
-Data can be requested from this light Geth instance in the same way as for a full node (i.e. using the [JSON-RPC-API](/docs/rpc/server) using tools such as [Curl](https://curl.se/) or Geth's [Javascript console](/docs/interface/javascript-console)). Instead of fetching the data from a local database as in a full node, the light Geth instance requests the data from full-node peers.
+Data can be requested from this light Geth instance in the same way as for a full node (i.e. using the [JSON-RPC-API](/docs/interacting-with-geth/rpc/) using tools such as [Curl](https://curl.se/) or Geth's [Javascript console](/docs/interacting-with-geth/javascript-console)). Instead of fetching the data from a local database as in a full node, the light Geth instance requests the data from full-node peers.
 
 It's also possible to send transactions. However, light clients are not connected directly to Ethereum Mainnet but to a network of light servers that connect to Ethereum Mainnet. This means a transaction submitted by a light client is received first by a light server that then propagates it to full-node peers on the light-client's behalf. This reliance on honest light-servers is one of the trust compromises that comes along with running a light node instead of a full node.
 

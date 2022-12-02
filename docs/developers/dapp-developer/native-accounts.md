@@ -5,7 +5,7 @@ description: Introduction to account management in Go native applications.
 
 Geth provides a simple, yet thorough accounts package that includes all the tools developers need to leverage all the security of Geth's crypto implementation in a Go native application. The account management is done client side with all sensitive data held inside the application. This gives the user control over access permissions without relying on any third party.
 
-**Note Geth's built-in account management is convenient and straightforward to use, but best practise is to use the external tool _Clef_ for key management.**
+**Note: Geth's built-in account management is convenient and straightforward to use, but best practise is to use the external tool _Clef_ for key management.**
 
 ## Encrypted keystores {#encrypted-keystores}
 
@@ -93,7 +93,7 @@ There are a few different ways to authorize the account manager to execute signi
 
 Assuming an instance of an [`accounts.Manager`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager) called `am` exists, a new account can be created to sign transactions using [`NewAccount`](https://godoc.org/github.com/ethereum/go-ethereum/accounts#Manager.NewAccount). Creating transactions is out of scope for this page so instead a random [`common.Hash`](https://godoc.org/github.com/ethereum/go-ethereum/common#Hash) will be signed instead.
 
-For information on creating transactions in Go native applications see the [Go API page](/docs/dapp/native).
+For information on creating transactions in Go native applications see the [Go API page](/docs/developers/dapp-developer/native).
 
 ```go
 // Create a new account to sign transactions with

@@ -4,7 +4,7 @@ export const textStyles = {
     fontWeight: 700,
     fontSize: '2.75rem',
     lineHeight: '3.375rem',
-    letterSpacing: '0.05em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
   h2: {
@@ -12,55 +12,56 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: { base: '1.5rem', md: '1.75rem' },
     lineHeight: 'normal',
-    letterSpacing: '0.04em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
   header1: {
     fontFamily: 'heading',
     fontWeight: 700,
     fontSize: { base: '1.875rem', md: '2.125rem' },
-    letterSpacing: '0.04em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
   header2: {
     fontFamily: 'heading',
     fontSize: { base: '1.5rem', md: '1.75rem' },
-    letterSpacing: '0.04em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
   header3: {
     fontFamily: 'heading',
     fontSize: { base: '1.25rem', md: '1.375rem' },
-    letterSpacing: '0.04em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
   header4: {
     fontFamily: 'heading',
     fontSize: '1.125rem',
-    letterSpacing: '0.04em',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
   header5: {
     fontFamily: 'heading',
     fontSize: '1rem',
-    letterSpacing: '0.02em',
+    letterSpacing: '0.02rem',
     lineHeight: 'normal',
     color: 'body'
   },
   header6: {
     fontFamily: 'heading',
     fontSize: '0.875rem',
-    letterSpacing: '0.02em',
+    letterSpacing: '0.02rem',
     lineHeight: 'normal',
     color: 'body'
   },
   'header-font': {
     fontFamily: 'heading',
     fontWeight: 700,
+    letterSpacing: '0.04rem',
     fontSize: { base: '0.86rem', sm: '1rem' },
     color: 'body'
   },
@@ -68,7 +69,7 @@ export const textStyles = {
     fontFamily: 'heading',
     fontWeight: 700,
     lineHeight: '21px',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.05rem',
     textAlign: { base: 'center', md: 'left' },
     color: 'body'
   },
@@ -106,11 +107,11 @@ export const textStyles = {
     color: 'body'
   },
   'footer-link-label': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     lineHeight: '21.12px',
-    letterSpacing: '0.02em'
+    letterSpacing: '0.02rem'
   },
   'footer-text': {
     fontFamily: 'body',
@@ -138,13 +139,28 @@ export const textStyles = {
     textAlign: 'center',
     fontSize: 'sm'
   },
+  'docs-nav-dropdown': {
+    fontFamily: 'heading',
+    fontWeight: 400,
+    fontSize: '18px',
+    lineHeight: 6,
+    letterSpacing: '4%',
+    textAlign: 'left'
+  },
+  'docs-nav-links': {
+    fontFamily: 'heading',
+    weight: 400,
+    fontSize: 'md',
+    lineHeight: 8,
+    letterSpacing: '0.01em'
+  },
   'header-button': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     fontWeight: 700,
     fontSize: { base: '0.86rem', sm: '1rem' }
   },
   'header-mobile-button': {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'heading',
     textTransform: 'uppercase',
     fontSize: '2xl'
   },
@@ -153,17 +169,34 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: 4,
-    letterSpacing: '0.01em'
+    letterSpacing: '0.01rem'
   },
   'code-block': {
     fontFamily: 'heading',
     fontWeight: 400,
     fontSize: 'md',
     lineHeight: '21.12px',
-    letterSpacing: '0.01em'
+    letterSpacing: '0.01rem'
   },
-  // TODO: refactor w/ semantic tokens for light/dark mode
-  'link-light': {},
-  // TODO: refactor w/ semantic tokens for light/dark mode
-  'text-light': {}
+  'document-nav-title': {
+    fontFamily: 'heading',
+    fontWeight: 400,
+    fontSize: 'md',
+    lineHeight: '21.12px',
+    letterSpacing: '2%'
+  },
+  'document-nav-link': {
+    fontFamily: 'body',
+    fontWeight: 400,
+    fontSize: '13px',
+    lineHeight: 5,
+    letterSpacing: '1%',
+    mb: 4
+  },
+  'note-text': {
+    fontFamily: 'body',
+    fontWeight: 400,
+    fontSize: 'md',
+    lineHeight: '26px'
+  }
 };

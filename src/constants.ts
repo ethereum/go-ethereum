@@ -71,6 +71,83 @@ export const DOWNLOADS_OPENPGP_BUILD_HEADERS = [
   'OpenPGP Key',
   'Fingerprint'
 ];
+export const DOWNLOADS_OPENPGP_SIGNATURES = [
+  {
+    'build server': 'Android Builder',
+    'unique id': 'Go Ethereum Android Builder <geth-ci@ethereum.org>',
+    'openpgp key': {
+      label: 'F9585DE6',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x70AD154BF9585DE6'
+    },
+    fingerprint: '8272 1824 F4D7 46E0 B5A7  AB95 70AD 154B F958 5DE6'
+  },
+  {
+    'build server': 'iOS Builder',
+    'unique id': 'Go Ethereum iOS Builder <geth-ci@ethereum.org>',
+    'openpgp key': {
+      label: 'C2FF8BBF',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF29DEFAFC2FF8BBF'
+    },
+    fingerprint: '70AD EB8F 3BC6 6F69 0256  4D88 F29D EFAF C2FF 8BBF'
+  },
+  {
+    'build server': 'Linux Builder',
+    'unique id': 'Go Ethereum Linux Builder <geth-ci@ethereum.org>',
+    'openpgp key': {
+      label: '9BA28146',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA61A13569BA28146'
+    },
+    fingerprint: 'FDE5 A1A0 44FA 13D2 F7AD  A019 A61A 1356 9BA2 8146'
+  },
+  {
+    'build server': 'macOS Builder',
+    'unique id': 'Go Ethereum macOS Builder <geth-ci@ethereum.org>',
+    'openpgp key': {
+      label: '7B9E2481',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x558915E17B9E2481'
+    },
+    fingerprint: '6D1D AF5D 0534 DEA6 1AA7  7AD5 5589 15E1 7B9E 2481'
+  },
+  {
+    'build server': 'Windows Builder',
+    'unique id': 'Go Ethereum Windows Builder <geth-ci@ethereum.org>',
+    'openpgp key': {
+      label: 'D2A67EAC',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x9417309ED2A67EAC'
+    },
+    fingerprint: 'C4B3 2BB1 F603 4241 A9E6  50A1 9417 309E D2A6 7EAC'
+  }
+];
+export const DOWNLOADS_DEVELOPERS_DATA = [
+  {
+    developer: 'Felix Lange',
+    'unique id': 'Felix Lange <fjl@ethereum.org>',
+    'openpgp key': {
+      label: 'E058A81C',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x337E68FCE058A81C'
+    },
+    fingerprint: '6047 0B71 5865 392D E43D 75A3 337E 68FC E058 A81C'
+  },
+  {
+    developer: 'Martin Holst Swende',
+    'unique id': 'Martin Holst Swende <martin.swende@ethereum.org>',
+    'openpgp key': {
+      label: '05A5DDF0',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x683B438C05A5DDF0'
+    },
+    fingerprint: 'CA99 ABB5 B36E 24AD 5DA0 FD40 683B 438C 05A5 DDF0'
+  },
+  {
+    developer: 'Péter Szilágyi',
+    'unique id': 'Péter Szilágyi <peter@ethereum.org>',
+    'openpgp key': {
+      label: '1CCB7DD2',
+      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x119A76381CCB7DD2'
+    },
+    fingerprint: '4948 43FC E822 1C4C 86AB 5E2F 119A 7638 1CCB 7DD2'
+  }
+];
+
 export const DOWNLOADS_OPENPGP_DEVELOPER_HEADERS = [
   'Developer',
   'Unique ID',
