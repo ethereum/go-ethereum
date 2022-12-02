@@ -4138,7 +4138,8 @@ func TestDataBlobTxs(t *testing.T) {
 	// Genesis (block 0): AllEthhashProtocolChanges
 	// Block 1          : ""
 	// Block 2          : Sharding
-	gspec.Config.ShardingForkBlock = common.Big2
+	var time uint64 = 2 * 10 // block time is 10 seconds, so this corresponds to second block.
+	gspec.Config.ShardingForkTime = &time
 	genesis := gspec.MustCommit(db)
 	signer := types.LatestSigner(gspec.Config)
 
@@ -4158,7 +4159,7 @@ func TestDataBlobTxs(t *testing.T) {
 		msg.GasFeeCap.SetFromBig(newGwei(5))
 		msg.GasTipCap.SetFromBig(big.NewInt(2))
 		msg.MaxFeePerDataGas.SetFromBig(big.NewInt(params.MinDataGasPrice))
-		// TODO: Add test case for max data fee too low
+		// TODO(eip-4844): Add test case for max data fee too low
 		msg.BlobVersionedHashes = []common.Hash{one, two}
 		txdata := &types.SignedBlobTx{Message: msg}
 
@@ -4332,7 +4333,7 @@ func TestEIP3651(t *testing.T) {
 
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
-	gspec.Config.ShanghaiTime = common.Big0
+	gspec.Config.ShanghaiTime = new(uint64)
 	signer := types.LatestSigner(gspec.Config)
 
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {

@@ -794,7 +794,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
-		signer:    types.MakeSigner(w.chainConfig, header.Number),
+		signer:    types.MakeSigner(w.chainConfig, header.Number, header.Time),
 		state:     state,
 		coinbase:  coinbase,
 		ancestors: mapset.NewSet[common.Hash](),
@@ -814,7 +814,7 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	env.tcount = 0
 
 	// Initialize the prestate excess_data_gas field used during state transition
-	if w.chainConfig.IsSharding(header.Number) {
+	if w.chainConfig.IsSharding(header.Time) {
 		// TODO(EIP-4844): Unit test this
 		env.excessDataGas = new(big.Int)
 		if parentExcessDataGas := parent.Header().ExcessDataGas; parentExcessDataGas != nil {

@@ -36,11 +36,11 @@ type sigCache struct {
 	from   common.Address
 }
 
-// MakeSigner returns a Signer based on the given chain config and block number.
-func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
+// MakeSigner returns a Signer based on the given chain config, block number and time.
+func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, time uint64) Signer {
 	var signer Signer
 	switch {
-	case config.IsSharding(blockNumber):
+	case config.IsSharding(time):
 		signer = NewDankSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)
@@ -65,7 +65,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
 	if config.ChainID != nil {
-		if config.ShardingForkBlock != nil {
+		if config.ShardingForkTime != nil {
 			return NewDankSigner(config.ChainID)
 		}
 		if config.LondonBlock != nil {

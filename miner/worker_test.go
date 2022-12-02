@@ -724,7 +724,7 @@ func testGenerateBlockWithBlobsAndImport(t *testing.T, isClique bool) {
 	}
 
 	chainConfig.LondonBlock = big.NewInt(0)
-	chainConfig.ShardingForkBlock = big.NewInt(0)
+	chainConfig.ShardingForkTime = new(uint64)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 

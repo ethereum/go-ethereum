@@ -306,7 +306,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
-	if !chain.Config().IsSharding(header.Number) {
+	if !chain.Config().IsSharding(header.Time) {
 		if header.ExcessDataGas != nil {
 			return fmt.Errorf("invalid excessDataGas before fork: have %v, expected 'nil'", header.ExcessDataGas)
 		}
@@ -609,7 +609,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	if chain.Config().IsSharding(header.Number) {
+	if chain.Config().IsSharding(header.Time) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		} else {

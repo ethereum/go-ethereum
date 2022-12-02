@@ -164,6 +164,10 @@ func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number)
 }
 
+func (b *BlockGen) Time() uint64 {
+	return b.header.Time
+}
+
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
@@ -291,7 +295,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			shanghai := config.IsShanghai(b.header.Number)
+			shanghai := config.IsShanghai(b.header.Time)
 			if shanghai && b.withdrawals == nil {
 				// need to make empty list to denote non-nil, but empty withdrawals to calc withdrawals hash
 				b.withdrawals = make([]*types.Withdrawal, 0)

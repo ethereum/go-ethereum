@@ -193,7 +193,10 @@ func (st *StateTransition) buyGas() error {
 	// compute data fee for eip-4844 data blobs if any
 	dgval := new(big.Int)
 	var dataGasUsed uint64
-	if st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+	if st.evm.ChainConfig().IsSharding(st.evm.Context.Time.Uint64()) {
+		if st.evm.Context.ExcessDataGas == nil {
+			return fmt.Errorf("sharding is active but ExcessDataGas is nil. Time: %v", st.evm.Context.Time.Uint64())
+		}
 		dgu := st.dataGasUsed()
 		if !dgu.IsUint64() {
 			return fmt.Errorf("data gas usage overflow: address %v have %v", st.msg.From().Hex(), dgu)
@@ -281,7 +284,7 @@ func (st *StateTransition) preCheck() error {
 		}
 	}
 	usesDataGas := st.dataGasUsed().Sign() > 0
-	if usesDataGas && st.evm.ChainConfig().IsSharding(st.evm.Context.BlockNumber) {
+	if usesDataGas && st.evm.ChainConfig().IsSharding(st.evm.Context.Time.Uint64()) {
 		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.msg.MaxFeePerDataGas()) > 0 {
 			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
@@ -330,7 +333,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From())
-		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
+		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Time.Uint64(), st.evm.Context.Random != nil)
 		contractCreation = msg.To() == nil
 	)
 
