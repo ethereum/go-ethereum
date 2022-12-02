@@ -30,7 +30,9 @@ export const Header: FC = () => {
       >
         <NextLink href={'/'} passHref>
           <Link _hover={{ textDecoration: 'none' }}>
-            <Text textStyle='header-font' whiteSpace='nowrap'>go-ethereum</Text>
+            <Text textStyle='header-font' whiteSpace='nowrap'>
+              go-ethereum
+            </Text>
           </Link>
         </NextLink>
       </Stack>
