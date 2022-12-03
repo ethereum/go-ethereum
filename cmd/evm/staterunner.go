@@ -105,7 +105,7 @@ func stateTestCmd(ctx *cli.Context) error {
 				root := s.IntermediateRoot(false)
 				result.Root = &root
 				if ctx.Bool(MachineFlag.Name) {
-					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", root)
+					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 				}
 			}
 			if err != nil {
