@@ -669,11 +669,6 @@ var (
 	}
 
 	// MISC settings
-	IgnoreLegacyReceiptsFlag = &cli.BoolFlag{
-		Name:     "ignore-legacy-receipts",
-		Usage:    "Geth will start up even if there are legacy receipts in freezer",
-		Category: flags.MiscCategory,
-	}
 	SyncTargetFlag = &cli.PathFlag{
 		Name:      "synctarget",
 		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
