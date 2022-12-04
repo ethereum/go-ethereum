@@ -169,13 +169,14 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db         ethdb.Database // Low level persistent database to store final content in
-	snaps      *snapshot.Tree // Snapshot tree for fast trie leaf access
-	triegc     *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc     time.Duration  // Accumulates canonical block processing for trie dumping
-	lastWrite  uint64         // Last block when the state was flushed
-	triedb     *trie.Database // The database handler for maintaining trie nodes.
-	stateCache state.Database // State database to reuse between imports (contains state cache)
+	db            ethdb.Database // Low level persistent database to store final content in
+	snaps         *snapshot.Tree // Snapshot tree for fast trie leaf access
+	triegc        *prque.Prque   // Priority queue mapping block numbers to tries to gc
+	gcproc        time.Duration  // Accumulates canonical block processing for trie dumping
+	lastWrite     uint64         // Last block when the state was flushed
+	flushInterval int64          // Time interval (processing time) after which to flush a state
+	triedb        *trie.Database // The database handler for maintaining trie nodes.
+	stateCache    state.Database // State database to reuse between imports (contains state cache)
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -259,6 +260,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig:   cacheConfig,
 		db:            db,
 		triedb:        triedb,
+		flushInterval: int64(cacheConfig.TrieTimeLimit),
 		triegc:        prque.New(nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
@@ -1330,9 +1332,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	// Find the next state trie we need to commit
 	chosen := current - TriesInMemory
-
-	// If we exceeded out time allowance, flush an entire trie to disk
-	if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+	flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
+	log.Info("Deciding to flush", "interval", flushInterval, "chosen", chosen, "time", bc.gcproc, "lastWrite", bc.lastWrite)
+	// If we exceeded time allowance, flush an entire trie to disk
+	if bc.gcproc > flushInterval {
 		// If the header is missing (canonical chain behind), we're reorging a low
 		// diff sidechain. Suspend committing until this operation is completed.
 		header := bc.GetHeaderByNumber(chosen)
@@ -1341,8 +1344,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		} else {
 			// If we're exceeding limits but haven't reached a large enough memory gap,
 			// warn the user that the system is becoming unstable.
-			if chosen < bc.lastWrite+TriesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-				log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-bc.lastWrite)/TriesInMemory)
+			if chosen < bc.lastWrite+TriesInMemory && bc.gcproc >= 2*flushInterval {
+				log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", flushInterval, "optimum", float64(chosen-bc.lastWrite)/TriesInMemory)
 			}
 			// Flush an entire trie and restart the counters
 			bc.triedb.Commit(header.Root, true, nil)
@@ -2436,4 +2439,10 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Processor) {
 	bc.validator = v
 	bc.processor = p
+}
+
+// SetTrieFlushInterval configures how often in-memory tries are persisted to disk.
+// It is thread-safe and can be called repeatedly without side effects.
+func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
+	atomic.StoreInt64(&bc.flushInterval, int64(interval))
 }

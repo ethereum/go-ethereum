@@ -490,6 +490,11 @@ web3._extend({
 			call: 'debug_dbAncients',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'setTrieFlushInterval',
+			call: 'debug_setTrieFlushInterval',
+			params: 1
+		}),
 	],
 	properties: []
 });
