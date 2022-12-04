@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/graph-gophers/graphql-go"
+	gqlErrors "github.com/graph-gophers/graphql-go/errors"
 )
 
 type handler struct {
@@ -58,10 +59,22 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if timeout, ok := rpc.GetContextRequestTimeout(ctx); ok {
 		timer = time.AfterFunc(timeout, func() {
 			responded.Do(func() {
-				msg := []byte("request timed out")
-				w.Header().Set("content-length", strconv.Itoa(len(msg)))
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(msg)
+				response := &graphql.Response{
+					Errors: []*gqlErrors.QueryError{
+						{
+							Message: "request timed out",
+						},
+					},
+				}
+				responseJSON, err := json.Marshal(response)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("content-type", "application/json")
+				w.Header().Set("content-length", strconv.Itoa(len(responseJSON)))
+				w.Header().Set("transfer-encoding", "identity")
+				w.Write(responseJSON)
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
 				}
@@ -80,7 +93,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(response.Errors) > 0 {
 			w.WriteHeader(http.StatusBadRequest)
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(responseJSON)
 	})
