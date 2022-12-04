@@ -53,6 +53,9 @@ type Config struct {
 	// DataDir is the directory to store the state in
 	DataDir string `hcl:"datadir,optional" toml:"datadir,optional"`
 
+	// Ancient is the directory to store the state in
+	Ancient string `hcl:"ancient,optional" toml:"ancient,optional"`
+
 	// KeyStoreDir is the directory to store keystores
 	KeyStoreDir string `hcl:"keystore,optional" toml:"keystore,optional"`
 
@@ -398,6 +401,7 @@ func DefaultConfig() *Config {
 		RequiredBlocks: map[string]string{},
 		LogLevel:       "INFO",
 		DataDir:        DefaultDataDir(),
+		Ancient:        "",
 		P2P: &P2PConfig{
 			MaxPeers:     50,
 			MaxPendPeers: 50,
@@ -878,6 +882,10 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	n.BorLogs = c.BorLogs
 	n.DatabaseHandles = dbHandles
+
+	if c.Ancient != "" {
+		n.DatabaseFreezer = c.Ancient
+	}
 
 	return &n, nil
 }
