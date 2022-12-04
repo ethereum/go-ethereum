@@ -32,6 +32,7 @@ export const DocumentNav: FC<Props> = ({ content }) => {
               <Text
                 color={activeHash === heading?.headingId ? 'body' : 'primary'}
                 textStyle='document-nav-link'
+                mb='14px'
               >
                 {heading?.title}
               </Text>
