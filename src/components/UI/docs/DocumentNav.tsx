@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import { Divider, Link, Stack, Text } from '@chakra-ui/react';
+import { Box, Divider, Link, Text } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
 import { parseHeadingId } from '../../../utils/parseHeadingId';
@@ -20,7 +20,7 @@ export const DocumentNav: FC<Props> = ({ content }) => {
   const activeHash = useActiveHash(parsedHeadings.map(heading => heading!.headingId));
 
   return (
-    <Stack position='sticky' top='4'>
+    <Box position='sticky' top='4'>
       <Text as='h5' textStyle='document-nav-title'>
         on this page
       </Text>
@@ -39,6 +39,6 @@ export const DocumentNav: FC<Props> = ({ content }) => {
           </NextLink>
         );
       })}
-    </Stack>
+    </Box>
   );
 };
