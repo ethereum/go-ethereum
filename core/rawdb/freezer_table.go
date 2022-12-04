@@ -867,13 +867,20 @@ func (t *freezerTable) advanceHead() error {
 // Sync pushes any pending data from memory out to disk. This is an expensive
 // operation, so use it with care.
 func (t *freezerTable) Sync() error {
-	if err := t.index.Sync(); err != nil {
-		return err
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	var err error
+	trackError := func(e error) {
+		if e != nil && err == nil {
+			err = e
+		}
 	}
-	if err := t.meta.Sync(); err != nil {
-		return err
-	}
-	return t.head.Sync()
+
+	trackError(t.index.Sync())
+	trackError(t.meta.Sync())
+	trackError(t.head.Sync())
+	return err
 }
 
 func (t *freezerTable) dumpIndexStdout(start, stop int64) {

@@ -669,11 +669,6 @@ var (
 	}
 
 	// MISC settings
-	IgnoreLegacyReceiptsFlag = &cli.BoolFlag{
-		Name:     "ignore-legacy-receipts",
-		Usage:    "Geth will start up even if there are legacy receipts in freezer",
-		Category: flags.MiscCategory,
-	}
 	SyncTargetFlag = &cli.PathFlag{
 		Name:      "synctarget",
 		Usage:     `File for containing the hex-encoded block-rlp as sync target(dev feature)`,
@@ -927,13 +922,13 @@ var (
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
 		Name:     "metrics.addr",
-		Usage:    "Enable stand-alone metrics HTTP server listening interface",
-		Value:    metrics.DefaultConfig.HTTP,
+		Usage:    `Enable stand-alone metrics HTTP server listening interface.`,
 		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
-		Name:     "metrics.port",
-		Usage:    "Metrics HTTP server listening port",
+		Name: "metrics.port",
+		Usage: `Metrics HTTP server listening port.
+Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.`,
 		Value:    metrics.DefaultConfig.Port,
 		Category: flags.MetricsCategory,
 	}
@@ -2150,6 +2145,8 @@ func SetupMetrics(ctx *cli.Context) {
 			address := fmt.Sprintf("%s:%d", ctx.String(MetricsHTTPFlag.Name), ctx.Int(MetricsPortFlag.Name))
 			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
 			exp.Setup(address)
+		} else if ctx.IsSet(MetricsPortFlag.Name) {
+			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
 		}
 	}
 }

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
@@ -166,26 +165,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideTerminalTotalDifficultyPassed = &override
 	}
 
-	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Warn users to migrate if they have a legacy freezer format.
-	if eth != nil && !ctx.IsSet(utils.IgnoreLegacyReceiptsFlag.Name) {
-		firstIdx := uint64(0)
-		// Hack to speed up check for mainnet because we know
-		// the first non-empty block.
-		ghash := rawdb.ReadCanonicalHash(eth.ChainDb(), 0)
-		if cfg.Eth.NetworkId == 1 && ghash == params.MainnetGenesisHash {
-			firstIdx = 46147
-		}
-		isLegacy, firstLegacy, err := dbHasLegacyReceipts(eth.ChainDb(), firstIdx)
-		if err != nil {
-			log.Error("Failed to check db for legacy receipts", "err", err)
-		} else if isLegacy {
-			stack.Close()
-			log.Error("Database has receipts with a legacy format", "firstLegacy", firstLegacy)
-			utils.Fatalf("Aborting. Please run `geth db freezer-migrate`.")
-		}
-	}
+	backend, _ := utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)

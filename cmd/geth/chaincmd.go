@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -48,7 +49,7 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags:     utils.DatabasePathFlags,
+		Flags:     flags.Merge([]cli.Flag{utils.CachePreimagesFlag}, utils.DatabasePathFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -188,12 +189,16 @@ func initGenesis(ctx *cli.Context) error {
 	// Open and initialise both full and light databases
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
-		_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
+		triedb := trie.NewDatabaseWithConfig(chaindb, &trie.Config{
+			Preimages: ctx.Bool(utils.CachePreimagesFlag.Name),
+		})
+		_, hash, err := core.SetupGenesisBlock(chaindb, triedb, genesis)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
@@ -460,7 +465,10 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	state, err := state.New(root, state.NewDatabase(db), nil)
+	config := &trie.Config{
+		Preimages: true, // always enable preimage lookup
+	}
+	state, err := state.New(root, state.NewDatabaseWithConfig(db, config), nil)
 	if err != nil {
 		return err
 	}

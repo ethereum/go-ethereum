@@ -86,7 +86,7 @@ func newConn(dest *enode.Node, log logger) *conn {
 		localNode:  ln,
 		remote:     dest,
 		remoteAddr: &net.UDPAddr{IP: dest.IP(), Port: dest.UDP()},
-		codec:      v5wire.NewCodec(ln, key, mclock.System{}),
+		codec:      v5wire.NewCodec(ln, key, mclock.System{}, nil),
 		log:        log,
 	}
 }

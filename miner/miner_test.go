@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -247,10 +246,9 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 		Etherbase: common.HexToAddress("123456789"),
 	}
 	// Create chainConfig
-	memdb := memorydb.New()
-	chainDB := rawdb.NewDatabase(memdb)
+	chainDB := rawdb.NewMemoryDatabase()
 	genesis := core.DeveloperGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, genesis)
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}
