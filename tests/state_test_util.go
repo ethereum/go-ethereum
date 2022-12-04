@@ -249,10 +249,16 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
-	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
-		rnd := common.BigToHash(t.json.Env.Random)
-		context.Random = &rnd
+	if config.IsLondon(new(big.Int)) {
+		if t.json.Env.Random != nil {
+			rnd := common.BigToHash(t.json.Env.Random)
+			context.Random = &rnd
+		}
 		context.Difficulty = big.NewInt(0)
+	} else {
+		if t.json.Env.Difficulty != nil {
+			context.Difficulty = new(big.Int).Set(t.json.Env.Difficulty)
+		}
 	}
 	evm := vm.NewEVM(context, txContext, statedb, config, vmconfig)
 	// Execute the message.
