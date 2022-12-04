@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test clean
+.PHONY: geth android ios evm all test format clean
 
 GOBIN = ./build/bin
 GO ?= latest
@@ -30,6 +30,9 @@ ios:
 
 test: all
 	$(GORUN) build/ci.go test
+
+format:
+	$(GORUN) build/ci.go format
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
