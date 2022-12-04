@@ -47,3 +47,9 @@ profile.cov
 /dashboard/assets/package-lock.json
 
 **/yarn-error.log
+
+.history/
+geth-tutorial/
+trace.out
+geth-trace.out
+audit.log

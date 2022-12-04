@@ -26,6 +26,7 @@ Available commands are:
 
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
 	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
+	format                                                                                      -- format codes in the whole project
 	lint                                                                                        -- runs certain pre-selected linters
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
@@ -174,6 +175,8 @@ func main() {
 		doInstall(os.Args[2:])
 	case "test":
 		doTest(os.Args[2:])
+	case "format":
+		doFormat(os.Args[2:])
 	case "lint":
 		doLint(os.Args[2:])
 	case "archive":
@@ -325,6 +328,20 @@ func doTest(cmdline []string) {
 	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
+}
+
+func doFormat(cmdline []string) {
+	flag.CommandLine.Parse(cmdline)
+	// Format with overwrite the whole package.
+	goformatArgs := []string{"-w", "-s"}
+
+	packages := []string{"."}
+	if len(flag.CommandLine.Args()) > 0 {
+		packages = flag.CommandLine.Args()
+	}
+	goformatArgs = append(goformatArgs, packages...)
+	build.MustRunCommand("gofmt", goformatArgs...)
+	fmt.Println("You have format the whole project.")
 }
 
 // doLint runs golangci-lint on requested packages.
