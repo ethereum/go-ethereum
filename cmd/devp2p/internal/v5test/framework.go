@@ -44,6 +44,8 @@ func (p *readError) Unwrap() error       { return p.err }
 func (p *readError) RequestID() []byte   { return nil }
 func (p *readError) SetRequestID([]byte) {}
 
+func (p *readError) AppendLogInfo(ctx []interface{}) []interface{} { return ctx }
+
 // readErrorf creates a readError with the given text.
 func readErrorf(format string, args ...interface{}) *readError {
 	return &readError{fmt.Errorf(format, args...)}
@@ -172,7 +174,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			// and needs to be the same across all responses.
 			if first {
 				if resp.Total == 0 || resp.Total > 6 {
-					return nil, fmt.Errorf("invalid NODES response 'total' %d (not in (0,7))", resp.Total)
+					return nil, fmt.Errorf("invalid NODES response count %d (not in (0,7))", resp.Total)
 				}
 				total = resp.Total
 				n = int(total) - 1
@@ -180,7 +182,7 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			} else {
 				n--
 				if resp.Total != total {
-					return nil, fmt.Errorf("invalid NODES response 'total' %d (!= %d)", resp.Total, total)
+					return nil, fmt.Errorf("invalid NODES response count %d (!= %d)", resp.Total, total)
 				}
 			}
 			// Check nodes.
