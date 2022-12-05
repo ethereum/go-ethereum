@@ -381,6 +381,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 <Stack
                   sx={{ mt: '0 !important' }}
                   borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link
                     as='button'
@@ -435,6 +436,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 <Stack
                   sx={{ mt: '0 !important' }}
                   borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link as='button' variant='button-link-secondary' onClick={showMoreDevBuilds}>
                     <Text
