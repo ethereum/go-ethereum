@@ -357,6 +357,34 @@ func writeTempStaticTrustedTOML(path string) {
 			log.Fatal(err)
 		}
 	}
+
+	if data.Has("Node.HTTPTimeouts.ReadTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsReadTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.ReadTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Node.HTTPTimeouts.WriteTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsWriteTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.WriteTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Node.HTTPTimeouts.IdleTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsIdleTimeout.toml", []byte(data.Get("Node.HTTPTimeouts.IdleTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if data.Has("Eth.TrieTimeout") {
+		err = os.WriteFile("./tempHTTPTimeoutsTrieTimeout.toml", []byte(data.Get("Eth.TrieTimeout").(string)), 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 func getStaticTrustedNodes(args []string) {
@@ -574,7 +602,7 @@ func commentFlags(path string, updatedArgs []string) {
 				flag = strconv.Itoa(passwordFlag) + "-" + flag
 			}
 
-			if flag != "static-nodes" && flag != "trusted-nodes" {
+			if flag != "static-nodes" && flag != "trusted-nodes" && flag != "read" && flag != "write" && flag != "idle" && flag != "timeout" {
 				flag = nameTagMap[flag]
 
 				tempFlag := false

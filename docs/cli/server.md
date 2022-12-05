@@ -4,7 +4,7 @@ The ```bor server``` command runs the Bor client.
 
 ## Options
 
-- ```chain```: Name of the chain to sync
+- ```chain```: Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file
 
 - ```identity```: Name/Identity of the node
 
@@ -12,7 +12,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```datadir```: Path of the data directory to store information
 
-- ```keystore```: Path of the directory to store keystores
+- ```keystore```: Path of the directory where keystores are located
 
 - ```config```: File for the config file
 
@@ -29,8 +29,6 @@ The ```bor server``` command runs the Bor client.
 - ```bor.heimdall```: URL of Heimdall service
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose)
-
-- ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
@@ -79,8 +77,6 @@ The ```bor server``` command runs the Bor client.
 - ```cache.noprefetch```: Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
 
 - ```cache.preimages```: Enable recording the SHA3/keccak preimages of trie keys
-
-- ```cache.triesinmemory```: Number of block states (tries) to keep in memory (default = 128)
 
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
 
@@ -136,7 +132,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```maxpeers```: Maximum number of network peers (network disabled if set to 0)
 
-- ```maxpendpeers```: Maximum number of pending connection attempts (defaults used if set to 0)
+- ```maxpendpeers```: Maximum number of pending connection attempts
 
 - ```nat```: NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
 
@@ -148,11 +144,11 @@ The ```bor server``` command runs the Bor client.
 
 - ```mine```: Enable mining
 
-- ```miner.etherbase```: Public address for block mining rewards (default = first account)
+- ```miner.etherbase```: Public address for block mining rewards
 
 - ```miner.extradata```: Block extra data set by the miner (default = client version)
 
-- ```miner.gaslimit```: Target gas ceiling for mined blocks
+- ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks
 
 - ```miner.gasprice```: Minimum gas price for mining a transaction
 

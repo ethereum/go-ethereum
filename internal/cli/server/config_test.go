@@ -1,7 +1,6 @@
 package server
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
@@ -99,38 +98,6 @@ func TestDefaultDatatypeOverride(t *testing.T) {
 
 	assert.NoError(t, c0.Merge(c1))
 	assert.Equal(t, c0, expected)
-}
-
-func TestConfigLoadFile(t *testing.T) {
-	readFile := func(path string) {
-		config, err := readConfigFile(path)
-		assert.NoError(t, err)
-
-		assert.Equal(t, config, &Config{
-			DataDir: "./data",
-			P2P: &P2PConfig{
-				MaxPeers: 30,
-			},
-			TxPool: &TxPoolConfig{
-				LifeTime: 1 * time.Second,
-			},
-			Gpo: &GpoConfig{
-				MaxPrice: big.NewInt(100),
-			},
-			Sealer: &SealerConfig{},
-			Cache:  &CacheConfig{},
-		})
-	}
-
-	// read file in hcl format
-	t.Run("hcl", func(t *testing.T) {
-		readFile("./testdata/test.hcl")
-	})
-
-	// read file in json format
-	t.Run("json", func(t *testing.T) {
-		readFile("./testdata/test.json")
-	})
 }
 
 var dummyEnodeAddr = "enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303"

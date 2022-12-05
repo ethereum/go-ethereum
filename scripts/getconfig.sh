@@ -112,6 +112,54 @@ else
     echo "neither JSON nor TOML TrustedNodes found"
 fi
 
+if [[ -f ./tempHTTPTimeoutsReadTimeout.toml ]]
+then
+    echo "HTTPTimeouts.ReadTimeout found"
+    read=$(head -1 ./tempHTTPTimeoutsReadTimeout.toml)
+    shopt -s nocasematch; if [[ "$OS" == "darwin"* ]]; then
+        sed -i '' "s%read = \"30s\"%read = \"${read}\"%" $confPath
+    else
+        sed -i "s%read = \"30s\"%read = \"${read}\"%" $confPath
+    fi
+    rm ./tempHTTPTimeoutsReadTimeout.toml
+fi
+
+if [[ -f ./tempHTTPTimeoutsWriteTimeout.toml ]]
+then
+    echo "HTTPTimeouts.WriteTimeout found"
+    write=$(head -1 ./tempHTTPTimeoutsWriteTimeout.toml)
+    shopt -s nocasematch; if [[ "$OS" == "darwin"* ]]; then
+        sed -i '' "s%write = \"30s\"%write = \"${write}\"%" $confPath
+    else
+        sed -i "s%write = \"30s\"%write = \"${write}\"%" $confPath
+    fi
+    rm ./tempHTTPTimeoutsWriteTimeout.toml
+fi
+
+if [[ -f ./tempHTTPTimeoutsIdleTimeout.toml ]]
+then
+    echo "HTTPTimeouts.IdleTimeout found"
+    idle=$(head -1 ./tempHTTPTimeoutsIdleTimeout.toml)
+    shopt -s nocasematch; if [[ "$OS" == "darwin"* ]]; then
+        sed -i '' "s%idle = \"2m0s\"%idle = \"${idle}\"%" $confPath
+    else
+        sed -i "s%idle = \"2m0s\"%idle = \"${idle}\"%" $confPath
+    fi
+    rm ./tempHTTPTimeoutsIdleTimeout.toml
+fi
+
+if [[ -f ./tempHTTPTimeoutsTrieTimeout.toml ]]
+then
+    echo "Eth.TrieTimeout found"
+    timeout=$(head -1 ./tempHTTPTimeoutsTrieTimeout.toml)
+    shopt -s nocasematch; if [[ "$OS" == "darwin"* ]]; then
+        sed -i '' "s%timeout = \"1h0m0s\"%timeout = \"${timeout}\"%" $confPath
+    else
+        sed -i "s%timeout = \"1h0m0s\"%timeout = \"${timeout}\"%" $confPath
+    fi
+    rm ./tempHTTPTimeoutsTrieTimeout.toml
+fi
+
 printf "\n"
 
 # comment flags in $configPath that were not passed through $startPath
