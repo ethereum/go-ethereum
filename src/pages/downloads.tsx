@@ -374,26 +374,13 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalStableReleases > 0
-                    ? `Showing ${Math.min(
-                        amountStableReleases,
-                        totalStableReleases
-                      )} latest releases of
-                    a total ${totalStableReleases} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalStableReleases > amountStableReleases && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
-                  w={{ base: '100%', md: 'auto' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
                 >
                   <Link
                     as='button'
@@ -441,23 +428,13 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalDevBuilds > 0
-                    ? `Showing ${Math.min(amountDevBuilds, totalDevBuilds)} latest releases of
-                    a total ${totalDevBuilds} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalDevBuilds > amountDevBuilds && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
-                  w={{ base: '100%', md: 'auto' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
                 >
                   <Link as='button' variant='button-link-secondary' onClick={showMoreDevBuilds}>
                     <Text
