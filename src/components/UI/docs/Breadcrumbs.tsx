@@ -7,7 +7,8 @@ export const Breadcrumbs: FC = () => {
   const router = useRouter();
 
   let pathSplit = router.asPath.split('/');
-  pathSplit = pathSplit.splice(1, pathSplit.length);
+  pathSplit = pathSplit.splice(1, pathSplit.length)
+    .map((path) => path.includes('#') ? path.split('#')[0] : path);
 
   return (
     <>
