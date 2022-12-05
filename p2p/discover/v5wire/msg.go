@@ -99,11 +99,11 @@ type (
 		OpID uint64 `rlp:"-"`
 	}
 
-	// NODES is a response to FINDNODE, REGTOPIC or TOPICQUERY.
+	// NODES is a response to FINDNODE.
 	Nodes struct {
-		ReqID []byte
-		Total uint8 // total number of responses to the request
-		Nodes []*enr.Record
+		ReqID     []byte
+		RespCount uint8 // total number of responses to the request
+		Nodes     []*enr.Record
 	}
 
 	// TALKREQ is an application-level request.
@@ -205,7 +205,7 @@ func (p *Nodes) SetRequestID(id []byte) { p.ReqID = id }
 func (p *Nodes) AppendLogInfo(ctx []interface{}) []interface{} {
 	return append(ctx,
 		"req", hexutil.Bytes(p.ReqID),
-		"tot", p.Total,
+		"tot", p.RespCount,
 		"n", len(p.Nodes),
 	)
 }

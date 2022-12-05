@@ -173,16 +173,16 @@ func (tc *conn) findnode(c net.PacketConn, dists []uint) ([]*enode.Node, error) 
 			// Check total count. It should be greater than one
 			// and needs to be the same across all responses.
 			if first {
-				if resp.Total == 0 || resp.Total > 6 {
-					return nil, fmt.Errorf("invalid NODES response count %d (not in (0,7))", resp.Total)
+				if resp.RespCount == 0 || resp.RespCount > 6 {
+					return nil, fmt.Errorf("invalid NODES response count %d (not in (0,7))", resp.RespCount)
 				}
-				total = resp.Total
+				total = resp.RespCount
 				n = int(total) - 1
 				first = false
 			} else {
 				n--
-				if resp.Total != total {
-					return nil, fmt.Errorf("invalid NODES response count %d (!= %d)", resp.Total, total)
+				if resp.RespCount != total {
+					return nil, fmt.Errorf("invalid NODES response count %d (!= %d)", resp.RespCount, total)
 				}
 			}
 			// Check nodes.

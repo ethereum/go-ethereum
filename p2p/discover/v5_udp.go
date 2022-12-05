@@ -389,7 +389,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 				nodes = append(nodes, node)
 			}
 			if total == -1 {
-				total = min(int(response.Total), totalNodesResponseLimit)
+				total = min(int(response.RespCount), totalNodesResponseLimit)
 			}
 			if received++; received == total {
 				return nodes, nil
@@ -838,7 +838,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 // packNodes creates NODES response packets for the given node list.
 func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 	if len(nodes) == 0 {
-		return []*v5wire.Nodes{{ReqID: reqid, Total: 1}}
+		return []*v5wire.Nodes{{ReqID: reqid, RespCount: 1}}
 	}
 
 	// This limit represents the available space for nodes in output packets. Maximum
@@ -862,7 +862,7 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 		resp = append(resp, p)
 	}
 	for _, msg := range resp {
-		msg.Total = uint8(len(resp))
+		msg.RespCount = uint8(len(resp))
 	}
 	return resp
 }
