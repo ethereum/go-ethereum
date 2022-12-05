@@ -125,6 +125,24 @@ func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger
 	return tab, nil
 }
 
+// Nodes returns all nodes contained in the table.
+func (tab *Table) Nodes() []*enode.Node {
+	if !tab.isInitDone() {
+		return nil
+	}
+
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	var nodes []*enode.Node
+	for _, b := range &tab.buckets {
+		for _, n := range b.entries {
+			nodes = append(nodes, unwrapNode(n))
+		}
+	}
+	return nodes
+}
+
 func (tab *Table) self() *enode.Node {
 	return tab.net.Self()
 }
