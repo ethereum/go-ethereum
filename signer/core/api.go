@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -627,7 +628,17 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 		}
 	}
 	typedData := gnosisTx.ToTypedData()
+
+	// The gnosis safetx input contains a 'safeTxHash' which is the expected safeTxHash that
+	// we are expected to sign. If our calculated hash does not match what they want,
+	// might aswell error early.
+	if sighash, _, err := apitypes.TypedDataAndHash(typedData); err != nil {
+		return nil, err
+	} else if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+		return nil, fmt.Errorf("mismatched safeTxHash; have %#x want %#x", sighash, gnosisTx.InputExpHash[:])
+	}
 	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
+
 	if err != nil {
 		return nil, err
 	}
