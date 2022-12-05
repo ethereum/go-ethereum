@@ -480,16 +480,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 
 	h := mocks.NewMockIHeimdallClient(ctrl)
 	h.EXPECT().Close().AnyTimes()
-<<<<<<< HEAD
 	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).AnyTimes()
-=======
-	h.EXPECT().Span(uint64(1)).Return(&res.Result, nil).AnyTimes()
-	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
-		StartBlock: big.NewInt(1),
-		EndBlock:   big.NewInt(2),
-		RootHash:   common.Hash{},
-	}, nil).AnyTimes()
->>>>>>> 57075d000d1a6396c33d42e5da97be19bfcfb6f1
 
 	// Mock State Sync events
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
