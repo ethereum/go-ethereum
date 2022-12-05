@@ -9,7 +9,7 @@ import {
   Stack,
   Text
 } from '@chakra-ui/react';
-import { AddIcon, MinusIcon } from '@chakra-ui/icons';
+import { AddIcon, MinusIcon } from '../svgs/'
 import NextLink from 'next/link';
 import { useRouter } from 'next/router';
 
@@ -79,9 +79,9 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
                       <Stack minW='61px'>
                         <Center>
                           {isExpanded ? (
-                            <MinusIcon w='20px' h='20px' color='primary' />
+                            <MinusIcon w='24px' h='24px' color='primary' />
                           ) : (
-                            <AddIcon w='20px' h='20px' color='primary' />
+                            <AddIcon w='24px' h='24px' color='primary' />
                           )}
                         </Center>
                       </Stack>
