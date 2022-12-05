@@ -143,7 +143,7 @@ const MDComponents = {
     );
   },
   li: ({ children }: any) => {
-    return <ListItem color='primary'>{children}</ListItem>;
+    return <ListItem>{children}</ListItem>;
   },
   note: ({ children }: any) => {
     return <Note>{children}</Note>;
