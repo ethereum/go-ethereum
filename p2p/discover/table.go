@@ -53,12 +53,10 @@ const (
 	bucketIPLimit, bucketSubnet = 2, 24 // at most 2 addresses from the same /24
 	tableIPLimit, tableSubnet   = 10, 24
 
-	refreshInterval    = 30 * time.Minute
-	revalidateInterval = 10 * time.Second
-	copyNodesInterval  = 30 * time.Second
-	seedMinTableTime   = 5 * time.Minute
-	seedCount          = 30
-	seedMaxAge         = 5 * 24 * time.Hour
+	copyNodesInterval = 30 * time.Second
+	seedMinTableTime  = 5 * time.Minute
+	seedCount         = 30
+	seedMaxAge        = 5 * 24 * time.Hour
 )
 
 // Table is the 'node table', a Kademlia-like index of neighbor nodes. The table keeps
@@ -71,9 +69,12 @@ type Table struct {
 	rand    *mrand.Rand       // source of randomness, periodically reseeded
 	ips     netutil.DistinctNetSet
 
-	log        log.Logger
-	db         *enode.DB // database of known nodes
-	net        transport
+	db  *enode.DB // database of known nodes
+	net transport
+	cfg Config
+	log log.Logger
+
+	// loop channels
 	refreshReq chan chan struct{}
 	initDone   chan struct{}
 	closeReq   chan struct{}
@@ -99,19 +100,21 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger) (*Table, error) {
+func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
+	cfg = cfg.withDefaults()
 	tab := &Table{
 		net:        t,
 		db:         db,
+		cfg:        cfg,
+		log:        cfg.Log,
 		refreshReq: make(chan chan struct{}),
 		initDone:   make(chan struct{}),
 		closeReq:   make(chan struct{}),
 		closed:     make(chan struct{}),
 		rand:       mrand.New(mrand.NewSource(0)),
 		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
-		log:        log,
 	}
-	if err := tab.setFallbackNodes(bootnodes); err != nil {
+	if err := tab.setFallbackNodes(cfg.Bootnodes); err != nil {
 		return nil, err
 	}
 	for i := range tab.buckets {
@@ -213,7 +216,7 @@ func (tab *Table) refresh() <-chan struct{} {
 func (tab *Table) loop() {
 	var (
 		revalidate     = time.NewTimer(tab.nextRevalidateTime())
-		refresh        = time.NewTicker(refreshInterval)
+		refresh        = time.NewTimer(tab.nextRefreshTime())
 		copyNodes      = time.NewTicker(copyNodesInterval)
 		refreshDone    = make(chan struct{})           // where doRefresh reports completion
 		revalidateDone chan struct{}                   // where doRevalidate reports completion
@@ -246,6 +249,7 @@ loop:
 				close(ch)
 			}
 			waiting, refreshDone = nil, nil
+			refresh.Reset(tab.nextRefreshTime())
 		case <-revalidate.C:
 			revalidateDone = make(chan struct{})
 			go tab.doRevalidate(revalidateDone)
@@ -368,7 +372,15 @@ func (tab *Table) nextRevalidateTime() time.Duration {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
-	return time.Duration(tab.rand.Int63n(int64(revalidateInterval)))
+	return time.Duration(tab.rand.Int63n(int64(tab.cfg.PingInterval)))
+}
+
+func (tab *Table) nextRefreshTime() time.Duration {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	half := tab.cfg.RefreshInterval / 2
+	return half + time.Duration(tab.rand.Int63n(int64(half)))
 }
 
 // copyLiveNodes adds nodes from the table to the database if they have been in the table
@@ -476,10 +488,12 @@ func (tab *Table) addSeenNode(n *node) {
 		// Can't add: IP limit reached.
 		return
 	}
+
 	// Add to end of bucket:
 	b.entries = append(b.entries, n)
 	b.replacements = deleteNode(b.replacements, n)
 	n.addedAt = time.Now()
+
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(n)
 	}
@@ -518,10 +532,12 @@ func (tab *Table) addVerifiedNode(n *node) {
 		// Can't add: IP limit reached.
 		return
 	}
+
 	// Add to front of bucket.
 	b.entries, _ = pushNode(b.entries, n, bucketSize)
 	b.replacements = deleteNode(b.replacements, n)
 	n.addedAt = time.Now()
+
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(n)
 	}
