@@ -138,29 +138,6 @@ func (tab *Table) seedRand() {
 	tab.mutex.Unlock()
 }
 
-// ReadRandomNodes fills the given slice with random nodes from the table. The results
-// are guaranteed to be unique for a single invocation, no node will appear twice.
-func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
-	if !tab.isInitDone() {
-		return 0
-	}
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-
-	var nodes []*enode.Node
-	for _, b := range &tab.buckets {
-		for _, n := range b.entries {
-			nodes = append(nodes, unwrapNode(n))
-		}
-	}
-	// Shuffle.
-	for i := 0; i < len(nodes); i++ {
-		j := tab.rand.Intn(len(nodes))
-		nodes[i], nodes[j] = nodes[j], nodes[i]
-	}
-	return copy(buf, nodes)
-}
-
 // getNode returns the node with the given ID or nil if it isn't in the table.
 func (tab *Table) getNode(id enode.ID) *enode.Node {
 	tab.mutex.Lock()
