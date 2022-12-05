@@ -20,7 +20,7 @@ export const GETH_DISCORD_URL = 'https://discord.com/invite/nthXNEv';
 export const GO_URL = 'https://go.dev/';
 
 // Downloads
-export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 10;
+export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 12;
 export const DOWNLOAD_HEADER_BUTTONS: {
   [index: string]: {
     name: string;

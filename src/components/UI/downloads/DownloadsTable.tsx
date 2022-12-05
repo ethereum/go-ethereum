@@ -33,6 +33,8 @@ export const DownloadsTable: FC<Props> = ({
     androidData.length
   ];
 
+  const LAST_2_LINUX_RELEASES = amountOfReleasesToShow + 12;
+
   return (
     <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid' borderColor='primary'>
       <Tabs variant='unstyled' onChange={idx => setTotalReleases(totalReleases[idx])}>
@@ -61,7 +63,7 @@ export const DownloadsTable: FC<Props> = ({
           <TabPanel p={0}>
             <DataTable
               columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
-              data={linuxData.slice(0, amountOfReleasesToShow)}
+              data={linuxData.slice(0, LAST_2_LINUX_RELEASES)}
             />
           </TabPanel>
           <TabPanel p={0}>
