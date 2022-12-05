@@ -79,6 +79,10 @@ gcmode = "archive"
         # host = ""
         # vhosts = ["*"]
         # corsdomain = ["*"]
+    # [jsonrpc.timeouts]
+        # read = "30s"
+        # write = "30s"
+        # idle = "2m0s"
 
 [gpo]
     # blocks = 20
@@ -105,15 +109,16 @@ gcmode = "archive"
 
 [cache]
     cache = 4096
-    # gc = 25
-    # snapshot = 10
+    gc = 0
+    snapshot = 20
     # database = 50
-    # trie = 15
+    trie = 30
     # journal = "triecache"
     # rejournal = "1h0m0s"
     # noprefetch = false
     # preimages = false
     # txlookuplimit = 2350000
+    # timeout = "1h0m0s"
 
 # [accounts]
     # unlock = []

@@ -86,6 +86,10 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
     host = ""                   # 
     vhosts = ["localhost"]      # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
     corsdomain = ["localhost"]  # Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  [jsonrpc.timeouts]
+    read = "30s"
+    write = "30s"
+    idle = "2m0s"
 
 [gpo]
   blocks = 20                 # Number of recent blocks to check for gas prices
@@ -126,6 +130,7 @@ ethstats = ""                # Reporting URL of a ethstats service (nodename:sec
   preimages = false        # Enable recording the SHA3/keccak preimages of trie keys
   txlookuplimit = 2350000  # Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
   triesinmemory = 128      # Number of block states (tries) to keep in memory
+  timeout = "1h0m0s"       # Time after which the Merkle Patricia Trie is stored to disc from memory
 
 [accounts]
   unlock = []                    # Comma separated list of accounts to unlock

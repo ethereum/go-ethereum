@@ -101,6 +101,11 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	h := mocks.NewMockIHeimdallClient(ctrl)
 	h.EXPECT().Close().AnyTimes()
 	h.EXPECT().Span(uint64(1)).Return(&res.Result, nil).AnyTimes()
+	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
+		StartBlock: big.NewInt(1),
+		EndBlock:   big.NewInt(2),
+		RootHash:   common.Hash{},
+	}, nil).AnyTimes()
 
 	// B.2 Mock State Sync events
 	fromID := uint64(1)
@@ -136,6 +141,11 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	h := mocks.NewMockIHeimdallClient(ctrl)
 	h.EXPECT().Close().AnyTimes()
 	h.EXPECT().Span(uint64(1)).Return(&res.Result, nil).AnyTimes()
+	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
+		StartBlock: big.NewInt(1),
+		EndBlock:   big.NewInt(2),
+		RootHash:   common.Hash{},
+	}, nil).AnyTimes()
 
 	// Mock State Sync events
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
@@ -287,6 +297,8 @@ func getMockedHeimdallClient(t *testing.T) (*mocks.MockIHeimdallClient, *span.He
 	h.EXPECT().StateSyncEvents(gomock.Any(), gomock.Any()).
 		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
 
+	// h.EXPECT().FetchLatestCheckpoint().Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
+
 	return h, heimdallSpan, ctrl
 }
 
@@ -324,13 +336,13 @@ func getEventRecords(t *testing.T) []*clerk.EventRecordWithTime {
 
 // TestEIP1559Transition tests the following:
 //
-// 1. A transaction whose gasFeeCap is greater than the baseFee is valid.
-// 2. Gas accounting for access lists on EIP-1559 transactions is correct.
-// 3. Only the transaction's tip will be received by the coinbase.
-// 4. The transaction sender pays for both the tip and baseFee.
-// 5. The coinbase receives only the partially realized tip when
-//    gasFeeCap - gasTipCap < baseFee.
-// 6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
+//  1. A transaction whose gasFeeCap is greater than the baseFee is valid.
+//  2. Gas accounting for access lists on EIP-1559 transactions is correct.
+//  3. Only the transaction's tip will be received by the coinbase.
+//  4. The transaction sender pays for both the tip and baseFee.
+//  5. The coinbase receives only the partially realized tip when
+//     gasFeeCap - gasTipCap < baseFee.
+//  6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
 func TestEIP1559Transition(t *testing.T) {
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")

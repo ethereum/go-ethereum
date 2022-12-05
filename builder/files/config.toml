@@ -61,32 +61,36 @@ syncmode = "full"
 
 
 # [jsonrpc]
-  # ipcdisable = false
-  # ipcpath = ""
-  # gascap = 50000000
-  # txfeecap = 5.0
-  # [jsonrpc.http]
-    # enabled = false
-    # port = 8545
-    # prefix = ""
-    # host = "localhost"
-    # api = ["eth", "net", "web3", "txpool", "bor"]
-    # vhosts = ["*"]
-    # corsdomain = ["*"]
-  # [jsonrpc.ws]
-    # enabled = false
-    # port = 8546
-    # prefix = ""
-    # host = "localhost"
-    # api = ["web3", "net"]
-    # origins = ["*"]
-  # [jsonrpc.graphql]
-    # enabled = false
-    # port = 0
-    # prefix = ""
-    # host = ""
-    # vhosts = ["*"]
-    # corsdomain = ["*"]
+#   ipcdisable = false
+#   ipcpath = ""
+#   gascap = 50000000
+#   txfeecap = 5.0
+#   [jsonrpc.http]
+#     enabled = false
+#     port = 8545
+#     prefix = ""
+#     host = "localhost"
+#     api = ["eth", "net", "web3", "txpool", "bor"]
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.ws]
+#     enabled = false
+#     port = 8546
+#     prefix = ""
+#     host = "localhost"
+#     api = ["web3", "net"]
+#     origins = ["*"]
+#   [jsonrpc.graphql]
+#     enabled = false
+#     port = 0
+#     prefix = ""
+#     host = ""
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.timeouts]
+#     read = "30s"
+#     write = "30s"
+#     idle = "2m0s"
 
 [gpo]
   # blocks = 20
@@ -122,6 +126,7 @@ syncmode = "full"
   # noprefetch = false
   # preimages = false
   # txlookuplimit = 2350000
+  # timeout = "1h0m0s"
 
 [accounts]
   # allow-insecure-unlock = true
