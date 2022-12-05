@@ -34,6 +34,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.DataDir,
 	})
 	f.StringFlag(&flagset.StringFlag{
+		Name:    "datadir.ancient",
+		Usage:   "Data directory for ancient chain segments (default = inside chaindata)",
+		Value:   &c.cliConfig.Ancient,
+		Default: c.cliConfig.Ancient,
+	})
+	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
 		Usage: "Path of the directory where keystores are located",
 		Value: &c.cliConfig.KeyStoreDir,

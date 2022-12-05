@@ -6,6 +6,7 @@ chain = "mainnet"            # Name of the chain to sync ("mumbai", "mainnet") o
 identity = "Annon-Identity"  # Name/Identity of the node (default = OS hostname)
 log-level = "INFO"           # Set log level for the server
 datadir = "var/lib/bor"      # Path of the data directory to store information
+ancient = ""                 # Data directory for ancient chain segments (default = inside chaindata)
 keystore = ""                # Path of the directory where keystores are located
 syncmode = "full"            # Blockchain sync mode (only "full" sync supported)
 gcmode = "full"              # Blockchain garbage collection mode ("full", "archive")
