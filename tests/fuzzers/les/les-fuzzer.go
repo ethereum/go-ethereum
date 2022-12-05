@@ -390,8 +390,8 @@ func Fuzz(input []byte) int {
 					nonce = f.nonce
 					f.nonce += 1
 				}
-                tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
-                req.Txs[i] = types.NewNetworkTransaction(tx)
+				tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(10000), params.TxGas, big.NewInt(1000000000*int64(f.randomByte())), nil), signer, bankKey)
+				req.Txs[i] = types.NewNetworkTransaction(tx)
 			}
 			f.doFuzz(l.SendTxV2Msg, req)
 

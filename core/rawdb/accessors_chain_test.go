@@ -377,13 +377,20 @@ func TestBlockReceiptStorage(t *testing.T) {
 	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
 	receipts := []*types.Receipt{receipt1, receipt2}
 
+	header := types.Header{
+		Number: big.NewInt(0),
+		Time:   0,
+		Extra:  []byte("test read receipts"),
+	}
+	hash := header.Hash()
+
 	// Check that no receipt entries are in a pristine database
-	hash := common.BytesToHash([]byte{0x03, 0x14})
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("non existent receipts returned: %v", rs)
 	}
-	// Insert the body that corresponds to the receipts
+	// Insert the body & header that corresponds to the receipts
 	WriteBody(db, hash, 0, body)
+	WriteHeader(db, &header)
 
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
@@ -751,7 +758,7 @@ func TestReadLogs(t *testing.T) {
 	}
 
 	// Fill in log fields so we can compare their rlp encoding
-	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
+	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, 0, body.Transactions); err != nil {
 		t.Fatal(err)
 	}
 	for i, pr := range receipts {

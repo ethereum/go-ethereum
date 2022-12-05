@@ -478,7 +478,7 @@ func (g *Genesis) ToBlock() *types.Block {
 				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 			}
 		}
-		if g.Config.IsSharding(common.Big0) {
+		if g.Config.IsSharding(0) {
 			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}

@@ -269,7 +269,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return err
 		}
 	}
-	shanghai := chain.Config().IsShanghai(header.Number)
+	shanghai := chain.Config().IsShanghai(header.Time)
 	if shanghai && header.WithdrawalsHash == nil {
 		return fmt.Errorf("missing withdrawalsHash")
 	}
@@ -277,7 +277,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if !shanghai && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %s, expected nil", header.WithdrawalsHash)
 	}
-	if chain.Config().IsSharding(header.Number) {
+	if chain.Config().IsSharding(header.Time) {
 		// Verify the header's EIP-4844 attributes.
 		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
 			return err
@@ -350,7 +350,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		return
 	}
 	// If withdrawals have been activated, process each one.
-	if chain.Config().IsShanghai(header.Number) {
+	if chain.Config().IsShanghai(header.Time) {
 		for _, w := range withdrawals {
 			state.AddBalance(w.Address, w.Amount)
 		}
@@ -358,7 +358,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
 	header.Root = state.IntermediateRoot(true)
-	if chain.Config().IsSharding(header.Number) {
+	if chain.Config().IsSharding(header.Time) {
 		if parent := chain.GetHeaderByHash(header.ParentHash); parent != nil {
 			header.SetExcessDataGas(misc.CalcExcessDataGas(parent.ExcessDataGas, misc.CountBlobs(txs)))
 		} else {
