@@ -18,7 +18,7 @@ export const LinksList: FC<LinksListProps> = ({ links }) => {
         const split = to?.split('/')
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         return to ? (
-          <Stack key={id} _hover={{ background: 'primary', color: 'bg' }} data-group>
+          <Stack key={id} pb={items ? 6 : 0} _hover={{ background: 'primary', color: 'bg' }} data-group>
             <NextLink href={to} passHref key={id}>
               <Link textDecoration='none !important'>
                 <Text
@@ -44,7 +44,7 @@ export const LinksList: FC<LinksListProps> = ({ links }) => {
             {items && <LinksList links={items} />}
           </Stack>
         ) : (
-          <Stack key={id}>
+          <Stack key={id} pb={6}>
             <Text textStyle='docs-nav-links' color={items ? 'primary' : 'body'}>
               {id}
             </Text>
