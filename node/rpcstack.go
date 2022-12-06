@@ -551,6 +551,7 @@ func (w *gzipResponseWriter) close() {
 	}
 	w.gz.Close()
 	gzPool.Put(w.gz)
+	w.gz = nil
 }
 
 func newGzipHandler(next http.Handler) http.Handler {
