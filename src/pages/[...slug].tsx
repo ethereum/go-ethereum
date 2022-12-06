@@ -63,7 +63,7 @@ export const getStaticProps: GetStaticProps = async context => {
       content,
       navLinks,
       lastModified: getParsedDate(lastModified.mtime, {
-        month: 'numeric',
+        month: 'long',
         day: 'numeric',
         year: 'numeric'
       })
@@ -111,7 +111,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 {frontmatter.title}
               </Heading>
               <Text as='span' mt='0 !important'>
-                last edited {lastModified}
+                Last edited on {lastModified}
               </Text>
             </Stack>
 
