@@ -365,6 +365,15 @@ func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.Execu
 	return data, nil
 }
 
+// GetPayloadV3 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV3(payloadID beacon.PayloadID) (*beacon.ExecutableData, error) {
+	data, err := api.GetPayloadV2(payloadID)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 // GetBlobsBundleV1 returns a bundle of all blob and corresponding KZG commitments by payload id
 func (api *ConsensusAPI) GetBlobsBundleV1(payloadID beacon.PayloadID) (*beacon.BlobsBundle, error) {
 	log.Trace("Engine API request received", "method", "GetBlobsBundle")
@@ -380,6 +389,29 @@ func (api *ConsensusAPI) GetBlobsBundleV1(payloadID beacon.PayloadID) (*beacon.B
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
+	if params.Withdrawals != nil {
+		return beacon.PayloadStatusV1{Status: beacon.INVALID}, fmt.Errorf("withdrawals not supported in V1")
+	}
+	if params.ExcessDataGas != nil {
+		return beacon.PayloadStatusV1{Status: beacon.INVALID}, fmt.Errorf("excessDataGas not supported in V1")
+	}
+	return api.newPayload(params)
+}
+
+// NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV2(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
+	if params.ExcessDataGas != nil {
+		return beacon.PayloadStatusV1{Status: beacon.INVALID}, fmt.Errorf("excessDataGas not supported in V2")
+	}
+	return api.newPayload(params)
+}
+
+// NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV3(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
+	return api.newPayload(params)
+}
+
+func (api *ConsensusAPI) newPayload(params beacon.ExecutableData) (beacon.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to

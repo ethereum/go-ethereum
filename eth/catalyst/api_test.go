@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	beaconConsensus "github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
@@ -51,8 +52,13 @@ var (
 	testBalance = big.NewInt(2e18)
 )
 
-func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
+// generateChain builds a block chain containing n blocks. A post-merge chain is generated iff merge is set
+func generateChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
+	if merged {
+		config.TerminalTotalDifficulty = common.Big0
+		config.TerminalTotalDifficultyPassed = true
+	}
 	genesis := &core.Genesis{
 		Config:     &config,
 		Alloc:      core.GenesisAlloc{testAddr: {Balance: testBalance}},
@@ -69,17 +75,19 @@ func generatePreMergeChain(n int) (*core.Genesis, []*types.Block) {
 		g.AddTx(tx)
 		testNonce++
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), n, generate)
-	totalDifficulty := big.NewInt(0)
-	for _, b := range blocks {
-		totalDifficulty.Add(totalDifficulty, b.Difficulty())
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, beaconConsensus.New(ethash.NewFaker()), n, generate)
+	if !merged {
+		totalDifficulty := big.NewInt(0)
+		for _, b := range blocks {
+			totalDifficulty.Add(totalDifficulty, b.Difficulty())
+		}
+		config.TerminalTotalDifficulty = totalDifficulty
 	}
-	config.TerminalTotalDifficulty = totalDifficulty
 	return genesis, blocks
 }
 
 func TestEth2AssembleBlock(t *testing.T) {
-	genesis, blocks := generatePreMergeChain(10)
+	genesis, blocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
@@ -118,7 +126,7 @@ func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params 
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
-	genesis, blocks := generatePreMergeChain(10)
+	genesis, blocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
 
@@ -137,7 +145,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 }
 
 func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
-	genesis, blocks := generatePreMergeChain(10)
+	genesis, blocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
 
@@ -155,7 +163,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 }
 
 func TestEth2PrepareAndGetPayload(t *testing.T) {
-	genesis, blocks := generatePreMergeChain(10)
+	genesis, blocks := generateChain(10, false)
 	// We need to properly set the terminal total difficulty
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[9].Difficulty())
 	n, ethservice := startEthService(t, genesis, blocks[:9])
@@ -221,7 +229,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 }
 
 func TestInvalidPayloadTimestamp(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 	var (
@@ -265,7 +273,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 }
 
 func TestEth2NewBlock(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -367,7 +375,7 @@ func TestEth2DeepReorg(t *testing.T) {
 	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold
 	/*
-		genesis, preMergeBlocks := generatePreMergeChain(core.TriesInMemory * 2)
+		genesis, preMergeBlocks := generateChain(core.TriesInMemory * 2, false)
 		n, ethservice := startEthService(t, genesis, preMergeBlocks)
 		defer n.Close()
 
@@ -442,7 +450,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 }
 
 func TestFullAPI(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 	var (
@@ -494,7 +502,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.Bl
 }
 
 func TestExchangeTransitionConfig(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -555,7 +563,7 @@ We expect
 	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -649,7 +657,7 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.Pay
 }
 
 func TestEmptyBlocks(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -765,7 +773,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 
 func TestTrickRemoteBlockCache(t *testing.T) {
 	// Setup two nodes
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	nodeA, ethserviceA := startEthService(t, genesis, preMergeBlocks)
 	nodeB, ethserviceB := startEthService(t, genesis, preMergeBlocks)
 	defer nodeA.Close()
@@ -828,7 +836,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 }
 
 func TestInvalidBloom(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	ethservice.Merger().ReachTTD()
 	defer n.Close()
@@ -852,7 +860,7 @@ func TestInvalidBloom(t *testing.T) {
 }
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(100)
+	genesis, preMergeBlocks := generateChain(100, false)
 	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
@@ -902,7 +910,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 // newPayLoad and forkchoiceUpdate. This is to test that the api behaves
 // well even of the caller is not being 'serial'.
 func TestSimultaneousNewBlock(t *testing.T) {
-	genesis, preMergeBlocks := generatePreMergeChain(10)
+	genesis, preMergeBlocks := generateChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
@@ -983,5 +991,57 @@ func TestSimultaneousNewBlock(t *testing.T) {
 			t.Fatalf("Chain head should be updated, have %d want %d", have, want)
 		}
 		parent = block
+	}
+}
+
+func TestEIP4844(t *testing.T) {
+	genesis, blocks := generateChain(10, true)
+	lastBlockTime := blocks[len(blocks)-1].Time()
+	genesis.Config.ShanghaiTime = new(uint64)
+	*genesis.Config.ShanghaiTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShardingForkTime = new(uint64)
+	*genesis.Config.ShardingForkTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	parent := ethservice.BlockChain().CurrentHeader()
+	params := beacon.PayloadAttributes{
+		Timestamp: parent.Time + 10,
+	}
+	fcState := beacon.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != beacon.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, beacon.VALID)
+	}
+
+	execData, err := api.GetPayloadV3(*resp.PayloadID)
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	if status, err := api.NewPayloadV3(*execData); err != nil {
+		t.Fatalf("error validating payload: %v", err)
+	} else if status.Status != beacon.VALID {
+		t.Fatalf("invalid payload")
+	}
+
+	fcState.HeadBlockHash = execData.BlockHash
+	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+
+	block := ethservice.APIBackend.CurrentBlock()
+	if block.ExcessDataGas() == nil {
+		t.Fatal("latest block is missing excessDataGas")
 	}
 }
