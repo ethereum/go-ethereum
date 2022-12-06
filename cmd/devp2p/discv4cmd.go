@@ -302,7 +302,7 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 		exit(err)
 	}
 
-	// Configure UDP endpoint in ENR from listening address.
+	// Configure UDP endpoint in ENR from listener address.
 	usocket := socket.(*net.UDPConn)
 	uaddr := socket.LocalAddr().(*net.UDPAddr)
 	if uaddr.IP.IsUnspecified() {
@@ -312,7 +312,9 @@ func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 	}
 	ln.SetFallbackUDP(uaddr.Port)
 
-	// Set explicit external address if configured.
+	// If an ENR endpoint is set explicitly on the command-line, override
+	// the information from the listening address. Note this is careful not
+	// to set the UDP port if the external address doesn't have it.
 	extAddr := ctx.String(extAddrFlag.Name)
 	if extAddr != "" {
 		ip, port, ok := parseExtAddr(extAddr)
