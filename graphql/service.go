@@ -60,20 +60,21 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		timer = time.AfterFunc(timeout, func() {
 			responded.Do(func() {
 				response := &graphql.Response{
-					Errors: []*gqlErrors.QueryError{
-						{
-							Message: "request timed out",
-						},
-					},
+					Errors: []*gqlErrors.QueryError{{Message: "request timed out"}},
 				}
 				responseJSON, err := json.Marshal(response)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
+
+				// Setting this disables gzip compression in package node.
+				w.Header().Set("transfer-encoding", "identity")
+
+				// Flush the response. Since we are writing close to the response timeout,
+				// chunked transfer encoding must be disabled by setting content-length.
 				w.Header().Set("content-type", "application/json")
 				w.Header().Set("content-length", strconv.Itoa(len(responseJSON)))
-				w.Header().Set("transfer-encoding", "identity")
 				w.Write(responseJSON)
 				if flush, ok := w.(http.Flusher); ok {
 					flush.Flush()
