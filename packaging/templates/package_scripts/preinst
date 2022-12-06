@@ -1,0 +1,7 @@
+#!/bin/bash
+#
+#################
+# Stop existing bor in case of upgrade
+################
+#sudo systemctl stop bor.service
+######################

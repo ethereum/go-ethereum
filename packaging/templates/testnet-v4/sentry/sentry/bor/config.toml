@@ -1,0 +1,135 @@
+chain = "mumbai"
+# identity = "node_name"
+# log-level = "INFO"
+datadir = "/var/lib/bor/data"
+# ancient = ""
+# keystore = ""
+syncmode = "full"
+# gcmode = "full"
+# snapshot = true
+# ethstats = ""
+
+# ["eth.requiredblocks"]
+
+[p2p]
+    maxpeers = 50
+    port = 30303
+    # maxpendpeers = 50
+    # bind = "0.0.0.0"
+    # nodiscover = false
+    # nat = "any"
+    # [p2p.discovery]
+        # v5disc = false
+        # bootnodes = []
+        # bootnodesv4 = []
+        # bootnodesv5 = []
+        # static-nodes = []
+        # trusted-nodes = []
+        # dns = []
+
+# [heimdall]
+    # url = "http://localhost:1317"
+    # "bor.without" = false
+    # grpc-address = ""
+
+[txpool]
+    nolocals = true
+    accountslots = 16
+    globalslots = 131072
+    accountqueue = 64
+    globalqueue = 131072
+    lifetime = "1h30m0s"
+    # locals = []
+    # journal = ""
+    # rejournal = "1h0m0s"
+    # pricelimit = 1
+    # pricebump = 10
+
+[miner]
+    gaslimit = 30000000
+    # gasprice = "1000000000"
+    # mine = false
+    # etherbase = ""
+    # extradata = ""
+
+[jsonrpc]
+    ipcpath = "/var/lib/bor/bor.ipc"
+    # ipcdisable = false
+    # gascap = 50000000
+    # txfeecap = 5.0
+    [jsonrpc.http]
+        enabled = true
+        port = 8545
+        host = "0.0.0.0"
+        api = ["eth", "net", "web3", "txpool", "bor"]
+        vhosts = ["*"]
+        corsdomain = ["*"]
+        # prefix = ""
+    # [jsonrpc.ws]
+        # enabled = false
+        # port = 8546
+        # prefix = ""
+        # host = "localhost"
+        # api = ["web3", "net"]
+        # origins = ["*"]
+    # [jsonrpc.graphql]
+        # enabled = false
+        # port = 0
+        # prefix = ""
+        # host = ""
+        # vhosts = ["*"]
+        # corsdomain = ["*"]
+    # [jsonrpc.timeouts]
+        # read = "30s"
+        # write = "30s"
+        # idle = "2m0s"
+
+# [gpo]
+    # blocks = 20
+    # percentile = 60
+    # maxprice = "5000000000000"
+    # ignoreprice = "2"
+
+[telemetry]
+    metrics = true
+    # expensive = false
+    # prometheus-addr = ""
+    # opencollector-endpoint = ""
+    # [telemetry.influx]
+        # influxdb = false
+        # endpoint = ""
+        # database = ""
+        # username = ""
+        # password = ""
+        # influxdbv2 = false
+        # token = ""
+        # bucket = ""
+        # organization = ""
+    # [telemetry.influx.tags]
+
+# [cache]
+    # cache = 1024
+    # gc = 25
+    # snapshot = 10
+    # database = 50
+    # trie = 15
+    # journal = "triecache"
+    # rejournal = "1h0m0s"
+    # noprefetch = false
+    # preimages = false
+    # txlookuplimit = 2350000
+    # timeout = "1h0m0s"
+
+# [accounts]
+    # unlock = []
+    # password = ""
+    # allow-insecure-unlock = false
+    # lightkdf = false
+    # disable-bor-wallet = false
+
+# [grpc]
+    # addr = ":3131"
+
+# [developer]
+    # dev = false
+    # period = 0

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/BurntSushi/toml"
 )
 
 // Enabled is checked by the constructor functions for all of the
@@ -32,26 +32,75 @@ var enablerFlags = []string{"metrics"}
 // expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
 var expensiveEnablerFlags = []string{"metrics.expensive"}
 
+// configFlag is the CLI flag name to use to start node by providing a toml based config
+var configFlag = "config"
+
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
-	for _, arg := range os.Args {
+	var configFile string
+
+	for i := 0; i < len(os.Args); i++ {
+		arg := os.Args[i]
+
 		flag := strings.TrimLeft(arg, "-")
+
+		// check for existence of `config` flag
+		if flag == configFlag && i < len(os.Args)-1 {
+			configFile = strings.TrimLeft(os.Args[i+1], "-") // find the value of flag
+		} else if len(flag) > 6 && flag[:6] == configFlag {
+			// Checks for `=` separated flag (e.g. config=path)
+			configFile = strings.TrimLeft(flag[6:], "=")
+		}
 
 		for _, enabler := range enablerFlags {
 			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
 				Enabled = true
 			}
 		}
+
 		for _, enabler := range expensiveEnablerFlags {
 			if !EnabledExpensive && flag == enabler {
-				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
 			}
 		}
 	}
+
+	// Update the global metrics value, if they're provided in the config file
+	updateMetricsFromConfig(configFile)
+}
+
+func updateMetricsFromConfig(path string) {
+	// Don't act upon any errors here. They're already taken into
+	// consideration when the toml config file will be parsed in the cli.
+	data, err := os.ReadFile(path)
+	tomlData := string(data)
+
+	if err != nil {
+		return
+	}
+
+	// Create a minimal config to decode
+	type TelemetryConfig struct {
+		Enabled   bool `hcl:"metrics,optional" toml:"metrics,optional"`
+		Expensive bool `hcl:"expensive,optional" toml:"expensive,optional"`
+	}
+
+	type CliConfig struct {
+		Telemetry *TelemetryConfig `hcl:"telemetry,block" toml:"telemetry,block"`
+	}
+
+	conf := &CliConfig{}
+
+	_, err = toml.Decode(tomlData, &conf)
+	if err != nil || conf == nil || conf.Telemetry == nil {
+		return
+	}
+
+	// We have the values now, update them
+	Enabled = conf.Telemetry.Enabled
+	EnabledExpensive = conf.Telemetry.Expensive
 }
 
 // CollectProcessMetrics periodically collects various metrics about the running

@@ -1,36 +1,28 @@
 package bor
 
 import (
-	"bytes"
 	"encoding/json"
+
+	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // Snapshot is the state of the authorization voting at a given point in time.
 type Snapshot struct {
 	config   *params.BorConfig // Consensus engine parameters to fine tune behavior
-	ethAPI   *ethapi.PublicBlockChainAPI
-	sigcache *lru.ARCCache // Cache of recent block signatures to speed up ecrecover
+	sigcache *lru.ARCCache     // Cache of recent block signatures to speed up ecrecover
 
 	Number       uint64                    `json:"number"`       // Block number where the snapshot was created
 	Hash         common.Hash               `json:"hash"`         // Block hash where the snapshot was created
-	ValidatorSet *ValidatorSet             `json:"validatorSet"` // Validator set at this moment
+	ValidatorSet *valset.ValidatorSet      `json:"validatorSet"` // Validator set at this moment
 	Recents      map[uint64]common.Address `json:"recents"`      // Set of recent signers for spam protections
 }
-
-// signersAscending implements the sort interface to allow sorting a list of addresses
-type signersAscending []common.Address
-
-func (s signersAscending) Len() int           { return len(s) }
-func (s signersAscending) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-func (s signersAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
@@ -40,37 +32,38 @@ func newSnapshot(
 	sigcache *lru.ARCCache,
 	number uint64,
 	hash common.Hash,
-	validators []*Validator,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	validators []*valset.Validator,
 ) *Snapshot {
 	snap := &Snapshot{
 		config:       config,
-		ethAPI:       ethAPI,
 		sigcache:     sigcache,
 		Number:       number,
 		Hash:         hash,
-		ValidatorSet: NewValidatorSet(validators),
+		ValidatorSet: valset.NewValidatorSet(validators),
 		Recents:      make(map[uint64]common.Address),
 	}
+
 	return snap
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte("bor-"), hash[:]...))
 	if err != nil {
 		return nil, err
 	}
+
 	snap := new(Snapshot)
+
 	if err := json.Unmarshal(blob, snap); err != nil {
 		return nil, err
 	}
+
 	snap.config = config
 	snap.sigcache = sigcache
-	snap.ethAPI = ethAPI
 
 	// update total voting power
-	if err := snap.ValidatorSet.updateTotalVotingPower(); err != nil {
+	if err := snap.ValidatorSet.UpdateTotalVotingPower(); err != nil {
 		return nil, err
 	}
 
@@ -83,6 +76,7 @@ func (s *Snapshot) store(db ethdb.Database) error {
 	if err != nil {
 		return err
 	}
+
 	return db.Put(append([]byte("bor-"), s.Hash[:]...), blob)
 }
 
@@ -90,7 +84,6 @@ func (s *Snapshot) store(db ethdb.Database) error {
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
 		config:       s.config,
-		ethAPI:       s.ethAPI,
 		sigcache:     s.sigcache,
 		Number:       s.Number,
 		Hash:         s.Hash,
@@ -115,6 +108,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			return nil, errOutOfRangeChain
 		}
 	}
+
 	if headers[0].Number.Uint64() != s.Number+1 {
 		return nil, errOutOfRangeChain
 	}
@@ -126,7 +120,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		number := header.Number.Uint64()
 
 		// Delete the oldest signer from the recent list to allow it signing again
-		if number >= s.config.Sprint && number-s.config.Sprint >= 0 {
+		if number >= s.config.Sprint {
 			delete(snap.Recents, number-s.config.Sprint)
 		}
 
@@ -153,15 +147,17 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			if err := validateHeaderExtraField(header.Extra); err != nil {
 				return nil, err
 			}
+
 			validatorBytes := header.Extra[extraVanity : len(header.Extra)-extraSeal]
 
 			// get validators from headers and use that for new validator set
-			newVals, _ := ParseValidators(validatorBytes)
+			newVals, _ := valset.ParseValidators(validatorBytes)
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
 			v.IncrementProposerPriority(1)
 			snap.ValidatorSet = v
 		}
 	}
+
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
 
@@ -173,10 +169,13 @@ func (s *Snapshot) GetSignerSuccessionNumber(signer common.Address) (int, error)
 	validators := s.ValidatorSet.Validators
 	proposer := s.ValidatorSet.GetProposer().Address
 	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
+
 	if proposerIndex == -1 {
 		return -1, &UnauthorizedProposerError{s.Number, proposer.Bytes()}
 	}
+
 	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
+
 	if signerIndex == -1 {
 		return -1, &UnauthorizedSignerError{s.Number, signer.Bytes()}
 	}
@@ -187,6 +186,7 @@ func (s *Snapshot) GetSignerSuccessionNumber(signer common.Address) (int, error)
 			tempIndex = tempIndex + len(validators)
 		}
 	}
+
 	return tempIndex - proposerIndex, nil
 }
 
@@ -196,13 +196,14 @@ func (s *Snapshot) signers() []common.Address {
 	for _, sig := range s.ValidatorSet.Validators {
 		sigs = append(sigs, sig.Address)
 	}
+
 	return sigs
 }
 
 // Difficulty returns the difficulty for a particular signer at the current snapshot number
 func (s *Snapshot) Difficulty(signer common.Address) uint64 {
 	// if signer is empty
-	if bytes.Compare(signer.Bytes(), common.Address{}.Bytes()) == 0 {
+	if signer == (common.Address{}) {
 		return 1
 	}
 

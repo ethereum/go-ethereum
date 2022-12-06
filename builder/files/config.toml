@@ -1,0 +1,143 @@
+# NOTE: Uncomment and configure the following 8 fields in case you run a validator:
+# `mine`, `etherbase`, `nodiscover`, `maxpeers`, `keystore`, `allow-insecure-unlock`, `password`, `unlock`
+
+chain = "mainnet"
+# chain = "mumbai"
+# identity = "Pratiks-MacBook-Pro.local"
+# log-level = "INFO"
+datadir = "/var/lib/bor/data"
+# ancient = ""
+# keystore = "/var/lib/bor/keystore"
+syncmode = "full"
+# gcmode = "full"
+# snapshot = true
+# "bor.logs" = false
+# ethstats = ""
+
+# ["eth.requiredblocks"]
+
+[p2p]
+  # maxpeers = 1
+  # nodiscover = true
+  # maxpendpeers = 50
+  # bind = "0.0.0.0"
+  # port = 30303
+  # nat = "any"
+  [p2p.discovery]
+    # v5disc = false
+    bootnodes = ["enode://0cb82b395094ee4a2915e9714894627de9ed8498fb881cec6db7c65e8b9a5bd7f2f25cc84e71e89d0947e51c76e85d0847de848c7782b13c0255247a6758178c@44.232.55.71:30303", "enode://88116f4295f5a31538ae409e4d44ad40d22e44ee9342869e7d68bdec55b0f83c1530355ce8b41fbec0928a7d75a5745d528450d30aec92066ab6ba1ee351d710@159.203.9.164:30303"]
+    # Uncomment below `bootnodes` field for Mumbai bootnode
+    # bootnodes = ["enode://095c4465fe509bd7107bbf421aea0d3ad4d4bfc3ff8f9fdc86f4f950892ae3bbc3e5c715343c4cf60c1c06e088e621d6f1b43ab9130ae56c2cacfd356a284ee4@18.213.200.99:30303"]
+    # bootnodesv4 = []
+    # bootnodesv5 = []
+    # static-nodes = []
+    # trusted-nodes = []
+    # dns = []
+
+# [heimdall]
+  # url = "http://localhost:1317"
+  # "bor.without" = false
+  # grpc-address = ""
+
+[txpool]
+  nolocals = true
+  pricelimit = 30000000000
+  accountslots = 16
+  globalslots = 32768
+  accountqueue = 16
+  globalqueue = 32768
+  lifetime = "1h30m0s"
+  # locals = []
+  # journal = ""
+  # rejournal = "1h0m0s"
+  # pricebump = 10
+
+[miner]
+  gaslimit = 30000000
+  gasprice = "30000000000"
+  # mine = true
+  # etherbase = "VALIDATOR ADDRESS"
+  # extradata = ""
+
+
+# [jsonrpc]
+#   ipcdisable = false
+#   ipcpath = ""
+#   gascap = 50000000
+#   txfeecap = 5.0
+#   [jsonrpc.http]
+#     enabled = false
+#     port = 8545
+#     prefix = ""
+#     host = "localhost"
+#     api = ["eth", "net", "web3", "txpool", "bor"]
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.ws]
+#     enabled = false
+#     port = 8546
+#     prefix = ""
+#     host = "localhost"
+#     api = ["web3", "net"]
+#     origins = ["*"]
+#   [jsonrpc.graphql]
+#     enabled = false
+#     port = 0
+#     prefix = ""
+#     host = ""
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.timeouts]
+#     read = "30s"
+#     write = "30s"
+#     idle = "2m0s"
+
+[gpo]
+  # blocks = 20
+  # percentile = 60
+  # maxprice = "5000000000000"
+  ignoreprice = "30000000000"
+
+[telemetry]
+  metrics = true
+  # expensive = false
+  # prometheus-addr = "127.0.0.1:7071"
+  # opencollector-endpoint = "127.0.0.1:4317"
+  # [telemetry.influx]
+    # influxdb = false
+    # endpoint = ""
+    # database = ""
+    # username = ""
+    # password = ""
+    # influxdbv2 = false
+    # token = ""
+    # bucket = ""
+    # organization = ""
+  # [telemetry.influx.tags]
+
+# [cache]
+  # cache = 1024
+  # gc = 25
+  # snapshot = 10
+  # database = 50
+  # trie = 15
+  # journal = "triecache"
+  # rejournal = "1h0m0s"
+  # noprefetch = false
+  # preimages = false
+  # txlookuplimit = 2350000
+  # timeout = "1h0m0s"
+
+[accounts]
+  # allow-insecure-unlock = true
+  # password = "/var/lib/bor/password.txt"
+  # unlock = ["VALIDATOR ADDRESS"]
+  # lightkdf = false
+  # disable-bor-wallet = false
+
+# [grpc]
+  # addr = ":3131"
+
+# [developer]
+  # dev = false
+  # period = 0

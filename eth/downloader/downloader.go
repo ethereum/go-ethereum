@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -143,11 +144,21 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
 
+	ChainValidator
+
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
+}
+
+// interface for whitelist service
+type ChainValidator interface {
+	IsValidChain(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
+	ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash)
+	GetCheckpointWhitelist() map[uint64]common.Hash
+	PurgeCheckpointWhitelist()
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -204,7 +215,8 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func()) *Downloader {
+//nolint: staticcheck
+func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn, success func(), whitelistService ChainValidator) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -221,6 +233,7 @@ func New(checkpoint uint64, stateDb ethdb.Database, mux *event.TypeMux, chain Bl
 		quitCh:         make(chan struct{}),
 		SnapSyncer:     snap.NewSyncer(stateDb),
 		stateSyncStart: make(chan *stateSync),
+		ChainValidator: whitelistService,
 	}
 	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
 
@@ -332,9 +345,11 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 	case nil, errBusy, errCanceled:
 		return err
 	}
+
 	if errors.Is(err, errInvalidChain) || errors.Is(err, errBadPeer) || errors.Is(err, errTimeout) ||
 		errors.Is(err, errStallingPeer) || errors.Is(err, errUnsyncedPeer) || errors.Is(err, errEmptyHeaderSet) ||
-		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) {
+		errors.Is(err, errPeersUnavailable) || errors.Is(err, errTooOld) || errors.Is(err, errInvalidAncestor) ||
+		errors.Is(err, whitelist.ErrCheckpointMismatch) {
 		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
 		if d.dropPeer == nil {
 			// The dropPeer method is nil when `--copydb` is used for a local copy.
@@ -345,10 +360,17 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td, ttd *big.Int, m
 		}
 		return err
 	}
+
 	if errors.Is(err, ErrMergeTransition) {
 		return err // This is an expected fault, don't keep printing it in a spin-loop
 	}
-	log.Warn("Synchronisation failed, retrying", "err", err)
+
+	if errors.Is(err, whitelist.ErrNoRemoteCheckoint) {
+		log.Warn("Doesn't have remote checkpoint yet", "peer", id, "err", err)
+	}
+
+	log.Warn("Synchronisation failed, retrying", "peer", id, "err", err)
+
 	return err
 }
 
@@ -764,12 +786,24 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 	return int64(from), count, span - 1, uint64(max)
 }
 
+// curried fetchHeadersByNumber
+func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+	return func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error) {
+		return d.fetchHeadersByNumber(p, number, amount, skip, reverse)
+	}
+}
+
 // findAncestor tries to locate the common ancestor link of the local chain and
 // a remote peers blockchain. In the general case when our node was in sync and
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
+	// Check the validity of chain to be downloaded
+	if _, err := d.IsValidChain(remoteHeader, d.getFetchHeadersByNumber(p)); err != nil {
+		return 0, err
+	}
+
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
 		floor        = int64(-1)
@@ -1346,6 +1380,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 					if chunkHeaders[len(chunkHeaders)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
 					}
+
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
@@ -1353,13 +1388,16 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 						rejected []*types.Header
 						td       *big.Int
 					)
+
 					if !beaconMode && ttd != nil {
 						td = d.blockchain.GetTd(chunkHeaders[0].ParentHash, chunkHeaders[0].Number.Uint64()-1)
 						if td == nil {
 							// This should never really happen, but handle gracefully for now
 							log.Error("Failed to retrieve parent header TD", "number", chunkHeaders[0].Number.Uint64()-1, "hash", chunkHeaders[0].ParentHash)
+
 							return fmt.Errorf("%w: parent TD missing", errInvalidChain)
 						}
+
 						for i, header := range chunkHeaders {
 							td = new(big.Int).Add(td, header.Difficulty)
 							if td.Cmp(ttd) >= 0 {
@@ -1373,10 +1411,12 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 								} else {
 									chunkHeaders, rejected = chunkHeaders[:i], chunkHeaders[i:]
 								}
+
 								break
 							}
 						}
 					}
+
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders, frequency); err != nil {
 							rollbackErr = err
@@ -1385,12 +1425,15 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 							if (mode == SnapSync || frequency > 1) && n > 0 && rollback == 0 {
 								rollback = chunkHeaders[0].Number.Uint64()
 							}
+
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
+
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
 						}
 						// All verifications passed, track all headers within the allowed limits
 						if mode == SnapSync {
 							head := chunkHeaders[len(chunkHeaders)-1].Number.Uint64()
+
 							if head-rollback > uint64(fsHeaderSafetyNet) {
 								rollback = head - uint64(fsHeaderSafetyNet)
 							} else {
@@ -1398,14 +1441,26 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 							}
 						}
 					}
+
 					if len(rejected) != 0 {
 						// Merge threshold reached, stop importing, but don't roll back
 						rollback = 0
 
 						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+
+						return ErrMergeTransition
+					}
+
+					if len(rejected) != 0 {
+						// Merge threshold reached, stop importing, but don't roll back
+						rollback = 0
+
+						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash(), "td", td, "ttd", ttd)
+
 						return ErrMergeTransition
 					}
 				}
+
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
 				if mode == FullSync || mode == SnapSync {
 					// If we've reached the allowed number of pending headers, stall a bit

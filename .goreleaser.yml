@@ -1,13 +1,13 @@
 project_name: bor
 
 release:
-  disable: false
+  disable: true
   draft: true
   prerelease: auto
 
 builds:
   - id: darwin-amd64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - darwin
@@ -22,7 +22,7 @@ builds:
       -s -w
 
   - id: darwin-arm64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - darwin
@@ -37,7 +37,7 @@ builds:
       -s -w
 
   - id: linux-amd64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - linux
@@ -53,7 +53,7 @@ builds:
       -s -w -extldflags "-static"
 
   - id: linux-arm64
-    main: ./cmd/geth
+    main: ./cmd/cli
     binary: bor
     goos:
       - linux
@@ -75,12 +75,18 @@ nfpms:
     description: Polygon Blockchain
     license: GPLv3 LGPLv3
 
+    bindir: /usr/local/bin
+
     formats:
       - apk
       - deb
       - rpm
 
     contents:
+      - dst: /var/lib/bor
+        type: dir
+        file_info:
+          mode: 0777
       - src: builder/files/bor.service
         dst: /lib/systemd/system/bor.service
         type: config
@@ -90,6 +96,12 @@ nfpms:
       - src: builder/files/genesis-testnet-v4.json
         dst: /etc/bor/genesis-testnet-v4.json
         type: config
+      - src: builder/files/config.toml
+        dst: /var/lib/bor/config.toml
+        type: config
+
+    scripts:
+      postinstall: builder/files/bor-post-install.sh
 
     overrides:
       rpm:
