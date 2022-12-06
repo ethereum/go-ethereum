@@ -1,7 +1,7 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import { Flex, Stack, Heading, Text } from '@chakra-ui/react';
+import { Box, Flex, Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/router';
@@ -116,7 +116,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
             </Stack>
 
             <Flex width='100%' placeContent='space-between' gap={8}>
-              <Stack maxW='min(100%, 768px)' sx={{ "*:first-of-type": { marginTop: '0 !important' } }}>
+              <Box maxW='min(100%, 768px)' sx={{ '*:first-of-type': { marginTop: '0 !important' } }}>
                 <ReactMarkdown
                   remarkPlugins={[gfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -124,9 +124,12 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 >
                   {content}
                 </ReactMarkdown>
-              </Stack>
+              </Box>
 
-              <Stack display={{ base: 'none', xl: 'block' }} w="clamp(var(--chakra-sizes-40), 12.5%, var(--chakra-sizes-56))">
+              <Stack
+                display={{ base: 'none', xl: 'block' }}
+                w='clamp(var(--chakra-sizes-40), 12.5%, var(--chakra-sizes-56))'
+              >
                 <DocumentNav content={content} />
               </Stack>
             </Flex>
