@@ -1764,6 +1764,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		stats.report(chain, it.index, dirty, setHead)
 
 		if !setHead {
+			// After merge we expect few side chains. Simply count
+			// all blocks the CL gives us for GC processing time
+			bc.gcproc += proctime
+
 			return it.index, nil // Direct block insertion of a single block
 		}
 		switch status {
