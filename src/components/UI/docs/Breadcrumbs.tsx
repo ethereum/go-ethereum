@@ -6,7 +6,7 @@ import { FC } from 'react';
 export const Breadcrumbs: FC = () => {
   const router = useRouter();
 
-  let pathSplit = router.asPath.split('/');
+  let pathSplit = router.asPath.split('#')[0].split('/');
   pathSplit = pathSplit.splice(1, pathSplit.length)
     .map((path) => path.includes('#') ? path.split('#')[0] : path);
 
