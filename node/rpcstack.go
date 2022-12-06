@@ -493,8 +493,8 @@ func (w *gzipResponseWriter) init() {
 
 	// Setting Transfer-Encoding to "identity" explictly disables compression. net/http
 	// also recognizes this header value and trims it from the response. This means
-	// handlers can choose to set this header without 'knowing' they will be wrapped in a
-	// gzipHandler.
+	// handlers set this header to disable gzip without 'knowing' they will be wrapped in
+	// a gzipHandler.
 	//
 	// In go-ethereum, we use this signal to disable compression for certain error
 	// responses which are flushed out close to the write deadline of the response.
