@@ -88,21 +88,13 @@ var (
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
 
-	//[Warning] ED1, Discard Future tx when txpool is full
-	ErrRejFuture = errors.New("ED1, txpool is full, discard future tx") 
+	// ErrFutureReplacePending is returned if a future transaction replaces a pending
+	// transaction. Future transactions should only be able to replace other future transactions.
+	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
 
-	//[Warning] Discard low price tx when txpool is full
-	ErrRejLowPrice = errors.New("txpool is full, discard low price tx") 
-
-	//[Warning]ED3
-	ErrRejVaildToFuture = errors.New("ED3, txpool is full, discard this tx that will change other vaild tx(s) to future") 
-
-	//[Warning]ED2
-	ErrRejOverdraftWhenEvictOtherTx = errors.New("ED2, txpool is full, discard this tx because it will evict other vaild tx(s) and it will cause overdraft")
-
-	//[Warning]ED4
-	ErrRejOverdraftWhenReplaceOtherTx = errors.New("ED4, discard this tx becuase it will replace itself and then cause overdraft") 
-
+	// ErrOverdraft is returned if a transaction would cause the senders balance to go negative
+	// thus invalidating a potential large number of transactions.
+	ErrOverdraft = errors.New("transaction would cause overdraft")
 )
 
 var (
@@ -694,76 +686,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
-
-	// ED4
 	from, _ := types.Sender(pool.signer, tx) // already validated
-	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
-		// Nonce already pending, check if required price bump is met
-		//inserted, old := list.TryToAdd(tx, pool.config.PriceBump)
-		old := list.txs.Get(tx.Nonce())
-	  if old != nil {
-	 
-	  // new tx's fee and tip should both more than old one's fee and tip
-		  if old.GasFeeCapCmp(tx) >= 0 || old.GasTipCapCmp(tx) >= 0 {
-			  return false, ErrUnderpriced
-		  }
-		  // thresholdFeeCap = oldFC  * (100 + priceBump) / 100
-		  a := big.NewInt(100 + int64(pool.config.PriceBump))
-		  aFeeCap := new(big.Int).Mul(a, old.GasFeeCap())
-		  aTip := a.Mul(a, old.GasTipCap())
-
-		  // thresholdTip    = oldTip * (100 + priceBump) / 100
-		  b := big.NewInt(100)
-		  thresholdFeeCap := aFeeCap.Div(aFeeCap, b)
-		  thresholdTip := aTip.Div(aTip, b)
-
-		  // We have to ensure that both the new fee cap and tip are higher than the
-		  // old ones as well as checking the percentage threshold to ensure that
-		  // this is accurate for low (Wei-level) gas price replacements.
-		  if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
-			  return false, ErrUnderpriced
-		  }
-	    
-	  //sum the pending txs spending  
-	  sum := big.NewInt(0)
-	  for _, pendingTx := range list.Flatten() {
-	    if pendingTx.Nonce() != tx.Nonce(){
-	      curVal := pendingTx.Value()
-	      curGas := big.NewInt(int64(pendingTx.Gas()))
-	      curGasFee := big.NewInt(1).Mul(pendingTx.GasPrice(),curGas)
-	      curSum := big.NewInt(0)
-	      curSum.Add(curVal, curGasFee)
-	      log.Error("CURsum", curSum, tx.Cost())
-	      sum.Add(sum, curSum)
-	      log.Error("[Warning], in pool tx info ", "value",curVal, "gas",curGas, "nonce", pendingTx.Nonce())
-	    }
-	  } 
-	  
-	  //pending tx + new tx total spending
-	  log.Error("[Warning] ED4", "tx in pool total spending value", sum)
-	  txVal := tx.Value()
-	  txGas := big.NewInt(int64(tx.Gas()))
-	  txGasFee := big.NewInt(1).Mul(tx.GasPrice(),txGas)
-	  txSum := big.NewInt(0)
-	  txSum.Add(txVal, txGasFee)
-	  sum.Add(sum, txSum)  
-	  log.Error("[Warning] ED4", "tx in pool spending value + incoming spending",sum) 
-	  log.Error("[Warning] ED4", "incoming tx sender balance ",pool.currentState.GetBalance(from))
-	  log.Error("[Warning] ED4", "comparsion result ",sum.Cmp(pool.currentState.GetBalance(from)))
-	  if sum.Cmp(pool.currentState.GetBalance(from))  > 0{
-	    return false, ErrRejOverdraftWhenReplaceOtherTx
-	  }
-	  }	  
-	}
-
-
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
-		//[Warning] ED1: If the new transaction is a future transaction, discard it
-		from, _ := types.Sender(pool.signer, tx)
-		if pool.isFuture(from, tx) {
-		  return false, ErrRejFuture
-		}
 
 		// If the new transaction is underpriced, don't accept it
 		if !isLocal && pool.priced.Underpriced(tx) {
@@ -771,6 +696,22 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			underpricedTxMeter.Mark(1)
 			return false, ErrUnderpriced
 		}
+
+		// Verify that replacing transactions will not result in overdraft
+		list := pool.pending[from]
+		if list != nil { // Sender already has pending txs
+			sum := tx.Cost()
+			for _, pendingTx := range list.Flatten() {
+				if pendingTx.Nonce() != tx.Nonce() {
+					sum.Add(sum, pendingTx.Cost())
+				}
+			}
+			if sum.Cmp(pool.currentState.GetBalance(from)) > 0 {
+				log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+				return false, ErrOverdraft
+			}
+		}
+
 		// We're about to replace a transaction. The reorg does a more thorough
 		// analysis of what to remove and how, but it runs async. We don't want to
 		// do too many replacements between reorg-runs, so we cap the number of
@@ -791,57 +732,21 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			overflowedTxMeter.Mark(1)
 			return false, ErrTxPoolOverflow
 		}
-		for _, dropTx := range drop {
-      //log.Error("[Warning] gasPrice",tx.GasPrice(),"drop gasPrice",*dropTx.GasPrice(), "drop nonce", *dropTx.Nonce())
-      //if dropTx.GasPrice().Cmp(tx.GasPrice()) >= 0{
-      //  return false, ErrRejLowPrice
-      //}
-      
-      // ED3
-      dropFrom, _ := types.Sender(pool.signer, dropTx)
-      log.Error("[Warning] ED3","pending pool curr nonce",pool.pendingNonces.get(dropFrom),"to dropTx nonce",dropTx.Nonce())
-      if pool.pendingNonces.get(dropFrom) != (dropTx.Nonce() + 1){
-        return false, ErrRejVaildToFuture
-      }
-      if from == dropFrom{
-        isReplace = true
-      }      
-    }
-    
-    // ED2
-    if len(drop) != 0 {
-      if !isReplace {
-          list := pool.pending[from]
-          if list != nil { // Sender already has pending txs
-		        sum := big.NewInt(0)
-            for _, pendingTx := range list.Flatten() {
-              curVal := pendingTx.Value()
-              curGas := big.NewInt(int64(pendingTx.Gas()))
-              curGasFee := big.NewInt(1).Mul(pendingTx.GasPrice(),curGas)
-              curSum := big.NewInt(0)
-              curSum.Add(curVal, curGasFee)
-              sum.Add(sum, curSum)
-              log.Error("[Warning] ED2, in pool tx info ", "value",curVal, "gas",curGas, "nonce", pendingTx.Nonce())
-            } 
-            log.Error("[Warning] ED2"," tx in pool total spending value",sum,)
-            txVal := tx.Value()
-            txGas := big.NewInt(int64(tx.Gas()))
-            txGasFee := big.NewInt(1).Mul(tx.GasPrice(),txGas)
-            txSum := big.NewInt(0)
-            txSum.Add(txVal, txGasFee)
-            sum.Add(sum, txSum)  
-            log.Error("[Warning] ED2","tx in pool spending value + incoming spending",sum) 
-            log.Error("[Warning] ED2","incoming tx sender balance ",pool.currentState.GetBalance(from))
-            log.Error("[Warning] ED2", "comparsion result ",sum.Cmp(pool.currentState.GetBalance(from)))
-            if sum.Cmp(pool.currentState.GetBalance(from))  > 0{
-              return false, ErrRejOverdraftWhenEvictOtherTx
-            } 
-        }
-      } 
-      //else {
-      
-     // }
-    }
+
+		// If the new transaction is a future transaction it should never churn pending transactions
+		if pool.isFuture(from, tx) {
+			for _, dropTx := range drop {
+				dropSender, _ := types.Sender(pool.signer, dropTx)
+				if list := pool.pending[dropSender]; list != nil && list.Overlaps(dropTx) {
+					// Add all transactions back to the priced queue
+					for _, d := range drop {
+						pool.priced.urgent.Push(d)
+					}
+					log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
+					return false, ErrFutureReplacePending
+				}
+			}
+		}
 
 		// Bump the counter of rejections-since-reorg
 		pool.changesSinceReorg += len(drop)
@@ -852,8 +757,8 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.removeTx(tx.Hash(), false)
 		}
 	}
+
 	// Try to replace an existing transaction in the pending pool
-	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -898,23 +803,23 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 }
 
 func (pool *TxPool) isFuture(from common.Address, tx *types.Transaction) bool {
-    list := pool.pending[from]
-    if list != nil { // Sender already has pending txs
-		  if old := list.txs.Get(tx.Nonce()); old != nil { // Replacing a pending, check bump
-        return false
-      }
- 		// Not replacing, check if parent nonce exist
-      if list.txs.Get(tx.Nonce()-1) != nil {
-        return false
-      }		    
-      return true
-	  }
-	  // Sender has no pending
-	  if pool.pendingNonces.get(from) == tx.Nonce() {
-		  return false
-	  }
-	  return true
-  }
+	list := pool.pending[from]
+	if list != nil { // Sender already has pending txs
+		if old := list.txs.Get(tx.Nonce()); old != nil { // Replacing a pending, check bump
+			return false
+		}
+		// Not replacing, check if parent nonce exist
+		if list.txs.Get(tx.Nonce()-1) != nil {
+			return false
+		}
+		return true
+	}
+	// Sender has no pending
+	if pool.pendingNonces.get(from) == tx.Nonce() {
+		return false
+	}
+	return true
+}
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
 //

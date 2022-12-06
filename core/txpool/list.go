@@ -571,6 +571,7 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
+				slots -= numSlots(tx)
 				continue
 			}
 			// Non stale transaction found, move to floating heap
@@ -584,6 +585,7 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 			tx := heap.Pop(&l.floating).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
 				atomic.AddInt64(&l.stales, -1)
+				slots -= numSlots(tx)
 				continue
 			}
 			// Non stale transaction found, discard it
