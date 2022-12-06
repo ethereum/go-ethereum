@@ -59,6 +59,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if timeout, ok := rpc.ContextRequestTimeout(ctx); ok {
 		timer = time.AfterFunc(timeout, func() {
 			responded.Do(func() {
+				// Cancel request handling.
+				cancel()
+
+				// Create the timeout response.
 				response := &graphql.Response{
 					Errors: []*gqlErrors.QueryError{{Message: "request timed out"}},
 				}
