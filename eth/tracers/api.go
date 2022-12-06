@@ -547,6 +547,9 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
 	)
 	for i, tx := range block.Transactions() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		var (
 			msg, _    = tx.AsMessage(signer, block.BaseFee())
 			txContext = core.NewEVMTxContext(msg)
@@ -638,12 +641,19 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			}
 		}()
 	}
+
 	// Feed the transactions into the tracers and return
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	for i, tx := range txs {
 		// Send the trace task over for execution
-		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
+		task := &txTraceTask{statedb: statedb.Copy(), index: i}
+		select {
+		case jobs <- task:
+		case <-ctx.Done():
+			failed = ctx.Err()
+			break
+		}
 
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer, block.BaseFee())
