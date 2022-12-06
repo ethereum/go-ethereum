@@ -510,8 +510,6 @@ func (s *stateObject) CodeSize(db Database) int {
 		return len(s.code)
 	}
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
-		if s.db.trie.IsVerkle() {
-		}
 		return 0
 	}
 	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.CodeHash()))

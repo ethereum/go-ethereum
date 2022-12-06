@@ -175,7 +175,9 @@ func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) {
 // by the caller while they are stored in the trie. If a node was not found in the
 // database, a trie.MissingNodeError is returned.
 func (trie *VerkleTrie) TryUpdate(key, value []byte) error {
-	return trie.root.Insert(key, value, func(h []byte) ([]byte, error) {
+	var v [32]byte
+	copy(v[:], value[:])
+	return trie.root.Insert(key, v[:], func(h []byte) ([]byte, error) {
 		return trie.db.diskdb.Get(h)
 	})
 }
