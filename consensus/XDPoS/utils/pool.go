@@ -11,20 +11,18 @@ type PoolObj interface {
 	PoolKey() string
 }
 type Pool struct {
-	objList   map[string]map[common.Hash]PoolObj
-	threshold int
-	lock      sync.RWMutex // Protects the pool fields
+	objList map[string]map[common.Hash]PoolObj
+	lock    sync.RWMutex // Protects the pool fields
 }
 
-func NewPool(threshold int) *Pool {
+func NewPool() *Pool {
 	return &Pool{
-		objList:   make(map[string]map[common.Hash]PoolObj),
-		threshold: threshold,
+		objList: make(map[string]map[common.Hash]PoolObj),
 	}
 }
 
 // return true if it has reached threshold
-func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
+func (p *Pool) Add(obj PoolObj) (int, map[common.Hash]PoolObj) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	poolKey := obj.PoolKey()
@@ -35,10 +33,7 @@ func (p *Pool) Add(obj PoolObj) (bool, int, map[common.Hash]PoolObj) {
 	}
 	objListKeyed[obj.Hash()] = obj
 	numOfItems := len(objListKeyed)
-	if numOfItems >= p.threshold {
-		return true, numOfItems, objListKeyed
-	}
-	return false, numOfItems, objListKeyed
+	return numOfItems, objListKeyed
 }
 
 func (p *Pool) Size(obj PoolObj) int {
@@ -83,13 +78,6 @@ func (p *Pool) Clear() {
 	defer p.lock.Unlock()
 
 	p.objList = make(map[string]map[common.Hash]PoolObj)
-}
-
-func (p *Pool) SetThreshold(t int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.threshold = t
 }
 
 func (p *Pool) GetObjsByKey(poolKey string) []PoolObj {

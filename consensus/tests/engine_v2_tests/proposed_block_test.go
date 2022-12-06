@@ -261,7 +261,7 @@ func TestShouldNotSendVoteMessageIfAlreadyVoteForThisRound(t *testing.T) {
 	select {
 	case <-engineV2.BroadcastCh:
 		t.Fatal("Should not trigger vote")
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, highestVotedRound, _ = engineV2.GetPropertiesFaker()
 		assert.Equal(t, types.Round(6), round)
@@ -290,7 +290,7 @@ func TestShouldNotSendVoteMsgIfBlockInfoRoundNotEqualCurrentRound(t *testing.T) 
 	select {
 	case <-engineV2.BroadcastCh:
 		t.Fatal("Should not trigger vote")
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 		assert.Equal(t, types.Round(8), round)
@@ -334,7 +334,7 @@ func TestShouldNotSendVoteMsgIfBlockNotExtendedFromAncestor(t *testing.T) {
 	select {
 	case <-engineV2.BroadcastCh:
 		t.Fatal("Should not trigger vote")
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		// Shoud not trigger setNewRound
 		round, _, _, _, _, _ := engineV2.GetPropertiesFaker()
 		assert.Equal(t, types.Round(7), round)

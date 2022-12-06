@@ -18,7 +18,7 @@ import (
 func TestYourTurnInitialV2(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, parentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)-1, config, nil)
-	minePeriod := config.XDPoS.V2.MinePeriod
+	minePeriod := config.XDPoS.V2.CurrentConfig.MinePeriod
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 
 	// Insert block 900
@@ -64,7 +64,7 @@ func TestShouldMineOncePerRound(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, block910, signer, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
-	minePeriod := config.XDPoS.V2.MinePeriod
+	minePeriod := config.XDPoS.V2.CurrentConfig.MinePeriod
 
 	// Make sure we seal the parentBlock 910
 	_, err := adaptor.Seal(blockchain, block910, nil)

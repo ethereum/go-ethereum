@@ -27,8 +27,6 @@ func TestShouldVerifyBlock(t *testing.T) {
 	assert.Nil(t, err)
 	// Enable verify
 	config.XDPoS.V2.SkipV2Validation = false
-	// Skip the mining time validation by set mine time to 0
-	config.XDPoS.V2.MinePeriod = 0
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -97,8 +95,9 @@ func TestShouldVerifyBlock(t *testing.T) {
 	err = adaptor.VerifyHeader(blockchain, parentNotExistBlock, true)
 	assert.Equal(t, consensus.ErrUnknownAncestor, err)
 
+	block901 := blockchain.GetBlockByNumber(901).Header()
 	tooFastMinedBlock := blockchain.GetBlockByNumber(902).Header()
-	tooFastMinedBlock.Time = big.NewInt(time.Now().Unix() - 10)
+	tooFastMinedBlock.Time = big.NewInt(block901.Time.Int64() - 10)
 	err = adaptor.VerifyHeader(blockchain, tooFastMinedBlock, true)
 	assert.Equal(t, utils.ErrInvalidTimestamp, err)
 
@@ -107,7 +106,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	err = adaptor.VerifyHeader(blockchain, invalidDifficultyBlock, true)
 	assert.Equal(t, utils.ErrInvalidDifficulty, err)
 
-	// Creat an invalid QC round
+	// Create an invalid QC round
 	proposedBlockInfo := &types.BlockInfo{
 		Hash:   blockchain.GetBlockByNumber(902).Hash(),
 		Round:  types.Round(2),
@@ -169,6 +168,62 @@ func TestShouldVerifyBlock(t *testing.T) {
 	assert.Equal(t, utils.ErrPenaltiesNotLegit, err)
 }
 
+func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+	// Enable verify
+	config.XDPoS.V2.SkipV2Validation = false
+	// Block 901 is the first v2 block with round of 1
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, &config, nil)
+
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+
+	// Genrate QC
+	proposedBlockInfo := &types.BlockInfo{
+		Hash:   blockchain.GetBlockByNumber(911).Hash(),
+		Round:  types.Round(11),
+		Number: blockchain.GetBlockByNumber(911).Number(),
+	}
+	voteForSign := &types.VoteForSign{
+		ProposedBlockInfo: proposedBlockInfo,
+		GapNumber:         450,
+	}
+
+	// Sign from acc 1, 2, 3
+	acc1SignedHash := SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, types.VoteSigHash(voteForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, types.VoteSigHash(voteForSign).Bytes())
+	var signatures []types.Signature
+	signatures = append(signatures, acc1SignedHash, acc2SignedHash, acc3SignedHash)
+	quorumCert := &types.QuorumCert{
+		ProposedBlockInfo: proposedBlockInfo,
+		Signatures:        signatures,
+		GapNumber:         450,
+	}
+
+	extra := types.ExtraFields_v2{
+		Round:      types.Round(12),
+		QuorumCert: quorumCert,
+	}
+	extraInBytes, err := extra.EncodeToBytes()
+	if err != nil {
+		panic(fmt.Errorf("Error encode extra into bytes: %v", err))
+	}
+
+	// after 910 require 5 signs, but we only give 3 signs
+	block912 := blockchain.GetBlockByNumber(912).Header()
+	block912.Extra = extraInBytes
+	err = adaptor.VerifyHeader(blockchain, block912, true)
+
+	// Error happens after verify QC, means verify QC passed
+	assert.Equal(t, utils.ErrInvalidQC, err)
+}
+
 func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)
@@ -179,8 +234,6 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	assert.Nil(t, err)
 	// Enable verify
 	config.XDPoS.V2.SkipV2Validation = false
-	// Skip the mining time validation by set mine time to 0
-	config.XDPoS.V2.MinePeriod = 0
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 902, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -232,8 +285,6 @@ func TestShouldVerifyHeaders(t *testing.T) {
 	assert.Nil(t, err)
 	// Enable verify
 	config.XDPoS.V2.SkipV2Validation = false
-	// Skip the mining time validation by set mine time to 0
-	config.XDPoS.V2.MinePeriod = 0
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -273,8 +324,6 @@ func TestShouldVerifyHeadersEvenIfParentsNotYetWrittenIntoDB(t *testing.T) {
 	assert.Nil(t, err)
 	// Enable verify
 	config.XDPoS.V2.SkipV2Validation = false
-	// Skip the mining time validation by set mine time to 0
-	config.XDPoS.V2.MinePeriod = 0
 	// Block 901 is the first v2 block with round of 1
 	blockchain, _, block910, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, &config, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
@@ -283,12 +332,12 @@ func TestShouldVerifyHeadersEvenIfParentsNotYetWrittenIntoDB(t *testing.T) {
 
 	// Create block 911 but don't write into DB
 	blockNumber := 911
-	roundNumber := int64(blockNumber) - config.XDPoS.V2.SwitchBlock.Int64()
+	roundNumber := int64(blockNumber) - config.XDPoS.V2.FirstSwitchBlock.Int64()
 	block911 := CreateBlock(blockchain, &config, block910, blockNumber, roundNumber, signer.Hex(), signer, signFn, nil, nil)
 
 	// Create block 912 and not write into DB as well
 	blockNumber = 912
-	roundNumber = int64(blockNumber) - config.XDPoS.V2.SwitchBlock.Int64()
+	roundNumber = int64(blockNumber) - config.XDPoS.V2.FirstSwitchBlock.Int64()
 	block912 := CreateBlock(blockchain, &config, block911, blockNumber, roundNumber, signer.Hex(), signer, signFn, nil, nil)
 
 	headersTobeVerified = append(headersTobeVerified, block910.Header(), block911.Header(), block912.Header())

@@ -2541,7 +2541,7 @@ func (bc *BlockChain) UpdateM1() error {
 		header := bc.CurrentHeader()
 		var maxMasternodes int
 		// check if block number is increase ms checkpoint
-		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) || (bc.chainConfig.XDPoS.V2.SwitchBlock != nil && header.Number.Cmp(bc.chainConfig.XDPoS.V2.SwitchBlock) == 1) {
+		if bc.chainConfig.IsTIPIncreaseMasternodes(header.Number) || (bc.chainConfig.XDPoS.V2.FirstSwitchBlock != nil && header.Number.Cmp(bc.chainConfig.XDPoS.V2.FirstSwitchBlock) == 1) {
 			// using new masterndoes
 			maxMasternodes = common.MaxMasternodesV2
 		} else {

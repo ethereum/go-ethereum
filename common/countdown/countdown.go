@@ -34,6 +34,10 @@ func (t *CountdownTimer) StopTimer() {
 	<-q
 }
 
+func (t *CountdownTimer) SetTimeoutDuration(duration time.Duration) {
+	t.timeoutDuration = duration
+}
+
 // Reset will start the countdown timer if it's already stopped, or simply reset the countdown time back to the defual `duration`
 func (t *CountdownTimer) Reset(i interface{}) {
 	if !t.isInitilised() {

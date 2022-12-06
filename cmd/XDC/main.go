@@ -301,7 +301,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("Ethereum service not running: %v", err)
 	}
-	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
+	if engine, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
 			ok := false
@@ -345,6 +345,8 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			defer close(core.CheckpointCh)
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
+				log.Info("Update consensus parameters")
+				engine.UpdateParams()
 				if common.IsTestnet {
 					ok, err = ethereum.ValidateMasternodeTestnet()
 					if err != nil {

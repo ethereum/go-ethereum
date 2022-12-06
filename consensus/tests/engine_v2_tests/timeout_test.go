@@ -1,6 +1,7 @@
 package engine_v2_tests
 
 import (
+	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -41,11 +42,11 @@ func TestCountdownTimeoutNotToSendTimeoutMessageIfNotInMasternodeList(t *testing
 	select {
 	case <-engineV2.BroadcastCh:
 		t.Fatalf("Not suppose to receive timeout msg")
-	case <-time.After(15 * time.Second): //Countdown is only 1s wait, let's wait for 3s here
+	case <-time.After(10 * time.Second): //Countdown is only 1s wait, let's wait for 3s here
 	}
 }
 
-func TestSyncInfoAfterReachTimeoutSnycThreadhold(t *testing.T) {
+func TestSyncInfoAfterReachTimeoutSyncThreadhold(t *testing.T) {
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 	engineV2.SetNewRoundFaker(blockchain, 1, true)
@@ -83,8 +84,63 @@ func TestSyncInfoAfterReachTimeoutSnycThreadhold(t *testing.T) {
 	assert.Equal(t, 2, syncInfoCounter)
 }
 
+func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 1799, params.TestXDPoSMockChainConfig, nil)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+	// engineV2.SetNewRoundFaker(blockchain, 1, true)
+
+	// Because messages are sending async and on random order, so use this way to test
+	var timeoutCounter, syncInfoCounter int
+	for i := 0; i < 3; i++ {
+		obj := <-engineV2.BroadcastCh
+		switch v := obj.(type) {
+		case *types.Timeout:
+			timeoutCounter++
+		case *types.SyncInfo:
+			syncInfoCounter++
+		default:
+			log.Error("Unknown message type received", "value", v)
+		}
+	}
+
+	assert.Equal(t, 2, timeoutCounter)
+	assert.Equal(t, 1, syncInfoCounter)
+
+	// Create another block to trigger update parameters
+	blockNum := 1800
+	blockCoinBase := "0x111000000000000000000000000000000123"
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 900, blockCoinBase, signer, signFn, nil, nil)
+	currentBlockHeader := currentBlock.Header()
+	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
+	err := blockchain.InsertBlock(currentBlock)
+	assert.Nil(t, err)
+
+	engineV2.UpdateParams() // it will be triggered automatically on the real code by other process
+
+	t.Log("waiting for another consecutive period")
+	// another consecutive period
+	t1 := time.Now()
+	for i := 0; i < 5; i++ {
+		obj := <-engineV2.BroadcastCh
+		switch v := obj.(type) {
+		case *types.Timeout:
+			timeoutCounter++
+		case *types.SyncInfo:
+			syncInfoCounter++
+		default:
+			log.Error("Unknown message type received", "value", v)
+		}
+	}
+	t2 := time.Now()
+	timediff := t2.Sub(t1).Seconds()
+	assert.Equal(t, 6, timeoutCounter)
+	assert.Equal(t, 2, syncInfoCounter)
+	assert.Less(t, timediff, float64(20))
+}
+
 // Timeout handler
 func TestTimeoutMessageHandlerSuccessfullyGenerateTCandSyncInfo(t *testing.T) {
+	params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig = params.TestV2Configs[0]
 	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 11, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 

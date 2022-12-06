@@ -87,7 +87,11 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 
 	// For testing and testing project, default to mainnet config
 	if config.V2 == nil {
-		config.V2 = params.XDPoSV2Config
+		config.V2 = &params.V2{
+			FirstSwitchBlock: params.MainnetV2Configs[0].SwitchBlock,
+			CurrentConfig:    params.MainnetV2Configs[0],
+			AllConfigs:       params.MainnetV2Configs,
+		}
 	}
 
 	log.Info("xdc config loading", "config", config)
@@ -138,6 +142,11 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		EngineV2:        engine_v2.New(conf, db, waitPeriodCh),
 	}
 	return fakeEngine
+}
+
+// Reset parameters after checkpoint due to config may change
+func (x *XDPoS) UpdateParams() {
+	x.EngineV2.UpdateParams()
 }
 
 func (x *XDPoS) Initial(chain consensus.ChainReader, header *types.Header) error {

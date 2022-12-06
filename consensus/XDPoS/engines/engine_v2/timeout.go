@@ -24,10 +24,11 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 		}
 	}
 	// Collect timeout, generate TC
-	isThresholdReached, numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
+	numberOfTimeoutsInPool, pooledTimeouts := x.timeoutPool.Add(timeout)
 	log.Debug("[timeoutHandler] collect timeout", "number", numberOfTimeoutsInPool)
 
 	// Threshold reached
+	isThresholdReached := numberOfTimeoutsInPool >= x.config.V2.CurrentConfig.CertThreshold
 	if isThresholdReached {
 		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))
 		err := x.onTimeoutPoolThresholdReached(blockChainReader, pooledTimeouts, timeout, timeout.GapNumber)
@@ -94,7 +95,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 	if timeoutCert == nil {
 		log.Warn("[verifyTC] TC is Nil")
 		return utils.ErrInvalidTC
-	} else if timeoutCert.Signatures == nil || (len(timeoutCert.Signatures) < x.config.V2.CertThreshold) {
+	} else if timeoutCert.Signatures == nil || (len(timeoutCert.Signatures) < x.config.V2.CurrentConfig.CertThreshold) {
 		log.Warn("[verifyTC] Invalid TC Signature is nil or empty", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures))
 		return utils.ErrInvalidTC
 	}
@@ -220,7 +221,7 @@ func (x *XDPoS_v2) OnCountdownTimeout(time time.Time, chain interface{}) error {
 	}
 
 	x.timeoutCount++
-	if x.timeoutCount%x.config.V2.TimeoutSyncThreshold == 0 {
+	if x.timeoutCount%x.config.V2.CurrentConfig.TimeoutSyncThreshold == 0 {
 		log.Warn("[OnCountdownTimeout] timeout sync threadhold reached, send syncInfo message")
 		syncInfo := x.getSyncInfo()
 		x.broadcastToBftChannel(syncInfo)

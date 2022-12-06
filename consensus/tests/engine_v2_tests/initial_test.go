@@ -32,7 +32,7 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	expectedQuorumCert := &types.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, types.Round(1), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
@@ -43,10 +43,10 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	assert.Equal(t, uint64(450), snap.Number)
 
 	// Test Running channels
-	WaitPeriod := <-adaptor.WaitPeriodCh
-	assert.Equal(t, params.TestXDPoSMockChainConfig.XDPoS.V2.WaitPeriod, WaitPeriod)
+	waitPeriod := <-adaptor.WaitPeriodCh
+	assert.Equal(t, params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig.WaitPeriod, waitPeriod)
 
-	t.Logf("Waiting %d secs for timeout to happen", params.TestXDPoSMockChainConfig.XDPoS.V2.TimeoutPeriod)
+	t.Logf("Waiting %d secs for timeout to happen", params.TestXDPoSMockChainConfig.XDPoS.V2.CurrentConfig.TimeoutPeriod)
 	timeoutMsg := <-adaptor.EngineV2.BroadcastCh
 	assert.NotNil(t, timeoutMsg)
 	assert.Equal(t, types.Round(1), timeoutMsg.(*types.Timeout).Round)
@@ -104,7 +104,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	expectedQuorumCert := &types.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        []types.Signature{},
-		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, types.Round(11), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
