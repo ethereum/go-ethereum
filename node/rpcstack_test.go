@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -445,6 +446,114 @@ func TestJWT(t *testing.T) {
 	srv.stop()
 }
 
+func TestGzipHandler(t *testing.T) {
+	type gzipTest struct {
+		name    string
+		handler http.HandlerFunc
+		status  int
+		isGzip  bool
+		header  map[string]string
+	}
+	tests := []gzipTest{
+		{
+			name: "Write",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("response"))
+			},
+			isGzip: true,
+			status: 200,
+		},
+		{
+			name: "WriteHeader",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("x-foo", "bar")
+				w.WriteHeader(205)
+				w.Write([]byte("response"))
+			},
+			isGzip: true,
+			status: 205,
+			header: map[string]string{"x-foo": "bar"},
+		},
+		{
+			name: "WriteContentLength",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("content-length", "8")
+				w.Write([]byte("response"))
+			},
+			isGzip: true,
+			status: 200,
+		},
+		{
+			name: "Flush",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("res"))
+				w.(http.Flusher).Flush()
+				w.Write([]byte("ponse"))
+			},
+			isGzip: true,
+			status: 200,
+		},
+		{
+			name: "disable",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("transfer-encoding", "identity")
+				w.Header().Set("x-foo", "bar")
+				w.Write([]byte("response"))
+			},
+			isGzip: false,
+			status: 200,
+			header: map[string]string{"x-foo": "bar"},
+		},
+		{
+			name: "disable-WriteHeader",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("transfer-encoding", "identity")
+				w.Header().Set("x-foo", "bar")
+				w.WriteHeader(205)
+				w.Write([]byte("response"))
+			},
+			isGzip: false,
+			status: 205,
+			header: map[string]string{"x-foo": "bar"},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			srv := httptest.NewServer(newGzipHandler(test.handler))
+			defer srv.Close()
+
+			resp, err := http.Get(srv.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			content, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wasGzip := resp.Uncompressed
+
+			if string(content) != "response" {
+				t.Fatalf("wrong response content %q", content)
+			}
+			if wasGzip != test.isGzip {
+				t.Fatalf("response gzipped == %t, want %t", wasGzip, test.isGzip)
+			}
+			if resp.StatusCode != test.status {
+				t.Fatalf("response status == %d, want %d", resp.StatusCode, test.status)
+			}
+			for name, expectedValue := range test.header {
+				if v := resp.Header.Get(name); v != expectedValue {
+					t.Fatalf("response header %s == %s, want %s", name, v, expectedValue)
+				}
+			}
+		})
+	}
+}
+
 func TestHTTPWriteTimeout(t *testing.T) {
 	const (
 		timeoutRes = `{"jsonrpc":"2.0","id":1,"error":{"code":-32002,"message":"request timed out"}}`
@@ -493,8 +602,7 @@ func apis() []rpc.API {
 	}
 }
 
-type testService struct {
-}
+type testService struct{}
 
 func (s *testService) Greet() string {
 	return "Hello"

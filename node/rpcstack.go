@@ -464,35 +464,47 @@ var gzPool = sync.Pool{
 }
 
 type gzipResponseWriter struct {
-	gz   *gzip.Writer
 	resp http.ResponseWriter
 
+	gz            *gzip.Writer
 	contentLength uint64 // total length of the uncompressed response
 	written       uint64 // amount of written bytes from the uncompressed response
 	hasLength     bool   // true if uncompressed response had Content-Length
-	inited        bool   // true after initContentLength called first time
-	chunked       bool   // true if response will be chunked
+	inited        bool   // true after init was called for the first time
 }
 
-// initContentLength checks if the uncompressed response has a content-length header.
-func (w *gzipResponseWriter) initContentLength() {
+// init runs just before response headers are written. Among other things, this function
+// also decides whether compression will be applied at all.
+func (w *gzipResponseWriter) init() {
 	if w.inited {
 		return
 	}
 	w.inited = true
 
 	hdr := w.resp.Header()
-	w.chunked = hdr.Get("transfer-encoding") != "identity"
-	length := hdr.Get("content-length")
-	if w.chunked {
-		hdr.Del("content-length")
-	}
 
+	length := hdr.Get("content-length")
 	if len(length) > 0 {
 		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
 			w.hasLength = true
 			w.contentLength = n
 		}
+	}
+
+	// Setting Transfer-Encoding to "identity" explictly disables compression. net/http
+	// also recognizes this header value and trims it from the response. This means
+	// handlers can choose to set this header without 'knowing' they will be wrapped in a
+	// gzipHandler.
+	//
+	// In go-ethereum, we use this signal to disable compression for certain error
+	// responses which are flushed out close to the write deadline of the response.
+	passthrough := hdr.Get("transfer-encoding") == "identity"
+
+	if !passthrough {
+		w.gz = gzPool.Get().(*gzip.Writer)
+		w.gz.Reset(w.resp)
+		hdr.Del("content-length")
+		hdr.Set("content-encoding", "gzip")
 	}
 }
 
@@ -501,17 +513,15 @@ func (w *gzipResponseWriter) Header() http.Header {
 }
 
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.initContentLength()
+	w.init()
 	w.resp.WriteHeader(status)
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	w.initContentLength()
-	// We don't compress error responses (e.g. timeout). They have to be delievered immediately
-	// and non-chunked. To serve a one-off compressed response,
-	// we need to know the length of the compressed output, which we don't.
-	if !w.chunked {
-		w.resp.Header().Del("content-encoding")
+	w.init()
+
+	if w.gz == nil {
+		// Compression is disabled.
 		return w.resp.Write(b)
 	}
 
@@ -519,18 +529,28 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	w.written += uint64(n)
 	if w.hasLength && w.written >= w.contentLength {
 		// The HTTP handler has finished writing the entire uncompressed response. Close
-		// the gzip stream to ensure the footer will be seen by the client if the response
-		// is flushed after this call to write.
+		// the gzip stream to ensure the footer will be seen by the client in case the
+		// response is flushed after this call to write.
 		err = w.gz.Close()
 	}
 	return n, err
 }
 
 func (w *gzipResponseWriter) Flush() {
-	w.gz.Flush()
+	if w.gz != nil {
+		w.gz.Flush()
+	}
 	if f, ok := w.resp.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+func (w *gzipResponseWriter) close() {
+	if w.gz == nil {
+		return
+	}
+	w.gz.Close()
+	gzPool.Put(w.gz)
 }
 
 func newGzipHandler(next http.Handler) http.Handler {
@@ -540,14 +560,9 @@ func newGzipHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		w.Header().Set("content-encoding", "gzip")
+		wrapper := &gzipResponseWriter{resp: w}
+		defer wrapper.close()
 
-		gz := gzPool.Get().(*gzip.Writer)
-		defer gzPool.Put(gz)
-		gz.Reset(w)
-		defer gz.Close()
-
-		wrapper := &gzipResponseWriter{resp: w, gz: gz}
 		next.ServeHTTP(wrapper, r)
 	})
 }
