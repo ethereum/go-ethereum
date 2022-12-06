@@ -28,14 +28,15 @@ const MDComponents = {
   },
   // links
   a: ({ children, href }: any) => {
-    return (
+    const isExternal = href.startsWith('http') && !href.includes('geth.ethereum.org');
+
+    return isExternal ? (
+      <Link href={href} isExternal variant='light'>
+        {children}
+      </Link>
+    ) : (
       <NextLink href={href} passHref>
-        <Link
-          isExternal={href.startsWith('http') && !href.includes('geth.ethereum.org')}
-          variant='light'
-        >
-          {children}
-        </Link>
+        <Link variant='light'>{children}</Link>
       </NextLink>
     );
   },

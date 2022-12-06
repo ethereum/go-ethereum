@@ -9,14 +9,21 @@ interface Props extends LinkProps {
 
 export const ButtonLinkSecondary: React.FC<Props> = ({ href, children, ...restProps }) => {
   const isExternal: boolean = href.toString().startsWith('http');
+
   const variant = LinkTheme.variants['button-link-secondary'];
   return (
     <Stack sx={{ mt: '0 !important' }} {...variant}>
-      <NextLink href={href} passHref {...restProps}>
-        <Link variant='button-link-secondary' isExternal={isExternal}>
+      {isExternal ? (
+        <Link variant='button-link-secondary' href={href.toString()} isExternal>
           <Text textStyle='home-section-link-label'>{children}</Text>
         </Link>
-      </NextLink>
+      ) : (
+        <NextLink href={href.toString()} passHref {...restProps}>
+          <Link variant='button-link-secondary'>
+            <Text textStyle='home-section-link-label'>{children}</Text>
+          </Link>
+        </NextLink>
+      )}
     </Stack>
   );
 };

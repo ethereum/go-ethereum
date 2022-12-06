@@ -82,11 +82,9 @@ export const Footer: FC = () => {
             _hover={hoverStyles}
             p={4}
           >
-            <NextLink href={GETH_TWITTER_URL} passHref>
-              <Link isExternal>
-                <TwitterIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
-              </Link>
-            </NextLink>
+            <Link href={GETH_TWITTER_URL} isExternal>
+              <TwitterIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+            </Link>
           </Center>
 
           <Center
@@ -98,24 +96,15 @@ export const Footer: FC = () => {
             borderColor='primary'
             p={4}
           >
-            <NextLink href={GETH_DISCORD_URL} passHref>
-              <Link isExternal>
-                <DiscordIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
-              </Link>
-            </NextLink>
+            <Link href={GETH_DISCORD_URL} isExternal>
+              <DiscordIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+            </Link>
           </Center>
 
-          <Center
-            data-group
-            flex={1}
-            _hover={hoverStyles}
-            p={4}
-          >
-            <NextLink href={GETH_REPO_URL} passHref>
-              <Link isExternal>
-                <GitHubIcon w={7} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
-              </Link>
-            </NextLink>
+          <Center data-group flex={1} _hover={hoverStyles} p={4}>
+            <Link href={GETH_REPO_URL} isExternal>
+              <GitHubIcon w={7} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+            </Link>
           </Center>
         </Flex>
       </Flex>
