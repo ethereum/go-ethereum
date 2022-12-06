@@ -52,10 +52,11 @@ type Contract struct {
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
-	Code     []byte
-	CodeHash common.Hash
-	CodeAddr *common.Address
-	Input    []byte
+	Code      []byte
+	Container *Container
+	CodeHash  common.Hash
+	CodeAddr  *common.Address
+	Input     []byte
 
 	// is the execution frame represented by this object a contract deployment
 	IsDeployment bool
@@ -144,11 +145,12 @@ func (c *Contract) AsDelegate() *Contract {
 }
 
 // GetOp returns the n'th element in the contract's byte array
-func (c *Contract) GetOp(n uint64) OpCode {
-	if n < uint64(len(c.Code)) {
+func (c *Contract) GetOp(n uint64, s uint64) OpCode {
+	if c.IsEOF() && n < uint64(len(c.Container.Code[s])) {
+		return OpCode(c.Container.Code[s][n])
+	} else if n < uint64(len(c.Code)) {
 		return OpCode(c.Code[n])
 	}
-
 	return STOP
 }
 
@@ -193,10 +195,23 @@ func (c *Contract) Value() *uint256.Int {
 	return c.value
 }
 
+// IsEOF returns whether the contract is EOF.
+func (c *Contract) IsEOF() bool {
+	return c.Container != nil
+}
+
+func (c *Contract) CodeAt(section uint64) []byte {
+	if c.Container == nil {
+		return c.Code
+	}
+	return c.Container.Code[section]
+}
+
 // SetCallCode sets the code of the contract and address of the backing data
 // object
-func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
+func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte, container *Container) {
 	c.Code = code
+	c.Container = container
 	c.CodeHash = hash
 	c.CodeAddr = addr
 }

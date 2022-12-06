@@ -284,8 +284,6 @@ func TestT8n(t *testing.T) {
 			input: t8nInput{
 				"alloc.json", "txs_more.rlp", "env.json", "Cancun", "",
 			},
-			output: t8nOutput{alloc: true, result: true},
-			expOut: "exp.json",
 		},
 	} {
 		args := []string{"t8n"}

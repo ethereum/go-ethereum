@@ -21,6 +21,8 @@ import (
 	"math"
 	"sort"
 
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
@@ -556,4 +558,136 @@ func enable7702(jt *JumpTable) {
 
 	jt[DELEGATECALL].constantGas = params.WarmStorageReadCostEIP2929
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
+}
+
+// enableEOF applies the EOF changes.
+func enableEOF(jt *JumpTable) {
+	// Deprecate opcodes
+	undefined := &operation{
+		execute:     opUndefined,
+		constantGas: 0,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		undefined:   true,
+	}
+	jt[CALLCODE] = undefined
+	jt[SELFDESTRUCT] = undefined
+	jt[JUMP] = undefined
+	jt[JUMPI] = undefined
+	jt[PC] = undefined
+
+	// New opcodes
+	jt[RJUMP] = &operation{
+		execute:     opRjump,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		terminal:    true,
+	}
+	jt[RJUMPI] = &operation{
+		execute:     opRjumpi,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	jt[RJUMPV] = &operation{
+		execute:     opRjumpv,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	jt[CALLF] = &operation{
+		execute:     opCallf,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[RETF] = &operation{
+		execute:     opRetf,
+		constantGas: GasFastishStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		terminal:    true,
+	}
+}
+
+// opRjump implements the rjump opcode.
+func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		offset = parseInt16(code[*pc+1:])
+	)
+	// move pc past op and operand (+3), add relative offset, subtract 1 to
+	// account for interpreter loop.
+	*pc = uint64(int64(*pc+3) + int64(offset) - 1)
+	return nil, nil
+}
+
+// opRjumpi implements the RJUMPI opcode
+func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	condition := scope.Stack.pop()
+	if condition.BitLen() == 0 {
+		// Not branching, just skip over immediate argument.
+		*pc += 2
+		return nil, nil
+	}
+	return opRjump(pc, interpreter, scope)
+}
+
+// opRjumpv implements the RJUMPV opcode
+func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		count = uint64(code[*pc+1])
+		idx   = scope.Stack.pop()
+	)
+	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= count {
+		// Index out-of-bounds, don't branch, just skip over immediate
+		// argument.
+		*pc += 1 + count*2
+		return nil, nil
+	}
+	offset := parseInt16(code[*pc+2+2*idx.Uint64():])
+	*pc = uint64(int64(*pc+2+count*2) + int64(offset) - 1)
+	return nil, nil
+}
+
+// opCallf implements the CALLF opcode
+func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code = scope.Contract.CodeAt(scope.CodeSection)
+		idx  = binary.BigEndian.Uint16(code[*pc+1:])
+		typ  = scope.Contract.Container.Types[scope.CodeSection]
+	)
+	if scope.Stack.len()+int(typ.MaxStackHeight) >= 1024 {
+		return nil, fmt.Errorf("stack overflow")
+	}
+	retCtx := &ReturnContext{
+		Section:     scope.CodeSection,
+		Pc:          *pc + 3,
+		StackHeight: scope.Stack.len() - int(typ.Input),
+	}
+	scope.ReturnStack = append(scope.ReturnStack, retCtx)
+	scope.CodeSection = uint64(idx)
+	*pc = 0
+	*pc -= 1 // hacks xD
+	return nil, nil
+}
+
+// opRetf implements the RETF opcode
+func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		last   = len(scope.ReturnStack) - 1
+		retCtx = scope.ReturnStack[last]
+	)
+	scope.ReturnStack = scope.ReturnStack[:last]
+	scope.CodeSection = retCtx.Section
+	*pc = retCtx.Pc - 1
+
+	// If returning from top frame, exit cleanly.
+	if len(scope.ReturnStack) == 0 {
+		return nil, errStopToken
+	}
+	return nil, nil
+>>>>>>> 3532f16eb7 (core/vm: add eof container)
 }

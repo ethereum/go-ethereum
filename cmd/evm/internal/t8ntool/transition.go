@@ -196,6 +196,9 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+	if err := applyEOFChecks(&prestate, chainConfig); err != nil {
+		return err
+	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
@@ -281,6 +284,29 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	// We require EIP-4788 beacon root to be set in the env
 	if env.ParentBeaconBlockRoot == nil {
 		return NewError(ErrorConfig, errors.New("post-cancun env requires parentBeaconBlockRoot to be set"))
+	}
+	return nil
+}
+
+func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
+	// Sanity check pre-allocated EOF code to not panic in state transition.
+	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+		for addr, acc := range prestate.Pre {
+			if vm.HasEOFByte(acc.Code) {
+				var (
+					c   vm.Container
+					err error
+				)
+				err = c.UnmarshalBinary(acc.Code)
+				if err == nil {
+					jt := vm.NewShanghaiEOFInstructionSetForTesting()
+					err = c.ValidateCode(&jt)
+				}
+				if err != nil {
+					return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))
+				}
+			}
+		}
 	}
 	return nil
 }

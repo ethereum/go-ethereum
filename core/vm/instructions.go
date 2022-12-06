@@ -969,12 +969,13 @@ func makeLog(size int) executionFunc {
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		codeLen = uint64(len(scope.Contract.Code))
+		code    = scope.Contract.CodeAt(scope.CodeSection)
+		codeLen = uint64(len(code))
 		integer = new(uint256.Int)
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
+		scope.Stack.push(integer.SetUint64(uint64(code[*pc])))
 	} else {
 		scope.Stack.push(integer.Clear())
 	}

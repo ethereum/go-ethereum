@@ -18,6 +18,7 @@ package core
 
 import (
 	"encoding/binary"
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4422,9 +4423,6 @@ func TestRequests(t *testing.T) {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	defer chain.Stop()
-	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
 
 	// Verify the withdrawal requests match.
 	block := chain.GetBlockByNumber(1)
@@ -4476,6 +4474,352 @@ func TestRequests(t *testing.T) {
 		}
 		if want.TargetPublicKey != got.TargetPublicKey {
 			t.Fatalf("wrong target public key: want %s, got %s", common.Bytes2Hex(want.TargetPublicKey[:]), common.Bytes2Hex(got.TargetPublicKey[:]))
+		}// Verify the withdrawal requests match.
+	block := chain.GetBlockByNumber(1)
+	if block == nil {
+		t.Fatalf("failed to retrieve block 1")
+	}
+
+	// Verify the withdrawal requests match.
+	got := block.Requests()
+	if len(got) != 2 {
+		t.Fatalf("wrong number of withdrawal requests: wanted 2, got %d", len(got))
+	}
+	for i, want := range wxs {
+		got, ok := got[i].Inner().(*types.WithdrawalRequest)
+		if !ok {
+			t.Fatalf("expected withdrawal request")
 		}
+		if want.Source != got.Source {
+			t.Fatalf("wrong source address: want %s, got %s", want.Source, got.Source)
+		}
+		if want.PublicKey != got.PublicKey {
+			t.Fatalf("wrong public key: want %s, got %s", common.Bytes2Hex(want.PublicKey[:]), common.Bytes2Hex(got.PublicKey[:]))
+		}
+		if want.Amount != got.Amount {
+			t.Fatalf("wrong amount: want %d, got %d", want.Amount, got.Amount)
+		}
+	}
+
+	// Verify the consolidation requests match. Even though both requests are sent
+	// in block two, only one is dequeued at a time.
+	for i, want := range cxs {
+		block := chain.GetBlockByNumber(uint64(i + 2))
+		if block == nil {
+			t.Fatalf("failed to retrieve block")
+		}
+		requests := block.Requests()
+		if len(requests) != 1 {
+			t.Fatalf("wrong number of consolidation requests: wanted 1, got %d", len(got))
+		}
+		got, ok := requests[0].Inner().(*types.ConsolidationRequest)
+		if !ok {
+			t.Fatalf("expected consolidation request")
+		}
+		if want.Source != got.Source {
+			t.Fatalf("wrong source address: want %s, got %s", want.Source, got.Source)
+		}
+		if want.SourcePublicKey != got.SourcePublicKey {
+			t.Fatalf("wrong source public key: want %s, got %s", common.Bytes2Hex(want.SourcePublicKey[:]), common.Bytes2Hex(got.SourcePublicKey[:]))
+		}
+		if want.TargetPublicKey != got.TargetPublicKey {
+			t.Fatalf("wrong target public key: want %s, got %s", common.Bytes2Hex(want.TargetPublicKey[:]), common.Bytes2Hex(got.TargetPublicKey[:]))
+		}
+}
+
+func int8ToByte(n int8) uint8 {
+	return uint8(n)
+}
+
+func TestEOF(t *testing.T) {
+	var (
+		createDeployer = []byte{
+			byte(vm.CALLDATASIZE), // size
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE),
+		}
+		create2Deployer = []byte{
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.PUSH1), 0x00, // salt
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE2),
+		}
+
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		cc     = common.HexToAddress("0x000000000000000000000000000000000000cccc")
+		engine = beacon.NewFaker()
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec  = &Genesis{
+			Config: params.AllDevChainProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr: {Balance: funds},
+				bb:   {Code: createDeployer, Balance: big.NewInt(0)},
+				cc:   {Code: create2Deployer, Balance: big.NewInt(0)},
+				aa: {
+					Code: (&vm.Container{
+						Types: []*vm.FunctionMetadata{
+							{Input: 0, Output: 0x80, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+							{Input: 0, Output: 0, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+						},
+						Code: [][]byte{
+							{
+								byte(vm.CALLF),
+								byte(0),
+								byte(1),
+								byte(vm.CALLF),
+								byte(0),
+								byte(2),
+								byte(vm.STOP),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.RJUMP), // skip first flag
+								byte(0),
+								byte(5),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.SSTORE), // set first flag
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SWAP1),
+								byte(vm.SUB),
+								byte(vm.DUP1),
+								byte(vm.RJUMPI), // jump to first flag, then don't branch
+								byte(0xff),
+								int8ToByte(-13),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SSTORE), // set second flag
+								byte(vm.RETF),
+							},
+							{
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.SSTORE), // set third flag
+
+								byte(vm.CALLF),
+								byte(0),
+								byte(3),
+								byte(vm.RETF),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.RJUMPV), // jump over invalid op
+								byte(1),
+								byte(0),
+								byte(1),
+
+								byte(vm.INVALID),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(3),
+								byte(vm.SSTORE), // set forth flag
+								byte(vm.RETF),
+							},
+						},
+						Data: []byte{},
+					}).MarshalBinary(),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.ShanghaiTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	container := vm.Container{
+		Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
+		Code:  [][]byte{{byte(vm.STOP)}},
+		Data:  nil,
+	}
+	deployed := container.MarshalBinary()
+	makeDeployCode := func(b []byte) []byte {
+		out := []byte{
+			byte(vm.PUSH1), byte(len(b)), // len
+			byte(vm.PUSH1), 0x0c, // offset
+			byte(vm.PUSH1), 0x00, // dst offset
+			byte(vm.CODECOPY),
+
+			// code in memory
+			byte(vm.PUSH1), byte(len(b)), // size
+			byte(vm.PUSH1), 0x00, // offset
+			byte(vm.RETURN),
+		}
+		return append(out, b...)
+	}
+	initCode := makeDeployCode(deployed)
+	initHash := crypto.Keccak256Hash(initCode)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+
+		// 0: execute flag contract
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       []byte{},
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 1: deploy eof contract from eoa
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      1,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 2: invalid initcode in create tx, should be valid and use all gas
+		invalid := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+			Code:  [][]byte{common.Hex2Bytes("604200")},
+			Data:  []byte{0x01, 0x02, 0x03},
+		}).MarshalBinary()
+		invalid[2] = 0x02 // make version invalid
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      2,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 3: invalid deployed eof in create tx, should be valid and use all gas
+		inner := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
+			Code:  [][]byte{common.Hex2Bytes("0000")},
+		}).MarshalBinary()
+		invalid = makeDeployCode(inner)
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      3,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 4: deploy eof contract from create contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      4,
+			To:         &bb,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 5: deploy eof contract from create2 contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      5,
+			To:         &cc,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Check flags.
+	state, _ := chain.State()
+	for i := 0; i < 4; i++ {
+		if state.GetState(aa, common.BigToHash(big.NewInt(int64(i)))).Big().Uint64() != 1 {
+			t.Fatalf("flag %d not set", i)
+		}
+	}
+
+	r := chain.GetReceiptsByHash(blocks[0].Hash())[2]
+	if got, want := r.GasUsed, blocks[0].Transactions()[2].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid initcode: gasUsed %d, gasLimit %d", got, want)
+	}
+	r = chain.GetReceiptsByHash(blocks[0].Hash())[3]
+	if got, want := r.GasUsed, blocks[0].Transactions()[3].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid deployed code: gasUsed %d, gasLimit %d", got, want)
+	}
+
+	// Check various deployment mechanisms.
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(addr, 1)), deployed) {
+		t.Fatalf("failed to deploy EOF with EOA")
+	}
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(bb, 0)), deployed) {
+		t.Fatalf("failed to deploy EOF with CREATE")
+	}
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployed) {
+		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }

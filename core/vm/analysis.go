@@ -116,3 +116,87 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 	}
 	return bits
 }
+
+// eofCodeBitmap collects data locations in code.
+func eofCodeBitmap(code []byte) bitvec {
+	// The bitmap is 4 bytes longer than necessary, in case the code
+	// ends with a PUSH32, the algorithm will push zeroes onto the
+	// bitvector outside the bounds of the actual code.
+	bits := make(bitvec, len(code)/8+1+4)
+	return eofCodeBitmapInternal(code, bits)
+}
+
+// eofCodeBitmapInternal is the internal implementation of codeBitmap for EOF
+// code validation.
+func eofCodeBitmapInternal(code, bits bitvec) bitvec {
+	for pc := uint64(0); pc < uint64(len(code)); {
+		var (
+			op      = OpCode(code[pc])
+			numbits uint8
+		)
+		pc++
+
+		switch {
+		case op >= PUSH1 && op <= PUSH32:
+			numbits = uint8(op - PUSH1 + 1)
+		case op == RJUMP || op == RJUMPI || op == CALLF:
+			numbits = 2
+		case op == RJUMPV:
+			// RJUMPV is unique as it has a variable sized operand.
+			// The total size is determined by the count byte which
+			// immediate proceeds RJUMPV. Truncation will be caught
+			// in other validation steps -- for now, just return a
+			// valid bitmap for as much of the code as is
+			// available.
+			end := uint64(len(code))
+			if pc >= end {
+				// Count missing, no more bits to mark.
+				return bits
+			}
+			numbits = code[pc]*2 + 1
+			if pc+uint64(numbits) > end {
+				// Jump table is truncated, mark as many bits
+				// as possible.
+				numbits = uint8(end - pc)
+			}
+		default:
+			// Op had no immediate operand, continue.
+			continue
+		}
+
+		if numbits >= 8 {
+			for ; numbits >= 16; numbits -= 16 {
+				bits.set16(pc)
+				pc += 16
+			}
+			for ; numbits >= 8; numbits -= 8 {
+				bits.set8(pc)
+				pc += 8
+			}
+		}
+		switch numbits {
+		case 1:
+			bits.set1(pc)
+			pc += 1
+		case 2:
+			bits.setN(set2BitsMask, pc)
+			pc += 2
+		case 3:
+			bits.setN(set3BitsMask, pc)
+			pc += 3
+		case 4:
+			bits.setN(set4BitsMask, pc)
+			pc += 4
+		case 5:
+			bits.setN(set5BitsMask, pc)
+			pc += 5
+		case 6:
+			bits.setN(set6BitsMask, pc)
+			pc += 6
+		case 7:
+			bits.setN(set7BitsMask, pc)
+			pc += 7
+		}
+	}
+	return bits
+}

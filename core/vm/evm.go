@@ -18,7 +18,9 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -242,7 +244,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code)
+			contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -299,6 +301,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
 		addrCopy := addr
+		code := evm.StateDB.GetCode(addrCopy)
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
@@ -306,7 +309,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -351,13 +354,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
 		addrCopy := addr
+		code := evm.StateDB.GetCode(addrCopy)
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -411,12 +415,13 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
+		code := evm.StateDB.GetCode(addrCopy)
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -449,7 +454,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, fromEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value.ToBig())
 		defer func(startGas uint64) {
@@ -464,6 +469,33 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only. If
+	// the initcode is EOF, contract.Container will be set.
+	contract := NewContract(caller, AccountRef(address), value, gas)
+	contract.SetCodeOptionalHash(&address, codeAndHash)
+	contract.IsDeployment = true
+
+	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
+	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
+	if evm.chainRules.IsShanghai {
+		if isInitcodeEOF {
+			// If the initcode is EOF, verify it is well-formed.
+			var c Container
+			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
+				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
+			}
+			if err := c.ValidateCode(evm.interpreter.tableEOF); err != nil {
+				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
+			}
+			contract.Container = &c
+		} else if fromEOF {
+			// Don't allow EOF contract to execute legacy initcode.
+			return nil, common.Address{}, gas, ErrLegacyCode
+		}
+	}
+	// Check for nonce overflow and then update caller nonce by 1.
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
@@ -508,13 +540,71 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
-	// Initialise a new contract and set the code that is to be used by the EVM.
-	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, AccountRef(address), value, gas)
-	contract.SetCodeOptionalHash(&address, codeAndHash)
-	contract.IsDeployment = true
+	// Charge the contract creation init gas in verkle mode
+	if evm.chainRules.IsEIP4762 {
+		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
+			err = ErrOutOfGas
+		}
+	}
 
-	ret, err = evm.initNewContract(contract, address, value)
+	if err == nil {
+		ret, err = evm.interpreter.Run(contract, nil, false)
+	}
+
+	// Check whether the max code size has been exceeded, assign err if the case.
+	if err == nil && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+		err = ErrMaxCodeSizeExceeded
+	}
+
+	// Reject legacy contract deployment from EOF.
+	if err == nil && isInitcodeEOF && !hasEOFMagic(ret) {
+		err = ErrLegacyCode
+	}
+
+	// Reject code starting with 0xEF if EIP-3541 is enabled.
+	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
+		if evm.chainRules.IsShanghai {
+			var c Container
+			if err = c.UnmarshalBinary(ret); err == nil {
+				err = c.ValidateCode(evm.interpreter.tableEOF)
+			}
+			if err != nil {
+				err = fmt.Errorf("%w: %v", ErrInvalidEOF, err)
+			}
+		} else if evm.chainRules.IsLondon {
+			err = ErrInvalidCode
+		}
+	}
+
+	// if the contract creation ran successfully and no errors were returned
+	// calculate the gas required to store the code. If the code could not
+	// be stored due to not enough gas set an error and let it be handled
+	// by the error checking condition below.
+	if err == nil {
+		if !evm.chainRules.IsEIP4762 {
+			createDataGas := uint64(len(ret)) * params.CreateDataGas
+			if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+				err = ErrCodeStoreOutOfGas
+			}
+		} else {
+			// Contract creation completed, touch the missing fields in the contract
+			if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
+				err = ErrCodeStoreOutOfGas
+			}
+
+			if err == nil && len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
+				err = ErrCodeStoreOutOfGas
+			}
+		}
+
+		if err == nil {
+			evm.StateDB.SetCode(address, ret)
+		}
+	}
+
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
+	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -524,55 +614,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	return ret, address, contract.Gas, err
 }
 
-// initNewContract runs a new contract's creation code, performs checks on the
-// resulting code that is to be deployed, and consumes necessary gas.
-func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int) ([]byte, error) {
-	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
-		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
-			return nil, ErrOutOfGas
-		}
-	}
-
-	ret, err := evm.interpreter.Run(contract, nil, false)
-	if err != nil {
-		return ret, err
-	}
-
-	// Check whether the max code size has been exceeded, assign err if the case.
-	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
-		return ret, ErrMaxCodeSizeExceeded
-	}
-
-	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		return ret, ErrInvalidCode
-	}
-
-	if !evm.chainRules.IsEIP4762 {
-		createDataGas := uint64(len(ret)) * params.CreateDataGas
-		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return ret, ErrCodeStoreOutOfGas
-		}
-	} else {
-		// Contract creation completed, touch the missing fields in the contract
-		if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
-			return ret, ErrCodeStoreOutOfGas
-		}
-
-		if len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
-			return ret, ErrCodeStoreOutOfGas
-		}
-	}
-
-	evm.StateDB.SetCode(address, ret)
-	return ret, nil
-}
-
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
+	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, isEOF)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -582,7 +628,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint2
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
+	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
 }
 
 // ChainConfig returns the environment's chain configuration
@@ -627,4 +674,19 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		ChainConfig: evm.ChainConfig(),
 		StateDB:     evm.StateDB,
 	}
+}
+
+// parseContainer tries to parse an EOF container if the Shanghai fork is active. It expects the code to already be validated.
+func (evm *EVM) parseContainer(b []byte) *Container {
+	if evm.chainRules.IsShanghai {
+		var c Container
+		if err := c.UnmarshalBinary(b); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
+			return nil
+		} else if err != nil {
+			// Code was already validated, so no other errors should be possible.
+			panic(fmt.Sprintf("unexpected error: %v\ncode: %s\n", err, common.Bytes2Hex(b)))
+		}
+		return &c
+	}
+	return nil
 }
