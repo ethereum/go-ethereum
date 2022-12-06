@@ -1,6 +1,7 @@
 - id: Getting started
-  to: /docs/getting-started
   items:
+    - id: Introduction
+      to: /docs/getting-started
     - id: Hardware requirements
       to: /docs/getting-started/hardware-requirements
     - id: Installing Geth
@@ -8,8 +9,9 @@
     - id: Consensus clients
       to: /docs/getting-started/consensus-clients
 - id: Fundamentals
-  to: /docs/fundamentals
   items:
+    - id: Introduction
+      to: /docs/fundamentals
     - id: Node architecture
       to: /docs/fundamentals/node-architecture
     - id: Command-line options
@@ -35,8 +37,9 @@
 - id: Interacting with Geth
   items:
     - id: JSON-RPC Server
-      to: /docs/interacting-with-geth/rpc
       items:
+        - id: Introduction
+          to: /docs/interacting-with-geth/rpc
         - id: Batch requests
           to: /docs/interacting-with-geth/rpc/batch
         - id: GraphQL server
@@ -70,8 +73,9 @@
     - id: 'JavaScript Console 2: Contracts'
       to: /docs/interacting-with-geth/javascript-console-contracts
 - id: Developers
-  to: /docs/developers
   items:
+    - id: Introduction
+      to: /docs/developers
     - id: Dapp developers
       items:
         - id: Go API
@@ -83,8 +87,9 @@
         - id: Geth for Mobile
           to: /docs/developers/dapp-developer/mobile
     - id: EVM tracing
-      to: /docs/developers/evm-tracing
       items:
+        - id: Introduction
+          to: /docs/developers/evm-tracing
         - id: Basic traces
           to: /docs/developers/evm-tracing/basic-traces
         - id: Built-in tracers

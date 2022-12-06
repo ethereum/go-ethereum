@@ -63,7 +63,7 @@ export const getStaticProps: GetStaticProps = async context => {
       content,
       navLinks,
       lastModified: getParsedDate(lastModified.mtime, {
-        month: 'numeric',
+        month: 'long',
         day: 'numeric',
         year: 'numeric'
       })
@@ -111,12 +111,12 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 {frontmatter.title}
               </Heading>
               <Text as='span' mt='0 !important'>
-                last edited {lastModified}
+                Last edited on {lastModified}
               </Text>
             </Stack>
 
-            <Flex width='100%' placeContent='space-between'>
-              <Stack maxW='768px' sx={{ "*:first-child": { marginTop: '0 !important' } }}>
+            <Flex width='100%' placeContent='space-between' gap={8}>
+              <Stack maxW='min(100%, 768px)' sx={{ "*:first-of-type": { marginTop: '0 !important' } }}>
                 <ReactMarkdown
                   remarkPlugins={[gfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -126,7 +126,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 </ReactMarkdown>
               </Stack>
 
-              <Stack display={{ base: 'none', xl: 'block' }} w={48}>
+              <Stack display={{ base: 'none', xl: 'block' }} w="clamp(var(--chakra-sizes-40), 12.5%, var(--chakra-sizes-56))">
                 <DocumentNav content={content} />
               </Stack>
             </Flex>

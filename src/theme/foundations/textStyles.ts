@@ -137,7 +137,7 @@ export const textStyles = {
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
-    fontSize: 'sm'
+    fontSize: { base: 'xs', sm: 'sm' }
   },
   'docs-nav-dropdown': {
     fontFamily: 'heading',
