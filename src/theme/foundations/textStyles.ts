@@ -191,7 +191,6 @@ export const textStyles = {
     fontSize: '13px',
     lineHeight: 5,
     letterSpacing: '1%',
-    mb: 4
   },
   'note-text': {
     fontFamily: 'body',
