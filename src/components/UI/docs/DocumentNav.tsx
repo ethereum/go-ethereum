@@ -28,10 +28,27 @@ export const DocumentNav: FC<Props> = ({ content }) => {
       {parsedHeadings.map((heading, idx) => {
         return (
           <NextLink key={`${idx} ${heading?.title}`} href={`#${heading?.headingId}`}>
-            <Link m={0}>
+            <Link m={0} textDecoration='none !important'>
               <Text
                 color={activeHash === heading?.headingId ? 'body' : 'primary'}
                 textStyle='document-nav-link'
+                _hover={{
+                  background: 'primary',
+                  boxShadow: '0 0 0 6px var(--chakra-colors-primary)',
+                  color: 'bg',
+                }}
+                _focus={{
+                  background: 'primary',
+                  boxShadow: '0 0 0 6px var(--chakra-colors-primary) !important',
+                  color: 'bg',
+                  outline: '2px solid var(--chakra-colors-secondary) !important',
+                  outlineOffset: '4px',
+                }}
+                _active={{
+                  background: 'secondary',
+                  boxShadow: '0 0 0 6px var(--chakra-colors-secondary)',
+                  color: 'bg',
+                }}
               >
                 {heading?.title}
               </Text>
