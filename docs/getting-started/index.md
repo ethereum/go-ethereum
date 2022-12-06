@@ -5,7 +5,7 @@ description: Guide to getting up and running with Geth using Clef.
 
 This page explains how to set up Geth and execute some basic tasks using the command line tools. In order to use Geth, the software must first be installed. There are several ways Geth can be installed depending on the operating system and the user's choice of installation method, for example using a package manager, container or building from source. Instructions for installing Geth can be found on the ["Install and Build"](/docs/getting_started/Installing-Geth) pages.
 
-Geth also needs to be connected to a [consensus client](docs/getting-started/consensus-clients.md) in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/docs/fundamentals/security).
+Geth also needs to be connected to a [consensus client](docs/getting-started/consensus-clients) in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/docs/fundamentals/security).
 
 This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/docs/tools/Clef/Tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team.
 
@@ -33,7 +33,7 @@ Read more about Ethereum accounts [here](https://ethereum.org/en/developers/docs
 
 ## Step 1: Generating accounts {#generating-accounts}
 
-There are several methods for generating accounts in Geth. This tutorial demonstrates how to generate accounts using Clef, as this is considered best practice, largely because it decouples the users' key management from Geth, making it more modular and flexible. It can also be run from secure USB sticks or virtual machines, offering security benefits. For convenience, this tutorial will execute Clef on the same computer that will also run Geth, although more secure options are available (see [here](https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/docs/setup.md)).
+There are several methods for generating accounts in Geth. This tutorial demonstrates how to generate accounts using Clef, as this is considered best practice, largely because it decouples the users' key management from Geth, making it more modular and flexible. It can also be run from secure USB sticks or virtual machines, offering security benefits. For convenience, this tutorial will execute Clef on the same computer that will also run Geth, although more secure options are available (see [here](/docs/tools/clef/setup)).
 
 An account is a pair of keys (public and private). Clef needs to know where to save these keys to so that they can be retrieved later. This information is passed to Clef as an argument. This is achieved using the following command:
 
@@ -121,7 +121,7 @@ geth --sepolia --datadir geth-tutorial --authrpc.addr localhost --authrpc.port 8
 
 Running the above command starts Geth. Geth will not sync the blockchain correctly unless there is also a consensus client that can pass Geth a valid head to sync up to. In a separate terminal, start a consensus client. Once the consensus client gets in sync, Geth will start to sync too.
 
-The terminal should rapidly fill with status updates that look similar to those below. To check the meaning of the logs, refer to the [logs page](docs/fundamentals/logs.md).
+The terminal should rapidly fill with status updates that look similar to those below. To check the meaning of the logs, refer to the [logs page](/docs/fundamentals/logs).
 
 ```terminal
 INFO [02-10|13:59:06.649] Starting Geth on sepolia testnet...

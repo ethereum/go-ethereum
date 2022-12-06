@@ -287,11 +287,11 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
   const [totalDevBuilds, setTotalDevBuilds] = useState(ALL_LINUX_DEV_BUILDS.length);
 
   const showMoreStableReleases = () => {
-    setAmountStableReleases(amountStableReleases + 10);
+    setAmountStableReleases(amountStableReleases + 12);
   };
 
   const showMoreDevBuilds = () => {
-    setAmountDevBuilds(amountDevBuilds + 10);
+    setAmountDevBuilds(amountDevBuilds + 12);
   };
 
   return (
@@ -374,25 +374,14 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalStableReleases > 0
-                    ? `Showing ${Math.min(
-                        amountStableReleases,
-                        totalStableReleases
-                      )} latest releases of
-                    a total ${totalStableReleases} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalStableReleases > amountStableReleases && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link
                     as='button'
@@ -440,22 +429,14 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalDevBuilds > 0
-                    ? `Showing ${Math.min(amountDevBuilds, totalDevBuilds)} latest releases of
-                    a total ${totalDevBuilds} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalDevBuilds > amountDevBuilds && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link as='button' variant='button-link-secondary' onClick={showMoreDevBuilds}>
                     <Text
@@ -504,6 +485,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
@@ -512,7 +494,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+              <Stack flex={1} w={'100%'}>
                 <Code p={4} bg='code-bg'>
                   gpg --recv-keys F9585DE6 C2FF8BBF 9BA28146 7B9E2481 D2A67EAC
                 </Code>
@@ -525,6 +507,8 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
+              sx={{ mt: '0 !important' }}
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
@@ -533,7 +517,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
                 </Text>
               </Stack>
 
-              <Stack flex={1} w={'100%'} bg='terminal-bg'>
+              <Stack flex={1} w={'100%'}>
                 <Code p={4} bg='code-bg'>
                   gpg --recv-keys E058A81C 05A5DDF0 1CCB7DD2
                 </Code>
@@ -542,10 +526,11 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
 
             <Flex
               p={4}
-              borderBottom='2px'
               borderColor='primary'
               gap={4}
               flexDirection={{ base: 'column', md: 'row' }}
+              alignItems='center'
+              sx={{ mt: '0 !important' }}
             >
               <Stack flex={1}>
                 <Text textStyle='quick-link-text'>
