@@ -101,7 +101,7 @@ const MDComponents = {
   },
   // tables
   table: ({ children }: any) => (
-    <Flex maxW='min(100%, 100vw)' overflowX='auto'>
+    <Flex overflowX='auto'>
       <Table
         variant='striped'
         colorScheme='greenAlpha'
