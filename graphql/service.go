@@ -56,7 +56,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 
-	if timeout, ok := rpc.GetContextRequestTimeout(ctx); ok {
+	if timeout, ok := rpc.ContextRequestTimeout(ctx); ok {
 		timer = time.AfterFunc(timeout, func() {
 			responded.Do(func() {
 				response := &graphql.Response{

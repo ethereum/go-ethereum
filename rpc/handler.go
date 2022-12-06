@@ -196,7 +196,7 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		// Cancel the request context after timeout and send an error response. Since the
 		// currently-running method might not return immediately on timeout, we must wait
 		// for the timeout concurrently with processing the request.
-		if timeout, ok := GetContextRequestTimeout(cp.ctx); ok {
+		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
 			timer = time.AfterFunc(timeout, func() {
 				cancel()
 				callBuffer.timeout(cp.ctx, h.conn)
@@ -243,7 +243,7 @@ func (h *handler) handleMsg(msg *jsonrpcMessage) {
 		// Cancel the request context after timeout and send an error response. Since the
 		// running method might not return immediately on timeout, we must wait for the
 		// timeout concurrently with processing the request.
-		if timeout, ok := GetContextRequestTimeout(cp.ctx); ok {
+		if timeout, ok := ContextRequestTimeout(cp.ctx); ok {
 			timer = time.AfterFunc(timeout, func() {
 				cancel()
 				responded.Do(func() {
