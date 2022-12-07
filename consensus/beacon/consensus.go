@@ -100,6 +100,10 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	ttd := chain.Config().TerminalTotalDifficulty
+	if ttd == nil {
+		return beacon.ethone.VerifyHeaders(chain, headers, seals)
+	}
 	td := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if td == nil {
 		results := make(chan error, len(headers))
@@ -113,7 +117,6 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		preHeaders  []*types.Header
 		postHeaders []*types.Header
 		preSeals    []bool
-		ttd         = chain.Config().TerminalTotalDifficulty
 	)
 	if td.Cmp(ttd) >= 0 {
 		postHeaders = headers
