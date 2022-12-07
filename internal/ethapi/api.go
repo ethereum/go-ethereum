@@ -1247,6 +1247,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		}
 		fields["transactions"] = transactions
 		// inclTx also expands withdrawals
+		// TODO @MariusVanDerWijden: add a second flag similar to inclTx to enable withdrawals
 		fields["withdrawals"] = block.Withdrawals()
 	}
 	uncles := block.Uncles()
