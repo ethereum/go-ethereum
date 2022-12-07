@@ -36,7 +36,7 @@ export const HomeHero: FC = () => {
         alignItems={{ base: 'center', md: 'flex-start' }}
       >
         <Flex direction='column' alignItems='center' mr={{ md: 6 }}>
-          <NextLink href={DOWNLOADS_PAGE} passHref>
+          <NextLink href={DOWNLOADS_PAGE} passHref legacyBehavior>
             <Button variant='primary' as='a' mb={1}>
               <Text textStyle='homepage-primary-label'>Download</Text>
             </Button>
@@ -48,7 +48,7 @@ export const HomeHero: FC = () => {
         </Flex>
 
         <Flex direction='column' alignItems='center'>
-          <NextLink href={DOCS_PAGE} passHref>
+          <NextLink href={DOCS_PAGE} passHref legacyBehavior>
             <Button variant='primary' as='a' mb={1}>
               <Text textStyle='homepage-primary-label'>Documentation</Text>
             </Button>

@@ -25,7 +25,7 @@ export const HeaderButtons: FC<Props> = ({ close }) => {
   return (
     <Flex direction={{ base: 'column', md: 'row' }}>
       {/* DOWNLOADS */}
-      <NextLink href={DOWNLOADS_PAGE} passHref>
+      <NextLink href={DOWNLOADS_PAGE} passHref legacyBehavior>
         <Link _hover={{ textDecoration: 'none' }} onClick={close}>
           <Stack {...menuItemStyles}>
             <Text textStyle={{ base: 'header-mobile-button', md: 'header-button' }}>downloads</Text>
@@ -34,7 +34,7 @@ export const HeaderButtons: FC<Props> = ({ close }) => {
       </NextLink>
 
       {/* DOCUMENTATION */}
-      <NextLink href={DOCS_PAGE} passHref>
+      <NextLink href={DOCS_PAGE} passHref legacyBehavior>
         <Link _hover={{ textDecoration: 'none' }} onClick={close}>
           <Stack {...menuItemStyles}>
             <Text textStyle={{ base: 'header-mobile-button', md: 'header-button' }}>

@@ -15,11 +15,16 @@ export const LinksList: FC<LinksListProps> = ({ links }) => {
   return (
     <Stack px={4}>
       {links.map(({ id, to, items }) => {
-        const split = to?.split('/')
+        const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         return to ? (
-          <Stack key={id} pb={items ? 6 : 0} _hover={{ background: 'primary', color: 'bg' }} data-group>
-            <NextLink href={to} passHref key={id}>
+          <Stack
+            key={id}
+            pb={items ? 6 : 0}
+            _hover={{ background: 'primary', color: 'bg' }}
+            data-group
+          >
+            <NextLink href={to} passHref key={id} legacyBehavior>
               <Link textDecoration='none !important'>
                 <Text
                   textStyle='docs-nav-links'
@@ -29,12 +34,11 @@ export const LinksList: FC<LinksListProps> = ({ links }) => {
                     verticalAlign: '-1.25px',
                     marginInlineEnd: 2,
                     fontSize: 'lg',
-                    display: isActive ? 'unset' : 'none',
+                    display: isActive ? 'unset' : 'none'
                   }}
                   _groupHover={{
                     color: 'bg',
-                    boxShadow: '0 0 0 var(--chakra-space-2) var(--chakra-colors-primary)',
-                    
+                    boxShadow: '0 0 0 var(--chakra-space-2) var(--chakra-colors-primary)'
                   }}
                 >
                   {id}

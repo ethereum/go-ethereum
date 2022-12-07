@@ -27,7 +27,7 @@ export const DocumentNav: FC<Props> = ({ content }) => {
       <Divider borderColor='primary' my={`4 !important`} />
       {parsedHeadings.map((heading, idx) => {
         return (
-          <NextLink key={`${idx} ${heading?.title}`} href={`#${heading?.headingId}`}>
+          <NextLink key={`${idx} ${heading?.title}`} href={`#${heading?.headingId}`} legacyBehavior>
             <Link m={0} textDecoration='none !important'>
               <Text
                 color={activeHash === heading?.headingId ? 'body' : 'primary'}
@@ -36,19 +36,19 @@ export const DocumentNav: FC<Props> = ({ content }) => {
                 _hover={{
                   background: 'primary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-primary)',
-                  color: 'bg',
+                  color: 'bg'
                 }}
                 _focus={{
                   background: 'primary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-primary) !important',
                   color: 'bg',
                   outline: '2px solid var(--chakra-colors-secondary) !important',
-                  outlineOffset: '4px',
+                  outlineOffset: '4px'
                 }}
                 _active={{
                   background: 'secondary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-secondary)',
-                  color: 'bg',
+                  color: 'bg'
                 }}
               >
                 {heading?.title}

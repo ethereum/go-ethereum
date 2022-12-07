@@ -16,7 +16,11 @@ export const Breadcrumbs: FC = () => {
           {pathSplit.map((path: string, idx: number) => {
             return (
               <BreadcrumbItem key={path}>
-                <NextLink href={`/${pathSplit.slice(0, idx + 1).join('/')}`} passHref>
+                <NextLink
+                  href={`/${pathSplit.slice(0, idx + 1).join('/')}`}
+                  passHref
+                  legacyBehavior
+                >
                   <BreadcrumbLink color={idx + 1 === pathSplit.length ? 'body' : 'primary'}>
                     {path}
                   </BreadcrumbLink>
