@@ -63,7 +63,7 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 	if uint16(extport) != res.MappedExternalPort {
 		// Destroying meaningless mapped port map in NAT device.
 		n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
-		return fmt.Errorf("preempted port")
+		return fmt.Errorf("preempted port %d(%s)", extport, protocol)
 	}
 
 	return nil
