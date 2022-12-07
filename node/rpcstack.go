@@ -482,7 +482,6 @@ func (w *gzipResponseWriter) init() {
 	w.inited = true
 
 	hdr := w.resp.Header()
-
 	length := hdr.Get("content-length")
 	if len(length) > 0 {
 		if n, err := strconv.ParseUint(length, 10, 64); err != nil {
@@ -499,7 +498,6 @@ func (w *gzipResponseWriter) init() {
 	// In go-ethereum, we use this signal to disable compression for certain error
 	// responses which are flushed out close to the write deadline of the response.
 	passthrough := hdr.Get("transfer-encoding") == "identity"
-
 	if !passthrough {
 		w.gz = gzPool.Get().(*gzip.Writer)
 		w.gz.Reset(w.resp)
