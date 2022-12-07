@@ -645,6 +645,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// Feed the transactions into the tracers and return
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+txloop:
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		task := &txTraceTask{statedb: statedb.Copy(), index: i}
@@ -652,7 +653,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		case jobs <- task:
 		case <-ctx.Done():
 			failed = ctx.Err()
-			break
+			break txloop
 		}
 
 		// Generate the next state snapshot fast without tracing
@@ -661,7 +662,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		vmenv := vm.NewEVM(blockCtx, core.NewEVMTxContext(msg), statedb, api.backend.ChainConfig(), vm.Config{})
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas())); err != nil {
 			failed = err
-			break
+			break txloop
 		}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
