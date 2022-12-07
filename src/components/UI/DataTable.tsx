@@ -31,7 +31,6 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
       css={{
         '&::-webkit-scrollbar': {
           borderTop: '2px solid var(--chakra-colors-primary)',
-          borderBottom: '2px solid var(--chakra-colors-primary)',
           height: 18
         },
         '&::-webkit-scrollbar-thumb': {
@@ -52,7 +51,7 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
                       fontFamily='"JetBrains Mono", monospace'
                       fontWeight={700}
                       fontSize='md'
-                      color='#868b87' //? Use theme color? Or add to theme?
+                      color='#868b87' // TODO: Use theme color? Or add to theme?
                     >
                       {columnHeader}
                     </Text>

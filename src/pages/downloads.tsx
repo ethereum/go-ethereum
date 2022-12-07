@@ -368,6 +368,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               windowsData={ALL_WINDOWS_STABLE_RELEASES}
               iOSData={ALL_IOS_STABLE_RELEASES}
               androidData={ALL_ANDROID_STABLE_RELEASES}
+              totalReleasesNumber={totalStableReleases}
               amountOfReleasesToShow={amountStableReleases}
               setTotalReleases={setTotalStableReleases}
             />
@@ -423,6 +424,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               windowsData={ALL_WINDOWS_DEV_BUILDS}
               iOSData={ALL_IOS_DEV_BUILDS}
               androidData={ALL_ANDROID_DEV_BUILDS}
+              totalReleasesNumber={totalDevBuilds}
               amountOfReleasesToShow={amountDevBuilds}
               setTotalReleases={setTotalDevBuilds}
             />
