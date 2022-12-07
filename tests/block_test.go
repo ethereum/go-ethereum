@@ -47,11 +47,6 @@ func TestBlockchain(t *testing.T) {
 	// using 4.6 TGas
 	bt.skipLoad(`.*randomStatetest94.json.*`)
 
-	// This is a legit test that we currently do not pass, and we should fix.
-	// See discussion at https://github.com/ethereum/go-ethereum/pull/26314#issue-1478605544
-	// TODO @holiman @mariusvanderwijden
-	bt.skipLoad(".*/bcArrowGlacierToMerge/powToPosBlockRejection.json")
-
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, test.Run(false)); err != nil {
 			t.Errorf("test without snapshotter failed: %v", err)

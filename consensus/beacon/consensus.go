@@ -100,13 +100,20 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	if !beacon.IsPoSHeader(headers[len(headers)-1]) {
-		return beacon.ethone.VerifyHeaders(chain, headers, seals)
+	td := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+	if td == nil {
+		results := make(chan error, len(headers))
+		for i := 0; i < len(headers); i++ {
+			results <- consensus.ErrUnknownAncestor
+		}
+		return make(chan struct{}), results
 	}
+	td = new(big.Int).Set(td)
 	var (
 		preHeaders  []*types.Header
 		postHeaders []*types.Header
 		preSeals    []bool
+		ttd         = chain.Config().TerminalTotalDifficulty
 	)
 	for index, header := range headers {
 		if beacon.IsPoSHeader(header) {
@@ -115,6 +122,20 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			preSeals = seals[:index]
 			break
 		}
+		// The 'expected' case is above, this is the non-expected case
+		// where we handle a chain which kept going on PoW and missed
+		// the merge. We split it up into pre- and post- anyway, the post-headers
+		// will fail validation further down
+		if ttd != nil && td.Cmp(ttd) >= 0 {
+			preHeaders = headers[:index]
+			postHeaders = headers[index:]
+			preSeals = seals[:index]
+			break
+		}
+		td.Add(td, header.Difficulty)
+	}
+	if len(postHeaders) == 0 {
+		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
 
 	if len(preHeaders) == 0 {
