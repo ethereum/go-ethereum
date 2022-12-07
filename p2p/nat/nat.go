@@ -91,14 +91,15 @@ func Parse(spec string) (Interface, error) {
 }
 
 const (
-	mapTimeout = 10 * time.Minute
+	mapTimeout      = 10 * time.Minute
+	refreshInterval = mapTimeout - (mapTimeout / 10)
 )
 
 // Map adds a port mapping on m and keeps it alive until c is closed.
 // This function is typically invoked in its own goroutine.
 func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, name string) {
 	log := log.New("proto", protocol, "extport", extport, "intport", intport, "interface", m)
-	refresh := time.NewTimer(mapTimeout)
+	refresh := time.NewTimer(refreshInterval)
 	defer func() {
 		refresh.Stop()
 		log.Debug("Deleting port mapping")
