@@ -115,29 +115,33 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		preSeals    []bool
 		ttd         = chain.Config().TerminalTotalDifficulty
 	)
-	for index, header := range headers {
-		if beacon.IsPoSHeader(header) {
-			preHeaders = headers[:index]
-			postHeaders = headers[index:]
-			preSeals = seals[:index]
-			break
+	if td.Cmp(ttd) >= 0 {
+		postHeaders = headers
+	} else {
+		tdPassed := false
+		preHeaders = headers
+		for index, header := range headers {
+			if beacon.IsPoSHeader(header) || tdPassed {
+				preHeaders = headers[:index]
+				postHeaders = headers[index:]
+				preSeals = seals[:index]
+				break
+			}
+			// The 'expected' case is above, this is the non-expected case
+			// where we handle a chain which kept going on PoW and missed
+			// the merge. We split it up into pre- and post- anyway, the post-headers
+			// will fail validation further down
+			td = td.Add(td, header.Difficulty)
+			if ttd != nil && td.Cmp(ttd) >= 0 {
+				// This is the last PoW header, it still belongs to
+				// the preHeaders, so we cannot split+break yet.
+				tdPassed = true
+			}
 		}
-		// The 'expected' case is above, this is the non-expected case
-		// where we handle a chain which kept going on PoW and missed
-		// the merge. We split it up into pre- and post- anyway, the post-headers
-		// will fail validation further down
-		if ttd != nil && td.Cmp(ttd) >= 0 {
-			preHeaders = headers[:index]
-			postHeaders = headers[index:]
-			preSeals = seals[:index]
-			break
-		}
-		td.Add(td, header.Difficulty)
 	}
 	if len(postHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
-
 	if len(preHeaders) == 0 {
 		// All the headers are pos headers. Verify that the parent block reached total terminal difficulty.
 		if reached, err := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
