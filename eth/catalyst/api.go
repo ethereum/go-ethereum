@@ -757,13 +757,38 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
 
-// GetPayloadBodiesV1 implements engine_getPayloadBodiesV1 which allows for retrieval of a list
+// GetPayloadBodiesV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesV1(hashes []common.Hash) []*types.Body {
+func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types.Body {
 	var bodies []*types.Body
 	for _, hash := range hashes {
 		body := api.eth.BlockChain().GetBody(hash)
 		if body == nil {
+			bodies = append(bodies, nil)
+			continue
+		}
+		// We only want to return the transactions, not uncles
+		if len(body.Uncles) != 0 {
+			body.Uncles = make([]*types.Header, 0)
+		}
+		bodies = append(bodies, body)
+	}
+	return bodies
+}
+
+// GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*types.Body {
+	var bodies []*types.Body
+	for i := uint64(0); i < count; i++ {
+		block := api.eth.BlockChain().GetBlockByNumber(start + i)
+		if block == nil {
+			bodies = append(bodies, nil)
+			continue
+		}
+		body := block.Body()
+		if body == nil {
+			bodies = append(bodies, nil)
 			continue
 		}
 		// We only want to return the transactions, not uncles
