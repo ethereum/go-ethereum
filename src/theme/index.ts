@@ -27,7 +27,7 @@ const overrides = {
   textStyles,
   semanticTokens: {
     colors: {
-      primary: { _light: 'green.600', _dark: 'green.200' },
+      primary: { _light: 'green.700', _dark: 'green.200' },
       secondary: { _light: 'green.800', _dark: 'green.600' },
       'button-bg': { _light: 'green.50', _dark: 'green.900' },
       body: { _light: 'gray.800', _dark: 'yellow.50' },
