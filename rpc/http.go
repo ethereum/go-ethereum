@@ -23,9 +23,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -52,7 +54,7 @@ type httpConn struct {
 // and some methods don't work. The panic() stubs here exist to ensure
 // this special treatment is correct.
 
-func (hc *httpConn) writeJSON(context.Context, interface{}) error {
+func (hc *httpConn) writeJSON(context.Context, interface{}, bool) error {
 	panic("writeJSON called on httpConn")
 }
 
@@ -256,7 +258,42 @@ type httpServerConn struct {
 func newHTTPServerConn(r *http.Request, w http.ResponseWriter) ServerCodec {
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	conn := &httpServerConn{Reader: body, Writer: w, r: r}
-	return NewCodec(conn)
+
+	encoder := func(v any, isErrorResponse bool) error {
+		if !isErrorResponse {
+			return json.NewEncoder(conn).Encode(v)
+		}
+
+		// It's an error response and requires special treatment.
+		//
+		// In case of a timeout error, the response must be written before the HTTP
+		// server's write timeout occurs. So we need to flush the response. The
+		// Content-Length header also needs to be set to ensure the client knows
+		// when it has the full response.
+		encdata, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		w.Header().Set("content-length", strconv.Itoa(len(encdata)))
+
+		// If this request is wrapped in a handler that might remove Content-Length (such
+		// as the automatic gzip we do in package node), we need to ensure the HTTP server
+		// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
+		// encoding might not be finished correctly, and some clients do not like it when
+		// the final chunk is missing.
+		w.Header().Set("transfer-encoding", "identity")
+
+		_, err = w.Write(encdata)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		return err
+	}
+
+	dec := json.NewDecoder(conn)
+	dec.UseNumber()
+
+	return NewFuncCodec(conn, encoder, dec.Decode)
 }
 
 // Close does nothing and always returns nil.
@@ -325,4 +362,36 @@ func validateRequest(r *http.Request) (int, error) {
 	// Invalid content-type
 	err := fmt.Errorf("invalid content type, only %s is supported", contentType)
 	return http.StatusUnsupportedMediaType, err
+}
+
+// ContextRequestTimeout returns the request timeout derived from the given context.
+func ContextRequestTimeout(ctx context.Context) (time.Duration, bool) {
+	timeout := time.Duration(math.MaxInt64)
+	hasTimeout := false
+	setTimeout := func(d time.Duration) {
+		if d < timeout {
+			timeout = d
+			hasTimeout = true
+		}
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		setTimeout(time.Until(deadline))
+	}
+
+	// If the context is an HTTP request context, use the server's WriteTimeout.
+	httpSrv, ok := ctx.Value(http.ServerContextKey).(*http.Server)
+	if ok && httpSrv.WriteTimeout > 0 {
+		wt := httpSrv.WriteTimeout
+		// When a write timeout is configured, we need to send the response message before
+		// the HTTP server cuts connection. So our internal timeout must be earlier than
+		// the server's true timeout.
+		//
+		// Note: Timeouts are sanitized to be a minimum of 1 second.
+		// Also see issue: https://github.com/golang/go/issues/47229
+		wt -= 100 * time.Millisecond
+		setTimeout(wt)
+	}
+
+	return timeout, hasTimeout
 }
