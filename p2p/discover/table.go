@@ -673,22 +673,14 @@ func (h *nodesByDistance) push(n *node, maxElems int) {
 		return enode.DistCmp(h.target, h.entries[i].ID(), n.ID()) > 0
 	})
 
-	if ix == len(h.entries) {
-		// farther away than all nodes we already have.
-		if len(h.entries) < maxElems {
-			h.entries = append(h.entries, n)
-		}
-	} else {
-		// slide existing entries down to make room
-		// note here len(h.entries) is guaranteed > 0
-		var last *node
-		if len(h.entries) < maxElems {
-			last = h.entries[len(h.entries)-1]
-		}
+	end := len(h.entries)
+	if len(h.entries) < maxElems {
+		h.entries = append(h.entries, n)
+	}
+	if ix < end {
+		// Slide existing entries down to make room.
+		// This will overwrite the entry we just appended.
 		copy(h.entries[ix+1:], h.entries[ix:])
 		h.entries[ix] = n
-		if last != nil {
-			h.entries = append(h.entries, n)
-		}
 	}
 }
