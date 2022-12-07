@@ -491,7 +491,7 @@ func (w *gzipResponseWriter) init() {
 		}
 	}
 
-	// Setting Transfer-Encoding to "identity" explictly disables compression. net/http
+	// Setting Transfer-Encoding to "identity" explicitly disables compression. net/http
 	// also recognizes this header value and trims it from the response. This means
 	// handlers set this header to disable gzip without 'knowing' they will be wrapped in
 	// a gzipHandler.
