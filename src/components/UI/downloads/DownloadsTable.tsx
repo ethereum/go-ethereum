@@ -36,7 +36,7 @@ export const DownloadsTable: FC<Props> = ({
   const LAST_2_LINUX_RELEASES = amountOfReleasesToShow + 12;
 
   return (
-    <Stack sx={{ mt: '0 !important' }} borderBottom='2px solid' borderColor='primary'>
+    <Stack sx={{ mt: '0 !important' }}>
       <Tabs variant='unstyled' onChange={idx => setTotalReleases(totalReleases[idx])}>
         <TabList color='primary' bg='button-bg'>
           {DOWNLOADS_TABLE_TABS.map((tab, idx) => {

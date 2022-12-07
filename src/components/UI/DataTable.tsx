@@ -1,4 +1,15 @@
-import { Link, Table, Thead, Tr, Th, TableContainer, Text, Tbody, Td } from '@chakra-ui/react';
+import {
+  Link,
+  Table,
+  Thead,
+  Tr,
+  Th,
+  TableContainer,
+  Text,
+  Tbody,
+  Td,
+  Stack
+} from '@chakra-ui/react';
 import { FC } from 'react';
 import { OpenPGPSignaturesData, ReleaseData } from '../../types';
 import { getParsedDate } from '../../utils';
@@ -20,6 +31,7 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
       css={{
         '&::-webkit-scrollbar': {
           borderTop: '2px solid var(--chakra-colors-primary)',
+          borderBottom: '2px solid var(--chakra-colors-primary)',
           height: 18
         },
         '&::-webkit-scrollbar-thumb': {
@@ -30,26 +42,34 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
       pb={4}
     >
       <Table variant='unstyled'>
-        <Thead>
-          <Tr>
-            {columnHeaders.map((columnHeader, idx) => {
-              return (
-                <Th key={idx} textTransform='none' minW={'130.5px'} px={4}>
-                  <Text
-                    fontFamily='"JetBrains Mono", monospace'
-                    fontWeight={700}
-                    fontSize='md'
-                    color='#868b87' //? Use theme color? Or add to theme?
-                  >
-                    {columnHeader}
-                  </Text>
-                </Th>
-              );
-            })}
-          </Tr>
-        </Thead>
+        {data.length > 0 && (
+          <Thead>
+            <Tr>
+              {columnHeaders.map((columnHeader, idx) => {
+                return (
+                  <Th key={idx} textTransform='none' minW={'130.5px'} px={4}>
+                    <Text
+                      fontFamily='"JetBrains Mono", monospace'
+                      fontWeight={700}
+                      fontSize='md'
+                      color='#868b87' //? Use theme color? Or add to theme?
+                    >
+                      {columnHeader}
+                    </Text>
+                  </Th>
+                );
+              })}
+            </Tr>
+          </Thead>
+        )}
 
         <Tbody>
+          {data.length === 0 && (
+            <Stack justifyContent='center' alignItems='center' w='100%' minH={80}>
+              <Text textStyle='header4'>No builds found</Text>
+            </Stack>
+          )}
+
           {dataType === 'Releases' &&
             data.map((r: ReleaseData, idx: number) => {
               return (
