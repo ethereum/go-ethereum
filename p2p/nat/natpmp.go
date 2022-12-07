@@ -55,15 +55,14 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 		return err
 	}
 
-	// NAT-PMP maps an available port number if the requested port is
-	// already preempted and returns success. In this case, It returns
-	// an error because no actual communication occurs by advertised
-	// the other node a different port number than the actual mapped
-	// port number.
+	// NAT-PMP maps an alternative available port number if the requested
+	// port is already mapped to another address and returns success. In this
+	// case, we return an error because there is no way to return the new port
+	// to the caller.
 	if uint16(extport) != res.MappedExternalPort {
-		// Destroying meaningless mapped port map in NAT device.
+		// Destroy the mapping in NAT device.
 		n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
-		return fmt.Errorf("preempted port %d(%s)", extport, protocol)
+		return fmt.Errorf("port %d already mapped to another address (%s)", intport, protocol)
 	}
 
 	return nil
