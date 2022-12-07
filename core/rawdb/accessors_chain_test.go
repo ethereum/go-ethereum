@@ -751,7 +751,7 @@ func TestReadLogs(t *testing.T) {
 	}
 
 	// Fill in log fields so we can compare their rlp encoding
-	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, body.Transactions); err != nil {
+	if err := types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, 0, big.NewInt(0), body.Transactions); err != nil {
 		t.Fatal(err)
 	}
 	for i, pr := range receipts {
