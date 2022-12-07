@@ -50,8 +50,23 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 	}
 	// Note order of port arguments is switched between our
 	// AddMapping and the client's AddPortMapping.
-	_, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
-	return err
+	res, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
+	if err != nil {
+		return err
+	}
+
+	// NAT-PMP maps an available port number if the requested port is
+	// already preempted and returns success. In this case, It returns
+	// an error because no actual communication occurs by telling the
+	// other node a different port number than the actual mapped port
+	// number.
+	if uint16(extport) != res.MappedExternalPort {
+		// Destroying meaningless mapped port map in NAT device.
+		n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
+		return fmt.Errorf("preempted port")
+	}
+
+	return nil
 }
 
 func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
