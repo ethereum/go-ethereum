@@ -1045,3 +1045,45 @@ func TestEIP4844(t *testing.T) {
 		t.Fatal("latest block is missing excessDataGas")
 	}
 }
+
+func TestEIP4844Withdrawals(t *testing.T) {
+	genesis, blocks := generateChain(10, true)
+	lastBlockTime := blocks[len(blocks)-1].Time()
+	genesis.Config.ShanghaiTime = new(uint64)
+	*genesis.Config.ShanghaiTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	// 10: Build Shanghai block with no withdrawals.
+	parent := ethservice.BlockChain().CurrentHeader()
+	params := beacon.PayloadAttributes{
+		Timestamp:   parent.Time + 5,
+		Withdrawals: make([]*types.Withdrawal, 0),
+	}
+	fcState := beacon.ForkchoiceStateV1{
+		HeadBlockHash: parent.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	if resp.PayloadStatus.Status != beacon.VALID {
+		t.Fatalf("unexpected status (got: %s, want: %s)", resp.PayloadStatus.Status, beacon.VALID)
+	}
+
+	execData, err := api.GetPayloadV2(*resp.PayloadID)
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	if execData.StateRoot != parent.Root {
+		t.Fatalf("mismatch state roots (got: %s, want: %s)", execData.StateRoot, blocks[8].Root())
+	}
+	if execData.Withdrawals == nil || len(execData.Withdrawals) != 0 {
+		t.Fatalf("expected empty withdrawals list. got %v", execData.Withdrawals)
+	}
+}

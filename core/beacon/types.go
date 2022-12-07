@@ -226,6 +226,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableData {
 		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
+		Withdrawals:   block.Withdrawals(),
 	}
 }
 

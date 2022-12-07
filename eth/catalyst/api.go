@@ -298,6 +298,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update beacon.ForkchoiceStateV1, payl
 			Timestamp:    payloadAttributes.Timestamp,
 			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
 			Random:       payloadAttributes.Random,
+			Withdrawals:  payloadAttributes.Withdrawals,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
