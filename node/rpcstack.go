@@ -491,12 +491,14 @@ func (w *gzipResponseWriter) init() {
 	}
 
 	// Setting Transfer-Encoding to "identity" explicitly disables compression. net/http
-	// also recognizes this header value and trims it from the response. This means
-	// downstream handlers can set this without harm, even if they aren't wrapped by
-	// newGzipHandler.
+	// also recognizes this header value and uses it to disable "chunked" transfer
+	// encoding, trimming the header from the response. This means downstream handlers can
+	// set this without harm, even if they aren't wrapped by newGzipHandler.
 	//
 	// In go-ethereum, we use this signal to disable compression for certain error
-	// responses which are flushed out close to the write deadline of the response.
+	// responses which are flushed out close to the write deadline of the response. For
+	// these cases, we want to avoid chunked transfer encoding and compression because
+	// they require additional output that may not get written in time.
 	passthrough := hdr.Get("transfer-encoding") == "identity"
 	if !passthrough {
 		w.gz = gzPool.Get().(*gzip.Writer)
