@@ -610,14 +610,13 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer  = types.MakeSigner(api.backend.ChainConfig(), block.Number())
 		txs     = block.Transactions()
 		results = make([]*txTraceResult, len(txs))
-
-		pend = new(sync.WaitGroup)
-		jobs = make(chan *txTraceTask, len(txs))
+		pend    sync.WaitGroup
 	)
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
 	}
+	jobs := make(chan *txTraceTask, len(txs))
 	blockHash := block.Hash()
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
@@ -650,10 +649,10 @@ txloop:
 		// Send the trace task over for execution
 		task := &txTraceTask{statedb: statedb.Copy(), index: i}
 		select {
-		case jobs <- task:
 		case <-ctx.Done():
 			failed = ctx.Err()
 			break txloop
+		case jobs <- task:
 		}
 
 		// Generate the next state snapshot fast without tracing
@@ -668,6 +667,7 @@ txloop:
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 	}
+
 	close(jobs)
 	pend.Wait()
 
