@@ -116,6 +116,9 @@ const (
 	MSIZE    OpCode = 0x59
 	GAS      OpCode = 0x5a
 	JUMPDEST OpCode = 0x5b
+	RJUMP    OpCode = 0x5c
+	RJUMPI   OpCode = 0x5d
+	RJUMPV   OpCode = 0x5e
 	PUSH0    OpCode = 0x5f
 )
 
@@ -202,6 +205,13 @@ const (
 	LOG2
 	LOG3
 	LOG4
+)
+
+// 0xb0 range - control flow ops.
+const (
+	CALLF = 0xb0 + iota
+	RETF
+	JUMPF
 )
 
 // 0xf0 range - closures.
@@ -304,6 +314,9 @@ var opCodeToString = map[OpCode]string{
 	MSIZE:    "MSIZE",
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
+	RJUMP:    "RJUMP",
+	RJUMPI:   "RJUMPI",
+	RJUMPV:   "RJUMPV",
 	PUSH0:    "PUSH0",
 
 	// 0x60 range - push.
@@ -380,6 +393,9 @@ var opCodeToString = map[OpCode]string{
 	LOG4:   "LOG4",
 
 	// 0xb0 range.
+	CALLF:  "CALLF",
+	RETF:   "RETF",
+	JUMPF:  "JUMPF",
 	TLOAD:  "TLOAD",
 	TSTORE: "TSTORE",
 

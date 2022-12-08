@@ -30,7 +30,7 @@ func TestEOFMarshaling(t *testing.T) {
 	}{
 		{
 			want: Container{
-				Types: []TypeAnnotation{{input: 0, output: 0, maxStackHeight: 0}},
+				Types: []TypeAnnotation{{Input: 0, Output: 0, MaxStackHeight: 0}},
 				Code:  [][]byte{common.Hex2Bytes("604200")},
 				Data:  []byte{0x01, 0x02, 0x03},
 			},
@@ -38,9 +38,9 @@ func TestEOFMarshaling(t *testing.T) {
 		{
 			want: Container{
 				Types: []TypeAnnotation{
-					{input: 0, output: 0, maxStackHeight: 0},
-					{input: 2, output: 3, maxStackHeight: 32},
-					{input: 1, output: 1, maxStackHeight: 1023},
+					{Input: 0, Output: 0, MaxStackHeight: 0},
+					{Input: 2, Output: 3, MaxStackHeight: 32},
+					{Input: 1, Output: 1, MaxStackHeight: 1023},
 				},
 				Code: [][]byte{
 					common.Hex2Bytes("604200"),

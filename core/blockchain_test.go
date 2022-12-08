@@ -4332,3 +4332,148 @@ func TestEIP3651(t *testing.T) {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
 	}
 }
+
+func int8ToByte(n int8) uint8 {
+	return uint8(n)
+}
+
+func TestEOF(t *testing.T) {
+	var (
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec   = &Genesis{
+			Config: params.AllEthashProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr1: {Balance: funds},
+				addr2: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code: (&vm.Container{
+						Types: []vm.TypeAnnotation{
+							{Input: 0, Output: 0, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+							{Input: 0, Output: 0, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+						},
+						Code: [][]byte{
+							{
+								byte(vm.CALLF),
+								byte(0),
+								byte(1),
+								byte(vm.CALLF),
+								byte(0),
+								byte(2),
+								byte(vm.STOP),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.RJUMP), // skip first flag
+								byte(0),
+								byte(5),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.SSTORE), // set first flag
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SWAP1),
+								byte(vm.SUB),
+								byte(vm.DUP1),
+								byte(vm.RJUMPI), // jump to first flag, then don't branch
+								byte(0xff),
+								int8ToByte(-13),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SSTORE), // set second flag
+								byte(vm.RETF),
+							},
+							{
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.SSTORE), // set third flag
+
+								byte(vm.JUMPF),
+								byte(0),
+								byte(3),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.RJUMPV), // jump over invalid op
+								byte(1),
+								byte(0),
+								byte(1),
+
+								byte(vm.INVALID),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(3),
+								byte(vm.SSTORE), // set forth flag
+								byte(vm.RETF),
+							},
+						},
+						Data: []byte{},
+					}).MarshalBinary(),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.ShanghaiTime = common.Big0
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       []byte{},
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Debug: true, Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr)}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	state, _ := chain.State()
+	for i := 0; i < 4; i++ {
+		if state.GetState(aa, common.BigToHash(big.NewInt(int64(i)))).Big().Uint64() != 1 {
+			t.Fatalf("flag %d not set", i)
+		}
+	}
+}

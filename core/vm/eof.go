@@ -61,9 +61,9 @@ type Container struct {
 
 // TypeAnnotation is an EOF function signature.
 type TypeAnnotation struct {
-	input          uint8
-	output         uint8
-	maxStackHeight uint16
+	Input          uint8
+	Output         uint8
+	MaxStackHeight uint16
 }
 
 // MarshalBinary encodes an EOF container into binary format.
@@ -83,7 +83,7 @@ func (c *Container) MarshalBinary() []byte {
 	b = append(b, 0) // terminator
 
 	for _, ty := range c.Types {
-		b = append(b, []byte{ty.input, ty.output, byte(ty.maxStackHeight >> 8), byte(ty.maxStackHeight & 0x00ff)}...)
+		b = append(b, []byte{ty.Input, ty.Output, byte(ty.MaxStackHeight >> 8), byte(ty.MaxStackHeight & 0x00ff)}...)
 	}
 	for _, code := range c.Code {
 		b = append(b, code...)
@@ -94,14 +94,15 @@ func (c *Container) MarshalBinary() []byte {
 
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte) error {
-	if len(b) < 9 {
-		return fmt.Errorf("container size less than minimum valid size")
-	}
-	if !bytes.Equal(b[0:2], eofMagic) {
+	if !hasEOFMagic(b) {
 		return fmt.Errorf("invalid magic")
 	}
 	if check(b, offsetVersion, eof1Version) {
 		return fmt.Errorf("invalid eof version")
+	}
+
+	if len(b) < 9 {
+		return fmt.Errorf("container size less than minimum valid size")
 	}
 
 	var (
@@ -152,16 +153,16 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	var types []TypeAnnotation
 	for i := 0; i < typesSize/4; i++ {
 		sig := TypeAnnotation{
-			input:          b[idx+i*4],
-			output:         b[idx+i*4+1],
-			maxStackHeight: uint16(parseUint16(b[idx+i*4+2:])),
+			Input:          b[idx+i*4],
+			Output:         b[idx+i*4+1],
+			MaxStackHeight: uint16(parseUint16(b[idx+i*4+2:])),
 		}
-		if sig.maxStackHeight > 1024 {
+		if sig.MaxStackHeight > 1024 {
 			return fmt.Errorf("type annotation %d max stack height must not exceed 1024", i)
 		}
 		types = append(types, sig)
 	}
-	if types[0].input != 0 || types[0].output != 0 {
+	if types[0].Input != 0 || types[0].Output != 0 {
 		return fmt.Errorf("input and output of first code section must be 0")
 	}
 	c.Types = types
@@ -181,6 +182,15 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	// Parse data section.
 	c.Data = b[idx : idx+dataSize]
 
+	return nil
+}
+
+func (c *Container) ValidateCode() error {
+	// for _, code := range c.Code {
+	//         if err := validateCode(code); err != nil {
+	//                 return err
+	//         }
+	// }
 	return nil
 }
 

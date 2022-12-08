@@ -56,6 +56,7 @@ var (
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
+	shanghaiEOFInstructionSet      = newShanghaiEOFInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -83,6 +84,12 @@ func newShanghaiInstructionSet() JumpTable {
 	instructionSet := newMergeInstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
+	return validate(instructionSet)
+}
+
+func newShanghaiEOFInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enableEOF(&instructionSet)
 	return validate(instructionSet)
 }
 
