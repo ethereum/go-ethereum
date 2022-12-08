@@ -2142,8 +2142,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 
 		// Collect deleted logs for notification
-		h := oldChain[i]
-		if logs := bc.collectLogs(h.Hash(), h.NumberU64(), true); len(logs) > 0 {
+		b := oldChain[i]
+		if logs := bc.collectLogs(b.Hash(), b.NumberU64(), true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
 		if len(deletedLogs) > 512 {
@@ -2158,8 +2158,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		h := newChain[i]
-		if logs := bc.collectLogs(h.Hash(), h.NumberU64(), false); len(logs) > 0 {
+		b := newChain[i]
+		if logs := bc.collectLogs(b.Hash(), b.NumberU64(), false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
 		if len(rebirthLogs) > 512 {
