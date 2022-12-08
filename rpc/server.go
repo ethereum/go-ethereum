@@ -125,7 +125,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	reqs, batch, err := codec.readBatch()
 	if err != nil {
 		if err != io.EOF {
-			codec.writeJSON(ctx, errorMessage(&invalidMessageError{"parse error"}))
+			resp := errorMessage(&invalidMessageError{"parse error"})
+			codec.writeJSON(ctx, resp, true)
 		}
 		return
 	}

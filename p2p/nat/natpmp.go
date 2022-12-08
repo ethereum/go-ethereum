@@ -50,8 +50,22 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 	}
 	// Note order of port arguments is switched between our
 	// AddMapping and the client's AddPortMapping.
-	_, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
-	return err
+	res, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
+	if err != nil {
+		return err
+	}
+
+	// NAT-PMP maps an alternative available port number if the requested
+	// port is already mapped to another address and returns success. In this
+	// case, we return an error because there is no way to return the new port
+	// to the caller.
+	if uint16(extport) != res.MappedExternalPort {
+		// Destroy the mapping in NAT device.
+		n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
+		return fmt.Errorf("port %d already mapped to another address (%s)", extport, protocol)
+	}
+
+	return nil
 }
 
 func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
@@ -95,13 +109,6 @@ func discoverPMP() Interface {
 	return nil
 }
 
-var (
-	// LAN IP ranges
-	_, lan10, _  = net.ParseCIDR("10.0.0.0/8")
-	_, lan176, _ = net.ParseCIDR("172.16.0.0/12")
-	_, lan192, _ = net.ParseCIDR("192.168.0.0/16")
-)
-
 // TODO: improve this. We currently assume that (on most networks)
 // the router is X.X.X.1 in a local LAN range.
 func potentialGateways() (gws []net.IP) {
@@ -116,7 +123,7 @@ func potentialGateways() (gws []net.IP) {
 		}
 		for _, addr := range ifaddrs {
 			if x, ok := addr.(*net.IPNet); ok {
-				if lan10.Contains(x.IP) || lan176.Contains(x.IP) || lan192.Contains(x.IP) {
+				if x.IP.IsPrivate() {
 					ip := x.IP.Mask(x.Mask).To4()
 					if ip != nil {
 						ip[3] = ip[3] | 0x01

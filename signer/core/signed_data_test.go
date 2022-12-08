@@ -220,15 +220,29 @@ func TestSignData(t *testing.T) {
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
-	// data/typed
+	// data/typed via SignTypeData
 	control.approveCh <- "Y"
 	control.inputCh <- "a_long_password"
-	signature, err = api.SignTypedData(context.Background(), a, typedData)
-	if err != nil {
+	var want []byte
+	if signature, err = api.SignTypedData(context.Background(), a, typedData); err != nil {
 		t.Fatal(err)
-	}
-	if signature == nil || len(signature) != 65 {
+	} else if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+	} else {
+		want = signature
+	}
+
+	// data/typed via SignData / mimetype typed data
+	control.approveCh <- "Y"
+	control.inputCh <- "a_long_password"
+	if typedDataJson, err := json.Marshal(typedData); err != nil {
+		t.Fatal(err)
+	} else if signature, err = api.SignData(context.Background(), apitypes.DataTyped.Mime, a, hexutil.Encode(typedDataJson)); err != nil {
+		t.Fatal(err)
+	} else if signature == nil || len(signature) != 65 {
+		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
+	} else if have := signature; !bytes.Equal(have, want) {
+		t.Fatalf("want %x, have %x", want, have)
 	}
 }
 
