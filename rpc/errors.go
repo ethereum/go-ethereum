@@ -58,11 +58,13 @@ var (
 )
 
 const (
-	errcodeDefault                  = -32000
-	errcodeTimeout                  = -32002
-	errcodeResponseTooLarge         = -32003
-	errcodePanic                    = -32603
-	errcodeMarshalError             = -32603
+	errcodeDefault          = -32000
+	errcodeTimeout          = -32002
+	errcodeResponseTooLarge = -32003
+	errcodePanic            = -32603
+	errcodeMarshalError     = -32603
+
+	legacyErrcodeNotificationsUnsupported = -32001
 )
 
 const (
@@ -100,7 +102,11 @@ func (e notificationsUnsupportedError) Is(other error) bool {
 		return true
 	}
 	rpcErr, ok := other.(Error)
-	return ok && rpcErr.ErrorCode() == -32601
+	if ok {
+		code := rpcErr.ErrorCode()
+		return code == -32601 || code == legacyErrcodeNotificationsUnsupported
+	}
+	return false
 }
 
 type subscriptionNotFoundError struct{ namespace, subscription string }
