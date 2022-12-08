@@ -59,7 +59,6 @@ var (
 
 const (
 	errcodeDefault                  = -32000
-	errcodeNotificationsUnsupported = -32001
 	errcodeTimeout                  = -32002
 	errcodeResponseTooLarge         = -32003
 	errcodePanic                    = -32603
@@ -78,6 +77,30 @@ func (e *methodNotFoundError) ErrorCode() int { return -32601 }
 
 func (e *methodNotFoundError) Error() string {
 	return fmt.Sprintf("the method %s does not exist/is not available", e.method)
+}
+
+type notificationsUnsupportedError struct{}
+
+func (e notificationsUnsupportedError) Error() string {
+	return "notifications not supported"
+}
+
+func (e notificationsUnsupportedError) ErrorCode() int { return -32601 }
+
+// Is checks for equivalence to another error. Here we define that all errors with code
+// -32601 (method not found) are equivalent to notificationsUnsupportedError. This is
+// done to enable the following pattern:
+//
+//	sub, err := client.Subscribe(...)
+//	if errors.Is(err, rpc.ErrNotificationsUnsupported) {
+//		// server doesn't support subscriptions
+//	}
+func (e notificationsUnsupportedError) Is(other error) bool {
+	if other == (notificationsUnsupportedError{}) {
+		return true
+	}
+	rpcErr, ok := other.(Error)
+	return ok && rpcErr.ErrorCode() == -32601
 }
 
 type subscriptionNotFoundError struct{ namespace, subscription string }
