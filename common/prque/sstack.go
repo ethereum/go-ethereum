@@ -16,9 +16,6 @@ import "golang.org/x/exp/constraints"
 const blockSize = 4096
 
 // A prioritized item in the sorted stack.
-//
-// Note: priorities can "wrap around" the int64 range, a comes before b if (a.priority - b.priority) > 0.
-// The difference between the lowest and highest priorities in the queue at any point should be less than 2^63.
 type item[P constraints.Ordered, V any] struct {
 	value    V
 	priority P
