@@ -293,6 +293,9 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
+	if evm.interpreter.cfg.HasEip3860() && wordGas > params.MaxInitCodeSize {
+		return 0, nil // instruction will handle error
+	}
 	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Keccak256WordGas); overflow {
 		return 0, ErrGasUintOverflow
 	}

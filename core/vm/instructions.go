@@ -633,7 +633,13 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-
+	// Check EIP-3860 initcode length.
+	if interpreter.cfg.HasEip3860() {
+		if size, overflow := size.Uint64WithOverflow(); overflow || size > params.MaxInitCodeSize {
+			scope.Stack.push(uint256.NewInt(0))
+			return nil, nil
+		}
+	}
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas)

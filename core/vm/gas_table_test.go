@@ -118,7 +118,7 @@ var createGasTests = []struct {
 	// create2(0, 0, 0xc000, 0)
 	{"0x600061C00060006000f5", false, 50444},
 	// create2(0, 0, 0xc000, 0)
-	{"0x600061C00060006000f5", true, 53516},
+	{"0x600061C00160006000f5", true, 32012},
 }
 
 func TestCreateGas(t *testing.T) {
