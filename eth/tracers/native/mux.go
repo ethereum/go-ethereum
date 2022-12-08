@@ -19,7 +19,6 @@ package native
 import (
 	"encoding/json"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -67,9 +66,9 @@ func (t *muxTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Add
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, elapsed time.Duration, err error) {
+func (t *muxTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	for _, t := range t.tracers {
-		t.CaptureEnd(output, gasUsed, elapsed, err)
+		t.CaptureEnd(output, gasUsed, err)
 	}
 }
 

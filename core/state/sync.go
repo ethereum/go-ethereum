@@ -27,7 +27,7 @@ import (
 )
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(keys [][]byte, leaf []byte) error) *trie.Sync {
+func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(keys [][]byte, leaf []byte) error, scheme trie.NodeScheme) *trie.Sync {
 	// Register the storage slot callback if the external callback is specified.
 	var onSlot func(keys [][]byte, path []byte, leaf []byte, parent common.Hash, parentPath []byte) error
 	if onLeaf != nil {
@@ -52,6 +52,6 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 		syncer.AddCodeEntry(common.BytesToHash(obj.CodeHash), path, parent, parentPath)
 		return nil
 	}
-	syncer = trie.NewSync(root, database, onAccount)
+	syncer = trie.NewSync(root, database, onAccount, scheme)
 	return syncer
 }

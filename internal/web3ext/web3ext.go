@@ -600,6 +600,12 @@ web3._extend({
 			call: 'eth_getLogs',
 			params: 1,
 		}),
+		new web3._extend.Method({
+			name: 'call',
+			call: 'eth_call',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null],
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
