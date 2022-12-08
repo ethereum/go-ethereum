@@ -42,10 +42,9 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "engine",
-			Service:   NewConsensusAPI(backend),
-			//Authenticated: true,
-			Authenticated: false, // TODO(roberto-bayardo): change this to true once we update the beacon client
+			Namespace:     "engine",
+			Service:       NewConsensusAPI(backend),
+			Authenticated: true,
 		},
 	})
 	return nil
