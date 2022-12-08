@@ -1333,7 +1333,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Find the next state trie we need to commit
 	chosen := current - TriesInMemory
 	flushInterval := time.Duration(atomic.LoadInt64(&bc.flushInterval))
-	log.Info("Deciding to flush", "interval", flushInterval, "chosen", chosen, "time", bc.gcproc, "lastWrite", bc.lastWrite)
 	// If we exceeded time allowance, flush an entire trie to disk
 	if bc.gcproc > flushInterval {
 		// If the header is missing (canonical chain behind), we're reorging a low
