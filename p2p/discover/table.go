@@ -79,7 +79,8 @@ type Table struct {
 	closeReq   chan struct{}
 	closed     chan struct{}
 
-	nodeAddedHook func(*node) // for testing
+	nodeIsValidFn func(enode.Node) bool // function to validate a node before it's added to routing tables
+	nodeAddedHook func(*node)           // for testing
 }
 
 // transport is implemented by the UDP transports.
@@ -99,17 +100,18 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, log log.Logger) (*Table, error) {
+func newTable(t transport, db *enode.DB, bootnodes []*enode.Node, nodeIsValidFn func(enode.Node) bool, log log.Logger) (*Table, error) {
 	tab := &Table{
-		net:        t,
-		db:         db,
-		refreshReq: make(chan chan struct{}),
-		initDone:   make(chan struct{}),
-		closeReq:   make(chan struct{}),
-		closed:     make(chan struct{}),
-		rand:       mrand.New(mrand.NewSource(0)),
-		ips:        netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
-		log:        log,
+		net:           t,
+		db:            db,
+		refreshReq:    make(chan chan struct{}),
+		initDone:      make(chan struct{}),
+		closeReq:      make(chan struct{}),
+		closed:        make(chan struct{}),
+		rand:          mrand.New(mrand.NewSource(0)),
+		ips:           netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+		nodeIsValidFn: nodeIsValidFn,
+		log:           log,
 	}
 	if err := tab.setFallbackNodes(bootnodes); err != nil {
 		return nil, err
@@ -464,6 +466,9 @@ func (tab *Table) addSeenNode(n *node) {
 	if n.ID() == tab.self().ID() {
 		return
 	}
+	if tab.nodeIsValidFn != nil && !tab.nodeIsValidFn(n.Node) {
+		return
+	}
 
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
@@ -504,6 +509,9 @@ func (tab *Table) addVerifiedNode(n *node) {
 		return
 	}
 	if n.ID() == tab.self().ID() {
+		return
+	}
+	if tab.nodeIsValidFn != nil && !tab.nodeIsValidFn(n.Node) {
 		return
 	}
 

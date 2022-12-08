@@ -43,7 +43,7 @@ func init() {
 
 func newTestTable(t transport) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, nil, log.Root())
+	tab, _ := newTable(t, db, nil, nil, log.Root())
 	go tab.loop()
 	return tab, db
 }

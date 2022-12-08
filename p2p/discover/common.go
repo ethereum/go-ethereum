@@ -53,6 +53,9 @@ type Config struct {
 	// V5ProtocolID configures the discv5 protocol identifier.
 	V5ProtocolID *[6]byte
 
+	// function to validate a node before it's added to routing tables
+	ValidationFn func(enode.Node) bool
+
 	ValidSchemes enr.IdentityScheme // allowed identity schemes
 	Clock        mclock.Clock
 }

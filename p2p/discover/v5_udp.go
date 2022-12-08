@@ -162,7 +162,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 	}
-	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
+	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.ValidationFn, cfg.Log)
 	if err != nil {
 		return nil, err
 	}
