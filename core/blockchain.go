@@ -1995,13 +1995,8 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 // collectLogs collects the logs that were generated or removed during
 // the processing of the block that corresponds with the given hash.
 // These logs are later announced as deleted or reborn.
-func (bc *BlockChain) collectLogs(hash common.Hash, removed bool) []*types.Log {
-	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
-		return nil
-	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
-
+func (bc *BlockChain) collectLogs(hash common.Hash, number uint64, removed bool) []*types.Log {
+	receipts := rawdb.ReadReceipts(bc.db, hash, number, bc.chainConfig)
 	var logs []*types.Log
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
@@ -2147,7 +2142,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
 
 		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldChain[i].Hash(), true); len(logs) > 0 {
+		h := oldChain[i]
+		if logs := bc.collectLogs(h.Hash(), h.NumberU64(), true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
 		if len(deletedLogs) > 512 {
@@ -2162,7 +2158,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		if logs := bc.collectLogs(newChain[i].Hash(), false); len(logs) > 0 {
+		h := newChain[i]
+		if logs := bc.collectLogs(h.Hash(), h.NumberU64(), false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
 		if len(rebirthLogs) > 512 {
@@ -2217,7 +2214,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	bc.writeHeadBlock(head)
 
 	// Emit events
-	logs := bc.collectLogs(head.Hash(), false)
+	logs := bc.collectLogs(head.Hash(), head.NumberU64(), false)
 	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
