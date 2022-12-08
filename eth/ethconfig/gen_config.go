@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/miner"
@@ -47,7 +47,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Preimages               bool
 		FilterLogCacheSize      int
 		Miner                   miner.Config
-		TxPool                  txpool.Config
+		TxPool                  legacypool.Config
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
@@ -133,7 +133,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Preimages               *bool
 		FilterLogCacheSize      *int
 		Miner                   *miner.Config
-		TxPool                  *txpool.Config
+		TxPool                  *legacypool.Config
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`

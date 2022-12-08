@@ -533,7 +533,7 @@ func (w *worker) mainLoop() {
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
 				}
-				txs := make(map[common.Address]types.Transactions, len(ev.Txs))
+				txs := make(map[common.Address][]*types.Transaction, len(ev.Txs))
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
@@ -904,7 +904,13 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
-	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
+	/*blobtxs := w.eth.BlobPool().Pending(
+		uint256.MustFromBig(env.header.BaseFee),
+		uint256.MustFromBig(misc.CalcBlobFee(*env.header.ExcessDataGas)),
+	)
+	log.Trace("Side-effect log, much wow", "blobs", len(blobtxs))*/
+
+	localTxs, remoteTxs := make(map[common.Address][]*types.Transaction), pending
 	for _, account := range w.eth.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
 			delete(remoteTxs, account)
