@@ -143,7 +143,9 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
 		t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
-		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, nil)
+		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, func(i int, gen *BlockGen) {
+			gen.SetPoS()
+		})
 	}
 	// Assemble header batch
 	preHeaders := make([]*types.Header, len(preBlocks))
