@@ -1880,25 +1880,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
-	if ctx.IsSet(SyncTargetFlag.Name) {
-		path := ctx.Path(SyncTargetFlag.Name)
-		if path == "" {
-			Fatalf("Failed to resolve file path")
-		}
-		blob, err := os.ReadFile(path)
-		if err != nil {
-			Fatalf("Failed to read block file: %v", err)
-		}
-		rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
-		if err != nil {
-			Fatalf("Failed to decode block blob: %v", err)
-		}
-		var block types.Block
-		if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
-			Fatalf("Failed to decode block: %v", err)
-		}
-		cfg.SyncTarget = &block
-	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
@@ -2052,13 +2033,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		Fatalf("Failed to register the Engine API service: %v", err)
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
-
-	// Register the auxiliary full-sync tester service in case the sync
-	// target is configured.
-	if cfg.SyncTarget != nil && cfg.SyncMode == downloader.FullSync {
-		ethcatalyst.RegisterFullSyncTester(stack, backend, cfg.SyncTarget)
-		log.Info("Registered full-sync tester", "number", cfg.SyncTarget.NumberU64(), "hash", cfg.SyncTarget.Hash())
-	}
 	return backend.APIBackend, backend
 }
 
@@ -2088,6 +2062,24 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
 	}})
 	return filterSystem
+}
+
+// RegisterFullSyncTester adds the full-sync tester service into node.
+func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, path string) {
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		Fatalf("Failed to read block file: %v", err)
+	}
+	rlpBlob, err := hexutil.Decode(string(bytes.TrimRight(blob, "\r\n")))
+	if err != nil {
+		Fatalf("Failed to decode block blob: %v", err)
+	}
+	var block types.Block
+	if err := rlp.DecodeBytes(rlpBlob, &block); err != nil {
+		Fatalf("Failed to decode block: %v", err)
+	}
+	ethcatalyst.RegisterFullSyncTester(stack, eth, &block)
+	log.Info("Registered full-sync tester", "number", block.NumberU64(), "hash", block.Hash())
 }
 
 func SetupMetrics(ctx *cli.Context) {
