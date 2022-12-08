@@ -1993,8 +1993,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 }
 
 // collectLogs collects the logs that were generated or removed during
-// the processing of the block that corresponds with the given hash.
-// These logs are later announced as deleted or reborn.
+// the processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
 	receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Transactions())
