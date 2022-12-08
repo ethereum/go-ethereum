@@ -762,7 +762,12 @@ func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types.Body {
 	var bodies []*types.Body
 	for _, hash := range hashes {
-		body := api.eth.BlockChain().GetBody(hash)
+		block := api.eth.BlockChain().GetBlockByHash(hash)
+		if block == nil {
+			bodies = append(bodies, nil)
+			continue
+		}
+		body := block.Body()
 		if body == nil {
 			bodies = append(bodies, nil)
 			continue
