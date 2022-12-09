@@ -36,6 +36,7 @@ export const Search: FC = () => {
             outlineOffset={4}
           />
           <Button
+            type="submit"
             px={4}
             me={2}
             borderRadius='0'
