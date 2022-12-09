@@ -616,7 +616,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	if threads > len(txs) {
 		threads = len(txs)
 	}
-	jobs := make(chan *txTraceTask, len(txs))
+	jobs := make(chan *txTraceTask, threads)
 	blockHash := block.Hash()
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
