@@ -77,7 +77,8 @@ export const textStyles = {
     fontFamily: 'heading',
     color: 'bg',
     fontWeight: 700,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'home-section-link-label': {
     fontFamily: 'heading',
@@ -124,13 +125,15 @@ export const textStyles = {
     fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'md', lg: 'xl' },
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'downloads-button-sublabel': {
     fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'xs', lg: 'sm' },
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'download-tab-label': {
     fontFamily: 'heading',
@@ -190,7 +193,7 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: '13px',
     lineHeight: 5,
-    letterSpacing: '1%',
+    letterSpacing: '1%'
   },
   'note-text': {
     fontFamily: 'body',

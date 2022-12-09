@@ -42,7 +42,7 @@ const MDComponents = {
   },
   // headings
   h1: ({ children }: any) => {
-    const { children: parsedChildren, headingId} = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
     return (
       <Heading as='h1' textAlign='start' mb='5 !important' {...header1} id={headingId}>
@@ -51,16 +51,23 @@ const MDComponents = {
     );
   },
   h2: ({ children }: any) => {
-    const { children: parsedChildren, headingId} = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
     return (
-      <Heading as='h2' textAlign='start' mt={{ base: '12 !important' , md: '16 !important'}} mb='4 !important' {...header2} id={headingId}>
+      <Heading
+        as='h2'
+        textAlign='start'
+        mt={{ base: '12 !important', md: '16 !important' }}
+        mb='4 !important'
+        {...header2}
+        id={headingId}
+      >
         {parsedChildren}
       </Heading>
     );
   },
   h3: ({ children }: any) => {
-    const { children: parsedChildren, headingId} = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
     return (
       <Heading as='h3' mt='5 !important' mb='2.5 !important' {...header3} id={headingId}>
         {parsedChildren}
@@ -68,7 +75,7 @@ const MDComponents = {
     );
   },
   h4: ({ children }: any) => {
-    const { children: parsedChildren, headingId} = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
     return (
       <Heading as='h4' mb='2.5 !important' {...header4} id={headingId}>

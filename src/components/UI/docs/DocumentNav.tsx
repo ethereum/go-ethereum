@@ -36,19 +36,19 @@ export const DocumentNav: FC<Props> = ({ content }) => {
                 _hover={{
                   background: 'primary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-primary)',
-                  color: 'bg',
+                  color: 'bg'
                 }}
                 _focus={{
                   background: 'primary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-primary) !important',
                   color: 'bg',
                   outline: '2px solid var(--chakra-colors-secondary) !important',
-                  outlineOffset: '4px',
+                  outlineOffset: '4px'
                 }}
                 _active={{
                   background: 'secondary',
                   boxShadow: '0 0 0 6px var(--chakra-colors-secondary)',
-                  color: 'bg',
+                  color: 'bg'
                 }}
               >
                 {heading?.title}
