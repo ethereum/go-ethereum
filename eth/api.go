@@ -590,3 +590,14 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 	}
 	return 0, errors.New("no state found")
 }
+
+// SetTrieFlushInterval configures how often in-memory tries are persisted
+// to disk. The value is in terms of block processing time, not wall clock.
+func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
+	t, err := time.ParseDuration(interval)
+	if err != nil {
+		return err
+	}
+	api.eth.blockchain.SetTrieFlushInterval(t)
+	return nil
+}
