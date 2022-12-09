@@ -130,12 +130,8 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 				preSeals = seals[:index]
 				break
 			}
-			// The 'expected' case is above, this is the non-expected case
-			// where we handle a chain which kept going on PoW and missed
-			// the merge. We split it up into pre- and post- anyway, the post-headers
-			// will fail validation further down
 			td = td.Add(td, header.Difficulty)
-			if ttd != nil && td.Cmp(ttd) >= 0 {
+			if td.Cmp(ttd) >= 0 {
 				// This is the last PoW header, it still belongs to
 				// the preHeaders, so we cannot split+break yet.
 				tdPassed = true
