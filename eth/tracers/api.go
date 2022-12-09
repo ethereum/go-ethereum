@@ -807,6 +807,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if err != nil {
 		return nil, err
 	}
+	// Only mined txes are supported
 	if tx == nil {
 		return nil, errors.New(errTxNotFound)
 	}
