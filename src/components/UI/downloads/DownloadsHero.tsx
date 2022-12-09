@@ -80,12 +80,17 @@ export const DownloadsHero: FC<DownloadsHero> = ({
         <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4}>
           {Object.keys(DOWNLOAD_HEADER_BUTTONS).map((key: string) => {
             const { name, buildURL, Svg, ariaLabel } = DOWNLOAD_HEADER_BUTTONS[key];
+
             return (
               <NextLink key={key} href={buildURL} passHref legacyBehavior>
-                <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16}>
+                <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16} data-group>
                   <HStack spacing={4}>
                     <Stack alignItems='center'>
-                      <Svg aria-label={ariaLabel} maxH='44px' />
+                      <Svg
+                        aria-label={ariaLabel}
+                        maxH='44px'
+                        _groupHover={{ color: 'yellow.50' }}
+                      />
                     </Stack>
                     <Box>
                       <Text textStyle='downloads-button-label'>For {name}</Text>
