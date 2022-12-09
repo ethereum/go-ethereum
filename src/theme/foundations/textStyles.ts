@@ -2,7 +2,7 @@ export const textStyles = {
   h1: {
     fontFamily: 'heading',
     fontWeight: 700,
-    fontSize: '2.75rem',
+    fontSize: { base: '2.175rem', md: '2.875rem' },
     lineHeight: '3.375rem',
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
@@ -15,14 +15,7 @@ export const textStyles = {
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
-  header1: {
-    fontFamily: 'heading',
-    fontWeight: 700,
-    fontSize: { base: '1.875rem', md: '2.125rem' },
-    letterSpacing: { base: '0.03rem', md: '0.04rem' },
-    lineHeight: 'normal',
-    color: 'body'
-  },
+
   header2: {
     fontFamily: 'heading',
     fontSize: { base: '1.5rem', md: '1.75rem' },

@@ -15,7 +15,7 @@ import { Code, Note } from '.';
 import { textStyles } from '../../../theme/foundations';
 import { parseHeadingId } from '../../../utils/parseHeadingId';
 
-const { header1, header2, header3, header4 } = textStyles;
+const { h1, header2, header3, header4 } = textStyles;
 
 const MDComponents = {
   // paragraphs
@@ -45,7 +45,7 @@ const MDComponents = {
     const { children: parsedChildren, headingId } = parseHeadingId(children);
 
     return (
-      <Heading as='h1' textAlign='start' mb='5 !important' {...header1} id={headingId}>
+      <Heading as='h1' textAlign='start' mb='5 !important' {...h1} id={headingId}>
         {parsedChildren}
       </Heading>
     );
