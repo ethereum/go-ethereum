@@ -96,7 +96,7 @@ var Flags = []cli.Flag{
 	//pprofPortFlag,
 	//memprofilerateFlag,
 	//blockprofilerateFlag,
-	//cpuprofileFlag,
+	cpuprofileFlag,
 	//traceFlag,
 }
 

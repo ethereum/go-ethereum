@@ -160,6 +160,9 @@ func (p *peer) MarkLendingTransaction(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
+		p.knownTxs.Pop()
+	}
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
@@ -169,6 +172,10 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendOrderTransactions(txs types.OrderTransactions) error {
+	for p.knownOrderTxs.Cardinality() >= maxKnownOrderTxs {
+		p.knownOrderTxs.Pop()
+	}
+
 	for _, tx := range txs {
 		p.knownOrderTxs.Add(tx.Hash())
 	}
@@ -178,6 +185,10 @@ func (p *peer) SendOrderTransactions(txs types.OrderTransactions) error {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendLendingTransactions(txs types.LendingTransactions) error {
+	for p.knownLendingTxs.Cardinality() >= maxKnownLendingTxs {
+		p.knownLendingTxs.Pop()
+	}
+
 	for _, tx := range txs {
 		p.knownLendingTxs.Add(tx.Hash())
 	}
@@ -187,6 +198,10 @@ func (p *peer) SendLendingTransactions(txs types.LendingTransactions) error {
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
+	}
+
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
 	}
@@ -200,6 +215,10 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
+	}
+
 	p.knownBlocks.Add(block.Hash())
 	if p.pairRw != nil {
 		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
