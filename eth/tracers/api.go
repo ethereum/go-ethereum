@@ -66,6 +66,8 @@ const (
 	// for tracing. The creation of trace state will be paused if the unused
 	// trace states exceed this limit.
 	maximumPendingTraceStates = 128
+
+	errTxNotFound = "transaction not found"
 )
 
 // StateReleaseFunc is used to deallocate resources held by constructing a
@@ -806,7 +808,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	if tx == nil {
-		return nil, errors.New("transaction not found")
+		return nil, errors.New(errTxNotFound)
 	}
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
