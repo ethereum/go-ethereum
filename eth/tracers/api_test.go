@@ -364,11 +364,8 @@ func TestTraceTransaction(t *testing.T) {
 
 	// Test non-existent transaction
 	result, err = api.TraceTransaction(context.Background(), common.Hash{42}, nil)
-	if err == nil {
-		t.Fatal("Tracing a non-existent transaction should return an error")
-	}
-	if err.Error() != errTxNotFound {
-		t.Fatalf("exptected error %s, got %s", errTxNotFound, err.Error())
+	if !errors.Is(err, errTxNotFound) {
+		t.Fatalf("want %v, have %v", errTxNotFound, err)
 	}
 }
 
