@@ -672,7 +672,7 @@ If set, the previous four arguments will be ignored.
   Valid values are described [here](https://golang.org/pkg/time/#ParseDuration).
 - `tracerConfig`: Config for the specified `tracer`. For example see callTracer's [config](/docs/developers/evm-tracing/built-in-tracers#config).
 
-Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing//built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
+Geth comes with a bundle of [built-in tracers](/docs/developers/evm-tracing/built-in-tracers), each providing various data about a transaction. This method defaults to the [struct logger](/docs/developers/evm-tracing/built-in-tracers#structopcode-logger). The `tracer` field of the second parameter can be set to use any of the other tracers. Alternatively a [custom tracer](/docs/developers/evm-tracing/custom-tracer) can be implemented in either Go or Javascript.
 
 #### Example
 
