@@ -592,7 +592,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 }
 
 // SetTrieFlushInterval configures how often in-memory tries are persisted
-// to disk. The value is
+// to disk. The value is in terms of block processing time, not wall clock.
 func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 	t, err := time.ParseDuration(interval)
 	if err != nil {
