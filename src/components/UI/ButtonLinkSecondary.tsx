@@ -18,7 +18,7 @@ export const ButtonLinkSecondary: React.FC<Props> = ({ href, children, ...restPr
           <Text textStyle='home-section-link-label'>{children}</Text>
         </Link>
       ) : (
-        <NextLink href={href.toString()} passHref {...restProps}>
+        <NextLink href={href.toString()} passHref legacyBehavior {...restProps}>
           <Link variant='button-link-secondary'>
             <Text textStyle='home-section-link-label'>{children}</Text>
           </Link>
