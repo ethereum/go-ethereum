@@ -35,7 +35,7 @@ const MDComponents = {
         {children}
       </Link>
     ) : (
-      <NextLink href={href} passHref>
+      <NextLink href={href} passHref legacyBehavior>
         <Link variant='light'>{children}</Link>
       </NextLink>
     );

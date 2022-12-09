@@ -52,7 +52,7 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
                       _groupHover={{ background: 'primary', color: 'bg', textDecoration: 'none' }}
                     >
                       {to ? (
-                        <NextLink href={to} passHref>
+                        <NextLink href={to} passHref legacyBehavior>
                           <Link textDecoration='none !important'>
                             <Text
                               textStyle='docs-nav-dropdown'

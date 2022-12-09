@@ -43,7 +43,7 @@ export const Footer: FC = () => {
             borderColor='primary'
             p={4}
           >
-            <NextLink href={DOWNLOADS_PAGE} passHref>
+            <NextLink href={DOWNLOADS_PAGE} passHref legacyBehavior>
               <Link _hover={{ textDecoration: 'none' }}>
                 <Text textStyle='footer-link-label'>DOWNLOADS</Text>
               </Link>
@@ -61,7 +61,7 @@ export const Footer: FC = () => {
             borderColor='primary'
             p={4}
           >
-            <NextLink href={DOCS_PAGE} passHref>
+            <NextLink href={DOCS_PAGE} passHref legacyBehavior>
               <Link _hover={{ textDecoration: 'none' }}>
                 <Text textStyle='footer-link-label'>DOCUMENTATION</Text>
               </Link>

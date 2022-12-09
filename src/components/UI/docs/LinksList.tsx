@@ -24,7 +24,7 @@ export const LinksList: FC<LinksListProps> = ({ links }) => {
             _hover={{ background: 'primary', color: 'bg' }}
             data-group
           >
-            <NextLink href={to} passHref key={id}>
+            <NextLink href={to} passHref key={id} legacyBehavior>
               <Link textDecoration='none !important'>
                 <Text
                   textStyle='docs-nav-links'

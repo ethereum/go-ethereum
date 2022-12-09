@@ -82,7 +82,7 @@ export const DownloadsHero: FC<DownloadsHero> = ({
             const { name, buildURL, Svg, ariaLabel } = DOWNLOAD_HEADER_BUTTONS[key];
 
             return (
-              <NextLink key={key} href={buildURL} passHref>
+              <NextLink key={key} href={buildURL} passHref legacyBehavior>
                 <Button as='a' variant='downloadsHeader' width={{ base: '100%' }} h={16} data-group>
                   <HStack spacing={4}>
                     <Stack alignItems='center'>

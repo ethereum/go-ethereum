@@ -27,7 +27,7 @@ export const Header: FC = () => {
         borderColor='primary'
         flexGrow={2}
       >
-        <NextLink href={'/'} passHref>
+        <NextLink href={'/'} passHref legacyBehavior>
           <Link _hover={{ textDecoration: 'none' }}>
             <Text textStyle='header-font' whiteSpace='nowrap'>
               go-ethereum
