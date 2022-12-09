@@ -115,6 +115,10 @@ var (
 		Usage: "Rollback chain at hash",
 		Value: "",
 	}
+	Enable0xPrefixFlag = cli.BoolFlag{
+		Name:  "enable-0x-prefix",
+		Usage: "Addres use 0x-prefix (default = false)",
+	}
 	// General settings
 	AnnounceTxsFlag = cli.BoolFlag{
 		Name:  "announce-txs",

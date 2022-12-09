@@ -165,6 +165,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
 	}
 
+	if ctx.GlobalBool(utils.Enable0xPrefixFlag.Name) {
+		common.Enable0xPrefix = true;
+	}
+	
 	// Rewound
 	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
 		common.Rewound = uint64(rewound)
