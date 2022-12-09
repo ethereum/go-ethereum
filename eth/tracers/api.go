@@ -806,7 +806,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	if tx == nil {
-		return nil, nil
+		return nil, errors.New("transaction not found")
 	}
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
