@@ -48,9 +48,8 @@ import (
 )
 
 var (
-	errStateNotFound       = errors.New("state not found")
-	errBlockNotFound       = errors.New("block not found")
-	errTransactionNotFound = errors.New("transaction not found")
+	errStateNotFound = errors.New("state not found")
+	errBlockNotFound = errors.New("block not found")
 )
 
 type testBackend struct {
@@ -117,9 +116,6 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 
 func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
-	if tx == nil {
-		return nil, common.Hash{}, 0, 0, errTransactionNotFound
-	}
 	return tx, hash, blockNumber, index, nil
 }
 
@@ -364,6 +360,12 @@ func TestTraceTransaction(t *testing.T) {
 		StructLogs:  []logger.StructLogRes{},
 	}) {
 		t.Error("Transaction tracing result is different")
+	}
+
+	// Test non-existent transaction
+	_, err = api.TraceTransaction(context.Background(), common.Hash{42}, nil)
+	if !errors.Is(err, errTxNotFound) {
+		t.Fatalf("want %v, have %v", errTxNotFound, err)
 	}
 }
 
