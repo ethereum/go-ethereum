@@ -160,6 +160,28 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
+// SetBlockContext updates the block context of the EVM.
+func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
+	evm.Context = blockCtx
+	evm.chainRules = evm.chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil)
+}
+
+// SetTracer updates the EVM tracer and enables debugging. If the tracer is nil
+// any set tracer is removed and debugging is disabled.
+func (evm *EVM) SetTracer(tracer EVMLogger) {
+	if tracer == nil {
+		evm.Config.Debug = false
+		evm.Config.Tracer = nil
+		evm.interpreter.cfg.Debug = false
+		evm.interpreter.cfg.Tracer = nil
+	} else {
+		evm.Config.Debug = true
+		evm.Config.Tracer = tracer
+		evm.interpreter.cfg.Debug = true
+		evm.interpreter.cfg.Tracer = tracer
+	}
+}
+
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
