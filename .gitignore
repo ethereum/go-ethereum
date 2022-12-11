@@ -53,3 +53,7 @@ profile.cov
 ./bor-debug-*
 
 dist
+
+.dccache
+
+*.csv

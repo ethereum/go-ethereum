@@ -11,6 +11,7 @@ import (
 
 	"github.com/pelletier/go-toml"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 )
 
@@ -95,7 +96,7 @@ var flagMap = map[string][]string{
 	"override.arrowglacier":            {"notABoolFlag", "No"},
 	"override.terminaltotaldifficulty": {"notABoolFlag", "No"},
 	"verbosity":                        {"notABoolFlag", "YesFV"},
-	"ws.origins":                       {"notABoolFlag", "YesF"},
+	"ws.origins":                       {"notABoolFlag", "No"},
 }
 
 // map from cli flags to corresponding toml tags
@@ -150,8 +151,7 @@ var nameTagMap = map[string]string{
 	"ipcpath":                "ipcpath",
 	"1-corsdomain":           "http.corsdomain",
 	"1-vhosts":               "http.vhosts",
-	"2-corsdomain":           "ws.corsdomain",
-	"2-vhosts":               "ws.vhosts",
+	"origins":                "ws.origins",
 	"3-corsdomain":           "graphql.corsdomain",
 	"3-vhosts":               "graphql.vhosts",
 	"1-enabled":              "http",
@@ -226,9 +226,8 @@ var replacedFlagsMapFlagAndValue = map[string]map[string]map[string]string{
 	},
 }
 
-var replacedFlagsMapFlag = map[string]string{
-	"ws.origins": "ws.corsdomain",
-}
+// Do not remove
+var replacedFlagsMapFlag = map[string]string{}
 
 var currentBoolFlags = []string{
 	"snapshot",
@@ -516,7 +515,13 @@ func commentFlags(path string, updatedArgs []string) {
 
 	ignoreLineFlag := false
 
-	input, err := os.ReadFile(path)
+	canonicalPath, err := common.VerifyPath(path)
+	if err != nil {
+		fmt.Println("path not verified: " + err.Error())
+		return
+	}
+
+	input, err := os.ReadFile(canonicalPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -596,7 +601,7 @@ func commentFlags(path string, updatedArgs []string) {
 
 	output := strings.Join(newLines, "\n")
 
-	err = os.WriteFile(path, []byte(output), 0600)
+	err = os.WriteFile(canonicalPath, []byte(output), 0600)
 	if err != nil {
 		log.Fatalln(err)
 	}

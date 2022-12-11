@@ -230,7 +230,7 @@ func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
 	// 		return downloader.SnapSync, td
 	// 	}
 	// }
-	// Nope, we're really full syncing
+	// // Nope, we're really full syncing
 	// head := cs.handler.chain.CurrentBlock()
 	// td := cs.handler.chain.GetTd(head.Hash(), head.NumberU64())
 	// return downloader.FullSync, td
