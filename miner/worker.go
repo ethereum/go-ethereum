@@ -920,6 +920,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 	initialGasLimit := env.gasPool.Gas()
 	initialTxs := txs.GetTxs()
+
 	var breakCause string
 
 	defer func() {
@@ -950,12 +951,14 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 					inc:   true,
 				}
 			}
+
 			breakCause = "interrupt"
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+
 			breakCause = "Not enough gas for further transactions"
 			break
 		}
