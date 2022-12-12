@@ -28,80 +28,64 @@ const MDComponents = {
   },
   // links
   a: ({ children, href }: any) => {
-    return (
-      <NextLink href={href} passHref>
-        <Link
-          isExternal={href.startsWith('http') && !href.includes('geth.ethereum.org')}
-          variant='light'
-        >
-          {children}
-        </Link>
+    const isExternal = href.startsWith('http') && !href.includes('geth.ethereum.org');
+
+    return isExternal ? (
+      <Link href={href} isExternal variant='light'>
+        {children}
+      </Link>
+    ) : (
+      <NextLink href={href} passHref legacyBehavior>
+        <Link variant='light'>{children}</Link>
       </NextLink>
     );
   },
   // headings
   h1: ({ children }: any) => {
-    const heading = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
-    return heading ? (
-      <Heading as='h1' textAlign='start' mb='5 !important' {...header1} id={heading.headingId}>
-        {heading.children}
-      </Heading>
-    ) : (
-      <Heading as='h1' textAlign='start' mb='5 !important' {...header1}>
-        {children}
+    return (
+      <Heading as='h1' textAlign='start' mb='5 !important' {...header1} id={headingId}>
+        {parsedChildren}
       </Heading>
     );
   },
   h2: ({ children }: any) => {
-    const heading = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
-    return heading ? (
+    return (
       <Heading
         as='h2'
         textAlign='start'
-        mt='16 !important'
+        mt={{ base: '12 !important', md: '16 !important' }}
         mb='4 !important'
         {...header2}
-        id={heading.headingId}
+        id={headingId}
       >
-        {heading.children}
-      </Heading>
-    ) : (
-      <Heading as='h2' textAlign='start' mt='16 !important' mb='4 !important' {...header2}>
-        {children}
+        {parsedChildren}
       </Heading>
     );
   },
   h3: ({ children }: any) => {
-    const heading = parseHeadingId(children);
-
-    return heading ? (
-      <Heading as='h3' mt='5 !important' mb='2.5 !important' {...header3} id={heading.headingId}>
-        {heading.children}
-      </Heading>
-    ) : (
-      <Heading as='h3' mt='5 !important' mb='2.5 !important' {...header3}>
-        {children}
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
+    return (
+      <Heading as='h3' mt='5 !important' mb='2.5 !important' {...header3} id={headingId}>
+        {parsedChildren}
       </Heading>
     );
   },
   h4: ({ children }: any) => {
-    const heading = parseHeadingId(children);
+    const { children: parsedChildren, headingId } = parseHeadingId(children);
 
-    return heading ? (
-      <Heading as='h4' mb='2.5 !important' {...header4} id={heading.headingId}>
-        {heading.children}
-      </Heading>
-    ) : (
-      <Heading as='h4' mb='2.5 !important' {...header4}>
-        {children}
+    return (
+      <Heading as='h4' mb='2.5 !important' {...header4} id={headingId}>
+        {parsedChildren}
       </Heading>
     );
   },
   // tables
   table: ({ children }: any) => (
-    <Flex maxW='min(100%, 100vw)' overflowX='auto'>
+    <Flex overflowX='auto'>
       <Table
         variant='striped'
         colorScheme='greenAlpha'
