@@ -17,6 +17,6 @@ module.exports = withMDX({
   // Append the default value with md extensions
   pageExtensions: ['ts', 'tsx', 'md', 'mdx'],
   async redirects() {
-    return redirectsList
-  },
+    return redirectsList;
+  }
 });
