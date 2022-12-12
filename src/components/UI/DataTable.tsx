@@ -85,15 +85,10 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
               const isLatestStableLinuxRelease =
                 os === 'linux' &&
                 data
+                  .slice(0, 12) // get latest build to filter on
                   .filter(
                     (e: ReleaseData) => e.arch === '64-bit' && !e.release.url.includes('unstable')
-                  )
-                  .every((elem: ReleaseData) => {
-                    console.log('release:', r);
-                    console.log('elem:', elem);
-
-                    return new Date(r.published) >= new Date(elem.published);
-                  });
+                  ).includes(r)
 
               const x = data.filter((e: ReleaseData, _: any, array: any) => {
                 const maxDate = array
