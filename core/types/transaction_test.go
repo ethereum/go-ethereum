@@ -27,7 +27,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
+	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -272,13 +275,21 @@ func TestTransactionPriceNonceSort1559(t *testing.T) {
 // Tests that transactions can be correctly sorted according to their price in
 // decreasing order, but at the same time with increasing nonces when issued by
 // the same account.
-func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
+//
+//nolint:gocognit,thelper
+func testTransactionPriceNonceSort(t *testing.T, baseFeeBig *big.Int) {
 	// Generate a batch of accounts to start with
 	keys := make([]*ecdsa.PrivateKey, 25)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 	}
+
 	signer := LatestSignerForChainID(common.Big1)
+
+	var baseFee *uint256.Int
+	if baseFeeBig != nil {
+		baseFee = cmath.FromBig(baseFeeBig)
+	}
 
 	// Generate a batch of transactions with overlapping values, but shifted nonces
 	groups := map[common.Address]Transactions{}
@@ -308,7 +319,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 					GasTipCap: big.NewInt(int64(rand.Intn(gasFeeCap + 1))),
 					Data:      nil,
 				})
-				if count == 25 && int64(gasFeeCap) < baseFee.Int64() {
+				if count == 25 && uint64(gasFeeCap) < baseFee.Uint64() {
 					count = i
 				}
 			}
@@ -341,12 +352,25 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
 			}
 		}
+
 		// If the next tx has different from account, the price must be lower than the current one
 		if i+1 < len(txs) {
 			next := txs[i+1]
 			fromNext, _ := Sender(signer, next)
-			tip, err := txi.EffectiveGasTip(baseFee)
-			nextTip, nextErr := next.EffectiveGasTip(baseFee)
+			tip, err := txi.EffectiveGasTipUnit(baseFee)
+			nextTip, nextErr := next.EffectiveGasTipUnit(baseFee)
+
+			tipBig, _ := txi.EffectiveGasTip(baseFeeBig)
+			nextTipBig, _ := next.EffectiveGasTip(baseFeeBig)
+
+			if tip.Cmp(cmath.FromBig(tipBig)) != 0 {
+				t.Fatalf("EffectiveGasTip incorrect. uint256 %q, big.Int %q, baseFee %q, baseFeeBig %q", tip.String(), tipBig.String(), baseFee.String(), baseFeeBig.String())
+			}
+
+			if nextTip.Cmp(cmath.FromBig(nextTipBig)) != 0 {
+				t.Fatalf("EffectiveGasTip next incorrect. uint256 %q, big.Int %q, baseFee %q, baseFeeBig %q", nextTip.String(), nextTipBig.String(), baseFee.String(), baseFeeBig.String())
+			}
+
 			if err != nil || nextErr != nil {
 				t.Errorf("error calculating effective tip")
 			}

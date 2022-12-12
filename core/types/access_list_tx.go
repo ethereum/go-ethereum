@@ -19,6 +19,8 @@ package types
 import (
 	"math/big"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -44,15 +46,16 @@ func (al AccessList) StorageKeys() int {
 
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
-	ChainID    *big.Int        // destination chain ID
-	Nonce      uint64          // nonce of sender account
-	GasPrice   *big.Int        // wei per gas
-	Gas        uint64          // gas limit
-	To         *common.Address `rlp:"nil"` // nil means contract creation
-	Value      *big.Int        // wei amount
-	Data       []byte          // contract invocation input data
-	AccessList AccessList      // EIP-2930 access list
-	V, R, S    *big.Int        // signature values
+	ChainID         *big.Int        // destination chain ID
+	Nonce           uint64          // nonce of sender account
+	GasPrice        *big.Int        // wei per gas
+	gasPriceUint256 *uint256.Int    // wei per gas
+	Gas             uint64          // gas limit
+	To              *common.Address `rlp:"nil"` // nil means contract creation
+	Value           *big.Int        // wei amount
+	Data            []byte          // contract invocation input data
+	AccessList      AccessList      // EIP-2930 access list
+	V, R, S         *big.Int        // signature values
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -80,6 +83,12 @@ func (tx *AccessListTx) copy() TxData {
 	}
 	if tx.GasPrice != nil {
 		cpy.GasPrice.Set(tx.GasPrice)
+
+		if cpy.gasPriceUint256 != nil {
+			cpy.gasPriceUint256.Set(tx.gasPriceUint256)
+		} else {
+			cpy.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
+		}
 	}
 	if tx.V != nil {
 		cpy.V.Set(tx.V)
@@ -100,11 +109,39 @@ func (tx *AccessListTx) accessList() AccessList { return tx.AccessList }
 func (tx *AccessListTx) data() []byte           { return tx.Data }
 func (tx *AccessListTx) gas() uint64            { return tx.Gas }
 func (tx *AccessListTx) gasPrice() *big.Int     { return tx.GasPrice }
-func (tx *AccessListTx) gasTipCap() *big.Int    { return tx.GasPrice }
-func (tx *AccessListTx) gasFeeCap() *big.Int    { return tx.GasPrice }
-func (tx *AccessListTx) value() *big.Int        { return tx.Value }
-func (tx *AccessListTx) nonce() uint64          { return tx.Nonce }
-func (tx *AccessListTx) to() *common.Address    { return tx.To }
+func (tx *AccessListTx) gasPriceU256() *uint256.Int {
+	if tx.gasPriceUint256 != nil {
+		return tx.gasPriceUint256
+	}
+
+	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
+
+	return tx.gasPriceUint256
+}
+
+func (tx *AccessListTx) gasTipCap() *big.Int { return tx.GasPrice }
+func (tx *AccessListTx) gasTipCapU256() *uint256.Int {
+	if tx.gasPriceUint256 != nil {
+		return tx.gasPriceUint256
+	}
+
+	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
+
+	return tx.gasPriceUint256
+}
+func (tx *AccessListTx) gasFeeCap() *big.Int { return tx.GasPrice }
+func (tx *AccessListTx) gasFeeCapU256() *uint256.Int {
+	if tx.gasPriceUint256 != nil {
+		return tx.gasPriceUint256
+	}
+
+	tx.gasPriceUint256, _ = uint256.FromBig(tx.GasPrice)
+
+	return tx.gasPriceUint256
+}
+func (tx *AccessListTx) value() *big.Int     { return tx.Value }
+func (tx *AccessListTx) nonce() uint64       { return tx.Nonce }
+func (tx *AccessListTx) to() *common.Address { return tx.To }
 
 func (tx *AccessListTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

@@ -617,7 +617,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 			sendRequest(rawPeer.app, GetTxStatusMsg, reqID, []common.Hash{tx.Hash()})
 		}
 		if err := expectResponse(rawPeer.app, TxStatusMsg, reqID, testBufLimit, []light.TxStatus{expStatus}); err != nil {
-			t.Errorf("transaction status mismatch")
+			t.Error("transaction status mismatch", err)
 		}
 	}
 	signer := types.HomesteadSigner{}
