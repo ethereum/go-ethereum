@@ -11,8 +11,16 @@ import {
   Stack
 } from '@chakra-ui/react';
 import { FC } from 'react';
+
+import {
+  getOS,
+  getParsedDate,
+  isDarwinPrimaryRelease,
+  isLinuxPrimaryRelease,
+  isMobilePrimaryRelease,
+  isWindowsPrimaryRelease
+} from '../../utils';
 import { OpenPGPSignaturesData, ReleaseData } from '../../types';
-import { getParsedDate } from '../../utils';
 
 interface Props {
   columnHeaders: string[];
@@ -72,66 +80,25 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
           {dataType === 'Releases' &&
             data.map((r: ReleaseData, idx: number) => {
               const url = r?.release?.url;
-              const os = url?.includes('darwin')
-                ? 'darwin'
-                : url?.includes('linux')
-                ? 'linux'
-                : url?.includes('windows')
-                ? 'windows'
-                : url?.includes('android')
-                ? 'android'
-                : 'ios';
+              const os = getOS(url);
 
-              const isLatestStableLinuxRelease =
-                os === 'linux' &&
-                data
-                  .slice(0, 12) // get latest build to filter on
-                  .filter(
-                    (e: ReleaseData) => e.arch === '64-bit' && !e.release.url.includes('unstable')
-                  ).includes(r)
-
-              const x = data.filter((e: ReleaseData, _: any, array: any) => {
-                const maxDate = array
-                  .map((e: ReleaseData) => new Date(e.published))
-                  .filter((f: Date, _: any, array: any) =>
-                    array.every((f: Date) => f <= new Date(e.published))
-                  );
-
-                return (
-                  e.arch === '64-bit' &&
-                  !e.release.url.includes('unstable') &&
-                  new Date(e.published) === new Date(maxDate)
-                );
-              });
-
-              console.log(x);
-
-              const latestDarwinRelease = os === 'darwin' && r.arch === '64-bit';
-              const latestWindowsRelease = os === 'darwin' && r.kind === 'Installer';
-              const latestAndroidRelease = os === 'android' && r.arch === 'all';
-              const latestiOSRelease = os === 'ios' && r.arch === 'all';
-
-              // const latest = data.filter(
-              //   (rel: ReleaseData) =>
-              //     os === 'linux' && rel.arch === '64-bit' && !rel.release.url.includes('unstable')
-              // );
-              // .every((otherRelease: ReleaseData) => r.published > otherRelease.published);
-
-              // console.log({ latest });
+              const _isLinuxPrimaryRelease = isLinuxPrimaryRelease(r, os, data);
+              const _isDarwinPrimaryRelease = isDarwinPrimaryRelease(r, os, data);
+              const _isWindowsPrimaryRelease = isWindowsPrimaryRelease(r, os, data);
+              const _isMobilePrimaryRelease = isMobilePrimaryRelease(r, os, data);
 
               const isPrimaryRelease =
-                isLatestStableLinuxRelease ||
-                latestDarwinRelease ||
-                latestWindowsRelease ||
-                latestAndroidRelease ||
-                latestiOSRelease;
+                _isLinuxPrimaryRelease ||
+                _isDarwinPrimaryRelease ||
+                _isWindowsPrimaryRelease ||
+                _isMobilePrimaryRelease;
 
               return (
                 <Tr
                   key={idx}
                   transition={'all 0.5s'}
                   _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
-                  fontWeight={isLatestStableLinuxRelease ? 700 : 400}
+                  fontWeight={isPrimaryRelease ? 700 : 400}
                 >
                   {Object.entries(r).map((item, idx) => {
                     const objectItems = ['release', 'commit', 'signature'];
