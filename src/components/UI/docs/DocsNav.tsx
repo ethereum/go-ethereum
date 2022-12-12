@@ -17,12 +17,10 @@ interface Props {
 }
 
 export const DocsNav: FC<Props> = ({ navLinks }) => {
-  const OPEN = 0;
-  const CLOSED = -1;
-  const [mobileAccordionState, setMobileAccordionState] = useState(CLOSED)
+  const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false)
 
-  const updateMobileAccordionState = () => {
-    setMobileAccordionState(mobileAccordionState === OPEN ? CLOSED : OPEN)
+  const toggleMobileAccordion = () => {
+    setMobileAccordionState(prev => !prev)
   }
 
   return (
