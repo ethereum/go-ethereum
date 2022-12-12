@@ -25,7 +25,7 @@ We encourage an early pull request approach, meaning pull requests are created a
 
 ## Contributing to the Geth website {#contributing-to-website}
 
-The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please for the Geth website GitHub repository and raise pull requests for the maintainers to review and merge.
+The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please check out the [website repository](https://github.com/ethereum/geth-website) and raise pull requests for the maintainers to review and merge.
 
 ## License {#license}
 
