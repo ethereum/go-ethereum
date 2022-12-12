@@ -82,18 +82,18 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
                 ? 'android'
                 : 'ios';
 
-              // const isLatestStableLinuxRelease =
-              //   os === 'linux' &&
-              //   data
-              //     .filter(
-              //       (e: ReleaseData) => e.arch === '64-bit' && !e.release.url.includes('unstable')
-              //     )
-              //     .every((elem: ReleaseData) => {
-              //       console.log('release:', r);
-              //       console.log('elem:', elem);
+              const isLatestStableLinuxRelease =
+                os === 'linux' &&
+                data
+                  .filter(
+                    (e: ReleaseData) => e.arch === '64-bit' && !e.release.url.includes('unstable')
+                  )
+                  .every((elem: ReleaseData) => {
+                    console.log('release:', r);
+                    console.log('elem:', elem);
 
-              //       return new Date(r.published) >= new Date(elem.published);
-              //     });
+                    return new Date(r.published) >= new Date(elem.published);
+                  });
 
               const x = data.filter((e: ReleaseData, _: any, array: any) => {
                 const maxDate = array
@@ -125,7 +125,7 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
               // console.log({ latest });
 
               const isPrimaryRelease =
-                'isLatestStableLinuxRelease' ||
+                isLatestStableLinuxRelease ||
                 latestDarwinRelease ||
                 latestWindowsRelease ||
                 latestAndroidRelease ||
@@ -136,7 +136,7 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
                   key={idx}
                   transition={'all 0.5s'}
                   _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
-                  fontWeight={false ? 700 : 400}
+                  fontWeight={isLatestStableLinuxRelease ? 700 : 400}
                 >
                   {Object.entries(r).map((item, idx) => {
                     const objectItems = ['release', 'commit', 'signature'];
