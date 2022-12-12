@@ -41,12 +41,12 @@ type Log struct {
 	// but not secured by consensus.
 	// block in which the transaction was included
 	BlockNumber uint64 `json:"blockNumber"`
-	// hash of the block in which the transaction was included
-	BlockHash common.Hash `json:"blockHash"`
 	// hash of the transaction
 	TxHash common.Hash `json:"transactionHash" gencodec:"required"`
 	// index of the transaction in the block
 	TxIndex uint `json:"transactionIndex"`
+	// hash of the block in which the transaction was included
+	BlockHash common.Hash `json:"blockHash"`
 	// index of the log in the block
 	Index uint `json:"logIndex"`
 
