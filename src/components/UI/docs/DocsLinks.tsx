@@ -9,7 +9,7 @@ import {
   Stack,
   Text
 } from '@chakra-ui/react';
-import { AddIcon, MinusIcon } from '../svgs/'
+import { AddIcon, MinusIcon } from '../svgs/';
 import NextLink from 'next/link';
 import { useRouter } from 'next/router';
 
@@ -28,10 +28,10 @@ export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) =
   return (
     <Stack border='2px' borderColor='primary'>
       {navLinks.map(({ id, to, items }, idx) => {
-        const split = to?.split('/')
+        const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         return (
-          <Accordion key={id} allowToggle mt='0 !important' defaultIndex={[0]}>
+          <Accordion key={id} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
@@ -63,7 +63,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) =
                                 verticalAlign: '-1.25px',
                                 marginInlineEnd: 2,
                                 fontSize: 'lg',
-                                display: isActive ? 'unset' : 'none',
+                                display: isActive ? 'unset' : 'none'
                               }}
                               _groupHover={{ color: 'bg' }}
                             >
@@ -101,4 +101,4 @@ export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) =
       })}
     </Stack>
   );
-}
+};
