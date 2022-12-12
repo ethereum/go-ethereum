@@ -87,6 +87,18 @@ func BenchmarkUniformSample1028(b *testing.B) {
 	benchmarkSample(b, NewUniformSample(1028))
 }
 
+func BenchmarkSlidingWindowArraySample257(b *testing.B) {
+	benchmarkSample(b, NewSlidingTimeWindowArraySample(257))
+}
+
+func BenchmarkSlidingWindowArraySample514(b *testing.B) {
+	benchmarkSample(b, NewSlidingTimeWindowArraySample(514))
+}
+
+func BenchmarkSlidingWindowArraySample1028(b *testing.B) {
+	benchmarkSample(b, NewSlidingTimeWindowArraySample(1028))
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
