@@ -8,7 +8,6 @@ The only way to get code into Geth is to submit a pull request (PR). Those pull 
 ## Terminology {#terminology}
 
 - The **author** of a pull request is the entity who wrote the diff and submitted it to GitHub.
-
 - The **team** consists of people with commit rights on the go-ethereum repository.
 - The **reviewer** is the person assigned to review the diff. The reviewer must be a team member.
 - The **code owner** is the person responsible for the subsystem being modified by the PR.
