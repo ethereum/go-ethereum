@@ -25,8 +25,8 @@ export const LinksList: FC<LinksListProps> = ({ links, toggleMobileAccordion }) 
             _hover={{ background: 'primary', color: 'bg' }}
             data-group
           >
-            <NextLink href={to} passHref key={id} onClick={toggleMobileAccordion} legacyBehavior>
-              <Link textDecoration='none !important'>
+            <NextLink href={to} passHref key={id} legacyBehavior>
+              <Link textDecoration='none !important' onClick={toggleMobileAccordion}>
                 <Text
                   textStyle='docs-nav-links'
                   color={items || isActive ? 'primary' : 'body'}

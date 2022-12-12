@@ -53,8 +53,8 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                       _groupHover={{ background: 'primary', color: 'bg', textDecoration: 'none' }}
                     >
                       {to ? (
-                        <NextLink href={to} passHref onClick={toggleMobileAccordion}>
-                          <Link textDecoration='none !important'>
+                        <NextLink href={to} passHref legacyBehavior>
+                          <Link textDecoration='none !important' onClick={toggleMobileAccordion}>
                             <Text
                               textStyle='docs-nav-dropdown'
                               color={isActive ? 'primary' : 'unset'}
