@@ -322,6 +322,10 @@ func TestTraceCall(t *testing.T) {
 }
 
 func TestTraceTransaction(t *testing.T) {
+	runTraceTransaction(t, nil)
+}
+
+func runTraceTransaction(t *testing.T, traceConfig *TraceConfig) {
 	t.Parallel()
 
 	// Initialize test accounts
@@ -345,7 +349,7 @@ func TestTraceTransaction(t *testing.T) {
 	})
 	defer backend.chain.Stop()
 	api := NewAPI(backend)
-	result, err := api.TraceTransaction(context.Background(), target, nil)
+	result, err := api.TraceTransaction(context.Background(), target, traceConfig)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}

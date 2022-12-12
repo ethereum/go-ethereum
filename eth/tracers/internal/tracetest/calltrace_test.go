@@ -18,6 +18,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"io/fs"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -55,17 +56,19 @@ type callLog struct {
 
 // callTrace is the result of a callTracer run.
 type callTrace struct {
-	From     common.Address  `json:"from"`
-	Gas      *hexutil.Uint64 `json:"gas"`
-	GasUsed  *hexutil.Uint64 `json:"gasUsed"`
-	To       common.Address  `json:"to,omitempty"`
-	Input    hexutil.Bytes   `json:"input"`
-	Output   hexutil.Bytes   `json:"output,omitempty"`
-	Error    string          `json:"error,omitempty"`
-	Revertal string          `json:"revertReason,omitempty"`
-	Calls    []callTrace     `json:"calls,omitempty"`
-	Logs     []callLog       `json:"logs,omitempty"`
-	Value    *hexutil.Big    `json:"value,omitempty"`
+	BlockNumber uint64          `json:"blockNumber"`
+	From        common.Address  `json:"from"`
+	Gas         *hexutil.Uint64 `json:"gas"`
+	GasUsed     *hexutil.Uint64 `json:"gasUsed"`
+	To          common.Address  `json:"to,omitempty"`
+	Input       hexutil.Bytes   `json:"input"`
+	Output      hexutil.Bytes   `json:"output,omitempty"`
+	Error       string          `json:"error,omitempty"`
+	Revertal    string          `json:"revertReason,omitempty"`
+	Calls       []callTrace     `json:"calls,omitempty"`
+	CaredOps    []callTrace     `json:"caredOps,omitempty"`
+	Logs        []callLog       `json:"logs,omitempty"`
+	Value       *hexutil.Big    `json:"value,omitempty"`
 	// Gencodec adds overridden fields at the end
 	Type string `json:"type"`
 }
@@ -111,14 +114,15 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				test = new(callTracerTest)
 				tx   = new(types.Transaction)
 			)
+			filePath := filepath.Join("testdata", dirPath, file.Name())
 			// Call tracer test found, read if from disk
-			if blob, err := os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
+			if blob, err := os.ReadFile(filePath); err != nil {
 				t.Fatalf("failed to read testcase: %v", err)
 			} else if err := json.Unmarshal(blob, test); err != nil {
 				t.Fatalf("failed to parse testcase: %v", err)
 			}
 			if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
-				t.Fatalf("failed to parse testcase input: %v", err)
+				t.Fatalf("failed to parse testcase filepath: %v input: %v", filePath, err)
 			}
 			// Configure a blockchain with the given prestate
 			var (
@@ -156,7 +160,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
-				t.Fatalf("failed to retrieve trace result: %v", err)
+				t.Fatalf("failed to retrieve trace result from %v: %v", filePath, err)
 			}
 			// The legacy javascript calltracer marshals json in js, which
 			// is not deterministic (as opposed to the golang json encoder).
@@ -172,7 +176,8 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
 			if string(want) != string(res) {
-				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
+				os.WriteFile(filepath.Join("testdata", dirPath, strings.TrimSuffix(file.Name(), ".json")+".want.json"), res, fs.ModePerm)
+				t.Fatalf("trace mismatch in %v\n have: %v\n want: %v\n", filePath, string(res), string(want))
 			}
 			// Sanity check: compare top call's gas used against vm result
 			type simpleResult struct {
@@ -327,7 +332,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve trace result: %v", err)
 	}
-	wantStr := `{"from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`
+	wantStr := `{"blockNumber":8000000,"from":"0x682a80a6f560eec50d54e63cbeda1c324c5f8d1b","gas":"0x7148","gasUsed":"0x54d8","to":"0x00000000000000000000000000000000deadbeef","input":"0x","calls":[{"blockNumber":8000000,"from":"0x00000000000000000000000000000000deadbeef","gas":"0x6cbf","gasUsed":"0x0","to":"0x00000000000000000000000000000000000000ff","input":"0x","value":"0x0","type":"CALL"}],"value":"0x0","type":"CALL"}`
 	if string(res) != wantStr {
 		t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), wantStr)
 	}

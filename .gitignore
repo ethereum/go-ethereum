@@ -48,8 +48,11 @@ profile.cov
 
 **/yarn-error.log
 
+# debug
 .history/
 geth-tutorial/
 trace.out
 geth-trace.out
 audit.log
+__debug_bin/
+local

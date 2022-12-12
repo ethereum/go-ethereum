@@ -64,7 +64,7 @@
         "from": "0x6c06b16512b332e6cd8293a2974872674716ce18",
         "to": "0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
         "value": "0x14d1120d7b160000",
-        "error":"internal failure",
+        "error": "internal failure",
         "input": "0x"
       }
     ]

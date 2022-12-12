@@ -57,6 +57,7 @@
     "calls": [
       {
         "error": "contract creation code storage out of gas",
+        "blockNumber": 2290744,
         "from": "0x1d3ddf7caf024f253487e18bc4a15b1a360c170a",
         "to": "0x0000000000000000000000000000000000000000",
         "gas": "0x39ff0",
@@ -67,6 +68,7 @@
       }
     ],
     "error": "invalid jump destination",
+    "blockNumber": 2290744,
     "from": "0xe4a13bc304682a903e9472f469c33801dd18d9e8",
     "gas": "0x435c8",
     "gasUsed": "0x493e0",

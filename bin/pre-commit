@@ -1,4 +1,13 @@
 #!/bin/bash
-set -e
 ROOT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && cd .. && pwd)"
+# format json files
+for filepath in $(find $ROOT_PATH -name '*.json' -type f); do
+    jq . $filepath > $filepath.tmp && mv $filepath.tmp $filepath
+    if [[ $? != 0 ]];then
+        rm $filepath.tmp
+    fi
+done
+
+set -e
 make format
+git add .

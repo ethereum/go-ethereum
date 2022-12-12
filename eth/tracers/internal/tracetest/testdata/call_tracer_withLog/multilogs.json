@@ -166,6 +166,7 @@
     "withLog": true
   },
   "result": {
+    "blockNumber": 595532,
     "from": "0x3fcb0342353c541e210013aaddc2e740b9a33d08",
     "gas": "0x2b0868",
     "gasUsed": "0x2570bf",

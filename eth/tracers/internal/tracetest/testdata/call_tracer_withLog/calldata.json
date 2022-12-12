@@ -76,6 +76,7 @@
     "withLog": true
   },
   "result": {
+    "blockNumber": 995201,
     "from": "0x4f5777744b500616697cb655dcb02ee6cd51deb5",
     "gas": "0x2dced",
     "gasUsed": "0x1a9e5",
@@ -84,6 +85,7 @@
     "output": "0xba51a6df00000000000000000000000000000000000000000000000000000000",
     "calls": [
       {
+        "blockNumber": 995201,
         "from": "0x200edd17f30485a8735878661960cd7a9a95733f",
         "gas": "0x2c263",
         "gasUsed": "0x1b0e4",
@@ -106,6 +108,17 @@
           }
         ],
         "value": "0x8ac7230489e80000",
+        "type": "CALLCODE"
+      }
+    ],
+    "caredOps": [
+      {
+        "blockNumber": 995201,
+        "from": "0x4f5777744b500616697cb655dcb02ee6cd51deb5",
+        "gas": "0x2dcbe",
+        "gasUsed": "0x0",
+        "to": "0x200edd17f30485a8735878661960cd7a9a95733f",
+        "input": "0xba51a6df0000000000000000000000000000000000000000000000000000000000000000",
         "type": "CALLCODE"
       }
     ],

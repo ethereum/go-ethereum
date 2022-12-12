@@ -47,8 +47,17 @@
     "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
   },
   "message": {
-    "from": { "name": "Cow"},
-    "to": [{ "name": "Moose"},{ "name": "Goose"}],
+    "from": {
+      "name": "Cow"
+    },
+    "to": [
+      {
+        "name": "Moose"
+      },
+      {
+        "name": "Goose"
+      }
+    ],
     "contents": "Hello, Bob!"
   }
 }

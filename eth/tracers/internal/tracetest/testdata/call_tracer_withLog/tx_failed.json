@@ -136,6 +136,7 @@
     "withLog": true
   },
   "result": {
+    "blockNumber": 1968180,
     "from": "0xe6002189a74b43e6868b20c1311bc108e38aac57",
     "gas": "0xa59c8",
     "gasUsed": "0xaae60",
@@ -144,6 +145,7 @@
     "error": "invalid jump destination",
     "calls": [
       {
+        "blockNumber": 1968180,
         "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
         "gas": "0x9f5a0",
         "gasUsed": "0x314",
@@ -154,6 +156,7 @@
         "type": "CALL"
       },
       {
+        "blockNumber": 1968180,
         "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
         "gas": "0x9a327",
         "gasUsed": "0x67b0",
@@ -161,6 +164,7 @@
         "input": "0x1a695230000000000000000000000000bb9bc244d798123fde783fcc1c72d3bb8c189413",
         "calls": [
           {
+            "blockNumber": 1968180,
             "from": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
             "gas": "0x93ff6",
             "gasUsed": "0x314",
@@ -171,6 +175,7 @@
             "type": "CALL"
           },
           {
+            "blockNumber": 1968180,
             "from": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
             "gas": "0x93c42",
             "gasUsed": "0x13f",
@@ -181,6 +186,7 @@
             "type": "CALL"
           },
           {
+            "blockNumber": 1968180,
             "from": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
             "gas": "0x939ba",
             "gasUsed": "0x5fca",
@@ -191,10 +197,40 @@
             "type": "CALL"
           }
         ],
+        "caredOps": [
+          {
+            "blockNumber": 1968180,
+            "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+            "gas": "0x9a1cd",
+            "gasUsed": "0x0",
+            "to": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
+            "input": "0x1a695230000000000000000000000000bb9bc244d798123fde783fcc1c72d3bb8c189413",
+            "type": "CALL"
+          },
+          {
+            "blockNumber": 1968180,
+            "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+            "gas": "0x99e19",
+            "gasUsed": "0x0",
+            "to": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
+            "input": "0x1a695230000000000000000000000000bb9bc244d798123fde783fcc1c72d3bb8c189413",
+            "type": "CALL"
+          },
+          {
+            "blockNumber": 1968180,
+            "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+            "gas": "0x99b91",
+            "gasUsed": "0x0",
+            "to": "0x6e073c0e1bd5af550239025dffcfb37175acedd3",
+            "input": "0x1a695230000000000000000000000000bb9bc244d798123fde783fcc1c72d3bb8c189413",
+            "type": "CALL"
+          }
+        ],
         "value": "0x0",
         "type": "CALL"
       },
       {
+        "blockNumber": 1968180,
         "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
         "gas": "0x8d8b6",
         "gasUsed": "0x7be",
@@ -205,6 +241,7 @@
         "type": "CALL"
       },
       {
+        "blockNumber": 1968180,
         "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
         "gas": "0x880f8",
         "gasUsed": "0x880f8",
@@ -213,6 +250,7 @@
         "error": "invalid jump destination",
         "calls": [
           {
+            "blockNumber": 1968180,
             "from": "0xbb9bc244d798123fde783fcc1c72d3bb8c189413",
             "gas": "0x7f910",
             "gasUsed": "0xd20f",
@@ -221,6 +259,7 @@
             "output": "0x0000000000000000000000000000000000000000000000000000000000000001",
             "calls": [
               {
+                "blockNumber": 1968180,
                 "from": "0x10abb5efecdc09581f8b7cb95791fe2936790b4e",
                 "gas": "0x76e12",
                 "gasUsed": "0x13f9",
@@ -230,11 +269,71 @@
                 "type": "CALL"
               }
             ],
+            "caredOps": [
+              {
+                "blockNumber": 1968180,
+                "from": "0xbb9bc244d798123fde783fcc1c72d3bb8c189413",
+                "gas": "0x7f311",
+                "gasUsed": "0x0",
+                "to": "0x10abb5efecdc09581f8b7cb95791fe2936790b4e",
+                "input": "0xbaac5300000000000000000000000000630a0cd35d5bd57e61410fda76fea850225cda18",
+                "type": "CALL"
+              }
+            ],
             "value": "0x20320625e3126cb0",
             "type": "CALL"
           }
         ],
+        "caredOps": [
+          {
+            "blockNumber": 1968180,
+            "from": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+            "gas": "0x87513",
+            "gasUsed": "0x0",
+            "to": "0xbb9bc244d798123fde783fcc1c72d3bb8c189413",
+            "input": "0x82661dc40000000000000000000000000000000000000000000000000000000000000110000000000000000000000000b3b10eff47b9c0b3e5579bf1c25872111667e650",
+            "type": "CALL"
+          }
+        ],
         "value": "0x0",
+        "type": "CALL"
+      }
+    ],
+    "caredOps": [
+      {
+        "blockNumber": 1968180,
+        "from": "0xe6002189a74b43e6868b20c1311bc108e38aac57",
+        "gas": "0xa5777",
+        "gasUsed": "0x0",
+        "to": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+        "input": "0xe1fa763800000000000000000000000000000000000000000000000000000000000001100000000000000000000000000000000000000000000000000000000000000000",
+        "type": "CALL"
+      },
+      {
+        "blockNumber": 1968180,
+        "from": "0xe6002189a74b43e6868b20c1311bc108e38aac57",
+        "gas": "0xa04fe",
+        "gasUsed": "0x0",
+        "to": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+        "input": "0xe1fa763800000000000000000000000000000000000000000000000000000000000001100000000000000000000000000000000000000000000000000000000000000000",
+        "type": "CALL"
+      },
+      {
+        "blockNumber": 1968180,
+        "from": "0xe6002189a74b43e6868b20c1311bc108e38aac57",
+        "gas": "0x93a8d",
+        "gasUsed": "0x0",
+        "to": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+        "input": "0xe1fa763800000000000000000000000000000000000000000000000000000000000001100000000000000000000000000000000000000000000000000000000000000000",
+        "type": "CALL"
+      },
+      {
+        "blockNumber": 1968180,
+        "from": "0xe6002189a74b43e6868b20c1311bc108e38aac57",
+        "gas": "0x8e2cf",
+        "gasUsed": "0x0",
+        "to": "0x630a0cd35d5bd57e61410fda76fea850225cda18",
+        "input": "0xe1fa763800000000000000000000000000000000000000000000000000000000000001100000000000000000000000000000000000000000000000000000000000000000",
         "type": "CALL"
       }
     ],

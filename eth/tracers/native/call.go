@@ -42,17 +42,19 @@ type callLog struct {
 }
 
 type callFrame struct {
-	Type     vm.OpCode      `json:"-"`
-	From     common.Address `json:"from"`
-	Gas      uint64         `json:"gas"`
-	GasUsed  uint64         `json:"gasUsed"`
-	To       common.Address `json:"to,omitempty" rlp:"optional"`
-	Input    []byte         `json:"input" rlp:"optional"`
-	Output   []byte         `json:"output,omitempty" rlp:"optional"`
-	Error    string         `json:"error,omitempty" rlp:"optional"`
-	Revertal string         `json:"revertReason,omitempty"`
-	Calls    []callFrame    `json:"calls,omitempty" rlp:"optional"`
-	Logs     []callLog      `json:"logs,omitempty" rlp:"optional"`
+	Type        vm.OpCode      `json:"-"`
+	BlockNumber *big.Int       `json:"blockNumber"`
+	From        common.Address `json:"from"`
+	Gas         uint64         `json:"gas"`
+	GasUsed     uint64         `json:"gasUsed"`
+	To          common.Address `json:"to,omitempty" rlp:"optional"`
+	Input       []byte         `json:"input" rlp:"optional"`
+	Output      []byte         `json:"output,omitempty" rlp:"optional"`
+	Error       string         `json:"error,omitempty" rlp:"optional"`
+	Revertal    string         `json:"revertReason,omitempty"`
+	Calls       []callFrame    `json:"calls,omitempty" rlp:"optional"`
+	CaredOps    []callFrame    `json:"caredOps,omitempty" rlp:"optional"`
+	Logs        []callLog      `json:"logs,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value *big.Int `json:"value,omitempty" rlp:"optional"`
@@ -107,13 +109,14 @@ type callTracer struct {
 }
 
 type callTracerConfig struct {
-	OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
-	WithLog     bool `json:"withLog"`     // If true, call tracer will collect event logs
+	OnlyTopCall  bool `json:"onlyTopCall"`  // If true, call tracer won't collect any subcalls
+	WithLog      bool `json:"withLog"`      // If true, call tracer will collect event logs
+	WithCaredOps bool `json:"withCaredOps"` // If true, call tracer will collect event that is in caredOps
 }
 
 // newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
+func newCallTracer(_ *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
 	var config callTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -128,12 +131,13 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, e
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.callstack[0] = callFrame{
-		Type:  vm.CALL,
-		From:  from,
-		To:    to,
-		Input: common.CopyBytes(input),
-		Gas:   gas,
-		Value: value,
+		Type:        vm.CALL,
+		BlockNumber: env.Context.BlockNumber,
+		From:        from,
+		To:          to,
+		Input:       common.CopyBytes(input),
+		Gas:         gas,
+		Value:       value,
 	}
 	if create {
 		t.callstack[0].Type = vm.CREATE
@@ -147,8 +151,8 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	// Only logs need to be captured via opcode processing
-	if !t.config.WithLog {
+	// Only logs and caredOps need to be captured via opcode processing
+	if !t.config.WithLog && !t.config.WithCaredOps {
 		return
 	}
 	// Avoid processing nested calls when only caring about top call
@@ -178,6 +182,16 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 		data := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
 		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
+	case vm.CALL, vm.CREATE, vm.CREATE2, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
+		cf := callFrame{
+			Type:  op,
+			From:  scope.Contract.CallerAddress,
+			To:    *scope.Contract.CodeAddr,
+			Input: common.CopyBytes(scope.Contract.Input),
+			Gas:   gas,
+		}
+		t.callstack[len(t.callstack)-1].CaredOps = append(t.callstack[len(t.callstack)-1].CaredOps, cf)
+		scope.Stack.Data()
 	}
 }
 
@@ -232,6 +246,7 @@ func (t *callTracer) CaptureTxEnd(restGas uint64) {
 		// Logs are not emitted when the call fails
 		clearFailedLogs(&t.callstack[0], false)
 	}
+	fillBlockNumber(&t.callstack[0], t.callstack[0].BlockNumber)
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any
@@ -263,5 +278,17 @@ func clearFailedLogs(cf *callFrame, parentFailed bool) {
 	}
 	for i := range cf.Calls {
 		clearFailedLogs(&cf.Calls[i], failed)
+	}
+}
+
+func fillBlockNumber(cf *callFrame, blockNumber *big.Int) {
+	if cf.BlockNumber == nil {
+		cf.BlockNumber = blockNumber
+	}
+	for i := range cf.Calls {
+		fillBlockNumber(&cf.Calls[i], blockNumber)
+	}
+	for i := range cf.CaredOps {
+		fillBlockNumber(&cf.CaredOps[i], blockNumber)
 	}
 }
