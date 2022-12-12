@@ -34,4 +34,8 @@ ignore:
     - '*':
         reason: 'As open source org, we have no issues with licenses'
         created: 2022-11-11T08:09:41.635Z
+  'SNYK-GOLANG-GOLANGORGXNETHTTP2-3160322':
+    - '*':
+        reason: 'grpc working on a release to fix the issue'
+        created: 2022-12-12T06:50:00.000Z
 patch: {}
