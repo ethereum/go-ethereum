@@ -71,11 +71,72 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
 
           {dataType === 'Releases' &&
             data.map((r: ReleaseData, idx: number) => {
+              const url = r?.release?.url;
+              const os = url?.includes('darwin')
+                ? 'darwin'
+                : url?.includes('linux')
+                ? 'linux'
+                : url?.includes('windows')
+                ? 'windows'
+                : url?.includes('android')
+                ? 'android'
+                : 'ios';
+
+              // const isLatestStableLinuxRelease =
+              //   os === 'linux' &&
+              //   data
+              //     .filter(
+              //       (e: ReleaseData) => e.arch === '64-bit' && !e.release.url.includes('unstable')
+              //     )
+              //     .every((elem: ReleaseData) => {
+              //       console.log('release:', r);
+              //       console.log('elem:', elem);
+
+              //       return new Date(r.published) >= new Date(elem.published);
+              //     });
+
+              const x = data.filter((e: ReleaseData, _: any, array: any) => {
+                const maxDate = array
+                  .map((e: ReleaseData) => new Date(e.published))
+                  .filter((f: Date, _: any, array: any) =>
+                    array.every((f: Date) => f <= new Date(e.published))
+                  );
+
+                return (
+                  e.arch === '64-bit' &&
+                  !e.release.url.includes('unstable') &&
+                  new Date(e.published) === new Date(maxDate)
+                );
+              });
+
+              console.log(x);
+
+              const latestDarwinRelease = os === 'darwin' && r.arch === '64-bit';
+              const latestWindowsRelease = os === 'darwin' && r.kind === 'Installer';
+              const latestAndroidRelease = os === 'android' && r.arch === 'all';
+              const latestiOSRelease = os === 'ios' && r.arch === 'all';
+
+              // const latest = data.filter(
+              //   (rel: ReleaseData) =>
+              //     os === 'linux' && rel.arch === '64-bit' && !rel.release.url.includes('unstable')
+              // );
+              // .every((otherRelease: ReleaseData) => r.published > otherRelease.published);
+
+              // console.log({ latest });
+
+              const isPrimaryRelease =
+                'isLatestStableLinuxRelease' ||
+                latestDarwinRelease ||
+                latestWindowsRelease ||
+                latestAndroidRelease ||
+                latestiOSRelease;
+
               return (
                 <Tr
                   key={idx}
                   transition={'all 0.5s'}
                   _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
+                  fontWeight={false ? 700 : 400}
                 >
                   {Object.entries(r).map((item, idx) => {
                     const objectItems = ['release', 'commit', 'signature'];
