@@ -102,6 +102,8 @@ func TestDefaultDatatypeOverride(t *testing.T) {
 }
 
 func TestConfigLoadFile(t *testing.T) {
+	t.Parallel()
+
 	readFile := func(path string) {
 		config, err := readConfigFile(path)
 		assert.NoError(t, err)
@@ -124,11 +126,15 @@ func TestConfigLoadFile(t *testing.T) {
 
 	// read file in hcl format
 	t.Run("hcl", func(t *testing.T) {
+		t.Parallel()
+
 		readFile("./testdata/test.hcl")
 	})
 
 	// read file in json format
 	t.Run("json", func(t *testing.T) {
+		t.Parallel()
+
 		readFile("./testdata/test.json")
 	})
 }
