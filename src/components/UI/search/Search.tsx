@@ -49,6 +49,7 @@ export const Search: FC = () => {
               bg: 'primary',
               svg: { color: 'bg' }
             }}
+            aria-label="Search"
           >
             <LensIcon color={{ base: 'bg', md: 'primary' }} fontSize={{ base: '3xl', md: 'xl' }} />
           </Button>

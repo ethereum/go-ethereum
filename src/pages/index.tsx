@@ -28,7 +28,7 @@ const HomePage: NextPage = ({}) => {
     <>
       <PageMetadata title={METADATA.HOME_TITLE} description={METADATA.HOME_DESCRIPTION} />
 
-      <main>
+      <main id="main-content">
         <Stack spacing={4}>
           <HomeHero />
 
@@ -44,7 +44,7 @@ const HomePage: NextPage = ({}) => {
               >
                 <Text textStyle='quick-link-text'>
                   Geth (go-ethereum) is a{' '}
-                  <Link href={GO_URL} isExternal variant='light'>
+                  <Link href={GO_URL} isExternal variant='light' aria-label='Go lang'>
                     Go
                   </Link>{' '}
                   implementation of{' '}

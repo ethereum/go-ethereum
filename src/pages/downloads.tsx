@@ -298,7 +298,7 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
     <>
       <PageMetadata title={METADATA.DOWNLOADS_TITLE} description={METADATA.DOWNLOADS_DESCRIPTION} />
 
-      <main>
+      <main id="main-content">
         <Stack spacing={4}>
           <DownloadsHero
             currentBuild={LATEST_RELEASES_DATA.releaseName}

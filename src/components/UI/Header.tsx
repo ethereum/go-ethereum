@@ -19,13 +19,14 @@ export const Header: FC = () => {
       justifyContent='space-between'
       position='relative'
     >
-      <Stack
+      <Flex
         p={4}
-        justifyContent='center'
-        alignItems='flex-start'
+        justifyContent='flex-start'
+        alignItems='center'
         borderRight='2px'
         borderColor='primary'
-        flexGrow={2}
+        flex={1}
+        gap={6}
       >
         <NextLink href={'/'} passHref legacyBehavior>
           <Link _hover={{ textDecoration: 'none' }}>
@@ -34,7 +35,22 @@ export const Header: FC = () => {
             </Text>
           </Link>
         </NextLink>
-      </Stack>
+        <Box
+          as='a'
+          href='#main-content'
+          pointerEvents='none'
+          opacity={0}
+          transition='opacity 200ms ease-in-out'
+          _focus={{
+            opacity: 1,
+            transition: 'opacity 200ms ease-in-out'
+          }}
+        >
+          <Text textStyle='header-font' whiteSpace='nowrap' fontSize='xs'>
+            skip to content
+          </Text>
+        </Box>
+      </Flex>
 
       <Flex>
         {/* HEADER BUTTONS */}
@@ -58,6 +74,7 @@ export const Header: FC = () => {
             bg: 'primary',
             svg: { color: 'bg' }
           }}
+          aria-label={`Toggle ${isDark ? 'light' : 'dark'} mode`}
         >
           {isDark ? <SunIcon color='primary' /> : <MoonIcon color='primary' />}
         </Box>
