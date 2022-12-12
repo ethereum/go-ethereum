@@ -30,7 +30,7 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         return (
-          <Accordion key={id} allowToggle mt='0 !important' defaultIndex={[0]}>
+          <Accordion key={id} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
