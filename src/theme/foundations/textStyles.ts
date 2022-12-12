@@ -15,36 +15,28 @@ export const textStyles = {
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
-
-  header2: {
-    fontFamily: 'heading',
-    fontSize: { base: '1.5rem', md: '1.75rem' },
-    letterSpacing: { base: '0.03rem', md: '0.04rem' },
-    lineHeight: 'normal',
-    color: 'body'
-  },
-  header3: {
+  h3: {
     fontFamily: 'heading',
     fontSize: { base: '1.25rem', md: '1.375rem' },
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
-  header4: {
+  h4: {
     fontFamily: 'heading',
     fontSize: '1.125rem',
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
-  header5: {
+  h5: {
     fontFamily: 'heading',
     fontSize: '1rem',
     letterSpacing: '0.02rem',
     lineHeight: 'normal',
     color: 'body'
   },
-  header6: {
+  h6: {
     fontFamily: 'heading',
     fontSize: '0.875rem',
     letterSpacing: '0.02rem',
