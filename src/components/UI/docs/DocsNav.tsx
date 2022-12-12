@@ -17,7 +17,7 @@ interface Props {
 }
 
 export const DocsNav: FC<Props> = ({ navLinks }) => {
-  const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false)
+  const [isMobileAccordionOpen, setMobileAccordionState] = useState(false)
 
   const toggleMobileAccordion = () => {
     setMobileAccordionState(prev => !prev)
@@ -26,11 +26,11 @@ export const DocsNav: FC<Props> = ({ navLinks }) => {
   return (
     <Stack w={{ base: '100%', lg: 72 }}>
       <Stack display={{ base: 'none', lg: 'block' }}>
-        <DocsLinks navLinks={navLinks} updateMobileAccordionState={updateMobileAccordionState} />
+        <DocsLinks navLinks={navLinks} toggleMobileAccordion={toggleMobileAccordion} />
       </Stack>
 
       <Stack display={{ base: 'block', lg: 'none' }}>
-        <Accordion allowToggle index={mobileAccordionState} onChange={updateMobileAccordionState}>
+        <Accordion allowToggle index={isMobileAccordionOpen ? 0 : -1} onChange={toggleMobileAccordion}>
           <AccordionItem border='none'>
             <AccordionButton
               display='flex'
@@ -55,7 +55,7 @@ export const DocsNav: FC<Props> = ({ navLinks }) => {
               <AccordionIcon />
             </AccordionButton>
             <AccordionPanel p={0}>
-              <DocsLinks navLinks={navLinks} updateMobileAccordionState={updateMobileAccordionState} />
+              <DocsLinks navLinks={navLinks} toggleMobileAccordion={toggleMobileAccordion} />
             </AccordionPanel>
           </AccordionItem>
         </Accordion>

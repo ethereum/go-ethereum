@@ -19,10 +19,10 @@ import { NavLink } from '../../../types';
 
 interface Props {
   navLinks: NavLink[];
-  updateMobileAccordionState: () => void;
+  toggleMobileAccordion: () => void;
 }
 
-export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) => {
+export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
   const router = useRouter();
   const { slug } = router.query;
   return (
@@ -53,7 +53,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) =
                       _groupHover={{ background: 'primary', color: 'bg', textDecoration: 'none' }}
                     >
                       {to ? (
-                        <NextLink href={to} passHref onClick={updateMobileAccordionState}>
+                        <NextLink href={to} passHref onClick={toggleMobileAccordion}>
                           <Link textDecoration='none !important'>
                             <Text
                               textStyle='docs-nav-dropdown'
@@ -90,7 +90,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, updateMobileAccordionState }) =
                   </AccordionButton>
                   {items && (
                     <AccordionPanel borderBottom='2px solid' borderColor='primary' px={0} py={4}>
-                      <LinksList links={items} updateMobileAccordionState={updateMobileAccordionState} />
+                      <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion} />
                     </AccordionPanel>
                   )}
                 </>

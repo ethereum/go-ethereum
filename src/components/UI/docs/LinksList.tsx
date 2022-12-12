@@ -7,10 +7,10 @@ import { NavLink } from '../../../types';
 
 interface LinksListProps {
   links: NavLink[];
-  updateMobileAccordionState: () => void;
+  toggleMobileAccordion: () => void;
 }
 
-export const LinksList: FC<LinksListProps> = ({ links, updateMobileAccordionState }) => {
+export const LinksList: FC<LinksListProps> = ({ links, toggleMobileAccordion }) => {
   const router = useRouter();
   const { slug } = router.query;
   return (
@@ -25,7 +25,7 @@ export const LinksList: FC<LinksListProps> = ({ links, updateMobileAccordionStat
             _hover={{ background: 'primary', color: 'bg' }}
             data-group
           >
-            <NextLink href={to} passHref key={id} onClick={updateMobileAccordionState}>
+            <NextLink href={to} passHref key={id} onClick={toggleMobileAccordion}>
               <Link textDecoration='none !important'>
                 <Text
                   textStyle='docs-nav-links'
@@ -46,14 +46,14 @@ export const LinksList: FC<LinksListProps> = ({ links, updateMobileAccordionStat
                 </Text>
               </Link>
             </NextLink>
-            {items && <LinksList links={items} updateMobileAccordionState={updateMobileAccordionState}/>}
+            {items && <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion}/>}
           </Stack>
         ) : (
           <Stack key={id} pb={6}>
             <Text textStyle='docs-nav-links' color={items ? 'primary' : 'body'}>
               {id}
             </Text>
-            {items && <LinksList links={items} updateMobileAccordionState={updateMobileAccordionState} />}
+            {items && <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion} />}
           </Stack>
         );
       })}
