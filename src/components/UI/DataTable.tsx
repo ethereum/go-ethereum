@@ -11,8 +11,16 @@ import {
   Stack
 } from '@chakra-ui/react';
 import { FC } from 'react';
+
+import {
+  getOS,
+  getParsedDate,
+  isDarwinPrimaryRelease,
+  isLinuxPrimaryRelease,
+  isMobilePrimaryRelease,
+  isWindowsPrimaryRelease
+} from '../../utils';
 import { OpenPGPSignaturesData, ReleaseData } from '../../types';
-import { getParsedDate } from '../../utils';
 
 interface Props {
   columnHeaders: string[];
@@ -71,11 +79,26 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
 
           {dataType === 'Releases' &&
             data.map((r: ReleaseData, idx: number) => {
+              const url = r?.release?.url;
+              const os = getOS(url);
+
+              const _isLinuxPrimaryRelease = isLinuxPrimaryRelease(r, os, data);
+              const _isDarwinPrimaryRelease = isDarwinPrimaryRelease(r, os, data);
+              const _isWindowsPrimaryRelease = isWindowsPrimaryRelease(r, os, data);
+              const _isMobilePrimaryRelease = isMobilePrimaryRelease(r, os, data);
+
+              const isPrimaryRelease =
+                _isLinuxPrimaryRelease ||
+                _isDarwinPrimaryRelease ||
+                _isWindowsPrimaryRelease ||
+                _isMobilePrimaryRelease;
+
               return (
                 <Tr
                   key={idx}
                   transition={'all 0.5s'}
                   _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
+                  fontWeight={isPrimaryRelease ? 700 : 400}
                 >
                   {Object.entries(r).map((item, idx) => {
                     const objectItems = ['release', 'commit', 'signature'];

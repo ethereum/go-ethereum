@@ -50,3 +50,5 @@ export interface OpenPGPSignaturesData {
   };
   fingerprint: string;
 }
+
+export type OS = 'linux' | 'darwin' | 'windows' | 'mobile';
