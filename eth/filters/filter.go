@@ -268,8 +268,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	unfiltered := cached.logs
-	logs := filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	logs := filterLogs(cached.logs, nil, nil, f.addresses, f.topics)
 	if len(logs) == 0 {
 		return nil, nil
 	}
@@ -277,7 +276,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if len(logs) > 0 && logs[0].TxHash != (common.Hash{}) {
 		return logs, nil
 	}
-	// Only resolve
+
 	body, err := f.sys.cachedGetBody(ctx, cached, hash, header.Number.Uint64())
 	if err != nil {
 		return nil, err
