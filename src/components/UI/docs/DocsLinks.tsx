@@ -19,9 +19,10 @@ import { NavLink } from '../../../types';
 
 interface Props {
   navLinks: NavLink[];
+  toggleMobileAccordion: () => void;
 }
 
-export const DocsLinks: FC<Props> = ({ navLinks }) => {
+export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
   const router = useRouter();
   const { slug } = router.query;
   return (
@@ -30,7 +31,7 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
         return (
-          <Accordion key={id} allowToggle mt='0 !important' defaultIndex={[0]}>
+          <Accordion key={id} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
@@ -53,7 +54,7 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
                     >
                       {to ? (
                         <NextLink href={to} passHref legacyBehavior>
-                          <Link textDecoration='none !important'>
+                          <Link textDecoration='none !important' onClick={toggleMobileAccordion}>
                             <Text
                               textStyle='docs-nav-dropdown'
                               color={isActive ? 'primary' : 'unset'}
@@ -89,7 +90,7 @@ export const DocsLinks: FC<Props> = ({ navLinks }) => {
                   </AccordionButton>
                   {items && (
                     <AccordionPanel borderBottom='2px solid' borderColor='primary' px={0} py={4}>
-                      <LinksList links={items} />
+                      <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion} />
                     </AccordionPanel>
                   )}
                 </>

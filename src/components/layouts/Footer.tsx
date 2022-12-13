@@ -41,10 +41,9 @@ export const Footer: FC = () => {
             _hover={hoverStyles}
             borderRight='2px solid'
             borderColor='primary'
-            p={4}
           >
             <NextLink href={DOWNLOADS_PAGE} passHref legacyBehavior>
-              <Link _hover={{ textDecoration: 'none' }}>
+              <Link _hover={{ textDecoration: 'none' }} p={4}>
                 <Text textStyle='footer-link-label'>DOWNLOADS</Text>
               </Link>
             </NextLink>
@@ -59,10 +58,9 @@ export const Footer: FC = () => {
               md: '2px solid'
             }}
             borderColor='primary'
-            p={4}
           >
             <NextLink href={DOCS_PAGE} passHref legacyBehavior>
-              <Link _hover={{ textDecoration: 'none' }}>
+              <Link _hover={{ textDecoration: 'none' }} p={4}>
                 <Text textStyle='footer-link-label'>DOCUMENTATION</Text>
               </Link>
             </NextLink>
@@ -80,10 +78,9 @@ export const Footer: FC = () => {
             }}
             borderColor='primary !important'
             _hover={hoverStyles}
-            p={4}
           >
-            <Link href={GETH_TWITTER_URL} isExternal>
-              <TwitterIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+            <Link href={GETH_TWITTER_URL} isExternal p={4}>
+              <TwitterIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' aria-label='Twitter' />
             </Link>
           </Center>
 
@@ -94,16 +91,15 @@ export const Footer: FC = () => {
             borderWidth='2px'
             borderStyle='none solid'
             borderColor='primary'
-            p={4}
           >
-            <Link href={GETH_DISCORD_URL} isExternal>
-              <DiscordIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+            <Link href={GETH_DISCORD_URL} isExternal p={4}>
+              <DiscordIcon w={8} height='22px' _groupHover={{ color: 'bg' }} color='primary' aria-label='Discord' />
             </Link>
           </Center>
 
-          <Center data-group flex={1} _hover={hoverStyles} p={4}>
-            <Link href={GETH_REPO_URL} isExternal>
-              <GitHubIcon w={7} height='22px' _groupHover={{ color: 'bg' }} color='primary' />
+          <Center data-group flex={1} _hover={hoverStyles}>
+            <Link href={GETH_REPO_URL} isExternal p={4}>
+              <GitHubIcon w={7} height='22px' _groupHover={{ color: 'bg' }} color='primary' aria-label='GitHub' />
             </Link>
           </Center>
         </Flex>

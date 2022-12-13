@@ -104,7 +104,7 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
             <DocsNav navLinks={navLinks} />
           </Stack>
 
-          <Stack pb={4} width='100%'>
+          <Stack pb={4} width='100%' id="main-content">
             <Stack mb={16}>
               <Breadcrumbs />
               <Heading as='h1' mt='4 !important' mb={0} {...textStyles.h1}>
