@@ -20,7 +20,7 @@ export const MobileMenu: React.FC = () => {
         color='primary'
         _hover={{ bg: 'primary', color: 'bg' }}
         onClick={onOpen}
-        aria-label="Open mobile menu"
+        aria-label='Open mobile menu'
       >
         <HamburgerIcon />
       </Box>
