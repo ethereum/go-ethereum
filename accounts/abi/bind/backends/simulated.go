@@ -76,30 +76,32 @@ type SimulatedBackend struct {
 
 	config *params.ChainConfig
 
-	// CloneVMConfigOn flags whether calls to CallContract(),
-	// PendingCallContract(), and/or EstimateGas() must clone the existing
-	// *vm.Config instead of using a fresh one. Historically the Config was
-	// always overridden, so this remains the default behaviour.
-	CloneVMConfigOn struct {
-		Call, PendingCall, EstimateGas bool
-	}
+	// Historically, CallContract(), PendingCallContract(), and EstimateGas()
+	// created a new vm.Config instead of cloning the backend's underlying one.
+	// This flag allows protection of backwards compatibility depending on the
+	// constructor that created the SimulatedBackend.
+	alwaysCloneVMConfig bool
 }
 
-// NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
-// and uses a simulated blockchain for testing purposes.
+// NewSimulatedBaNewSimulatedBackendWithDBAndVMConfigckend creates a new binding
+// backend using a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
-func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+//
+// Unlike NewSimulatedBackend() and NewSimulatedBackendWithDatabase(), the
+// vm.Config will be used for all contract interaction, not just transactions.
+func NewSimulatedBackendWithDBAndVMConfig(database ethdb.Database, config vm.Config, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	genesis := core.Genesis{
 		Config:   params.AllEthashProtocolChanges,
 		GasLimit: gasLimit,
 		Alloc:    alloc,
 	}
-	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	blockchain, _ := core.NewBlockChain(database, nil, &genesis, nil, ethash.NewFaker(), config, nil, nil)
 
 	backend := &SimulatedBackend{
-		database:   database,
-		blockchain: blockchain,
-		config:     genesis.Config,
+		database:            database,
+		blockchain:          blockchain,
+		config:              genesis.Config,
+		alwaysCloneVMConfig: true,
 	}
 
 	filterBackend := &filterBackend{database, blockchain, backend}
@@ -110,9 +112,40 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.Genesis
 	return backend
 }
 
+// NewSimulatedBackendWithDatabase creates a new binding backend based on the given database
+// and uses a simulated blockchain for testing purposes.
+// A simulated backend always uses chainID 1337.
+//
+// For historical reasons and to maintain backwards compatibility, if the
+// SimulatedBackend's vm.Config is modified it will only be used for
+// transactions, not for CallContract(), PendingCallContract(), nor
+// EstimateGas(). To set a config that is always used, use
+// NewSimulatedBackendWithDBAndVMConfig().
+func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	b := NewSimulatedBackendWithDBAndVMConfig(database, vm.Config{}, alloc, gasLimit)
+	b.alwaysCloneVMConfig = false // maintains backwards compatibility
+	return b
+}
+
+// NewSimulatedBackendWithVMConfig creates a new binding backend using a simulated blockchain
+// for testing purposes.
+// A simulated backend always uses chainID 1337.
+//
+// Unlike NewSimulatedBackend() and NewSimulatedBackendWithDatabase(), the
+// vm.Config will be used for all contract interaction, not just transactions.
+func NewSimulatedBackendWithVMConfig(config vm.Config, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
+	return NewSimulatedBackendWithDBAndVMConfig(rawdb.NewMemoryDatabase(), config, alloc, gasLimit)
+}
+
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
 // A simulated backend always uses chainID 1337.
+//
+// For historical reasons and to maintain backwards compatibility, if the
+// SimulatedBackend's vm.Config is modified it will only be used for
+// transactions, not for CallContract(), PendingCallContract(), nor
+// EstimateGas(). To set a config that is always used, use
+// NewSimulatedBackendWithVMConfig().
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
 }
@@ -449,7 +482,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB, b.CloneVMConfigOn.Call)
+	res, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), stateDB)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +499,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.CloneVMConfigOn.PendingCall)
+	res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +593,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		call.Gas = gas
 
 		snapshot := b.pendingState.Snapshot()
-		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState, b.CloneVMConfigOn.EstimateGas)
+		res, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 		b.pendingState.RevertToSnapshot(snapshot)
 
 		if err != nil {
@@ -610,7 +643,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 // callContract implements common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB, cloneVMConfig bool) (*core.ExecutionResult, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, stateDB *state.StateDB) (*core.ExecutionResult, error) {
 	// Gas prices post 1559 need to be initialized
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -658,7 +691,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	txContext := core.NewEVMTxContext(msg)
 	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	var vmConfig vm.Config
-	if c := b.blockchain.GetVMConfig(); c != nil && cloneVMConfig {
+	if c := b.blockchain.GetVMConfig(); c != nil && b.alwaysCloneVMConfig {
 		vmConfig = *c
 	}
 	vmConfig.NoBaseFee = true

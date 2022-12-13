@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -32,7 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
@@ -113,12 +116,16 @@ const deployedCode = `60806040526004361061003b576000357c010000000000000000000000
 // expected return value contains "hello world"
 var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
+const simTestGasLimit = 10000000
+
 func simTestBackend(testAddr common.Address) *SimulatedBackend {
-	return NewSimulatedBackend(
-		core.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000000000)},
-		}, 10000000,
-	)
+	return NewSimulatedBackend(simTestGenesisAlloc(testAddr), simTestGasLimit)
+}
+
+func simTestGenesisAlloc(testAddr common.Address) core.GenesisAlloc {
+	return core.GenesisAlloc{
+		testAddr: {Balance: big.NewInt(10000000000000000)},
+	}
 }
 
 func TestNewSimulatedBackend(t *testing.T) {
@@ -1060,77 +1067,90 @@ func TestPendingAndCallContract(t *testing.T) {
 
 func TestVMConfigCloning(t *testing.T) {
 	// vm.Config was previously only honoured by SendTransaction() and ignored
-	// by CallContract(), PendingCallContract(), and EstimateGas().
+	// by CallContract(), PendingCallContract(), and EstimateGas(). Pre-existing
+	// constructors must still behave in this manner otherwise we may break
+	// users' code. Only the new constructors that explicitly accept a vm.Config
+	// will use it for all contract interaction.
+	//
+	// To test behaviour of vm.Config cloning, we inspect the number of entries
+	// in a struct trace. If cloned then there will be an entry, if not then no
+	// logs will be captured. This is necessary in order to not introduce a
+	// breaking change with the old vm.Config handling.
+	//
+	// Tests share the tracer and reset it as this is simpler than constructing
+	// a new one for each.
+	tracer := logger.NewStructLogger(&logger.Config{
+		Limit: 1,
+	})
+	config := vm.Config{
+		Debug:  true,
+		Tracer: tracer,
+	}
+
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	alloc := simTestGenesisAlloc(testAddr)
+
 	tests := []struct {
-		name                                                      string
-		before                                                    func(*SimulatedBackend)
-		wantCallClone, wantPendingCallClone, wantEstimageGasClone bool
+		name    string
+		backend func() *SimulatedBackend
+		// All constructors use the vm.Config for transactions so it's not
+		// explicitly specified.
+		wantCallUse, wantPendingCallUse, wantEstimageGasUse bool
 	}{
 		{
-			name:                 "default behaviour",
-			before:               func(*SimulatedBackend) {},
-			wantCallClone:        false,
-			wantPendingCallClone: false,
-			wantEstimageGasClone: false,
+			name: "NewSimulatedBackend() has OLD behaviour",
+			backend: func() *SimulatedBackend {
+				b := NewSimulatedBackend(alloc, simTestGasLimit)
+				*b.Blockchain().GetVMConfig() = config
+				return b
+			},
+			wantCallUse:        false,
+			wantPendingCallUse: false,
+			wantEstimageGasUse: false,
 		},
 		{
-			name: "only clone on ContractCall()",
-			before: func(s *SimulatedBackend) {
-				s.CloneVMConfigOn.Call = true
+			name: "NewSimulatedBackend() has OLD behaviour",
+			backend: func() *SimulatedBackend {
+				b := NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, simTestGasLimit)
+				*b.Blockchain().GetVMConfig() = config
+				return b
 			},
-			wantCallClone: true,
+			wantCallUse:        false,
+			wantPendingCallUse: false,
+			wantEstimageGasUse: false,
 		},
 		{
-			name: "only clone on PendingContractCall()",
-			before: func(s *SimulatedBackend) {
-				s.CloneVMConfigOn.PendingCall = true
+			name: "NewSimulatedBackendWithVMConfig() has NEW behaviour",
+			backend: func() *SimulatedBackend {
+				return NewSimulatedBackendWithVMConfig(config, alloc, simTestGasLimit)
 			},
-			wantPendingCallClone: true,
+			wantCallUse:        true,
+			wantPendingCallUse: true,
+			wantEstimageGasUse: true,
 		},
 		{
-			name: "only clone on EstimateGas()",
-			before: func(s *SimulatedBackend) {
-				s.CloneVMConfigOn.EstimateGas = true
+			name: "NewSimulatedBackendWithDBAndVMConfig() has NEW behaviour",
+			backend: func() *SimulatedBackend {
+				return NewSimulatedBackendWithDBAndVMConfig(rawdb.NewMemoryDatabase(), config, alloc, simTestGasLimit)
 			},
-			wantEstimageGasClone: true,
-		},
-		{
-			name: "always clone",
-			before: func(s *SimulatedBackend) {
-				s.CloneVMConfigOn.Call = true
-				s.CloneVMConfigOn.PendingCall = true
-				s.CloneVMConfigOn.EstimateGas = true
-			},
-			wantCallClone:        true,
-			wantPendingCallClone: true,
-			wantEstimageGasClone: true,
+			wantCallUse:        true,
+			wantPendingCallUse: true,
+			wantEstimageGasUse: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-			sim := simTestBackend(testAddr)
+			sim := tt.backend()
 			defer sim.Close()
-			tt.before(sim)
 			bgCtx := context.Background()
-
-			// To test behaviour of vm.Config cloning options, we inspect the
-			// number of entries in a struct trace. If cloned then there will be
-			// an entry, if not then no logs will be captured.
-			tracer := logger.NewStructLogger(&logger.Config{
-				Limit: 1,
-			})
-			cfg := sim.Blockchain().GetVMConfig()
-			cfg.Debug = true
-			cfg.Tracer = tracer
 
 			parsed, err := abi.JSON(strings.NewReader(abiJSON))
 			if err != nil {
 				t.Errorf("could not get code at test addr: %v", err)
 			}
 			contractAuth, _ := bind.NewKeyedTransactorWithChainID(testKey, big.NewInt(1337))
-			addr, _, _, err := bind.DeployContract(contractAuth, parsed, common.FromHex(abiBin), sim)
+			addr, _, contract, err := bind.DeployContract(contractAuth, parsed, common.FromHex(abiBin), sim)
 			if err != nil {
 				t.Errorf("could not deploy contract: %v", err)
 			}
@@ -1147,17 +1167,28 @@ func TestVMConfigCloning(t *testing.T) {
 			}
 
 			for _, funcTest := range []struct {
-				name               string
-				fn                 func(context.Context) error
-				wantVMConfigCloned bool
+				name             string
+				fn               func(context.Context) error
+				wantVMConfigUsed bool
 			}{
+				{
+					name: "SendTransaction()",
+					fn: func(ctx context.Context) error {
+						if _, err := contract.Transact(contractAuth, "receive", []byte{}); err != nil {
+							return fmt.Errorf(`%T.Transact(…, "receive"): %v`, contract, err)
+						}
+						sim.Commit()
+						return nil
+					},
+					wantVMConfigUsed: true,
+				},
 				{
 					name: "PendingCallContract()",
 					fn: func(ctx context.Context) error {
 						_, err := sim.PendingCallContract(ctx, callMsg)
 						return err
 					},
-					wantVMConfigCloned: tt.wantPendingCallClone,
+					wantVMConfigUsed: tt.wantPendingCallUse,
 				},
 				{
 					name: "CallContract()",
@@ -1165,7 +1196,7 @@ func TestVMConfigCloning(t *testing.T) {
 						_, err := sim.CallContract(ctx, callMsg, nil)
 						return err
 					},
-					wantVMConfigCloned: tt.wantCallClone,
+					wantVMConfigUsed: tt.wantCallUse,
 				},
 				{
 					name: "EstimateGas()",
@@ -1173,7 +1204,7 @@ func TestVMConfigCloning(t *testing.T) {
 						_, err := sim.EstimateGas(ctx, callMsg)
 						return err
 					},
-					wantVMConfigCloned: tt.wantEstimageGasClone,
+					wantVMConfigUsed: tt.wantEstimageGasUse,
 				},
 			} {
 				t.Run(funcTest.name, func(t *testing.T) {
@@ -1182,11 +1213,9 @@ func TestVMConfigCloning(t *testing.T) {
 					if err := funcTest.fn(bgCtx); err != nil {
 						t.Fatalf("%s got err %v; want nil err", funcTest.name, err)
 					}
-					if gotVMConfigCloned := len(tracer.StructLogs()) > 0; gotVMConfigCloned != funcTest.wantVMConfigCloned {
-						t.Errorf("%s got vm.Config cloned = %t; want %t", funcTest.name, gotVMConfigCloned, funcTest.wantVMConfigCloned)
+					if gotVMConfigUsed := len(tracer.StructLogs()) > 0; gotVMConfigUsed != funcTest.wantVMConfigUsed {
+						t.Errorf("%s got vm.Config used = %t; want %t", funcTest.name, gotVMConfigUsed, funcTest.wantVMConfigUsed)
 					}
-
-					sim.Commit()
 				})
 			}
 		})
