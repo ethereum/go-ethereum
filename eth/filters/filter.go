@@ -216,7 +216,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			if header == nil || err != nil {
 				return logs, err
 			}
-			found, err := f.blockLogs(ctx, header)
+			found, err := f.checkMatches(ctx, header)
 			if err != nil {
 				return logs, err
 			}
@@ -249,8 +249,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 
 // blockLogs returns the logs matching the filter criteria within a single block.
 func (f *Filter) blockLogs(ctx context.Context, header *types.Header) ([]*types.Log, error) {
-	skipFilter := len(f.addresses) == 0 && len(f.topics) == 0
-	if skipFilter || bloomFilter(header.Bloom, f.addresses, f.topics) {
+	if bloomFilter(header.Bloom, f.addresses, f.topics) {
 		return f.checkMatches(ctx, header)
 	}
 	return nil, nil
