@@ -21,9 +21,7 @@ export const DocumentNav: FC<Props> = ({ content }) => {
 
   return (
     <Box as='aside' position='sticky' top='4'>
-      <Text textStyle='document-nav-title'>
-        on this page
-      </Text>
+      <Text textStyle='document-nav-title'>on this page</Text>
       <Divider borderColor='primary' my={`4 !important`} />
       {parsedHeadings.map((heading, idx) => {
         return (

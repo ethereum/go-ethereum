@@ -28,7 +28,7 @@ const HomePage: NextPage = ({}) => {
     <>
       <PageMetadata title={METADATA.HOME_TITLE} description={METADATA.HOME_DESCRIPTION} />
 
-      <main id="main-content">
+      <main id='main-content'>
         <Stack spacing={4}>
           <HomeHero />
 
