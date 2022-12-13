@@ -1,7 +1,7 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import { Box, Flex, Stack, Heading, Text } from '@chakra-ui/react';
+import { Box, Grid, Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/router';
@@ -99,7 +99,10 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
       <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
-        <Flex direction={{ base: 'column', lg: 'row' }} gap={{ base: 4, lg: 8 }}>
+        <Grid
+          gap={{ base: 4, lg: 8 }}
+          templateColumns={{ base: 'repeat(1, 1fr)', lg: '288px 1fr' }}
+        >
           <Stack>
             <DocsNav navLinks={navLinks} />
           </Stack>
@@ -115,10 +118,14 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
               </Text>
             </Stack>
 
-            <Flex width='100%' placeContent='space-between' gap={8}>
+            <Grid
+              gap={{ base: 4, lg: 8 }}
+              templateColumns={{ base: 'repeat(1, 1fr)', xl: '1fr 192px' }}
+            >
               <Box
-                maxW='min(100%, 768px)'
+                w='min(100%, 768px)'
                 sx={{ '*:first-of-type': { marginTop: '0 !important' } }}
+                overflow='auto'
               >
                 <ReactMarkdown
                   remarkPlugins={[gfm]}
@@ -129,15 +136,12 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 </ReactMarkdown>
               </Box>
 
-              <Stack
-                display={{ base: 'none', xl: 'block' }}
-                w='clamp(var(--chakra-sizes-40), 12.5%, var(--chakra-sizes-56))'
-              >
+              <Stack display={{ base: 'none', xl: 'block' }}>
                 <DocumentNav content={content} />
               </Stack>
-            </Flex>
+            </Grid>
           </Stack>
-        </Flex>
+        </Grid>
       </main>
     </>
   );

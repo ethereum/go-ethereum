@@ -13,13 +13,13 @@ export const DocumentNav: FC<Props> = ({ content }) => {
   const parsedHeadings = content
     .split('\n\n')
     .map(item => item.replace(/[\n\r]/g, ''))
-    .filter(item => item.startsWith('#'))
+    .filter(item => item.startsWith('##'))
     .map(item => parseHeadingId([item]))
     .filter(item => item);
 
   const activeHash = useActiveHash(parsedHeadings.map(heading => heading!.headingId));
 
-  return (
+  return parsedHeadings.length ? (
     <Box as='aside' position='sticky' top='4'>
       <Text textStyle='document-nav-title'>on this page</Text>
       <Divider borderColor='primary' my={`4 !important`} />
@@ -56,5 +56,5 @@ export const DocumentNav: FC<Props> = ({ content }) => {
         );
       })}
     </Box>
-  );
+  ) : null;
 };

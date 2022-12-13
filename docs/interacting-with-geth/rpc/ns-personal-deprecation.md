@@ -23,7 +23,7 @@ Unpair deletes a pairing between some specific types of smartcard wallet and Get
 
 InitializeWallet is for initializing some specific types of smartcard wallet at a provided URL. There is not yet a corresponding method in Clef.
 
-## Methods with replacements:
+## Methods with replacements
 
 ### personal_listAccounts
 

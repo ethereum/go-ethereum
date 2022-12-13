@@ -101,8 +101,8 @@ const MDComponents = {
   ),
   // pre
   pre: ({ children }: any) => (
-    <Stack mb={5}>
-      <pre>{children}</pre>
+    <Stack mb={5} whiteSpace='pre'>
+      {children}
     </Stack>
   ),
   // code

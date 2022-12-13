@@ -39,10 +39,12 @@ export const Header: FC = () => {
           as='a'
           href='#main-content'
           pointerEvents='none'
+          w='0px'
           opacity={0}
           transition='opacity 200ms ease-in-out'
           _focus={{
             opacity: 1,
+            w: 'auto',
             transition: 'opacity 200ms ease-in-out'
           }}
         >
