@@ -45,7 +45,7 @@ type account struct {
 }
 
 func (a *account) exists() bool {
-	return a.Balance.Sign() != 0 || a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {
