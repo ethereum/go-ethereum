@@ -25,21 +25,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
-func hashData(input []byte) common.Hash {
-	var hasher = sha3.NewLegacyKeccak256()
-	var hash common.Hash
-	hasher.Reset()
-	hasher.Write(input)
-	hasher.Sum(hash[:0])
-	return hash
-}
+var hashData = crypto.Keccak256Hash
 
 // Tests that snapshot generation from an empty database.
 func TestGeneration(t *testing.T) {
