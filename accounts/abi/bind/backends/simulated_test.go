@@ -1095,7 +1095,7 @@ func TestVMConfigCloning(t *testing.T) {
 		backend func() *SimulatedBackend
 		// All constructors use the vm.Config for transactions so it's not
 		// explicitly specified.
-		wantCallUse, wantPendingCallUse, wantEstimageGasUse bool
+		wantNonTxUse bool
 	}{
 		{
 			name: "NewSimulatedBackend() has OLD behaviour",
@@ -1104,38 +1104,39 @@ func TestVMConfigCloning(t *testing.T) {
 				*b.Blockchain().GetVMConfig() = config
 				return b
 			},
-			wantCallUse:        false,
-			wantPendingCallUse: false,
-			wantEstimageGasUse: false,
+			wantNonTxUse: false,
 		},
 		{
-			name: "NewSimulatedBackend() has OLD behaviour",
+			name: "NewSimulatedBackendWithDatabase() has OLD behaviour",
 			backend: func() *SimulatedBackend {
 				b := NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, simTestGasLimit)
 				*b.Blockchain().GetVMConfig() = config
 				return b
 			},
-			wantCallUse:        false,
-			wantPendingCallUse: false,
-			wantEstimageGasUse: false,
+			wantNonTxUse: false,
+		},
+		{
+			name: "NewSimulatedBackend() + SetVMConfig() has NEW behaviour",
+			backend: func() *SimulatedBackend {
+				b := NewSimulatedBackend(alloc, simTestGasLimit)
+				b.SetVMConfig(config)
+				return b
+			},
+			wantNonTxUse: true,
 		},
 		{
 			name: "NewSimulatedBackendWithVMConfig() has NEW behaviour",
 			backend: func() *SimulatedBackend {
 				return NewSimulatedBackendWithVMConfig(config, alloc, simTestGasLimit)
 			},
-			wantCallUse:        true,
-			wantPendingCallUse: true,
-			wantEstimageGasUse: true,
+			wantNonTxUse: true,
 		},
 		{
 			name: "NewSimulatedBackendWithDBAndVMConfig() has NEW behaviour",
 			backend: func() *SimulatedBackend {
 				return NewSimulatedBackendWithDBAndVMConfig(rawdb.NewMemoryDatabase(), config, alloc, simTestGasLimit)
 			},
-			wantCallUse:        true,
-			wantPendingCallUse: true,
-			wantEstimageGasUse: true,
+			wantNonTxUse: true,
 		},
 	}
 
@@ -1188,7 +1189,7 @@ func TestVMConfigCloning(t *testing.T) {
 						_, err := sim.PendingCallContract(ctx, callMsg)
 						return err
 					},
-					wantVMConfigUsed: tt.wantPendingCallUse,
+					wantVMConfigUsed: tt.wantNonTxUse,
 				},
 				{
 					name: "CallContract()",
@@ -1196,7 +1197,7 @@ func TestVMConfigCloning(t *testing.T) {
 						_, err := sim.CallContract(ctx, callMsg, nil)
 						return err
 					},
-					wantVMConfigUsed: tt.wantCallUse,
+					wantVMConfigUsed: tt.wantNonTxUse,
 				},
 				{
 					name: "EstimateGas()",
@@ -1204,7 +1205,7 @@ func TestVMConfigCloning(t *testing.T) {
 						_, err := sim.EstimateGas(ctx, callMsg)
 						return err
 					},
-					wantVMConfigUsed: tt.wantEstimageGasUse,
+					wantVMConfigUsed: tt.wantNonTxUse,
 				},
 			} {
 				t.Run(funcTest.name, func(t *testing.T) {
@@ -1214,7 +1215,7 @@ func TestVMConfigCloning(t *testing.T) {
 						t.Fatalf("%s got err %v; want nil err", funcTest.name, err)
 					}
 					if gotVMConfigUsed := len(tracer.StructLogs()) > 0; gotVMConfigUsed != funcTest.wantVMConfigUsed {
-						t.Errorf("%s got vm.Config used = %t; want %t", funcTest.name, gotVMConfigUsed, funcTest.wantVMConfigUsed)
+						t.Errorf("%s got custom vm.Config used = %t; want %t", funcTest.name, gotVMConfigUsed, funcTest.wantVMConfigUsed)
 					}
 				})
 			}

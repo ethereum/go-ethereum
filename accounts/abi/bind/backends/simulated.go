@@ -117,10 +117,10 @@ func NewSimulatedBackendWithDBAndVMConfig(database ethdb.Database, config vm.Con
 // A simulated backend always uses chainID 1337.
 //
 // For historical reasons and to maintain backwards compatibility, if the
-// SimulatedBackend's vm.Config is modified it will only be used for
+// SimulatedBackend's vm.Config is modified directly it will only be used for
 // transactions, not for CallContract(), PendingCallContract(), nor
 // EstimateGas(). To set a config that is always used, use
-// NewSimulatedBackendWithDBAndVMConfig().
+// NewSimulatedBackendWithDBAndVMConfig() or SetVMConfig().
 func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	b := NewSimulatedBackendWithDBAndVMConfig(database, vm.Config{}, alloc, gasLimit)
 	b.alwaysCloneVMConfig = false // maintains backwards compatibility
@@ -142,12 +142,21 @@ func NewSimulatedBackendWithVMConfig(config vm.Config, alloc core.GenesisAlloc, 
 // A simulated backend always uses chainID 1337.
 //
 // For historical reasons and to maintain backwards compatibility, if the
-// SimulatedBackend's vm.Config is modified it will only be used for
+// SimulatedBackend's vm.Config is modified directly it will only be used for
 // transactions, not for CallContract(), PendingCallContract(), nor
 // EstimateGas(). To set a config that is always used, use
-// NewSimulatedBackendWithVMConfig().
+// NewSimulatedBackendWithVMConfig() or SetVMConfig().
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	return NewSimulatedBackendWithDatabase(rawdb.NewMemoryDatabase(), alloc, gasLimit)
+}
+
+// SetVMConfig sets b.Blockchain().GetVMConfig() to the provided Config and
+// ensures that it is always used for contract interaction. If the value is
+// modified directly, not with this method, it will only be used for
+// transactions but not calls to maintain backward compatibility.
+func (b *SimulatedBackend) SetVMConfig(c vm.Config) {
+	*b.Blockchain().GetVMConfig() = c
+	b.alwaysCloneVMConfig = true
 }
 
 // Close terminates the underlying blockchain's update loop.
