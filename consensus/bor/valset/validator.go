@@ -47,21 +47,26 @@ func (v *Validator) Cmp(other *Validator) *Validator {
 		return v
 	}
 
-	// nolint:nestif
 	if v.ProposerPriority > other.ProposerPriority {
 		return v
-	} else if v.ProposerPriority < other.ProposerPriority {
-		return other
-	} else {
-		result := bytes.Compare(v.Address.Bytes(), other.Address.Bytes())
-		if result < 0 {
-			return v
-		} else if result > 0 {
-			return other
-		} else {
-			panic("Cannot compare identical validators")
-		}
 	}
+
+	if v.ProposerPriority < other.ProposerPriority {
+		return other
+	}
+
+	result := bytes.Compare(v.Address.Bytes(), other.Address.Bytes())
+
+	if result == 0 {
+		panic("Cannot compare identical validators")
+	}
+
+	if result < 0 {
+		return v
+	}
+
+	// result > 0
+	return other
 }
 
 func (v *Validator) String() string {

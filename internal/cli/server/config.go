@@ -161,6 +161,9 @@ type HeimdallConfig struct {
 
 	// Without is used to disable remote heimdall during testing
 	Without bool `hcl:"bor.without,optional" toml:"bor.without,optional"`
+
+	// GRPCAddress is the address of the heimdall grpc server
+	GRPCAddress string `hcl:"grpc-address,optional" toml:"grpc-address,optional"`
 }
 
 type TxPoolConfig struct {
@@ -398,6 +401,8 @@ type CacheConfig struct {
 	// TxLookupLimit sets the maximum number of blocks from head whose tx indices are reserved.
 	TxLookupLimit uint64 `hcl:"txlookuplimit,optional" toml:"txlookuplimit,optional"`
 
+	// Number of block states to keep in memory (default = 128)
+	TriesInMemory uint64 `hcl:"triesinmemory,optional" toml:"triesinmemory,optional"`
 	// Time after which the Merkle Patricia Trie is stored to disc from memory
 	TrieTimeout    time.Duration `hcl:"-,optional" toml:"-"`
 	TrieTimeoutRaw string        `hcl:"timeout,optional" toml:"timeout,optional"`
@@ -454,8 +459,9 @@ func DefaultConfig() *Config {
 			},
 		},
 		Heimdall: &HeimdallConfig{
-			URL:     "http://localhost:1317",
-			Without: false,
+			URL:         "http://localhost:1317",
+			Without:     false,
+			GRPCAddress: "",
 		},
 		SyncMode: "full",
 		GcMode:   "full",
@@ -550,6 +556,7 @@ func DefaultConfig() *Config {
 			NoPrefetch:    false,
 			Preimages:     false,
 			TxLookupLimit: 2350000,
+			TriesInMemory: 128,
 			TrieTimeout:   60 * time.Minute,
 		},
 		Accounts: &AccountsConfig{
@@ -695,6 +702,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
+	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
 
 	// gas price oracle
 	{

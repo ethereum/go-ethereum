@@ -1987,7 +1987,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 		config.SnapshotWait = true
 	}
 
-	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -2082,6 +2082,7 @@ func testSetHead(t *testing.T, tt *rewindTest, snapshots bool) {
 
 // verifyNoGaps checks that there are no gaps after the initial set of blocks in
 // the database and errors if found.
+//
 //nolint:gocognit
 func verifyNoGaps(t *testing.T, chain *core.BlockChain, canonical bool, inserted types.Blocks) {
 	t.Helper()
@@ -2135,6 +2136,7 @@ func verifyNoGaps(t *testing.T, chain *core.BlockChain, canonical bool, inserted
 
 // verifyCutoff checks that there are no chain data available in the chain after
 // the specified limit, but that it is available before.
+//
 //nolint:gocognit
 func verifyCutoff(t *testing.T, chain *core.BlockChain, canonical bool, inserted types.Blocks, head int) {
 	t.Helper()

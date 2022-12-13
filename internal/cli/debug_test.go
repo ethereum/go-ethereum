@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/mitchellh/cli"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 )
 
-var currentDir string = ""
+var currentDir string
 
 func TestCommand_DebugBlock(t *testing.T) {
 	t.Parallel()
@@ -30,7 +30,7 @@ func TestCommand_DebugBlock(t *testing.T) {
 
 	// start the mock server
 	srv, err := server.CreateMockServer(config)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer server.CloseMockServer(srv)
 
@@ -53,7 +53,7 @@ func TestCommand_DebugBlock(t *testing.T) {
 	start := time.Now()
 	dst1 := path.Join(output, prefix+time.Now().UTC().Format("2006-01-02-150405Z"), "block.json")
 	res := traceBlock(port, 1, output)
-	assert.Equal(t, 0, res)
+	require.Equal(t, 0, res)
 	t.Logf("Completed trace of block %d in %d ms at %s", 1, time.Since(start).Milliseconds(), dst1)
 
 	// adding this to avoid debug directory name conflicts
@@ -64,14 +64,14 @@ func TestCommand_DebugBlock(t *testing.T) {
 	latestBlock := srv.GetLatestBlockNumber().Int64()
 	dst2 := path.Join(output, prefix+time.Now().UTC().Format("2006-01-02-150405Z"), "block.json")
 	res = traceBlock(port, latestBlock, output)
-	assert.Equal(t, 0, res)
+	require.Equal(t, 0, res)
 	t.Logf("Completed trace of block %d in %d ms at %s", latestBlock, time.Since(start).Milliseconds(), dst2)
 
 	// verify if the trace files are created
 	done := verify(dst1)
-	assert.Equal(t, true, done)
+	require.Equal(t, true, done)
 	done = verify(dst2)
-	assert.Equal(t, true, done)
+	require.Equal(t, true, done)
 
 	// delete the traces
 	deleteTraces(output)

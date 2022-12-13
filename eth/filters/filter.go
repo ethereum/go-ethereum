@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+//go:generate mockgen -destination=../../eth/filters/IBackend.go -package=filters . Backend
 type Backend interface {
 	ChainDb() ethdb.Database
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)

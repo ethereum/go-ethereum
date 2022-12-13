@@ -108,6 +108,7 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			// bor related flags
 			utils.HeimdallURLFlag,
 			utils.WithoutHeimdallFlag,
+			utils.HeimdallgRPCAddressFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `

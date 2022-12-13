@@ -285,7 +285,7 @@ func TestMatcherRunonlylist(t *testing.T) {
 	tm.runonly("invalid*")
 	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
 		if name[:len("invalidRLPTest.json")] != "invalidRLPTest.json" {
-			t.Fatalf("invalid test found: %s != invalidRLPTest.json", name)
+			t.Fatalf("in 'init_test.go' invalid test found: %s != invalidRLPTest.json", name)
 		}
 	})
 }

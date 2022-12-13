@@ -20,3 +20,12 @@ type CheckpointResponse struct {
 	Height string     `json:"height"`
 	Result Checkpoint `json:"result"`
 }
+
+type CheckpointCount struct {
+	Result int64 `json:"result"`
+}
+
+type CheckpointCountResponse struct {
+	Height string          `json:"height"`
+	Result CheckpointCount `json:"result"`
+}

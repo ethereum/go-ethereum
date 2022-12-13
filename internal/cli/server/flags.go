@@ -92,6 +92,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.Without,
 		Default: c.cliConfig.Heimdall.Without,
 	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "bor.heimdallgRPC",
+		Usage:   "Address of Heimdall gRPC service",
+		Value:   &c.cliConfig.Heimdall.GRPCAddress,
+		Default: c.cliConfig.Heimdall.GRPCAddress,
+	})
 
 	// txpool options
 	f.SliceStringFlag(&flagset.SliceStringFlag{
@@ -302,6 +308,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Usage:   "Enable recording the SHA3/keccak preimages of trie keys",
 		Value:   &c.cliConfig.Cache.Preimages,
 		Default: c.cliConfig.Cache.Preimages,
+		Group:   "Cache",
+	})
+	f.Uint64Flag(&flagset.Uint64Flag{
+		Name:    "cache.triesinmemory",
+		Usage:   "Number of block states (tries) to keep in memory (default = 128)",
+		Value:   &c.cliConfig.Cache.TriesInMemory,
+		Default: c.cliConfig.Cache.TriesInMemory,
 		Group:   "Cache",
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{

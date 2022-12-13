@@ -18,12 +18,22 @@
         "londonBlock":13996000,
         "bor":{
           "period":{
-            "0":2
+            "0":2,
+            "25275000": 5,
+            "29638656": 2
           },
-          "producerDelay":6,
-          "sprint":64,
+          "producerDelay":{
+            "0": 6,
+            "29638656": 4
+          },
+          "sprint":{
+            "0": 64,
+            "29638656": 16
+          },
           "backupMultiplier":{
-            "0":2
+            "0": 2,
+            "25275000": 5,
+            "29638656": 2
           },
           "validatorContract":"0x0000000000000000000000000000000000001000",
           "stateReceiverContract":"0x0000000000000000000000000000000000001001",
@@ -39,7 +49,8 @@
           "burntContract":{
             "22640000":"0x70bcA57F4579f58670aB2d18Ef16e02C17553C38"
           },
-          "jaipurBlock":22770000
+          "jaipurBlock":22770000,
+          "delhiBlock": 29638656
         }
       },
       "nonce":"0x0",

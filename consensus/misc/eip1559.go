@@ -59,9 +59,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 	}
 
 	var (
-		parentGasTarget          = parent.GasLimit / params.ElasticityMultiplier
-		parentGasTargetBig       = new(big.Int).SetUint64(parentGasTarget)
-		baseFeeChangeDenominator = new(big.Int).SetUint64(params.BaseFeeChangeDenominator)
+		parentGasTarget                = parent.GasLimit / params.ElasticityMultiplier
+		parentGasTargetBig             = new(big.Int).SetUint64(parentGasTarget)
+		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
+		baseFeeChangeDenominator       = new(big.Int).SetUint64(baseFeeChangeDenominatorUint64)
 	)
 	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
 	if parent.GasUsed == parentGasTarget {

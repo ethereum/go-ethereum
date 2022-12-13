@@ -4,31 +4,364 @@
 package bor
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"io"
 	"math/big"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
-	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
+	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 )
+
+var (
+	// addr1 = 0x71562b71999873DB5b286dF957af199Ec94617F7
+	pkey1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	// addr2 = 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
+	pkey2, _ = crypto.HexToECDSA("9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3")
+)
+
+func TestValidatorWentOffline(t *testing.T) {
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	fdlimit.Raise(2048)
+
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
+	}
+
+	// Create an Ethash network based off of the Ropsten config
+	// Generate a batch of accounts to seal and fund with
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
+
+	var (
+		stacks []*node.Node
+		nodes  []*eth.Ethereum
+		enodes []*enode.Node
+	)
+	for i := 0; i < 2; i++ {
+		// Start the node and wait until it's up
+		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
+		if err != nil {
+			panic(err)
+		}
+		defer stack.Close()
+
+		for stack.Server().NodeInfo().Ports.Listener == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+		// Connect the node to all the previous ones
+		for _, n := range enodes {
+			stack.Server().AddPeer(n)
+		}
+		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
+		nodes = append(nodes, ethBackend)
+		enodes = append(enodes, stack.Server().Self())
+	}
+
+	// Iterate over all the nodes and start mining
+	time.Sleep(3 * time.Second)
+	for _, node := range nodes {
+		if err := node.StartMining(1); err != nil {
+			panic(err)
+		}
+	}
+
+	for {
+
+		// for block 1 to 8, the primary validator is node0
+		// for block 9 to 16, the primary validator is node1
+		// for block 17 to 24, the primary validator is node0
+		// for block 25 to 32, the primary validator is node1
+		blockHeaderVal0 := nodes[0].BlockChain().CurrentHeader()
+
+		// we remove peer connection between node0 and node1
+		if blockHeaderVal0.Number.Uint64() == 9 {
+			stacks[0].Server().RemovePeer(enodes[1])
+		}
+
+		// here, node1 is the primary validator, node0 will sign out-of-turn
+
+		// we add peer connection between node1 and node0
+		if blockHeaderVal0.Number.Uint64() == 14 {
+			stacks[0].Server().AddPeer(enodes[1])
+		}
+
+		// reorg happens here, node1 has higher difficulty, it will replace blocks by node0
+
+		if blockHeaderVal0.Number.Uint64() == 30 {
+
+			break
+		}
+
+	}
+
+	// check block 10 miner ; expected author is node1 signer
+	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(10)
+	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(10)
+	authorVal0, err := nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err := nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 10
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 11 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(11)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(11)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 11
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 12 miner ; expected author is node1 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(12)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(12)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 12
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[1].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[1].AccountManager().Accounts()[0])
+
+	// check block 17 miner ; expected author is node0 signer
+	blockHeaderVal0 = nodes[0].BlockChain().GetHeaderByNumber(17)
+	blockHeaderVal1 = nodes[1].BlockChain().GetHeaderByNumber(17)
+	authorVal0, err = nodes[0].Engine().Author(blockHeaderVal0)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+	authorVal1, err = nodes[1].Engine().Author(blockHeaderVal1)
+	if err != nil {
+		log.Error("Error in getting author", "err", err)
+	}
+
+	// check both nodes have the same block 17
+	assert.Equal(t, authorVal0, authorVal1)
+
+	// check node0 has block mined by node1
+	assert.Equal(t, authorVal0, nodes[0].AccountManager().Accounts()[0])
+
+	// check node1 has block mined by node1
+	assert.Equal(t, authorVal1, nodes[0].AccountManager().Accounts()[0])
+}
+
+func TestForkWithBlockTime(t *testing.T) {
+
+	cases := []struct {
+		name          string
+		sprint        map[string]uint64
+		blockTime     map[string]uint64
+		change        uint64
+		producerDelay map[string]uint64
+		forkExpected  bool
+	}{
+		{
+			name: "No fork after 2 sprints with producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 128,
+			},
+			blockTime: map[string]uint64{
+				"0":   5,
+				"128": 2,
+				"256": 8,
+			},
+			change: 2,
+			producerDelay: map[string]uint64{
+				"0": 8,
+			},
+			forkExpected: false,
+		},
+		{
+			name: "No Fork after 1 sprint producer delay = max block time",
+			sprint: map[string]uint64{
+				"0": 64,
+			},
+			blockTime: map[string]uint64{
+				"0":  5,
+				"64": 2,
+			},
+			change: 1,
+			producerDelay: map[string]uint64{
+				"0": 5,
+			},
+			forkExpected: false,
+		},
+		{
+			name: "Fork after 4 sprints with producer delay < max block time",
+			sprint: map[string]uint64{
+				"0": 16,
+			},
+			blockTime: map[string]uint64{
+				"0":  2,
+				"64": 5,
+			},
+			change: 4,
+			producerDelay: map[string]uint64{
+				"0": 4,
+			},
+			forkExpected: true,
+		},
+	}
+
+	// Create an Ethash network based off of the Ropsten config
+	// Generate a batch of accounts to seal and fund with
+	faucets := make([]*ecdsa.PrivateKey, 128)
+	for i := 0; i < len(faucets); i++ {
+		faucets[i], _ = crypto.GenerateKey()
+	}
+	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+
+			genesis.Config.Bor.Sprint = test.sprint
+			genesis.Config.Bor.Period = test.blockTime
+			genesis.Config.Bor.BackupMultiplier = test.blockTime
+			genesis.Config.Bor.ProducerDelay = test.producerDelay
+
+			stacks, nodes, _ := setupMiner(t, 2, genesis)
+
+			defer func() {
+				for _, stack := range stacks {
+					stack.Close()
+				}
+			}()
+
+			// Iterate over all the nodes and start mining
+			for _, node := range nodes {
+				if err := node.StartMining(1); err != nil {
+					t.Fatal("Error occured while starting miner", "node", node, "error", err)
+				}
+			}
+			var wg sync.WaitGroup
+			blockHeaders := make([]*types.Header, 2)
+			ticker := time.NewTicker(time.Duration(test.blockTime["0"]) * time.Second)
+			defer ticker.Stop()
+
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+
+				go func(i int) {
+					defer wg.Done()
+
+					for range ticker.C {
+						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint["0"]*test.change + 10)
+						if blockHeaders[i] != nil {
+							break
+						}
+					}
+
+				}(i)
+			}
+
+			wg.Wait()
+
+			// Before the end of sprint
+			blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
+			blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(test.sprint["0"] - 1)
+			assert.Equal(t, blockHeaderVal0.Hash(), blockHeaderVal1.Hash())
+			assert.Equal(t, blockHeaderVal0.Time, blockHeaderVal1.Time)
+
+			author0, err := nodes[0].Engine().Author(blockHeaderVal0)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author1, err := nodes[1].Engine().Author(blockHeaderVal1)
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			assert.Equal(t, author0, author1)
+
+			// After the end of sprint
+			author2, err := nodes[0].Engine().Author(blockHeaders[0])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+			author3, err := nodes[1].Engine().Author(blockHeaders[1])
+			if err != nil {
+				t.Error("Error occured while fetching author", "err", err)
+			}
+
+			if test.forkExpected {
+				assert.NotEqual(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.NotEqual(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.NotEqual(t, author2, author3)
+			} else {
+				assert.Equal(t, blockHeaders[0].Hash(), blockHeaders[1].Hash())
+				assert.Equal(t, blockHeaders[0].Time, blockHeaders[1].Time)
+				assert.Equal(t, author2, author3)
+			}
+		})
+
+	}
+
+}
 
 func TestInsertingSpanSizeBlocks(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
@@ -38,14 +371,14 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 
 	defer _bor.Close()
 
-	h, heimdallSpan, ctrl := getMockedHeimdallClient(t)
+	_, currentSpan := loadSpanFromFile(t)
+
+	h, ctrl := getMockedHeimdallClient(t, currentSpan)
 	defer ctrl.Finish()
 
-	_, span := loadSpanFromFile(t)
-
 	h.EXPECT().Close().AnyTimes()
-	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
-		Proposer:   span.SelectedProducers[0].Address,
+	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{
+		Proposer:   currentSpan.SelectedProducers[0].Address,
 		StartBlock: big.NewInt(0),
 		EndBlock:   big.NewInt(int64(spanSize)),
 	}, nil).AnyTimes()
@@ -56,21 +389,23 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	block := init.genesis.ToBlock(db)
 	// to := int64(block.Header().Time)
 
+	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
+
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i <= spanSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
 
-	validators, err := _bor.GetCurrentValidators(block.Hash(), spanSize) // check validator set at the first block of new span
+	validators, err := _bor.GetCurrentValidators(context.Background(), block.Hash(), spanSize) // check validator set at the first block of new span
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
 
-	assert.Equal(t, 3, len(validators))
+	require.Equal(t, 3, len(validators))
 	for i, validator := range validators {
-		assert.Equal(t, validator.Address.Bytes(), heimdallSpan.SelectedProducers[i].Address.Bytes())
-		assert.Equal(t, validator.VotingPower, heimdallSpan.SelectedProducers[i].VotingPower)
+		require.Equal(t, validator.Address.Bytes(), currentSpan.SelectedProducers[i].Address.Bytes())
+		require.Equal(t, validator.VotingPower, currentSpan.SelectedProducers[i].VotingPower)
 	}
 }
 
@@ -85,27 +420,29 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	// A. Insert blocks for 0th sprint
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
+
+	// B.1 Mock /bor/span/1
+	res, _ := loadSpanFromFile(t)
+
+	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
+
 	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
 	for i := uint64(1); i < sprintSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		if IsSpanEnd(i) {
+			currentValidators = res.Result.ValidatorSet.Validators
+		}
+
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
 
 	// B. Before inserting 1st block of the next sprint, mock heimdall deps
-	// B.1 Mock /bor/span/1
-	res, _ := loadSpanFromFile(t)
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	h := mocks.NewMockIHeimdallClient(ctrl)
 	h.EXPECT().Close().AnyTimes()
-	h.EXPECT().Span(uint64(1)).Return(&res.Result, nil).AnyTimes()
-	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
-		StartBlock: big.NewInt(1),
-		EndBlock:   big.NewInt(2),
-		RootHash:   common.Hash{},
-	}, nil).AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).AnyTimes()
 
 	// B.2 Mock State Sync events
 	fromID := uint64(1)
@@ -117,10 +454,10 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	sample.Time = time.Unix(to-int64(eventCount+1), 0) // last event.Time will be just < to
 	eventRecords := generateFakeStateSyncEvents(sample, eventCount)
 
-	h.EXPECT().StateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
+	h.EXPECT().StateSyncEvents(gomock.Any(), fromID, to).Return(eventRecords, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
-	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 	insertNewBlock(t, chain, block)
 }
 
@@ -135,17 +472,15 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	// Mock /bor/span/1
 	res, _ := loadSpanFromFile(t)
 
+	// add the block producer
+	res.Result.ValidatorSet.Validators = append(res.Result.ValidatorSet.Validators, valset.NewValidator(addr, 4500))
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	h := mocks.NewMockIHeimdallClient(ctrl)
 	h.EXPECT().Close().AnyTimes()
-	h.EXPECT().Span(uint64(1)).Return(&res.Result, nil).AnyTimes()
-	h.EXPECT().FetchLatestCheckpoint().Return(&checkpoint.Checkpoint{
-		StartBlock: big.NewInt(1),
-		EndBlock:   big.NewInt(2),
-		RootHash:   common.Hash{},
-	}, nil).AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).AnyTimes()
 
 	// Mock State Sync events
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
@@ -164,21 +499,30 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		buildStateEvent(sample, 6, 4), // id = 6, time = 4
 	}
 
-	h.EXPECT().StateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
+	h.EXPECT().StateSyncEvents(gomock.Any(), fromID, to).Return(eventRecords, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	// Insert blocks for 0th sprint
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
+
+	var currentValidators []*valset.Validator
+
 	for i := uint64(1); i <= sprintSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		if IsSpanEnd(i) {
+			currentValidators = res.Result.ValidatorSet.Validators
+		} else {
+			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
+		}
+
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
 
 	lastStateID, _ := _bor.GenesisContractsClient.LastStateId(sprintSize)
 
 	// state 6 was not written
-	assert.Equal(t, uint64(4), lastStateID.Uint64())
+	require.Equal(t, uint64(4), lastStateID.Uint64())
 
 	//
 	fromID = uint64(5)
@@ -188,15 +532,21 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 		buildStateEvent(sample, 5, 7),
 		buildStateEvent(sample, 6, 4),
 	}
-	h.EXPECT().StateSyncEvents(fromID, to).Return(eventRecords, nil).AnyTimes()
+	h.EXPECT().StateSyncEvents(gomock.Any(), fromID, to).Return(eventRecords, nil).AnyTimes()
 
 	for i := sprintSize + 1; i <= spanSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		if IsSpanEnd(i) {
+			currentValidators = res.Result.ValidatorSet.Validators
+		} else {
+			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
+		}
+
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
 	}
 
 	lastStateID, _ = _bor.GenesisContractsClient.LastStateId(spanSize)
-	assert.Equal(t, uint64(6), lastStateID.Uint64())
+	require.Equal(t, uint64(6), lastStateID.Uint64())
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
@@ -207,17 +557,29 @@ func TestOutOfTurnSigning(t *testing.T) {
 
 	defer _bor.Close()
 
-	h, _, ctrl := getMockedHeimdallClient(t)
+	_, heimdallSpan := loadSpanFromFile(t)
+	proposer := valset.NewValidator(addr, 10)
+	heimdallSpan.ValidatorSet.Validators = append(heimdallSpan.ValidatorSet.Validators, proposer)
+
+	// add the block producer
+	h, ctrl := getMockedHeimdallClient(t, heimdallSpan)
 	defer ctrl.Finish()
 
 	h.EXPECT().Close().AnyTimes()
+
 	_bor.SetHeimdallClient(h)
 
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
 
+	setDifficulty := func(header *types.Header) {
+		if IsSprintStart(header.Number.Uint64()) {
+			header.Difficulty = big.NewInt(int64(len(heimdallSpan.ValidatorSet.Validators)))
+		}
+	}
+
 	for i := uint64(1); i < spanSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, heimdallSpan.ValidatorSet.Validators, setDifficulty)
 		insertNewBlock(t, chain, block)
 	}
 
@@ -225,34 +587,50 @@ func TestOutOfTurnSigning(t *testing.T) {
 	// This account is one the out-of-turn validators for 1st (0-indexed) span
 	signer := "c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd9"
 	signerKey, _ := hex.DecodeString(signer)
-	key, _ = crypto.HexToECDSA(signer)
-	addr = crypto.PubkeyToAddress(key.PublicKey)
+	newKey, _ := crypto.HexToECDSA(signer)
+	newAddr := crypto.PubkeyToAddress(newKey.PublicKey)
 	expectedSuccessionNumber := 2
 
-	block = buildNextBlock(t, _bor, chain, block, signerKey, init.genesis.Config.Bor)
-	_, err := chain.InsertChain([]*types.Block{block})
-	assert.Equal(t,
-		*err.(*bor.BlockTooSoonError),
-		bor.BlockTooSoonError{Number: spanSize, Succession: expectedSuccessionNumber})
+	parentTime := block.Time()
 
-	expectedDifficulty := uint64(3 - expectedSuccessionNumber) // len(validators) - succession
+	setParentTime := func(header *types.Header) {
+		header.Time = parentTime + 1
+	}
+
+	const turn = 1
+
+	setDifficulty = func(header *types.Header) {
+		header.Difficulty = big.NewInt(int64(len(heimdallSpan.ValidatorSet.Validators)) - turn)
+	}
+
+	block = buildNextBlock(t, _bor, chain, block, signerKey, init.genesis.Config.Bor, nil, heimdallSpan.ValidatorSet.Validators, setParentTime, setDifficulty)
+	_, err := chain.InsertChain([]*types.Block{block})
+	require.Equal(t,
+		bor.BlockTooSoonError{Number: spanSize, Succession: expectedSuccessionNumber},
+		*err.(*bor.BlockTooSoonError))
+
+	expectedDifficulty := uint64(len(heimdallSpan.ValidatorSet.Validators) - expectedSuccessionNumber - turn) // len(validators) - succession
 	header := block.Header()
-	header.Time += (bor.CalcProducerDelay(header.Number.Uint64(), expectedSuccessionNumber, init.genesis.Config.Bor) -
-		bor.CalcProducerDelay(header.Number.Uint64(), 0, init.genesis.Config.Bor))
+
+	diff := bor.CalcProducerDelay(header.Number.Uint64(), expectedSuccessionNumber, init.genesis.Config.Bor)
+	header.Time += diff
+
 	sign(t, header, signerKey, init.genesis.Config.Bor)
+
 	block = types.NewBlockWithHeader(header)
 
 	_, err = chain.InsertChain([]*types.Block{block})
-	assert.Equal(t,
-		*err.(*bor.WrongDifficultyError),
-		bor.WrongDifficultyError{Number: spanSize, Expected: expectedDifficulty, Actual: 3, Signer: addr.Bytes()})
+	require.NotNil(t, err)
+	require.Equal(t,
+		bor.WrongDifficultyError{Number: spanSize, Expected: expectedDifficulty, Actual: 3, Signer: newAddr.Bytes()},
+		*err.(*bor.WrongDifficultyError))
 
 	header.Difficulty = new(big.Int).SetUint64(expectedDifficulty)
 	sign(t, header, signerKey, init.genesis.Config.Bor)
 	block = types.NewBlockWithHeader(header)
 
 	_, err = chain.InsertChain([]*types.Block{block})
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 func TestSignerNotFound(t *testing.T) {
@@ -263,7 +641,9 @@ func TestSignerNotFound(t *testing.T) {
 
 	defer _bor.Close()
 
-	h, _, ctrl := getMockedHeimdallClient(t)
+	_, heimdallSpan := loadSpanFromFile(t)
+
+	h, ctrl := getMockedHeimdallClient(t, heimdallSpan)
 	defer ctrl.Finish()
 
 	h.EXPECT().Close().AnyTimes()
@@ -274,64 +654,21 @@ func TestSignerNotFound(t *testing.T) {
 	block := init.genesis.ToBlock(db)
 
 	// random signer account that is not a part of the validator set
-	signer := "3714d99058cd64541433d59c6b391555b2fd9b54629c2b717a6c9c00d1127b6b"
+	const signer = "3714d99058cd64541433d59c6b391555b2fd9b54629c2b717a6c9c00d1127b6b"
 	signerKey, _ := hex.DecodeString(signer)
-	key, _ = crypto.HexToECDSA(signer)
-	addr = crypto.PubkeyToAddress(key.PublicKey)
+	newKey, _ := crypto.HexToECDSA(signer)
+	newAddr := crypto.PubkeyToAddress(newKey.PublicKey)
 
-	block = buildNextBlock(t, _bor, chain, block, signerKey, init.genesis.Config.Bor)
+	_bor.Authorize(newAddr, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+		return crypto.Sign(crypto.Keccak256(data), newKey)
+	})
+
+	block = buildNextBlock(t, _bor, chain, block, signerKey, init.genesis.Config.Bor, nil, heimdallSpan.ValidatorSet.Validators)
+
 	_, err := chain.InsertChain([]*types.Block{block})
-	assert.Equal(t,
+	require.Equal(t,
 		*err.(*bor.UnauthorizedSignerError),
-		bor.UnauthorizedSignerError{Number: 0, Signer: addr.Bytes()})
-}
-
-func getMockedHeimdallClient(t *testing.T) (*mocks.MockIHeimdallClient, *span.HeimdallSpan, *gomock.Controller) {
-	ctrl := gomock.NewController(t)
-	h := mocks.NewMockIHeimdallClient(ctrl)
-
-	_, heimdallSpan := loadSpanFromFile(t)
-
-	h.EXPECT().Span(uint64(1)).Return(heimdallSpan, nil).AnyTimes()
-
-	h.EXPECT().StateSyncEvents(gomock.Any(), gomock.Any()).
-		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
-
-	// h.EXPECT().FetchLatestCheckpoint().Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
-
-	return h, heimdallSpan, ctrl
-}
-
-func generateFakeStateSyncEvents(sample *clerk.EventRecordWithTime, count int) []*clerk.EventRecordWithTime {
-	events := make([]*clerk.EventRecordWithTime, count)
-	event := *sample
-	event.ID = 1
-	events[0] = &clerk.EventRecordWithTime{}
-	*events[0] = event
-	for i := 1; i < count; i++ {
-		event.ID = uint64(i)
-		event.Time = event.Time.Add(1 * time.Second)
-		events[i] = &clerk.EventRecordWithTime{}
-		*events[i] = event
-	}
-	return events
-}
-
-func buildStateEvent(sample *clerk.EventRecordWithTime, id uint64, timeStamp int64) *clerk.EventRecordWithTime {
-	event := *sample
-	event.ID = id
-	event.Time = time.Unix(timeStamp, 0)
-	return &event
-}
-
-func getSampleEventRecord(t *testing.T) *clerk.EventRecordWithTime {
-	eventRecords := stateSyncEventsPayload(t)
-	eventRecords.Result[0].Time = time.Unix(1, 0)
-	return eventRecords.Result[0]
-}
-
-func getEventRecords(t *testing.T) []*clerk.EventRecordWithTime {
-	return stateSyncEventsPayload(t).Result
+		bor.UnauthorizedSignerError{Number: 0, Signer: newAddr.Bytes()})
 }
 
 // TestEIP1559Transition tests the following:
@@ -361,7 +698,7 @@ func TestEIP1559Transition(t *testing.T) {
 		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
 		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec = &core.Genesis{
-			Config: params.BorTestChainConfig,
+			Config: params.BorUnittestChainConfig,
 			Alloc: core.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
@@ -413,7 +750,7 @@ func TestEIP1559Transition(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -443,7 +780,7 @@ func TestEIP1559Transition(t *testing.T) {
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorTestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
 	expected = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	burntContractBalance := expected
 	if actual.Cmp(expected) != 0 {
@@ -491,7 +828,7 @@ func TestEIP1559Transition(t *testing.T) {
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorTestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
 	expected = new(big.Int).Add(burntContractBalance, new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee()))
 	burntContractBalance = expected
 	if actual.Cmp(expected) != 0 {
@@ -549,7 +886,7 @@ func TestEIP1559Transition(t *testing.T) {
 	state, _ = chain.State()
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorTestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
 	burntAmount := new(big.Int).Mul(
 		block.BaseFee(),
 		big.NewInt(int64(block.GasUsed())),
@@ -560,25 +897,188 @@ func TestEIP1559Transition(t *testing.T) {
 	}
 }
 
-func newGwei(n int64) *big.Int {
-	return new(big.Int).Mul(big.NewInt(n), big.NewInt(params.GWei))
+// EIP1559 is not supported without EIP155. An error is expected
+func TestEIP1559TransitionWithEIP155(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		db     = rawdb.NewMemoryDatabase()
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		key3, _ = crypto.HexToECDSA("225171aed3793cba1c029832886d69785b7e77a54a44211226b447aa2d16b058")
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec = &core.Genesis{
+			Config: params.BorUnittestChainConfig,
+			Alloc: core.GenesisAlloc{
+				addr1: {Balance: funds},
+				addr2: {Balance: funds},
+				addr3: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code: []byte{
+						byte(vm.PC),
+						byte(vm.PC),
+						byte(vm.SLOAD),
+						byte(vm.SLOAD),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	genesis := gspec.MustCommit(db)
+
+	// Use signer without chain ID
+	signer := types.HomesteadSigner{}
+
+	_, _ = core.GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// One transaction to 0xAAAA
+		accesses := types.AccessList{types.AccessTuple{
+			Address:     aa,
+			StorageKeys: []common.Hash{{0}},
+		}}
+
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        30000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: accesses,
+			Data:       []byte{},
+		}
+
+		var err error
+
+		tx := types.NewTx(txdata)
+		tx, err = types.SignTx(tx, signer, key1)
+
+		require.ErrorIs(t, err, types.ErrTxTypeNotSupported)
+	})
+}
+
+// it is up to a user to use protected transactions. so if a transaction is unprotected no errors related to chainID are expected.
+// transactions are checked in 2 places: transaction pool and blockchain processor.
+func TestTransitionWithoutEIP155(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		db     = rawdb.NewMemoryDatabase()
+		engine = ethash.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		key3, _ = crypto.HexToECDSA("225171aed3793cba1c029832886d69785b7e77a54a44211226b447aa2d16b058")
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+		addr3 = crypto.PubkeyToAddress(key3.PublicKey)
+		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec = &core.Genesis{
+			Config: params.BorUnittestChainConfig,
+			Alloc: core.GenesisAlloc{
+				addr1: {Balance: funds},
+				addr2: {Balance: funds},
+				addr3: {Balance: funds},
+				// The address 0xAAAA sloads 0x00 and 0x01
+				aa: {
+					Code: []byte{
+						byte(vm.PC),
+						byte(vm.PC),
+						byte(vm.SLOAD),
+						byte(vm.SLOAD),
+					},
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	genesis := gspec.MustCommit(db)
+
+	// Use signer without chain ID
+	signer := types.HomesteadSigner{}
+	//signer := types.FrontierSigner{}
+
+	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{1})
+
+		txdata := &types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Gas:      30000,
+			GasPrice: newGwei(5),
+		}
+
+		var err error
+
+		tx := types.NewTx(txdata)
+		tx, err = types.SignTx(tx, signer, key1)
+
+		require.Nil(t, err)
+		require.False(t, tx.Protected())
+
+		from, err := types.Sender(types.EIP155Signer{}, tx)
+		require.Equal(t, addr1, from)
+		require.Nil(t, err)
+
+		b.AddTx(tx)
+	})
+
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := core.NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	block := chain.GetBlockByNumber(1)
+
+	require.Len(t, block.Transactions(), 1)
 }
 
 func TestJaipurFork(t *testing.T) {
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
+
 	_bor := engine.(*bor.Bor)
+	defer _bor.Close()
+
 	db := init.ethereum.ChainDb()
 	block := init.genesis.ToBlock(db)
+
+	res, _ := loadSpanFromFile(t)
+
 	for i := uint64(1); i < sprintSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor)
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock-1 {
-			assert.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
+
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64()-1 {
+			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
-		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock {
-			assert.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
+
+		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64() {
+			require.Equal(t, testSealHash(block.Header(), init.genesis.Config.Bor), bor.SealHash(block.Header(), init.genesis.Config.Bor))
 		}
 	}
 }
@@ -609,7 +1109,7 @@ func testEncodeSigHeader(w io.Writer, header *types.Header, c *params.BorConfig)
 		header.MixDigest,
 		header.Nonce,
 	}
-	if c.IsJaipur(header.Number.Uint64()) {
+	if c.IsJaipur(header.Number) {
 		if header.BaseFee != nil {
 			enc = append(enc, header.BaseFee)
 		}

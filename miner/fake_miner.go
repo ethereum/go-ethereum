@@ -47,7 +47,7 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 	ethAPI.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	spanner := bor.NewMockSpanner(ctrl)
-	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
 		{
 			ID:               0,
 			Address:          common.Address{0x1},
@@ -84,7 +84,7 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	engine := NewFakeBor(t, chainDB, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 
 	// Create Ethereum backend
-	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil)
+	bc, err := core.NewBlockChain(chainDB, nil, chainConfig, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("can't create new chain %v", err)
 	}
@@ -118,7 +118,12 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	return miner, mux, cleanup
 }
 
-func NewDBForFakes(t *testing.T) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
+type TensingObject interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
+func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.ChainConfig) {
 	t.Helper()
 
 	memdb := memorydb.New()
@@ -133,11 +138,14 @@ func NewDBForFakes(t *testing.T) (ethdb.Database, *core.Genesis, *params.ChainCo
 	chainConfig.Bor.Period = map[string]uint64{
 		"0": 1,
 	}
+	chainConfig.Bor.Sprint = map[string]uint64{
+		"0": 64,
+	}
 
 	return chainDB, genesis, chainConfig
 }
 
-func NewFakeBor(t *testing.T, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
+func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.ChainConfig, ethAPIMock api.Caller, spanner bor.Spanner, heimdallClientMock bor.IHeimdallClient, contractMock bor.GenesisContract) consensus.Engine {
 	t.Helper()
 
 	if chainConfig.Bor == nil {
@@ -203,7 +211,7 @@ var (
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
+	TestBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 	testBankFunds   = big.NewInt(1000000000000000000)
 
 	testUserKey, _  = crypto.GenerateKey()

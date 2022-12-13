@@ -28,7 +28,7 @@ func TestRLP(t *testing.T) {
 	tm := new(testMatcher)
 	tm.walk(t, rlpTestDir, func(t *testing.T, name string, test *RLPTest) {
 		if err := tm.checkFailure(t, test.Run()); err != nil {
-			t.Error(err)
+			t.Errorf("in 'rlp_test.go', test '%s' failed with error: '%v'", name, err)
 		}
 	})
 }

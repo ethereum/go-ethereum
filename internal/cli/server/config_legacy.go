@@ -2,13 +2,13 @@ package server
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/BurntSushi/toml"
 )
 
 func readLegacyConfig(path string) (*Config, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	tomlData := string(data)
 
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -162,7 +161,7 @@ func (b *BootnodeCommand) Run(args []string) int {
 			}
 			// save the public key
 			pubRaw := fmt.Sprintf("%x", crypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
-			if err := ioutil.WriteFile(filepath.Join(path, "pub.key"), []byte(pubRaw), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(path, "pub.key"), []byte(pubRaw), 0600); err != nil {
 				b.UI.Error(fmt.Sprintf("failed to write node pub key: %v", err))
 				return 1
 			}

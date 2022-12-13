@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -15,14 +15,20 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
-// errShutdownDetected is returned if a shutdown was detected
-var errShutdownDetected = errors.New("shutdown detected")
+var (
+	// ErrShutdownDetected is returned if a shutdown was detected
+	ErrShutdownDetected      = errors.New("shutdown detected")
+	ErrNoResponse            = errors.New("got a nil response")
+	ErrNotSuccessfulResponse = errors.New("error while fetching data from Heimdall")
+)
 
 const (
 	stateFetchLimit    = 50
 	apiHeimdallTimeout = 5 * time.Second
+	retryCall          = 5 * time.Second
 )
 
 type StateSyncEventsResponse struct {
@@ -41,6 +47,12 @@ type HeimdallClient struct {
 	closeCh   chan struct{}
 }
 
+type Request struct {
+	client http.Client
+	url    *url.URL
+	start  time.Time
+}
+
 func NewHeimdallClient(urlString string) *HeimdallClient {
 	return &HeimdallClient{
 		urlString: urlString,
@@ -54,12 +66,13 @@ func NewHeimdallClient(urlString string) *HeimdallClient {
 const (
 	fetchStateSyncEventsFormat = "from-id=%d&to-time=%d&limit=%d"
 	fetchStateSyncEventsPath   = "clerk/event-record/list"
-	fetchLatestCheckpoint      = "/checkpoints/latest"
+	fetchCheckpoint            = "/checkpoints/%s"
+	fetchCheckpointCount       = "/checkpoints/count"
 
 	fetchSpanFormat = "bor/span/%d"
 )
 
-func (h *HeimdallClient) StateSyncEvents(fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
+func (h *HeimdallClient) StateSyncEvents(ctx context.Context, fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error) {
 	eventRecords := make([]*clerk.EventRecordWithTime, 0)
 
 	for {
@@ -70,7 +83,9 @@ func (h *HeimdallClient) StateSyncEvents(fromID uint64, to int64) ([]*clerk.Even
 
 		log.Info("Fetching state sync events", "queryParams", url.RawQuery)
 
-		response, err := FetchWithRetry[StateSyncEventsResponse](h.client, url, h.closeCh)
+		ctx = withRequestType(ctx, stateSyncRequest)
+
+		response, err := FetchWithRetry[StateSyncEventsResponse](ctx, h.client, url, h.closeCh)
 		if err != nil {
 			return nil, err
 		}
@@ -96,13 +111,15 @@ func (h *HeimdallClient) StateSyncEvents(fromID uint64, to int64) ([]*clerk.Even
 	return eventRecords, nil
 }
 
-func (h *HeimdallClient) Span(spanID uint64) (*span.HeimdallSpan, error) {
+func (h *HeimdallClient) Span(ctx context.Context, spanID uint64) (*span.HeimdallSpan, error) {
 	url, err := spanURL(h.urlString, spanID)
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := FetchWithRetry[SpanResponse](h.client, url, h.closeCh)
+	ctx = withRequestType(ctx, spanRequest)
+
+	response, err := FetchWithRetry[SpanResponse](ctx, h.client, url, h.closeCh)
 	if err != nil {
 		return nil, err
 	}
@@ -110,72 +127,122 @@ func (h *HeimdallClient) Span(spanID uint64) (*span.HeimdallSpan, error) {
 	return &response.Result, nil
 }
 
-// FetchLatestCheckpoint fetches the latest bor submitted checkpoint from heimdall
-func (h *HeimdallClient) FetchLatestCheckpoint() (*checkpoint.Checkpoint, error) {
-	url, err := latestCheckpointURL(h.urlString)
+// FetchCheckpoint fetches the checkpoint from heimdall
+func (h *HeimdallClient) FetchCheckpoint(ctx context.Context, number int64) (*checkpoint.Checkpoint, error) {
+	url, err := checkpointURL(h.urlString, number)
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := FetchWithRetry[checkpoint.CheckpointResponse](h.client, url, h.closeCh)
+	ctx = withRequestType(ctx, checkpointRequest)
+
+	response, err := FetchWithRetry[checkpoint.CheckpointResponse](ctx, h.client, url, h.closeCh)
 	if err != nil {
 		return nil, err
 	}
 
 	return &response.Result, nil
+}
+
+// FetchCheckpointCount fetches the checkpoint count from heimdall
+func (h *HeimdallClient) FetchCheckpointCount(ctx context.Context) (int64, error) {
+	url, err := checkpointCountURL(h.urlString)
+	if err != nil {
+		return 0, err
+	}
+
+	ctx = withRequestType(ctx, checkpointCountRequest)
+
+	response, err := FetchWithRetry[checkpoint.CheckpointCountResponse](ctx, h.client, url, h.closeCh)
+	if err != nil {
+		return 0, err
+	}
+
+	return response.Result.Result, nil
 }
 
 // FetchWithRetry returns data from heimdall with retry
-func FetchWithRetry[T any](client http.Client, url *url.URL, closeCh chan struct{}) (*T, error) {
-	// attempt counter
-	attempt := 1
-	result := new(T)
-
-	ctx, cancel := context.WithTimeout(context.Background(), apiHeimdallTimeout)
-
+func FetchWithRetry[T any](ctx context.Context, client http.Client, url *url.URL, closeCh chan struct{}) (*T, error) {
 	// request data once
-	body, err := internalFetch(ctx, client, url)
+	request := &Request{client: client, url: url, start: time.Now()}
+	result, err := Fetch[T](ctx, request)
 
-	cancel()
-
-	if err == nil && body != nil {
-		err = json.Unmarshal(body, result)
-		if err != nil {
-			return nil, err
-		}
-
+	if err == nil {
 		return result, nil
 	}
 
+	// attempt counter
+	attempt := 1
+
+	log.Warn("an error while trying fetching from Heimdall", "attempt", attempt, "error", err)
+
 	// create a new ticker for retrying the request
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(retryCall)
 	defer ticker.Stop()
 
+	const logEach = 5
+
+retryLoop:
 	for {
 		log.Info("Retrying again in 5 seconds to fetch data from Heimdall", "path", url.Path, "attempt", attempt)
+
 		attempt++
+
 		select {
+		case <-ctx.Done():
+			log.Debug("Shutdown detected, terminating request by context.Done")
+
+			return nil, ctx.Err()
 		case <-closeCh:
-			log.Debug("Shutdown detected, terminating request")
+			log.Debug("Shutdown detected, terminating request by closing")
 
-			return nil, errShutdownDetected
+			return nil, ErrShutdownDetected
 		case <-ticker.C:
-			ctx, cancel = context.WithTimeout(context.Background(), apiHeimdallTimeout)
+			request = &Request{client: client, url: url, start: time.Now()}
+			result, err = Fetch[T](ctx, request)
 
-			body, err = internalFetch(ctx, client, url)
-
-			cancel()
-
-			if err == nil && body != nil {
-				err = json.Unmarshal(body, result)
-				if err != nil {
-					return nil, err
+			if err != nil {
+				if attempt%logEach == 0 {
+					log.Warn("an error while trying fetching from Heimdall", "attempt", attempt, "error", err)
 				}
 
-				return result, nil
+				continue retryLoop
 			}
+
+			return result, nil
 		}
 	}
+}
+
+// Fetch returns data from heimdall
+func Fetch[T any](ctx context.Context, request *Request) (*T, error) {
+	isSuccessful := false
+
+	defer func() {
+		if metrics.EnabledExpensive {
+			sendMetrics(ctx, request.start, isSuccessful)
+		}
+	}()
+
+	result := new(T)
+
+	body, err := internalFetchWithTimeout(ctx, request.client, request.url)
+	if err != nil {
+		return nil, err
+	}
+
+	if body == nil {
+		return nil, ErrNoResponse
+	}
+
+	err = json.Unmarshal(body, result)
+	if err != nil {
+		return nil, err
+	}
+
+	isSuccessful = true
+
+	return result, nil
 }
 
 func spanURL(urlString string, spanID uint64) (*url.URL, error) {
@@ -188,8 +255,19 @@ func stateSyncURL(urlString string, fromID uint64, to int64) (*url.URL, error) {
 	return makeURL(urlString, fetchStateSyncEventsPath, queryParams)
 }
 
-func latestCheckpointURL(urlString string) (*url.URL, error) {
-	return makeURL(urlString, fetchLatestCheckpoint, "")
+func checkpointURL(urlString string, number int64) (*url.URL, error) {
+	url := ""
+	if number == -1 {
+		url = fmt.Sprintf(fetchCheckpoint, "latest")
+	} else {
+		url = fmt.Sprintf(fetchCheckpoint, fmt.Sprint(number))
+	}
+
+	return makeURL(urlString, url, "")
+}
+
+func checkpointCountURL(urlString string) (*url.URL, error) {
+	return makeURL(urlString, fetchCheckpointCount, "")
 }
 
 func makeURL(urlString, rawPath, rawQuery string) (*url.URL, error) {
@@ -215,11 +293,12 @@ func internalFetch(ctx context.Context, client http.Client, u *url.URL) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+
 	defer res.Body.Close()
 
 	// check status code
 	if res.StatusCode != 200 && res.StatusCode != 204 {
-		return nil, fmt.Errorf("Error while fetching data from Heimdall")
+		return nil, fmt.Errorf("%w: response code %d", ErrNotSuccessfulResponse, res.StatusCode)
 	}
 
 	// unmarshall data from buffer
@@ -228,12 +307,20 @@ func internalFetch(ctx context.Context, client http.Client, u *url.URL) ([]byte,
 	}
 
 	// get response
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	return body, nil
+}
+
+func internalFetchWithTimeout(ctx context.Context, client http.Client, url *url.URL) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, apiHeimdallTimeout)
+	defer cancel()
+
+	// request data once
+	return internalFetch(ctx, client, url)
 }
 
 // Close sends a signal to stop the running process

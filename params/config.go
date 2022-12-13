@@ -278,8 +278,12 @@ var (
 			Period: map[string]uint64{
 				"0": 2,
 			},
-			ProducerDelay: 6,
-			Sprint:        64,
+			ProducerDelay: map[string]uint64{
+				"0": 6,
+			},
+			Sprint: map[string]uint64{
+				"0": 64,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -310,8 +314,12 @@ var (
 			Period: map[string]uint64{
 				"0": 1,
 			},
-			ProducerDelay: 3,
-			Sprint:        32,
+			ProducerDelay: map[string]uint64{
+				"0": 3,
+			},
+			Sprint: map[string]uint64{
+				"0": 32,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -341,16 +349,25 @@ var (
 		BerlinBlock:         big.NewInt(13996000),
 		LondonBlock:         big.NewInt(22640000),
 		Bor: &BorConfig{
-			JaipurBlock: 22770000,
+			JaipurBlock: big.NewInt(22770000),
+			DelhiBlock:  big.NewInt(29638656),
 			Period: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
+				"29638656": 2,
 			},
-			ProducerDelay: 6,
-			Sprint:        64,
+			ProducerDelay: map[string]uint64{
+				"0":        6,
+				"29638656": 4,
+			},
+			Sprint: map[string]uint64{
+				"0":        64,
+				"29638656": 16,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0":        2,
 				"25275000": 5,
+				"29638656": 2,
 			},
 			ValidatorContract:     "0x0000000000000000000000000000000000001000",
 			StateReceiverContract: "0x0000000000000000000000000000000000001001",
@@ -386,12 +403,16 @@ var (
 		BerlinBlock:         big.NewInt(14750000),
 		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
-			JaipurBlock: 23850000,
+			JaipurBlock: big.NewInt(23850000),
 			Period: map[string]uint64{
 				"0": 2,
 			},
-			ProducerDelay: 6,
-			Sprint:        64,
+			ProducerDelay: map[string]uint64{
+				"0": 6,
+			},
+			Sprint: map[string]uint64{
+				"0": 64,
+			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
 			},
@@ -436,8 +457,10 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
-	TestRules       = TestChainConfig.Rules(new(big.Int), false)
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, &BorConfig{Sprint: map[string]uint64{
+		"0": 4,
+	}, BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
+	TestRules = TestChainConfig.Rules(new(big.Int), false)
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -550,20 +573,29 @@ func (c *CliqueConfig) String() string {
 // BorConfig is the consensus engine configs for Matic bor based sealing.
 type BorConfig struct {
 	Period                   map[string]uint64      `json:"period"`                   // Number of seconds between blocks to enforce
-	ProducerDelay            uint64                 `json:"producerDelay"`            // Number of seconds delay between two producer interval
-	Sprint                   uint64                 `json:"sprint"`                   // Epoch length to proposer
+	ProducerDelay            map[string]uint64      `json:"producerDelay"`            // Number of seconds delay between two producer interval
+	Sprint                   map[string]uint64      `json:"sprint"`                   // Epoch length to proposer
 	BackupMultiplier         map[string]uint64      `json:"backupMultiplier"`         // Backup multiplier to determine the wiggle time
 	ValidatorContract        string                 `json:"validatorContract"`        // Validator set contract
 	StateReceiverContract    string                 `json:"stateReceiverContract"`    // State receiver contract
 	OverrideStateSyncRecords map[string]int         `json:"overrideStateSyncRecords"` // override state records count
 	BlockAlloc               map[string]interface{} `json:"blockAlloc"`
 	BurntContract            map[string]string      `json:"burntContract"` // governance contract where the token will be sent to and burnt in london fork
-	JaipurBlock              uint64                 `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
+	JaipurBlock              *big.Int               `json:"jaipurBlock"`   // Jaipur switch block (nil = no fork, 0 = already on jaipur)
+	DelhiBlock               *big.Int               `json:"delhiBlock"`    // Delhi switch block (nil = no fork, 0 = already on delhi)
 }
 
 // String implements the stringer interface, returning the consensus engine details.
 func (b *BorConfig) String() string {
 	return "bor"
+}
+
+func (c *BorConfig) CalculateProducerDelay(number uint64) uint64 {
+	return c.calculateSprintSizeHelper(c.ProducerDelay, number)
+}
+
+func (c *BorConfig) CalculateSprint(number uint64) uint64 {
+	return c.calculateSprintSizeHelper(c.Sprint, number)
 }
 
 func (c *BorConfig) CalculateBackupMultiplier(number uint64) uint64 {
@@ -574,8 +606,12 @@ func (c *BorConfig) CalculatePeriod(number uint64) uint64 {
 	return c.calculateBorConfigHelper(c.Period, number)
 }
 
-func (c *BorConfig) IsJaipur(number uint64) bool {
-	return number >= c.JaipurBlock
+func (c *BorConfig) IsJaipur(number *big.Int) bool {
+	return isForked(c.JaipurBlock, number)
+}
+
+func (c *BorConfig) IsDelhi(number *big.Int) bool {
+	return isForked(c.DelhiBlock, number)
 }
 
 func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {
@@ -589,7 +625,28 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 	for i := 0; i < len(keys)-1; i++ {
 		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
 		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
+
 		if number > valUint && number < valUintNext {
+			return field[keys[i]]
+		}
+	}
+
+	return field[keys[len(keys)-1]]
+}
+
+func (c *BorConfig) calculateSprintSizeHelper(field map[string]uint64, number uint64) uint64 {
+	keys := make([]string, 0, len(field))
+	for k := range field {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for i := 0; i < len(keys)-1; i++ {
+		valUint, _ := strconv.ParseUint(keys[i], 10, 64)
+		valUintNext, _ := strconv.ParseUint(keys[i+1], 10, 64)
+
+		if number >= valUint && number < valUintNext {
 			return field[keys[i]]
 		}
 	}

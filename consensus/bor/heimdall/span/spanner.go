@@ -39,12 +39,12 @@ func NewChainSpanner(ethAPI api.Caller, validatorSet abi.ABI, chainConfig *param
 }
 
 // GetCurrentSpan get current span from contract
-func (c *ChainSpanner) GetCurrentSpan(headerHash common.Hash) (*Span, error) {
+func (c *ChainSpanner) GetCurrentSpan(ctx context.Context, headerHash common.Hash) (*Span, error) {
 	// block
 	blockNr := rpc.BlockNumberOrHashWithHash(headerHash, false)
 
 	// method
-	method := "getCurrentSpan"
+	const method = "getCurrentSpan"
 
 	data, err := c.validatorSet.Pack(method)
 	if err != nil {
@@ -58,7 +58,7 @@ func (c *ChainSpanner) GetCurrentSpan(headerHash common.Hash) (*Span, error) {
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
 	// todo: would we like to have a timeout here?
-	result, err := c.ethAPI.Call(context.Background(), ethapi.TransactionArgs{
+	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -89,8 +89,8 @@ func (c *ChainSpanner) GetCurrentSpan(headerHash common.Hash) (*Span, error) {
 }
 
 // GetCurrentValidators get current validators
-func (c *ChainSpanner) GetCurrentValidators(headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func (c *ChainSpanner) GetCurrentValidators(ctx context.Context, headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// method
@@ -146,7 +146,7 @@ func (c *ChainSpanner) GetCurrentValidators(headerHash common.Hash, blockNumber 
 
 const method = "commitSpan"
 
-func (c *ChainSpanner) CommitSpan(heimdallSpan HeimdallSpan, state *state.StateDB, header *types.Header, chainContext core.ChainContext) error {
+func (c *ChainSpanner) CommitSpan(ctx context.Context, heimdallSpan HeimdallSpan, state *state.StateDB, header *types.Header, chainContext core.ChainContext) error {
 	// get validators bytes
 	validators := make([]valset.MinimalVal, 0, len(heimdallSpan.ValidatorSet.Validators))
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
@@ -194,7 +194,7 @@ func (c *ChainSpanner) CommitSpan(heimdallSpan HeimdallSpan, state *state.StateD
 	msg := statefull.GetSystemMessage(c.validatorContractAddress, data)
 
 	// apply message
-	_, err = statefull.ApplyMessage(msg, state, header, c.chainConfig, chainContext)
+	_, err = statefull.ApplyMessage(ctx, msg, state, header, c.chainConfig, chainContext)
 
 	return err
 }

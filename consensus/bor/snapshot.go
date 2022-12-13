@@ -59,6 +59,8 @@ func loadSnapshot(config *params.BorConfig, sigcache *lru.ARCCache, db ethdb.Dat
 		return nil, err
 	}
 
+	snap.ValidatorSet.UpdateValidatorMap()
+
 	snap.config = config
 	snap.sigcache = sigcache
 
@@ -120,8 +122,8 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		number := header.Number.Uint64()
 
 		// Delete the oldest signer from the recent list to allow it signing again
-		if number >= s.config.Sprint {
-			delete(snap.Recents, number-s.config.Sprint)
+		if number >= s.config.CalculateSprint(number) {
+			delete(snap.Recents, number-s.config.CalculateSprint(number))
 		}
 
 		// Resolve the authorization key and check against signers
@@ -131,7 +133,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		}
 
 		// check if signer is in validator set
-		if !snap.ValidatorSet.HasAddress(signer.Bytes()) {
+		if !snap.ValidatorSet.HasAddress(signer) {
 			return nil, &UnauthorizedSignerError{number, signer.Bytes()}
 		}
 
@@ -143,7 +145,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		snap.Recents[number] = signer
 
 		// change validator set and change proposer
-		if number > 0 && (number+1)%s.config.Sprint == 0 {
+		if number > 0 && (number+1)%s.config.CalculateSprint(number) == 0 {
 			if err := validateHeaderExtraField(header.Extra); err != nil {
 				return nil, err
 			}
@@ -201,18 +203,18 @@ func (s *Snapshot) signers() []common.Address {
 }
 
 // Difficulty returns the difficulty for a particular signer at the current snapshot number
-func (s *Snapshot) Difficulty(signer common.Address) uint64 {
+func Difficulty(validatorSet *valset.ValidatorSet, signer common.Address) uint64 {
 	// if signer is empty
 	if signer == (common.Address{}) {
 		return 1
 	}
 
-	validators := s.ValidatorSet.Validators
-	proposer := s.ValidatorSet.GetProposer().Address
+	validators := validatorSet.Validators
+	proposer := validatorSet.GetProposer().Address
 	totalValidators := len(validators)
 
-	proposerIndex, _ := s.ValidatorSet.GetByAddress(proposer)
-	signerIndex, _ := s.ValidatorSet.GetByAddress(signer)
+	proposerIndex, _ := validatorSet.GetByAddress(proposer)
+	signerIndex, _ := validatorSet.GetByAddress(signer)
 
 	// temp index
 	tempIndex := signerIndex
