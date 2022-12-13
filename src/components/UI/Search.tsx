@@ -9,6 +9,6 @@ export const Search: React.FC = () => {
 
   // TODO: Replace Algolia test keys with above env vars when ready
   return (
-    <DocSearch appId='R2IYF7ETH7' apiKey='599cec31baffa4868cae4e79f180729b' indexName='docsearch' />
+    <DocSearch appId={appId} apiKey={apiKey} indexName={indexName} />
   );
 };
