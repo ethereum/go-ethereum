@@ -20,7 +20,7 @@ import { NavLink } from '../types';
 import { getFileList } from '../utils/getFileList';
 
 import { textStyles } from '../theme/foundations';
-import { getParsedDate } from '../utils';
+import { getLastModifiedDate, getParsedDate } from '../utils';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -40,20 +40,21 @@ export const getStaticPaths: GetStaticPaths = () => {
 
 // Reads file data for markdown pages
 export const getStaticProps: GetStaticProps = async context => {
+  const navLinks = yaml.load(fs.readFileSync('src/data/documentation-links.yaml', 'utf8'));
+
   const { slug } = context.params as ParsedUrlQuery;
   const filePath = (slug as string[])!.join('/');
   let file;
-  let lastModified;
 
-  const navLinks = yaml.load(fs.readFileSync('src/data/documentation-links.yaml', 'utf8'));
-
+  // read file
   try {
-    file = fs.readFileSync(`${filePath}.md`, 'utf-8');
-    lastModified = fs.statSync(`${filePath}.md`);
-  } catch {
     file = fs.readFileSync(`${filePath}/index.md`, 'utf-8');
-    lastModified = fs.statSync(`${filePath}/index.md`);
+  } catch (error) {
+    file = fs.readFileSync(`${filePath}.md`, 'utf-8');
   }
+
+  // get last commit on file date
+  const lastModified = await getLastModifiedDate(filePath);
 
   const { data: frontmatter, content } = matter(file, MATTER_OPTIONS);
 
@@ -62,7 +63,7 @@ export const getStaticProps: GetStaticProps = async context => {
       frontmatter,
       content,
       navLinks,
-      lastModified: getParsedDate(lastModified.mtime, {
+      lastModified: getParsedDate(lastModified, {
         month: 'long',
         day: 'numeric',
         year: 'numeric'
