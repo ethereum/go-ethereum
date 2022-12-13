@@ -20,10 +20,8 @@ export const DocumentNav: FC<Props> = ({ content }) => {
   const activeHash = useActiveHash(parsedHeadings.map(heading => heading!.headingId));
 
   return (
-    <Box position='sticky' top='4'>
-      <Text as='h5' textStyle='document-nav-title'>
-        on this page
-      </Text>
+    <Box as='aside' position='sticky' top='4'>
+      <Text textStyle='document-nav-title'>on this page</Text>
       <Divider borderColor='primary' my={`4 !important`} />
       {parsedHeadings.map((heading, idx) => {
         return (

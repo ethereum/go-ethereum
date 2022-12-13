@@ -2,7 +2,7 @@ import { Html, Head, Main, NextScript } from 'next/document';
 
 export default function Document() {
   return (
-    <Html>
+    <Html lang='en'>
       <Head>
         {/* fonts are being loaded here to enable optimization (https://nextjs.org/docs/basic-features/font-optimization) */}
         {/* JetBrains Mono */}

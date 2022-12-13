@@ -46,7 +46,7 @@ export const LinksList: FC<LinksListProps> = ({ links, toggleMobileAccordion }) 
                 </Text>
               </Link>
             </NextLink>
-            {items && <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion}/>}
+            {items && <LinksList links={items} toggleMobileAccordion={toggleMobileAccordion} />}
           </Stack>
         ) : (
           <Stack key={id} pb={6}>

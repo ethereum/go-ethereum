@@ -21,10 +21,10 @@ export const Search: FC = () => {
     >
       <form method='get' action='https://duckduckgo.com/' role='search' target='blank'>
         <InputGroup alignItems='center'>
-          <Input type="hidden" name="sites" value="geth.ethereum.org" />
+          <Input type='hidden' name='sites' value='geth.ethereum.org' />
           <Input
-            type="text"
-            name="q"
+            type='text'
+            name='q'
             py={{ base: 8, md: 4 }}
             px={4}
             variant='unstyled'
@@ -36,7 +36,7 @@ export const Search: FC = () => {
             outlineOffset={4}
           />
           <Button
-            type="submit"
+            type='submit'
             px={4}
             me={2}
             borderRadius='0'
@@ -49,6 +49,7 @@ export const Search: FC = () => {
               bg: 'primary',
               svg: { color: 'bg' }
             }}
+            aria-label='Search'
           >
             <LensIcon color={{ base: 'bg', md: 'primary' }} fontSize={{ base: '3xl', md: 'xl' }} />
           </Button>
