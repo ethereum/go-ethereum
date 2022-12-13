@@ -4,8 +4,8 @@ The ```debug pprof <enode>``` command will create an archive containing bor ppro
 
 ## Options
 
-- ```address```: Address of the grpc endpoint
+- ```address```: Address of the grpc endpoint (default: 127.0.0.1:3131)
 
-- ```seconds```: seconds to trace
+- ```seconds```: seconds to trace (default: 2)
 
 - ```output```: Output directory
