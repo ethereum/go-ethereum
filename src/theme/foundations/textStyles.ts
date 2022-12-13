@@ -9,7 +9,7 @@ export const textStyles = {
   },
   h2: {
     fontFamily: 'heading',
-    fontWeight: 400,
+    fontWeight: 700,
     fontSize: { base: '1.5rem', md: '1.75rem' },
     lineHeight: 'normal',
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
