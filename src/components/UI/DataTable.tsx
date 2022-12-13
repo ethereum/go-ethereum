@@ -1,7 +1,26 @@
-import { Link, Table, Thead, Tr, Th, TableContainer, Text, Tbody, Td } from '@chakra-ui/react';
+import {
+  Link,
+  Table,
+  Thead,
+  Tr,
+  Th,
+  TableContainer,
+  Text,
+  Tbody,
+  Td,
+  Stack
+} from '@chakra-ui/react';
 import { FC } from 'react';
+
+import {
+  getOS,
+  getParsedDate,
+  isDarwinPrimaryRelease,
+  isLinuxPrimaryRelease,
+  isMobilePrimaryRelease,
+  isWindowsPrimaryRelease
+} from '../../utils';
 import { OpenPGPSignaturesData, ReleaseData } from '../../types';
-import { getParsedDate } from '../../utils';
 
 interface Props {
   columnHeaders: string[];
@@ -30,33 +49,56 @@ export const DataTable: FC<Props> = ({ columnHeaders, data }) => {
       pb={4}
     >
       <Table variant='unstyled'>
-        <Thead>
-          <Tr>
-            {columnHeaders.map((columnHeader, idx) => {
-              return (
-                <Th key={idx} textTransform='none' minW={'130.5px'} px={4}>
-                  <Text
-                    fontFamily='"JetBrains Mono", monospace'
-                    fontWeight={700}
-                    fontSize='md'
-                    color='#868b87' //? Use theme color? Or add to theme?
-                  >
-                    {columnHeader}
-                  </Text>
-                </Th>
-              );
-            })}
-          </Tr>
-        </Thead>
+        {data.length > 0 && (
+          <Thead>
+            <Tr>
+              {columnHeaders.map((columnHeader, idx) => {
+                return (
+                  <Th key={idx} textTransform='none' minW={'130.5px'} px={4}>
+                    <Text
+                      fontFamily='"JetBrains Mono", monospace'
+                      fontWeight={700}
+                      fontSize='md'
+                      color='#868b87' // TODO: Use theme color? Or add to theme?
+                    >
+                      {columnHeader}
+                    </Text>
+                  </Th>
+                );
+              })}
+            </Tr>
+          </Thead>
+        )}
 
         <Tbody>
+          {data.length === 0 && (
+            <Stack justifyContent='center' alignItems='center' w='100%' minH={80}>
+              <Text textStyle='header4'>No builds found</Text>
+            </Stack>
+          )}
+
           {dataType === 'Releases' &&
             data.map((r: ReleaseData, idx: number) => {
+              const url = r?.release?.url;
+              const os = getOS(url);
+
+              const _isLinuxPrimaryRelease = isLinuxPrimaryRelease(r, os, data);
+              const _isDarwinPrimaryRelease = isDarwinPrimaryRelease(r, os, data);
+              const _isWindowsPrimaryRelease = isWindowsPrimaryRelease(r, os, data);
+              const _isMobilePrimaryRelease = isMobilePrimaryRelease(r, os, data);
+
+              const isPrimaryRelease =
+                _isLinuxPrimaryRelease ||
+                _isDarwinPrimaryRelease ||
+                _isWindowsPrimaryRelease ||
+                _isMobilePrimaryRelease;
+
               return (
                 <Tr
                   key={idx}
                   transition={'all 0.5s'}
                   _hover={{ background: 'button-bg', transition: 'all 0.5s' }}
+                  fontWeight={isPrimaryRelease ? 700 : 400}
                 >
                   {Object.entries(r).map((item, idx) => {
                     const objectItems = ['release', 'commit', 'signature'];

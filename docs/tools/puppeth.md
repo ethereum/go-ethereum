@@ -1,5 +1,5 @@
 ---
-title: puppeth
+title: Puppeth
 description: introduction to the private-network boot-strapping tool, Puppeth
 ---
 

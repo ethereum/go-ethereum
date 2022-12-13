@@ -9,7 +9,7 @@ const Icon = createIcon({
   path: (
     <svg width={w} height={h} fill='none' xmlns='http://www.w3.org/2000/svg'>
       <path
-        d='M0.5 12V3.354L10.5 1.999V12H0.5ZM11.5 12H24.5V0L11.5 1.807V12ZM10.5 13H0.5V20.646L10.5 22.001V13ZM11.5 13V22.194L24.5 24V13H11.5Z'
+        d='M.5 12V3.354l10-1.355V12H.5zm11 0h13V0l-13 1.807V12zm-1 1H.5v7.646l10 1.355V13zm1 0v9.194L24.5 24V13h-13z'
         fill='currentColor'
       />
     </svg>

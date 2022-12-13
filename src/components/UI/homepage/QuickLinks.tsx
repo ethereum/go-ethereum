@@ -28,7 +28,7 @@ export const QuickLinks: FC = () => {
           </Stack>
         </GridItem>
         <GridItem borderBottom='2px solid' borderColor='primary'>
-          <NextLink href={`${DOCS_PAGE}/getting-started`} passHref>
+          <NextLink href={`${DOCS_PAGE}/getting-started`} passHref legacyBehavior>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
@@ -66,7 +66,7 @@ export const QuickLinks: FC = () => {
           </Stack>
         </GridItem>
         <GridItem borderBottom='2px solid' borderColor='primary'>
-          <NextLink href={FAQ_PAGE} passHref>
+          <NextLink href={FAQ_PAGE} passHref legacyBehavior>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group
@@ -104,7 +104,7 @@ export const QuickLinks: FC = () => {
           </Stack>
         </GridItem>
         <GridItem>
-          <NextLink href={CONTRIBUTING_PAGE} passHref>
+          <NextLink href={CONTRIBUTING_PAGE} passHref legacyBehavior>
             <Link _hover={{ textDecoration: 'none' }}>
               <Stack
                 data-group

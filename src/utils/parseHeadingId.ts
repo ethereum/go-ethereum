@@ -1,18 +1,22 @@
-const check = '{#';
+import { getKebabCaseFromName } from './';
 
 export const parseHeadingId = (children: string[]) => {
-  if (children[children.length - 1].includes(check)) {
-    const temp = children[children.length - 1].split(check);
-    const headingId = temp[temp.length - 1].split('}')[0];
-
-    children[children.length - 1] = temp[0];
-
+  const CHECK = '{#';
+  const lastChild = children[children.length - 1];
+  const split = lastChild.split(CHECK);
+  if (lastChild.includes(CHECK)) {
+    const headingId = split[split.length - 1].split('}')[0];
+    const newChildren = [...children];
+    newChildren[newChildren.length - 1] = split[0];
     return {
-      children,
-      title: temp[0].replaceAll('#', ''),
+      children: newChildren,
+      title: split[0].replaceAll('#', ''),
       headingId
     };
   }
-
-  return null;
+  return {
+    children,
+    title: split[0].replaceAll('#', ''),
+    headingId: getKebabCaseFromName(split[0])
+  };
 };

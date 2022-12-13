@@ -20,22 +20,40 @@ export const Header: FC = () => {
       justifyContent='space-between'
       position='relative'
     >
-      <Stack
+      <Flex
         p={4}
-        justifyContent='center'
-        alignItems='flex-start'
+        justifyContent='flex-start'
+        alignItems='center'
         borderRight='2px'
         borderColor='primary'
-        flexGrow={2}
+        flex={1}
+        gap={6}
       >
-        <NextLink href={'/'} passHref>
+        <NextLink href={'/'} passHref legacyBehavior>
           <Link _hover={{ textDecoration: 'none' }}>
             <Text textStyle='header-font' whiteSpace='nowrap'>
               go-ethereum
             </Text>
           </Link>
         </NextLink>
-      </Stack>
+        <Box
+          as='a'
+          href='#main-content'
+          pointerEvents='none'
+          w='0px'
+          opacity={0}
+          transition='opacity 200ms ease-in-out'
+          _focus={{
+            opacity: 1,
+            w: 'auto',
+            transition: 'opacity 200ms ease-in-out'
+          }}
+        >
+          <Text textStyle='header-font' whiteSpace='nowrap' fontSize='xs'>
+            skip to content
+          </Text>
+        </Box>
+      </Flex>
 
       <Flex>
         {/* HEADER BUTTONS */}
@@ -59,6 +77,7 @@ export const Header: FC = () => {
             bg: 'primary',
             svg: { color: 'bg' }
           }}
+          aria-label={`Toggle ${isDark ? 'light' : 'dark'} mode`}
         >
           {isDark ? <SunIcon color='primary' /> : <MoonIcon color='primary' />}
         </Box>

@@ -2,56 +2,41 @@ export const textStyles = {
   h1: {
     fontFamily: 'heading',
     fontWeight: 700,
-    fontSize: '2.75rem',
+    fontSize: { base: '2.175rem', md: '2.875rem' },
     lineHeight: '3.375rem',
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
   h2: {
     fontFamily: 'heading',
-    fontWeight: 400,
-    fontSize: { base: '1.5rem', md: '1.75rem' },
-    lineHeight: 'normal',
-    letterSpacing: { base: '0.03rem', md: '0.04rem' },
-    color: 'body'
-  },
-  header1: {
-    fontFamily: 'heading',
     fontWeight: 700,
-    fontSize: { base: '1.875rem', md: '2.125rem' },
-    letterSpacing: { base: '0.03rem', md: '0.04rem' },
-    lineHeight: 'normal',
-    color: 'body'
-  },
-  header2: {
-    fontFamily: 'heading',
     fontSize: { base: '1.5rem', md: '1.75rem' },
-    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
+    letterSpacing: { base: '0.03rem', md: '0.04rem' },
     color: 'body'
   },
-  header3: {
+  h3: {
     fontFamily: 'heading',
     fontSize: { base: '1.25rem', md: '1.375rem' },
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
-  header4: {
+  h4: {
     fontFamily: 'heading',
     fontSize: '1.125rem',
     letterSpacing: { base: '0.03rem', md: '0.04rem' },
     lineHeight: 'normal',
     color: 'body'
   },
-  header5: {
+  h5: {
     fontFamily: 'heading',
     fontSize: '1rem',
     letterSpacing: '0.02rem',
     lineHeight: 'normal',
     color: 'body'
   },
-  header6: {
+  h6: {
     fontFamily: 'heading',
     fontSize: '0.875rem',
     letterSpacing: '0.02rem',
@@ -77,7 +62,8 @@ export const textStyles = {
     fontFamily: 'heading',
     color: 'bg',
     fontWeight: 700,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'home-section-link-label': {
     fontFamily: 'heading',
@@ -124,20 +110,22 @@ export const textStyles = {
     fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'md', lg: 'xl' },
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'downloads-button-sublabel': {
     fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'xs', lg: 'sm' },
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    _groupHover: { color: 'yellow.50' }
   },
   'download-tab-label': {
     fontFamily: 'heading',
     fontWeight: 700,
     textTransform: 'uppercase',
     textAlign: 'center',
-    fontSize: 'sm'
+    fontSize: { base: 'xs', sm: 'sm' }
   },
   'docs-nav-dropdown': {
     fontFamily: 'heading',
@@ -190,8 +178,7 @@ export const textStyles = {
     fontWeight: 400,
     fontSize: '13px',
     lineHeight: 5,
-    letterSpacing: '1%',
-    mb: 4
+    letterSpacing: '1%'
   },
   'note-text': {
     fontFamily: 'body',

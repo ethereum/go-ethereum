@@ -30,11 +30,11 @@ Timers are extensions of _meters_, the _duration_ of an event is collected along
 - Percentile 80: general performance (these should be optimised)
 - Percentile 95: worst case outliers (rare, just handle gracefully)
 
-### Counters: {#counters}
+### Counters {#counters}
 
 A counter is a single int64 value that can be incremented and decremented. The current value of the counter can be queried.
 
-### Gauges: {#guages}
+### Gauges {#guages}
 
 A gauge is a single int64 value. Its value can increment and decrement - as with a counter - but can also be set arbitrarily.
 

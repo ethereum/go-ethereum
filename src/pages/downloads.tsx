@@ -287,18 +287,18 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
   const [totalDevBuilds, setTotalDevBuilds] = useState(ALL_LINUX_DEV_BUILDS.length);
 
   const showMoreStableReleases = () => {
-    setAmountStableReleases(amountStableReleases + 10);
+    setAmountStableReleases(amountStableReleases + 12);
   };
 
   const showMoreDevBuilds = () => {
-    setAmountDevBuilds(amountDevBuilds + 10);
+    setAmountDevBuilds(amountDevBuilds + 12);
   };
 
   return (
     <>
       <PageMetadata title={METADATA.DOWNLOADS_TITLE} description={METADATA.DOWNLOADS_DESCRIPTION} />
 
-      <main>
+      <main id='main-content'>
         <Stack spacing={4}>
           <DownloadsHero
             currentBuild={LATEST_RELEASES_DATA.releaseName}
@@ -368,31 +368,21 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               windowsData={ALL_WINDOWS_STABLE_RELEASES}
               iOSData={ALL_IOS_STABLE_RELEASES}
               androidData={ALL_ANDROID_STABLE_RELEASES}
+              totalReleasesNumber={totalStableReleases}
               amountOfReleasesToShow={amountStableReleases}
               setTotalReleases={setTotalStableReleases}
             />
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalStableReleases > 0
-                    ? `Showing ${Math.min(
-                        amountStableReleases,
-                        totalStableReleases
-                      )} latest releases of
-                    a total ${totalStableReleases} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalStableReleases > amountStableReleases && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link
                     as='button'
@@ -434,28 +424,21 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
               windowsData={ALL_WINDOWS_DEV_BUILDS}
               iOSData={ALL_IOS_DEV_BUILDS}
               androidData={ALL_ANDROID_DEV_BUILDS}
+              totalReleasesNumber={totalDevBuilds}
               amountOfReleasesToShow={amountDevBuilds}
               setTotalReleases={setTotalDevBuilds}
             />
             <Flex
               sx={{ mt: '0 !important' }}
               flexDirection={{ base: 'column', md: 'row' }}
-              justifyContent='space-between'
+              justifyContent='flex-end'
               alignItems='center'
             >
-              <Stack p={4} display={{ base: 'none', md: 'block' }} mx='auto'>
-                <Text textStyle='hero-text-small'>
-                  {totalDevBuilds > 0
-                    ? `Showing ${Math.min(amountDevBuilds, totalDevBuilds)} latest releases of
-                    a total ${totalDevBuilds} releases`
-                    : `No releases`}
-                </Text>
-              </Stack>
-
               {totalDevBuilds > amountDevBuilds && (
                 <Stack
                   sx={{ mt: '0 !important' }}
-                  borderLeft={{ base: 'none', md: '2px solid #11866f' }}
+                  borderLeft={{ base: 'none', md: '2px solid var(--chakra-colors-primary)' }}
+                  w={{ base: '100%', md: 'auto' }}
                 >
                   <Link as='button' variant='button-link-secondary' onClick={showMoreDevBuilds}>
                     <Text

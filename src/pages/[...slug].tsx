@@ -1,7 +1,7 @@
 import fs from 'fs';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
-import { Flex, Stack, Heading, Text } from '@chakra-ui/react';
+import { Box, Grid, Stack, Heading, Text } from '@chakra-ui/react';
 import ChakraUIRenderer from 'chakra-ui-markdown-renderer';
 import ReactMarkdown from 'react-markdown';
 import { useRouter } from 'next/router';
@@ -63,7 +63,7 @@ export const getStaticProps: GetStaticProps = async context => {
       content,
       navLinks,
       lastModified: getParsedDate(lastModified.mtime, {
-        month: 'numeric',
+        month: 'long',
         day: 'numeric',
         year: 'numeric'
       })
@@ -99,24 +99,34 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
       <PageMetadata title={frontmatter.title} description={frontmatter.description} />
 
       <main>
-        <Flex direction={{ base: 'column', lg: 'row' }} gap={{ base: 4, lg: 8 }}>
+        <Grid
+          gap={{ base: 4, lg: 8 }}
+          templateColumns={{ base: 'repeat(1, 1fr)', lg: '288px 1fr' }}
+        >
           <Stack>
             <DocsNav navLinks={navLinks} />
           </Stack>
 
-          <Stack pb={4} width='100%'>
+          <Stack pb={4} width='100%' id='main-content'>
             <Stack mb={16}>
               <Breadcrumbs />
-              <Heading as='h1' mt='4 !important' mb={0} {...textStyles.header1}>
+              <Heading as='h1' mt='4 !important' mb={0} {...textStyles.h1}>
                 {frontmatter.title}
               </Heading>
               <Text as='span' mt='0 !important'>
-                last edited {lastModified}
+                Last edited on {lastModified}
               </Text>
             </Stack>
 
-            <Flex width='100%' placeContent='space-between'>
-              <Stack maxW='768px' sx={{ '*:first-child': { marginTop: '0 !important' } }}>
+            <Grid
+              gap={{ base: 4, lg: 8 }}
+              templateColumns={{ base: 'repeat(1, 1fr)', xl: '1fr 192px' }}
+            >
+              <Box
+                w='min(100%, 768px)'
+                sx={{ '*:first-of-type': { marginTop: '0 !important' } }}
+                overflow='auto'
+              >
                 <ReactMarkdown
                   remarkPlugins={[gfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -124,14 +134,14 @@ const DocPage: NextPage<Props> = ({ frontmatter, content, navLinks, lastModified
                 >
                   {content}
                 </ReactMarkdown>
-              </Stack>
+              </Box>
 
-              <Stack display={{ base: 'none', xl: 'block' }} w={48}>
+              <Stack display={{ base: 'none', xl: 'block' }}>
                 <DocumentNav content={content} />
               </Stack>
-            </Flex>
+            </Grid>
           </Stack>
-        </Flex>
+        </Grid>
       </main>
     </>
   );
