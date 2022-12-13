@@ -25,8 +25,6 @@ import (
 )
 
 func TestResetFreezer(t *testing.T) {
-	t.Parallel()
-
 	items := []struct {
 		id   uint64
 		blob []byte
@@ -36,6 +34,8 @@ func TestResetFreezer(t *testing.T) {
 		{2, bytes.Repeat([]byte{2}, 2048)},
 	}
 	f, _ := NewResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
+	defer f.Close()
+
 	f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for _, item := range items {
 			op.AppendRaw("test", item.id, item.blob)
@@ -78,8 +78,6 @@ func TestResetFreezer(t *testing.T) {
 }
 
 func TestFreezerCleanup(t *testing.T) {
-	t.Parallel()
-
 	items := []struct {
 		id   uint64
 		blob []byte
