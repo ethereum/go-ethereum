@@ -12,7 +12,7 @@ export const Search: React.FC = () => {
     <DocSearch appId={appId} apiKey={apiKey} indexName={indexName} transformItems={
       items => items.map(item => ({
         ...item,
-        url: item.url.replace('https://melodious-puffpuff-8e1109.netlify.app/', ''),
+        url: item.url.replace('https://melodious-puffpuff-8e1109.netlify.app', ''),
       }))
     } />
   );
