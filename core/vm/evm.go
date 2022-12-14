@@ -133,7 +133,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
-	evm.interpreter = NewEVMInterpreter(evm, config)
+	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
 }
 
@@ -164,22 +164,6 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
 	evm.Context = blockCtx
 	evm.chainRules = evm.chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil)
-}
-
-// SetTracer updates the EVM tracer and enables debugging. If the tracer is nil
-// any set tracer is removed and debugging is disabled.
-func (evm *EVM) SetTracer(tracer EVMLogger) {
-	if tracer == nil {
-		evm.Config.Debug = false
-		evm.Config.Tracer = nil
-		evm.interpreter.cfg.Debug = false
-		evm.interpreter.cfg.Tracer = nil
-	} else {
-		evm.Config.Debug = true
-		evm.Config.Tracer = tracer
-		evm.interpreter.cfg.Debug = true
-		evm.interpreter.cfg.Tracer = tracer
-	}
 }
 
 // Call executes the contract associated with the addr with the given input as

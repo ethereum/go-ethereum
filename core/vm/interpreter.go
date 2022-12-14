@@ -46,7 +46,6 @@ type ScopeContext struct {
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
 	evm *EVM
-	cfg Config
 
 	hasher    crypto.KeccakState // Keccak256 hasher instance shared across opcodes
 	hasherBuf common.Hash        // Keccak256 hasher result array shared aross opcodes
@@ -56,53 +55,50 @@ type EVMInterpreter struct {
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
-func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
+func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
-	if cfg.JumpTable == nil {
+	if evm.Config.JumpTable == nil {
 		switch {
 		case evm.chainRules.IsShanghai:
 			cfg.JumpTable = &shanghaiInstructionSet
 		case evm.chainRules.IsMerge:
-			cfg.JumpTable = &mergeInstructionSet
+			evm.Config.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:
-			cfg.JumpTable = &londonInstructionSet
+			evm.Config.JumpTable = &londonInstructionSet
 		case evm.chainRules.IsBerlin:
-			cfg.JumpTable = &berlinInstructionSet
+			evm.Config.JumpTable = &berlinInstructionSet
 		case evm.chainRules.IsIstanbul:
-			cfg.JumpTable = &istanbulInstructionSet
+			evm.Config.JumpTable = &istanbulInstructionSet
 		case evm.chainRules.IsConstantinople:
-			cfg.JumpTable = &constantinopleInstructionSet
+			evm.Config.JumpTable = &constantinopleInstructionSet
 		case evm.chainRules.IsByzantium:
-			cfg.JumpTable = &byzantiumInstructionSet
+			evm.Config.JumpTable = &byzantiumInstructionSet
 		case evm.chainRules.IsEIP158:
-			cfg.JumpTable = &spuriousDragonInstructionSet
+			evm.Config.JumpTable = &spuriousDragonInstructionSet
 		case evm.chainRules.IsEIP150:
-			cfg.JumpTable = &tangerineWhistleInstructionSet
+			evm.Config.JumpTable = &tangerineWhistleInstructionSet
 		case evm.chainRules.IsHomestead:
-			cfg.JumpTable = &homesteadInstructionSet
+			evm.Config.JumpTable = &homesteadInstructionSet
 		default:
-			cfg.JumpTable = &frontierInstructionSet
+			evm.Config.JumpTable = &frontierInstructionSet
 		}
 		var extraEips []int
-		if len(cfg.ExtraEips) > 0 {
+		if len(evm.Config.ExtraEips) > 0 {
 			// Deep-copy jumptable to prevent modification of opcodes in other tables
-			cfg.JumpTable = copyJumpTable(cfg.JumpTable)
+			evm.Config.JumpTable = copyJumpTable(evm.Config.JumpTable)
 		}
-		for _, eip := range cfg.ExtraEips {
-			if err := EnableEIP(eip, cfg.JumpTable); err != nil {
+		for _, eip := range evm.Config.ExtraEips {
+			if err := EnableEIP(eip, evm.Config.JumpTable); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				log.Error("EIP activation failed", "eip", eip, "error", err)
 			} else {
 				extraEips = append(extraEips, eip)
 			}
 		}
-		cfg.ExtraEips = extraEips
+		evm.Config.ExtraEips = extraEips
 	}
 
-	return &EVMInterpreter{
-		evm: evm,
-		cfg: cfg,
-	}
+	return &EVMInterpreter{evm: evm}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -160,13 +156,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}()
 	contract.Input = input
 
-	if in.cfg.Debug {
+	if in.evm.Config.Debug {
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+					in.evm.Config.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 				} else {
-					in.cfg.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
+					in.evm.Config.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
 				}
 			}
 		}()
@@ -176,14 +172,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for {
-		if in.cfg.Debug {
+		if in.evm.Config.Debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
-		operation := in.cfg.JumpTable[op]
+		operation := in.evm.Config.JumpTable[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
@@ -221,15 +217,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				return nil, ErrOutOfGas
 			}
 			// Do tracing before memory expansion
-			if in.cfg.Debug {
-				in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			if in.evm.Config.Debug {
+				in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 				logged = true
 			}
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}
-		} else if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+		} else if in.evm.Config.Debug {
+			in.evm.Config.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
 		// execute the operation
