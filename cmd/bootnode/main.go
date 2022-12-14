@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -110,11 +111,57 @@ func main() {
 
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	if natm != nil {
+		var (
+			protocol   = "udp"
+			name       = "ethereum discovery"
+			intport    = realaddr.Port
+			extport    = realaddr.Port
+			mapTimeout = nat.DefaultMapTimeout
+
+			newLogger = func(p string, e int, i int, n nat.Interface) log.Logger {
+				return log.New("proto", p, "extport", e, "intport", i, "interface", n)
+			}
+		)
+
 		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			log := newLogger(protocol, extport, intport, natm)
+
+			p, err := natm.AddMapping(protocol, extport, intport, name, mapTimeout)
+			if err != nil {
+				log.Debug("Couldn't add port mapping", "err", err)
+			} else {
+				log.Info("Mapped network port")
+				if p != uint16(extport) {
+					log.Debug("Already mapped port", extport, "use alternative port", p)
+					log = newLogger(protocol, int(p), intport, natm)
+					extport = int(p)
+				}
+			}
+
+			go func() {
+				refresh := time.NewTimer(mapTimeout)
+				for {
+					<-refresh.C
+					log.Trace("Start port mapping")
+					p, err := natm.AddMapping(protocol, extport, intport, name, mapTimeout)
+					if err != nil {
+						log.Debug("Couldn't add port mapping", "err", err)
+					} else {
+						if p != uint16(extport) {
+							// If the port mapping is changed after the boot node is executed and the
+							// URL is shared, there is no point in continuing the node. In this case,
+							// re-execute with an available port and share the URL again.
+							natm.DeleteMapping(protocol, int(p), intport)
+							panic(fmt.Errorf("port %d already mapped to another address (hint: use %d", extport, p))
+						}
+						log.Info("Mapped network port")
+					}
+					refresh.Reset(mapTimeout)
+				}
+			}()
 		}
-		if ext, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+		if extip, err := natm.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: extip, Port: extport}
 		}
 	}
 
