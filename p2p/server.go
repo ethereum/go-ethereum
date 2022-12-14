@@ -657,11 +657,10 @@ func (srv *Server) setupListening() error {
 
 	// Update the local node record and map the TCP listening port if NAT is configured.
 	if tcp, ok := listener.Addr().(*net.TCPAddr); ok {
-		srv.localnode.Set(enr.TCP(tcp.Port))
 		if !tcp.IP.IsLoopback() && srv.NAT != nil {
 			srv.loopWG.Add(1)
 			go func() {
-				nat.Map(srv.NAT, srv.quit, "tcp", tcp.Port, tcp.Port, "ethereum p2p")
+				srv.natMapLoop(srv.NAT, "tcp", tcp.Port, tcp.Port, "ethereum p2p", nat.DefaultMapTimeout)
 				srv.loopWG.Done()
 			}()
 		}
@@ -689,7 +688,9 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 		return nil, err
 	}
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	srv.localnode.SetFallbackUDP(realaddr.Port)
 	srv.log.Debug("UDP listener up", "addr", realaddr)
+
 	if srv.NAT != nil {
 		if !realaddr.IP.IsLoopback() {
 			srv.loopWG.Add(1)
@@ -699,8 +700,62 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 			}()
 		}
 	}
-	srv.localnode.SetFallbackUDP(realaddr.Port)
+
 	return conn, nil
+}
+
+// natMapLoop performs initialization mapping for nat and repeats refresh.
+func (srv *Server) natMapLoop(natm nat.Interface, protocol string, intport, extport int, name string, interval time.Duration) {
+	var (
+		internal   = intport
+		external   = extport
+		mapTimeout = interval
+
+		newLogger = func(p string, e int, i int, n nat.Interface) log.Logger {
+			return log.New("proto", p, "extport", e, "intport", i, "interface", n)
+		}
+	)
+
+	log := newLogger(protocol, external, internal, natm)
+
+	// Set to 0 to perform initial port mapping. This will return C
+	// immediately and set it to mapTimeout in the next loop.
+	refresh := time.NewTimer(time.Duration(0))
+	defer func() {
+		refresh.Stop()
+		log.Debug("Deleting port mapping")
+		natm.DeleteMapping(protocol, external, internal)
+	}()
+
+	for {
+		select {
+		case _, ok := <-srv.quit:
+			if !ok {
+				return
+			}
+		case <-refresh.C:
+			log.Trace("Start port mapping")
+			p, err := natm.AddMapping(protocol, external, internal, name, mapTimeout)
+			if err != nil {
+				log.Debug("Couldn't add port mapping", "err", err)
+			} else {
+				if p != uint16(external) {
+					log.Debug("Already mapped port", external, "use alternative port", p)
+					log = newLogger(protocol, int(p), internal, natm)
+					external = int(p)
+				}
+				log.Info("Mapped network port")
+
+				switch protocol {
+				case "tcp":
+					srv.localnode.Set(enr.TCP(external))
+				case "udp":
+					srv.localnode.SetFallbackUDP(external)
+				}
+			}
+			refresh.Reset(mapTimeout)
+		}
+	}
 }
 
 // doPeerOp runs fn on the main loop.

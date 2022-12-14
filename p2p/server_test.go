@@ -24,6 +24,8 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 )
 
@@ -223,6 +226,14 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 	defer srv1.Stop()
 	srv2.Start()
 	defer srv2.Stop()
+
+	s := strings.Split(srv2.ListenAddr, ":")
+	if len(s) != 2 {
+		t.Fatal("invalid ListenAddr")
+	}
+	if port, err := strconv.Atoi(s[1]); err == nil {
+		srv2.localnode.Set(enr.TCP(uint16(port)))
+	}
 
 	if !syncAddPeer(srv1, srv2.Self()) {
 		t.Fatal("peer not connected")
@@ -451,6 +462,134 @@ func TestServerSetupConn(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestChangeLocalNodePort tests for localnode port change in Server.natMapLoop.
+func TestChangeLocalNodePort(t *testing.T) {
+	tests := []struct {
+		protocol string
+		request  int // The port number that requested by the server.
+		response int // The port number that responded with mock NAT.
+	}{
+		{
+			protocol: "udp",
+			request:  30303,
+			response: 30303,
+		},
+		{
+			protocol: "udp",
+			request:  30303,
+			response: 30000,
+		},
+		{
+			protocol: "tcp",
+			request:  30303,
+			response: 30303,
+		},
+		{
+			protocol: "tcp",
+			request:  30303,
+			response: 30000,
+		},
+	}
+
+	srvkey := newkey()
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  srvkey,
+			MaxPeers:    0,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
+			Logger:      testlog.Logger(t, log.LvlTrace),
+		},
+		newTransport: nil,
+	}
+
+	srv.quit = make(chan struct{})
+
+	if err := srv.setupLocalNode(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range tests {
+		mock := &mockNAT{uint16(test.response)}
+		go srv.natMapLoop(mock, test.protocol, test.request, test.request, "mock discovery", nat.DefaultMapTimeout)
+		time.Sleep(5 * time.Millisecond)
+
+		close(srv.quit)
+		srv.quit = make(chan struct{})
+
+		var port int
+		switch test.protocol {
+		case "tcp":
+			port = srv.localnode.Node().TCP()
+		case "udp":
+			port = srv.localnode.Node().UDP()
+		}
+		if port != test.response {
+			t.Fatalf("couldn't change the port number on localnode: got %d want %d", port, test.response)
+		}
+	}
+}
+
+// TestMapLoop checks if the alternate port is actually used by Server.natMapLoop.
+func TestMapLoop(t *testing.T) {
+	srvkey := newkey()
+	srv := &Server{
+		Config: Config{
+			PrivateKey:  srvkey,
+			MaxPeers:    0,
+			NoDial:      true,
+			NoDiscovery: true,
+			Protocols:   []Protocol{discard},
+			Logger:      testlog.Logger(t, log.LvlTrace),
+		},
+		newTransport: nil,
+	}
+
+	srv.quit = make(chan struct{})
+
+	if err := srv.setupLocalNode(); err != nil {
+		t.Fatal(err)
+	}
+
+	mock := &mockNAT{30000}
+	interval := 20 * time.Millisecond
+
+	go srv.natMapLoop(mock, "udp", 30303, 30303, "mock discovery", interval)
+	time.Sleep(5 * time.Millisecond)
+
+	// Watch the interval 3 times. UDP on localnode should be 30000.
+	for i := 0; i < 3; i++ {
+		if srv.localnode.Node().UDP() != int(mock.mapped) {
+			t.Fatalf("natMapLoop does not make requests to alternate ports: got %d want %d", srv.localnode.Node().UDP(), int(mock.mapped))
+		}
+		time.Sleep(interval)
+
+		// In the last interval, the alternate port is changed once more.
+		if i == 2 {
+			mock.mapped = 50000
+		}
+	}
+	close(srv.quit)
+}
+
+type mockNAT struct {
+	mapped uint16
+}
+
+func (m *mockNAT) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
+	return m.mapped, nil
+}
+func (m *mockNAT) DeleteMapping(protocol string, extport, intport int) error {
+	return nil
+}
+func (m *mockNAT) ExternalIP() (net.IP, error) {
+	panic("not implemented")
+}
+func (m *mockNAT) String() string {
+	panic("not implemented")
 }
 
 type setupTransport struct {
