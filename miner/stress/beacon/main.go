@@ -27,11 +27,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -142,7 +142,7 @@ func newNode(typ nodetype, genesis *core.Genesis, enodes []*enode.Node) *ethNode
 	}
 }
 
-func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*beacon.ExecutableData, error) {
+func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) (*engine.ExecutableData, error) {
 	if n.typ != eth2MiningNode {
 		return nil, errors.New("invalid node type")
 	}
@@ -150,12 +150,12 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	if timestamp <= parentTimestamp {
 		timestamp = parentTimestamp + 1
 	}
-	payloadAttribute := beacon.PayloadAttributes{
+	payloadAttribute := engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		Random:                common.Hash{},
 		SuggestedFeeRecipient: common.HexToAddress("0xdeadbeef"),
 	}
-	fcState := beacon.ForkchoiceStateV1{
+	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      parentHash,
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -168,7 +168,7 @@ func (n *ethNode) assembleBlock(parentHash common.Hash, parentTimestamp uint64) 
 	return n.api.GetPayloadV1(*payload.PayloadID)
 }
 
-func (n *ethNode) insertBlock(eb beacon.ExecutableData) error {
+func (n *ethNode) insertBlock(eb engine.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
@@ -194,18 +194,18 @@ func (n *ethNode) insertBlock(eb beacon.ExecutableData) error {
 	}
 }
 
-func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed beacon.ExecutableData) error {
+func (n *ethNode) insertBlockAndSetHead(parent *types.Header, ed engine.ExecutableData) error {
 	if !eth2types(n.typ) {
 		return errors.New("invalid node type")
 	}
 	if err := n.insertBlock(ed); err != nil {
 		return err
 	}
-	block, err := beacon.ExecutableDataToBlock(ed)
+	block, err := engine.ExecutableDataToBlock(ed)
 	if err != nil {
 		return err
 	}
-	fcState := beacon.ForkchoiceStateV1{
+	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.ParentHash(),
 		SafeBlockHash:      common.Hash{},
 		FinalizedBlockHash: common.Hash{},
@@ -319,7 +319,7 @@ func (mgr *nodeManager) run() {
 		nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)
 		//nodes = append(nodes, mgr.getNodes(eth2LightClient)...)
 		for _, node := range nodes {
-			fcState := beacon.ForkchoiceStateV1{
+			fcState := engine.ForkchoiceStateV1{
 				HeadBlockHash:      parentBlock.Hash(),
 				SafeBlockHash:      oldest.Hash(),
 				FinalizedBlockHash: oldest.Hash(),
@@ -362,7 +362,7 @@ func (mgr *nodeManager) run() {
 				log.Error("Failed to assemble the block", "err", err)
 				continue
 			}
-			block, _ := beacon.ExecutableDataToBlock(*ed)
+			block, _ := engine.ExecutableDataToBlock(*ed)
 
 			nodes := mgr.getNodes(eth2MiningNode)
 			nodes = append(nodes, mgr.getNodes(eth2NormalNode)...)

@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -47,7 +47,7 @@ func TestBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	verify := func(outer *beacon.ExecutionPayloadEnvelope, txs int) {
+	verify := func(outer *engine.ExecutionPayloadEnvelope, txs int) {
 		payload := outer.ExecutionPayload
 		if payload.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
