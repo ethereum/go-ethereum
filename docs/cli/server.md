@@ -32,6 +32,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
+- ```bor.heimdallgRPC```: Address of Heimdall gRPC service
+
 - ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
 - ```gpo.blocks```: Number of recent blocks to check for gas prices (default: 20)
@@ -79,6 +81,8 @@ The ```bor server``` command runs the Bor client.
 - ```cache.noprefetch```: Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data) (default: false)
 
 - ```cache.preimages```: Enable recording the SHA3/keccak preimages of trie keys (default: false)
+
+- ```cache.triesinmemory```: Number of block states (tries) to keep in memory (default = 128) (default: 128)
 
 - ```txlookuplimit```: Number of recent blocks to maintain transactions index for (default: 2350000)
 

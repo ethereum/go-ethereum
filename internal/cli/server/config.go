@@ -686,7 +686,7 @@ func (c *Config) loadChain() error {
 
 //nolint:gocognit
 func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*ethconfig.Config, error) {
-	dbHandles, err := makeDatabaseHandles()
+	dbHandles, err := MakeDatabaseHandles()
 	if err != nil {
 		return nil, err
 	}
@@ -1075,7 +1075,7 @@ func (c *Config) Merge(cc ...*Config) error {
 	return nil
 }
 
-func makeDatabaseHandles() (int, error) {
+func MakeDatabaseHandles() (int, error) {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
 		return -1, err
