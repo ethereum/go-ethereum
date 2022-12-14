@@ -9,6 +9,11 @@ export const Search: React.FC = () => {
 
   // TODO: Replace Algolia test keys with above env vars when ready
   return (
-    <DocSearch appId={appId} apiKey={apiKey} indexName={indexName} />
+    <DocSearch appId={appId} apiKey={apiKey} indexName={indexName} transformItems={
+      items => items.map(item => ({
+        ...item,
+        url: item.url.replace('https://melodious-puffpuff-8e1109.netlify.app/', ''),
+      }))
+    } />
   );
 };
