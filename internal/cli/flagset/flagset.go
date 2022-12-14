@@ -24,9 +24,10 @@ func NewFlagSet(name string) *Flagset {
 }
 
 type FlagVar struct {
-	Name  string
-	Usage string
-	Group string
+	Name    string
+	Usage   string
+	Group   string
+	Default any
 }
 
 func (f *Flagset) addFlag(fl *FlagVar) {
@@ -38,7 +39,11 @@ func (f *Flagset) Help() string {
 
 	items := []string{}
 	for _, item := range f.flags {
-		items = append(items, fmt.Sprintf("  -%s\n    %s", item.Name, item.Usage))
+		if item.Default != nil {
+			items = append(items, fmt.Sprintf("  -%s\n    %s (default: %v)", item.Name, item.Usage, item.Default))
+		} else {
+			items = append(items, fmt.Sprintf("  -%s\n    %s", item.Name, item.Usage))
+		}
 	}
 
 	return str + strings.Join(items, "\n\n")
@@ -85,7 +90,11 @@ func (f *Flagset) MarkDown() string {
 		}
 
 		for _, item := range groups[k] {
-			items = append(items, fmt.Sprintf("- ```%s```: %s", item.Name, item.Usage))
+			if item.Default != nil {
+				items = append(items, fmt.Sprintf("- ```%s```: %s (default: %v)", item.Name, item.Usage, item.Default))
+			} else {
+				items = append(items, fmt.Sprintf("- ```%s```: %s", item.Name, item.Usage))
+			}
 		}
 	}
 
@@ -110,27 +119,39 @@ type BoolFlag struct {
 
 func (f *Flagset) BoolFlag(b *BoolFlag) {
 	f.addFlag(&FlagVar{
-		Name:  b.Name,
-		Usage: b.Usage,
-		Group: b.Group,
+		Name:    b.Name,
+		Usage:   b.Usage,
+		Group:   b.Group,
+		Default: b.Default,
 	})
 	f.set.BoolVar(b.Value, b.Name, b.Default, b.Usage)
 }
 
 type StringFlag struct {
-	Name    string
-	Usage   string
-	Default string
-	Value   *string
-	Group   string
+	Name               string
+	Usage              string
+	Default            string
+	Value              *string
+	Group              string
+	HideDefaultFromDoc bool
 }
 
 func (f *Flagset) StringFlag(b *StringFlag) {
-	f.addFlag(&FlagVar{
-		Name:  b.Name,
-		Usage: b.Usage,
-		Group: b.Group,
-	})
+	if b.Default == "" || b.HideDefaultFromDoc {
+		f.addFlag(&FlagVar{
+			Name:    b.Name,
+			Usage:   b.Usage,
+			Group:   b.Group,
+			Default: nil,
+		})
+	} else {
+		f.addFlag(&FlagVar{
+			Name:    b.Name,
+			Usage:   b.Usage,
+			Group:   b.Group,
+			Default: b.Default,
+		})
+	}
 	f.set.StringVar(b.Value, b.Name, b.Default, b.Usage)
 }
 
@@ -144,9 +165,10 @@ type IntFlag struct {
 
 func (f *Flagset) IntFlag(i *IntFlag) {
 	f.addFlag(&FlagVar{
-		Name:  i.Name,
-		Usage: i.Usage,
-		Group: i.Group,
+		Name:    i.Name,
+		Usage:   i.Usage,
+		Group:   i.Group,
+		Default: i.Default,
 	})
 	f.set.IntVar(i.Value, i.Name, i.Default, i.Usage)
 }
@@ -161,18 +183,20 @@ type Uint64Flag struct {
 
 func (f *Flagset) Uint64Flag(i *Uint64Flag) {
 	f.addFlag(&FlagVar{
-		Name:  i.Name,
-		Usage: i.Usage,
-		Group: i.Group,
+		Name:    i.Name,
+		Usage:   i.Usage,
+		Group:   i.Group,
+		Default: fmt.Sprintf("%d", i.Default),
 	})
 	f.set.Uint64Var(i.Value, i.Name, i.Default, i.Usage)
 }
 
 type BigIntFlag struct {
-	Name  string
-	Usage string
-	Value *big.Int
-	Group string
+	Name    string
+	Usage   string
+	Value   *big.Int
+	Group   string
+	Default *big.Int
 }
 
 func (b *BigIntFlag) String() string {
@@ -204,9 +228,10 @@ func (b *BigIntFlag) Set(value string) error {
 
 func (f *Flagset) BigIntFlag(b *BigIntFlag) {
 	f.addFlag(&FlagVar{
-		Name:  b.Name,
-		Usage: b.Usage,
-		Group: b.Group,
+		Name:    b.Name,
+		Usage:   b.Usage,
+		Group:   b.Group,
+		Default: b.Default,
 	})
 	f.set.Var(b, b.Name, b.Usage)
 }
@@ -247,11 +272,21 @@ func (i *SliceStringFlag) Set(value string) error {
 }
 
 func (f *Flagset) SliceStringFlag(s *SliceStringFlag) {
-	f.addFlag(&FlagVar{
-		Name:  s.Name,
-		Usage: s.Usage,
-		Group: s.Group,
-	})
+	if s.Default == nil || len(s.Default) == 0 {
+		f.addFlag(&FlagVar{
+			Name:    s.Name,
+			Usage:   s.Usage,
+			Group:   s.Group,
+			Default: nil,
+		})
+	} else {
+		f.addFlag(&FlagVar{
+			Name:    s.Name,
+			Usage:   s.Usage,
+			Group:   s.Group,
+			Default: strings.Join(s.Default, ","),
+		})
+	}
 	f.set.Var(s, s.Name, s.Usage)
 }
 
@@ -265,31 +300,37 @@ type DurationFlag struct {
 
 func (f *Flagset) DurationFlag(d *DurationFlag) {
 	f.addFlag(&FlagVar{
-		Name:  d.Name,
-		Usage: d.Usage,
-		Group: d.Group,
+		Name:    d.Name,
+		Usage:   d.Usage,
+		Group:   d.Group,
+		Default: d.Default,
 	})
 	f.set.DurationVar(d.Value, d.Name, d.Default, "")
 }
 
 type MapStringFlag struct {
-	Name  string
-	Usage string
-	Value *map[string]string
-	Group string
+	Name    string
+	Usage   string
+	Value   *map[string]string
+	Group   string
+	Default map[string]string
 }
 
-func (m *MapStringFlag) String() string {
-	if m.Value == nil {
+func formatMapString(m map[string]string) string {
+	if len(m) == 0 {
 		return ""
 	}
 
 	ls := []string{}
-	for k, v := range *m.Value {
+	for k, v := range m {
 		ls = append(ls, k+"="+v)
 	}
 
 	return strings.Join(ls, ",")
+}
+
+func (m *MapStringFlag) String() string {
+	return formatMapString(*m.Value)
 }
 
 func (m *MapStringFlag) Set(value string) error {
@@ -311,11 +352,21 @@ func (m *MapStringFlag) Set(value string) error {
 }
 
 func (f *Flagset) MapStringFlag(m *MapStringFlag) {
-	f.addFlag(&FlagVar{
-		Name:  m.Name,
-		Usage: m.Usage,
-		Group: m.Group,
-	})
+	if m.Default == nil || len(m.Default) == 0 {
+		f.addFlag(&FlagVar{
+			Name:    m.Name,
+			Usage:   m.Usage,
+			Group:   m.Group,
+			Default: nil,
+		})
+	} else {
+		f.addFlag(&FlagVar{
+			Name:    m.Name,
+			Usage:   m.Usage,
+			Group:   m.Group,
+			Default: formatMapString(m.Default),
+		})
+	}
 	f.set.Var(m, m.Name, m.Usage)
 }
 
@@ -329,9 +380,10 @@ type Float64Flag struct {
 
 func (f *Flagset) Float64Flag(i *Float64Flag) {
 	f.addFlag(&FlagVar{
-		Name:  i.Name,
-		Usage: i.Usage,
-		Group: i.Group,
+		Name:    i.Name,
+		Usage:   i.Usage,
+		Group:   i.Group,
+		Default: i.Default,
 	})
 	f.set.Float64Var(i.Value, i.Name, i.Default, "")
 }
