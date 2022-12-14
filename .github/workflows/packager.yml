@@ -377,6 +377,9 @@ jobs:
       - name: Removing systemd file
         run: rm -rf packaging/deb/bor/lib/systemd/system/bor.service
 
+      - name: Updating the apt-get
+        run: sudo apt-get update -y
+
       - name: Adding requirements for cross compile
         run: sudo apt-get install g++-aarch64-linux-gnu gcc-aarch64-linux-gnu
 
