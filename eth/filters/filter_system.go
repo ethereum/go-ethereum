@@ -515,10 +515,10 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	cached, err := es.sys.cachedLogElem(ctx, header.Hash(), header.Number.Uint64())
-	unfiltered := cached.logs
 	if err != nil {
 		return nil
 	}
+	unfiltered := append([]*types.Log{}, cached.logs...)
 	for i, log := range unfiltered {
 		// Don't modify in-cache elements
 		logcopy := *log
