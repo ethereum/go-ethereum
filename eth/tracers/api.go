@@ -610,7 +610,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// JS tracers have high overhead. In this case run a parallel
 	// process that generates states in one thread and traces txes
 	// in separate worker threads.
-	if config.Tracer != nil && *config.Tracer != "" {
+	if config != nil && config.Tracer != nil && *config.Tracer != "" {
 		t, err := New(*config.Tracer, nil, nil)
 		if err != nil {
 			return nil, err
