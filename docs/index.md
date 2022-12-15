@@ -3,7 +3,7 @@ title: Welcome to go-ethereum
 description: Documentation for the go-ethereum client
 ---
 
-Go-ethereum (aka Geth) is an Ethereum client built in [Golang](https://go.dev). It is one of the original and most popular Ethereum clients.
+Go-ethereum (aka Geth) is an Ethereum client built in [Go](https://go.dev). It is one of the original and most popular Ethereum clients.
 These documentation pages are intended to help users download, install and use Geth.
 
 ## Where to go from here {#where-to-go}
@@ -18,7 +18,7 @@ More advanced topics are also available - explore them using the sidebar!
 
 ## Developers and contributors {#developers-and-contributors}
 
-If you want to help develop Geth or build decentralized apps on top of it, head to our [Developers](/docs/developers) documentation.
+If you want to help develop Geth or build decentralized apps on top of it, head to our [Developer](/docs/developers) documentation.
 
 ## More resources {#more-resources}
 
