@@ -8,7 +8,11 @@ interface Props {
 
 export const SpecificVersionsSection: FC<Props> = ({ children }) => {
   return (
-    <Grid id='specificversions' templateColumns={{ base: '1fr', md: '300px 1fr' }} gap={4}>
+    <Grid
+      id='specificversions'
+      templateColumns={{ base: '1fr', md: '300px 1fr' }}
+      gap={{ base: 4, lg: 8 }}
+    >
       <GridItem w='auto'>
         <Box h='100%'>
           {/* TODO: replace with animated/video version */}
