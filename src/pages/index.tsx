@@ -1,8 +1,6 @@
 import { Box, Grid, GridItem, Link, Stack, Text } from '@chakra-ui/react';
 import type { NextPage } from 'next';
 
-import { GopherHomeFront } from '../components/UI/svgs';
-
 import {
   HomeHero,
   HomeSection,
@@ -11,7 +9,7 @@ import {
   WhyRunANode
 } from '../components/UI/homepage';
 import { PageMetadata } from '../components/UI';
-import { GopherHomeLinks } from '../components/UI/svgs';
+import { GopherHomeFront, GopherHomeLinks } from '../components/UI/svgs';
 
 import {
   CONTRIBUTING_PAGE,
@@ -29,7 +27,7 @@ const HomePage: NextPage = ({}) => {
       <PageMetadata title={METADATA.HOME_TITLE} description={METADATA.HOME_DESCRIPTION} />
 
       <main id='main-content'>
-        <Stack spacing={4}>
+        <Stack spacing={{ base: 4, lg: 8 }}>
           <HomeHero />
 
           <Grid
@@ -109,7 +107,10 @@ const HomePage: NextPage = ({}) => {
             </GridItem>
           </Grid>
 
-          <Grid templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }} gap={4}>
+          <Grid
+            templateColumns={{ base: 'repeat(1, 1fr)', md: 'repeat(2, 1fr)' }}
+            gap={{ base: 4, lg: 8 }}
+          >
             <GridItem>
               {/* SECTION: Contribute to Geth */}
               <HomeSection
@@ -145,7 +146,7 @@ const HomePage: NextPage = ({}) => {
             </GridItem>
           </Grid>
 
-          <Grid templateColumns={{ base: '1fr', md: '300px 1fr' }} gap={4}>
+          <Grid templateColumns={{ base: '1fr', md: '300px 1fr' }} gap={{ base: 4, lg: 8 }}>
             <GridItem w='auto'>
               <Box h='100%'>
                 {/* TODO: replace with animated/video version */}

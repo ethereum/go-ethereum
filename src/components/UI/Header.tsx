@@ -2,10 +2,9 @@ import { FC } from 'react';
 import { Box, Flex, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
-import { Search } from '../UI';
+import { HeaderButtons, Search } from '../UI';
 import { MoonIcon, SunIcon } from '../UI/icons';
 
-import { HeaderButtons } from './';
 import { MobileMenu } from '../layouts';
 
 export const Header: FC = () => {
@@ -14,7 +13,7 @@ export const Header: FC = () => {
 
   return (
     <Flex
-      mb={4}
+      mb={{ base: 4, lg: 8 }}
       border='2px'
       borderColor='primary'
       justifyContent='space-between'
