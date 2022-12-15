@@ -43,7 +43,7 @@ export const DownloadsTable: FC<Props> = ({
     if (OS.includes('Mac')) return 1;
     if (OS.includes('Win')) return 2;
     if (OS.includes('iPhone')) return 3;
-    if (OS.includes('Android') || userAgent.includes("SamsungBrowser")) return 4;
+    if (/Android/i.test(OS) || /Android|SamsungBrowser/i.test(userAgent)) return 4;
     return 0;
   }, [])
 
