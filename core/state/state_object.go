@@ -385,7 +385,7 @@ func (s *stateObject) updateTrie(db Database) (Trie, error) {
 func (s *stateObject) updateRoot(db Database) {
 	tr, err := s.updateTrie(db)
 	if err != nil {
-		s.setError(fmt.Errorf("updateRoot (%x) error: %v", s.address, err))
+		s.setError(fmt.Errorf("updateRoot (%x) error: %w", s.address, err))
 		return
 	}
 	// If nothing changed, don't bother with hashing anything

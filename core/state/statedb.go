@@ -336,7 +336,6 @@ func (s *StateDB) GetProofByHash(addrHash common.Hash) ([][]byte, error) {
 
 // GetStorageProof returns the Merkle proof for given storage slot.
 func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
-	var proof proofList
 	trie, err := s.StorageTrie(a)
 	if err != nil {
 		return nil, err
@@ -344,8 +343,12 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 	if trie == nil {
 		return nil, errors.New("storage trie for requested address does not exist")
 	}
+	var proof proofList
 	err = trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	return proof, err
+	if err != nil {
+		return nil, err
+	}
+	return proof, nil
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
