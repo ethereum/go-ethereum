@@ -40,8 +40,13 @@ type ResettableFreezer struct {
 
 // NewResettableFreezer creates a resettable freezer, note freezer is
 // only resettable if the passed file directory is exclusively occupied
-// by the freezer. The reset function will delete directory atomically
-// and re-create the freezer from scratch.
+// by the freezer. And also the user-configurable ancient root directory
+// is **not** supported for reset since it might be a mount and rename
+// will cause a copy of hundreds of gigabyte into local directory. It
+// needs some other file based solutions.
+//
+// The reset function will delete directory atomically and re-create the
+// freezer from scratch.
 func NewResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*ResettableFreezer, error) {
 	if err := cleanup(datadir); err != nil {
 		return nil, err
