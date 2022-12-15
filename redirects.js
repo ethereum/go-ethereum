@@ -51,7 +51,7 @@ const redirects = [
   },
   {
     source: '/docs/interface/private-network',
-    destination: '/docs/developers/geth-developer/private-network',
+    destination: '/docs/fundamentals/private-network',
     permanent: true
   },
   {
