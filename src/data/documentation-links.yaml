@@ -64,8 +64,6 @@
           to: /docs/interacting-with-geth/rpc/ns-personal
         - id: txpool Namespace
           to: /docs/interacting-with-geth/rpc/ns-txpool
-        - id: Objects
-          to: /docs/interacting-with-geth/rpc/objects
         - id: Real-time Events
           to: /docs/interacting-with-geth/rpc/pubsub
     - id: JavaScript Console
