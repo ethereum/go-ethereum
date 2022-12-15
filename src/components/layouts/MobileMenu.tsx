@@ -9,9 +9,8 @@ import {
 } from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
 
+import { HeaderButtons, Search } from '../UI';
 import { HamburgerIcon } from '../UI/icons';
-import { Search } from '../UI/';
-import { HeaderButtons } from '../UI';
 
 import { BORDER_WIDTH } from '../../constants';
 
