@@ -39,10 +39,11 @@ export const DownloadsTable: FC<Props> = ({
 
   const getDefaultIndex = useMemo<number>(() => {
     const OS: string = typeof window !== 'undefined' ? window.navigator.platform : '';
+    const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : '';
     if (OS.includes('Mac')) return 1;
     if (OS.includes('Win')) return 2;
     if (OS.includes('iPhone')) return 3;
-    if (OS.includes('Android')) return 4;
+    if (OS.includes('Android') || userAgent.includes("SamsungBrowser")) return 4;
     return 0;
   }, [])
 
