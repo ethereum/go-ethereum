@@ -25,7 +25,7 @@ func (a *SnapshotCommand) MarkDown() string {
 	items := []string{
 		"# snapshot",
 		"The ```snapshot``` command groups snapshot related actions:",
-		"- [```snapshot prune-state```](./snapshot_prune-state.md): Joins the local client to another remote peer.",
+		"- [```snapshot prune-state```](./snapshot_prune-state.md): Prune state databases at the given datadir location.",
 	}
 
 	return strings.Join(items, "\n\n")
