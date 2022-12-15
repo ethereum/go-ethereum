@@ -32,7 +32,10 @@ const HomePage: NextPage = ({}) => {
         <Stack spacing={4}>
           <HomeHero />
 
-          <Grid templateColumns={{ base: 'repeat(1, 1fr)', lg: 'repeat(2, 1fr)' }} gap={4}>
+          <Grid
+            templateColumns={{ base: 'repeat(1, 1fr)', lg: 'repeat(2, 1fr)' }}
+            gap={{ base: 4, lg: 8 }}
+          >
             <GridItem rowSpan={2}>
               {/* SECTION: What is Geth */}
               <HomeSection
