@@ -479,7 +479,10 @@ func (g *Genesis) ToBlock() *types.Block {
 				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 			}
 		}
-		if g.Config.IsSharding(0) {
+		if g.Config.IsShanghai(g.Timestamp) {
+			head.WithdrawalsHash = &types.EmptyRootHash
+		}
+		if g.Config.IsSharding(g.Timestamp) {
 			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}
