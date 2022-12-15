@@ -2,8 +2,9 @@ import { FC } from 'react';
 import { Box, Flex, Link, Stack, Text, useColorMode } from '@chakra-ui/react';
 import NextLink from 'next/link';
 
+import { Search } from '../UI';
 import { MoonIcon, SunIcon } from '../UI/icons';
-import { Search } from './search';
+
 import { HeaderButtons } from './';
 import { MobileMenu } from '../layouts';
 
@@ -61,7 +62,7 @@ export const Header: FC = () => {
         </Stack>
 
         {/* SEARCH */}
-        <Stack display={{ base: 'none', md: 'block' }}>
+        <Stack display={{ base: 'none', md: 'block' }} borderRight='2px' borderColor='primary'>
           <Search />
         </Stack>
 
