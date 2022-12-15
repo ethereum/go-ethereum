@@ -188,7 +188,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			}
 			// Found the first unpassed fork block, check if our current state matches
 			// the remote checksum (rule #1).
-			if sums[i] == id.Hash {
+			if sums[index] == id.Hash {
 				// Fork checksum matched, check if a remote future fork block already passed
 				// locally without the local node being aware of it (rule #1a).
 				if id.Next > 0 && (head >= id.Next || (id.Next > timestampThreshold && time >= id.Next)) {
@@ -199,7 +199,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			}
 			// The local and remote nodes are in different forks currently, check if the
 			// remote checksum is a subset of our local forks (rule #2).
-			for j := 0; j < i; j++ {
+			for j := 0; j < index; j++ {
 				if sums[j] == id.Hash {
 					// Remote checksum is a subset, validate based on the announced next fork
 					if allForks[j] != id.Next {
@@ -210,7 +210,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			}
 			// Remote chain is not a subset of our local one, check if it's a superset by
 			// any chance, signalling that we're simply out of sync (rule #3).
-			for j := i + 1; j < len(sums); j++ {
+			for j := index + 1; j < len(sums); j++ {
 				if sums[j] == id.Hash {
 					// Yay, remote checksum is a superset, ignore upcoming forks
 					return nil
@@ -219,44 +219,26 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			// No exact, subset or superset match. We are on differing chains, reject.
 			return ErrLocalIncompatibleOrStale
 		}
+
+		head, time := headfn()
+		// Verify forks by block
+		for i, fork := range forks {
+			// If our head is beyond this fork, continue to the next (we have a dummy
+			// fork of maxuint64 as the last item to always fail this check eventually).
+			if head >= fork {
+				continue
+			}
+			return verify(i, head)
+		}
 		// Verify forks by time
 		for i := len(forks); i < len(forks)+len(forksByTime); i++ {
 			fork := forksByTime[i-len(forks)]
+			// If our head is beyond this fork, continue to the next (we have a dummy
+			// fork of maxuint64 as the last item to always fail this check eventually).
 			if time >= fork {
 				continue
 			}
-			// Found the first unpassed fork block, check if our current state matches
-			// the remote checksum (rule #1).
-			if sums[i] == id.Hash {
-				// Fork checksum matched, check if a remote future fork block already passed
-				// locally without the local node being aware of it (rule #1a).
-				if id.Next > 0 && time >= id.Next {
-					return ErrLocalIncompatibleOrStale
-				}
-				// Haven't passed locally a remote-only fork, accept the connection (rule #1b).
-				return nil
-			}
-			// The local and remote nodes are in different forks currently, check if the
-			// remote checksum is a subset of our local forks (rule #2).
-			for j := 0; j < i; j++ {
-				if sums[j] == id.Hash {
-					// Remote checksum is a subset, validate based on the announced next fork
-					if allForks[j] != id.Next {
-						return ErrRemoteStale
-					}
-					return nil
-				}
-			}
-			// Remote chain is not a subset of our local one, check if it's a superset by
-			// any chance, signalling that we're simply out of sync (rule #3).
-			for j := i + 1; j < len(sums); j++ {
-				if sums[j] == id.Hash {
-					// Yay, remote checksum is a superset, ignore upcoming forks
-					return nil
-				}
-			}
-			// No exact, subset or superset match. We are on differing chains, reject.
-			return ErrLocalIncompatibleOrStale
+			return verify(i, time)
 		}
 
 		log.Error("Impossible fork ID validation", "id", id)
