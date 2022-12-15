@@ -47,7 +47,7 @@ This contract can be pasted into a text file and saved as `Storage.sol`. The fol
 solc --abi Storage.sol -o build
 ```
 
-The ABI can also be generated in other ways such as using the `compile` commands in development frameworks such as [Truffle](https://trufflesuite.com/), [Hardhat](https://hardhat.org/) and [Brownie](https://eth-brownie.readthedocs.io/en/stable/) or in the online IDE [Remix](https://remix.ethereum.org/). ABIs for existing verified contracts can be downloaded from [Etherscan](etherscan.io).
+The ABI can also be generated in other ways such as using the `compile` commands in development frameworks such as [Truffle](https://trufflesuite.com/), [Hardhat](https://hardhat.org/) and [Brownie](https://eth-brownie.readthedocs.io/en/stable/) or in the online IDE [Remix](https://remix.ethereum.org/). ABIs for existing verified contracts can be downloaded from [Etherscan](https://etherscan.io/).
 
 The ABI for `Storage.sol` (`Storage.abi`) looks as follows:
 

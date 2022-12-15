@@ -3,7 +3,7 @@ title: Geth for Mobile
 description: Introduction to mobile development with Geth
 ---
 
-Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. This is because being able to verify data, follow the chain and submit transactions without relying on centralized intermediaries is critical for censorship resistant access to the network. Doing so on a mobile device is the most convenient route for many users. This relies on Geth running a [light client](/docs/interface/les) on the mobile
+Embedding clients into mobile devices is an important part of Ethereum's decentralization vision. This is because being able to verify data, follow the chain and submit transactions without relying on centralized intermediaries is critical for censorship resistant access to the network. Doing so on a mobile device is the most convenient route for many users. This relies on Geth running a [light client](/docs/fundamentals/les) on the mobile
 device and exposing an API that developers can use to build mobile apps on top of Geth. This page outlines how to download Geth for mobile and how to get started with managing Ethereum accounts in mobile applications. Ethereum mobile development is relatively nascent, but there is an active developer community. For further information on Geth mobile development visit the #mobile channel in the [Geth discord](https://discord.gg/wQdpS5aA).
 
 ## Download and install {#download-and-install}

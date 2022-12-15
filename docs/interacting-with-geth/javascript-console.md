@@ -3,7 +3,7 @@ title: JavaScript Console
 description: How to interact with Geth using Javascript
 ---
 
-Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/interacting-with-geth/rpc/server). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed.
+Geth responds to instructions encoded as JSON objects as defined in the [JSON-RPC-API](/docs/interacting-with-geth/rpc). A Geth user can send these instructions directly, for example over HTTP using tools like [Curl](https://github.com/curl/curl). The code snippet below shows a request for an account balance sent to a local Geth node with the HTTP port `8545` exposed.
 
 ```sh
 curl --data '{"jsonrpc":"2.0","method":"eth_getBalance", "params": ["0x9b1d35635cc34752ca54713bb99d38614f63c955", "latest"], "id":2}' -H "Content-Type: application/json" localhost:8545
@@ -18,7 +18,7 @@ This returns a result which is also a JSON object, with values expressed as hexa
 This is a low level and rather error-prone way to interact with Geth. Most developers prefer to use convenience libraries that abstract away some of the more tedious and awkward tasks such as converting values from hexadecimal strings into numbers, or converting between denominations of ether (Wei, Gwei, etc). One such library is [Web3.js](https://web3js.readthedocs.io/en/v1.7.3/).
 The purpose of Geth's Javascript console is to provide a built-in environment to use a subset of the Web3.js libraries to interact with a Geth node.
 
-<Note>The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.js documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/interacting-with-geth/rpc/server).</Note>
+<Note>The web3.js version that comes bundled with Geth is not up to date with the official Web3.js documentation. There are several Web3.js libraries that are not available in the Geth Javascript Console. There are also administrative APIs included in the Geth console that are not documented in the Web3.js documentation. The full list of libraries available in the Geth console is available on the [JSON-RPC API page](/docs/interacting-with-geth/rpc).</Note>
 
 ## Starting the console {#starting-the-console}
 
@@ -77,7 +77,7 @@ To exit, press ctrl-d or type exit
 
 ## Interactive use {#interactive-use}
 
-Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/interacting-with-geth/rpc/server). For example, to check the balance of the first account already existing in the keystore:
+Once the console has been started, it can be used to interact with Geth. The console supports Javascript and the full Geth [JSON-RPC API](/docs/interacting-with-geth/rpc). For example, to check the balance of the first account already existing in the keystore:
 
 ```js
 eth.getBalance(eth.accounts[0]);
