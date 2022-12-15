@@ -1,5 +1,10 @@
 const redirects = [
   {
+    source: '/getting-started/dev-mode',
+    destination: '/docs/developers/geth-developer/dev-mode',
+    permanent: true
+  },
+  {
     source: '/docs/getting-started/dev-mode',
     destination: '/docs/developers/geth-developer/dev-mode',
     permanent: true
@@ -47,6 +52,11 @@ const redirects = [
   {
     source: '/docs/interface/javascript-console',
     destination: '/docs/interacting-with-geth/javascript-console',
+    permanent: true
+  },
+  {
+    source: '/getting-started/private-network',
+    destination: '/docs/fundamentals/private-network',
     permanent: true
   },
   {
