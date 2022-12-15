@@ -24,9 +24,10 @@ type RemoveDBCommand struct {
 }
 
 const (
-	chaindataPath      string = "chaindata"
-	ancientPath        string = "ancient"
-	lightchaindataPath string = "lightchaindata"
+	chaindataPath        string = "chaindata"
+	ancientPath          string = "ancient"
+	trieCacheJournalPath string = "triecache"
+	lightchaindataPath   string = "lightchaindata"
 )
 
 // MarkDown implements cli.MarkDown interface
