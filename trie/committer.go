@@ -56,17 +56,7 @@ func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 	// Some nodes can be deleted from trie which can't be captured by committer
 	// itself. Iterate all deleted nodes tracked by tracer and marked them as
 	// deleted only if they are present in database previously.
-	for _, path := range c.tracer.deleteList() {
-		// There are a few possibilities for this scenario(the node is deleted
-		// but not present in database previously), for example the node was
-		// embedded in the parent and now deleted from the trie. In this case
-		// it's noop from database's perspective.
-		val := c.tracer.getPrev(path)
-		if len(val) == 0 {
-			continue
-		}
-		c.nodes.markDeleted(path, val)
-	}
+	wrapDeletions(c.nodes, c.tracer)
 	return h.(hashNode), c.nodes, nil
 }
 
@@ -230,5 +220,20 @@ func estimateSize(n node) int {
 		return 1 + len(n)
 	default:
 		panic(fmt.Sprintf("node type %T", n))
+	}
+}
+
+// wrapDeletions puts all tracked deletions into the dirty nodeset.
+func wrapDeletions(set *NodeSet, tracer *tracer) {
+	for _, path := range tracer.deleteList() {
+		// There are a few possibilities for this scenario(the node is deleted
+		// but not present in database previously), for example the node was
+		// embedded in the parent and now deleted from the trie. In this case
+		// it's noop from database's perspective.
+		val := tracer.getPrev(path)
+		if len(val) == 0 {
+			continue
+		}
+		set.markDeleted(path, val)
 	}
 }
