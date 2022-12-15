@@ -3,7 +3,7 @@ https://geth.ethereum.org/,https://geth.ethereum.org,,will be react page
 https://geth.ethereum.org/downloads/,https://geth.ethereum.org/downloads,,will be react page
 https://geth.ethereum.org/docs/,https://geth.ethereum.org/docs,,n/a
 https://geth.ethereum.org/docs/getting-started,https://geth.ethereum.org/docs/getting-started/backup-restore,,n/a
-https://geth.ethereum.org/docs/getting-started/dev-mode,https://geth.ethereum.org/docs/developers/geth-developer/dev-mode,,n/a
+https://geth.ethereum.org/docs/getting-started/dev-mode,https://geth.ethereum.org/docs/developers/dapp-developer/dev-mode,,n/a
 https://geth.ethereum.org/docs/install-and-build/installing-geth,https://geth.ethereum.org/docs/getting-started/install-geth,,n/a
 https://geth.ethereum.org/docs/install-and-build/backup-restore,https://geth.ethereum.org/docs/getting-started/backup-restore,,n/a
 https://geth.ethereum.org/docs/interface/command-line-options,https://geth.ethereum.org/docs/fundamentals/command-line-options,,n/a
@@ -14,7 +14,7 @@ https://geth.ethereum.org/docs/interface/les,https://geth.ethereum.org/docs/fund
 https://geth.ethereum.org/docs/interface/managing-your-accounts,https://geth.ethereum.org/docs/fundamentals/account-management,,n/a
 https://geth.ethereum.org/docs/faq,https://geth.ethereum.org/docs/faq,,n/a
 https://geth.ethereum.org/docs/interface/javascript-console,https://geth.ethereum.org/docs/interacting-with-geth/javascript-console,,n/a
-https://geth.ethereum.org/docs/interface/private-network,https://geth.ethereum.org/docs/developers/geth-developer/private-network,,n/a
+https://geth.ethereum.org/docs/interface/private-network,https://geth.ethereum.org/docs/fundamentals/private-network,,n/a
 https://geth.ethereum.org/docs/interface/mining,https://geth.ethereum.org/docs/fundamentals/mining,,n/a
 https://geth.ethereum.org/docs/interface/metrics,https://geth.ethereum.org/docs/monitoring/metrics,,n/a
 https://geth.ethereum.org/docs/dapp/native,https://geth.ethereum.org/docs/developers/dapp-developer/native,,n/a
@@ -41,7 +41,7 @@ https://geth.ethereum.org/docs/rpc/ns-txpool,https://geth.ethereum.org/docs/inte
 https://geth.ethereum.org/docs/rpc/objects,https://geth.ethereum.org/docs/interacting-with-geth/rpc/objects,,n/a
 https://geth.ethereum.org/docs/developers/dev-guide,https://geth.ethereum.org/docs/developers/geth-developer/dev-guide,,n/a
 https://geth.ethereum.org/docs/developers/code-review-guidelines,https://geth.ethereum.org/docs/developers/geth-developer/code-review-guidelines,,n/a
-https://geth.ethereum.org/docs/developers/issue-handling-workflow,https://geth.ethereum.org/docs/developers/geth-developer/issue-handling-workflow,,n/a
+https://geth.ethereum.org/docs/developers/issue-handling-workflow,https://geth.ethereum.org/,page deleted,n/a
 https://geth.ethereum.org/docs/developers/dns-discovery-setup,https://geth.ethereum.org/doce/developers/geth-developer/dns-discovery-setup,,n/a
 https://geth.ethereum.org/docs/clef/introduction,https://geth.ethereum.org/docs/tools/clef/introduction,,n/a
 https://geth.ethereum.org/docs/clef/tutorial,https://geth.ethereum.org/docs/tools/clef/tutorial,,n/a
