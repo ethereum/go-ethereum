@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run lint && next build && npm run format:fix",
+    "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "next lint",
     "format:fix": "prettier . --write --config .prettierrc --ignore-path .prettierignore --loglevel warn"
@@ -25,6 +26,7 @@
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
     "next": "^13.0.2",
+    "next-sitemap": "^3.1.32",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-markdown": "^8.0.3",
