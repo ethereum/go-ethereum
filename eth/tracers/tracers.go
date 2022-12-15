@@ -42,6 +42,12 @@ type Tracer interface {
 	Stop(err error)
 }
 
+// JSTracer is implemented by tracers evaluating JS code.
+type JSTracer interface {
+	Tracer
+	IsJS() bool
+}
+
 type lookupFunc func(string, *Context, json.RawMessage) (Tracer, error)
 
 var (
