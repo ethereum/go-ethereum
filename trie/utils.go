@@ -179,8 +179,8 @@ func (t *tracer) copy() *tracer {
 	}
 }
 
-// handleDeletions puts all tracked deletions into the provided nodeset.
-func (t *tracer) handleDeletions(set *NodeSet) {
+// markDeletions puts all tracked deletions into the provided nodeset.
+func (t *tracer) markDeletions(set *NodeSet) {
 	// Tracer isn't used right now, remove this check later.
 	if t == nil {
 		return

@@ -53,10 +53,11 @@ func (c *committer) Commit(n node) (hashNode, *NodeSet, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	// Some nodes can be deleted from trie which can't be captured by committer
-	// itself. Iterate all deleted nodes tracked by tracer and marked them as
-	// deleted only if they are present in database previously.
-	c.tracer.handleDeletions(c.nodes)
+	// Some nodes can be deleted from trie which can't be captured
+	// by committer itself. Iterate all deleted nodes tracked by
+	// tracer and marked them as deleted only if they are present
+	// in database previously.
+	c.tracer.markDeletions(c.nodes)
 	return h.(hashNode), c.nodes, nil
 }
 
