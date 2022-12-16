@@ -88,7 +88,7 @@ var (
 
 	// ErrMaxFeePerDataGas is returned if the transaction specified a
 	// max_fee_per_data_gas that is below the current data gas price.
-	ErrMaxFeePerDataGas = errors.New("max data fee per gas too low")
+	ErrMaxFeePerDataGas = errors.New("max fee per data gas too low")
 
 	// ErrTipVeryHigh is a sanity error to avoid extremely big numbers specified
 	// in the tip field.
@@ -104,4 +104,8 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrInternalFailure is returned when an unexpected internal error condition
+	// prevents execution.
+	ErrInternalFailure = errors.New("internal failure")
 )
