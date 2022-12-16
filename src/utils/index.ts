@@ -4,6 +4,7 @@ export { fetchLatestReleaseVersionAndName } from './fetchLatestReleaseVersionAnd
 export { fetchXMLData } from './fetchXMLData';
 export { getChecksum } from './getChecksum';
 export { getKebabCaseFromName } from './getKebabCaseFromName';
+export { getLastModifiedDate } from './getLastModifiedDate';
 export { getLatestBinaryURL } from './getLatestBinaryURL';
 export { getOS } from './getOS';
 export { getParsedDate } from './getParsedDate';
