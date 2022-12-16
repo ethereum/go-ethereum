@@ -146,6 +146,9 @@ var (
 		var {{.Type}}FuncSigs = {{.Type}}MetaData.Sigs
 	{{end}}
 
+	// {{.Type}}Encoder is an encoder to pack or unpack data concerning the {{.Type}} contract.
+	var {{.Type}}Encoder = new{{.Type}}Encoder()
+
 	{{if .InputBin}}
 		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
 		// Deprecated: Use {{.Type}}MetaData.Bin instead.
@@ -231,6 +234,12 @@ var (
 		Contract *{{.Type}}Transactor // Generic write-only contract binding to access the raw methods on
 	}
 
+	// _{{.Type}}Encoder is an auto generated pack/unpack Go binding around an Ethereum contract.
+	type _{{.Type}}Encoder struct {
+		abi     *abi.ABI
+		initErr error
+	}
+
 	// New{{.Type}} creates a new instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}(address common.Address, backend bind.ContractBackend) (*{{.Type}}, error) {
 	  contract, err := bind{{.Type}}(address, backend, backend, backend)
@@ -265,6 +274,18 @@ var (
  	    return nil, err
  	  }
  	  return &{{.Type}}Filterer{contract: contract}, nil
+ 	}
+
+	// new{{.Type}}Encoder creates a new encoder of {{.Type}}, bound to a specific deployed contract.
+ 	func new{{.Type}}Encoder() *_{{.Type}}Encoder {
+	  parsed, err := {{.Type}}MetaData.GetAbi()
+	  if err == nil && parsed == nil {
+	    err = errors.New("GetABI returned nil")
+	  }
+	  return &_{{.Type}}Encoder{
+		abi:     parsed,
+		initErr: err,		
+	  }
  	}
 
 	// bind{{.Type}} binds a generic wrapper to an already deployed contract.
@@ -340,6 +361,52 @@ var (
 			return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
 			{{end}}
 		}
+
+		// Pack{{.Normalized.Name}} returns input data to call the method 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *_{{$contract.Type}}Encoder) Pack{{.Normalized.Name}}({{range $i, $e := .Normalized.Inputs}}{{if $i}}, {{end}} {{$e.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+			if _{{$contract.Type}}.initErr != nil {
+				return nil, _{{$contract.Type}}.initErr
+			}
+			return _{{$contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}}) 
+		}
+
+		{{if gt (len .Normalized.Outputs) 0}}
+		// Unpack{{.Normalized.Name}} decodes given output data after calls the contract method 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *_{{$contract.Type}}Encoder) Unpack{{.Normalized.Name}}(output []byte) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
+			if _{{$contract.Type}}.initErr != nil {
+				{{if .Structured}}
+				outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+				return *outstruct, _{{$contract.Type}}.initErr
+				{{else}}
+				return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} _{{$contract.Type}}.initErr
+				{{end}}
+			}
+
+			out, err := _{{$contract.Type}}.abi.Unpack("{{.Original.Name}}", output)
+			{{if .Structured}}
+			outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+			if err != nil {
+				return *outstruct, err
+			}
+			{{range $i, $t := .Normalized.Outputs}} 
+			outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+
+			return *outstruct, err
+			{{else}}
+			if err != nil {
+				return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
+			}
+			{{range $i, $t := .Normalized.Outputs}}
+			out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+			
+			return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} nil
+			{{end}}
+		}
+		{{end}}
 
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
