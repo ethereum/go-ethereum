@@ -575,7 +575,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	if t.root == nil {
 		// Wrap tracked deletions as the return
 		set := NewNodeSet(t.owner)
-		wrapDeletions(set, t.tracer)
+		t.tracer.handleDeletions(set)
 		return emptyRoot, set, nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
