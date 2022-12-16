@@ -163,7 +163,9 @@ export const METADATA = {
   HOME_DESCRIPTION:
     'Go-ethereum website, home for the official Golang execution layer implementation of the Ethereum protocol',
   DOWNLOADS_TITLE: 'Downloads',
-  DOWNLOADS_DESCRIPTION: 'All Geth releases and builds, available for download'
+  DOWNLOADS_DESCRIPTION: 'All Geth releases and builds, available for download',
+  PAGE_404_TITLE: '404 - Page not found',
+  PAGE_404_DESCRIPTION: 'The page you are looking for does not exist'
 };
 
 // GitHub urls
