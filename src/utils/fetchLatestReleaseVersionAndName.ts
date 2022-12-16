@@ -1,7 +1,13 @@
 import { LATEST_GETH_RELEASE_URL } from '../constants';
 
 export const fetchLatestReleaseVersionAndName = () => {
-  return fetch(LATEST_GETH_RELEASE_URL)
+  const headers = new Headers({
+    // Note: this token expires on Dec 16, 2023
+    // check fine-grained tokens https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#about-personal-access-tokens
+    Authorization: 'Token ' + process.env.GITHUB_TOKEN_READ_ONLY
+  });
+
+  return fetch(LATEST_GETH_RELEASE_URL, { headers })
     .then(response => response.json())
     .then(release => {
       return {
