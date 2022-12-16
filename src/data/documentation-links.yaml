@@ -22,7 +22,7 @@
       to: /docs/fundamentals/sync-modes
     - id: Account management
       to: /docs/fundamentals/account-management
-    - id: 'Backup & Restore'
+    - id: 'Backup & restore'
       to: /docs/fundamentals/backup-restore
     - id: Logs
       to: /docs/fundamentals/logs
