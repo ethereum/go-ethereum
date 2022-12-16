@@ -248,6 +248,31 @@ const redirects = [
     source: '/docs/interface/hardware',
     destination: '/docs/getting-started/hardware-requirements',
     permanent: true
+  },
+  {
+    source: '/docs/interacting-with-geth',
+    destination: '/docs/interacting-with-geth/rpc',
+    permanent: true
+  },
+  {
+    source: '/docs/developers/dapp-developer',
+    destination: '/docs/developers/dapp-developer/dev-mode',
+    permanent: true
+  },
+  {
+    source: '/docs/developers/geth-developer',
+    destination: '/docs/developers/geth-developer/dev-guide',
+    permanent: true
+  },
+  {
+    source: '/docs/monitoring',
+    destination: '/docs/monitoring/dashboards',
+    permanent: true
+  },
+  {
+    source: '/docs/tools',
+    destination: '/docs/tools/clef/introduction',
+    permanent: true
   }
 ];
 
