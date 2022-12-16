@@ -5,7 +5,7 @@ import NextLink from 'next/link';
 import { GopherHomeFront } from '../components/UI/svgs';
 import { PageMetadata } from '../components/UI';
 
-import { METADATA} from '../constants';
+import { METADATA } from '../constants';
 
 const Page404NotFound: NextPage = ({}) => {
   return (
@@ -13,10 +13,16 @@ const Page404NotFound: NextPage = ({}) => {
       <PageMetadata title={METADATA.PAGE_404_TITLE} description={METADATA.PAGE_404_DESCRIPTION} />
 
       <main id='main-content'>
-        <Flex direction='column' alignItems='center' py={{ base: 16, md: 24 }} border="2px" borderColor="primary">
+        <Flex
+          direction='column'
+          alignItems='center'
+          py={{ base: 16, md: 24 }}
+          border='2px'
+          borderColor='primary'
+        >
           <GopherHomeFront />
           <Text
-            fontSize={{ base: "8xl", md: "9xl" }}
+            fontSize={{ base: '8xl', md: '9xl' }}
             lineHeight='120%'
             fontFamily='heading'
             textAlign='center'
@@ -26,7 +32,7 @@ const Page404NotFound: NextPage = ({}) => {
             404
           </Text>
           <Text
-            fontSize={{ base: 'xl', md: '2xl'}}
+            fontSize={{ base: 'xl', md: '2xl' }}
             fontFamily='heading'
             fontWeight='700'
             textAlign='center'
