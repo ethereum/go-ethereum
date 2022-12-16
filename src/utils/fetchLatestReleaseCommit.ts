@@ -2,8 +2,7 @@ import { ALL_GETH_COMMITS_URL } from '../constants';
 
 export const fetchLatestReleaseCommit = (versionNumber: string) => {
   const headers = new Headers({
-    // Note: this token expires on Dec 16, 2023
-    // check fine-grained tokens https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#about-personal-access-tokens
+    // About personal access tokens https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#about-personal-access-tokens
     Authorization: 'Token ' + process.env.GITHUB_TOKEN_READ_ONLY
   });
 
