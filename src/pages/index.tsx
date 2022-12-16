@@ -37,7 +37,7 @@ const HomePage: NextPage = ({}) => {
             <GridItem rowSpan={2}>
               {/* SECTION: What is Geth */}
               <HomeSection
-                sectionTitle='What is Geth'
+                sectionTitle='What is Geth?'
                 linkLabel='Get started with Geth'
                 buttonHref={`${DOCS_PAGE}/getting-started`}
                 Svg={GopherHomeFront}

@@ -23,7 +23,7 @@ export const WhatIsEthereum: FC<Props> = ({ children }) => {
         >
           <Stack p={4} borderBottom='2px' borderColor='primary' sx={{ mt: '0 !important' }}>
             <Box as='h2' textStyle='h2'>
-              What is Ethereum
+              What is Ethereum?
             </Box>
           </Stack>
 
