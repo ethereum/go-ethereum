@@ -262,10 +262,12 @@ func TestDeleteAll(t *testing.T) {
 		trie.Update([]byte(val.k), []byte(val.v))
 	}
 	root, set, err := trie.Commit(false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Update(NewWithNodeSet(set)); err != nil {
 		t.Fatal(err)
 	}
-
 	// Delete entries from trie, ensure all values are detected
 	trie, _ = New(TrieID(root), db)
 	trie.tracer = newTracer()
