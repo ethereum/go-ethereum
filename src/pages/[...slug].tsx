@@ -11,16 +11,15 @@ import rehypeRaw from 'rehype-raw';
 import { ParsedUrlQuery } from 'querystring';
 import type { GetStaticPaths, GetStaticProps, NextPage } from 'next';
 
-import MDComponents from '../components/UI/docs';
-import { Breadcrumbs, DocsNav, DocumentNav } from '../components/UI/docs';
+import MDComponents, { Breadcrumbs, DocsNav, DocumentNav } from '../components/UI/docs';
 import { PageMetadata } from '../components/UI';
+
+import { getFileList } from '../utils/getFileList';
+import { getLastModifiedDate, getParsedDate } from '../utils';
 
 import { NavLink } from '../types';
 
-import { getFileList } from '../utils/getFileList';
-
 import { textStyles } from '../theme/foundations';
-import { getLastModifiedDate, getParsedDate } from '../utils';
 
 const MATTER_OPTIONS = {
   engines: {
@@ -53,9 +52,7 @@ export const getStaticProps: GetStaticProps = async context => {
     file = fs.readFileSync(`${filePath}.md`, 'utf-8');
   }
 
-  // get last commit on file date
   const lastModified = await getLastModifiedDate(filePath);
-
   const { data: frontmatter, content } = matter(file, MATTER_OPTIONS);
 
   return {
