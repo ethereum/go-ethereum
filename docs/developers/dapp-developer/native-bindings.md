@@ -61,7 +61,7 @@ The following code snippet shows how an ABI can be generated for `Storage.sol` u
 solc --abi Storage.sol -o build
 ```
 
-The ABI can also be generated in other ways such as using the `compile` commands in development frameworks such as [Truffle](https://trufflesuite.com/docs/truffle/), [Hardhat](https://hardhat.org/) and [Brownie](https://eth-brownie.readthedocs.io/en/stable/) or in the online IDE [Remix](https://remix.ethereum.org/). ABIs for existing verified contracts can be downloaded from [Etherscan](etherscan.io).
+The ABI can also be generated in other ways such as using the `compile` commands in development frameworks such as [Truffle](https://trufflesuite.com/docs/truffle/), [Hardhat](https://hardhat.org/) and [Brownie](https://eth-brownie.readthedocs.io/en/stable/) or in the online IDE [Remix](https://remix.ethereum.org/). ABIs for existing verified contracts can be downloaded from [Etherscan](https://etherscan.io/).
 
 The ABI for `Storage.sol` (`Storage.abi`) looks as follows:
 
@@ -262,7 +262,7 @@ Note that `DeployStorage` returns four variables:
 
 - `address`: the deployment address of the contract
 
-- `tx`: the transaction hash that can be queried using Geth or a service like [Etherscan](etherscan.io)
+- `tx`: the transaction hash that can be queried using Geth or a service like [Etherscan](https://etherscan.io/)
 
 - `instance`: an instance of the deployed contract whose functions can be called in the Go application
 

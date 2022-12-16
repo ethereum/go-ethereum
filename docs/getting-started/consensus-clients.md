@@ -55,7 +55,7 @@ Please see the pages on [syncing](/docs/fundamentals/sync-modes) for more detail
 
 ## Using Geth {#using-geth}
 
-Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc/server) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interacting-with-geth/javascript-console). The Javascript console can be started
+Geth is the portal for users to send transactions to Ethereum. The Geth Javascript console is available for this purpose, and the majority of the [JSON-RPC API](/docs/rpc) will remain available via web3js or HTTP requests with commands as json payloads. These options are explained in more detail on the [Javascript Console page](/docs/interacting-with-geth/javascript-console). The Javascript console can be started
 using the following command in a separate terminal (assuming Geth's IPC file is saved in `datadir`):
 
 ```sh

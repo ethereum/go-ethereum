@@ -20,7 +20,7 @@ const hoverStyles = {
 
 export const Footer: FC = () => {
   return (
-    <Flex mt={4} direction={{ base: 'column', lg: 'row' }}>
+    <Flex mt={{ base: 4, lg: 8 }} direction={{ base: 'column', lg: 'row' }}>
       <Flex
         direction={{ base: 'column', md: 'row' }}
         justifyContent={{ md: 'space-between' }}

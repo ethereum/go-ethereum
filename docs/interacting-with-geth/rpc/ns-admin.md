@@ -179,7 +179,7 @@ Removes a remote node from the trusted peer set, but it does not disconnect it a
 
 ## admin_startHTTP {#admin-starthttp}
 
-The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/interacting-with-geth/rpc/server) webserver to handle client requests. All the parameters are optional:
+The `startHTTP` administrative method starts an HTTP based JSON-RPC [API](/docs/interacting-with-geth/rpc) webserver to handle client requests. All the parameters are optional:
 
 - `host`: network interface to open the listener socket on (defaults to `"localhost"`)
 - `port`: network port to open the listener socket on (defaults to `8545`)

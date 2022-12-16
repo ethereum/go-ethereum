@@ -30,6 +30,8 @@
       to: /docs/fundamentals/peer-to-peer
     - id: Pruning
       to: /docs/fundamentals/pruning
+    - id: Private networks
+      to: /docs/fundamentals/private-network
     - id: Light client
       to: /docs/fundamentals/les
     - id: Mining
@@ -78,6 +80,8 @@
       to: /docs/developers
     - id: Dapp developers
       items:
+        - id: Dev mode
+          to: /docs/developers/dapp-developer/dev-mode
         - id: Go API
           to: /docs/developers/dapp-developer/native
         - id: Go Account Management
@@ -102,18 +106,12 @@
       items:
         - id: Developer guide
           to: /docs/developers/geth-developer/dev-guide
-        - id: Developer mode
-          to: /docs/developers/geth-developer/dev-mode
         - id: Disclosures
           to: /docs/developers/geth-developer/disclosures
-        - id: Issue handling workflow
-          to: /docs/developers/geth-developer/issue-handling-workflow
         - id: DNS discovery setup guide
           to: /docs/developers/geth-developer/dns-discovery-setup
         - id: Code review guidelines
           to: /docs/developers/geth-developer/code-review-guidelines
-        - id: Private networks
-          to: /docs/developers/geth-developer/private-network
     - id: Contributing
       to: /docs/developers/contributing
 - id: Monitoring

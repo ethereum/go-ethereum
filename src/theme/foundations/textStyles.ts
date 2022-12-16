@@ -63,7 +63,9 @@ export const textStyles = {
     color: 'bg',
     fontWeight: 700,
     textTransform: 'uppercase',
-    _groupHover: { color: 'yellow.50' }
+    _groupHover: { color: 'yellow.50' },
+    _groupFocus: { color: 'yellow.50' },
+    _groupActive: { color: 'yellow.50' }
   },
   'home-section-link-label': {
     fontFamily: 'heading',
@@ -111,14 +113,18 @@ export const textStyles = {
     color: 'bg',
     fontSize: { base: 'md', lg: 'xl' },
     textTransform: 'uppercase',
-    _groupHover: { color: 'yellow.50' }
+    _groupHover: { color: 'yellow.50' },
+    _groupFocus: { color: 'yellow.50' },
+    _groupActive: { color: 'yellow.50' }
   },
   'downloads-button-sublabel': {
     fontFamily: 'heading',
     color: 'bg',
     fontSize: { base: 'xs', lg: 'sm' },
     textTransform: 'uppercase',
-    _groupHover: { color: 'yellow.50' }
+    _groupHover: { color: 'yellow.50' },
+    _groupFocus: { color: 'yellow.50' },
+    _groupActive: { color: 'yellow.50' }
   },
   'download-tab-label': {
     fontFamily: 'heading',

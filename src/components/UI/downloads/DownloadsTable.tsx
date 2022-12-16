@@ -1,5 +1,5 @@
 import { Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
-import { FC } from 'react';
+import { FC, useMemo } from 'react';
 
 import { DataTable } from '../../UI';
 
@@ -37,6 +37,16 @@ export const DownloadsTable: FC<Props> = ({
 
   const LAST_2_LINUX_RELEASES = amountOfReleasesToShow + 12;
 
+  const getDefaultIndex = useMemo<number>(() => {
+    const OS: string = typeof window !== 'undefined' ? window.navigator.platform : '';
+    const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : '';
+    if (/Mac/i.test(OS)) return 1;
+    if (/Win/i.test(OS)) return 2;
+    if (/iPhone/i.test(OS)) return 3;
+    if (/Android/i.test(userAgent)) return 4;
+    return 0;
+  }, [])
+
   return (
     <Stack
       sx={{ mt: '0 !important' }}
@@ -46,7 +56,7 @@ export const DownloadsTable: FC<Props> = ({
           : 'none'
       }
     >
-      <Tabs variant='unstyled' onChange={idx => setTotalReleases(totalReleases[idx])}>
+      <Tabs variant='unstyled' onChange={idx => setTotalReleases(totalReleases[idx])} defaultIndex={getDefaultIndex}>
         <TabList color='primary' bg='button-bg'>
           {DOWNLOADS_TABLE_TABS.map((tab, idx) => {
             return (

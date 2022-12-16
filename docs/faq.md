@@ -11,7 +11,7 @@ The Geth team have also recently started to run AMA's on Reddit:
 
 - [Aug 2022 AMA](https://www.reddit.com/r/ethereum/comments/wpqmo1/ama_we_are_the_go_ethereum_geth_team_18_august/)
 
-It is also recommended to search for 'Geth' and 'go-ethereum' on [ethereum.stackexchange](ethereum.stackexchange.com).
+It is also recommended to search for 'Geth' and 'go-ethereum' on [ethereum.stackexchange.com](https://ethereum.stackexchange.com/).
 
 ## What are RPC and IPC? {#what-are-rpc-and-ipc}
 

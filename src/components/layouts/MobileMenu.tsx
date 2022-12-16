@@ -1,9 +1,16 @@
-import { Box, Flex, Modal, ModalContent, ModalOverlay, useDisclosure } from '@chakra-ui/react';
+import {
+  Box,
+  Flex,
+  Modal,
+  ModalContent,
+  ModalOverlay,
+  Stack,
+  useDisclosure
+} from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
 
+import { HeaderButtons, Search } from '../UI';
 import { HamburgerIcon } from '../UI/icons';
-import { Search } from '../UI/search';
-import { HeaderButtons } from '../UI';
 
 import { BORDER_WIDTH } from '../../constants';
 
@@ -42,6 +49,7 @@ export const MobileMenu: React.FC = () => {
             border={BORDER_WIDTH}
             overflow='hidden'
             direction='column'
+            display={{ md: 'none' }}
           >
             <Flex borderBottom={BORDER_WIDTH} justify='flex-end'>
               {/* CLOSE ICON */}
@@ -63,7 +71,9 @@ export const MobileMenu: React.FC = () => {
             <HeaderButtons close={onClose} />
 
             {/* SEARCH */}
-            <Search />
+            <Stack borderBlockEnd='2px' borderColor='bg'>
+              <Search />
+            </Stack>
           </Flex>
         </ModalContent>
       </Modal>

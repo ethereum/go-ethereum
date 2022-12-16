@@ -21,7 +21,7 @@ const MDComponents = {
   // paragraphs
   p: ({ children }: any) => {
     return (
-      <Text mb='7 !important' lineHeight={1.5}>
+      <Text mb='7 !important' lineHeight={1.6}>
         {children}
       </Text>
     );

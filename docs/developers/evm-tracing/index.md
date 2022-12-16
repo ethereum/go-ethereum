@@ -55,7 +55,7 @@ Read more about Geth's basic traces on the [basic traces page](/docs/developers/
 The tracing API accepts an optional `tracer` parameter that defines how the data returned to the API call should be processed. If this parameter is ommitted the default tracer is used. The default is the struct (or 'opcode') logger. These raw opcode traces are sometimes useful, but the returned data is very low level and can be too extensive and awkward to read for many use-cases. A full opcode trace can easily go into the hundreds of megabytes, making them very resource intensive to get out of the node and process externally. For these reasons, there are a set of non-default built-in tracers that can be named in the API call to return different data from the method. Under the hood, these tracers are Go or Javascript
 functions that do some specific preprocessing on the trace data before it is returned.
 
-More information about Geth's built-in tracers is available on the [built-in tracers](/docs/developers/evm-tracing/builtin-tracers) page.
+More information about Geth's built-in tracers is available on the [built-in tracers](/docs/developers/evm-tracing/built-in-tracers) page.
 
 ### Custom tracers {#custom-tracers}
 

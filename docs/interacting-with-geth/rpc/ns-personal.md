@@ -5,7 +5,7 @@ description: Documentation for the JSON-RPC API "personal" namespace
 
 <Note>The personal namespace will be deprecated in the very near future.</Note>
 
-The personal API managed private keys in the key store. It is deprecated in favour of using [Clef](/docs/tools/clef/Introduction) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns_personal_deprecation) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate tousing Clef for account interactions.
+The personal API managed private keys in the key store. It is deprecated in favour of using [Clef](/docs/tools/clef/Introduction) for interacting with accounts Please refer to the [ns_personal deprecation page](/docs/interacting-with-geth/rpc/ns-personal-deprecation) to see the equivalent methods. The following documentation should be treated as archive information and users should migrate tousing Clef for account interactions.
 
 ## personal_deriveAccount {#personal-deriveaccount}
 

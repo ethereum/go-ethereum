@@ -15,7 +15,7 @@ All data relating to a specific Geth instance gets written inside a data directo
 
 Accounts are stored in the `keystore` subdirectory. The contents of this directories should be transportable between nodes, platforms, and client implementations.
 
-To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](../interface/command-line-options) for more details. There may exist multiple data directories for multiple networks (e.g. a separate directory for Ethereum Mainnet and the Goerli testnet). Each would have subdirectories for their blockchain data and keystore.
+To configure the location of the data directory, the `--datadir` parameter can be specified. See [CLI Options](/docs/fundamentals/command-line-options) for more details. There may exist multiple data directories for multiple networks (e.g. a separate directory for Ethereum Mainnet and the Goerli testnet). Each would have subdirectories for their blockchain data and keystore.
 
 It is important to backup the files in the keystore securely. These files are encrypted using an account password. This needs to be securely backed up too. There is no way to decrypt the keys without the password!
 
