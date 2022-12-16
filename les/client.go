@@ -180,7 +180,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		if compat.RewindToTime > 0 {
-			log.Crit("Timestamp based rewinds not implemented yet /sad")
+			leth.blockchain.SetHeadWithTimestamp(compat.RewindToTime)
 		} else {
 			leth.blockchain.SetHead(compat.RewindToBlock)
 		}

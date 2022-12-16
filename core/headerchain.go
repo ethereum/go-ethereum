@@ -556,7 +556,7 @@ type (
 	// before head header is updated. The method will return the actual block it
 	// updated the head to (missing state) and a flag if setHead should continue
 	// rewinding till that forcefully (exceeded ancient limits)
-	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (uint64, bool)
+	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (*types.Header, bool)
 
 	// DeleteBlockContentCallback is a callback function that is called by SetHead
 	// before each header is deleted.
@@ -566,15 +566,33 @@ type (
 // SetHead rewinds the local chain to a new head. Everything above the new head
 // will be deleted and the new one set.
 func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+	hc.setHead(head, 0, updateFn, delFn)
+}
+
+// SetHeadWithTimestamp rewinds the local chain to a new head timestamp. Everything
+// above the new head will be deleted and the new one set.
+func (hc *HeaderChain) SetHeadWithTimestamp(time uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+	hc.setHead(0, time, updateFn, delFn)
+}
+
+// setHead rewinds the local chain to a new head block or a head timestamp.
+// Everything above the new head will be deleted and the new one set.
+func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
 	var (
 		parentHash common.Hash
 		batch      = hc.chainDb.NewBatch()
 		origin     = true
 	)
-	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
+	done := func(header *types.Header) bool {
+		if headBlock != 0 || headTime == 0 {
+			return header.Number.Uint64() <= headBlock
+		}
+		return header.Time <= headTime
+	}
+	for hdr := hc.CurrentHeader(); hdr != nil && !done(hdr); hdr = hc.CurrentHeader() {
 		num := hdr.Number.Uint64()
 
-		// Rewind block chain to new head.
+		// Rewind chain to new head
 		parent := hc.GetHeader(hdr.ParentHash, num-1)
 		if parent == nil {
 			parent = hc.genesisHeader
@@ -591,9 +609,9 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		markerBatch := hc.chainDb.NewBatch()
 		if updateFn != nil {
 			newHead, force := updateFn(markerBatch, parent)
-			if force && newHead < head {
-				log.Warn("Force rewinding till ancient limit", "head", newHead)
-				head = newHead
+			if force && ((headTime > 0 && newHead.Time < headTime) || (headTime == 0 && newHead.Number.Uint64() < headBlock)) {
+				log.Warn("Force rewinding till ancient limit", "head", newHead.Number.Uint64())
+				headBlock, headTime = newHead.Number.Uint64(), 0
 			}
 		}
 		// Update head header then.
