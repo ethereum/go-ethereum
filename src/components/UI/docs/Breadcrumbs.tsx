@@ -11,7 +11,7 @@ export const Breadcrumbs: FC = () => {
 
   return (
     <>
-      {router.asPath !== '/docs' ? (
+      {router.asPath !== '/docs' && pathSplit.length > 1? (
         <Breadcrumb>
           {pathSplit.map((path: string, idx: number) => {
             return (
