@@ -194,15 +194,11 @@ func (st *StateTransition) buyGas() error {
 	dgval := new(big.Int)
 	var dataGasUsed uint64
 	if st.evm.ChainConfig().IsSharding(st.evm.Context.Time.Uint64()) {
+		dataGasUsed = st.dataGasUsed()
 		if st.evm.Context.ExcessDataGas == nil {
-			return fmt.Errorf("sharding is active but ExcessDataGas is nil. Time: %v", st.evm.Context.Time.Uint64())
+			return fmt.Errorf("%w: sharding is active but ExcessDataGas is nil. Time: %v", ErrInternalFailure, st.evm.Context.Time.Uint64())
 		}
-		dgu := st.dataGasUsed()
-		if !dgu.IsUint64() {
-			return fmt.Errorf("data gas usage overflow: address %v have %v", st.msg.From().Hex(), dgu)
-		}
-		dataGasUsed = dgu.Uint64()
-		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), dgu)
+		dgval.Mul(misc.GetDataGasPrice(st.evm.Context.ExcessDataGas), new(big.Int).SetUint64(dataGasUsed))
 	}
 
 	// perform the required user balance checks
@@ -283,8 +279,7 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
-	usesDataGas := st.dataGasUsed().Sign() > 0
-	if usesDataGas && st.evm.ChainConfig().IsSharding(st.evm.Context.Time.Uint64()) {
+	if st.dataGasUsed() > 0 && st.evm.ChainConfig().IsSharding(st.evm.Context.Time.Uint64()) {
 		dataGasPrice := misc.GetDataGasPrice(st.evm.Context.ExcessDataGas)
 		if dataGasPrice.Cmp(st.msg.MaxFeePerDataGas()) > 0 {
 			return fmt.Errorf("%w: address %v, maxFeePerDataGas: %v dataGasPrice: %v, excessDataGas: %v",
@@ -369,8 +364,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data(), st.gasRemaining, msg.Value())
 	}
 
-	// Note that unlike regular gas, data fee gas is not refunded if the tx is reverted, per
-	// EIP-4844 spec.
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)
@@ -423,12 +416,6 @@ func (st *StateTransition) gasUsed() uint64 {
 	return st.msg.Gas() - st.gasRemaining
 }
 
-func (st *StateTransition) dataGasUsed() *big.Int {
-	dataGas := new(big.Int)
-	l := int64(len(st.msg.DataHashes()))
-	if l != 0 {
-		dataGas.SetInt64(l)
-		dataGas.Mul(dataGas, big.NewInt(params.DataGasPerBlob))
-	}
-	return dataGas
+func (st *StateTransition) dataGasUsed() uint64 {
+	return uint64(len(st.msg.DataHashes())) * params.DataGasPerBlob
 }
