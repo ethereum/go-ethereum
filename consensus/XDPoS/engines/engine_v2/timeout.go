@@ -28,15 +28,14 @@ func (x *XDPoS_v2) timeoutHandler(blockChainReader consensus.ChainReader, timeou
 	log.Debug("[timeoutHandler] collect timeout", "number", numberOfTimeoutsInPool)
 
 	// Threshold reached
-	isThresholdReached := numberOfTimeoutsInPool >= x.config.V2.CurrentConfig.CertThreshold
+	certThreshold := x.config.V2.Config(uint64(x.currentRound)).CertThreshold
+	isThresholdReached := numberOfTimeoutsInPool >= certThreshold
 	if isThresholdReached {
 		log.Info(fmt.Sprintf("Timeout pool threashold reached: %v, number of items in the pool: %v", isThresholdReached, numberOfTimeoutsInPool))
 		err := x.onTimeoutPoolThresholdReached(blockChainReader, pooledTimeouts, timeout, timeout.GapNumber)
 		if err != nil {
 			return err
 		}
-		// clean up timeout message, regardless its GapNumber or round
-		x.timeoutPool.Clear()
 	}
 	return nil
 }
@@ -82,6 +81,11 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 					- Use the above public key to find out the xdc address
 					- Use the above xdc address to check against the master node list from step 1(For the received TC epoch)
 	*/
+	if timeoutCert == nil || timeoutCert.Signatures == nil {
+		log.Warn("[verifyTC] TC or TC signatures is Nil")
+		return utils.ErrInvalidTC
+	}
+
 	snap, err := x.getSnapshot(chain, timeoutCert.GapNumber, true)
 	if err != nil {
 		log.Error("[verifyTC] Fail to get snapshot when verifying TC!", "TCGapNumber", timeoutCert.GapNumber)
@@ -92,16 +96,21 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		return fmt.Errorf("Empty master node lists from snapshot")
 	}
 
-	if timeoutCert == nil {
-		log.Warn("[verifyTC] TC is Nil")
-		return utils.ErrInvalidTC
-	} else if timeoutCert.Signatures == nil || (len(timeoutCert.Signatures) < x.config.V2.CurrentConfig.CertThreshold) {
-		log.Warn("[verifyTC] Invalid TC Signature is nil or empty", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures))
-		return utils.ErrInvalidTC
+	signatures, duplicates := UniqueSignatures(timeoutCert.Signatures)
+	if len(duplicates) != 0 {
+		for _, d := range duplicates {
+			log.Warn("[verifyQC] duplicated signature in QC", "duplicate", common.Bytes2Hex(d))
+		}
+	}
+
+	certThreshold := x.config.V2.Config(uint64(timeoutCert.Round)).CertThreshold
+	if len(signatures) < certThreshold {
+		log.Warn("[verifyTC] Invalid TC Signature is nil or empty", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures), "CertThreshold", certThreshold)
+		return utils.ErrInvalidTCSignatures
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(timeoutCert.Signatures))
+	wg.Add(len(signatures))
 	var haveError error
 
 	signedTimeoutObj := types.TimeoutSigHash(&types.TimeoutForSign{
@@ -109,17 +118,17 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		GapNumber: timeoutCert.GapNumber,
 	})
 
-	for _, signature := range timeoutCert.Signatures {
+	for _, signature := range signatures {
 		go func(sig types.Signature) {
 			defer wg.Done()
 			verified, _, err := x.verifyMsgSignature(signedTimeoutObj, sig, snap.NextEpochMasterNodes)
 			if err != nil {
-				log.Error("[verifyTC] Error while verfying TC message signatures", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures), "Error", err)
+				log.Error("[verifyTC] Error while verfying TC message signatures", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(signatures), "Error", err)
 				haveError = fmt.Errorf("Error while verfying TC message signatures")
 				return
 			}
 			if !verified {
-				log.Warn("[verifyTC] Signature not verified doing TC verification", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures))
+				log.Warn("[verifyTC] Signature not verified doing TC verification", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(signatures))
 				haveError = fmt.Errorf("Fail to verify TC due to signature mis-match")
 				return
 			}

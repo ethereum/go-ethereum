@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInitialFirstV2Blcok(t *testing.T) {
+func TestInitialFirstV2Block(t *testing.T) {
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 900, params.TestXDPoSMockChainConfig, nil)
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
 	header := currentBlock.Header()
@@ -32,7 +32,7 @@ func TestInitialFirstV2Blcok(t *testing.T) {
 	expectedQuorumCert := &types.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, types.Round(1), round)
 	assert.Equal(t, expectedQuorumCert, highQC)
@@ -104,7 +104,7 @@ func TestInitialOtherV2Block(t *testing.T) {
 	expectedQuorumCert := &types.QuorumCert{
 		ProposedBlockInfo: blockInfo,
 		Signatures:        []types.Signature{},
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	assert.Equal(t, types.Round(11), round)
 	assert.Equal(t, expectedQuorumCert, highQC)

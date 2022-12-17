@@ -346,7 +346,8 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
 				log.Info("Update consensus parameters")
-				engine.UpdateParams()
+				chain := ethereum.BlockChain()
+				engine.UpdateParams(chain.CurrentHeader())
 				if common.IsTestnet {
 					ok, err = ethereum.ValidateMasternodeTestnet()
 					if err != nil {

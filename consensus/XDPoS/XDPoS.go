@@ -37,8 +37,8 @@ import (
 )
 
 const (
-	ExtraFieldCheck     = false
-	SkipExtraFieldCheck = true
+	ExtraFieldCheck     = true
+	SkipExtraFieldCheck = false
 )
 
 func (x *XDPoS) SigHash(header *types.Header) (hash common.Hash) {
@@ -79,7 +79,7 @@ func (x *XDPoS) SubscribeForensicsEvent(ch chan<- types.ForensicsEvent) event.Su
 // New creates a XDPoS delegated-proof-of-stake consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
-	log.Info("[New] initial conensus engines")
+	log.Info("[New] initialise consensus engines")
 	// Set any missing consensus parameters to their defaults
 	if config.Epoch == 0 {
 		config.Epoch = utils.EpochLength
@@ -88,9 +88,9 @@ func New(config *params.XDPoSConfig, db ethdb.Database) *XDPoS {
 	// For testing and testing project, default to mainnet config
 	if config.V2 == nil {
 		config.V2 = &params.V2{
-			FirstSwitchBlock: params.MainnetV2Configs[0].SwitchBlock,
-			CurrentConfig:    params.MainnetV2Configs[0],
-			AllConfigs:       params.MainnetV2Configs,
+			SwitchBlock:   params.XDCMainnetChainConfig.XDPoS.V2.SwitchBlock,
+			CurrentConfig: params.MainnetV2Configs[0],
+			AllConfigs:    params.MainnetV2Configs,
 		}
 	}
 
@@ -145,8 +145,14 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 }
 
 // Reset parameters after checkpoint due to config may change
-func (x *XDPoS) UpdateParams() {
-	x.EngineV2.UpdateParams()
+func (x *XDPoS) UpdateParams(header *types.Header) {
+	switch x.config.BlockConsensusVersion(header.Number, header.Extra, ExtraFieldCheck) {
+	case params.ConsensusEngineVersion2:
+		x.EngineV2.UpdateParams(header)
+		return
+	default: // Default "v1"
+		return
+	}
 }
 
 func (x *XDPoS) Initial(chain consensus.ChainReader, header *types.Header) error {

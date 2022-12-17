@@ -291,7 +291,7 @@ func (self *worker) update() {
 		// A real event arrived, process interesting content
 		select {
 		case v := <-WaitPeriodCh:
-			log.Info("[worker] update mine period", "period", v)
+			log.Info("[worker] update wait period", "period", v)
 			waitPeriod = v
 			timeout.Reset(time.Duration(waitPeriod) * time.Second)
 

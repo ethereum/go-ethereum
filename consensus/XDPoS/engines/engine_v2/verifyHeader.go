@@ -58,7 +58,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Number.Uint64() > x.config.V2.FirstSwitchBlock.Uint64() && parent.Time.Uint64()+uint64(x.config.V2.CurrentConfig.MinePeriod) > header.Time.Uint64() {
+	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+uint64(x.config.V2.CurrentConfig.MinePeriod) > header.Time.Uint64() {
 		return utils.ErrInvalidTimestamp
 	}
 

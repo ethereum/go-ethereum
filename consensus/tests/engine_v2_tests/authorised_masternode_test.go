@@ -83,13 +83,13 @@ func TestIsYourTurnConsensusV2(t *testing.T) {
 
 func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
 	// we skip test for v1 since it's hard to make a real genesis block
-	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 910, params.TestXDPoSMockChainConfig, nil)
+	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 909, params.TestXDPoSMockChainConfig, nil)
 	firstMinePeriod := blockchain.Config().XDPoS.V2.CurrentConfig.MinePeriod
 
 	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
-	blockNum := 911 // 911 is new config switch block
+	blockNum := 910 // 910 is new config switch block
 	blockCoinBase := "0x111000000000000000000000000000000123"
-	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 1, blockCoinBase, signer, signFn, nil, nil)
+	currentBlock = CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, blockNum, 10, blockCoinBase, signer, signFn, nil, nil)
 	currentBlockHeader := currentBlock.Header()
 	currentBlockHeader.Time = big.NewInt(time.Now().Unix())
 	err := blockchain.InsertBlock(currentBlock)
@@ -100,8 +100,11 @@ func TestIsYourTurnConsensusV2CrossConfig(t *testing.T) {
 	assert.Nil(t, err)
 	assert.False(t, isYourTurn)
 
+	adaptor.UpdateParams(currentBlockHeader) // it will be triggered automatically on the real code by other process
+
 	// after new mine period
 	secondMinePeriod := blockchain.Config().XDPoS.V2.CurrentConfig.MinePeriod
+
 	time.Sleep(time.Duration(secondMinePeriod-firstMinePeriod) * time.Second)
 	isYourTurn, err = adaptor.YourTurn(blockchain, currentBlockHeader, common.HexToAddress("xdc0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"))
 	assert.Nil(t, err)

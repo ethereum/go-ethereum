@@ -23,7 +23,7 @@ func TestHookRewardV2(t *testing.T) {
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
 	// set switch to 1800, so that it covers 901-1799, 1800-2700 two epochs
-	config.XDPoS.V2.FirstSwitchBlock.SetUint64(1800)
+	config.XDPoS.V2.SwitchBlock.SetUint64(1800)
 
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*5, &config, nil)
 
@@ -104,7 +104,7 @@ func TestHookRewardV2SplitReward(t *testing.T) {
 	err = json.Unmarshal([]byte(configString), &config)
 	assert.Nil(t, err)
 	// set switch to 1800, so that it covers 901-1799, 1800-2700 two epochs
-	config.XDPoS.V2.FirstSwitchBlock.SetUint64(1800)
+	config.XDPoS.V2.SwitchBlock.SetUint64(1800)
 
 	blockchain, _, _, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, int(config.XDPoS.Epoch)*3, &config, nil)
 

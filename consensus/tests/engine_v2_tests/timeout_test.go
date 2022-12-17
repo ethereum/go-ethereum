@@ -115,7 +115,7 @@ func TestTimeoutPeriodAndThreadholdConfigChange(t *testing.T) {
 	err := blockchain.InsertBlock(currentBlock)
 	assert.Nil(t, err)
 
-	engineV2.UpdateParams() // it will be triggered automatically on the real code by other process
+	engineV2.UpdateParams(currentBlockHeader) // it will be triggered automatically on the real code by other process
 
 	t.Log("waiting for another consecutive period")
 	// another consecutive period

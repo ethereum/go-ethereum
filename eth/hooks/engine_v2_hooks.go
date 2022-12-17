@@ -86,7 +86,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 
 		// get list check penalties signing block & list master nodes wil comeback
 		// start to calc comeback at v2 block + limitPenaltyEpochV2 to avoid reading v1 blocks
-		comebackHeight := (common.LimitPenaltyEpochV2+1)*chain.Config().XDPoS.Epoch + chain.Config().XDPoS.V2.FirstSwitchBlock.Uint64()
+		comebackHeight := (common.LimitPenaltyEpochV2+1)*chain.Config().XDPoS.Epoch + chain.Config().XDPoS.V2.SwitchBlock.Uint64()
 		penComebacks := []common.Address{}
 		if number.Uint64() > comebackHeight {
 			pens := adaptor.EngineV2.GetPreviousPenaltyByHash(chain, currentHash, common.LimitPenaltyEpochV2)
@@ -170,7 +170,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		}
 		rewards := make(map[string]interface{})
 		// skip hook reward if this is the first v2
-		if number == chain.Config().XDPoS.V2.FirstSwitchBlock.Uint64()+1 {
+		if number == chain.Config().XDPoS.V2.SwitchBlock.Uint64()+1 {
 			return rewards, nil
 		}
 		start := time.Now()
@@ -235,7 +235,7 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 		if err != nil {
 			return nil, err
 		}
-		if isEpochSwitch && i != chain.Config().XDPoS.V2.FirstSwitchBlock.Uint64()+1 {
+		if isEpochSwitch && i != chain.Config().XDPoS.V2.SwitchBlock.Uint64()+1 {
 			epochCount += 1
 			if epochCount == signEpochCount {
 				endBlockNumber = header.Number.Uint64() - 1

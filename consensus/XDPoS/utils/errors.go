@@ -87,7 +87,9 @@ var (
 
 	ErrInvalidV2Extra                = errors.New("Invalid v2 extra in the block")
 	ErrInvalidQC                     = errors.New("Invalid QC content")
+	ErrInvalidQCSignatures           = errors.New("Invalid QC Signatures")
 	ErrInvalidTC                     = errors.New("Invalid TC content")
+	ErrInvalidTCSignatures           = errors.New("Invalid TC Signatures")
 	ErrEmptyBlockInfoHash            = errors.New("BlockInfo hash is empty")
 	ErrInvalidFieldInNonEpochSwitch  = errors.New("Invalid field exist in a non-epoch swtich block")
 	ErrValidatorNotWithinMasternodes = errors.New("Validaotor address is not in the master node list")

@@ -19,8 +19,10 @@ package params
 import (
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 const (
@@ -39,7 +41,7 @@ var (
 var (
 	MainnetV2Configs = map[uint64]*V2Config{
 		Default: {
-			SwitchBlock:          big.NewInt(9999999999),
+			SwitchRound:          0,
 			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
@@ -47,7 +49,7 @@ var (
 			MinePeriod:           10,
 		},
 		9999999999: {
-			SwitchBlock:          big.NewInt(9999999999),
+			SwitchRound:          9999999999,
 			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        60,
@@ -57,31 +59,23 @@ var (
 	}
 	TestV2Configs = map[uint64]*V2Config{
 		Default: {
-			SwitchBlock:          big.NewInt(900),
+			SwitchRound:          0,
 			CertThreshold:        3,
 			TimeoutSyncThreshold: 2,
 			TimeoutPeriod:        4,
 			WaitPeriod:           1,
 			MinePeriod:           2,
 		},
-		900: {
-			SwitchBlock:          big.NewInt(900),
-			CertThreshold:        3,
-			TimeoutSyncThreshold: 2,
-			TimeoutPeriod:        4,
-			WaitPeriod:           1,
-			MinePeriod:           2,
-		},
-		910: {
-			SwitchBlock:          big.NewInt(910),
+		10: {
+			SwitchRound:          10,
 			CertThreshold:        5,
 			TimeoutSyncThreshold: 2,
 			TimeoutPeriod:        4,
 			WaitPeriod:           2,
 			MinePeriod:           3,
 		},
-		1799: {
-			SwitchBlock:          big.NewInt(1799),
+		899: {
+			SwitchRound:          899,
 			CertThreshold:        5,
 			TimeoutSyncThreshold: 4,
 			TimeoutPeriod:        5,
@@ -92,31 +86,23 @@ var (
 
 	DevnetV2Configs = map[uint64]*V2Config{
 		Default: {
-			SwitchBlock:          big.NewInt(7074000),
-			CertThreshold:        4,
-			TimeoutSyncThreshold: 5,
-			TimeoutPeriod:        10,
-			WaitPeriod:           5,
-			MinePeriod:           5,
-		},
-		7074000: {
-			SwitchBlock:          big.NewInt(7074000),
+			SwitchRound:          0,
 			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
 			WaitPeriod:           10,
 			MinePeriod:           10,
 		},
-		7224300: {
-			SwitchBlock:          big.NewInt(7224300),
+		151919: {
+			SwitchRound:          151919,
 			CertThreshold:        common.MaxMasternodesV2*1/2 + 1,
 			TimeoutSyncThreshold: 8,
 			TimeoutPeriod:        50,
 			WaitPeriod:           5,
 			MinePeriod:           20,
 		},
-		7242300: {
-			SwitchBlock:          big.NewInt(7242300),
+		171000: {
+			SwitchRound:          171000,
 			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
 			TimeoutSyncThreshold: 5,
 			TimeoutPeriod:        25,
@@ -142,9 +128,9 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2: &V2{
-				FirstSwitchBlock: MainnetV2Configs[0].SwitchBlock,
-				CurrentConfig:    MainnetV2Configs[0],
-				AllConfigs:       MainnetV2Configs,
+				SwitchBlock:   big.NewInt(9999999999),
+				CurrentConfig: MainnetV2Configs[0],
+				AllConfigs:    MainnetV2Configs,
 			},
 		},
 	}
@@ -184,7 +170,7 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				FirstSwitchBlock: TestV2Configs[0].SwitchBlock,
+				SwitchBlock:      big.NewInt(900),
 				CurrentConfig:    TestV2Configs[0],
 				AllConfigs:       TestV2Configs,
 				SkipV2Validation: true,
@@ -209,9 +195,9 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("0x746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				FirstSwitchBlock: DevnetV2Configs[0].SwitchBlock,
-				CurrentConfig:    DevnetV2Configs[0],
-				AllConfigs:       DevnetV2Configs,
+				SwitchBlock:   big.NewInt(7074000),
+				CurrentConfig: DevnetV2Configs[0],
+				AllConfigs:    DevnetV2Configs,
 			},
 		},
 	}
@@ -232,9 +218,9 @@ var (
 			Period: 15,
 			Epoch:  30000,
 			V2: &V2{
-				FirstSwitchBlock: MainnetV2Configs[0].SwitchBlock,
-				CurrentConfig:    MainnetV2Configs[0],
-				AllConfigs:       MainnetV2Configs,
+				SwitchBlock:   big.NewInt(9999999999),
+				CurrentConfig: MainnetV2Configs[0],
+				AllConfigs:    MainnetV2Configs,
 			},
 		},
 	}
@@ -275,9 +261,9 @@ var (
 			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
 			Reward:              250,
 			V2: &V2{
-				FirstSwitchBlock: TestV2Configs[0].SwitchBlock,
-				CurrentConfig:    TestV2Configs[0],
-				AllConfigs:       TestV2Configs,
+				SwitchBlock:   big.NewInt(900),
+				CurrentConfig: TestV2Configs[0],
+				AllConfigs:    TestV2Configs,
 			},
 		},
 	}
@@ -347,27 +333,78 @@ type XDPoSConfig struct {
 }
 
 type V2 struct {
-	FirstSwitchBlock *big.Int             `json:"switchBlock"`
-	CurrentConfig    *V2Config            `json:"config"`
-	AllConfigs       map[uint64]*V2Config `json:"allConfigs"`
-	configIndex      []uint64             //list of switch block of configs
-	SkipV2Validation bool                 //Skip Block Validation for testing purpose, V2 consensus only
+	lock sync.RWMutex // Protects the signer fields
+
+	SwitchBlock   *big.Int             `json:"switchBlock"`
+	CurrentConfig *V2Config            `json:"config"`
+	AllConfigs    map[uint64]*V2Config `json:"allConfigs"`
+	configIndex   []uint64             //list of switch block of configs
+
+	SkipV2Validation bool //Skip Block Validation for testing purpose, V2 consensus only
 }
 
 type V2Config struct {
-	WaitPeriod           int      `json:"waitPeriod"`           // Miner wait period to check mine event
-	MinePeriod           int      `json:"minePeriod"`           // Miner mine period to mine a block
-	SwitchBlock          *big.Int `json:"switchBlock"`          // v1 to v2 switch block number
-	TimeoutSyncThreshold int      `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
-	TimeoutPeriod        int      `json:"timeoutPeriod"`        // Duration in ms
-	CertThreshold        int      `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
+	SwitchRound          uint64 `json:"switchRound"`          // v1 to v2 switch block number
+	WaitPeriod           int    `json:"waitPeriod"`           // Miner wait period to check mine event
+	MinePeriod           int    `json:"minePeriod"`           // Miner mine period to mine a block
+	TimeoutSyncThreshold int    `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
+	TimeoutPeriod        int    `json:"timeoutPeriod"`        // Duration in ms
+	CertThreshold        int    `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
 }
 
-// String implements the stringer interface, returning the consensus engine details.
-func (c *XDPoSConfig) BuildConfigIndex() {
+func (c *XDPoSConfig) String() string {
+	return "XDPoS"
+}
+
+func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, extraCheck bool) string {
+	if extraCheck && (len(extraByte) == 0 || extraByte[0] != 2) {
+		return ConsensusEngineVersion1
+	}
+
+	if c.V2 != nil && c.V2.SwitchBlock != nil && num.Cmp(c.V2.SwitchBlock) > 0 {
+		return ConsensusEngineVersion2
+	}
+	return ConsensusEngineVersion1
+}
+
+func (v *V2) UpdateConfig(round uint64) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	var index uint64
+
+	//find the right config
+	for i := range v.configIndex {
+		if v.configIndex[i] <= round {
+			index = v.configIndex[i]
+		} else {
+			break
+		}
+	}
+	// update to current config
+	log.Info("[updateV2Config] Update config", "index", index, "round", round, "SwitchRound", v.AllConfigs[index].SwitchRound)
+	v.CurrentConfig = v.AllConfigs[index]
+}
+
+func (v *V2) Config(round uint64) *V2Config {
+	configRound := round - 1 //start from next block from SwitchRound number
+	var index uint64
+
+	//find the right config
+	for i := range v.configIndex {
+		if v.configIndex[i] <= configRound {
+			index = v.configIndex[i]
+		} else {
+			break
+		}
+	}
+	return v.AllConfigs[index]
+}
+
+func (v *V2) BuildConfigIndex() {
 	var list []uint64
 
-	for i := range c.V2.AllConfigs {
+	for i := range v.AllConfigs {
 		list = append(list, i)
 	}
 
@@ -379,40 +416,12 @@ func (c *XDPoSConfig) BuildConfigIndex() {
 			}
 		}
 	}
-	c.V2.configIndex = list
+	log.Info("[BuildConfigIndex] config list", "list", list)
+	v.configIndex = list
 }
 
-func (c *XDPoSConfig) String() string {
-	return "XDPoS"
-}
-
-func (c *XDPoSConfig) updateV2Config(num uint64) {
-	var index uint64
-
-	//find the right config
-	for i := range c.V2.configIndex {
-		if c.V2.configIndex[i] <= num {
-			index = c.V2.configIndex[i]
-		} else {
-			break
-		}
-	}
-	// update to current config
-	c.V2.CurrentConfig = c.V2.AllConfigs[index]
-}
-
-func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, skipExtraCheck bool) string {
-	if !skipExtraCheck && (len(extraByte) == 0 || extraByte[0] != 2) {
-		return ConsensusEngineVersion1
-	}
-
-	if c.V2 != nil && c.V2.FirstSwitchBlock != nil && num.Cmp(c.V2.FirstSwitchBlock) > 0 {
-		// We have to check each block configuration due to reorg chain case
-		// Block may get rollback and old config need to apply to verify block
-		c.updateV2Config(num.Uint64() - 1)
-		return ConsensusEngineVersion2
-	}
-	return ConsensusEngineVersion1
+func (v *V2) ConfigIndex() []uint64 {
+	return v.configIndex
 }
 
 // String implements the fmt.Stringer interface.

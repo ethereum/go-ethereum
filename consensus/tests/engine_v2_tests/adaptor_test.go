@@ -66,7 +66,7 @@ func TestAdaptorGetMasternodesFromCheckpointHeader(t *testing.T) {
 	headerV1.Extra = common.Hex2Bytes("d7830100018358444388676f312e31352e38856c696e757800000000000000000278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758ccef312ee5eea8d7bad5374c6a652150515d744508b61c1a4deb4e4e7bf057e4e3824c11fd2569bcb77a52905cda63b5a58507910bed335e4c9d87ae0ecdfafd400")
 	masternodesV1 := adaptor.GetMasternodesFromCheckpointHeader(headerV1)
 	headerV2 := currentBlock.Header()
-	headerV2.Number.Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(1))
+	headerV2.Number.Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(1))
 	headerV2.Validators = common.Hex2Bytes("0278c350152e15fa6ffc712a5a73d704ce73e2e103d9e17ae3ff2c6712e44e25b09ac5ee91f6c9ff065551f0dcac6f00cae11192d462db709be3758c")
 	headerV2.Extra = []byte{2}
 	masternodesV2 := adaptor.GetMasternodesFromCheckpointHeader(headerV2)
@@ -91,12 +91,12 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	parentBlockInfo := &types.BlockInfo{
 		Hash:   header.ParentHash,
 		Round:  types.Round(0),
-		Number: big.NewInt(0).Set(blockchain.Config().XDPoS.V2.FirstSwitchBlock),
+		Number: big.NewInt(0).Set(blockchain.Config().XDPoS.V2.SwitchBlock),
 	}
 	quorumCert := &types.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	extra := types.ExtraFields_v2{
 		Round:      1,
@@ -105,19 +105,19 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	extraBytes, err := extra.EncodeToBytes()
 	assert.Nil(t, err)
 	header.Extra = extraBytes
-	header.Number.Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(1))
+	header.Number.Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(1))
 	isEpochSwitchBlock, _, err = adaptor.IsEpochSwitch(header)
 	assert.Nil(t, err)
 	assert.True(t, isEpochSwitchBlock, "header should be epoch switch", header)
 	parentBlockInfo = &types.BlockInfo{
 		Hash:   header.ParentHash,
 		Round:  types.Round(1),
-		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(1)),
+		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(1)),
 	}
 	quorumCert = &types.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	extra = types.ExtraFields_v2{
 		Round:      2,
@@ -126,19 +126,19 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	extraBytes, err = extra.EncodeToBytes()
 	assert.Nil(t, err)
 	header.Extra = extraBytes
-	header.Number.Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(2))
+	header.Number.Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(2))
 	isEpochSwitchBlock, _, err = adaptor.IsEpochSwitch(header)
 	assert.Nil(t, err)
 	assert.False(t, isEpochSwitchBlock, "header should not be epoch switch", header)
 	parentBlockInfo = &types.BlockInfo{
 		Hash:   header.ParentHash,
 		Round:  types.Round(blockchain.Config().XDPoS.Epoch) - 1,
-		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(100)),
+		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(100)),
 	}
 	quorumCert = &types.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	extra = types.ExtraFields_v2{
 		Round:      types.Round(blockchain.Config().XDPoS.Epoch) + 1,
@@ -147,19 +147,19 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	extraBytes, err = extra.EncodeToBytes()
 	assert.Nil(t, err)
 	header.Extra = extraBytes
-	header.Number.Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(101))
+	header.Number.Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(101))
 	isEpochSwitchBlock, _, err = adaptor.IsEpochSwitch(header)
 	assert.Nil(t, err)
 	assert.True(t, isEpochSwitchBlock, "header should be epoch switch", header)
 	parentBlockInfo = &types.BlockInfo{
 		Hash:   header.ParentHash,
 		Round:  types.Round(blockchain.Config().XDPoS.Epoch) + 1,
-		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(100)),
+		Number: big.NewInt(0).Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(100)),
 	}
 	quorumCert = &types.QuorumCert{
 		ProposedBlockInfo: parentBlockInfo,
 		Signatures:        nil,
-		GapNumber:         blockchain.Config().XDPoS.V2.FirstSwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
+		GapNumber:         blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() - blockchain.Config().XDPoS.Gap,
 	}
 	extra = types.ExtraFields_v2{
 		Round:      types.Round(blockchain.Config().XDPoS.Epoch) + 2,
@@ -168,7 +168,7 @@ func TestAdaptorIsEpochSwitch(t *testing.T) {
 	extraBytes, err = extra.EncodeToBytes()
 	assert.Nil(t, err)
 	header.Extra = extraBytes
-	header.Number.Add(blockchain.Config().XDPoS.V2.FirstSwitchBlock, big.NewInt(101))
+	header.Number.Add(blockchain.Config().XDPoS.V2.SwitchBlock, big.NewInt(101))
 	isEpochSwitchBlock, _, err = adaptor.IsEpochSwitch(header)
 	assert.Nil(t, err)
 	assert.False(t, isEpochSwitchBlock, "header should not be epoch switch", header)

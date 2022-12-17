@@ -127,7 +127,7 @@ func (x *XDPoS_v2) getExtraFields(header *types.Header) (*types.QuorumCert, type
 	var masternodes []common.Address
 
 	// last v1 block
-	if header.Number.Cmp(x.config.V2.FirstSwitchBlock) == 0 {
+	if header.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		masternodes = decodeMasternodesFromHeaderExtra(header)
 		return nil, types.Round(0), masternodes, nil
 	}

@@ -321,7 +321,6 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
 	config := params.XDCMainnetChainConfig
-	config.XDPoS.V2 = nil
 	return &Genesis{
 		Config:     config,
 		Nonce:      0,

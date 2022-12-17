@@ -302,7 +302,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 	}
 
 	// Inject the hardcoded master node list for the last v1 epoch block and all v1 epoch switch blocks (excluding genesis)
-	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.FirstSwitchBlock) == 0 || blockNumber%int(chainConfig.XDPoS.Epoch) == 0 {
+	if big.NewInt(int64(blockNumber)).Cmp(chainConfig.XDPoS.V2.SwitchBlock) == 0 || blockNumber%int(chainConfig.XDPoS.Epoch) == 0 {
 		// reset extra
 		header.Extra = []byte{}
 		if len(header.Extra) < utils.ExtraVanity {

@@ -75,7 +75,8 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 	go x.ForensicsProcessor.DetectEquivocationInVotePool(voteMsg, x.votePool)
 	go x.ForensicsProcessor.ProcessVoteEquivocation(chain, x, voteMsg)
 
-	thresholdReached := numberOfVotesInPool >= x.config.V2.CurrentConfig.CertThreshold
+	certThreshold := x.config.V2.Config(uint64(voteMsg.ProposedBlockInfo.Round)).CertThreshold
+	thresholdReached := numberOfVotesInPool >= certThreshold
 	if thresholdReached {
 		log.Info(fmt.Sprintf("[voteHandler] Vote pool threashold reached: %v, number of items in the pool: %v", thresholdReached, numberOfVotesInPool))
 
@@ -113,46 +114,48 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 	// Filter out non-Master nodes signatures
 	var wg sync.WaitGroup
 	wg.Add(len(pooledVotes))
-	signatureSlice := make([]types.Signature, len(pooledVotes))
+	signatures := make([]types.Signature, len(pooledVotes))
 	counter := 0
 	for h, vote := range pooledVotes {
 		go func(hash common.Hash, v *types.Vote, i int) {
 			defer wg.Done()
-			verified, _, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
+			signedVote := types.VoteSigHash(&types.VoteForSign{
 				ProposedBlockInfo: v.ProposedBlockInfo,
 				GapNumber:         v.GapNumber,
-			}), v.Signature, masternodes)
+			})
+			verified, _, err := x.verifyMsgSignature(signedVote, v.Signature, masternodes)
 			if err != nil {
-				log.Warn("[onVotePoolThresholdReached] Skip not verified vote signatures when building QC", "Error", err.Error())
+				log.Warn("[onVotePoolThresholdReached] Skip not verified vote signatures when building QC", "error", err.Error())
 			} else if !verified {
 				log.Warn("[onVotePoolThresholdReached] Skip not verified vote signatures when building QC", "verified", verified)
 			} else {
-				signatureSlice[i] = v.Signature
+				signatures[i] = v.Signature
 			}
 		}(h, vote.(*types.Vote), counter)
 		counter++
 	}
 	wg.Wait()
 	elapsed := time.Since(start)
-	log.Info("[onVotePoolThresholdReached] verify message signatures of vote pool took", "elapsed", elapsed)
+	log.Debug("[onVotePoolThresholdReached] verify message signatures of vote pool took", "elapsed", elapsed)
 
 	// The signature list may contain empty entey. we only care the ones with values
-	var validSignatureSlice []types.Signature
-	for _, v := range signatureSlice {
+	var validSignatures []types.Signature
+	for _, v := range signatures {
 		if len(v) != 0 {
-			validSignatureSlice = append(validSignatureSlice, v)
+			validSignatures = append(validSignatures, v)
 		}
 	}
 
 	// Skip and wait for the next vote to process again if valid votes is less than what we required
-	if len(validSignatureSlice) < x.config.V2.CurrentConfig.CertThreshold {
-		log.Warn("[onVotePoolThresholdReached] Not enough valid signatures to generate QC", "VotesSignaturesAfterFilter", validSignatureSlice, "NumberOfValidVotes", len(validSignatureSlice), "NumberOfVotes", len(pooledVotes))
+	certThreshold := x.config.V2.Config(uint64(currentVoteMsg.(*types.Vote).ProposedBlockInfo.Round)).CertThreshold
+	if len(validSignatures) < certThreshold {
+		log.Warn("[onVotePoolThresholdReached] Not enough valid signatures to generate QC", "VotesSignaturesAfterFilter", validSignatures, "NumberOfValidVotes", len(validSignatures), "NumberOfVotes", len(pooledVotes))
 		return nil
 	}
 	// Genrate QC
 	quorumCert := &types.QuorumCert{
 		ProposedBlockInfo: currentVoteMsg.(*types.Vote).ProposedBlockInfo,
-		Signatures:        validSignatureSlice,
+		Signatures:        validSignatures,
 		GapNumber:         currentVoteMsg.(*types.Vote).GapNumber,
 	}
 	err := x.processQC(chain, quorumCert)

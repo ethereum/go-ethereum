@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -78,4 +80,40 @@ func TestCheckCompatible(t *testing.T) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nhead: %v\nerr: %v\nwant: %v", test.stored, test.new, test.head, err, test.wantErr)
 		}
 	}
+}
+
+func TestUpdateV2Config(t *testing.T) {
+	TestnetChainConfig.XDPoS.V2.BuildConfigIndex()
+	c := TestnetChainConfig.XDPoS.V2.CurrentConfig
+	assert.Equal(t, 3, c.CertThreshold)
+
+	TestnetChainConfig.XDPoS.V2.UpdateConfig(10)
+	c = TestnetChainConfig.XDPoS.V2.CurrentConfig
+	assert.Equal(t, 5, c.CertThreshold)
+
+	TestnetChainConfig.XDPoS.V2.UpdateConfig(899)
+	c = TestnetChainConfig.XDPoS.V2.CurrentConfig
+	assert.Equal(t, 4, c.TimeoutSyncThreshold)
+}
+
+func TestV2Config(t *testing.T) {
+	TestnetChainConfig.XDPoS.V2.BuildConfigIndex()
+	c := TestnetChainConfig.XDPoS.V2.Config(1)
+	assert.Equal(t, 3, c.CertThreshold)
+
+	c = TestnetChainConfig.XDPoS.V2.Config(5)
+	assert.Equal(t, 3, c.CertThreshold)
+
+	c = TestnetChainConfig.XDPoS.V2.Config(10)
+	assert.Equal(t, 3, c.CertThreshold)
+
+	c = TestnetChainConfig.XDPoS.V2.Config(11)
+	assert.Equal(t, 5, c.CertThreshold)
+}
+
+func TestBuildConfigIndex(t *testing.T) {
+	TestnetChainConfig.XDPoS.V2.BuildConfigIndex()
+	index := TestnetChainConfig.XDPoS.V2.ConfigIndex()
+	expected := []uint64{0, 10, 899}
+	assert.Equal(t, expected, index)
 }
