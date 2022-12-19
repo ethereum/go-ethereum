@@ -40,7 +40,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
         {}
       )
     );
-  }, [asPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [asPath, navLinks]);
   return (
     <Stack border='2px' borderColor='primary'>
       {navLinks.map(({ id, to, items }, idx) => {
