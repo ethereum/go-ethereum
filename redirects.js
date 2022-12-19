@@ -171,7 +171,7 @@ const redirects = [
   },
   {
     source: '/docs/rpc/objects',
-    destination: '/',
+    destination: '/docs',
     permanent: true
   },
   {
