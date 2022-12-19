@@ -357,9 +357,6 @@ func (t *jsTracer) Stop(err error) {
 	t.vm.Interrupt(err)
 }
 
-// IsJS returns whether this tracer evaluates JS code.
-func (t *jsTracer) IsJS() bool { return true }
-
 // onError is called anytime the running JS code is interrupted
 // and returns an error. It in turn pings the EVM to cancel its
 // execution.
