@@ -144,7 +144,7 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	case "name", "symbol":
 		return method.Outputs.PackValues([]interface{}{"ETH"})
 	case "decimals":
-		return method.Outputs.PackValues([]interface{}{18})
+		return method.Outputs.PackValues([]interface{}{uint8(18)})
 	case "totalSupply":
 		return method.Outputs.PackValues([]interface{}{120 * 1_000_000 * 18})
 	}
