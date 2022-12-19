@@ -569,8 +569,14 @@ func (t *Trie) Hash() common.Hash {
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *NodeSet, error) {
 	defer t.tracer.reset()
 
+	// Trie is empty and can be classified into two types of situations:
+	// - The trie was empty and no update happens
+	// - The trie was non-empty and all nodes are dropped
 	if t.root == nil {
-		return emptyRoot, nil, nil
+		// Wrap tracked deletions as the return
+		set := NewNodeSet(t.owner)
+		t.tracer.markDeletions(set)
+		return emptyRoot, set, nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.

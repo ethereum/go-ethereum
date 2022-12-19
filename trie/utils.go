@@ -178,3 +178,22 @@ func (t *tracer) copy() *tracer {
 		origin: origin,
 	}
 }
+
+// markDeletions puts all tracked deletions into the provided nodeset.
+func (t *tracer) markDeletions(set *NodeSet) {
+	// Tracer isn't used right now, remove this check later.
+	if t == nil {
+		return
+	}
+	for _, path := range t.deleteList() {
+		// There are a few possibilities for this scenario(the node is deleted
+		// but not present in database previously), for example the node was
+		// embedded in the parent and now deleted from the trie. In this case
+		// it's noop from database's perspective.
+		val := t.getPrev(path)
+		if len(val) == 0 {
+			continue
+		}
+		set.markDeleted(path, val)
+	}
+}
