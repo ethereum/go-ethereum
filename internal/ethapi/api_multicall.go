@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -142,11 +143,11 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	}
 	switch method.Name {
 	case "name", "symbol":
-		return method.Outputs.PackValues([]interface{}{"ETH"})
+		return method.Outputs.Pack("ETH")
 	case "decimals":
-		return method.Outputs.PackValues([]interface{}{uint8(18)})
+		return method.Outputs.Pack(uint8(18))
 	case "totalSupply":
-		return method.Outputs.PackValues([]interface{}{120 * 1_000_000 * 18})
+		return method.Outputs.Pack(big.NewInt(120 * 1_000_000 * 18))
 	}
 
 	if method.Name == "balanceOf" {
