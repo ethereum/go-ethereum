@@ -41,14 +41,16 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
       )
     );
   }, [asPath, navLinks]);
+
+  const handleSectionToggle = (id: string): void => {
+    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <Stack border='2px' borderColor='primary'>
       {navLinks.map(({ id, to, items }, idx) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
-        const handleToggle = () => {
-          setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
-        };
         return (
           <Accordion key={id} index={openSections[id] ? 0 : -1} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
@@ -62,7 +64,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                     placeContent='flex-end'
                     bg='button-bg'
                     data-group
-                    onClick={handleToggle}
+                    onClick={() => handleSectionToggle(id)}
                   >
                     <Stack
                       p={4}
