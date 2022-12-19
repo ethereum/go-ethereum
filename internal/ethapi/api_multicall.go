@@ -142,11 +142,11 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	}
 	switch method.Name {
 	case "name", "symbol":
-		return method.Outputs.Pack("ETH")
+		return method.Outputs.PackValues([]interface{}{"ETH"})
 	case "decimals":
-		return method.Outputs.Pack(18)
+		return method.Outputs.PackValues([]interface{}{18})
 	case "totalSupply":
-		return method.Outputs.Pack(120 * 1_000_000 * 18)
+		return method.Outputs.PackValues([]interface{}{120 * 1_000_000 * 18})
 	}
 
 	if method.Name == "balanceOf" {
