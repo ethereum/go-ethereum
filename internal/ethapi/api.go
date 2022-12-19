@@ -1012,17 +1012,6 @@ func (e *revertError) ErrorData() interface{} {
 	return e.reason
 }
 
-func (s *BlockChainAPI) ethCallCacheBlockNr(blockNrOrHash rpc.BlockNumberOrHash) int64 {
-	var blockNr int64
-	if n, ok := blockNrOrHash.Number(); ok {
-		blockNr = n.Int64()
-		if n == rpc.LatestBlockNumber || n == rpc.PendingBlockNumber {
-			blockNr = s.b.CurrentBlock().Header().Number.Int64()
-		}
-	}
-	return blockNr
-}
-
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.

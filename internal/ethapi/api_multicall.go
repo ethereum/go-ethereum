@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -63,6 +64,61 @@ var (
 	errCancelled = fmt.Errorf("execution aborted (timeout = %v)", singleCallTimeout)
 )
 
+const (
+	nativeAddr = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+)
+
+var (
+	// copied from: accounts/abi/abi_test.go
+	Uint8, _   = abi.NewType("uint8", "", nil)
+	Uint256, _ = abi.NewType("uint256", "", nil)
+	String, _  = abi.NewType("string", "", nil)
+	Address, _ = abi.NewType("address", "", nil)
+
+	erc20ABI = abi.ABI{
+		Methods: map[string]abi.Method{
+			"name":        funcName,
+			"symbol":      funcSymbol,
+			"decimals":    funcDecimals,
+			"totalSupply": funcTotalSupply,
+			"balanceOf":   funcBalanceOf,
+		},
+	}
+
+	funcName = abi.NewMethod("name", "name", abi.Function, "", false, false,
+		[]abi.Argument{},
+		[]abi.Argument{
+			{Name: "", Type: String, Indexed: false},
+		},
+	)
+	funcSymbol = abi.NewMethod("symbol", "symbol", abi.Function, "", false, false,
+		[]abi.Argument{},
+		[]abi.Argument{
+			{Name: "", Type: String, Indexed: false},
+		},
+	)
+	funcDecimals = abi.NewMethod("decimals", "decimals", abi.Function, "", false, false,
+		[]abi.Argument{},
+		[]abi.Argument{
+			{Name: "", Type: Uint8, Indexed: false},
+		},
+	)
+	funcTotalSupply = abi.NewMethod("totalSupply", "totalSupply", abi.Function, "", false, false,
+		[]abi.Argument{},
+		[]abi.Argument{
+			{Name: "", Type: Uint256, Indexed: false},
+		},
+	)
+	funcBalanceOf = abi.NewMethod("balanceOf", "balanceOf", abi.Function, "", false, false,
+		[]abi.Argument{
+			{Name: "", Type: Address, Indexed: false},
+		},
+		[]abi.Argument{
+			{Name: "", Type: Uint256, Indexed: false},
+		},
+	)
+)
+
 func ethCallCacheKey(b Backend, blockHash common.Hash, to *common.Address, input []byte) string {
 	var sb strings.Builder
 
@@ -76,6 +132,40 @@ func ethCallCacheKey(b Backend, blockHash common.Hash, to *common.Address, input
 	sb.Write(bs)
 
 	return sb.String()
+}
+
+func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) ([]byte, error) {
+	data := msg.Data()
+	method, err := erc20ABI.MethodById(data)
+	if err != nil {
+		return []byte("0x"), err
+	}
+	switch method.Name {
+	case "name", "symbol":
+		return method.Outputs.Pack("ETH")
+	case "decimals":
+		return method.Outputs.Pack(18)
+	case "totalSupply":
+		return method.Outputs.Pack(120 * 1_000_000 * 18)
+	}
+
+	if method.Name == "balanceOf" {
+		inputs, err := method.Inputs.Unpack(data[4:])
+		if err != nil || len(inputs) == 0 {
+			return []byte("0x"), fmt.Errorf("input error")
+		}
+		address, ok := inputs[0].(common.Address)
+		if !ok {
+			return []byte("0x"), fmt.Errorf("input address parse error")
+		}
+		balance, err := method.Outputs.Pack(state.GetBalance(address))
+		if err != nil {
+			return []byte("0x"), err
+		}
+		return balance, state.Error()
+	}
+
+	return []byte("0x"), nil
 }
 
 func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *types.Header, arg TransactionArgs, disableCache bool) (*callResult, error) {
@@ -108,7 +198,6 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 		result.TimeCost = time.Since(start).Seconds()
 	}()
 
-	// Get a new instance of the EVM.
 	msg, err := arg.ToMessage(b.RPCGasCap(), header.BaseFee)
 	if err != nil {
 		result.Code = errParam
@@ -116,6 +205,15 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 		return result, err
 	}
 
+	// skip EVM if requests for native token
+	if strings.ToLower(msg.To().Hex()) == nativeAddr {
+		result.Result, err = handleNative(ctx, state, msg)
+		result.Code = errLogic
+		result.Err = err.Error()
+		return result, err
+	}
+
+	// Get a new instance of the EVM.
 	evm, _, _ := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true}) // never return error
 
 	// Wait for the context to be done and cancel the evm. Even if the
