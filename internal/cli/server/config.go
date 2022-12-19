@@ -722,7 +722,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		for i, account := range c.Accounts.Unlock {
 			err = ks.Unlock(accounts.Account{Address: common.HexToAddress(account)}, passwords[i])
 			if err != nil {
-				return nil, fmt.Errorf("could not unlock an account %q", account)
+				log.Warn("Could not unlock account", "account", account, "err", err)
 			}
 		}
 	}
