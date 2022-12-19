@@ -139,7 +139,7 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	data := msg.Data()
 	method, err := erc20ABI.MethodById(data)
 	if err != nil {
-		return []byte("0x"), err
+		return nil, err
 	}
 	switch method.Name {
 	case "name", "symbol":
@@ -153,20 +153,21 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	if method.Name == "balanceOf" {
 		inputs, err := method.Inputs.Unpack(data[4:])
 		if err != nil || len(inputs) == 0 {
-			return []byte("0x"), fmt.Errorf("input error")
+			return nil, fmt.Errorf("input error")
 		}
 		address, ok := inputs[0].(common.Address)
 		if !ok {
-			return []byte("0x"), fmt.Errorf("input address parse error")
+			return nil, fmt.Errorf("input address parse error")
 		}
 		balance, err := method.Outputs.Pack(state.GetBalance(address))
 		if err != nil {
-			return []byte("0x"), err
+			return nil, err
 		}
 		return balance, state.Error()
 	}
 
-	return []byte("0x"), nil
+	// should never reach here
+	return nil, fmt.Errorf("unsupported method")
 }
 
 func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *types.Header, arg TransactionArgs, disableCache bool) (*callResult, error) {
