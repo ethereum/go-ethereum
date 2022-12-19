@@ -16,6 +16,7 @@ import { useRouter } from 'next/router';
 import { LinksList } from './';
 
 import { NavLink } from '../../../types';
+import { checkNavLinks } from '../../../utils';
 
 interface Props {
   navLinks: NavLink[];
@@ -23,15 +24,16 @@ interface Props {
 }
 
 export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
-  const router = useRouter();
-  const { slug } = router.query;
+  const { asPath, query: { slug } }  = useRouter();
   return (
     <Stack border='2px' borderColor='primary'>
       {navLinks.map(({ id, to, items }, idx) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
+        const isSectionActive = checkNavLinks({ to, items, pathCheck: asPath.split('#')[0] })
+
         return (
-          <Accordion key={id} allowToggle mt='0 !important'>
+          <Accordion key={id} defaultIndex={isSectionActive ? 0 : -1} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
