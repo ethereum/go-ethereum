@@ -208,8 +208,10 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 	// skip EVM if requests for native token
 	if strings.ToLower(msg.To().Hex()) == nativeAddr {
 		result.Result, err = handleNative(ctx, state, msg)
-		result.Code = errLogic
-		result.Err = err.Error()
+		if err != nil {
+			result.Code = errLogic
+			result.Err = err.Error()
+		}
 		return result, err
 	}
 
