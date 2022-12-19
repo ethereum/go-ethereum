@@ -611,11 +611,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	// process that generates states in one thread and traces txes
 	// in separate worker threads.
 	if config != nil && config.Tracer != nil && *config.Tracer != "" {
-		t, err := New(*config.Tracer, nil, nil)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := t.(JSTracer); ok {
+		if isJS := DefaultDirectory.IsJS(*config.Tracer); isJS {
 			return api.traceBlockParallel(ctx, block, statedb, config)
 		}
 	}
@@ -967,7 +963,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	// Default tracer is the struct logger
 	tracer = logger.NewStructLogger(config.Config)
 	if config.Tracer != nil {
-		tracer, err = New(*config.Tracer, txctx, config.TracerConfig)
+		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig)
 		if err != nil {
 			return nil, err
 		}
