@@ -263,9 +263,11 @@ func (s *stateObject) SetState(db Database, key, value common.Hash) {
 //
 // Note this function should only be used for debugging purpose.
 //
-//@deprecated use SetState per item instead. This method no longer fully replaces
-// all slots.
 func (s *stateObject) SetStorage(db Database, storage map[common.Hash]common.Hash) {
+	// We set the root to empty root, to make prevent GetCommittedState from
+	// reading the original data, it should thus only have access to what is
+	// set in the loop below.
+	s.data.Root = emptyRoot
 	for k, v := range storage {
 		s.SetState(db, k, v)
 	}
