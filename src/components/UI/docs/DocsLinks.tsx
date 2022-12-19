@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { FC, useEffect, useState } from 'react';
 import {
   Accordion,
   AccordionButton,
@@ -24,16 +24,33 @@ interface Props {
 }
 
 export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
-  const { asPath, query: { slug } }  = useRouter();
+  const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({});
+  const {
+    asPath,
+    query: { slug }
+  } = useRouter();
+
+  useEffect(() => {
+    setOpenSections(
+      navLinks.reduce(
+        (acc, navLink) => ({
+          ...acc,
+          [navLink.id]: checkNavLinks({ items: navLink.items, pathCheck: asPath })
+        }),
+        {}
+      )
+    );
+  }, [asPath]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Stack border='2px' borderColor='primary'>
       {navLinks.map(({ id, to, items }, idx) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
-        const isSectionActive = checkNavLinks({ to, items, pathCheck: asPath.split('#')[0] })
-
+        const handleToggle = () => {
+          setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+        };
         return (
-          <Accordion key={id} defaultIndex={isSectionActive ? 0 : -1} allowToggle mt='0 !important'>
+          <Accordion key={id} index={openSections[id] ? 0 : -1} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
@@ -45,6 +62,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                     placeContent='flex-end'
                     bg='button-bg'
                     data-group
+                    onClick={handleToggle}
                   >
                     <Stack
                       p={4}
