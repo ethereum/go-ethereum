@@ -155,7 +155,6 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 		return nil, nil, nil, err
 	}
 
-	traceResult, err := tracer.GetResult()
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -181,7 +180,12 @@ func applyTransactionWithResult(msg types.Message, config *params.ChainConfig, b
 	receipt.BlockHash = header.Hash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	return receipt, result, traceResult, err
+
+	if tracer != nil {
+		traceResult, err := tracer.GetResult()
+		return receipt, result, traceResult, err
+	}
+	return receipt, result, nil, err
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
@@ -197,6 +201,18 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
 	return applyTransaction(msg, config, author, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
+}
+
+func ApplyTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, error) {
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	receipt, result, _, err := applyTransactionWithResult(msg, config, bc, author, gp, statedb, header, msg, usedGas, vmenv, nil)
+	return receipt, result, err
 }
 
 func ApplyUnsignedTransactionWithResult(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, msg types.Message, usedGas *uint64, cfg vm.Config) (*types.Receipt, *ExecutionResult, interface{}, error) {
