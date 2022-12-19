@@ -308,8 +308,7 @@ func (s *BlockChainAPI) MultiCall(ctx context.Context, args []TransactionArgs, b
 				defer wg.Done()
 
 				// state is not reentrancy in concurrent scenarios, so use a copy
-				state, _, _ := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-				r, _ := doOneCall(ctx, s.b, state, header, arg, disableCache)
+				r, _ := doOneCall(ctx, s.b, state.Copy(), header, arg, disableCache)
 				ret[i] = r
 				if r.Err != "" {
 					stats.Success = false
