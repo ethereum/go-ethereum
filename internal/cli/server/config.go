@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -720,10 +721,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		}
 
 		for i, account := range c.Accounts.Unlock {
-			err = ks.Unlock(accounts.Account{Address: common.HexToAddress(account)}, passwords[i])
-			if err != nil {
-				log.Warn("Could not unlock account", "account", account, "err", err)
-			}
+			unlockAccount(ks, account, i, passwords)
 		}
 	}
 
@@ -903,6 +901,61 @@ var (
 	gitCommit        = "" // Git SHA1 commit hash of the release (set via linker flags)
 	gitDate          = "" // Git commit date YYYYMMDD of the release (set via linker flags)
 )
+
+// tries unlocking the specified account a few times.
+func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
+	account, err := utils.MakeAddress(ks, address)
+	if err != nil {
+		utils.Fatalf("Could not list accounts: %v", err)
+	}
+	for trials := 0; trials < 3; trials++ {
+		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
+		password := utils.GetPassPhraseWithList(prompt, false, i, passwords)
+		err = ks.Unlock(account, password)
+		if err == nil {
+			log.Info("Unlocked account", "address", account.Address.Hex())
+			return account, password
+		}
+		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
+			log.Info("Unlocked account", "address", account.Address.Hex())
+			return ambiguousAddrRecovery(ks, err, password), password
+		}
+		if err != keystore.ErrDecrypt {
+			// No need to prompt again if the error is not decryption-related.
+			break
+		}
+	}
+	// All trials expended to unlock account, bail out
+	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
+
+	return accounts.Account{}, ""
+}
+
+func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
+	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
+	for _, a := range err.Matches {
+		fmt.Println("  ", a.URL)
+	}
+	fmt.Println("Testing your password against all of them...")
+	var match *accounts.Account
+	for _, a := range err.Matches {
+		if err := ks.Unlock(a, auth); err == nil {
+			match = &a
+			break
+		}
+	}
+	if match == nil {
+		utils.Fatalf("None of the listed files could be unlocked.")
+	}
+	fmt.Printf("Your password unlocked %s\n", match.URL)
+	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
+	for _, a := range err.Matches {
+		if a != *match {
+			fmt.Println("  ", a.URL)
+		}
+	}
+	return *match
+}
 
 func (c *Config) buildNode() (*node.Config, error) {
 	ipcPath := ""
