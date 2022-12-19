@@ -3,8 +3,6 @@ title: Geth fundamentals
 description: Documentation for foundational Geth topics
 ---
 
-## Geth fundamentals {#geth-fundamentals}
-
 This section includes documentation for foundational topics in Geth. The pages here will help you to understand how Geth works from a user perspective and under the hood.
 
 This is where you will find information about how to manage a Geth node and understand how it functions.

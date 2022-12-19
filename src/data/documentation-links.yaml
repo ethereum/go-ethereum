@@ -22,7 +22,7 @@
       to: /docs/fundamentals/sync-modes
     - id: Account management
       to: /docs/fundamentals/account-management
-    - id: Backup restore
+    - id: 'Backup & restore'
       to: /docs/fundamentals/backup-restore
     - id: Logs
       to: /docs/fundamentals/logs
@@ -66,8 +66,6 @@
           to: /docs/interacting-with-geth/rpc/ns-personal
         - id: txpool Namespace
           to: /docs/interacting-with-geth/rpc/ns-txpool
-        - id: Objects
-          to: /docs/interacting-with-geth/rpc/objects
         - id: Real-time Events
           to: /docs/interacting-with-geth/rpc/pubsub
     - id: JavaScript Console
@@ -142,7 +140,7 @@
           to: /docs/tools/clef/clique-signing
     - id: puppeth
       to: /docs/tools/puppeth
-    - id: Abigen
+    - id: abigen
       to: /docs/tools/abigen
     - id: devp2p
       to: /docs/tools/devp2p

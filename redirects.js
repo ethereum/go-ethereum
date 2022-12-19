@@ -181,7 +181,12 @@ const redirects = [
   },
   {
     source: '/docs/rpc/objects',
-    destination: '/docs/interacting-with-geth/rpc/objects',
+    destination: '/docs',
+    permanent: true
+  },
+  {
+    source: '/docs/interacting-with-geth/rpc/objects',
+    destination: '/docs',
     permanent: true
   },
   {
