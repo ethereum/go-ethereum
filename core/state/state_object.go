@@ -203,7 +203,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	//   1) resurrect happened, and new slot values were set -- those should
 	//      have been handles via pendingStorage above.
 	//   2) we don't have new values, and can deliver empty response back
-	if _, destructed := s.db.stateObjectsDestruct[s.addrHash]; destructed {
+	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
 		return common.Hash{}
 	}
 	// If no live objects are available, attempt to use snapshots

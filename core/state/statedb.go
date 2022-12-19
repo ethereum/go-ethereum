@@ -81,7 +81,7 @@ type StateDB struct {
 	stateObjects         map[common.Address]*stateObject
 	stateObjectsPending  map[common.Address]struct{} // State objects finalized but not yet written to the trie
 	stateObjectsDirty    map[common.Address]struct{} // State objects modified in the current execution
-	stateObjectsDestruct map[common.Hash]struct{}    // State objects destructed in the block
+	stateObjectsDestruct map[common.Address]struct{} // State objects destructed in the block
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -146,7 +146,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjects:         make(map[common.Address]*stateObject),
 		stateObjectsPending:  make(map[common.Address]struct{}),
 		stateObjectsDirty:    make(map[common.Address]struct{}),
-		stateObjectsDestruct: make(map[common.Hash]struct{}),
+		stateObjectsDestruct: make(map[common.Address]struct{}),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
@@ -611,9 +611,9 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 
 	var prevdestruct bool
 	if prev != nil {
-		_, prevdestruct = s.stateObjectsDestruct[prev.addrHash]
+		_, prevdestruct = s.stateObjectsDestruct[prev.address]
 		if !prevdestruct {
-			s.stateObjectsDestruct[prev.addrHash] = struct{}{}
+			s.stateObjectsDestruct[prev.address] = struct{}{}
 		}
 	}
 	newobj = newObject(s, addr, types.StateAccount{})
@@ -686,7 +686,7 @@ func (s *StateDB) Copy() *StateDB {
 		stateObjects:         make(map[common.Address]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
-		stateObjectsDestruct: make(map[common.Hash]struct{}, len(s.stateObjectsDestruct)),
+		stateObjectsDestruct: make(map[common.Address]struct{}, len(s.stateObjectsDestruct)),
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
@@ -831,7 +831,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely).
-			s.stateObjectsDestruct[obj.addrHash] = struct{}{}
+			s.stateObjectsDestruct[obj.address] = struct{}{}
 
 			// If state snapshotting is active, also mark the destruction there.
 			// Note, we can't do this only at the end of a block because multiple
@@ -1027,7 +1027,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		start := time.Now()
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
-			if err := s.snaps.Update(root, parent, s.stateObjectsDestruct, s.snapAccounts, s.snapStorage); err != nil {
+			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.snapAccounts, s.snapStorage); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
@@ -1044,7 +1044,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap, s.snapAccounts, s.snapStorage = nil, nil, nil
 	}
 	if len(s.stateObjectsDestruct) > 0 {
-		s.stateObjectsDestruct = make(map[common.Hash]struct{})
+		s.stateObjectsDestruct = make(map[common.Address]struct{})
 	}
 	if root == (common.Hash{}) {
 		root = emptyRoot
@@ -1140,4 +1140,18 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+// convertAccountSet converts a provided account set from address keyed to hash keyed.
+func (s *StateDB) convertAccountSet(set map[common.Address]struct{}) map[common.Hash]struct{} {
+	ret := make(map[common.Hash]struct{})
+	for addr := range set {
+		obj, exist := s.stateObjects[addr]
+		if !exist {
+			ret[crypto.Keccak256Hash(addr[:])] = struct{}{}
+		} else {
+			ret[obj.addrHash] = struct{}{}
+		}
+	}
+	return ret
 }
