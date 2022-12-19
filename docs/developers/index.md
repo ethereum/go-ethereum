@@ -17,7 +17,6 @@ Geth has many features that support dapp developers. There are many built-in tra
 - [Go contract bindings](/docs/developers/dapp-developer/native-bindings)
 - [Account management in Go apps](/docs/developers/dapp-developer/native-accounts)
 
-
 ## Geth developers {#geth-developers}
 
 Geth developers add/remove features and fix bugs in Geth. The `geth-developer` section includes contribution guidelines and documentation relating to testing and disclosing vulnerabilities that willhep you get started with working on Geth.
