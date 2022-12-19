@@ -24,14 +24,13 @@
 
 .DocSearch-Button-Container {
   flex: 1;
-  flex-direction: row-reverse;
   justify-content: space-between;
 }
 
 .DocSearch-Button-Keys kbd {
   background: none;
-  border: 1px solid var(--chakra-colors-primary);
-  color: var(--chakra-colors-primary);
+  border: 1px solid var(--chakra-colors-secondary);
+  color: var(--chakra-colors-secondary);
   box-shadow: none;
   padding: 0.125rem;
 }
@@ -147,6 +146,10 @@ svg[aria-label='Algolia'] * {
 
 @media (max-width: 768px) {
   /* Search field in mobile menu */
+  .DocSearch-Button-Container {
+    flex-direction: row-reverse;
+  }
+    
   .DocSearch-Button {
     padding: 2rem 1rem;
     width: 100%;
