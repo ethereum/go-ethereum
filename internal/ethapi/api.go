@@ -2202,7 +2202,7 @@ func (s *BundleAPI) BNMultiSim(ctx context.Context, args BNMultiSimArgs) (map[st
 	ret["blockNumber"] = parent.Number.Int64()
 
 	ret["args"] = header
-	fmt.Sprintf("DEBUG | Getting to the end of BNMultiSim")
+	fmt.Printf("DEBUG | Getting to the end of BNMultiSim\n")
 	return ret, nil
 }
 
