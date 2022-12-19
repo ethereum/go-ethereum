@@ -905,21 +905,26 @@ var (
 // tries unlocking the specified account a few times.
 func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
+
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
+
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
 		password := utils.GetPassPhraseWithList(prompt, false, i, passwords)
 		err = ks.Unlock(account, password)
+
 		if err == nil {
 			log.Info("Unlocked account", "address", account.Address.Hex())
 			return account, password
 		}
+
 		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
 			log.Info("Unlocked account", "address", account.Address.Hex())
 			return ambiguousAddrRecovery(ks, err, password), password
 		}
+
 		if err != keystore.ErrDecrypt {
 			// No need to prompt again if the error is not decryption-related.
 			break
@@ -933,27 +938,36 @@ func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []str
 
 func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
 	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
+
 	for _, a := range err.Matches {
 		fmt.Println("  ", a.URL)
 	}
+
 	fmt.Println("Testing your password against all of them...")
+
 	var match *accounts.Account
+
 	for _, a := range err.Matches {
 		if err := ks.Unlock(a, auth); err == nil {
+			// nolint: gosec, exportloopref
 			match = &a
 			break
 		}
 	}
+
 	if match == nil {
 		utils.Fatalf("None of the listed files could be unlocked.")
 	}
+
 	fmt.Printf("Your password unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
+
 	for _, a := range err.Matches {
 		if a != *match {
 			fmt.Println("  ", a.URL)
 		}
 	}
+
 	return *match
 }
 
