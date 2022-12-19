@@ -1,3 +1,4 @@
+export { checkNavLinks } from './checkNavLinks';
 export { compareReleasesFn } from './compareReleasesFn';
 export { fetchLatestReleaseCommit } from './fetchLatestReleaseCommit';
 export { fetchLatestReleaseVersionAndName } from './fetchLatestReleaseVersionAndName';
