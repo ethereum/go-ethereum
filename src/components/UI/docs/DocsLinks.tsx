@@ -51,8 +51,8 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
                       borderRight={items ? '2px' : 'none'}
                       borderColor='primary'
                       w='100%'
-                      bg={isSectionActive ? 'primary' : 'bg'}
-                      color={isSectionActive ? 'bg' : 'primary'}
+                      bg={isSectionActive ? 'secondary' : 'bg'}
+                      color={isSectionActive ? 'body' : 'primary'}
                       _groupHover={{ background: 'primary', color: 'bg', textDecoration: 'none' }}
                     >
                       {to ? (
