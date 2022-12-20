@@ -7,7 +7,7 @@ This page explains how to set up Geth and execute some basic tasks using the com
 
 Geth also needs to be connected to a [consensus client](docs/getting-started/consensus-clients) in order to function as an Ethereum node. The tutorial on this page assumes Geth and a consensus client have been installed successfully and that a firewall has been configured to block external traffic to the JSON-RPC port `8545` see [Security](/docs/fundamentals/security).
 
-This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/docs/tools/Clef/Tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team.
+This page provides step-by-step instructions covering the fundamentals of using Geth. This includes generating accounts, joining an Ethereum network, syncing the blockchain and sending ether between accounts. This tutorial uses [Clef](/docs/tools/clef/tutorial). Clef is an account management tool external to Geth itself that allows users to sign transactions. It is developed and maintained by the Geth team.
 
 ## Prerequisites {#prerequisites}
 
@@ -431,4 +431,4 @@ This requires approval in Clef. Once the password for the sender account has bee
 
 ## Summary {#summary}
 
-This tutorial has demonstrated how to generate accounts using Clef, fund them with testnet ether and use those accounts to interact with Ethereum (Sepolia) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using the web3.js library via the Geth console and using the JSON-RPC directly using Curl. For more detailed information about Clef, please see [the Clef docs](/docs/tools/Clef/Tutorial).
+This tutorial has demonstrated how to generate accounts using Clef, fund them with testnet ether and use those accounts to interact with Ethereum (Sepolia) through a Geth node. Checking account balances, sending transactions and retrieving transaction details were explained using the web3.js library via the Geth console and using the JSON-RPC directly using Curl. For more detailed information about Clef, please see [the Clef docs](/docs/tools/clef/tutorial).

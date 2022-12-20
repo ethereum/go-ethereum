@@ -11,7 +11,7 @@ Clef provides a way to safely circumvent `--unlock` while maintaining a enough a
 
 ## Prerequisites {#prerequisites}
 
-It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/docs/developers/geth-developer/private-network) and [Introduction to Clef](/docs/tools/Clef/introduction) pages.
+It is useful to have basic knowledge of private networks and Clef. These topics are covered on our [private networks](/docs/developers/geth-developer/private-network) and [Introduction to Clef](/docs/tools/clef/introduction) pages.
 
 ## Prepping a Clique network {#prepping-clique-network}
 

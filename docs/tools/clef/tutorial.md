@@ -573,5 +573,5 @@ Ultimately, the goal is to deprecate Geth's account management tools completely 
 
 ## Summary {#summary}
 
-This page includes step-by-step instructions for basic and intermediate uses of Clef, including using it as a standalone app and a backend signer for Geth. Further information is available on our other Clef pages, including [Introduction](/docs/clef/introduction), [Setup](/docs/tools/clef/setup),
+This page includes step-by-step instructions for basic and intermediate uses of Clef, including using it as a standalone app and a backend signer for Geth. Further information is available on our other Clef pages, including [Introduction](/docs/tools/clef/introduction), [Setup](/docs/tools/clef/setup),
 [Rules](/docs/tools/clef/rules), [Communication Datatypes](/docs/clef/datatypes) and [Communication APIs](/docs/tools/clef/apis). Also see the [Clef GitHub](https://github.com/ethereum/go-ethereum/tree/master/cmd/clef) for further reading.
