@@ -51,7 +51,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
       {navLinks.map(({ id, to, items }, idx) => {
         const split = to?.split('/');
         const isActive = slug && split && split[split.length - 1] === slug[slug.length - 1];
-        const isSectionActive = openSections[id];
+        const index = openSections[id] ? 0 : -1;
 
         return (
           <Accordion key={id} index={isSectionActive ? 0 : -1} allowToggle mt='0 !important'>
