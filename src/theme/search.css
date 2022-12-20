@@ -149,7 +149,7 @@ svg[aria-label='Algolia'] * {
   .DocSearch-Button-Container {
     flex-direction: row-reverse;
   }
-    
+
   .DocSearch-Button {
     padding: 2rem 1rem;
     width: 100%;
