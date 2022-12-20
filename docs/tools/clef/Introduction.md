@@ -76,7 +76,7 @@ The general flow for a basic transaction-signing operation using Clef and an Eth
 
 In the case illustrated in the schematic above, Geth would be started with `--signer <addr>:<port>` and would relay requests to `eth.sendTransaction`. Text in `mono` font positioned along arrows shows the objects passed between each component.
 
-Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also possible to configure Clef to sign transactions without always prompting the user. This requires defining the precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are small Javascript snippets that are _attested_ by the user by injecting the snippet's hash into Clef's secure whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted rule files are automatically signed. This is covered in detail on the [Rules page](/docs/tools/Clef/rules).
+Most users use Clef by manually approving transactions through the UI as in the schematic above, but it is also possible to configure Clef to sign transactions without always prompting the user. This requires defining the precise conditions under which a transaction will be signed. These conditions are known as `Rules` and they are small Javascript snippets that are _attested_ by the user by injecting the snippet's hash into Clef's secure whitelist. Clef is then started with the rule file, so that requests that satisfy the conditions in the whitelisted rule files are automatically signed. This is covered in detail on the [Rules page](/docs/tools/clef/rules).
 
 ## Basic usage {#basic-usage}
 
@@ -107,7 +107,7 @@ Enter 'ok' to proceed:
 
 Requests requiring account access or signing now require explicit consent in this terminal. Activities such as sending transactions via a local Geth node's attached Javascript console or RPC will now hang indefinitely, awaiting approval in this terminal.
 
-A much more detailed Clef tutorial is available on the [Tutorial page](/docs/tools/Clef/tutorial).
+A much more detailed Clef tutorial is available on the [Tutorial page](/docs/tools/clef/tutorial).
 
 ## Command line options {#command-line-options}
 
