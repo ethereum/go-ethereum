@@ -278,6 +278,11 @@ const redirects = [
     source: '/docs/tools',
     destination: '/docs/tools/clef/introduction',
     permanent: true
+  },
+  {
+    source: '/docs/tools/clef',
+    destination: '/docs/tools/clef/introduction',
+    permanent: true
   }
 ];
 
