@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://geth.ethereum.org
+
+# Sitemaps
+Sitemap: https://geth.ethereum.org/sitemap.xml

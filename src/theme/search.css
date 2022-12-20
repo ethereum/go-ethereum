@@ -1,0 +1,185 @@
+/* Search field on desktop nav bar */
+.DocSearch-Button {
+  border-radius: 0;
+  height: 100%;
+  background: none;
+  margin: 0;
+  padding: 1rem;
+  width: 200px;
+  gap: 1rem;
+  --docsearch-searchbox-shadow: transparent;
+  --docsearch-searchbox-focus-background: transparent;
+}
+
+.DocSearch-Button:hover {
+  background: var(--chakra-colors-primary);
+}
+
+.DocSearch-Button:hover svg path,
+.DocSearch-Button:hover kbd,
+.DocSearch-Button:hover span {
+  color: var(--chakra-colors-bg);
+  border-color: var(--chakra-colors-bg);
+}
+
+.DocSearch-Button-Container {
+  flex: 1;
+  justify-content: space-between;
+}
+
+.DocSearch-Button-Keys kbd {
+  background: none;
+  border: 1px solid var(--chakra-colors-secondary);
+  color: var(--chakra-colors-secondary);
+  box-shadow: none;
+  padding: 0.125rem;
+}
+
+.DocSearch-Button-Placeholder {
+  text-align: start;
+  text-transform: lowercase;
+  font-style: italic;
+  color: var(--chakra-colors-primary);
+  font-weight: 400;
+  width: 100%;
+  flex: 1;
+}
+
+.DocSearch-Search-Icon * {
+  color: var(--chakra-colors-primary);
+}
+
+/* Algolia search modal styling */
+.DocSearch-Container {
+  z-index: 1400;
+}
+
+.DocSearch-Modal {
+  border-radius: 0;
+  background: var(--chakra-colors-bg);
+}
+
+.DocSearch-Logo {
+  text-transform: uppercase;
+}
+
+.DocSearch-Commands kbd {
+  background: var(--chakra-colors-button-bg);
+  border: 1px solid var(--chakra-colors-primary);
+  border-radius: 0;
+  color: var(--chakra-colors-primary);
+  box-shadow: none;
+}
+
+.DocSearch-Footer {
+  background: var(--chakra-colors-bg);
+}
+
+svg[aria-label='Algolia'] * {
+  fill: var(--chakra-colors-body);
+}
+
+.DocSearch-Form {
+  box-shadow: inset 0 0 0 2px var(--chakra-colors-primary);
+  background: var(--chakra-colors-secondary);
+  border-radius: 0;
+}
+
+.DocSearch-Hit[aria-selected='true'] a {
+  background: var(--chakra-colors-secondary);
+  color: var(--chakra-colors-button-bg);
+}
+
+.DocSearch-Hit[aria-selected='false'] a {
+  background: var(--chakra-colors-button-bg);
+}
+
+.DocSearch-Hit[aria-selected='false'] > a > div > div.DocSearch-Hit-icon > svg > path {
+  color: var(--chakra-colors-body);
+}
+
+.DocSearch-Hit-source,
+.DocSearch-Label {
+  color: var(--chakra-colors-body);
+  font-family: var(--chakra-fonts-heading);
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+.DocSearch-Hit-source {
+  background: var(--chakra-colors-bg);
+  padding-block: var(--chakra-space-2);
+}
+
+.DocSearch-Hit {
+  padding-bottom: var(--chakra-space-2);
+}
+
+.DocSearch-Hit a {
+  border-radius: 0;
+}
+
+.DocSearch-Hit[aria-selected='true'] > a > div > div.DocSearch-Hit-content-wrapper svg,
+.DocSearch-Hit[aria-selected='true'] > a > div > div.DocSearch-Hit-content-wrapper span,
+.DocSearch-Hit-title mark,
+.DocSearch-Hit-path mark,
+.DocSearch-Prefill {
+  color: var(--chakra-colors-primary);
+}
+
+.DocSearch-Input,
+.DocSearch-Input::placeholder,
+.DocSearch-Form > label > svg > path,
+.DocSearch-Reset {
+  color: var(--chakra-colors-bg);
+}
+
+.DocSearch-Input::placeholder {
+  font-style: italic;
+  font-size: var(--chakra-fontSizes-md);
+}
+
+.DocSearch-Container--Stalled .DocSearch-MagnifierLabel,
+.DocSearch-Container--Stalled .DocSearch-LoadingIndicator {
+  color: var(--chakra-colors-bg);
+}
+
+@media (max-width: 768px) {
+  /* Search field in mobile menu */
+  .DocSearch-Button-Container {
+    flex-direction: row-reverse;
+  }
+
+  .DocSearch-Button {
+    padding: 2rem 1rem;
+    width: 100%;
+    position: relative;
+  }
+
+  .DocSearch-Button::before {
+    position: absolute;
+    content: 'search';
+    font-size: var(--chakra-fontSizes-md);
+    color: var(--chakra-colors-bg);
+    inset: 0;
+    text-align: start;
+    padding: 2rem 1rem;
+  }
+
+  .DocSearch-Search-Icon * {
+    color: var(--chakra-colors-bg);
+  }
+
+  /* Mobile modal styling */
+  .DocSearch-Container,
+  .DocSearch-Modal {
+    position: fixed;
+    inset: 1rem;
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+  }
+
+  .DocSearch-Cancel {
+    color: var(--chakra-colors-primary);
+  }
+}

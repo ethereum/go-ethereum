@@ -1,0 +1,150 @@
+- id: Getting started
+  items:
+    - id: Introduction
+      to: /docs/getting-started
+    - id: Hardware requirements
+      to: /docs/getting-started/hardware-requirements
+    - id: Installing Geth
+      to: /docs/getting-started/installing-geth
+    - id: Consensus clients
+      to: /docs/getting-started/consensus-clients
+- id: Fundamentals
+  items:
+    - id: Introduction
+      to: /docs/fundamentals
+    - id: Node architecture
+      to: /docs/fundamentals/node-architecture
+    - id: Command-line options
+      to: /docs/fundamentals/command-line-options
+    - id: Security
+      to: /docs/fundamentals/security
+    - id: Sync-modes
+      to: /docs/fundamentals/sync-modes
+    - id: Account management
+      to: /docs/fundamentals/account-management
+    - id: 'Backup & restore'
+      to: /docs/fundamentals/backup-restore
+    - id: Logs
+      to: /docs/fundamentals/logs
+    - id: Peer-to-peer
+      to: /docs/fundamentals/peer-to-peer
+    - id: Pruning
+      to: /docs/fundamentals/pruning
+    - id: Private networks
+      to: /docs/fundamentals/private-network
+    - id: Light client
+      to: /docs/fundamentals/les
+    - id: Mining
+      to: /docs/fundamentals/mining
+- id: Interacting with Geth
+  items:
+    - id: JSON-RPC Server
+      items:
+        - id: Introduction
+          to: /docs/interacting-with-geth/rpc
+        - id: Batch requests
+          to: /docs/interacting-with-geth/rpc/batch
+        - id: GraphQL server
+          to: /docs/interacting-with-geth/rpc/graphql
+        - id: admin Namespace
+          to: /docs/interacting-with-geth/rpc/ns-admin
+        - id: clique Namespace
+          to: /docs/interacting-with-geth/rpc/ns-clique
+        - id: debug Namespace
+          to: /docs/interacting-with-geth/rpc/ns-debug
+        - id: eth Namespace
+          to: /docs/interacting-with-geth/rpc/ns-eth
+        - id: les Namespace
+          to: /docs/interacting-with-geth/rpc/ns-les
+        - id: miner Namespace
+          to: /docs/interacting-with-geth/rpc/ns-miner
+        - id: net Namespace
+          to: /docs/interacting-with-geth/rpc/ns-net
+        - id: Personal namespace deprecation notes
+          to: /docs/interacting-with-geth/rpc/ns-personal-deprecation
+        - id: Personal Namespace
+          to: /docs/interacting-with-geth/rpc/ns-personal
+        - id: txpool Namespace
+          to: /docs/interacting-with-geth/rpc/ns-txpool
+        - id: Real-time Events
+          to: /docs/interacting-with-geth/rpc/pubsub
+    - id: JavaScript Console
+      to: /docs/interacting-with-geth/javascript-console
+    - id: 'JavaScript Console 2: Contracts'
+      to: /docs/interacting-with-geth/javascript-console-contracts
+- id: Developers
+  items:
+    - id: Introduction
+      to: /docs/developers
+    - id: Dapp developers
+      items:
+        - id: Dev mode
+          to: /docs/developers/dapp-developer/dev-mode
+        - id: Go API
+          to: /docs/developers/dapp-developer/native
+        - id: Go Account Management
+          to: /docs/developers/dapp-developer/native-accounts
+        - id: Go Contract Bindings
+          to: /docs/developers/dapp-developer/native-bindings
+        - id: Geth for Mobile
+          to: /docs/developers/dapp-developer/mobile
+    - id: EVM tracing
+      items:
+        - id: Introduction
+          to: /docs/developers/evm-tracing
+        - id: Basic traces
+          to: /docs/developers/evm-tracing/basic-traces
+        - id: Built-in tracers
+          to: /docs/developers/evm-tracing/built-in-tracers
+        - id: Custom EVM tracer
+          to: /docs/developers/evm-tracing/custom-tracer
+        - id: Tutorial for Javascript tracing
+          to: /docs/developers/evm-tracing/javascript-tutorial
+    - id: Geth developer
+      items:
+        - id: Developer guide
+          to: /docs/developers/geth-developer/dev-guide
+        - id: Disclosures
+          to: /docs/developers/geth-developer/disclosures
+        - id: DNS discovery setup guide
+          to: /docs/developers/geth-developer/dns-discovery-setup
+        - id: Code review guidelines
+          to: /docs/developers/geth-developer/code-review-guidelines
+    - id: Contributing
+      to: /docs/developers/contributing
+- id: Monitoring
+  items:
+    - id: Dashboards
+      to: /docs/monitoring/dashboards
+    - id: Ethstats
+      to: /docs/monitoring/ethstats
+    - id: Metrics
+      to: /docs/monitoring/metrics
+- id: Tools
+  items:
+    - id: Clef
+      items:
+        - id: Introduction
+          to: /docs/tools/clef/introduction
+        - id: APIs
+          to: /docs/tools/clef/apis
+        - id: Rules
+          to: /docs/tools/clef/rules
+        - id: Setup
+          to: /docs/tools/clef/setup
+        - id: Datatypes
+          to: /docs/tools/clef/datatypes
+        - id: Tutorial
+          to: /docs/tools/clef/tutorial
+        - id: Clique-signing
+          to: /docs/tools/clef/clique-signing
+    - id: puppeth
+      to: /docs/tools/puppeth
+    - id: abigen
+      to: /docs/tools/abigen
+    - id: devp2p
+      to: /docs/tools/devp2p
+- id: FAQs
+  to: /docs/faq
+- id: Resources
+  to: /docs/resources

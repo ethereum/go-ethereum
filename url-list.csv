@@ -1,0 +1,57 @@
+OLD Geth website URLS,Equivalent NEW website URLs,,Notes
+https://geth.ethereum.org/,https://geth.ethereum.org,,will be react page
+https://geth.ethereum.org/downloads/,https://geth.ethereum.org/downloads,,will be react page
+https://geth.ethereum.org/docs/,https://geth.ethereum.org/docs,,n/a
+https://geth.ethereum.org/docs/getting-started,https://geth.ethereum.org/docs/getting-started/backup-restore,,n/a
+https://geth.ethereum.org/docs/getting-started/dev-mode,https://geth.ethereum.org/docs/developers/dapp-developer/dev-mode,,n/a
+https://geth.ethereum.org/docs/install-and-build/installing-geth,https://geth.ethereum.org/docs/getting-started/install-geth,,n/a
+https://geth.ethereum.org/docs/install-and-build/backup-restore,https://geth.ethereum.org/docs/getting-started/backup-restore,,n/a
+https://geth.ethereum.org/docs/interface/command-line-options,https://geth.ethereum.org/docs/fundamentals/command-line-options,,n/a
+https://geth.ethereum.org/docs/interface/pruning,https://geth.ethereum.org/docs/fundamentals/pruning,,n/a
+https://geth.ethereum.org/docs/interface/consensus-clients,https://geth.ethereum.org/docs/getting-started/consensus-client,,n/a
+https://geth.ethereum.org/docs/interface/peer-to-peer,https://geth.ethereum.org/docs/fundamentals/peer-to-peer,,n/a
+https://geth.ethereum.org/docs/interface/les,https://geth.ethereum.org/docs/fundamentals/les,,n/a
+https://geth.ethereum.org/docs/interface/managing-your-accounts,https://geth.ethereum.org/docs/fundamentals/account-management,,n/a
+https://geth.ethereum.org/docs/faq,https://geth.ethereum.org/docs/faq,,n/a
+https://geth.ethereum.org/docs/interface/javascript-console,https://geth.ethereum.org/docs/interacting-with-geth/javascript-console,,n/a
+https://geth.ethereum.org/docs/interface/private-network,https://geth.ethereum.org/docs/fundamentals/private-network,,n/a
+https://geth.ethereum.org/docs/interface/mining,https://geth.ethereum.org/docs/fundamentals/mining,,n/a
+https://geth.ethereum.org/docs/interface/metrics,https://geth.ethereum.org/docs/monitoring/metrics,,n/a
+https://geth.ethereum.org/docs/dapp/native,https://geth.ethereum.org/docs/developers/dapp-developer/native,,n/a
+https://geth.ethereum.org/docs/dapp/tracing,https://geth.ethereum.org/docs/developers/evm-tracing,,n/a
+https://geth.ethereum.org/docs/dapp/custom-tracer,https://geth.ethereum.org/docs/developers/evm-tracing/custom-tracer,,n/a
+https://geth.ethereum.org/docs/dapp/builtin-tracers,https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers,,n/a
+https://geth.ethereum.org/docs/dapp/native-accounts,https://geth.ethereum.org/docs/docs/developers/dapp-developer/native-accounts,,n/a
+https://geth.ethereum.org/docs/dapp/native-bindings,https://geth.ethereum.org/docs/developers/dapp-developer/native-bindings,,n/a
+https://geth.ethereum.org/docs/dapp/mobile,https://geth.ethereum.org/docs/developers/dapp-developer/mobile,,n/a
+https://geth.ethereum.org/docs/dapp/mobile-accounts,https://geth.ethereum.org/docs/developers/dapp-developer/mobile,,n/a
+https://geth.ethereum.org/docs/rpc/server,https://geth.ethereum.org/docs/interacting-with-geth/rpc,,n/a
+https://geth.ethereum.org/docs/rpc/pubsub,https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub,,n/a
+https://geth.ethereum.org/docs/rpc/batch,https://geth.ethereum.org/docs/interacting-with-geth/rpc/batch,,n/a
+https://geth.ethereum.org/docs/rpc/graphql,https://geth.ethereum.org/docs/interacting-with-geth/rpc/graphql,,n/a
+https://geth.ethereum.org/docs/rpc/ns-admin,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-admin,,n/a
+https://geth.ethereum.org/docs/rpc/ns-clique,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-clique,,n/a
+https://geth.ethereum.org/docs/rpc/ns-debug,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-debug,,n/a
+https://geth.ethereum.org/docs/rpc/ns-eth,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-eth,,n/a
+https://geth.ethereum.org/docs/rpc/ns-les,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-les,,n/a
+https://geth.ethereum.org/docs/rpc/ns-miner,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-miner,,n/a
+https://geth.ethereum.org/docs/rpc/ns-net,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-net,,n/a
+https://geth.ethereum.org/docs/rpc/ns-personal,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-personal,,n/a
+https://geth.ethereum.org/docs/rpc/ns-txpool,https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-txpool,,n/a
+https://geth.ethereum.org/docs/rpc/objects,https://geth.ethereum.org/,page deleted,n/a
+https://geth.ethereum.org/docs/developers/dev-guide,https://geth.ethereum.org/docs/developers/geth-developer/dev-guide,,n/a
+https://geth.ethereum.org/docs/developers/code-review-guidelines,https://geth.ethereum.org/docs/developers/geth-developer/code-review-guidelines,,n/a
+https://geth.ethereum.org/docs/developers/issue-handling-workflow,https://geth.ethereum.org/,page deleted,n/a
+https://geth.ethereum.org/docs/developers/dns-discovery-setup,https://geth.ethereum.org/doce/developers/geth-developer/dns-discovery-setup,,n/a
+https://geth.ethereum.org/docs/clef/introduction,https://geth.ethereum.org/docs/tools/clef/introduction,,n/a
+https://geth.ethereum.org/docs/clef/tutorial,https://geth.ethereum.org/docs/tools/clef/tutorial,,n/a
+https://geth.ethereum.org/docs/clef/cliquesigning,https://geth.ethereum.org/docs/tools/clef/clique-signing,,n/a
+https://geth.ethereum.org/docs/clef/rules,https://geth.ethereum.org/docs/tools/clef/rules,,n/a
+https://geth.ethereum.org/docs/clef/setup,https://geth.ethereum.org/docs/tools/clef/setup,,n/a
+https://geth.ethereum.org/docs/clef/apis,https://geth.ethereum.org/docs/tools/clef/apis,,n/a
+https://geth.ethereum.org/docs/clef/datatypes,https://geth.ethereum.org/docs/tools/clef/datatypes,,n/a
+https://geth.ethereum.org/docs/interface/sync-modes,https://geth.ethereum.org/docs/fundamentals/sync-modes,,n/a
+https://geth.ethereum.org/docs/interface/hardware,https://geth.ethereum.org/docs/getting-started/hardware-requirements,,
+https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json,https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json,"Cant add redirect since this is a external URL (GitHub, not geth.ethereum.org)",must be served at original URL
+https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json.minisig,https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.json.minisig,"Cant add redirect since this is a external URL (GitHub, not geth.ethereum.org)",must be served at original URL
+https://github.com/ethereum/go-ethereum/tree/gh-pages/docs/_vulnerabilities/vulnerabilities.md,https://geth.ethereum.org/docs/developers/geth-developer/disclosures,"Cant add redirect since this is a external URL (GitHub, not geth.ethereum.org)",moved to /docs and renamed
