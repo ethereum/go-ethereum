@@ -147,7 +147,7 @@ func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) 
 	case "decimals":
 		return method.Outputs.Pack(uint8(18))
 	case "totalSupply":
-		return method.Outputs.Pack(big.NewInt(120 * 1_000_000 * 18))
+		return method.Outputs.Pack(big.NewInt(1_000_000_000_000_000_000)) // 1 ETH
 	}
 
 	if method.Name == "balanceOf" {
