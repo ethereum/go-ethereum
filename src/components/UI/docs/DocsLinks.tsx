@@ -54,7 +54,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
         const index = openSections[id] ? 0 : -1;
 
         return (
-          <Accordion key={id} index={isSectionActive ? 0 : -1} allowToggle mt='0 !important'>
+          <Accordion key={id} index={index} allowToggle mt='0 !important'>
             <AccordionItem border='none'>
               {({ isExpanded }) => (
                 <>
