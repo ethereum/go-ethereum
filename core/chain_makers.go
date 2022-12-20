@@ -80,6 +80,11 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
+// SetPos makes the header a PoS-header (0 difficulty)
+func (b *BlockGen) SetPoS() {
+	b.header.Difficulty = new(big.Int)
+}
+
 // addTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //

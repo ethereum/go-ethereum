@@ -95,44 +95,71 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	return beacon.verifyHeader(chain, header, parent)
 }
 
+// errOut constructs an error channel with prefilled errors inside.
+func errOut(n int, err error) chan error {
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		errs <- err
+	}
+	return errs
+}
+
+// splitHeaders splits the provided header batch into two parts according to
+// the configured ttd. It requires the parent of header batch along with its
+// td are stored correctly in chain. If ttd is not configured yet, all headers
+// will be treated legacy PoW headers.
+// Note, this function will not verify the header validity but just split them.
+func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) ([]*types.Header, []*types.Header, error) {
+	// TTD is not defined yet, all headers should be in legacy format.
+	ttd := chain.Config().TerminalTotalDifficulty
+	if ttd == nil {
+		return headers, nil, nil
+	}
+	ptd := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+	if ptd == nil {
+		return nil, nil, consensus.ErrUnknownAncestor
+	}
+	// The entire header batch already crosses the transition.
+	if ptd.Cmp(ttd) >= 0 {
+		return nil, headers, nil
+	}
+	var (
+		preHeaders  = headers
+		postHeaders []*types.Header
+		td          = new(big.Int).Set(ptd)
+		tdPassed    bool
+	)
+	for i, header := range headers {
+		if tdPassed {
+			preHeaders = headers[:i]
+			postHeaders = headers[i:]
+			break
+		}
+		td = td.Add(td, header.Difficulty)
+		if td.Cmp(ttd) >= 0 {
+			// This is the last PoW header, it still belongs to
+			// the preHeaders, so we cannot split+break yet.
+			tdPassed = true
+		}
+	}
+	return preHeaders, postHeaders, nil
+}
+
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	if !beacon.IsPoSHeader(headers[len(headers)-1]) {
+	preHeaders, postHeaders, err := beacon.splitHeaders(chain, headers)
+	if err != nil {
+		return make(chan struct{}), errOut(len(headers), err)
+	}
+	if len(postHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
-	var (
-		preHeaders  []*types.Header
-		postHeaders []*types.Header
-		preSeals    []bool
-	)
-	for index, header := range headers {
-		if beacon.IsPoSHeader(header) {
-			preHeaders = headers[:index]
-			postHeaders = headers[index:]
-			preSeals = seals[:index]
-			break
-		}
-	}
-
 	if len(preHeaders) == 0 {
-		// All the headers are pos headers. Verify that the parent block reached total terminal difficulty.
-		if reached, err := IsTTDReached(chain, headers[0].ParentHash, headers[0].Number.Uint64()-1); !reached {
-			// TTD not reached for the first block, mark subsequent with invalid terminal block
-			if err == nil {
-				err = consensus.ErrInvalidTerminalBlock
-			}
-			results := make(chan error, len(headers))
-			for i := 0; i < len(headers); i++ {
-				results <- err
-			}
-			return make(chan struct{}), results
-		}
 		return beacon.verifyHeaders(chain, headers, nil)
 	}
-
 	// The transition point exists in the middle, separate the headers
 	// into two batches and apply different verification rules for them.
 	var (
@@ -144,16 +171,9 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 			old, new, out      = 0, len(preHeaders), 0
 			errors             = make([]error, len(headers))
 			done               = make([]bool, len(headers))
-			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
+			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, seals[:len(preHeaders)])
 			newDone, newResult = beacon.verifyHeaders(chain, postHeaders, preHeaders[len(preHeaders)-1])
 		)
-		// Verify that pre-merge headers don't overflow the TTD
-		if index, err := verifyTerminalPoWBlock(chain, preHeaders); err != nil {
-			// Mark all subsequent pow headers with the error.
-			for i := index; i < len(preHeaders); i++ {
-				errors[i], done[i] = err, true
-			}
-		}
 		// Collect the results
 		for {
 			for ; done[out]; out++ {
@@ -179,33 +199,6 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 		}
 	}()
 	return abort, results
-}
-
-// verifyTerminalPoWBlock verifies that the preHeaders conform to the specification
-// wrt. their total difficulty.
-// It expects:
-// - preHeaders to be at least 1 element
-// - the parent of the header element to be stored in the chain correctly
-// - the preHeaders to have a set difficulty
-// - the last element to be the terminal block
-func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*types.Header) (int, error) {
-	td := chain.GetTd(preHeaders[0].ParentHash, preHeaders[0].Number.Uint64()-1)
-	if td == nil {
-		return 0, consensus.ErrUnknownAncestor
-	}
-	td = new(big.Int).Set(td)
-	// Check that all blocks before the last one are below the TTD
-	for i, head := range preHeaders {
-		if td.Cmp(chain.Config().TerminalTotalDifficulty) >= 0 {
-			return i, consensus.ErrInvalidTerminalBlock
-		}
-		td.Add(td, head.Difficulty)
-	}
-	// Check that the last block is the terminal block
-	if td.Cmp(chain.Config().TerminalTotalDifficulty) < 0 {
-		return len(preHeaders) - 1, consensus.ErrInvalidTerminalBlock
-	}
-	return 0, nil
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
@@ -419,11 +412,11 @@ func (beacon *Beacon) SetThreads(threads int) {
 // IsTTDReached checks if the TotalTerminalDifficulty has been surpassed on the `parentHash` block.
 // It depends on the parentHash already being stored in the database.
 // If the parentHash is not stored in the database a UnknownAncestor error is returned.
-func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, number uint64) (bool, error) {
+func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, parentNumber uint64) (bool, error) {
 	if chain.Config().TerminalTotalDifficulty == nil {
 		return false, nil
 	}
-	td := chain.GetTd(parentHash, number)
+	td := chain.GetTd(parentHash, parentNumber)
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor
 	}
