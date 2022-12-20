@@ -35,7 +35,7 @@ export const DocsLinks: FC<Props> = ({ navLinks, toggleMobileAccordion }) => {
       navLinks.reduce(
         (acc, navLink) => ({
           ...acc,
-          [navLink.id]: checkNavLinks({ items: navLink.items, pathCheck: asPath })
+          [navLink.id]: checkNavLinks({ items: navLink.items, pathCheck: asPath.split('#')[0] })
         }),
         {}
       )
