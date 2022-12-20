@@ -940,7 +940,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 	log.Warn("Multiple key files exist for", "address", err.Addr)
 
 	for _, a := range err.Matches {
-		log.Info("Multiple keys", "file", a.URL)
+		log.Info("Multiple keys", "file", a.URL.String())
 	}
 
 	log.Info("Testing your password against all of them...")
@@ -959,12 +959,12 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 		utils.Fatalf("None of the listed files could be unlocked.")
 	}
 
-	log.Info("Your password unlocked", "key", match.URL)
+	log.Info("Your password unlocked", "key", match.URL.String())
 	log.Warn("In order to avoid this warning, you need to remove the following duplicate key files:")
 
 	for _, a := range err.Matches {
 		if a != *match {
-			fmt.Println("  ", a.URL)
+			log.Warn("Duplicate", "key", a.URL.String())
 		}
 	}
 
