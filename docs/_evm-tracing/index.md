@@ -19,7 +19,7 @@ transactions by re-running them locally and collecting data about precisely what
 executed by the EVM.
 
 Also see this [Devcon 2022 talk](https://www.youtube.com/watch?v=b8RdmGsilfU) on 
-tracing in Geth.
+tracing in Geth or read this [article on EVM Traces](https://docs.alchemy.com/reference/what-are-evm-traces) by Alchemy.
 
 ## State availability
 
