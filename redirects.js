@@ -283,6 +283,11 @@ const redirects = [
     source: '/docs/tools/clef',
     destination: '/docs/tools/clef/introduction',
     permanent: true
+  },
+  {
+    source: '/docs/developers/contributing',
+    destination: '/docs/developers/geth-developer/contributing',
+    permanent: true
   }
 ];
 

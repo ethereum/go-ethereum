@@ -111,7 +111,7 @@
         - id: Code review guidelines
           to: /docs/developers/geth-developer/code-review-guidelines
     - id: Contributing
-      to: /docs/developers/contributing
+      to: /docs/developers/geth-developer/contributing
 - id: Monitoring
   items:
     - id: Dashboards
