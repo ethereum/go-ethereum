@@ -154,8 +154,21 @@ func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	elemSize := scope.EVMMAXField.ElementSize
 
-	output_offset := uint64(scope.Stack.Back(0).Bytes()[0]) * elemSize
-	input_offset := uint64(scope.Stack.Back(1).Bytes()[0]) * elemSize
+    output_stack := scope.Stack.pop()
+    input_stack := scope.Stack.pop()
+
+    output_stack_bytes := output_stack.Bytes()
+    input_stack_bytes := input_stack.Bytes()
+    if len(output_stack_bytes) == 0 {
+        output_stack_bytes = []byte{0}
+    }
+
+    if len(input_stack_bytes) == 0 {
+        input_stack_bytes = []byte{0}
+    }
+
+	output_offset := uint64(output_stack_bytes[0]) * elemSize
+	input_offset := uint64(input_stack_bytes[0]) * elemSize
 
 	out_bytes := scope.Memory.GetPtr(int64(output_offset), int64(elemSize))
 	input_bytes := scope.Memory.GetPtr(int64(input_offset), int64(elemSize))
