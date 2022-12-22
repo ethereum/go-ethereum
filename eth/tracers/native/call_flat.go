@@ -242,11 +242,14 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 		valueHex = hexutil.Big(*input.Value)
 	}
 
+	// copy addresses
+	to := input.To
+	from := input.From
 	frame := flatCallFrame{
 		Type: strings.ToLower(input.Type.String()),
 		Action: FlatCallTraceAction{
-			From:  &input.From,
-			To:    &input.To,
+			From:  &from,
+			To:    &to,
 			Gas:   &gasHex,
 			Value: &valueHex,
 		},
