@@ -18,6 +18,7 @@ package native
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strings"
 	"time"
@@ -105,7 +106,7 @@ type FlatCallTraceResult struct {
 // flatCallTracer is a go implementation of the Tracer interface which
 // runs multiple tracers in one go.
 type flatCallTracer struct {
-	tracer tracers.Tracer
+	tracer *callTracer
 	// env    *vm.EVM
 	config flatCallTracerConfig
 	ctx    *tracers.Context // Holds tracer context data
@@ -132,8 +133,12 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Trace
 	if err != nil {
 		return nil, err
 	}
+	t, ok := tracer.(*callTracer)
+	if !ok {
+		return nil, errors.New("internal error: embedded tracer has wrong type")
+	}
 
-	return &flatCallTracer{tracer: tracer, ctx: ctx, config: config}, nil
+	return &flatCallTracer{tracer: t, ctx: ctx, config: config}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
@@ -144,6 +149,9 @@ func (t *flatCallTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *flatCallTracer) CaptureEnd(output []byte, gasUsed uint64, elapsed time.Duration, err error) {
 	t.tracer.CaptureEnd(output, gasUsed, elapsed, err)
+	// Parity trace considers only reports the gas used during the top call frame which doesn't include
+	// tx processing such as intrinsic gas and refunds.
+	t.tracer.callstack[0].GasUsed = gasUsed
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -167,13 +175,9 @@ func (t *flatCallTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	t.tracer.CaptureExit(output, gasUsed, err)
 }
 
-func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {
-	t.tracer.CaptureTxStart(gasLimit)
-}
+func (t *flatCallTracer) CaptureTxStart(gasLimit uint64) {}
 
-func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
-	t.tracer.CaptureTxEnd(restGas)
-}
+func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {

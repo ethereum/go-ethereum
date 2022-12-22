@@ -125,6 +125,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		lines := deep.Equal(ret, test.Result)
 		for _, l := range lines {
 			t.Logf("%s", l)
+			t.FailNow()
 		}
 
 		t.Fatalf("trace mismatch: \nhave %+v\nwant %+v", ret, test.Result)
