@@ -42,10 +42,6 @@ type multiCallStats struct {
 	BlockTime    int64       `json:"blockTime"`
 	Success      bool        `json:"success"`
 	CacheEnabled bool        `json:"cacheEnabled"`
-	// gasUsed, excluding calls from cache
-	GasUsed       int64 `json:"gasUsed"`
-	OriginGasUsed int64 `json:"originGasUsed"`
-	CacheHitCount int64 `json:"cacheHitCount"`
 }
 
 const (
@@ -317,13 +313,6 @@ func (s *BlockChainAPI) MultiCall(ctx context.Context, args []TransactionArgs, b
 					}
 					return
 				}
-
-				if r.FromCache {
-					stats.CacheHitCount++
-				} else {
-					stats.GasUsed += r.GasUsed
-				}
-				stats.OriginGasUsed += r.GasUsed
 			}(i, arg)
 		}
 		wg.Wait()
@@ -348,13 +337,6 @@ func (s *BlockChainAPI) MultiCall(ctx context.Context, args []TransactionArgs, b
 			}
 			continue
 		}
-
-		if r.FromCache {
-			stats.CacheHitCount++
-		} else {
-			stats.GasUsed += r.GasUsed
-		}
-		stats.OriginGasUsed += r.GasUsed
 	}
 
 	return &multiCallResp{Results: ret, Stats: stats}, nil
