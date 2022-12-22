@@ -188,18 +188,11 @@ func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
-	traceResultJson, err := t.tracer.GetResult()
-	if err != nil {
-		return nil, err
+	if len(t.tracer.callstack) < 1 {
+		return nil, errors.New("invalid number of calls")
 	}
 
-	traceResult := new(callFrame)
-	err = json.Unmarshal(traceResultJson, &traceResult)
-	if err != nil {
-		return nil, err
-	}
-
-	flat, err := t.processOutput(traceResult, []int{})
+	flat, err := t.processOutput(&t.tracer.callstack[0], []int{})
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +201,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(res), t.reason
+	return res, t.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
