@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,31 +22,53 @@ import (
 
 	// Force-load the native, to trigger registration
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 // flatCallTrace is the result of a callTracerParity run.
 type flatCallTrace struct {
-	Action              native.FlatCallTraceAction `json:"action"`
-	BlockHash           *common.Hash               `json:"-"`
-	BlockNumber         uint64                     `json:"-"`
-	Error               string                     `json:"error,omitempty"`
-	Result              native.FlatCallTraceResult `json:"result,omitempty"`
-	Subtraces           int                        `json:"subtraces"`
-	TraceAddress        []int                      `json:"traceAddress"`
-	TransactionHash     *common.Hash               `json:"-"`
-	TransactionPosition *uint64                    `json:"-"`
-	Type                string                     `json:"type"`
-	Time                string                     `json:"-"`
+	Action              flatCallTraceAction `json:"action"`
+	BlockHash           common.Hash         `json:"-"`
+	BlockNumber         uint64              `json:"-"`
+	Error               string              `json:"error,omitempty"`
+	Result              flatCallTraceResult `json:"result,omitempty"`
+	Subtraces           int                 `json:"subtraces"`
+	TraceAddress        []int               `json:"traceAddress"`
+	TransactionHash     common.Hash         `json:"-"`
+	TransactionPosition uint64              `json:"-"`
+	Type                string              `json:"type"`
+	Time                string              `json:"-"`
+}
+
+type flatCallTraceAction struct {
+	Author         common.Address `json:"author,omitempty"`
+	RewardType     string         `json:"rewardType,omitempty"`
+	SelfDestructed common.Address `json:"address,omitempty"`
+	Balance        hexutil.Big    `json:"balance,omitempty"`
+	CallType       string         `json:"callType,omitempty"`
+	CreationMethod string         `json:"creationMethod,omitempty"`
+	From           common.Address `json:"from,omitempty"`
+	Gas            hexutil.Uint64 `json:"gas,omitempty"`
+	Init           hexutil.Bytes  `json:"init,omitempty"`
+	Input          hexutil.Bytes  `json:"input,omitempty"`
+	RefundAddress  common.Address `json:"refundAddress,omitempty"`
+	To             common.Address `json:"to,omitempty"`
+	Value          hexutil.Big    `json:"value,omitempty"`
+}
+
+type flatCallTraceResult struct {
+	Address common.Address `json:"address,omitempty"`
+	Code    hexutil.Bytes  `json:"code,omitempty"`
+	GasUsed hexutil.Uint64 `json:"gasUsed,omitempty"`
+	Output  hexutil.Bytes  `json:"output,omitempty"`
 }
 
 // flatCallTracerTest defines a single test to check the call tracer against.
 type flatCallTracerTest struct {
-	Genesis      *core.Genesis    `json:"genesis"`
-	Context      *callContext     `json:"context"`
-	Input        string           `json:"input"`
-	TracerConfig json.RawMessage  `json:"tracerConfig"`
-	Result       *[]flatCallTrace `json:"result"`
+	Genesis      core.Genesis    `json:"genesis"`
+	Context      callContext     `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
+	Result       []flatCallTrace `json:"result"`
 }
 
 func flatCallTracerTestRunner(tracerName string, filename string, dirPath string, t testing.TB) error {

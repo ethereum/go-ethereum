@@ -51,36 +51,21 @@ var parityErrorMappingStartingWith = map[string]string{
 	"stack underflow": "Stack underflow",
 }
 
-// callParityFrame is the result of a callParityTracerParity run.
+// flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
-	Action              FlatCallTraceAction  `json:"action"`
+	Action              flatCallTraceAction  `json:"action"`
 	BlockHash           *common.Hash         `json:"blockHash"`
 	BlockNumber         uint64               `json:"blockNumber"`
 	Error               string               `json:"error,omitempty"`
-	Result              *FlatCallTraceResult `json:"result,omitempty"`
+	Result              *flatCallTraceResult `json:"result,omitempty"`
 	Subtraces           int                  `json:"subtraces"`
 	TraceAddress        []int                `json:"traceAddress"`
 	TransactionHash     *common.Hash         `json:"transactionHash"`
 	TransactionPosition *uint64              `json:"transactionPosition"`
 	Type                string               `json:"type"`
-	Calls               []callParityFrame    `json:"-"`
 }
 
-// callParityFrame is the result of a callParityTracerParity run.
-type callParityFrame struct {
-	Action              FlatCallTraceAction  `json:"action"`
-	BlockHash           *common.Hash         `json:"blockHash"`
-	BlockNumber         uint64               `json:"blockNumber"`
-	Error               string               `json:"error,omitempty"`
-	Result              *FlatCallTraceResult `json:"result,omitempty"`
-	Subtraces           int                  `json:"subtraces"`
-	TraceAddress        []int                `json:"traceAddress"`
-	TransactionHash     *common.Hash         `json:"transactionHash"`
-	TransactionPosition *uint64              `json:"transactionPosition"`
-	Type                string               `json:"type"`
-	Calls               []callParityFrame    `json:"-"`
-}
-type FlatCallTraceAction struct {
+type flatCallTraceAction struct {
 	Author         *common.Address `json:"author,omitempty"`
 	RewardType     *string         `json:"rewardType,omitempty"`
 	SelfDestructed *common.Address `json:"address,omitempty"`
@@ -96,22 +81,19 @@ type FlatCallTraceAction struct {
 	Value          *hexutil.Big    `json:"value,omitempty"`
 }
 
-type FlatCallTraceResult struct {
+type flatCallTraceResult struct {
 	Address *common.Address `json:"address,omitempty"`
 	Code    *hexutil.Bytes  `json:"code,omitempty"`
 	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
 	Output  *hexutil.Bytes  `json:"output,omitempty"`
 }
 
-// flatCallTracer is a go implementation of the Tracer interface which
-// runs multiple tracers in one go.
+// flatCallTracer reports call frame information of a tx in a flat format, i.e.
+// as opposed to the nested format of `callTracer`.
 type flatCallTracer struct {
-	tracer *callTracer
-	// env    *vm.EVM
-	config flatCallTracerConfig
-	ctx    *tracers.Context // Holds tracer context data
-	// callstack         []callParityFrame
-	// interrupt         uint32           // Atomic flag to signal execution interruption
+	tracer            *callTracer
+	config            flatCallTracerConfig
+	ctx               *tracers.Context // Holds tracer context data
 	reason            error            // Textual reason for the interruption
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
@@ -120,7 +102,7 @@ type flatCallTracerConfig struct {
 	ConvertedParityErrors bool `json:"convertedParityErrors"` // If true, call tracer converts errors to parity format
 }
 
-// newFlatCallTracer returns a new mux tracer.
+// newFlatCallTracer returns a new flatCallTracer.
 func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (tracers.Tracer, error) {
 	var config flatCallTracerConfig
 	if cfg != nil {
@@ -247,13 +229,13 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 	from := input.From
 	frame := flatCallFrame{
 		Type: strings.ToLower(input.Type.String()),
-		Action: FlatCallTraceAction{
+		Action: flatCallTraceAction{
 			From:  &from,
 			To:    &to,
 			Gas:   &gasHex,
 			Value: &valueHex,
 		},
-		Result: &FlatCallTraceResult{
+		Result: &flatCallTraceResult{
 			GasUsed: &gasUsedHex,
 		},
 		Error:        input.Error,
