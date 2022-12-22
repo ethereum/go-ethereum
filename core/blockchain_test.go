@@ -4356,7 +4356,7 @@ func TestEOF(t *testing.T) {
 				// The address 0xAAAA sloads 0x00 and 0x01
 				aa: {
 					Code: (&vm.Container{
-						Types: []vm.TypeAnnotation{
+						Types: []*vm.FunctionMetadata{
 							{Input: 0, Output: 0, MaxStackHeight: 0},
 							{Input: 0, Output: 0, MaxStackHeight: 2},
 							{Input: 0, Output: 0, MaxStackHeight: 0},

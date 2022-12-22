@@ -54,13 +54,13 @@ func isEOFVersion1(code []byte) bool {
 
 // Container is and EOF container object.
 type Container struct {
-	Types []TypeAnnotation
+	Types []*FunctionMetadata
 	Code  [][]byte
 	Data  []byte
 }
 
-// TypeAnnotation is an EOF function signature.
-type TypeAnnotation struct {
+// FunctionMetadata is an EOF function signature.
+type FunctionMetadata struct {
 	Input          uint8
 	Output         uint8
 	MaxStackHeight uint16
@@ -150,9 +150,9 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 
 	// Parse types section.
 	idx := offsetTerminator + 1
-	var types []TypeAnnotation
+	var types []*FunctionMetadata
 	for i := 0; i < typesSize/4; i++ {
-		sig := TypeAnnotation{
+		sig := &FunctionMetadata{
 			Input:          b[idx+i*4],
 			Output:         b[idx+i*4+1],
 			MaxStackHeight: uint16(parseUint16(b[idx+i*4+2:])),
@@ -185,12 +185,12 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
-func (c *Container) ValidateCode() error {
-	// for _, code := range c.Code {
-	//         if err := validateCode(code); err != nil {
-	//                 return err
-	//         }
-	// }
+func (c *Container) ValidateCode(jt *JumpTable) error {
+	for i, code := range c.Code {
+		if err := validateCode(code, i, c.Types, jt); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

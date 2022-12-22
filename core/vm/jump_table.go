@@ -42,6 +42,12 @@ type operation struct {
 
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
+
+	// undefined denotes if the instruction is not officially defined in the jump table
+	undefined bool
+
+	// terminal denotes if the instruction can be the final opcode in a code section
+	terminal bool
 }
 
 var (
@@ -88,7 +94,7 @@ func newShanghaiInstructionSet() JumpTable {
 }
 
 func newShanghaiEOFInstructionSet() JumpTable {
-	instructionSet := newMergeInstructionSet()
+	instructionSet := newShanghaiInstructionSet()
 	enableEOF(&instructionSet)
 	return validate(instructionSet)
 }
@@ -204,6 +210,7 @@ func newByzantiumInstructionSet() JumpTable {
 		minStack:   minStack(2, 0),
 		maxStack:   maxStack(2, 0),
 		memorySize: memoryRevert,
+		terminal:   true,
 	}
 	return validate(instructionSet)
 }
@@ -252,6 +259,7 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: 0,
 			minStack:    minStack(0, 0),
 			maxStack:    maxStack(0, 0),
+			terminal:    true,
 		},
 		ADD: {
 			execute:     opAdd,
@@ -1040,6 +1048,7 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
+			terminal:   true,
 		},
 		SELFDESTRUCT: {
 			execute:    opSelfdestruct,
@@ -1052,7 +1061,7 @@ func newFrontierInstructionSet() JumpTable {
 	// Fill all unassigned slots with opUndefined.
 	for i, entry := range tbl {
 		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
+			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0), undefined: true}
 		}
 	}
 
