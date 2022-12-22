@@ -99,7 +99,7 @@ type flatCallTracer struct {
 }
 
 type flatCallTracerConfig struct {
-	ConvertedParityErrors bool `json:"convertedParityErrors"` // If true, call tracer converts errors to parity format
+	ConvertParityErrors bool `json:"convertParityErrors"` // If true, call tracer converts errors to parity format
 }
 
 // newFlatCallTracer returns a new flatCallTracer.
@@ -210,16 +210,17 @@ func (t *flatCallTracer) Stop(err error) {
 }
 
 func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (output []flatCallFrame, err error) {
-	gasHex := hexutil.Uint64(input.Gas)
-	gasUsedHex := hexutil.Uint64(input.GasUsed)
-	valueHex := hexutil.Big{}
+	var (
+		gasHex     = hexutil.Uint64(input.Gas)
+		gasUsedHex = hexutil.Uint64(input.GasUsed)
+		valueHex   = hexutil.Big{}
+		// copy addresses
+		to   = input.To
+		from = input.From
+	)
 	if input.Value != nil {
 		valueHex = hexutil.Big(*input.Value)
 	}
-
-	// copy addresses
-	to := input.To
-	from := input.From
 	frame := flatCallFrame{
 		Type: strings.ToLower(input.Type.String()),
 		Action: flatCallTraceAction{
@@ -233,9 +234,9 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 		},
 		Error:        input.Error,
 		TraceAddress: traceAddress,
+		Subtraces:    len(input.Calls),
 	}
 
-	// typ := vm.StringToOp(strings.ToUpper(call.Type))
 	if input.Type == vm.CREATE || input.Type == vm.CREATE2 {
 		t.formatCreateResult(&frame, input)
 	} else if input.Type == vm.SELFDESTRUCT {
@@ -246,11 +247,9 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 
 	t.fillCallFrameFromContext(&frame)
 
-	if t.config.ConvertedParityErrors {
+	if t.config.ConvertParityErrors {
 		t.convertErrorToParity(&frame)
 	}
-
-	frame.Subtraces = len(input.Calls)
 
 	output = append(output, frame)
 
