@@ -14,6 +14,12 @@ type DAG struct {
 	*dag.DAG
 }
 
+type TxDep struct {
+	Index         int
+	ReadList      []ReadDescriptor
+	FullWriteList [][]WriteDescriptor
+}
+
 func HasReadDep(txFrom TxnOutput, txTo TxnInput) bool {
 	reads := make(map[Key]bool)
 
@@ -67,6 +73,54 @@ func BuildDAG(deps TxnInputOutput) (d DAG) {
 	}
 
 	return
+}
+
+func depsHelper(dependencies map[int]map[int]bool, txFrom TxnOutput, txTo TxnInput, i int, j int) map[int]map[int]bool {
+	if HasReadDep(txFrom, txTo) {
+		dependencies[i][j] = true
+
+		for k := range dependencies[i] {
+			_, foundDep := dependencies[j][k]
+
+			if foundDep {
+				delete(dependencies[i], k)
+			}
+		}
+	}
+
+	return dependencies
+}
+
+func UpdateDeps(deps map[int]map[int]bool, t TxDep) map[int]map[int]bool {
+	txTo := t.ReadList
+
+	deps[t.Index] = map[int]bool{}
+
+	for j := 0; j <= t.Index-1; j++ {
+		txFrom := t.FullWriteList[j]
+
+		deps = depsHelper(deps, txFrom, txTo, t.Index, j)
+	}
+
+	return deps
+}
+
+func GetDep(deps TxnInputOutput) map[int]map[int]bool {
+	newDependencies := map[int]map[int]bool{}
+
+	for i := 1; i < len(deps.inputs); i++ {
+		txTo := deps.inputs[i]
+
+		newDependencies[i] = map[int]bool{}
+
+		for j := 0; j <= i-1; j++ {
+			txFrom := deps.allOutputs[j]
+
+			newDependencies = depsHelper(newDependencies, txFrom, txTo, i, j)
+		}
+	}
+
+	return newDependencies
 }
 
 // Find the longest execution path in the DAG

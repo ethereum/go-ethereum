@@ -179,6 +179,10 @@ func (sdb *StateDB) SetMVHashmap(mvhm *blockstm.MVHashMap) {
 	sdb.dep = -1
 }
 
+func (sdb *StateDB) GetMVHashmap() *blockstm.MVHashMap {
+	return sdb.mvHashmap
+}
+
 func (s *StateDB) MVWriteList() []blockstm.WriteDescriptor {
 	writes := make([]blockstm.WriteDescriptor, 0, len(s.writeMap))
 
@@ -225,6 +229,14 @@ func (s *StateDB) ensureWriteMap() {
 	if s.writeMap == nil {
 		s.writeMap = make(map[blockstm.Key]blockstm.WriteDescriptor)
 	}
+}
+
+func (s *StateDB) ClearReadMap() {
+	s.readMap = make(map[blockstm.Key]blockstm.ReadDescriptor)
+}
+
+func (s *StateDB) ClearWriteMap() {
+	s.writeMap = make(map[blockstm.Key]blockstm.WriteDescriptor)
 }
 
 func (s *StateDB) HadInvalidRead() bool {

@@ -75,6 +75,15 @@ type ExecutionTask struct {
 	totalUsedGas               *uint64
 	receipts                   *types.Receipts
 	allLogs                    *[]*types.Log
+
+	// length of dependencies          -> 2 + k (k = a whole number)
+	// first 2 element in dependencies -> transaction index, and flag representing if delay is allowed or not
+	//                                       (0 -> delay is not allowed, 1 -> delay is allowed)
+	// next k elements in dependencies -> transaction indexes on which transaction i is dependent on
+	dependencies []int
+
+	blockContext vm.BlockContext
+	coinbase     common.Address
 }
 
 func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (err error) {
@@ -83,9 +92,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	task.statedb.SetMVHashmap(mvh)
 	task.statedb.SetIncarnation(incarnation)
 
-	blockContext := NewEVMBlockContext(task.header, task.blockChain, nil)
-
-	evm := vm.NewEVM(blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
+	evm := vm.NewEVM(task.blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(task.msg)
@@ -112,8 +119,8 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 
 		reads := task.statedb.MVReadMap()
 
-		if _, ok := reads[blockstm.NewSubpathKey(blockContext.Coinbase, state.BalancePath)]; ok {
-			log.Info("Coinbase is in MVReadMap", "address", blockContext.Coinbase)
+		if _, ok := reads[blockstm.NewSubpathKey(task.blockContext.Coinbase, state.BalancePath)]; ok {
+			log.Info("Coinbase is in MVReadMap", "address", task.blockContext.Coinbase)
 
 			task.shouldRerunWithoutFeeDelay = true
 		}
@@ -157,6 +164,10 @@ func (task *ExecutionTask) Hash() common.Hash {
 	return task.tx.Hash()
 }
 
+func (task *ExecutionTask) Dependencies() []int {
+	return task.dependencies
+}
+
 func (task *ExecutionTask) Settle() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -171,9 +182,7 @@ func (task *ExecutionTask) Settle() {
 
 	task.finalStateDB.Prepare(task.tx.Hash(), task.index)
 
-	coinbase, _ := task.blockChain.Engine().Author(task.header)
-
-	coinbaseBalance := task.finalStateDB.GetBalance(coinbase)
+	coinbaseBalance := task.finalStateDB.GetBalance(task.coinbase)
 
 	task.finalStateDB.ApplyMVWriteSet(task.statedb.MVWriteList())
 
@@ -186,7 +195,7 @@ func (task *ExecutionTask) Settle() {
 			task.finalStateDB.AddBalance(task.result.BurntContractAddress, task.result.FeeBurnt)
 		}
 
-		task.finalStateDB.AddBalance(coinbase, task.result.FeeTipped)
+		task.finalStateDB.AddBalance(task.coinbase, task.result.FeeTipped)
 		output1 := new(big.Int).SetBytes(task.result.SenderInitBalance.Bytes())
 		output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -196,7 +205,7 @@ func (task *ExecutionTask) Settle() {
 			task.finalStateDB,
 
 			task.msg.From(),
-			coinbase,
+			task.coinbase,
 
 			task.result.FeeTipped,
 			task.result.SenderInitBalance,
@@ -267,6 +276,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		blockNumber = block.Number()
 		allLogs     []*types.Log
 		usedGas     = new(uint64)
+		metadata    bool
 	)
 
 	// Mutate the block and state according to any hard-fork specs
@@ -280,6 +290,14 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	coinbase, _ := p.bc.Engine().Author(header)
 
+	deps, delayMap := GetDeps(block.Header().TxDependency)
+
+	if block.Header().TxDependency != nil {
+		metadata = true
+	}
+
+	blockContext := NewEVMBlockContext(header, p.bc, nil)
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSigner(p.config, header.Number), header.BaseFee)
@@ -290,37 +308,69 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 		cleansdb := statedb.Copy()
 
-		if msg.From() == coinbase {
-			shouldDelayFeeCal = false
-		}
+		if len(header.TxDependency) > 0 {
+			shouldDelayFeeCal = delayMap[i]
 
-		task := &ExecutionTask{
-			msg:               msg,
-			config:            p.config,
-			gasLimit:          block.GasLimit(),
-			blockNumber:       blockNumber,
-			blockHash:         blockHash,
-			tx:                tx,
-			index:             i,
-			cleanStateDB:      cleansdb,
-			finalStateDB:      statedb,
-			blockChain:        p.bc,
-			header:            header,
-			evmConfig:         cfg,
-			shouldDelayFeeCal: &shouldDelayFeeCal,
-			sender:            msg.From(),
-			totalUsedGas:      usedGas,
-			receipts:          &receipts,
-			allLogs:           &allLogs,
-		}
+			task := &ExecutionTask{
+				msg:               msg,
+				config:            p.config,
+				gasLimit:          block.GasLimit(),
+				blockNumber:       blockNumber,
+				blockHash:         blockHash,
+				tx:                tx,
+				index:             i,
+				cleanStateDB:      cleansdb,
+				finalStateDB:      statedb,
+				blockChain:        p.bc,
+				header:            header,
+				evmConfig:         cfg,
+				shouldDelayFeeCal: &shouldDelayFeeCal,
+				sender:            msg.From(),
+				totalUsedGas:      usedGas,
+				receipts:          &receipts,
+				allLogs:           &allLogs,
+				dependencies:      deps[i],
+				blockContext:      blockContext,
+				coinbase:          coinbase,
+			}
 
-		tasks = append(tasks, task)
+			tasks = append(tasks, task)
+		} else {
+			if msg.From() == coinbase {
+				shouldDelayFeeCal = false
+			}
+
+			task := &ExecutionTask{
+				msg:               msg,
+				config:            p.config,
+				gasLimit:          block.GasLimit(),
+				blockNumber:       blockNumber,
+				blockHash:         blockHash,
+				tx:                tx,
+				index:             i,
+				cleanStateDB:      cleansdb,
+				finalStateDB:      statedb,
+				blockChain:        p.bc,
+				header:            header,
+				evmConfig:         cfg,
+				shouldDelayFeeCal: &shouldDelayFeeCal,
+				sender:            msg.From(),
+				totalUsedGas:      usedGas,
+				receipts:          &receipts,
+				allLogs:           &allLogs,
+				dependencies:      nil,
+				blockContext:      blockContext,
+				coinbase:          coinbase,
+			}
+
+			tasks = append(tasks, task)
+		}
 	}
 
 	backupStateDB := statedb.Copy()
 
 	profile := false
-	result, err := blockstm.ExecuteParallel(tasks, profile)
+	result, err := blockstm.ExecuteParallel(tasks, false, metadata)
 
 	if err == nil && profile {
 		_, weight := result.Deps.LongestPath(*result.Stats)
@@ -356,7 +406,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				t.totalUsedGas = usedGas
 			}
 
-			_, err = blockstm.ExecuteParallel(tasks, false)
+			_, err = blockstm.ExecuteParallel(tasks, false, metadata)
 
 			break
 		}
@@ -371,4 +421,24 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 
 	return receipts, allLogs, *usedGas, nil
+}
+
+func GetDeps(txDependency [][]uint64) (map[int][]int, map[int]bool) {
+	deps := make(map[int][]int)
+	delayMap := make(map[int]bool)
+
+	for i := 0; i <= len(txDependency)-1; i++ {
+		idx := int(txDependency[i][0])
+		shouldDelay := txDependency[i][1] == 1
+
+		delayMap[idx] = shouldDelay
+
+		deps[idx] = []int{}
+
+		for j := 2; j <= len(txDependency[i])-1; j++ {
+			deps[idx] = append(deps[idx], int(txDependency[i][j]))
+		}
+	}
+
+	return deps, delayMap
 }

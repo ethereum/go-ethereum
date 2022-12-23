@@ -80,3 +80,15 @@ func (io *TxnInputOutput) recordWrite(txId int, output []WriteDescriptor) {
 func (io *TxnInputOutput) recordAllWrite(txId int, output []WriteDescriptor) {
 	io.allOutputs[txId] = output
 }
+
+func (io *TxnInputOutput) RecordReadAtOnce(inputs [][]ReadDescriptor) {
+	for ind, val := range inputs {
+		io.inputs[ind] = val
+	}
+}
+
+func (io *TxnInputOutput) RecordAllWriteAtOnce(outputs [][]WriteDescriptor) {
+	for ind, val := range outputs {
+		io.allOutputs[ind] = val
+	}
+}

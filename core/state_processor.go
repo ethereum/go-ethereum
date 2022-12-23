@@ -97,11 +97,50 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
-	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	var result *ExecutionResult
+
+	var err error
+
+	backupMVHashMap := statedb.GetMVHashmap()
+
+	// pause recording read and write
+	statedb.SetMVHashmap(nil)
+
+	coinbaseBalance := statedb.GetBalance(evm.Context.Coinbase)
+
+	// resume recording read and write
+	statedb.SetMVHashmap(backupMVHashMap)
+
+	result, err = ApplyMessageNoFeeBurnOrTip(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
+
+	// stop recording read and write
+	statedb.SetMVHashmap(nil)
+
+	if evm.ChainConfig().IsLondon(blockNumber) {
+		statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
+	}
+
+	statedb.AddBalance(evm.Context.Coinbase, result.FeeTipped)
+	output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
+	output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
+
+	// Deprecating transfer log and will be removed in future fork. PLEASE DO NOT USE this transfer log going forward. Parameters won't get updated as expected going forward with EIP1559
+	// add transfer log
+	AddFeeTransferLog(
+		statedb,
+
+		msg.From(),
+		evm.Context.Coinbase,
+
+		result.FeeTipped,
+		result.SenderInitBalance,
+		coinbaseBalance,
+		output1.Sub(output1, result.FeeTipped),
+		output2.Add(output2, result.FeeTipped),
+	)
 
 	// Update the state with pending changes.
 	var root []byte

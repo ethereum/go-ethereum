@@ -26,6 +26,7 @@ type ExecTask interface {
 	Hash() common.Hash
 	Sender() common.Address
 	Settle()
+	Dependencies() []int
 }
 
 type ExecVersionView struct {
@@ -82,6 +83,34 @@ func (h *IntHeap) Pop() any {
 	return x
 }
 
+type SafeQueue interface {
+	Push(v int, d interface{})
+	Pop() interface{}
+	Len() int
+}
+
+type SafeFIFOQueue struct {
+	c chan interface{}
+}
+
+func NewSafeFIFOQueue(capacity int) *SafeFIFOQueue {
+	return &SafeFIFOQueue{
+		c: make(chan interface{}, capacity),
+	}
+}
+
+func (q *SafeFIFOQueue) Push(v int, d interface{}) {
+	q.c <- d
+}
+
+func (q *SafeFIFOQueue) Pop() interface{} {
+	return <-q.c
+}
+
+func (q *SafeFIFOQueue) Len() int {
+	return len(q.c)
+}
+
 // A thread safe priority queue
 type SafePriorityQueue struct {
 	m     sync.Mutex
@@ -122,9 +151,10 @@ func (pq *SafePriorityQueue) Len() int {
 }
 
 type ParallelExecutionResult struct {
-	TxIO  *TxnInputOutput
-	Stats *map[int]ExecutionStat
-	Deps  *DAG
+	TxIO    *TxnInputOutput
+	Stats   *map[int]ExecutionStat
+	Deps    *DAG
+	AllDeps map[int]map[int]bool
 }
 
 const numGoProcs = 2
@@ -145,7 +175,7 @@ type ParallelExecutor struct {
 	chSpeculativeTasks chan struct{}
 
 	// Channel to signal that the result of a transaction could be written to storage
-	specTaskQueue *SafePriorityQueue
+	specTaskQueue SafeQueue
 
 	// A priority queue that stores speculative tasks
 	chSettle chan int
@@ -154,7 +184,7 @@ type ParallelExecutor struct {
 	chResults chan struct{}
 
 	// A priority queue that stores the transaction index of results, so we can validate the results in order
-	resultQueue *SafePriorityQueue
+	resultQueue SafeQueue
 
 	// A wait group to wait for all settling tasks to finish
 	settleWg sync.WaitGroup
@@ -211,8 +241,20 @@ type ExecutionStat struct {
 	Worker      int
 }
 
-func NewParallelExecutor(tasks []ExecTask, profile bool) *ParallelExecutor {
+func NewParallelExecutor(tasks []ExecTask, profile bool, metadata bool) *ParallelExecutor {
 	numTasks := len(tasks)
+
+	var resultQueue SafeQueue
+
+	var specTaskQueue SafeQueue
+
+	if metadata {
+		resultQueue = NewSafeFIFOQueue(numTasks)
+		specTaskQueue = NewSafeFIFOQueue(numTasks)
+	} else {
+		resultQueue = NewSafePriorityQueue(numTasks)
+		specTaskQueue = NewSafePriorityQueue(numTasks)
+	}
 
 	pe := &ParallelExecutor{
 		tasks:              tasks,
@@ -221,8 +263,8 @@ func NewParallelExecutor(tasks []ExecTask, profile bool) *ParallelExecutor {
 		chSpeculativeTasks: make(chan struct{}, numTasks),
 		chSettle:           make(chan int, numTasks),
 		chResults:          make(chan struct{}, numTasks),
-		specTaskQueue:      NewSafePriorityQueue(numTasks),
-		resultQueue:        NewSafePriorityQueue(numTasks),
+		specTaskQueue:      specTaskQueue,
+		resultQueue:        resultQueue,
 		lastSettled:        -1,
 		skipCheck:          make(map[int]bool),
 		execTasks:          makeStatusManager(numTasks),
@@ -241,19 +283,36 @@ func NewParallelExecutor(tasks []ExecTask, profile bool) *ParallelExecutor {
 	return pe
 }
 
+// nolint: gocognit
 func (pe *ParallelExecutor) Prepare() {
-	prevSenderTx := make(map[common.Address]int)
-
 	for i, t := range pe.tasks {
+		clearPendingFlag := false
+
 		pe.skipCheck[i] = false
 		pe.estimateDeps[i] = make([]int, 0)
 
-		if tx, ok := prevSenderTx[t.Sender()]; ok {
-			pe.execTasks.addDependencies(tx, i)
-			pe.execTasks.clearPending(i)
-		}
+		if len(t.Dependencies()) > 0 {
+			for _, val := range t.Dependencies() {
+				clearPendingFlag = true
 
-		prevSenderTx[t.Sender()] = i
+				pe.execTasks.addDependencies(val, i)
+			}
+
+			if clearPendingFlag {
+				pe.execTasks.clearPending(i)
+
+				clearPendingFlag = false
+			}
+		} else {
+			prevSenderTx := make(map[common.Address]int)
+
+			if tx, ok := prevSenderTx[t.Sender()]; ok {
+				pe.execTasks.addDependencies(tx, i)
+				pe.execTasks.clearPending(i)
+			}
+
+			prevSenderTx[t.Sender()] = i
+		}
 	}
 
 	pe.workerWg.Add(numSpeculativeProcs + numGoProcs)
@@ -478,13 +537,13 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 		pe.Close(true)
 
-		var dag DAG
+		var allDeps map[int]map[int]bool
 
 		if pe.profile {
-			dag = BuildDAG(*pe.lastTxIO)
+			allDeps = GetDep(*pe.lastTxIO)
 		}
 
-		return ParallelExecutionResult{pe.lastTxIO, &pe.stats, &dag}, err
+		return ParallelExecutionResult{pe.lastTxIO, &pe.stats, nil, allDeps}, err
 	}
 
 	// Send the next immediate pending transaction to be executed
@@ -518,12 +577,12 @@ func (pe *ParallelExecutor) Step(res *ExecResult) (result ParallelExecutionResul
 
 type PropertyCheck func(*ParallelExecutor) error
 
-func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck) (result ParallelExecutionResult, err error) {
+func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyCheck, metadata bool) (result ParallelExecutionResult, err error) {
 	if len(tasks) == 0 {
-		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil}, nil
+		return ParallelExecutionResult{MakeTxnInputOutput(len(tasks)), nil, nil, nil}, nil
 	}
 
-	pe := NewParallelExecutor(tasks, profile)
+	pe := NewParallelExecutor(tasks, profile, metadata)
 	pe.Prepare()
 
 	for range pe.chResults {
@@ -547,6 +606,6 @@ func executeParallelWithCheck(tasks []ExecTask, profile bool, check PropertyChec
 	return
 }
 
-func ExecuteParallel(tasks []ExecTask, profile bool) (result ParallelExecutionResult, err error) {
-	return executeParallelWithCheck(tasks, profile, nil)
+func ExecuteParallel(tasks []ExecTask, profile bool, metadata bool) (result ParallelExecutionResult, err error) {
+	return executeParallelWithCheck(tasks, profile, nil, metadata)
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -81,6 +82,10 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	// TODO: will be handled (and made mandatory) in a hardfork event
+	// when true, will get the transaction dependencies for parallel execution, also set in `state_processor.go`
+	EnableMVHashMap = true
 )
 
 // environment is the worker's current environment and holds all
@@ -918,7 +923,50 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	}
 	var coalescedLogs []*types.Log
 
+	var depsMVReadList [][]blockstm.ReadDescriptor
+
+	var depsMVFullWriteList [][]blockstm.WriteDescriptor
+
+	var mvReadMapList []map[blockstm.Key]blockstm.ReadDescriptor
+
+	var deps map[int]map[int]bool
+
+	chDeps := make(chan blockstm.TxDep)
+
+	var count int
+
+	var depsWg sync.WaitGroup
+
+	// create and add empty mvHashMap in statedb
+	if EnableMVHashMap {
+		depsMVReadList = [][]blockstm.ReadDescriptor{}
+
+		depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
+
+		mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
+
+		deps = map[int]map[int]bool{}
+
+		chDeps = make(chan blockstm.TxDep)
+
+		count = 0
+
+		depsWg.Add(1)
+
+		go func(chDeps chan blockstm.TxDep) {
+			for t := range chDeps {
+				deps = blockstm.UpdateDeps(deps, t)
+			}
+
+			depsWg.Done()
+		}(chDeps)
+	}
+
 	for {
+		if EnableMVHashMap {
+			env.state.AddEmptyMVHashMap()
+		}
+
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
 		// (2) worker start or restart, the interrupt signal is 1
@@ -986,7 +1034,23 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			txs.Shift()
+
+			if EnableMVHashMap {
+				depsMVReadList = append(depsMVReadList, env.state.MVReadList())
+				depsMVFullWriteList = append(depsMVFullWriteList, env.state.MVFullWriteList())
+				mvReadMapList = append(mvReadMapList, env.state.MVReadMap())
+
+				temp := blockstm.TxDep{
+					Index:         env.tcount - 1,
+					ReadList:      depsMVReadList[count],
+					FullWriteList: depsMVFullWriteList,
+				}
+
+				chDeps <- temp
+				count++
+
+				txs.Shift()
+			}
 
 		case errors.Is(err, core.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
@@ -998,6 +1062,54 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			// nonce-too-high clause will prevent us from executing in vain).
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift()
+		}
+
+		if EnableMVHashMap {
+			env.state.ClearReadMap()
+			env.state.ClearWriteMap()
+		}
+	}
+
+	// nolint:nestif
+	if EnableMVHashMap {
+		close(chDeps)
+		depsWg.Wait()
+
+		if len(mvReadMapList) > 0 {
+			tempDeps := make([][]uint64, len(mvReadMapList))
+
+			// adding for txIdx = 0
+			tempDeps[0] = []uint64{uint64(0)}
+			tempDeps[0] = append(tempDeps[0], 1)
+
+			for j := range deps[0] {
+				tempDeps[0] = append(tempDeps[0], uint64(j))
+			}
+
+			for i := 1; i <= len(mvReadMapList)-1; i++ {
+				tempDeps[i] = []uint64{uint64(i)}
+
+				reads := mvReadMapList[i-1]
+
+				_, ok1 := reads[blockstm.NewSubpathKey(env.coinbase, state.BalancePath)]
+				_, ok2 := reads[blockstm.NewSubpathKey(common.HexToAddress(w.chainConfig.Bor.CalculateBurntContract(env.header.Number.Uint64())), state.BalancePath)]
+
+				if ok1 || ok2 {
+					// 0 -> delay is not allowed
+					tempDeps[i] = append(tempDeps[i], 0)
+				} else {
+					// 1 -> delay is allowed
+					tempDeps[i] = append(tempDeps[i], 1)
+				}
+
+				for j := range deps[i] {
+					tempDeps[i] = append(tempDeps[i], uint64(j))
+				}
+			}
+
+			env.header.TxDependency = tempDeps
+		} else {
+			env.header.TxDependency = nil
 		}
 	}
 
