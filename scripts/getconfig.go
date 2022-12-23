@@ -11,6 +11,7 @@ import (
 
 	"github.com/pelletier/go-toml"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 )
 
@@ -514,7 +515,13 @@ func commentFlags(path string, updatedArgs []string) {
 
 	ignoreLineFlag := false
 
-	input, err := os.ReadFile(path)
+	canonicalPath, err := common.VerifyPath(path)
+	if err != nil {
+		fmt.Println("path not verified: " + err.Error())
+		return
+	}
+
+	input, err := os.ReadFile(canonicalPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -594,7 +601,7 @@ func commentFlags(path string, updatedArgs []string) {
 
 	output := strings.Join(newLines, "\n")
 
-	err = os.WriteFile(path, []byte(output), 0600)
+	err = os.WriteFile(canonicalPath, []byte(output), 0600)
 	if err != nil {
 		log.Fatalln(err)
 	}

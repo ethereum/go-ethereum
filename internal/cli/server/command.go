@@ -41,7 +41,7 @@ func (c *Command) MarkDown() string {
 // Help implements the cli.Command interface
 func (c *Command) Help() string {
 	return `Usage: bor [options]
-  
+
 	Run the Bor server.
   ` + c.Flags().Help()
 }

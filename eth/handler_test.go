@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"math/big"
 	"sort"
 	"sync"
@@ -92,7 +93,7 @@ func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
+func (p *testTxPool) Pending(ctx context.Context, enforceTips bool) map[common.Address]types.Transactions {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 

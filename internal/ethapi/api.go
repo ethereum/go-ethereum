@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"runtime"
 	"strings"
 	"time"
 
@@ -1615,6 +1616,26 @@ type PublicTransactionPoolAPI struct {
 	signer    types.Signer
 }
 
+// returns block transactions along with state-sync transaction if present
+// nolint: unparam
+func (api *PublicTransactionPoolAPI) getAllBlockTransactions(ctx context.Context, block *types.Block) (types.Transactions, bool) {
+	txs := block.Transactions()
+
+	stateSyncPresent := false
+
+	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64())
+	if borReceipt != nil {
+		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
+		if txHash != (common.Hash{}) {
+			borTx, _, _, _, _ := api.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
+			txs = append(txs, borTx)
+			stateSyncPresent = true
+		}
+	}
+
+	return txs, stateSyncPresent
+}
+
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
 	// The signer used by the API should always be the 'latest' known one because we expect
@@ -1626,7 +1647,8 @@ func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransa
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := s.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 	return nil
@@ -1635,7 +1657,8 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(ctx context.
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
 func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
 	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := s.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 	return nil
@@ -2205,6 +2228,21 @@ func (api *PrivateDebugAPI) GetCheckpointWhitelist() map[uint64]common.Hash {
 // PurgeCheckpointWhitelist purges the current checkpoint whitelist entries
 func (api *PrivateDebugAPI) PurgeCheckpointWhitelist() {
 	api.b.PurgeCheckpointWhitelist()
+}
+
+// GetTraceStack returns the current trace stack
+func (api *PrivateDebugAPI) GetTraceStack() string {
+	buf := make([]byte, 1024)
+
+	for {
+		n := runtime.Stack(buf, true)
+
+		if n < len(buf) {
+			return string(buf)
+		}
+
+		buf = make([]byte, 2*len(buf))
+	}
 }
 
 // PublicNetAPI offers network related RPC methods

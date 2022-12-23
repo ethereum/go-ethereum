@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"fmt"
 	"runtime"
 )
 
@@ -25,4 +26,27 @@ func Callers(show int) []string {
 	}
 
 	return callers
+}
+
+func CodeLine() (string, string, int) {
+	pc, filename, line, _ := runtime.Caller(1)
+	return runtime.FuncForPC(pc).Name(), filename, line
+}
+
+func CodeLineStr() string {
+	pc, filename, line, _ := runtime.Caller(1)
+	return fmt.Sprintf("%s:%d - %s", filename, line, runtime.FuncForPC(pc).Name())
+}
+
+func Stack(all bool) []byte {
+	buf := make([]byte, 4096)
+
+	for {
+		n := runtime.Stack(buf, all)
+		if n < len(buf) {
+			return buf[:n]
+		}
+
+		buf = make([]byte, 2*len(buf))
+	}
 }

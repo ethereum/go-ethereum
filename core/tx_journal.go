@@ -61,11 +61,13 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
 	}
+
 	// Open the journal for loading any past transactions
 	input, err := os.Open(journal.path)
 	if err != nil {
 		return err
 	}
+
 	defer input.Close()
 
 	// Temporarily discard any journal additions (don't double add on load)
@@ -80,29 +82,35 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	// appropriate progress counters. Then use this method to load all the
 	// journaled transactions in small-ish batches.
 	loadBatch := func(txs types.Transactions) {
+		errs := add(txs)
+
+		dropped = len(errs)
+
 		for _, err := range add(txs) {
-			if err != nil {
-				log.Debug("Failed to add journaled transaction", "err", err)
-				dropped++
-			}
+			log.Debug("Failed to add journaled transaction", "err", err)
 		}
 	}
 	var (
 		failure error
 		batch   types.Transactions
 	)
+
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
+
 		if err = stream.Decode(tx); err != nil {
 			if err != io.EOF {
 				failure = err
 			}
+
 			if batch.Len() > 0 {
 				loadBatch(batch)
 			}
+
 			break
 		}
+
 		// New transaction parsed, queue up for later, import if threshold is reached
 		total++
 
@@ -111,6 +119,7 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 			batch = batch[:0]
 		}
 	}
+
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
 
 	return failure

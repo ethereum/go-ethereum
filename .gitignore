@@ -54,4 +54,6 @@ profile.cov
 
 dist
 
+.dccache
+
 *.csv
