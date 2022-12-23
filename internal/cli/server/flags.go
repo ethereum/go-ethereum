@@ -92,6 +92,18 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.GRPCAddress,
 		Default: c.cliConfig.Heimdall.GRPCAddress,
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.runheimdall",
+		Usage:   "Run Heimdall service as a child process",
+		Value:   &c.cliConfig.Heimdall.RunHeimdall,
+		Default: c.cliConfig.Heimdall.RunHeimdall,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "bor.runheimdallargs",
+		Usage:   "Arguments to pass to Heimdall service",
+		Value:   &c.cliConfig.Heimdall.RunHeimdallArgs,
+		Default: c.cliConfig.Heimdall.RunHeimdallArgs,
+	})
 
 	// txpool options
 	f.SliceStringFlag(&flagset.SliceStringFlag{

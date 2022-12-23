@@ -2035,6 +2035,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 			HeimdallURL:         ctx.GlobalString(HeimdallURLFlag.Name),
 			WithoutHeimdall:     ctx.GlobalBool(WithoutHeimdallFlag.Name),
 			HeimdallgRPCAddress: ctx.GlobalString(HeimdallgRPCAddressFlag.Name),
+			RunHeimdall:         ctx.GlobalBool(RunHeimdallFlag.Name),
+			RunHeimdallArgs:     ctx.GlobalString(RunHeimdallArgsFlag.Name),
 		})
 		engine = ethereum.Engine()
 	} else {

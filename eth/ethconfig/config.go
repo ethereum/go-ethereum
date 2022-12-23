@@ -221,6 +221,12 @@ type Config struct {
 	// Address to connect to Heimdall gRPC server
 	HeimdallgRPCAddress string
 
+	// Run heimdall service as a child process
+	RunHeimdall bool
+
+	// Arguments to pass to heimdall service
+	RunHeimdallArgs string
+
 	// Bor logs flag
 	BorLogs bool
 

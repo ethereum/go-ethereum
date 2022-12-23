@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/maticnetwork/heimdall/cmd/heimdalld/service"
 	"github.com/mitchellh/cli"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -108,6 +110,15 @@ func (c *Command) Run(args []string) int {
 	}
 	c.srv = srv
 
+	if c.config.Heimdall.RunHeimdall {
+		shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
+		go func() {
+			service.NewHeimdallService(shutdownCtx, c.getHeimdallArgs())
+		}()
+	}
+
 	return c.handleSignals()
 }
 
@@ -140,4 +151,9 @@ func (c *Command) handleSignals() int {
 // GetConfig returns the user specified config
 func (c *Command) GetConfig() *Config {
 	return c.cliConfig
+}
+
+func (c *Command) getHeimdallArgs() []string {
+	heimdallArgs := strings.Split(c.config.Heimdall.RunHeimdallArgs, ",")
+	return append([]string{"start"}, heimdallArgs...)
 }

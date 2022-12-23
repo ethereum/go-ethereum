@@ -161,6 +161,12 @@ type HeimdallConfig struct {
 
 	// GRPCAddress is the address of the heimdall grpc server
 	GRPCAddress string `hcl:"grpc-address,optional" toml:"grpc-address,optional"`
+
+	// RunHeimdall is used to run heimdall as a child process
+	RunHeimdall bool `hcl:"bor.runheimdall,optional" toml:"bor.runheimdall,optional"`
+
+	// RunHeimdal args are the arguments to run heimdall with
+	RunHeimdallArgs string `hcl:"bor.runheimdallargs,optional" toml:"bor.runheimdallargs,optional"`
 }
 
 type TxPoolConfig struct {
@@ -664,6 +670,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	n.HeimdallURL = c.Heimdall.URL
 	n.WithoutHeimdall = c.Heimdall.Without
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
+	n.RunHeimdall = c.Heimdall.RunHeimdall
+	n.RunHeimdallArgs = c.Heimdall.RunHeimdallArgs
 
 	// gas price oracle
 	{
