@@ -137,7 +137,8 @@ var (
 		"focal":  "golang-go",   // EOL: 04/2030
 		"impish": "golang-go",   // EOL: 07/2022
 		"jammy":  "golang-go",   // EOL: 04/2032
-		"kinetic": "golang-go",  //  EOL: 07/2023
+		"kinetic": "golang-go",  // EOL: 07/2023
+		//"lunar": "golang-go",  // EOL: 01/2024
 	}
 
 	debGoBootPaths = map[string]string{
