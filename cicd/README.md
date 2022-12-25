@@ -17,7 +17,10 @@ Each PR merged into `dev-upgrade` will trigger below actions:
 ```
 {
   "xdc0": {
-    "pk": {{PRIVATE KEY}}
+    "pk": {{PRIVATE KEY}},
+    "address": {{XDC wallet address}},
+    "imageTag": {{Optional field to run different version of XDC}},
+    "logLevel": {{Optional field to adjust the log level for the container}}
   },
   "xdc1": {...},
   "xdc{{NUMBER}}: {...}
@@ -35,12 +38,15 @@ Each PR merged into `dev-upgrade` will trigger below actions:
   
 You are all set!
 
-## Testnet
-*** WIP ***
-Testnet release build are triggered by cutting a "pre-release" tag which matches the name of `TESTNET-{{release-version}}` from dev-upgrade or master branch.
-An example can be found here: https://github.com/XinFinOrg/XDPoSChain/releases/tag/Testnet-v2.0.0
-For more information, refer to github documentation on the release: https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases
-
-## Mainnet
-*** WIP ***
-Mainnet release are triggered by making a normal release tag with name starting with `v` (stands for version) from the master branch.
+## How to run different version of XDC on selected nodes
+1. Create a new image tag:
+  - Check out the repo
+  - Run docker build `docker build -t xdc-devnet -f cicd/devnet/Dockerfile .`
+  - Run docker tag `docker tag xdc-devnet:latest xinfinorg/devnet:test-{{put your version number here}}`
+  - Run docker push `docker push xinfinorg/devnet:test-{{Version number from step above}}`
+2. Adjust node-config.json
+  - Download the node-config.json from s3
+  - Add/update the `imageTag` field with value of `test-{{version number you defined in step 1}}` for the selected number of nodes you want to test with
+  - Optional: Adjust the log level by add/updating the field of `logLevel`
+  - Save and upload to s3
+3. Make a dummy PR and get merged. Wait it to be updated.

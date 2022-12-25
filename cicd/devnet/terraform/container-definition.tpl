@@ -1,7 +1,7 @@
 [
   {
     "name": "tfXdcNode",
-    "image": "xinfinorg/${xdc_environment}:latest",
+    "image": "xinfinorg/${xdc_environment}:${image_tag}",
     "environment": [
       {"name": "PRIVATE_KEYS", "value": "${private_keys}"},
       {"name": "LOG_LEVEL", "value": "${log_level}"},

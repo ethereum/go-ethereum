@@ -4,10 +4,11 @@ data template_file devnet_container_definition {
 
   vars = {
     xdc_environment = "devnet"
+    image_tag = "${lookup(each.value, "imageTag", "latest")}"
     node_name = "${each.key}"
     private_keys = "${each.value.pk}"
     cloudwatch_group = "tf-${each.key}"
-    log_level = "${local.logLevel}"
+    log_level = "${lookup(each.value, "logLevel", "${local.logLevel}")}"
   }
 }
 
