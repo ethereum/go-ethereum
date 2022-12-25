@@ -460,10 +460,10 @@ func gasEVMMAXArith(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64,
 		return 0, ErrOutOfGas
 	}
 
-	z_offset := scope.Contract.Code[pc+1]
-	x_offset := scope.Contract.Code[pc+2]
-	y_offset := scope.Contract.Code[pc+3]
-	if uint64(max(z_offset, max(x_offset, y_offset)))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	z_slot := scope.Contract.Code[pc+1]
+	x_slot := scope.Contract.Code[pc+2]
+	y_slot := scope.Contract.Code[pc+3]
+	if scope.EVMMAXField.memStart + uint64(max(z_slot, max(x_slot, y_slot))) * 8 + scope.EVMMAXField.field.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
@@ -479,13 +479,13 @@ func max(x, y byte) byte {
 }
 
 func gasAddModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 2 })
 }
 func gasSubModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 2 })
 }
 func gasMulMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 1 })
+	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 4 })
 }
 func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	if scope.EVMMAXField == nil {
@@ -505,7 +505,7 @@ func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 
 	output_offset := x[0]
 	input_offset := y[0]
-	if uint64(max(input_offset, output_offset))*8+scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	if uint64(max(input_offset, output_offset))*8 + scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}

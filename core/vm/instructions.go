@@ -84,13 +84,21 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	mod_offset_stack := scope.Stack.pop()
 	mod_limbs_stack := scope.Stack.pop()
+    evmmax_mem_start := scope.Stack.pop()
 
 	mod_offset := mod_offset_stack.Uint64()
 	mod_limbs := mod_limbs_stack.Uint64()
 
 	mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_limbs)*8)
 
-	scope.EVMMAXField = evmmax_arith.NewField(evmmax_arith.DefaultPreset())
+	scope.EVMMAXField = EVMMAXState{
+        evmmax_arith.NewField(evmmax_arith.Asm384Preset())
+        calcGasCostSetmodx(input_size),
+        calcGasCostAddmodx(input_size),
+        calcGasCostMulmontx(input_size),
+        evmmax_mem_start,
+    }
+
 	if err := scope.EVMMAXField.SetMod(mod_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}

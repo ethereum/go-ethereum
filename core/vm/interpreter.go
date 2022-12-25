@@ -37,13 +37,21 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 }
 
+type EVMMAXState struct {
+	field *evmmax_arith.Field
+    gasCostSetmodx uint64
+    gasCostAddmodx uint64
+    gasCostMulmontx uint64
+    memStart uint64
+}
+
 // ScopeContext contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
 type ScopeContext struct {
 	Memory      *Memory
 	Stack       *Stack
 	Contract    *Contract
-	EVMMAXField *evmmax_arith.Field
+    evmmaxState EVMMAXState
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
