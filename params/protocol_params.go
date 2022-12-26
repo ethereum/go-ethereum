@@ -169,4 +169,8 @@ var (
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
 
-var EVMMAXMaxLimbCount uint = 24
+var EVMMAXMaxLimbCount uint = 16
+
+EVMMAXSetmodxCost = [16]uint64{...}
+EVMMAXAddmodxCost = [16]uint64{...}
+EVMMAXMulmontxCost = [16]uint64{...}

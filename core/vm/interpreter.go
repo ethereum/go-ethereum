@@ -38,7 +38,7 @@ type Config struct {
 }
 
 type EVMMAXState struct {
-	field *evmmax_arith.Field
+	field evmmax_arith.Field
     gasCostSetmodx uint64
     gasCostAddmodx uint64
     gasCostMulmontx uint64
@@ -51,7 +51,7 @@ type ScopeContext struct {
 	Memory      *Memory
 	Stack       *Stack
 	Contract    *Contract
-    evmmaxState EVMMAXState
+    EVMMAXState *EVMMAXState
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports

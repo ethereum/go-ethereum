@@ -81,6 +81,18 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	return nil, nil
 }
 
+func calcGasCostSetmodx(input_size uint64) uint64 {
+    return 1
+}
+
+func calcGasCostAddmodx(input_size uint64) uint64 {
+    return 2
+}
+
+func calcGasCostMulmontx(input_size uint64) uint64 {
+    return 4
+}
+
 func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	mod_offset_stack := scope.Stack.pop()
 	mod_limbs_stack := scope.Stack.pop()
@@ -91,22 +103,22 @@ func opSetModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 
 	mod_bytes := scope.Memory.GetPtr(int64(mod_offset), int64(mod_limbs)*8)
 
-	scope.EVMMAXField = EVMMAXState{
-        evmmax_arith.NewField(evmmax_arith.Asm384Preset())
+	scope.EVMMAXState = &EVMMAXState{
+        &evmmax_arith.NewField(evmmax_arith.Asm384Preset()),
         calcGasCostSetmodx(input_size),
         calcGasCostAddmodx(input_size),
         calcGasCostMulmontx(input_size),
         evmmax_mem_start,
     }
 
-	if err := scope.EVMMAXField.SetMod(mod_bytes); err != nil {
+	if err := scope.EVMMAXState.field.SetMod(mod_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil
 }
 
 func opAddModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := scope.EVMMAXField.ElementSize
+	elemSize := scope.EVMMAXState.field.ElementSize
 
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * elemSize
 	x_offset := uint64(scope.Contract.Code[*pc+2]) * elemSize
@@ -117,7 +129,7 @@ func opAddModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
 	y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(elemSize))
 
-	if err := scope.EVMMAXField.AddMod(scope.EVMMAXField, out_bytes, x_bytes, y_bytes); err != nil {
+	if err := scope.EVMMAXState.field.AddMod(scope.EVMMAXState.field, out_bytes, x_bytes, y_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil
@@ -135,14 +147,14 @@ func opSubModX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
 	y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(elemSize))
 
-	if err := scope.EVMMAXField.SubMod(scope.EVMMAXField, out_bytes, x_bytes, y_bytes); err != nil {
+	if err := scope.EVMMAXState.field.SubMod(scope.EVMMAXState.field, out_bytes, x_bytes, y_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil
 }
 
 func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := scope.EVMMAXField.ElementSize
+	elemSize := scope.EVMMAXState.field.ElementSize
 
 	out_offset := uint64(scope.Contract.Code[*pc+1]) * elemSize
 	x_offset := uint64(scope.Contract.Code[*pc+2]) * elemSize
@@ -153,14 +165,14 @@ func opMulMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	x_bytes := scope.Memory.GetPtr(int64(x_offset), int64(elemSize))
 	y_bytes := scope.Memory.GetPtr(int64(y_offset), int64(elemSize))
 
-	if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, x_bytes, y_bytes); err != nil {
+	if err := scope.EVMMAXState.field.MulMont(scope.EVMMAXState.field, out_bytes, x_bytes, y_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil
 }
 
 func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	elemSize := scope.EVMMAXField.ElementSize
+	elemSize := scope.EVMMAXState.field.ElementSize
 
     output_stack := scope.Stack.pop()
     input_stack := scope.Stack.pop()
@@ -182,7 +194,7 @@ func opToMontX(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	input_bytes := scope.Memory.GetPtr(int64(input_offset), int64(elemSize))
 	r_squared_bytes := scope.EVMMAXField.RSquared()
 
-	if err := scope.EVMMAXField.MulMont(scope.EVMMAXField, out_bytes, input_bytes, r_squared_bytes); err != nil {
+	if err := scope.EVMMAXState.field.MulMont(scope.EVMMAXState.field, out_bytes, input_bytes, r_squared_bytes); err != nil {
 		return nil, ErrOutOfGas
 	}
 	return nil, nil

@@ -444,31 +444,13 @@ func gasSelfdestruct(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64
 func gasSetModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	mod_offset := scope.Stack.Back(0).Uint64()
 	mod_limb_count := scope.Stack.Back(1).Uint64()
+    evmmax_mem_start = scope.Stack.Back(2).Uint64()
 
-	if mod_offset+mod_limb_count*8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 {
+	if evmmax_mem_start + mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || mod_limb_count > EVMMAXMaxInputSize {
 		return 0, ErrOutOfGas
 	}
 
-	return 1, nil
-}
-
-// TODO create a separate gas class for EVMMAX ops as they are 'constant' in price
-// for a given configured limb count: they should be treated same as constant cost op path
-
-func gasEVMMAXArith(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64, costFn func() uint64) (uint64, error) {
-	if scope.EVMMAXField == nil {
-		return 0, ErrOutOfGas
-	}
-
-	z_slot := scope.Contract.Code[pc+1]
-	x_slot := scope.Contract.Code[pc+2]
-	y_slot := scope.Contract.Code[pc+3]
-	if scope.EVMMAXField.memStart + uint64(max(z_slot, max(x_slot, y_slot))) * 8 + scope.EVMMAXField.field.ElementSize > uint64(scope.Memory.Len()) {
-		fmt.Println("error: out of memory bounds")
-		return 0, ErrOutOfGas
-	}
-
-	return costFn(), nil
+    return EVMMAXCostTables[OP_SETMODX][
 }
 
 func max(x, y byte) byte {
@@ -479,16 +461,16 @@ func max(x, y byte) byte {
 }
 
 func gasAddModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 2 })
+    return scope.EVMMAXState.gasCostAddmodx, nil
 }
 func gasSubModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 2 })
+    return scope.EVMMAXState.gasCostAddmodx, nil
 }
 func gasMulMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	return gasEVMMAXArith(pc, evm, scope, memorySize, func() uint64 { return 4 })
+    return scope.EVMMAXState.gasCostMulmontx, nil
 }
 func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	if scope.EVMMAXField == nil {
+	if scope.EVMMAXState == nil {
 		return 0, ErrOutOfGas
 	}
 
@@ -505,10 +487,9 @@ func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 
 	output_offset := x[0]
 	input_offset := y[0]
-	if uint64(max(input_offset, output_offset))*8 + scope.EVMMAXField.ElementSize > uint64(scope.Memory.Len()) {
+	if uint64(max(input_offset, output_offset))*8 + scope.EVMMAXState.field.ElementSize > uint64(scope.Memory.Len()) {
 		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
-
-	return 1, nil
+    return scope.EVMMAXState.gasCostMulmontx, nil
 }
