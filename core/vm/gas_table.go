@@ -444,13 +444,13 @@ func gasSelfdestruct(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64
 func gasSetModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	mod_offset := scope.Stack.Back(0).Uint64()
 	mod_limb_count := scope.Stack.Back(1).Uint64()
-    evmmax_mem_start = scope.Stack.Back(2).Uint64()
+    evmmax_mem_start := scope.Stack.Back(2).Uint64()
 
-	if evmmax_mem_start + mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || mod_limb_count > EVMMAXMaxInputSize {
+	if evmmax_mem_start + mod_offset + mod_limb_count * 8 > uint64(scope.Memory.Len()) || mod_limb_count == 0 || mod_limb_count > params.EVMMAXMaxInputSize {
 		return 0, ErrOutOfGas
 	}
 
-    return EVMMAXCostTables[OP_SETMODX][
+    return params.EVMMAXSetmodxCost[mod_limb_count - 1], nil
 }
 
 func max(x, y byte) byte {

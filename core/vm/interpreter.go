@@ -39,7 +39,6 @@ type Config struct {
 
 type EVMMAXState struct {
 	field evmmax_arith.Field
-    gasCostSetmodx uint64
     gasCostAddmodx uint64
     gasCostMulmontx uint64
     memStart uint64
