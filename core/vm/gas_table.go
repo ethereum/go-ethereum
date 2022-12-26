@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -488,7 +487,6 @@ func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 	output_offset := x[0]
 	input_offset := y[0]
 	if uint64(max(input_offset, output_offset))*8 + scope.EVMMAXState.field.ElementSize > uint64(scope.Memory.Len()) {
-		fmt.Println("error: out of memory bounds")
 		return 0, ErrOutOfGas
 	}
     return scope.EVMMAXState.gasCostMulmontx, nil
