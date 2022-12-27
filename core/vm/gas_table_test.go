@@ -17,17 +17,17 @@
 package vm
 
 import (
+	"bytes"
 	"math"
 	"math/big"
+	"sort"
 	"testing"
 
-	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
-	"sort"
 )
 
 func TestMemoryGasCost(t *testing.T) {
@@ -159,7 +159,7 @@ func TestCreateGas(t *testing.T) {
 			if len(ret) != 32 {
 				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
 			}
-			if bytes.Compare(ret, make([]byte, 32)) == 0 {
+			if bytes.Equal(ret, make([]byte, 32)) {
 				// Failure
 				return false
 			}
