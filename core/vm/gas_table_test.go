@@ -21,11 +21,13 @@ import (
 	"math/big"
 	"testing"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/params"
+	"sort"
 )
 
 func TestMemoryGasCost(t *testing.T) {
@@ -107,48 +109,71 @@ func TestEIP2200(t *testing.T) {
 }
 
 var createGasTests = []struct {
-	code    string
-	eip3860 bool
-	gasUsed uint64
+	code       string
+	eip3860    bool
+	gasUsed    uint64
+	minimumGas uint64
 }{
-	// create(0, 0, 0xc000)
-	{"0x61C00060006000f0", false, 41225},
-	// create(0, 0, 0xc000)
-	{"0x61C00060006000f0", true, 44297},
+	// create(0, 0, 0xc000) no limit used
+	{"0x61C00060006000f0" + "600052" + "60206000F3", false, 41237, 41237},
+	// create(0, 0, 0xc000) with limit
+	{"0x61C00060006000f0" + "600052" + "60206000F3", true, 44309, 44345},
+	// create2(0, 0, 0xc001, 0) no limit
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", false, 50471, 50471},
+	// create2(0, 0, 0xc001, 0) (too large)
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32012, 100_000},
 	// create2(0, 0, 0xc000, 0)
-	{"0x600061C00060006000f5", false, 50444},
-	// create2(0, 0, 0xc000, 0)
-	{"0x600061C00160006000f5", true, 32012},
+	// This case is trying to deploy code at (within) the limit
+	{"0x600061C00060006000f5" + "600052" + "60206000F3", true, 50456, 53564},
+	// create2(0, 0, 0xc001, 0)
+	// This case is trying to deploy code exceeding the limit
+	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32024, 100000},
 }
 
 func TestCreateGas(t *testing.T) {
 	for i, tt := range createGasTests {
-		address := common.BytesToAddress([]byte("contract"))
+		var gasUsed = uint64(0)
+		doCheck := func(testGas int) bool {
+			address := common.BytesToAddress([]byte("contract"))
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb.CreateAccount(address)
+			statedb.SetCode(address, hexutil.MustDecode(tt.code))
+			statedb.Finalise(true)
+			vmctx := BlockContext{
+				CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
+				Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
+				BlockNumber: big.NewInt(0),
+			}
+			config := Config{}
+			if tt.eip3860 {
+				config.ExtraEips = []int{3860}
+			}
 
-		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-		statedb.CreateAccount(address)
-		statedb.SetCode(address, hexutil.MustDecode(tt.code))
-		statedb.Finalise(true)
-
-		vmctx := BlockContext{
-			CanTransfer: func(StateDB, common.Address, *big.Int) bool { return true },
-			Transfer:    func(StateDB, common.Address, common.Address, *big.Int) {},
-			BlockNumber: big.NewInt(0),
+			vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
+			var startGas = uint64(testGas)
+			ret, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
+			if err != nil {
+				return false
+			}
+			gasUsed = startGas - gas
+			if len(ret) != 32 {
+				t.Fatalf("test %d: expected 32 bytes returned, have %d", i, len(ret))
+			}
+			if bytes.Compare(ret, make([]byte, 32)) == 0 {
+				// Failure
+				return false
+			}
+			return true
 		}
-		config := Config{}
-		if tt.eip3860 {
-			config.ExtraEips = []int{3860}
+		minGas := sort.Search(100_000, doCheck)
+		if uint64(minGas) != tt.minimumGas {
+			t.Fatalf("test %d: min gas error, want %d, have %d", i, tt.minimumGas, minGas)
 		}
-
-		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
-
-		var startGas uint64 = math.MaxUint64
-		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, startGas, new(big.Int))
-		if err != nil {
-			t.Errorf("test %d execution failed: %v", i, err)
-		}
-		if gasUsed := startGas - gas; gasUsed != tt.gasUsed {
-			t.Errorf("test %d: gas used mismatch: have %v, want %v", i, gasUsed, tt.gasUsed)
+		// If the deployment succeeded, we also check the gas used
+		if minGas < 100_000 {
+			if gasUsed != tt.gasUsed {
+				t.Errorf("test %d: gas used mismatch: have %v, want %v", i, gasUsed, tt.gasUsed)
+			}
 		}
 	}
 }
