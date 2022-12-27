@@ -452,7 +452,7 @@ func gasSetModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
     return params.EVMMAXSetmodxCost[mod_limb_count - 1], nil
 }
 
-func max(x, y byte) byte {
+func max(x, y uint64) uint64 {
 	if x > y {
 		return x
 	}
@@ -460,12 +460,49 @@ func max(x, y byte) byte {
 }
 
 func gasAddModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+    if scope.EVMMAXState == nil {
+        return 0, ErrOutOfGas
+    }
+
+    elemSize := scope.EVMMAXState.field.ElementSize
+	out_offset := uint64(scope.Contract.Code[pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[pc+3]) * elemSize
+
+    if max(max(x_offset, y_offset), out_offset) + elemSize >= uint64(scope.Memory.Len()) {
+        return 0, ErrOutOfGas
+    }
+
     return scope.EVMMAXState.gasCostAddmodx, nil
 }
 func gasSubModX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+    if scope.EVMMAXState == nil {
+        return 0, ErrOutOfGas
+    }
+
+    elemSize := scope.EVMMAXState.field.ElementSize
+	out_offset := uint64(scope.Contract.Code[pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[pc+3]) * elemSize
+
+    if max(max(x_offset, y_offset), out_offset) + elemSize >= uint64(scope.Memory.Len()) {
+        return 0, ErrOutOfGas
+    }
     return scope.EVMMAXState.gasCostAddmodx, nil
 }
 func gasMulMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+    if scope.EVMMAXState == nil {
+        return 0, ErrOutOfGas
+    }
+
+    elemSize := scope.EVMMAXState.field.ElementSize
+	out_offset := uint64(scope.Contract.Code[pc+1]) * elemSize
+	x_offset := uint64(scope.Contract.Code[pc+2]) * elemSize
+	y_offset := uint64(scope.Contract.Code[pc+3]) * elemSize
+
+    if max(max(x_offset, y_offset), out_offset) + elemSize >= uint64(scope.Memory.Len()) {
+        return 0, ErrOutOfGas
+    }
     return scope.EVMMAXState.gasCostMulmontx, nil
 }
 func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
@@ -473,20 +510,11 @@ func gasToMontX(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (ui
 		return 0, ErrOutOfGas
 	}
 
-    x := scope.Stack.Back(0).Bytes()
-    y := scope.Stack.Back(1).Bytes()
+    output_offset := scope.Stack.Back(0).Uint64()
+    input_offset := scope.Stack.Back(1).Uint64()
+    maxOffset := uint64(max(input_offset, output_offset)) + scope.EVMMAXState.field.ElementSize
 
-    if len(x) == 0 {
-        x = []byte{0}
-    }
-
-    if len(y) == 0 {
-        y = []byte{0}
-    }
-
-	output_offset := x[0]
-	input_offset := y[0]
-	if uint64(max(input_offset, output_offset))*8 + scope.EVMMAXState.field.ElementSize > uint64(scope.Memory.Len()) {
+	if maxOffset >= uint64(scope.Memory.Len()) {
 		return 0, ErrOutOfGas
 	}
     return scope.EVMMAXState.gasCostMulmontx, nil
