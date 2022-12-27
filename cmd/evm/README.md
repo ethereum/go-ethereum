@@ -439,11 +439,11 @@ to use the evm to go from `json` input to `rlp` input.
 The following command takes **json** the transactions in `./testdata/13/txs.json` and signs them. After execution, they are output to `signed_txs.rlp`.:
 ```
 ./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./testdata/13/txs.json --input.env=./testdata/13/env.json --output.result=alloc_jsontx.json --output.body=signed_txs.rlp
-INFO [12-07|04:30:12.380] Trie dumping started                     root=e4b924..6aef61
-INFO [12-07|04:30:12.380] Trie dumping complete                    accounts=3 elapsed="85.765µs"
-INFO [12-07|04:30:12.380] Wrote file                               file=alloc.json
-INFO [12-07|04:30:12.380] Wrote file                               file=alloc_jsontx.json
-INFO [12-07|04:30:12.380] Wrote file                               file=signed_txs.rlp
+INFO [12-27|09:25:11.102] Trie dumping started                     root=e4b924..6aef61
+INFO [12-27|09:25:11.102] Trie dumping complete                    accounts=3 elapsed="275.66µs"
+INFO [12-27|09:25:11.102] Wrote file                               file=alloc.json
+INFO [12-27|09:25:11.103] Wrote file                               file=alloc_jsontx.json
+INFO [12-27|09:25:11.103] Wrote file                               file=signed_txs.rlp
 ```
 
 The `output.body` is the rlp-list of transactions, encoded in hex and placed in a string a'la `json` encoding rules:
@@ -463,10 +463,10 @@ rlpdump -hex $(cat signed_txs.rlp | jq -r )
 Now, we can now use those (or any other already signed transactions), as input, like so: 
 ```
 ./evm t8n --state.fork=London --input.alloc=./testdata/13/alloc.json --input.txs=./signed_txs.rlp --input.env=./testdata/13/env.json --output.result=alloc_rlptx.json
-INFO [12-07|04:30:12.425] Trie dumping started                     root=e4b924..6aef61
-INFO [12-07|04:30:12.425] Trie dumping complete                    accounts=3 elapsed="70.684µs"
-INFO [12-07|04:30:12.425] Wrote file                               file=alloc.json
-INFO [12-07|04:30:12.425] Wrote file                               file=alloc_rlptx.json
+INFO [12-27|09:25:11.187] Trie dumping started                     root=e4b924..6aef61
+INFO [12-27|09:25:11.187] Trie dumping complete                    accounts=3 elapsed="123.676µs"
+INFO [12-27|09:25:11.187] Wrote file                               file=alloc.json
+INFO [12-27|09:25:11.187] Wrote file                               file=alloc_rlptx.json
 ```
 You might have noticed that the results from these two invocations were stored in two separate files. 
 And we can now finally check that they match.
@@ -475,3 +475,152 @@ cat alloc_jsontx.json | jq .stateRoot && cat alloc_rlptx.json | jq .stateRoot
 "0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
 "0xe4b924a6adb5959fccf769d5b7bb2f6359e26d1e76a2443c5a91a36d826aef61"
 ```
+
+## Transaction tool
+
+The transaction tool is used to perform static validity checks on transactions such as:
+* intrinsic gas calculation
+* max values on integers
+* fee semantics, such as `maxFeePerGas < maxPriorityFeePerGas`
+* newer tx types on old forks
+
+### Examples
+
+```
+./evm t9n --state.fork Homestead --input.txs testdata/15/signed_txs.rlp
+[
+  {
+    "error": "transaction type not supported",
+    "hash": "0xa98a24882ea90916c6a86da650fbc6b14238e46f0af04a131ce92be897507476"
+  },
+  {
+    "error": "transaction type not supported",
+    "hash": "0x36bad80acce7040c45fd32764b5c2b2d2e6f778669fb41791f73f546d56e739a"
+  }
+]
+```
+```
+./evm t9n --state.fork London --input.txs testdata/15/signed_txs.rlp
+[
+  {
+    "address": "0xd02d72e067e77158444ef2020ff2d325f929b363",
+    "hash": "0xa98a24882ea90916c6a86da650fbc6b14238e46f0af04a131ce92be897507476",
+    "intrinsicGas": "0x5208"
+  },
+  {
+    "address": "0xd02d72e067e77158444ef2020ff2d325f929b363",
+    "hash": "0x36bad80acce7040c45fd32764b5c2b2d2e6f778669fb41791f73f546d56e739a",
+    "intrinsicGas": "0x5208"
+  }
+]
+```
+## Block builder tool (b11r)
+
+The `evm b11r` tool is used to assemble and seal full block rlps.
+
+### Specification
+
+#### Command line params
+
+Command line params that need to be supported are:
+
+```
+    --input.header value        `stdin` or file name of where to find the block header to use. (default: "header.json")
+    --input.ommers value        `stdin` or file name of where to find the list of ommer header RLPs to use.
+    --input.txs value           `stdin` or file name of where to find the transactions list in RLP form. (default: "txs.rlp")
+    --output.basedir value      Specifies where output files are placed. Will be created if it does not exist.
+    --output.block value        Determines where to put the alloc of the post-state. (default: "block.json")
+                                <file> - into the file <file>
+                                `stdout` - into the stdout output
+                                `stderr` - into the stderr output
+    --seal.clique value         Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.
+    --seal.ethash               Seal block with ethash. (default: false)
+    --seal.ethash.dir value     Path to ethash DAG. If none exists, a new DAG will be generated.
+    --seal.ethash.mode value    Defines the type and amount of PoW verification an ethash engine makes. (default: "normal")
+    --verbosity value           Sets the verbosity level. (default: 3)
+```
+
+#### Objects
+
+##### `header`
+
+The `header` object is a consensus header.
+
+```go=
+type Header struct {
+        ParentHash  common.Hash       `json:"parentHash"`
+        OmmerHash   *common.Hash      `json:"sha3Uncles"`
+        Coinbase    *common.Address   `json:"miner"`
+        Root        common.Hash       `json:"stateRoot"         gencodec:"required"`
+        TxHash      *common.Hash      `json:"transactionsRoot"`
+        ReceiptHash *common.Hash      `json:"receiptsRoot"`
+        Bloom       types.Bloom       `json:"logsBloom"`
+        Difficulty  *big.Int          `json:"difficulty"`
+        Number      *big.Int          `json:"number"            gencodec:"required"`
+        GasLimit    uint64            `json:"gasLimit"          gencodec:"required"`
+        GasUsed     uint64            `json:"gasUsed"`
+        Time        uint64            `json:"timestamp"         gencodec:"required"`
+        Extra       []byte            `json:"extraData"`
+        MixDigest   common.Hash       `json:"mixHash"`
+        Nonce       *types.BlockNonce `json:"nonce"`
+        BaseFee     *big.Int          `json:"baseFeePerGas"`
+}
+```
+#### `ommers`
+
+The `ommers` object is a list of RLP-encoded ommer blocks in hex
+representation.
+
+```go=
+type Ommers []string
+```
+
+#### `txs`
+
+The `txs` object is a list of RLP-encoded transactions in hex representation.
+
+```go=
+type Txs []string
+```
+
+#### `clique`
+
+The `clique` object provides the neccesary information to complete a clique
+seal of the block.
+
+```go=
+var CliqueInfo struct {
+        Key       *common.Hash    `json:"secretKey"`
+        Voted     *common.Address `json:"voted"`
+        Authorize *bool           `json:"authorize"`
+        Vanity    common.Hash     `json:"vanity"`
+}
+```
+
+#### `output`
+
+The `output` object contains two values, the block RLP and the block hash.
+
+```go=
+type BlockInfo struct {
+    Rlp  []byte      `json:"rlp"`
+    Hash common.Hash `json:"hash"`
+}
+```
+
+## A Note on Encoding
+
+The encoding of values for `evm` utility attempts to be relatively flexible. It
+generally supports hex-encoded or decimal-encoded numeric values, and
+hex-encoded byte values (like `common.Address`, `common.Hash`, etc). When in
+doubt, the [`execution-apis`](https://github.com/ethereum/execution-apis) way
+of encoding should always be accepted.
+
+## Testing
+
+There are many test cases in the [`cmd/evm/testdata`](./testdata) directory.
+These fixtures are used to power the `t8n` tests in
+[`t8n_test.go`](./t8n_test.go). The best way to verify correctness of new `evm`
+implementations is to execute these and verify the output and error codes match
+the expected values.
+
