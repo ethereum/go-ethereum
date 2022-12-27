@@ -114,17 +114,17 @@ var createGasTests = []struct {
 	gasUsed    uint64
 	minimumGas uint64
 }{
-	// create(0, 0, 0xc000) no limit used
+	// legacy create(0, 0, 0xc000) without 3860 used
 	{"0x61C00060006000f0" + "600052" + "60206000F3", false, 41237, 41237},
-	// create(0, 0, 0xc000) with limit
-	{"0x61C00060006000f0" + "600052" + "60206000F3", true, 44309, 44345},
-	// create2(0, 0, 0xc001, 0) no limit
+	// legacy create(0, 0, 0xc000) _with_ 3860
+	{"0x61C00060006000f0" + "600052" + "60206000F3", true, 44309, 44309},
+	// create2(0, 0, 0xc001, 0) without 3860
 	{"0x600061C00160006000f5" + "600052" + "60206000F3", false, 50471, 50471},
-	// create2(0, 0, 0xc001, 0) (too large)
+	// create2(0, 0, 0xc001, 0) (too large), with 3860
 	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32012, 100_000},
 	// create2(0, 0, 0xc000, 0)
 	// This case is trying to deploy code at (within) the limit
-	{"0x600061C00060006000f5" + "600052" + "60206000F3", true, 50456, 53564},
+	{"0x600061C00060006000f5" + "600052" + "60206000F3", true, 53528, 53528},
 	// create2(0, 0, 0xc001, 0)
 	// This case is trying to deploy code exceeding the limit
 	{"0x600061C00160006000f5" + "600052" + "60206000F3", true, 32024, 100000},
