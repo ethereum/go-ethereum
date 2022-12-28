@@ -257,8 +257,20 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, config.NetworkId)
 
+	apis := eth.APIs()
+	// Filter out personal namespace
+	if config.EnablePersonal {
+		log.Error("Deprecated personal namespace activated")
+	} else {
+		for i, api := range apis {
+			if api.Namespace == "personal" {
+				apis = append(apis[:i], apis[i+1:]...)
+			}
+		}
+	}
+
 	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
+	stack.RegisterAPIs(apis)
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
 

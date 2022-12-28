@@ -208,6 +208,9 @@ type Config struct {
 
 	// OverrideShanghai (TODO: remove after the fork)
 	OverrideShanghai *big.Int `toml:",omitempty"`
+
+	// Enable personal namespace (TODO: remove once personal namespace is deprecated)
+	EnablePersonal bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
