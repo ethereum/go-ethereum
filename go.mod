@@ -16,6 +16,7 @@ require (
 	github.com/consensys/gnark-crypto v0.4.1-0.20210426202927-39ac3d4b3f1f
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.8.0
+	github.com/dgraph-io/ristretto v0.1.1
 	github.com/docker/docker v1.6.2
 	github.com/dop251/goja v0.0.0-20220405120441-9037c2b61cbf
 	github.com/edsrzf/mmap-go v1.0.0
@@ -60,7 +61,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
+	golang.org/x/sys v0.0.0-20221010170243-090e33056c14
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 	golang.org/x/text v0.3.7
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
@@ -82,12 +83,12 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
 	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91 // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
-	github.com/go-logfmt/logfmt v0.4.0 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
-	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect

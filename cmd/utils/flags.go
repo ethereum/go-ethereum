@@ -65,8 +65,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/txtrace"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/txtrace"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/urfave/cli/v2"
@@ -607,6 +607,12 @@ var (
 		Value:    ethconfig.Defaults.RPCGasCap,
 		Category: flags.APICategory,
 	}
+	RPCCacheFlag = &cli.Uint64Flag{
+		Name:     "rpc.cache",
+		Usage:    "Sets rpc cache that can be used in eth_call/eth_multiCall (0=infinite)",
+		Value:    ethconfig.Defaults.RPCCache,
+		Category: flags.APICategory,
+	}
 	RPCGlobalEVMTimeoutFlag = &cli.DurationFlag{
 		Name:     "rpc.evmtimeout",
 		Usage:    "Sets a timeout used for eth_call (0=infinite)",
@@ -988,12 +994,12 @@ var (
 	TxTraceEnabledFlag = &cli.BoolFlag{
 		Name:     "txtrace",
 		Usage:    "Enable transaction trace while evm processing, default result is openEthereum style",
-		Category:  flags.MiscCategory,
+		Category: flags.MiscCategory,
 	}
 	TxTraceStoreFlag = &flags.DirectoryFlag{
 		Name:     "txtrace.store",
 		Usage:    "Data directory for store transaction trace result (default = inside datadir)",
-		Category:  flags.MiscCategory,
+		Category: flags.MiscCategory,
 	}
 )
 
@@ -1885,6 +1891,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.Float64(RPCGlobalTxFeeCapFlag.Name)
+	}
+	if ctx.IsSet(RPCCacheFlag.Name) {
+		cfg.RPCCache = ctx.Uint64(RPCCacheFlag.Name)
 	}
 	if ctx.IsSet(NoDiscoverFlag.Name) {
 		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}

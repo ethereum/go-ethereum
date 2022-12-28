@@ -133,6 +133,12 @@ func (b *LesApiBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	return nil, nil
 }
 
+func (b *LesApiBackend) SetCallCache(key string, value interface{}, weight int64) {
+}
+func (b *LesApiBackend) GetCallCache(key string) (interface{}, bool) {
+	return nil, false
+}
+
 func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	header, err := b.HeaderByNumber(ctx, number)
 	if err != nil {
