@@ -293,9 +293,10 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
 					txctx := &Context{
-						BlockHash: task.block.Hash(),
-						TxIndex:   i,
-						TxHash:    tx.Hash(),
+						BlockHash:   task.block.Hash(),
+						BlockNumber: task.block.Number(),
+						TxIndex:     i,
+						TxHash:      tx.Hash(),
 					}
 					res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
@@ -625,9 +626,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			for task := range jobs {
 				msg, _ := txs[task.index].AsMessage(signer, block.BaseFee())
 				txctx := &Context{
-					BlockHash: blockHash,
-					TxIndex:   task.index,
-					TxHash:    txs[task.index].Hash(),
+					BlockHash:   blockHash,
+					BlockNumber: block.Number(),
+					TxIndex:     task.index,
+					TxHash:      txs[task.index].Hash(),
 				}
 				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
@@ -824,9 +826,10 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	defer release()
 
 	txctx := &Context{
-		BlockHash: blockHash,
-		TxIndex:   int(index),
-		TxHash:    hash,
+		BlockHash:   blockHash,
+		BlockNumber: block.Number(),
+		TxIndex:     int(index),
+		TxHash:      hash,
 	}
 	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
 }

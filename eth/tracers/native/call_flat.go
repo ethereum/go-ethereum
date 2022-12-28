@@ -273,6 +273,7 @@ func (t *flatCallTracer) fillCallFrameFromContext(callFrame *flatCallFrame) {
 	if t.ctx != nil {
 		if t.ctx.BlockHash != (common.Hash{}) {
 			callFrame.BlockHash = &t.ctx.BlockHash
+			callFrame.BlockNumber = t.ctx.BlockNumber.Uint64()
 		}
 		if t.ctx.TxHash != (common.Hash{}) {
 			callFrame.TransactionHash = &t.ctx.TxHash
