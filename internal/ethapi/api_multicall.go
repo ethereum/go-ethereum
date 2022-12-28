@@ -48,17 +48,23 @@ const (
 	singleCallTimeout = 1 * time.Second
 	multiCallLimit    = 50
 
-	errParam     = -40001
-	errConsensus = -40002 // error on consensus check
-	errLogic     = -40003 // logic error
-	errEVM       = -40004 // error on evm execution
+	// client param error
+	errCodeTxArgs               = -40000
+	errNativeMethodNotFound     = -40001
+	errNativeMethodInput        = -40002
+	errNativeMethodInputAddress = -40003
+
+	// evm processing error
+	errNativeMethodOutput     = -40010
+	errNativeMethodStateError = -40011
+	errMessageExecuting       = -40012
+	errEVMCancelled           = -40013
+	errEVMReverted            = -40014
 )
 
 var (
 	ethMultiCallCacheHit   = metrics.GetOrRegisterMeter("rpc/ethmulticall/cache/hit", nil)
 	ethMultiCallCacheCount = metrics.GetOrRegisterMeter("rpc/ethmulticall/cache/count", nil)
-
-	errCancelled = fmt.Errorf("execution aborted (timeout = %v)", singleCallTimeout)
 )
 
 const (
@@ -131,39 +137,51 @@ func ethCallCacheKey(b Backend, blockHash common.Hash, to *common.Address, input
 	return sb.String()
 }
 
-func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) ([]byte, error) {
+func handleNative(ctx context.Context, state *state.StateDB, msg types.Message) ([]byte, int, error) {
 	data := msg.Data()
 	method, err := erc20ABI.MethodById(data)
 	if err != nil {
-		return nil, err
+		return nil, errNativeMethodNotFound, err
 	}
 	switch method.Name {
 	case "name", "symbol":
-		return method.Outputs.Pack("ETH")
+		res, err := method.Outputs.Pack("ETH")
+		if err != nil {
+			return nil, errNativeMethodOutput, err
+		}
+		return res, 0, nil
 	case "decimals":
-		return method.Outputs.Pack(uint8(18))
+		res, err := method.Outputs.Pack(uint8(18))
+		if err != nil {
+			return nil, errNativeMethodOutput, err
+		}
+		return res, 0, nil
 	case "totalSupply":
-		return method.Outputs.Pack(big.NewInt(1_000_000_000_000_000_000)) // 1 ETH
-	}
-
-	if method.Name == "balanceOf" {
+		res, err := method.Outputs.Pack(big.NewInt(1_000_000_000_000_000_000)) // 1 ETH
+		if err != nil {
+			return nil, errNativeMethodOutput, err
+		}
+		return res, 0, nil
+	case "balanceOf":
 		inputs, err := method.Inputs.Unpack(data[4:])
 		if err != nil || len(inputs) == 0 {
-			return nil, fmt.Errorf("input error")
+			return nil, errNativeMethodInput, err
 		}
 		address, ok := inputs[0].(common.Address)
 		if !ok {
-			return nil, fmt.Errorf("input address parse error")
+			return nil, errNativeMethodInputAddress, fmt.Errorf("input address error")
 		}
 		balance, err := method.Outputs.Pack(state.GetBalance(address))
 		if err != nil {
-			return nil, err
+			return nil, errNativeMethodOutput, err
 		}
-		return balance, state.Error()
+		if state.Error() != nil {
+			return nil, errNativeMethodStateError, state.Error()
+		}
+		return balance, 0, nil
+	default:
+		return nil, errNativeMethodNotFound, fmt.Errorf("method not found")
 	}
-
-	// should never reach here
-	return nil, fmt.Errorf("unsupported method")
 }
 
 func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *types.Header, arg TransactionArgs, disableCache bool) (*callResult, error) {
@@ -198,18 +216,19 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 
 	msg, err := arg.ToMessage(b.RPCGasCap(), header.BaseFee)
 	if err != nil {
-		result.Code = errParam
+		result.Code = errCodeTxArgs
 		result.Err = err.Error()
 		return result, err
 	}
 
 	// skip EVM if requests for native token
 	if strings.ToLower(msg.To().Hex()) == nativeAddr {
-		result.Result, err = handleNative(ctx, state, msg)
+		res, code, err := handleNative(ctx, state, msg)
 		if err != nil {
-			result.Code = errLogic
+			result.Code = code
 			result.Err = err.Error()
 		}
+		result.Result = res
 		return result, err
 	}
 
@@ -226,16 +245,15 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	evmRet, err := core.ApplyMessage(evm, msg, gp)
 	if err != nil {
-		result.Code = errConsensus
+		result.Code = errMessageExecuting
 		result.Err = err.Error()
 		return result, err
 	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
-		err = errCancelled
-		result.Code = errLogic
-		result.Err = err.Error()
+		result.Code = errEVMCancelled
+		result.Err = fmt.Sprintf("execution cancelled, either fast failed or exceeding timeout(%v)", singleCallTimeout)
 		return result, err
 	}
 
@@ -244,7 +262,7 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 		if len(evmRet.Revert()) > 0 {
 			e = newRevertError(evmRet)
 		}
-		result.Code = errEVM
+		result.Code = errEVMReverted
 		result.Err = e.Error()
 		return result, e
 	}
