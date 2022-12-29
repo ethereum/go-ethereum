@@ -503,7 +503,7 @@ func (tx *Transaction) Hash() common.Hash {
 	case BlobTxType:
 		// TODO(eip-4844): We should remove this ugly switch by making hash()
 		// a part of the TxData interface
-		h = prefixedSSZHash(tx.Type(), &tx.inner.(*SignedBlobTx).Message)
+		h = prefixedSSZHash(tx.Type(), tx.inner.(*SignedBlobTx))
 	default:
 		h = prefixedRlpHash(tx.Type(), tx.inner)
 	}
