@@ -80,6 +80,39 @@ func TestValidateCode(t *testing.T) {
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 2}},
 			err:      fmt.Errorf("computed max stack height for code section 0 does not match expect (want: 2, got: 1)"),
 		},
+		{
+			code: []byte{
+				byte(PUSH0),
+				byte(RJUMPI),
+				byte(0x00),
+				byte(0x01),
+				byte(PUSH1),
+				byte(0x42), // jumps to here
+				byte(POP),
+				byte(STOP),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			err:      fmt.Errorf("relative offset into immediate operand: 5"),
+		},
+		{
+			code: []byte{
+				byte(PUSH0),
+				byte(RJUMPV),
+				byte(0x02),
+				byte(0x00),
+				byte(0x01),
+				byte(0x00),
+				byte(0x02),
+				byte(PUSH1),
+				byte(0x42), // jumps to here
+				byte(POP),  // and here
+				byte(STOP),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			err:      fmt.Errorf("relative offset into immediate operand: 8"),
+		},
 	} {
 		if err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet); test.err != nil && (err == nil || test.err.Error() != err.Error()) {
 			t.Fatalf("test %d: unexpected error (want: %v, got: %v)", i, test.err, err)
