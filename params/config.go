@@ -109,6 +109,30 @@ var (
 			WaitPeriod:           10,
 			MinePeriod:           10,
 		},
+		270000: {
+			SwitchRound:          270000,
+			CertThreshold:        common.MaxMasternodesV2*1/5 + 1,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        10,
+			WaitPeriod:           2,
+			MinePeriod:           2,
+		},
+		300000: {
+			SwitchRound:          300000,
+			CertThreshold:        common.MaxMasternodesV2*4/5 + 1,
+			TimeoutSyncThreshold: 3,
+			TimeoutPeriod:        60,
+			WaitPeriod:           20,
+			MinePeriod:           20,
+		},
+		310000: {
+			SwitchRound:          310000,
+			CertThreshold:        common.MaxMasternodesV2*2/3 + 1,
+			TimeoutSyncThreshold: 5,
+			TimeoutPeriod:        25,
+			WaitPeriod:           10,
+			MinePeriod:           10,
+		},
 	}
 
 	// XDPoSChain mainnet config
