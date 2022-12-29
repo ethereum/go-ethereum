@@ -330,7 +330,7 @@ func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		count = uint64(code[*pc+1])
 		idx   = scope.Stack.pop()
 	)
-	if idx.Uint64() >= uint64(count) {
+	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= count {
 		// Index out-of-bounds, don't branch, just skip over immediate
 		// argument.
 		*pc += 1 + count*2

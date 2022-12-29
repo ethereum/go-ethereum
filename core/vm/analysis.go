@@ -144,7 +144,7 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 			numbits = uint8(op - PUSH1 + 1)
 		} else if int8(op) == int8(RJUMPV) {
 			// RJUMPV has variable sized operand
-			numbits = uint8(code[pc]*2) + 1
+			numbits = code[pc]*2 + 1
 		} else {
 			// If not PUSH (the int8(op) > int(PUSH32) is always false).
 			continue
