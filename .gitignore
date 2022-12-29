@@ -54,5 +54,6 @@ geth-tutorial/
 trace.out
 geth-trace.out
 audit.log
-__debug_bin/
 local
+soljson-v0.8.17+commit.8df45f5f.js
+

@@ -7,6 +7,7 @@
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
+TEST_ARGS ?= ""
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -29,7 +30,7 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test: all
-	$(GORUN) build/ci.go test
+	$(GORUN) build/ci.go test $(TEST_ARGS)
 
 format:
 	$(GORUN) build/ci.go format
