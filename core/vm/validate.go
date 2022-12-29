@@ -161,16 +161,16 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				}
 			case op == RJUMP:
 				arg := parseUint16(code[pos+1:])
-				pos += 3 + int(arg)
+				pos += 3 + arg
 			case op == RJUMPI:
 				arg := parseUint16(code[pos+1:])
-				worklist = append(worklist, item{pos: pos + 3 + int(arg), height: height})
+				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
 				pos += 3
 			case op == RJUMPV:
 				count := int(code[pos+1])
 				for i := 0; i < count; i++ {
 					arg := parseUint16(code[pos+2+2*i:])
-					worklist = append(worklist, item{pos: pos + int(arg), height: height})
+					worklist = append(worklist, item{pos: pos + arg, height: height})
 				}
 				pos += 2 + 2*count
 			default:
