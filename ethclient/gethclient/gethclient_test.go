@@ -119,9 +119,6 @@ func TestGethClient(t *testing.T) {
 			"TestGetNodeInfo",
 			func(t *testing.T) { testGetNodeInfo(t, client) },
 		}, {
-			"TestSetHead",
-			func(t *testing.T) { testSetHead(t, client) },
-		}, {
 			"TestSubscribePendingTxHashes",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
@@ -138,6 +135,9 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestAccessList",
 			func(t *testing.T) { testAccessList(t, client) },
+		}, {
+			"TestSetHead",
+			func(t *testing.T) { testSetHead(t, client) },
 		},
 	}
 	for _, tt := range tests {

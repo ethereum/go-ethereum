@@ -532,8 +532,12 @@ func (bc *BlockChain) loadLastState() error {
 // was fast synced or full synced and in which state, the method will try to
 // delete minimal data from disk whilst retaining chain consistency.
 func (bc *BlockChain) SetHead(head uint64) error {
-	_, err := bc.setHeadBeyondRoot(head, common.Hash{}, false)
-	return err
+	if _, err := bc.setHeadBeyondRoot(head, common.Hash{}, false); err != nil {
+		return err
+	}
+	// Send chain head event to update the transaction pool
+	bc.chainHeadFeed.Send(ChainHeadEvent{Block: bc.CurrentBlock()})
+	return nil
 }
 
 // SetFinalized sets the finalized block.
