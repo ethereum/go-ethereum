@@ -833,6 +833,7 @@ func (m Message) Gas() uint64                { return m.gasLimit }
 func (m Message) Nonce() uint64              { return m.nonce }
 func (m Message) Data() []byte               { return m.data }
 func (m Message) AccessList() AccessList     { return m.accessList }
+func (m Message) DataGas() uint64            { return params.DataGasPerBlob * uint64(len(m.dataHashes)) }
 func (m Message) DataHashes() []common.Hash  { return m.dataHashes }
 func (m Message) IsFake() bool               { return m.isFake }
 

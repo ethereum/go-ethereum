@@ -656,7 +656,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	gasPool := new(core.GasPool).AddGas(math.MaxUint64).AddDataGas(params.MaxDataGasPerBlock)
 
 	return core.NewStateTransition(vmEnv, msg, gasPool).TransitionDb()
 }
@@ -834,6 +834,7 @@ func (m callMsg) To() *common.Address          { return m.CallMsg.To }
 func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
 func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
 func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
+func (m callMsg) DataGas() uint64              { return params.DataGasPerBlob * uint64(len(m.CallMsg.DataHashes)) }
 func (m callMsg) MaxFeePerDataGas() *big.Int   { return m.CallMsg.MaxFeePerDataGas }
 func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
