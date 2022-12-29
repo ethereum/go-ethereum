@@ -31,6 +31,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var (
+	LatestBlockNumber    *big.Int = nil
+	PendingBlockNumber            = big.NewInt(-1)
+	FinalizedBlockNumber          = big.NewInt(int64(rpc.FinalizedBlockNumber))
+	SafeBlockNumber               = big.NewInt(int64(rpc.SafeBlockNumber))
+)
+
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
 	c *rpc.Client
