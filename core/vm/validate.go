@@ -33,7 +33,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		count += 1
 		op = OpCode(code[i])
 		if jt[op].undefined {
-			return fmt.Errorf("use of undefined opcode")
+			return fmt.Errorf("use of undefined opcode %s", op)
 		}
 		switch {
 		case op >= PUSH1 && op <= PUSH32:
@@ -83,8 +83,8 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 				return fmt.Errorf("code section out-of-bounds (want: %d, have: %d)", arg, len(metadata))
 			}
 			if op == JUMPF {
-				if metadata[section].Output != metadata[arg].Output {
-					return fmt.Errorf("jumpf to section with different number of outputs")
+				if metadata[section].Output < metadata[arg].Output {
+					return fmt.Errorf("jumpf to section with more outputs")
 				}
 			}
 			i += 2

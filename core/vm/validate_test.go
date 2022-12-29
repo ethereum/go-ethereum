@@ -113,6 +113,27 @@ func TestValidateCode(t *testing.T) {
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
 			err:      fmt.Errorf("relative offset into immediate operand: 8"),
 		},
+		{
+			code: []byte{
+				byte(PUSH0),
+				byte(RJUMPV),
+				byte(0x00),
+				byte(STOP),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			err:      fmt.Errorf("rjumpv branch count must not be 0"),
+		},
+		{
+			code: []byte{
+				byte(JUMPF),
+				byte(0x00),
+				byte(0x01),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}, {Input: 0, Output: 1, MaxStackHeight: 1}},
+			err:      fmt.Errorf("jumpf to section with more outputs"),
+		},
 	} {
 		if err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet); test.err != nil && (err == nil || test.err.Error() != err.Error()) {
 			t.Fatalf("test %d: unexpected error (want: %v, got: %v)", i, test.err, err)

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4339,18 +4340,41 @@ func int8ToByte(n int8) uint8 {
 
 func TestEOF(t *testing.T) {
 	var (
-		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
-		engine = ethash.NewFaker()
+		createDeployer = []byte{
+			byte(vm.CALLDATASIZE), // size
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE),
+		}
+		create2Deployer = []byte{
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.PUSH1), 0x00, // salt
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE2),
+		}
 
-		// A sender who makes transactions, has some funds
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
-		gspec   = &Genesis{
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		cc     = common.HexToAddress("0x000000000000000000000000000000000000cccc")
+		engine = ethash.NewFaker()
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec  = &Genesis{
 			Config: params.AllEthashProtocolChanges,
 			Alloc: GenesisAlloc{
-				addr1: {Balance: funds},
-				// The address 0xAAAA sloads 0x00 and 0x01
+				addr: {Balance: funds},
+				bb:   {Code: createDeployer, Balance: big.NewInt(0)},
+				cc:   {Code: create2Deployer, Balance: big.NewInt(0)},
 				aa: {
 					Code: (&vm.Container{
 						Types: []*vm.FunctionMetadata{
@@ -4442,8 +4466,31 @@ func TestEOF(t *testing.T) {
 	gspec.Config.ShanghaiTime = common.Big0
 	signer := types.LatestSigner(gspec.Config)
 
+	container := vm.Container{
+		Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+		Code:  [][]byte{{byte(vm.STOP)}},
+		Data:  nil,
+	}
+	deployCode := container.MarshalBinary()
+
+	initCode := []byte{
+		byte(vm.PUSH1), byte(len(deployCode)), // len
+		byte(vm.PUSH1), 0x0c, // offset
+		byte(vm.PUSH1), 0x00, // dst offset
+		byte(vm.CODECOPY),
+
+		// code in memory
+		byte(vm.PUSH1), byte(len(deployCode)), // size
+		byte(vm.PUSH1), 0x00, // offset
+		byte(vm.RETURN),
+	}
+	initCode = append(initCode, deployCode...)
+	initHash := crypto.Keccak256Hash(initCode)
+
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(aa)
+
+		// execute flag contract
 		txdata := &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      0,
@@ -4455,8 +4502,52 @@ func TestEOF(t *testing.T) {
 			Data:       []byte{},
 		}
 		tx := types.NewTx(txdata)
-		tx, _ = types.SignTx(tx, signer, key1)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
 
+		// deploy eof contract from eoa
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      1,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// deploy eof contract from create contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      2,
+			To:         &bb,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// deploy eof contract from create2 contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      3,
+			To:         &cc,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
 		b.AddTx(tx)
 	})
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Debug: true, Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr)}, nil, nil)
@@ -4467,10 +4558,22 @@ func TestEOF(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
+	// Check flags.
 	state, _ := chain.State()
 	for i := 0; i < 4; i++ {
 		if state.GetState(aa, common.BigToHash(big.NewInt(int64(i)))).Big().Uint64() != 1 {
 			t.Fatalf("flag %d not set", i)
 		}
+	}
+
+	// Check various deployment mechanisms.
+	if bytes.Compare(state.GetCode(crypto.CreateAddress(addr, 1)), deployCode) != 0 {
+		t.Fatalf("failed to deploy EOF with EOA")
+	}
+	if bytes.Compare(state.GetCode(crypto.CreateAddress(bb, 0)), deployCode) != 0 {
+		t.Fatalf("failed to deploy EOF with CREATE")
+	}
+	if bytes.Compare(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployCode) != 0 {
+		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }
