@@ -512,6 +512,13 @@ func (n *Node) stopRPC() {
 // startInProc registers all RPC APIs on the inproc server.
 func (n *Node) startInProc() error {
 	for _, api := range n.rpcAPIs {
+		if api.Namespace == "personal" {
+			if !n.config.EnablePersonal {
+				continue
+			} else {
+				log.Error("Deprecated personal namespace activated")
+			}
+		}
 		if err := n.inprocHandler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
