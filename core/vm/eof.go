@@ -101,7 +101,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("invalid eof version")
 	}
 
-	if len(b) < 9 {
+	if len(b) < 15 {
 		return fmt.Errorf("container size less than minimum valid size")
 	}
 
@@ -143,8 +143,6 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	// Check for terminator.
 	expectedSize := offsetTerminator + typesSize + sum(codeSizes) + dataSize + 1
 	if len(b) != expectedSize {
-		fmt.Println(codeSizes)
-		fmt.Println(offsetTerminator, typesSize, sum(codeSizes), dataSize)
 		return fmt.Errorf("invalid container size (want %d, got %d)", expectedSize, len(b))
 	}
 
