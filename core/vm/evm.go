@@ -442,6 +442,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
 			return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
 		}
+		if err := c.ValidateCode(evm.Config.JumpTableEOF); err != nil {
+			return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+		}
 		contract.Container = &c
 	}
 
@@ -472,7 +475,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF {
 		if evm.chainRules.IsShanghai {
 			var c Container
-			if err = c.UnmarshalBinary(ret); err != nil {
+			if err = c.UnmarshalBinary(ret); err == nil {
+				err = c.ValidateCode(evm.Config.JumpTableEOF)
+			}
+			if err != nil {
 				err = fmt.Errorf("invalid code: %v", err)
 			}
 		} else if evm.chainRules.IsLondon {
