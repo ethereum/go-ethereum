@@ -19,6 +19,7 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -28,6 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
+
+//go:generate go run github.com/fjl/gencodec -type flatCallFrame -field-override flatCallFrameMarshaling -out gen_flatcallframe_json.go
+//go:generate go run github.com/fjl/gencodec -type flatCallAction -field-override flatCallActionMarshaling -out gen_flatcallaction_json.go
+//go:generate go run github.com/fjl/gencodec -type flatCallResult -field-override flatCallResultMarshaling -out gen_flatcallresult_json.go
 
 func init() {
 	register("flatCallTracer", newFlatCallTracer)
@@ -53,39 +58,58 @@ var parityErrorMappingStartingWith = map[string]string{
 
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
-	Action              flatCallTraceAction  `json:"action"`
-	BlockHash           *common.Hash         `json:"blockHash"`
-	BlockNumber         uint64               `json:"blockNumber"`
-	Error               string               `json:"error,omitempty"`
-	Result              *flatCallTraceResult `json:"result,omitempty"`
-	Subtraces           int                  `json:"subtraces"`
-	TraceAddress        []int                `json:"traceAddress"`
-	TransactionHash     *common.Hash         `json:"transactionHash"`
-	TransactionPosition *uint64              `json:"transactionPosition"`
-	Type                string               `json:"type"`
+	Action              flatCallAction  `json:"action"`
+	BlockHash           *common.Hash    `json:"blockHash"`
+	BlockNumber         uint64          `json:"blockNumber"`
+	Error               string          `json:"error,omitempty"`
+	Result              *flatCallResult `json:"result,omitempty"`
+	Subtraces           int             `json:"subtraces"`
+	TraceAddress        []int           `json:"traceAddress"`
+	TransactionHash     *common.Hash    `json:"transactionHash"`
+	TransactionPosition uint64          `json:"transactionPosition"`
+	Type                string          `json:"type"`
 }
 
-type flatCallTraceAction struct {
-	Author         *common.Address `json:"author,omitempty"`
-	RewardType     *string         `json:"rewardType,omitempty"`
-	SelfDestructed *common.Address `json:"address,omitempty"`
-	Balance        *hexutil.Big    `json:"balance,omitempty"`
-	CallType       string          `json:"callType,omitempty"`
-	CreationMethod string          `json:"creationMethod,omitempty"`
-	From           *common.Address `json:"from,omitempty"`
-	Gas            *hexutil.Uint64 `json:"gas,omitempty"`
-	Init           *hexutil.Bytes  `json:"init,omitempty"`
-	Input          *hexutil.Bytes  `json:"input,omitempty"`
-	RefundAddress  *common.Address `json:"refundAddress,omitempty"`
-	To             *common.Address `json:"to,omitempty"`
-	Value          *hexutil.Big    `json:"value,omitempty"`
+type flatCallFrameMarshaling struct {
+	BlockNumber         hexutil.Uint64
+	TransactionPosition hexutil.Uint64
 }
 
-type flatCallTraceResult struct {
-	Address *common.Address `json:"address,omitempty"`
-	Code    *hexutil.Bytes  `json:"code,omitempty"`
-	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
-	Output  *hexutil.Bytes  `json:"output,omitempty"`
+type flatCallAction struct {
+	Author         common.Address `json:"author,omitempty"`
+	RewardType     string         `json:"rewardType,omitempty"`
+	SelfDestructed common.Address `json:"address,omitempty"`
+	Balance        *big.Int       `json:"balance,omitempty"`
+	CallType       string         `json:"callType,omitempty"`
+	CreationMethod string         `json:"creationMethod,omitempty"`
+	From           common.Address `json:"from,omitempty"`
+	Gas            uint64         `json:"gas,omitempty"`
+	Init           []byte         `json:"init,omitempty"`
+	Input          []byte         `json:"input,omitempty"`
+	RefundAddress  common.Address `json:"refundAddress,omitempty"`
+	To             common.Address `json:"to,omitempty"`
+	Value          *big.Int       `json:"value,omitempty"`
+}
+
+type flatCallActionMarshaling struct {
+	Balance *hexutil.Big
+	Gas     hexutil.Uint64
+	Init    hexutil.Bytes
+	Input   hexutil.Bytes
+	Value   *hexutil.Big
+}
+
+type flatCallResult struct {
+	Address common.Address `json:"address,omitempty"`
+	Code    []byte         `json:"code,omitempty"`
+	GasUsed uint64         `json:"gasUsed,omitempty"`
+	Output  []byte         `json:"output,omitempty"`
+}
+
+type flatCallResultMarshaling struct {
+	Code    hexutil.Bytes
+	GasUsed hexutil.Uint64
+	Output  hexutil.Bytes
 }
 
 // flatCallTracer reports call frame information of a tx in a flat format, i.e.
@@ -192,7 +216,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 		return nil, errors.New("invalid number of calls")
 	}
 
-	flat, err := t.processOutput(&t.tracer.callstack[0], []int{})
+	flat, err := flatFromNested(&t.tracer.callstack[0], []int{}, t.config.ConvertParityErrors, t.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -209,56 +233,42 @@ func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
 }
 
-func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (output []flatCallFrame, err error) {
-	var (
-		gasHex     = hexutil.Uint64(input.Gas)
-		gasUsedHex = hexutil.Uint64(input.GasUsed)
-		valueHex   = hexutil.Big{}
-		// copy addresses
-		to   = input.To
-		from = input.From
-	)
-	if input.Value != nil {
-		valueHex = hexutil.Big(*input.Value)
+// isPrecompiled returns whether the addr is a precompile.
+func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
+	for _, p := range t.activePrecompiles {
+		if p == addr {
+			return true
+		}
 	}
-	frame := flatCallFrame{
-		Type: strings.ToLower(input.Type.String()),
-		Action: flatCallTraceAction{
-			From:  &from,
-			To:    &to,
-			Gas:   &gasHex,
-			Value: &valueHex,
-		},
-		Result: &flatCallTraceResult{
-			GasUsed: &gasUsedHex,
-		},
-		Error:        input.Error,
-		TraceAddress: traceAddress,
-		Subtraces:    len(input.Calls),
+	return false
+}
+
+func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx *tracers.Context) (output []flatCallFrame, err error) {
+	var frame *flatCallFrame
+	switch input.Type {
+	case vm.CREATE, vm.CREATE2:
+		frame = newFlatCreate(input)
+	case vm.SELFDESTRUCT:
+		frame = newFlatSuicide(input)
+	case vm.CALL, vm.STATICCALL, vm.CALLCODE, vm.DELEGATECALL:
+		frame = newFlatCall(input)
+	default:
+		return nil, fmt.Errorf("unrecognized call frame type: %s", input.Type)
 	}
 
-	if input.Type == vm.CREATE || input.Type == vm.CREATE2 {
-		t.formatCreateResult(&frame, input)
-	} else if input.Type == vm.SELFDESTRUCT {
-		t.formatSuicideResult(&frame, input)
-	} else {
-		t.formatCallResult(&frame, input)
+	frame.TraceAddress = traceAddress
+	frame.Error = input.Error
+	frame.Subtraces = len(input.Calls)
+	fillCallFrameFromContext(frame, ctx)
+	if convertErrs {
+		convertErrorToParity(frame)
 	}
 
-	t.fillCallFrameFromContext(&frame)
-
-	if t.config.ConvertParityErrors {
-		t.convertErrorToParity(&frame)
-	}
-
-	output = append(output, frame)
-
+	output = append(output, *frame)
 	if len(input.Calls) > 0 {
 		for i, childCall := range input.Calls {
-			var childTraceAddress []int
-			childTraceAddress = append(childTraceAddress, traceAddress...)
-			childTraceAddress = append(childTraceAddress, i)
-			flat, err := t.processOutput(&childCall, childTraceAddress)
+			childAddr := childTraceAddress(traceAddress, i)
+			flat, err := flatFromNested(&childCall, childAddr, convertErrs, ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -269,74 +279,67 @@ func (t *flatCallTracer) processOutput(input *callFrame, traceAddress []int) (ou
 	return output, nil
 }
 
-func (t *flatCallTracer) fillCallFrameFromContext(callFrame *flatCallFrame) {
-	if t.ctx != nil {
-		if t.ctx.BlockHash != (common.Hash{}) {
-			callFrame.BlockHash = &t.ctx.BlockHash
-			callFrame.BlockNumber = t.ctx.BlockNumber.Uint64()
-		}
-		if t.ctx.TxHash != (common.Hash{}) {
-			callFrame.TransactionHash = &t.ctx.TxHash
-		}
-		transactionPosition := uint64(t.ctx.TxIndex)
-		callFrame.TransactionPosition = &transactionPosition
+func newFlatCreate(input *callFrame) *flatCallFrame {
+	return &flatCallFrame{
+		Type: strings.ToLower(vm.CREATE.String()),
+		Action: flatCallAction{
+			From:  input.From,
+			Gas:   input.Gas,
+			Value: input.Value,
+			Init:  input.Input[:],
+		},
+		Result: &flatCallResult{
+			GasUsed: input.GasUsed,
+			Address: input.To,
+			Code:    input.Output[:],
+		},
 	}
 }
 
-func (t *flatCallTracer) formatCreateResult(call *flatCallFrame, input *callFrame) {
-	call.Type = strings.ToLower(vm.CREATE.String())
-
-	init := hexutil.Bytes(input.Input[:])
-	call.Action.Init = &init
-
-	call.Result.Address = &input.To
-
-	code := hexutil.Bytes(input.Output[:])
-	call.Result.Code = &code
-
-	call.Action.To = nil
-	call.Action.Input = nil
-
-	call.Result.Output = nil
-}
-
-func (t *flatCallTracer) formatCallResult(call *flatCallFrame, input *callFrame) {
-	call.Action.CallType = strings.ToLower(input.Type.String())
-
-	// update after callResult so as it affects only the root type
-	if input.Type == vm.CALLCODE || input.Type == vm.DELEGATECALL || input.Type == vm.STATICCALL {
-		call.Type = strings.ToLower(vm.CALL.String())
+func newFlatCall(input *callFrame) *flatCallFrame {
+	return &flatCallFrame{
+		Type: strings.ToLower(vm.CALL.String()),
+		Action: flatCallAction{
+			From:     input.From,
+			To:       input.To,
+			Gas:      input.Gas,
+			Value:    input.Value,
+			CallType: strings.ToLower(input.Type.String()),
+			Input:    input.Input[:],
+		},
+		Result: &flatCallResult{
+			GasUsed: input.GasUsed,
+			Output:  input.Output[:],
+		},
 	}
-
-	actionInput := hexutil.Bytes(input.Input[:])
-	call.Action.Input = &actionInput
-
-	resultOutput := hexutil.Bytes(input.Output[:])
-	call.Result.Output = &resultOutput
 }
 
-func (t *flatCallTracer) formatSuicideResult(call *flatCallFrame, input *callFrame) {
-	// this is using the old opcode, in order we maintain parity compatibility
-	call.Type = "suicide"
-
-	call.Action.SelfDestructed = &input.From
-
-	balanceHex := hexutil.Big(*input.Value)
-	call.Action.Balance = &balanceHex
-
-	call.Action.Value = nil
-
-	call.Action.RefundAddress = &input.To
-
-	call.Action.From = nil
-	call.Action.To = nil
-	call.Action.Input = nil
-	call.Action.Gas = nil
-
-	call.Result = nil
+func newFlatSuicide(input *callFrame) *flatCallFrame {
+	return &flatCallFrame{
+		Type: "suicide",
+		Action: flatCallAction{
+			SelfDestructed: input.From,
+			Balance:        input.Value,
+			RefundAddress:  input.To,
+		},
+	}
 }
 
-func (t *flatCallTracer) convertErrorToParity(call *flatCallFrame) {
+func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
+	if ctx == nil {
+		return
+	}
+	if ctx.BlockHash != (common.Hash{}) {
+		callFrame.BlockHash = &ctx.BlockHash
+		callFrame.BlockNumber = ctx.BlockNumber.Uint64()
+	}
+	if ctx.TxHash != (common.Hash{}) {
+		callFrame.TransactionHash = &ctx.TxHash
+	}
+	callFrame.TransactionPosition = uint64(ctx.TxIndex)
+}
+
+func convertErrorToParity(call *flatCallFrame) {
 	if call.Error == "" {
 		return
 	}
@@ -354,12 +357,9 @@ func (t *flatCallTracer) convertErrorToParity(call *flatCallFrame) {
 	}
 }
 
-// isPrecompiled returns whether the addr is a precompile.
-func (t *flatCallTracer) isPrecompiled(addr common.Address) bool {
-	for _, p := range t.activePrecompiles {
-		if p == addr {
-			return true
-		}
-	}
-	return false
+func childTraceAddress(a []int, i int) []int {
+	child := make([]int, 0, len(a)+1)
+	child = append(child, a...)
+	child = append(child, i)
+	return child
 }
