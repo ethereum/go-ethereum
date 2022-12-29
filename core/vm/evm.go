@@ -224,7 +224,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.maybeParseContainer(code))
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -282,7 +282,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.maybeParseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -323,7 +323,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		code := evm.StateDB.GetCode(addrCopy)
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.maybeParseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -377,7 +377,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addrCopy)
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.maybeParseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -437,7 +437,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	// If the initcode is EOF, verify it is well-formed.
-	if evm.chainRules.IsShanghai && hasEOFByte(codeAndHash.code) {
+	isInitcodeEOF := hasEOFByte(codeAndHash.code)
+	if evm.chainRules.IsShanghai && isInitcodeEOF {
 		var c Container
 		if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
 			return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
@@ -471,6 +472,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		err = ErrMaxCodeSizeExceeded
 	}
 
+	// Reject legacy contract deployment from EOF.
+	if err == nil && isInitcodeEOF && !hasEOFByte(ret) {
+		err = ErrLegacyCode
+	}
+
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF {
 		if evm.chainRules.IsShanghai {
@@ -479,7 +485,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				err = c.ValidateCode(evm.interpreter.cfg.JumpTableEOF)
 			}
 			if err != nil {
-				err = fmt.Errorf("invalid code: %v", err)
+				err = fmt.Errorf("%v: %v", ErrInvalidEOF, err)
 			}
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode
@@ -538,12 +544,14 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) maybeParseContainer(b []byte) *Container {
+// parseContainer tries to parse an EOF container if the Shanghai fork is active. It expects the code to already be validated.
+func (evm *EVM) parseContainer(b []byte) *Container {
 	if evm.chainRules.IsShanghai {
 		var c Container
 		if err := c.UnmarshalBinary(b); err != nil && err.Error() == "invalid magic" {
 			return nil
 		} else if err != nil {
+			// Code was already validated, so no other errors should be possible.
 			panic(fmt.Sprintf("unexpected error: %v", err))
 		}
 		return &c
