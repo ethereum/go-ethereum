@@ -160,17 +160,17 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 					return 0, 0, fmt.Errorf("stack overflow")
 				}
 			case op == RJUMP:
-				arg := parseUint16(code[pos+1:])
-				pos += 3 + arg
+				arg := parseInt16(code[pos+1:])
+				pos += 3 + int(arg)
 			case op == RJUMPI:
-				arg := parseUint16(code[pos+1:])
-				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
+				arg := parseInt16(code[pos+1:])
+				worklist = append(worklist, item{pos: pos + 3 + int(arg), height: height})
 				pos += 3
 			case op == RJUMPV:
 				count := int(code[pos+1])
 				for i := 0; i < count; i++ {
-					arg := parseUint16(code[pos+2+2*i:])
-					worklist = append(worklist, item{pos: pos + arg, height: height})
+					arg := parseInt16(code[pos+2+2*i:])
+					worklist = append(worklist, item{pos: pos + int(arg), height: height})
 				}
 				pos += 2 + 2*count
 			default:

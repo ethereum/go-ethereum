@@ -134,9 +134,28 @@ func TestValidateCode(t *testing.T) {
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}, {Input: 0, Output: 1, MaxStackHeight: 1}},
 			err:      fmt.Errorf("jumpf to section with more outputs"),
 		},
+		{
+			code: []byte{
+				byte(RJUMP), 0x00, 0x03,
+				byte(JUMPDEST),
+				byte(JUMPDEST),
+				byte(RETURN),
+				byte(PUSH1), 20,
+				byte(PUSH1), 39,
+				byte(PUSH1), 0x00,
+				byte(CODECOPY),
+				byte(PUSH1), 20,
+				byte(PUSH1), 0x00,
+				byte(RJUMP), 0xff, 0xef,
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 3}},
+		},
 	} {
-		if err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet); test.err != nil && (err == nil || test.err.Error() != err.Error()) {
-			t.Fatalf("test %d: unexpected error (want: %v, got: %v)", i, test.err, err)
+		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
+		if (err != nil && test.err == nil) || (err == nil && test.err != nil) || (err != nil && test.err != nil && err.Error() != test.err.Error()) {
+			t.Errorf("test %d: unexpected error (want: %v, got: %v)", i, test.err, err)
 		}
 	}
+
 }
