@@ -1056,6 +1056,12 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 		},
+		INVALID: {
+			execute:  opUndefined,
+			minStack: minStack(0, 0),
+			maxStack: maxStack(0, 0),
+			terminal: true,
+		},
 	}
 
 	// Fill all unassigned slots with opUndefined.
