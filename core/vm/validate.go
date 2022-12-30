@@ -150,6 +150,15 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			}
 			heights[pos] = height
 
+			// Validate height for current op and update as needed.
+			if jt[op].minStack > height {
+				return 0, 0, fmt.Errorf("stack underflow")
+			}
+			if jt[op].maxStack < height {
+				return 0, 0, fmt.Errorf("stack overflow")
+			}
+			height += int(params.StackLimit) - jt[op].maxStack
+
 			switch {
 			case op == CALLF:
 				arg := parseUint16(code[pos+1:])
@@ -174,13 +183,6 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				}
 				pos += 2 + 2*count
 			default:
-				if jt[op].minStack > height {
-					return 0, 0, fmt.Errorf("stack underflow")
-				}
-				if jt[op].maxStack < height {
-					return 0, 0, fmt.Errorf("stack overflow")
-				}
-				height += int(params.StackLimit) - jt[op].maxStack
 				if op >= PUSH1 && op <= PUSH32 {
 					pos += 1 + int(op-PUSH0)
 				} else {

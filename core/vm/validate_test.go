@@ -151,6 +151,24 @@ func TestValidateCode(t *testing.T) {
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 3}},
 		},
+		{
+			code: []byte{
+				byte(PUSH1), 1,
+				byte(RJUMPI), 0x00, 0x03,
+				byte(JUMPDEST),
+				byte(JUMPDEST),
+				byte(STOP),
+				byte(PUSH1), 20,
+				byte(PUSH1), 39,
+				byte(PUSH1), 0x00,
+				byte(CODECOPY),
+				byte(PUSH1), 20,
+				byte(PUSH1), 0x00,
+				byte(RETURN),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 3}},
+		},
 	} {
 		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
 		if (err != nil && test.err == nil) || (err == nil && test.err != nil) || (err != nil && test.err != nil && err.Error() != test.err.Error()) {
