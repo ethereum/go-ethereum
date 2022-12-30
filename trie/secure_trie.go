@@ -103,10 +103,10 @@ func (t *StateTrie) TryGetAccount(address common.Address) (*types.StateAccount, 
 	return ret, err
 }
 
-// TryGetAccountWithHash does the same thing as TryGetAccount, however
+// TryGetAccountByHash does the same thing as TryGetAccount, however
 // it expects an account hash that is the hash of address. This constitutes an
 // abstraction leak, since the client code needs to know the key format.
-func (t *StateTrie) TryGetAccountWithHash(addrHash common.Hash) (*types.StateAccount, error) {
+func (t *StateTrie) TryGetAccountByHash(addrHash common.Hash) (*types.StateAccount, error) {
 	res, err := t.trie.TryGet(addrHash.Bytes())
 	if res == nil || err != nil {
 		return nil, err
