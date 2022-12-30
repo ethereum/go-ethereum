@@ -30,7 +30,7 @@ func TestEOFMarshaling(t *testing.T) {
 	}{
 		{
 			want: Container{
-				Types: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+				Types: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
 				Code:  [][]byte{common.Hex2Bytes("604200")},
 				Data:  []byte{0x01, 0x02, 0x03},
 			},
@@ -38,9 +38,9 @@ func TestEOFMarshaling(t *testing.T) {
 		{
 			want: Container{
 				Types: []*FunctionMetadata{
-					{Input: 0, Output: 0, MaxStackHeight: 0},
-					{Input: 2, Output: 3, MaxStackHeight: 32},
-					{Input: 1, Output: 1, MaxStackHeight: 1023},
+					{Input: 0, Output: 0, MaxStackHeight: 1},
+					{Input: 2, Output: 3, MaxStackHeight: 4},
+					{Input: 1, Output: 1, MaxStackHeight: 1},
 				},
 				Code: [][]byte{
 					common.Hex2Bytes("604200"),
