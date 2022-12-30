@@ -44,7 +44,7 @@ func TestSimulatedBackend(t *testing.T) {
 	genAlloc := make(core.GenesisAlloc)
 	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
 
-	sim := NewSimulatedBackend(genAlloc, gasLimit)
+	sim := NewSimulatedBackend(genAlloc, gasLimit, nil)
 	defer sim.Close()
 
 	// should return an error if the tx is not found
@@ -117,6 +117,7 @@ func simTestBackend(testAddr common.Address) *SimulatedBackend {
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
+		nil,
 	)
 }
 
@@ -144,6 +145,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 func TestAdjustTime(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{}, 10000000,
+		nil,
 	)
 	defer sim.Close()
 
@@ -220,6 +222,7 @@ func TestBalanceAt(t *testing.T) {
 func TestBlockByHash(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{}, 10000000,
+		nil,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -240,7 +243,7 @@ func TestBlockByHash(t *testing.T) {
 
 func TestBlockByNumber(t *testing.T) {
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+		core.GenesisAlloc{}, 10000000, nil,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -367,6 +370,7 @@ func TestTransactionByHash(t *testing.T) {
 		core.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
+		nil,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -432,7 +436,8 @@ func TestEstimateGas(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
+	sim := NewSimulatedBackend(
+		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000, nil)
 	defer sim.Close()
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
@@ -537,7 +542,8 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
+	sim := NewSimulatedBackend(
+		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000, nil)
 	defer sim.Close()
 
 	recipient := common.HexToAddress("deadbeef")
@@ -910,6 +916,7 @@ func TestSuggestGasPrice(t *testing.T) {
 	sim := NewSimulatedBackend(
 		core.GenesisAlloc{},
 		10000000,
+		nil,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()

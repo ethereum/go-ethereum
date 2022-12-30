@@ -182,7 +182,7 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 		data := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
 		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
-	case vm.CALL, vm.CREATE, vm.CREATE2, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL:
+	case vm.CALL, vm.CREATE, vm.CREATE2, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL, vm.CALLVALUE:
 		cf := callFrame{
 			Type:  op,
 			From:  scope.Contract.CallerAddress,

@@ -59,6 +59,7 @@ func TestWaitDeployed(t *testing.T) {
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 			},
 			10000000,
+			nil,
 		)
 		defer backend.Close()
 
@@ -105,6 +106,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 		},
 		10000000,
+		nil,
 	)
 	defer backend.Close()
 
