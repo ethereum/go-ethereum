@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/crypto/sha3"
 )
 
 // Account represents an Ethereum account located at a specific location defined

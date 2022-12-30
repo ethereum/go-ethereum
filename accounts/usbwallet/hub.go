@@ -23,10 +23,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/karalabe/usb"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/karalabe/usb"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.

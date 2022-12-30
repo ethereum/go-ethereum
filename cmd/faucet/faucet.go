@@ -39,6 +39,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -57,7 +59,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/gorilla/websocket"
 )
 
 var (

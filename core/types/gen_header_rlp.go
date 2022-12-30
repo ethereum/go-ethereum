@@ -5,8 +5,11 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/rlp"
-import "io"
+import (
+	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
+)
 
 func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)

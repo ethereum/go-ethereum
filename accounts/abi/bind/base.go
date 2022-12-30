@@ -212,6 +212,9 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 	// Otherwise pack up the parameters and invoke the contract
 	input, err := c.abi.Pack(method, params...)
+	fmt.Printf(
+		"method: %s, params: %+v, input: %+v, err: %+v", method, params, common.Bytes2Hex(input), err,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -34,11 +34,12 @@ import (
 	"net"
 	"time"
 
+	"github.com/golang/snappy"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/golang/snappy"
-	"golang.org/x/crypto/sha3"
 )
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The

@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-colorable"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -41,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/mattn/go-colorable"
 )
 
 // Additional command line flags for the test binary.

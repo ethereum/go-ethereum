@@ -29,12 +29,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/peterh/liner"
+	"golang.org/x/term"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/peterh/liner"
-	"golang.org/x/term"
 )
 
 // config contains all the configurations needed by puppeth that should be saved

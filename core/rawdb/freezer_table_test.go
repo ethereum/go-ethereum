@@ -30,8 +30,9 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 func init() {

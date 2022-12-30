@@ -33,6 +33,10 @@ import (
 	"strings"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -73,9 +77,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"github.com/urfave/cli/v2"
 )
 
 // These are all the command line flags we support.

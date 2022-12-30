@@ -58,6 +58,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"

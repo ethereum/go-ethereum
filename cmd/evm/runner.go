@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/urfave/cli/v2"
 )
 
 var runCommand = &cli.Command{

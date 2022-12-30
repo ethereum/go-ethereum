@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"math/big"
 
+	big2 "github.com/holiman/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	big2 "github.com/holiman/big"
 )
 
 // Fuzz is the fuzzing entry-point.

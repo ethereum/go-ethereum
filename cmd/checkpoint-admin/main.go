@@ -22,10 +22,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/urfave/cli/v2"
 )
 
 var app = flags.NewApp("ethereum checkpoint helper tool")

@@ -225,6 +225,15 @@ const (
 	TSTORE OpCode = 0xb4
 )
 
+func OpInGroup(op OpCode, codes ...OpCode) bool {
+	for _, c := range codes {
+		if c == op {
+			return true
+		}
+	}
+	return false
+}
+
 // Since the opcodes aren't all in order we can't use a regular slice.
 var opCodeToString = map[OpCode]string{
 	// 0x0 range - arithmetic ops.

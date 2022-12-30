@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/urfave/cli/v2"
 )
 
 var (

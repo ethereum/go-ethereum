@@ -22,13 +22,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/urfave/cli/v2"
 )
 
 var stateTestCommand = &cli.Command{

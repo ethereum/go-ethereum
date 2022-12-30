@@ -23,8 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // main is just a boring entry point to set up the CLI app.

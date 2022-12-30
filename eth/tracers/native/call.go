@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
@@ -101,6 +102,7 @@ type callFrameMarshaling struct {
 
 type callTracer struct {
 	noopTracer
+	env       *vm.EVM
 	callstack []callFrame
 	config    callTracerConfig
 	gasLimit  uint64
@@ -130,6 +132,7 @@ func newCallTracer(_ *tracers.Context, cfg json.RawMessage) (tracers.Tracer, err
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+	t.env = env
 	t.callstack[0] = callFrame{
 		Type:        vm.CALL,
 		BlockNumber: env.Context.BlockNumber,
@@ -163,35 +166,52 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	if atomic.LoadUint32(&t.interrupt) > 0 {
 		return
 	}
-	switch op {
-	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
+	stack := scope.Stack
+	stackData := stack.Data()
+	stackLen := len(stackData)
+	caller := scope.Contract.Address()
+	var addr common.Address
+	switch {
+	case vm.OpInGroup(op, vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4):
 		size := int(op - vm.LOG0)
-
 		stack := scope.Stack
 		stackData := stack.Data()
 
 		// Don't modify the stack
-		mStart := stackData[len(stackData)-1]
-		mSize := stackData[len(stackData)-2]
+		mStart := stackData[stackLen-1]
+		mSize := stackData[stackLen-2]
 		topics := make([]common.Hash, size)
 		for i := 0; i < size; i++ {
-			topic := stackData[len(stackData)-2-(i+1)]
+			topic := stackData[stackLen-2-(i+1)]
 			topics[i] = common.Hash(topic.Bytes32())
 		}
 
 		data := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
-		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
+		log := callLog{Address: caller, Topics: topics, Data: hexutil.Bytes(data)}
 		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
-	case vm.CALL, vm.CREATE, vm.CREATE2, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL, vm.CALLVALUE:
+	case stackLen >= 5 && vm.OpInGroup(op, vm.CALL, vm.CALLCODE, vm.DELEGATECALL, vm.STATICCALL):
+		addr = common.Address(stackData[stackLen-2].Bytes20())
+	case vm.OpInGroup(op, vm.CREATE):
+		nonce := t.env.StateDB.GetNonce(caller)
+		addr = crypto.CreateAddress(caller, nonce)
+	case stackLen >= 4 && op == vm.CREATE2:
+		offset := stackData[stackLen-2]
+		size := stackData[stackLen-3]
+		init := scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		inithash := crypto.Keccak256(init)
+		salt := stackData[stackLen-4]
+		addr = crypto.CreateAddress2(caller, salt.Bytes32(), inithash)
+	}
+	if addr.Hex() != "0x0000000000000000000000000000000000000000" {
 		cf := callFrame{
 			Type:  op,
-			From:  scope.Contract.CallerAddress,
-			To:    *scope.Contract.CodeAddr,
+			From:  caller,
+			To:    addr,
 			Input: common.CopyBytes(scope.Contract.Input),
 			Gas:   gas,
+			Value: scope.Contract.Value(),
 		}
 		t.callstack[len(t.callstack)-1].CaredOps = append(t.callstack[len(t.callstack)-1].CaredOps, cf)
-		scope.Stack.Data()
 	}
 }
 

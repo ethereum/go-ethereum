@@ -24,6 +24,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -32,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/urfave/cli/v2"
 )
 
 type result struct {

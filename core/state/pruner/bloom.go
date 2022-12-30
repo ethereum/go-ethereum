@@ -21,10 +21,11 @@ import (
 	"errors"
 	"os"
 
+	bloomfilter "github.com/holiman/bloomfilter/v2"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/log"
-	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
 // stateBloomHasher is a wrapper around a byte blob to satisfy the interface API

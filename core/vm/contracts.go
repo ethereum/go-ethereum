@@ -22,6 +22,9 @@ import (
 	"errors"
 	"math/big"
 
+	big2 "github.com/holiman/big"
+	"golang.org/x/crypto/ripemd160"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -29,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
-	big2 "github.com/holiman/big"
-	"golang.org/x/crypto/ripemd160"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation

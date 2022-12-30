@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
 )
 
 var commandDeploy = &cli.Command{

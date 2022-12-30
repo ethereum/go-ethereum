@@ -19,8 +19,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var commandStatus = &cli.Command{

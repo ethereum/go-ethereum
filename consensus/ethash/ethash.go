@@ -34,6 +34,7 @@ import (
 	"unsafe"
 
 	"github.com/edsrzf/mmap-go"
+
 	lrupkg "github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"

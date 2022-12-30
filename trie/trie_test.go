@@ -29,13 +29,14 @@ import (
 	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 func init() {

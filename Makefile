@@ -8,6 +8,7 @@ GOBIN = ./build/bin
 GO ?= latest
 GORUN = env GO111MODULE=on go run
 TEST_ARGS ?= ""
+GOPATH = $(shell go env GOPATH)
 
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
@@ -33,7 +34,9 @@ test: all
 	$(GORUN) build/ci.go test $(TEST_ARGS)
 
 format:
+	env GO111MODULE=on go install golang.org/x/tools/cmd/goimports@latest
 	$(GORUN) build/ci.go format
+	$(GOPATH)/bin/goimports -local github.com/ethereum/go-ethereum -w ./
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
