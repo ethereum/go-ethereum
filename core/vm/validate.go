@@ -179,7 +179,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				count := int(code[pos+1])
 				for i := 0; i < count; i++ {
 					arg := parseInt16(code[pos+2+2*i:])
-					worklist = append(worklist, item{pos: pos + int(arg), height: height})
+					worklist = append(worklist, item{pos: pos + 2 + 2*count + int(arg), height: height})
 				}
 				pos += 2 + 2*count
 			default:
