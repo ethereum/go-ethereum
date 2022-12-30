@@ -78,7 +78,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 			if i+2 >= len(code) {
 				return fmt.Errorf("truncated operand")
 			}
-			arg := parseUint16(code[i+1:])
+			arg, _ := parseUint16(code[i+1:])
 			if arg >= len(metadata) {
 				return fmt.Errorf("code section out-of-bounds (want: %d, have: %d)", arg, len(metadata))
 			}
@@ -161,7 +161,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 
 			switch {
 			case op == CALLF:
-				arg := parseUint16(code[pos+1:])
+				arg, _ := parseUint16(code[pos+1:])
 				if metadata[arg].Input < uint8(height) {
 					return 0, 0, fmt.Errorf("stack underflow")
 				}
