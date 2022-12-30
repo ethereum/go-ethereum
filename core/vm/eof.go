@@ -232,7 +232,7 @@ func parseList(b []byte, idx int) ([]int, error) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	count := binary.BigEndian.Uint16(b[idx:])
-	if len(b) < 2+int(count*2) {
+	if len(b) < idx + 2+int(count*2) {
 		return nil, io.ErrUnexpectedEOF
 
 	}
