@@ -481,7 +481,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 			return err
 		}
 	} else {
-		// In beacon mode, user the skeleton chain to retrieve the headers from
+		// In beacon mode, use the skeleton chain to retrieve the headers from
 		latest, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
@@ -1174,7 +1174,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) e
 				}
 			}
 		}
-		// If no headers have bene delivered, or all of them have been delayed,
+		// If no headers have been delivered, or all of them have been delayed,
 		// sleep a bit and retry. Take care with headers already consumed during
 		// skeleton filling
 		if len(headers) == 0 && !progressed {
