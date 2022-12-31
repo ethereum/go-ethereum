@@ -395,7 +395,7 @@ func FindnodePastExpiration(t *utesting.T) {
 
 // bond performs the endpoint proof with the remote node.
 func bond(t *utesting.T, te *testenv) {
-	te.send(te.l1, &v4wire.Ping{
+	pingHash := te.send(te.l1, &v4wire.Ping{
 		Version:    4,
 		From:       te.localEndpoint(te.l1),
 		To:         te.remoteEndpoint(),
@@ -417,7 +417,9 @@ func bond(t *utesting.T, te *testenv) {
 			})
 			gotPing = true
 		case *v4wire.Pong:
-			// TODO: maybe verify pong data here
+			if err := te.checkPong(req, pingHash); err != nil {
+				t.Fatal(err)
+			}
 			gotPong = true
 		}
 	}
