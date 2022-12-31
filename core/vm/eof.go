@@ -121,6 +121,9 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	} else if kind != kindTypes {
 		return fmt.Errorf("expected kind types")
 	}
+	if typesSize < 4 {
+		return fmt.Errorf("type section size invalid")
+	}
 	if typesSize > 4*1024 {
 		return fmt.Errorf("number of code sections must not exceed 1024 (got %d)", typesSize)
 	}

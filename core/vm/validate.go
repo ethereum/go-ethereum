@@ -44,6 +44,9 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 			}
 			i += size
 		case op == RJUMP || op == RJUMPI:
+			if i+2 >= len(code) {
+				return fmt.Errorf("truncated rjump* operand")
+			}
 			if analysis == nil {
 				tmp := eofCodeBitmap(code)
 				analysis = &tmp
@@ -64,7 +67,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 			if count == 0 {
 				return fmt.Errorf("rjumpv branch count must not be 0")
 			}
-			if i+count+1 >= len(code) {
+			if i+count >= len(code) {
 				return fmt.Errorf("truncated jump table operand")
 			}
 			if analysis == nil {
