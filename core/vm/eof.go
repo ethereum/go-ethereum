@@ -168,6 +168,9 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 			Output:         b[idx+i*4+1],
 			MaxStackHeight: uint16(binary.BigEndian.Uint16(b[idx+i*4+2:])),
 		}
+		if sig.Output > 127 || sig.Input > 127 {
+			return fmt.Errorf("type annotation %d inputs and outputs must not exceed 127", i)
+		}
 		if sig.MaxStackHeight > 1024 {
 			return fmt.Errorf("type annotation %d max stack height must not exceed 1024", i)
 		}
