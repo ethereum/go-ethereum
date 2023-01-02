@@ -133,7 +133,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 	var (
 		heights        = make(map[int]int)
 		worklist       = []item{{0, int(metadata[section].Input)}}
-		maxStackHeight = 0
+		maxStackHeight = int(metadata[section].Input)
 	)
 	for 0 < len(worklist) {
 		var (
