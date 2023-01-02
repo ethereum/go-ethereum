@@ -175,6 +175,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
 					return 0, 0, fmt.Errorf("stack overflow")
 				}
+				pos += 3
 			case op == RJUMP:
 				arg := parseInt16(code[pos+1:])
 				pos += 3 + int(arg)
