@@ -49,6 +49,15 @@ func TestValidateCode(t *testing.T) {
 		},
 		{
 			code: []byte{
+				byte(ADDRESS),
+				byte(CALLF), 0x00, 0x00,
+				byte(STOP),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+		},
+		{
+			code: []byte{
 				byte(CALLER),
 				byte(POP),
 			},

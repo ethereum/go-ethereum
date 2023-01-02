@@ -169,7 +169,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			switch {
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
-				if metadata[arg].Input < uint8(height) {
+				if metadata[arg].Input > uint8(height) {
 					return 0, 0, fmt.Errorf("stack underflow")
 				}
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
