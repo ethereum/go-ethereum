@@ -199,6 +199,14 @@ func TestValidateCode(t *testing.T) {
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
 			err:      fmt.Errorf("unreachable code"),
 		},
+		{
+			code: []byte{
+				byte(RETF),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 1, MaxStackHeight: 0}},
+			err:      fmt.Errorf("wrong number of outputs (want: 1, got: 0)"),
+		},
 	} {
 		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
 		if (err != nil && test.err == nil) || (err == nil && test.err != nil) || (err != nil && test.err != nil && err.Error() != test.err.Error()) {
