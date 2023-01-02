@@ -73,7 +73,7 @@ func TestReproduceTree(t *testing.T) {
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
 		t.Fatal("could not verify proof")
 	}
@@ -88,7 +88,7 @@ func TestReproduceTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("serialized: %x", p)
-	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commit().Bytes())
 }
 
 func TestChunkifyCodeTestnet(t *testing.T) {
@@ -294,7 +294,7 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
 		t.Fatal("could not verify proof")
 	}
@@ -309,7 +309,7 @@ func TestReproduceCondrieuStemAggregationInProofOfAbsence(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("serialized: %x", p)
-	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commit().Bytes())
 
 	t.Logf("%d", len(proof.ExtStatus))
 	if len(proof.ExtStatus) != 5 {
@@ -341,7 +341,7 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 	}
 
 	proof, Cs, zis, yis, _ := verkle.MakeVerkleMultiProof(root, append(presentKeys, absentKeys...), kv)
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	if !verkle.VerifyVerkleProof(proof, Cs, zis, yis, cfg) {
 		t.Fatal("could not verify proof")
 	}
@@ -356,7 +356,7 @@ func TestReproduceCondrieuPoAStemConflictWithAnotherStem(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("serialized: %x", p)
-	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.ComputeCommitment().Bytes())
+	t.Logf("tree: %s\n%x\n", verkle.ToDot(root), root.Commit().Bytes())
 
 	t.Logf("%d", len(proof.ExtStatus))
 	if len(proof.PoaStems) != 0 {

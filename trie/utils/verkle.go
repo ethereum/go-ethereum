@@ -80,7 +80,7 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 	verkle.FromLEBytes(&poly[3], index[:16])
 	verkle.FromLEBytes(&poly[4], index[16:])
 
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	ret := cfg.CommitToPoly(poly[:], 0)
 
 	// add a constant point
@@ -187,7 +187,7 @@ func getTreeKeyWithEvaluatedAddess(evaluated *verkle.Point, treeIndex *uint256.I
 	verkle.FromLEBytes(&poly[3], index[:16])
 	verkle.FromLEBytes(&poly[4], index[16:])
 
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	ret := cfg.CommitToPoly(poly[:], 0)
 
 	// add the pre-evaluated address
@@ -211,7 +211,7 @@ func EvaluateAddressPoint(address []byte) *verkle.Point {
 	verkle.FromLEBytes(&poly[1], address[:16])
 	verkle.FromLEBytes(&poly[2], address[16:])
 
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	ret := cfg.CommitToPoly(poly[:], 0)
 
 	// add a constant point

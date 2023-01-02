@@ -129,13 +129,13 @@ func (it *verkleNodeIterator) Error() error {
 
 // Hash returns the hash of the current node.
 func (it *verkleNodeIterator) Hash() common.Hash {
-	return it.current.ComputeCommitment().Bytes()
+	return it.current.Commit().Bytes()
 }
 
 // Parent returns the hash of the parent of the current node. The hash may be the one
 // grandparent if the immediate parent is an internal node with no hash.
 func (it *verkleNodeIterator) Parent() common.Hash {
-	return it.stack[len(it.stack)-1].Node.ComputeCommitment().Bytes()
+	return it.stack[len(it.stack)-1].Node.Commit().Bytes()
 }
 
 // Path returns the hex-encoded path to the current node.

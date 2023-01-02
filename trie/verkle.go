@@ -144,8 +144,7 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 
 	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		leaf := verkle.NewLeafNode(stem, values)
-		err = root.InsertStem(stem, leaf, flusher, true)
+		err = root.InsertStem(stem, values, flusher)
 		// case *verkle.StatelessNode:
 		// 	err = root.InsertAtStem(stem, values, flusher, true)
 	}
@@ -158,10 +157,9 @@ func (t *VerkleTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error
 }
 
 func (trie *VerkleTrie) TryUpdateStem(key []byte, values [][]byte) {
-	leaf := verkle.NewLeafNode(key[:31], values)
-	trie.root.(*verkle.InternalNode).InsertStem(key, leaf, func(h []byte) ([]byte, error) {
+	trie.root.(*verkle.InternalNode).InsertStem(key, values, func(h []byte) ([]byte, error) {
 		return trie.db.DiskDB().Get(h)
-	}, false /* catch a code overwrite */)
+	})
 }
 
 // TryUpdate associates key with value in the trie. If value has length zero, any
@@ -220,11 +218,11 @@ func (trie *VerkleTrie) TryDelete(key []byte) error {
 // Hash returns the root hash of the trie. It does not write to the database and
 // can be used even if the trie doesn't have one.
 func (trie *VerkleTrie) Hash() common.Hash {
-	return trie.root.ComputeCommitment().Bytes()
+	return trie.root.Commit().Bytes()
 }
 
 func nodeToDBKey(n verkle.VerkleNode) []byte {
-	ret := n.ComputeCommitment().Bytes()
+	ret := n.Commit().Bytes()
 	return ret[:]
 }
 
@@ -238,7 +236,7 @@ func (trie *VerkleTrie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
 				if leaf, isLeaf := n.(*verkle.LeafNode); isLeaf {
 					for i := 0; i < verkle.NodeWidth; i++ {
 						if leaf.Value(i) != nil {
-							comm := n.ComputeCommitment().Bytes()
+							comm := n.Commit().Bytes()
 							onleaf(nil, nil, leaf.Value(i), common.BytesToHash(comm[:]))
 						}
 					}
@@ -316,7 +314,7 @@ func DeserializeAndVerifyVerkleProof(serialized []byte, rootC *verkle.Point, key
 	if err != nil {
 		return fmt.Errorf("could not deserialize proof: %w", err)
 	}
-	cfg, err := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	if err != nil {
 		return fmt.Errorf("could not get configuration %w", err)
 	}

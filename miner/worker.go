@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/gballet/go-verkle"
 )
 
 const (
@@ -1172,6 +1173,15 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			if err != nil {
 				return err
 			}
+
+			var rootC verkle.Point
+			rootC.SetBytesTrusted(env.preRoot[:])
+			err = trie.DeserializeAndVerifyVerkleProof(p, &rootC, k)
+			if err != nil {
+				log.Crit("could not verify my own proof", "err", err)
+				return err
+			}
+
 			block.SetVerkleProof(p, k)
 		}
 

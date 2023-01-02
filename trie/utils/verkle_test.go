@@ -40,7 +40,7 @@ func TestGetTreeKey(t *testing.T) {
 func TestConstantPoint(t *testing.T) {
 	var expectedPoly [1]verkle.Fr
 
-	cfg, _ := verkle.GetConfig()
+	cfg := verkle.GetConfig()
 	verkle.FromLEBytes(&expectedPoly[0], []byte{2, 64})
 	expected := cfg.CommitToPoly(expectedPoly[:], 1)
 
