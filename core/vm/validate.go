@@ -105,7 +105,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 	} else if paths != count {
 		return fmt.Errorf("unreachable code")
 	} else if max != int(metadata[section].MaxStackHeight) {
-		return fmt.Errorf("computed max stack height for code section %d does not match expect (want: %d, got: %d)", section, metadata[section].MaxStackHeight, max)
+		return fmt.Errorf("computed max stack height for code section %d does not match expected (want: %d, got: %d)", section, metadata[section].MaxStackHeight, max)
 	}
 	return nil
 }
@@ -142,6 +142,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			height = worklist[idx].height
 		)
 		worklist = worklist[:idx]
+	outer:
 		for pos < len(code) {
 			op := OpCode(code[pos])
 
@@ -191,6 +192,8 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			default:
 				if op >= PUSH1 && op <= PUSH32 {
 					pos += 1 + int(op-PUSH0)
+				} else if jt[op].terminal {
+					break outer
 				} else {
 					// No immediate.
 					pos += 1

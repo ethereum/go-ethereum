@@ -19,6 +19,8 @@ package vm
 import (
 	"fmt"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestValidateCode(t *testing.T) {
@@ -78,7 +80,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 2}},
-			err:      fmt.Errorf("computed max stack height for code section 0 does not match expect (want: 2, got: 1)"),
+			err:      fmt.Errorf("computed max stack height for code section 0 does not match expected (want: 2, got: 1)"),
 		},
 		{
 			code: []byte{
@@ -187,10 +189,20 @@ func TestValidateCode(t *testing.T) {
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 3}},
 		},
+		{
+			code: []byte{
+				byte(STOP),
+				byte(STOP),
+				byte(INVALID),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+			err:      fmt.Errorf("unreachable code"),
+		},
 	} {
 		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
 		if (err != nil && test.err == nil) || (err == nil && test.err != nil) || (err != nil && test.err != nil && err.Error() != test.err.Error()) {
-			t.Errorf("test %d: unexpected error (want: %v, got: %v)", i, test.err, err)
+			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
 	}
 
