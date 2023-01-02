@@ -54,7 +54,7 @@ func TestValidateCode(t *testing.T) {
 				byte(STOP),
 			},
 			section:  0,
-			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
 		},
 		{
 			code: []byte{

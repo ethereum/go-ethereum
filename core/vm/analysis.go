@@ -148,7 +148,7 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 				continue // skip over if rjumpv is truncated
 			}
 			numbits = code[pc]*2 + 1
-			if pc+uint64(numbits) >= uint64(len(code)) {
+			if pc+uint64(numbits) > uint64(len(code)) {
 				continue // skip over if rjumpv is truncated
 			}
 		} else {

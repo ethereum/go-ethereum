@@ -176,6 +176,11 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 					return 0, 0, fmt.Errorf("stack overflow")
 				}
 				pos += 3
+			case op == RETF:
+				if int(metadata[section].Output) != height {
+					return 0, 0, fmt.Errorf("wrong number of outputs (want: %d, got: %d)", metadata[section].Output, height)
+				}
+				break outer
 			case op == RJUMP:
 				arg := parseInt16(code[pos+1:])
 				pos += 3 + int(arg)
@@ -190,11 +195,6 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 					worklist = append(worklist, item{pos: pos + 2 + 2*count + int(arg), height: height})
 				}
 				pos += 2 + 2*count
-			case op == RETF:
-				if int(metadata[section].Output) != height {
-					return 0, 0, fmt.Errorf("wrong number of outputs (want: %d, got: %d)", metadata[section].Output, height)
-				}
-				break outer
 			default:
 				if op >= PUSH1 && op <= PUSH32 {
 					pos += 1 + int(op-PUSH0)

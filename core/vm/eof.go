@@ -21,6 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -34,6 +36,10 @@ const (
 
 	eofFormatByte = 0xef
 	eof1Version   = 1
+
+	maxInputItems  = 127
+	maxOutputItems = 127
+	maxStackHeight = 1023
 )
 
 var eofMagic = []byte{0xef, 0x00}
@@ -54,7 +60,7 @@ func isEOFVersion1(code []byte) bool {
 	return 2 < len(code) && code[2] == byte(eof1Version)
 }
 
-// Container is and EOF container object.
+// Container is an EOF container object.
 type Container struct {
 	Types []*FunctionMetadata
 	Code  [][]byte
@@ -70,12 +76,14 @@ type FunctionMetadata struct {
 
 // MarshalBinary encodes an EOF container into binary format.
 func (c *Container) MarshalBinary() []byte {
+	// Build EOF prefix.
 	b := make([]byte, 2)
 	copy(b, eofMagic)
 	b = append(b, eof1Version)
+
+	// Write section headers.
 	b = append(b, kindTypes)
 	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Types)*4))
-	//b = appendUint16(b, uint16(len(c.Types)*4))
 	b = append(b, kindCode)
 	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Code)))
 	for _, code := range c.Code {
@@ -85,6 +93,7 @@ func (c *Container) MarshalBinary() []byte {
 	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Data)))
 	b = append(b, 0) // terminator
 
+	// Write section contents.
 	for _, ty := range c.Types {
 		b = append(b, []byte{ty.Input, ty.Output, byte(ty.MaxStackHeight >> 8), byte(ty.MaxStackHeight & 0x00ff)}...)
 	}
@@ -92,71 +101,76 @@ func (c *Container) MarshalBinary() []byte {
 		b = append(b, code...)
 	}
 	b = append(b, c.Data...)
+
 	return b
 }
 
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte) error {
 	if !hasEOFMagic(b) {
-		return fmt.Errorf("invalid magic")
+		return fmt.Errorf("invalid magic: have %s, want %s", common.Bytes2Hex(b[:min(2, len(b))]), common.Bytes2Hex(eofMagic))
 	}
 	if !isEOFVersion1(b) {
-		return fmt.Errorf("invalid eof version")
-	}
-
-	if len(b) < 15 {
-		return fmt.Errorf("container size less than minimum valid size")
+		have := "<nil>"
+		if len(b) > 3 {
+			have = fmt.Sprintf("%d", int(b[2]))
+		}
+		return fmt.Errorf("invalid eof version: have %s, want %d", have, eof1Version)
 	}
 
 	var (
-		typesSize, dataSize int
-		codeSizes           []int
-		kind                int
-		err                 error
+		kind, typesSize, dataSize int
+		codeSizes                 []int
+		err                       error
 	)
 
-	// Parse types size.
-	if kind, typesSize, err = parseSection(b, offsetTypesKind); err != nil {
+	// Parse type section header.
+	kind, typesSize, err = parseSection(b, offsetTypesKind)
+	if err != nil {
 		return err
-	} else if kind != kindTypes {
-		return fmt.Errorf("expected kind types")
+	}
+	if kind != kindTypes {
+		return fmt.Errorf("expected kind types 0x01: have %x", kind)
 	}
 	if typesSize < 4 || typesSize%4 != 0 {
-		return fmt.Errorf("type section size invalid")
+		return fmt.Errorf("type section size must be divisible by 4: have %d", typesSize)
 	}
-	if typesSize > 4*1024 {
-		return fmt.Errorf("number of code sections must not exceed 1024 (got %d)", typesSize)
+	if typesSize/4 > 1024 {
+		return fmt.Errorf("number of code sections must not exceed 1024: got %d", typesSize/4)
 	}
 
-	// Parse code sizes.
-	if kind, codeSizes, err = parseSectionList(b, offsetCodeKind); err != nil {
+	// Parse code section header.
+	kind, codeSizes, err = parseSectionList(b, offsetCodeKind)
+	if err != nil {
 		return fmt.Errorf("failed to parse section list: %v", err)
-	} else if kind != kindCode {
-		return fmt.Errorf("expected kind code")
+	}
+	if kind != kindCode {
+		return fmt.Errorf("expected kind code 0x02: have %x", kind)
 	}
 	if len(codeSizes) != typesSize/4 {
-		return fmt.Errorf("mismatch of code sections count and type signatures (types %d, code %d)", typesSize/3, len(codeSizes))
+		return fmt.Errorf("mismatch of code sections count and type signatures: types %d, code %d)", typesSize/4, len(codeSizes))
 	}
 
-	// Parse data size.
+	// Parse data section header.
 	offsetDataKind := offsetCodeKind + 2 + 2*len(codeSizes) + 1
-	if len(b) < offsetDataKind+2 {
-		return fmt.Errorf("container size invalid")
-	}
-	if kind, dataSize, err = parseSection(b, offsetDataKind); err != nil {
+	kind, dataSize, err = parseSection(b, offsetDataKind)
+	if err != nil {
 		return err
-	} else if kind != kindData {
-		return fmt.Errorf("expected kind data")
 	}
+	if kind != kindData {
+		return fmt.Errorf("expected kind data 0x03: have %x", kind)
+	}
+
+	// Check for terminator.
 	offsetTerminator := offsetDataKind + 3
 	if check(b, offsetTerminator, 0) {
 		return fmt.Errorf("expected terminator")
 	}
 
-	// Check for terminator.
+	// Verify overall container size.
 	expectedSize := offsetTerminator + typesSize + sum(codeSizes) + dataSize + 1
 	if len(b) != expectedSize {
-		return fmt.Errorf("invalid container size (want %d, got %d)", expectedSize, len(b))
+		return fmt.Errorf("invalid container size: have %d, want %d", len(b), expectedSize)
 	}
 
 	// Parse types section.
@@ -168,16 +182,19 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 			Output:         b[idx+i*4+1],
 			MaxStackHeight: uint16(binary.BigEndian.Uint16(b[idx+i*4+2:])),
 		}
-		if sig.Output > 127 || sig.Input > 127 {
-			return fmt.Errorf("type annotation %d inputs and outputs must not exceed 127", i)
+		if sig.Input > maxInputItems {
+			return fmt.Errorf("invalid type annotation at index %d: inputs must not exceed %d: have %d", i, maxInputItems, sig.Input)
 		}
-		if sig.MaxStackHeight > 1023 {
-			return fmt.Errorf("type annotation %d max stack height must not exceed 1023", i)
+		if sig.Output > maxOutputItems {
+			return fmt.Errorf("invalid type annotation at index %d: inputs and outputs must not exceed %d: have %d", i, maxOutputItems, sig.Output)
+		}
+		if sig.MaxStackHeight > maxStackHeight {
+			return fmt.Errorf("invalid type annotation at index %d: max stack height must not exceed %d: have %d", i, maxStackHeight, sig.MaxStackHeight)
 		}
 		types = append(types, sig)
 	}
 	if types[0].Input != 0 || types[0].Output != 0 {
-		return fmt.Errorf("input and output of first code section must be 0")
+		return fmt.Errorf("invalid type annotation at index 0: input and output must be 0: have (%d, %d)", types[0].Input, types[0].Output)
 	}
 	c.Types = types
 
@@ -186,7 +203,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	code := make([][]byte, len(codeSizes))
 	for i, size := range codeSizes {
 		if size == 0 {
-			return fmt.Errorf("code section %d size must not be 0", i)
+			return fmt.Errorf("invalid code section %d: size must not be 0", i)
 		}
 		code[i] = b[idx : idx+size]
 		idx += size
@@ -199,6 +216,8 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+// ValidateCode validates each code section of the container against the EOF v1
+// rule set.
 func (c *Container) ValidateCode(jt *JumpTable) error {
 	for i, code := range c.Code {
 		if err := validateCode(code, i, c.Types, jt); err != nil {
@@ -265,6 +284,15 @@ func check(b []byte, idx int, want byte) bool {
 	return b[idx] != want
 }
 
+// min returns the minimum value between x and y.
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+// sum computes the sum of a slice.
 func sum(list []int) (s int) {
 	for _, n := range list {
 		s += n

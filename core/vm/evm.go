@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -485,7 +486,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				err = c.ValidateCode(evm.interpreter.cfg.JumpTableEOF)
 			}
 			if err != nil {
-				err = fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+				err = fmt.Errorf("%w: %v", ErrInvalidEOF, err)
 			}
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode
@@ -548,7 +549,7 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 func (evm *EVM) parseContainer(b []byte) *Container {
 	if evm.chainRules.IsShanghai {
 		var c Container
-		if err := c.UnmarshalBinary(b); err != nil && err.Error() == "invalid magic" {
+		if err := c.UnmarshalBinary(b); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
 			return nil
 		} else if err != nil {
 			// Code was already validated, so no other errors should be possible.
