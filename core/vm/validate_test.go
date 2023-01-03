@@ -145,16 +145,6 @@ func TestValidateCode(t *testing.T) {
 		},
 		{
 			code: []byte{
-				byte(JUMPF),
-				byte(0x00),
-				byte(0x01),
-			},
-			section:  0,
-			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}, {Input: 0, Output: 1, MaxStackHeight: 1}},
-			err:      fmt.Errorf("jumpf to section with more outputs"),
-		},
-		{
-			code: []byte{
 				byte(RJUMP), 0x00, 0x03,
 				byte(JUMPDEST),
 				byte(JUMPDEST),

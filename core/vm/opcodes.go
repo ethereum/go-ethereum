@@ -211,7 +211,6 @@ const (
 const (
 	CALLF = 0xb0 + iota
 	RETF
-	JUMPF
 )
 
 // 0xf0 range - closures.
@@ -395,7 +394,6 @@ var opCodeToString = map[OpCode]string{
 	// 0xb0 range.
 	CALLF:  "CALLF",
 	RETF:   "RETF",
-	JUMPF:  "JUMPF",
 	TLOAD:  "TLOAD",
 	TSTORE: "TSTORE",
 

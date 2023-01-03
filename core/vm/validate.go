@@ -25,13 +25,16 @@ import (
 // validateCode validates the code parameter against the EOF v1 validity requirements.
 func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) error {
 	var (
-		i        = 0
+		i = 0
+		// Tracks the number of actual instructions in the code (e.g.
+		// non-immediate values). This is used at the end to determine
+		// if each instruction is reachable.
 		count    = 0
 		op       OpCode
 		analysis bitvec
 	)
 	for i < len(code) {
-		count += 1
+		count++
 		op = OpCode(code[i])
 		if jt[op].undefined {
 			return fmt.Errorf("use of undefined opcode %s", op)
@@ -39,53 +42,42 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		switch {
 		case op >= PUSH1 && op <= PUSH32:
 			size := int(op - PUSH0)
-			if i+size >= len(code) {
+			if len(code) <= i+size {
 				return fmt.Errorf("truncated operand")
 			}
 			i += size
 		case op == RJUMP || op == RJUMPI:
-			if i+2 >= len(code) {
+			if len(code) <= i+2 {
 				return fmt.Errorf("truncated rjump* operand")
 			}
-			if analysis == nil {
-				analysis = eofCodeBitmap(code)
-			}
-			if err := checkDest(code[i+1:], i+3, len(code), analysis); err != nil {
+			if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
 				return err
 			}
 			i += 2
 		case op == RJUMPV:
-			if i+1 >= len(code) {
+			if len(code) <= i+1 {
 				return fmt.Errorf("truncated jump table operand")
 			}
 			count := int(code[i+1])
 			if count == 0 {
 				return fmt.Errorf("rjumpv branch count must not be 0")
 			}
-			if i+count >= len(code) {
+			if len(code) <= i+count {
 				return fmt.Errorf("truncated jump table operand")
 			}
-			if analysis == nil {
-				analysis = eofCodeBitmap(code)
-			}
 			for j := 0; j < count; j++ {
-				if err := checkDest(code[i+2+j*2:], i+2*count+2, len(code), analysis); err != nil {
+				if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
 					return err
 				}
 			}
 			i += 1 + 2*count
-		case op == CALLF || op == JUMPF:
+		case op == CALLF:
 			if i+2 >= len(code) {
 				return fmt.Errorf("truncated operand")
 			}
 			arg, _ := parseUint16(code[i+1:])
 			if arg >= len(metadata) {
 				return fmt.Errorf("code section out-of-bounds (want: %d, have: %d)", arg, len(metadata))
-			}
-			if op == JUMPF {
-				if metadata[section].Output < metadata[arg].Output {
-					return fmt.Errorf("jumpf to section with more outputs")
-				}
 			}
 			i += 2
 		}
@@ -105,11 +97,14 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 }
 
 // checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.
-func checkDest(code []byte, from, length int, analysis bitvec) error {
-	if len(code) < 2 {
+func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
+	if len(code) < imm+2 {
 		return fmt.Errorf("truncated operand")
 	}
-	dest := from + parseInt16(code)
+	if analysis != nil && *analysis == nil {
+		*analysis = eofCodeBitmap(code)
+	}
+	dest := from + parseInt16(code[imm:])
 	if dest < 0 || dest >= length {
 		return fmt.Errorf("relative offset out-of-bounds: %d", dest)
 	}

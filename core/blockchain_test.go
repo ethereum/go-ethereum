@@ -4430,9 +4430,10 @@ func TestEOF(t *testing.T) {
 								byte(2),
 								byte(vm.SSTORE), // set third flag
 
-								byte(vm.JUMPF),
+								byte(vm.CALLF),
 								byte(0),
 								byte(3),
+								byte(vm.RETF),
 							},
 							{
 								byte(vm.PUSH1),
