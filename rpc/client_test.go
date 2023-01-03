@@ -52,6 +52,21 @@ func TestClientRequest(t *testing.T) {
 	}
 }
 
+func TestClientRequestSingle(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+	client := DialInProc(server)
+	defer client.Close()
+
+	var resp echoResult
+	if err := client.CallContextSingle(context.Background(), &resp, "test_echo", []interface{}{"hello", 10, &echoArgs{"world"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(resp, echoResult{"hello", 10, &echoArgs{"world"}}) {
+		t.Errorf("incorrect result %#v", resp)
+	}
+}
+
 func TestClientResponseType(t *testing.T) {
 	server := newTestServer()
 	defer server.Stop()
