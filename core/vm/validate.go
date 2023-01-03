@@ -33,6 +33,12 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		op       OpCode
 		analysis bitvec
 	)
+	// This loop visits every single instruction and verifies:
+	// * if the instruction is valid for the given jump table.
+	// * if the instruction has an immediate value, it is not truncated.
+	// * if performing a relative jump, all jump destinations are valid.
+	// * if changing code sections, the new code section index is valid and
+	//   will not cause a stack overflow.
 	for i < len(code) {
 		count++
 		op = OpCode(code[i])
@@ -83,15 +89,15 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		}
 		i += 1
 	}
+	// Code sections may not "fall through" and require proper termination.
+	// Therefore, the last instruction must be considered terminal.
 	if !jt[op].terminal {
 		return fmt.Errorf("code section ends with non-terminal instruction")
 	}
-	if max, paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
+	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
 		return err
 	} else if paths != count {
 		return fmt.Errorf("unreachable code")
-	} else if max != int(metadata[section].MaxStackHeight) {
-		return fmt.Errorf("computed max stack height for code section %d does not match expected (want: %d, got: %d)", section, metadata[section].MaxStackHeight, max)
 	}
 	return nil
 }
@@ -116,7 +122,7 @@ func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
 
 // validateControlFlow iterates through all possible branches the provided code
 // value and determines if it is valid per EOF v1.
-func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) (int, int, error) {
+func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) (int, error) {
 	type item struct {
 		pos    int
 		height int
@@ -140,7 +146,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			// Check if pos has already be visited; if so, the stack heights should be the same.
 			if exp, ok := heights[pos]; ok {
 				if height != exp {
-					return 0, 0, fmt.Errorf("stack height mismatch for different paths")
+					return 0, fmt.Errorf("stack height mismatch for different paths")
 				}
 				// Already visited this path and stack height
 				// matches.
@@ -150,10 +156,10 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 
 			// Validate height for current op and update as needed.
 			if jt[op].minStack > height {
-				return 0, 0, fmt.Errorf("stack underflow")
+				return 0, fmt.Errorf("stack underflow")
 			}
 			if jt[op].maxStack < height {
-				return 0, 0, fmt.Errorf("stack overflow")
+				return 0, fmt.Errorf("stack overflow")
 			}
 			height += int(params.StackLimit) - jt[op].maxStack
 
@@ -161,16 +167,17 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
 				if metadata[arg].Input > uint8(height) {
-					return 0, 0, fmt.Errorf("stack underflow")
+					return 0, fmt.Errorf("stack underflow")
 				}
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
-					return 0, 0, fmt.Errorf("stack overflow")
+					return 0, fmt.Errorf("stack overflow")
 				}
+				height -= int(metadata[arg].Input)
 				height += int(metadata[arg].Output)
 				pos += 3
 			case op == RETF:
 				if int(metadata[section].Output) != height {
-					return 0, 0, fmt.Errorf("wrong number of outputs (want: %d, got: %d)", metadata[section].Output, height)
+					return 0, fmt.Errorf("wrong number of outputs (want: %d, got: %d)", metadata[section].Output, height)
 				}
 				break outer
 			case op == RJUMP:
@@ -200,5 +207,8 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			maxStackHeight = max(maxStackHeight, height)
 		}
 	}
-	return maxStackHeight, len(heights), nil
+	if maxStackHeight != int(metadata[section].MaxStackHeight) {
+		return 0, fmt.Errorf("computed max stack height for code section %d does not match expected (want: %d, got: %d)", section, metadata[section].MaxStackHeight, maxStackHeight)
+	}
+	return len(heights), nil
 }

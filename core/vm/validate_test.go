@@ -74,7 +74,7 @@ func TestValidateCode(t *testing.T) {
 				byte(STOP),
 			},
 			section:  0,
-			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
 			err:      fmt.Errorf("unreachable code"),
 		},
 		{
@@ -229,6 +229,17 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}, {Input: 0, Output: 1, MaxStackHeight: 0}},
+		},
+		{
+			code: []byte{
+				byte(ORIGIN),
+				byte(ORIGIN),
+				byte(CALLF), 0x00, 0x01,
+				byte(POP),
+				byte(RETF),
+			},
+			section:  0,
+			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 2}, {Input: 2, Output: 1, MaxStackHeight: 2}},
 		},
 	} {
 		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
