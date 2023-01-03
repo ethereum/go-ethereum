@@ -3083,7 +3083,7 @@ func (t *healRequestSort) Swap(i, j int) {
 func (t *healRequestSort) Merge() []TrieNodePathSet {
 	var result []TrieNodePathSet
 	for _, path := range t.syncPaths {
-		pathset := TrieNodePathSet([][]byte(path))
+		pathset := TrieNodePathSet(path)
 		if len(path) == 1 {
 			// It's an account reference.
 			result = append(result, pathset)
