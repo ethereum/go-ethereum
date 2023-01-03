@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -211,14 +212,20 @@ func (s *Subscription) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.ID)
 }
 
+// ClientSubscriptionConfig is a subcrption configuration
+type ClientSubscriptionConfig struct {
+	SubscribeMethod   string
+	UnsubscribeMethod string
+}
+
 // ClientSubscription is a subscription established through the Client's Subscribe or
 // EthSubscribe methods.
 type ClientSubscription struct {
-	client    *Client
-	etype     reflect.Type
-	channel   reflect.Value
-	namespace string
-	subid     string
+	client  *Client
+	etype   reflect.Type
+	channel reflect.Value
+	config  ClientSubscriptionConfig
+	subid   string
 
 	// The in channel receives notification values from client dispatcher.
 	in chan json.RawMessage
@@ -239,10 +246,10 @@ type ClientSubscription struct {
 // This is the sentinel value sent on sub.quit when Unsubscribe is called.
 var errUnsubscribed = errors.New("unsubscribed")
 
-func newClientSubscription(c *Client, namespace string, channel reflect.Value) *ClientSubscription {
+func newClientSubscription(c *Client, config ClientSubscriptionConfig, channel reflect.Value) *ClientSubscription {
 	sub := &ClientSubscription{
 		client:      c,
-		namespace:   namespace,
+		config:      config,
 		etype:       channel.Type().Elem(),
 		channel:     channel,
 		in:          make(chan json.RawMessage),
@@ -381,6 +388,9 @@ func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, e
 }
 
 func (sub *ClientSubscription) requestUnsubscribe() error {
+	if sub.config.UnsubscribeMethod == "" {
+		return fmt.Errorf("no unsubscription method")
+	}
 	var result interface{}
-	return sub.client.Call(&result, sub.namespace+unsubscribeMethodSuffix, sub.subid)
+	return sub.client.Call(&result, sub.config.UnsubscribeMethod, sub.subid)
 }

@@ -517,6 +517,16 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
 func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.SubscribeWith(ctx, ClientSubscriptionConfig{
+		SubscribeMethod:   namespace + subscribeMethodSuffix,
+		UnsubscribeMethod: namespace + unsubscribeMethodSuffix,
+	}, channel, args...)
+}
+
+// SubscribeWith calls the "<config.SubscribeMethod>" method with the given arguments,
+// registering a new Subscription. If `config.UnsubscribeMethod` is not set, it won't
+// be possible to unsubscribe.
+func (c *Client) SubscribeWith(ctx context.Context, config ClientSubscriptionConfig, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
@@ -528,15 +538,18 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	if c.isHTTP {
 		return nil, ErrNotificationsUnsupported
 	}
+	if config.SubscribeMethod == "" {
+		return nil, fmt.Errorf("no subscription method")
+	}
 
-	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args)
+	msg, err := c.newMessage(config.SubscribeMethod, args)
 	if err != nil {
 		return nil, err
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
 		resp: make(chan []*jsonrpcMessage, 1),
-		sub:  newClientSubscription(c, namespace, chanVal),
+		sub:  newClientSubscription(c, config, chanVal),
 	}
 
 	// Send the subscription request.
