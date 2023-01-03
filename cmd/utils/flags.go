@@ -791,7 +791,7 @@ var (
 		Category: flags.APICategory,
 	}
 	EnablePersonal = &cli.BoolFlag{
-		Name:     "rpc.enablepersonal",
+		Name:     "rpc.enabledeprecatedpersonal",
 		Usage:    "Enables the (deprecated) personal namespace",
 		Category: flags.APICategory,
 	}

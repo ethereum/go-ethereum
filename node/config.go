@@ -201,7 +201,7 @@ type Config struct {
 	JWTSecret string `toml:",omitempty"`
 
 	// EnablePersonal enables the deprecated personal namespace.
-	EnablePersonal bool `toml:",omitempty"`
+	EnablePersonal bool `toml:"-"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
