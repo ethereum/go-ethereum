@@ -355,7 +355,7 @@ func (bn *bystander) loop() {
 			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.Findnode:
-			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, Total: 1}, nil)
+			bn.conn.write(bn.l, &v5wire.Nodes{ReqID: p.ReqID, RespCount: 1}, nil)
 			wasAdded = true
 			bn.notifyAdded()
 		case *v5wire.TalkRequest:
