@@ -246,5 +246,4 @@ func TestValidateCode(t *testing.T) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
 	}
-
 }

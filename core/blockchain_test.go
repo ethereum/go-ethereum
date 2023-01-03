@@ -4567,13 +4567,13 @@ func TestEOF(t *testing.T) {
 	}
 
 	// Check various deployment mechanisms.
-	if bytes.Compare(state.GetCode(crypto.CreateAddress(addr, 1)), deployCode) != 0 {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(addr, 1)), deployCode) {
 		t.Fatalf("failed to deploy EOF with EOA")
 	}
-	if bytes.Compare(state.GetCode(crypto.CreateAddress(bb, 0)), deployCode) != 0 {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(bb, 0)), deployCode) {
 		t.Fatalf("failed to deploy EOF with CREATE")
 	}
-	if bytes.Compare(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployCode) != 0 {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployCode) {
 		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }

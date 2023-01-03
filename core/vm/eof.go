@@ -180,7 +180,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		sig := &FunctionMetadata{
 			Input:          b[idx+i*4],
 			Output:         b[idx+i*4+1],
-			MaxStackHeight: uint16(binary.BigEndian.Uint16(b[idx+i*4+2:])),
+			MaxStackHeight: binary.BigEndian.Uint16(b[idx+i*4+2:]),
 		}
 		if sig.Input > maxInputItems {
 			return fmt.Errorf("invalid type annotation at index %d: inputs must not exceed %d: have %d", i, maxInputItems, sig.Input)
@@ -259,7 +259,6 @@ func parseList(b []byte, idx int) ([]int, error) {
 	count := binary.BigEndian.Uint16(b[idx:])
 	if len(b) <= idx+2+int(count)*2 {
 		return nil, io.ErrUnexpectedEOF
-
 	}
 	list := make([]int, count)
 	for i := 0; i < int(count); i++ {

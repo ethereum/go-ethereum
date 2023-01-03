@@ -171,7 +171,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
 					return 0, 0, fmt.Errorf("stack overflow")
 				}
-				height += int(metadata[arg].Output)
+				height += metadata[arg].Output
 				pos += 3
 			case op == RETF:
 				if int(metadata[section].Output) != height {
