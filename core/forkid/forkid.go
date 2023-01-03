@@ -45,6 +45,12 @@ var (
 	ErrLocalIncompatibleOrStale = errors.New("local incompatible or needs update")
 )
 
+// timestampThreshold is the Ethereum mainnet genesis timestamp. It is used to
+// differentiate if a forkid.next field is a block number or a timestamp. Whilst
+// very hacky, something's needed to split the validation during the transition
+// period (block forks -> time forks).
+const timestampThreshold = 1438269973
+
 // Blockchain defines all necessary method to build a forkID.
 type Blockchain interface {
 	// Config retrieves the chain's fork configuration.
@@ -72,8 +78,8 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head, time uint64) I
 	hash := crc32.ChecksumIEEE(genesis[:])
 
 	// Calculate the current fork checksum and the next fork block
-	forks, forksByTime := gatherForks(config)
-	for _, fork := range forks {
+	forksByBlock, forksByTime := gatherForks(config)
+	for _, fork := range forksByBlock {
 		if fork <= head {
 			// Fork already passed, checksum the previous hash and the fork number
 			hash = checksumUpdate(hash, fork)
@@ -81,26 +87,26 @@ func NewID(config *params.ChainConfig, genesis common.Hash, head, time uint64) I
 		}
 		return ID{Hash: checksumToBytes(hash), Next: fork}
 	}
-	var next uint64
 	for _, fork := range forksByTime {
-		if time >= fork {
-			// Fork passed, checksum previous hash and fork time
+		if fork <= time {
+			// Fork already passed, checksum the previous hash and fork timestamp
 			hash = checksumUpdate(hash, fork)
 			continue
 		}
-		next = fork
-		break
+		return ID{Hash: checksumToBytes(hash), Next: fork}
 	}
-	return ID{Hash: checksumToBytes(hash), Next: next}
+	return ID{Hash: checksumToBytes(hash), Next: 0}
 }
 
 // NewIDWithChain calculates the Ethereum fork ID from an existing chain instance.
 func NewIDWithChain(chain Blockchain) ID {
+	head := chain.CurrentHeader()
+
 	return NewID(
 		chain.Config(),
 		chain.Genesis().Hash(),
-		chain.CurrentHeader().Number.Uint64(),
-		chain.CurrentHeader().Time,
+		head.Number.Uint64(),
+		head.Time,
 	)
 }
 
@@ -111,7 +117,8 @@ func NewFilter(chain Blockchain) Filter {
 		chain.Config(),
 		chain.Genesis().Hash(),
 		func() (uint64, uint64) {
-			return chain.CurrentHeader().Number.Uint64(), chain.CurrentHeader().Time
+			head := chain.CurrentHeader()
+			return head.Number.Uint64(), head.Time
 		},
 	)
 }
@@ -128,23 +135,23 @@ func NewStaticFilter(config *params.ChainConfig, genesis common.Hash) Filter {
 func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (uint64, uint64)) Filter {
 	// Calculate the all the valid fork hash and fork next combos
 	var (
-		forks, forksByTime = gatherForks(config)
-		sums               = make([][4]byte, len(forks)+len(forksByTime)+1) // 0th is the genesis
+		forksByBlock, forksByTime = gatherForks(config)
+		forks                     = append(append([]uint64{}, forksByBlock...), forksByTime...)
+		sums                      = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
-	allForks := append(forks, forksByTime...)
 	hash := crc32.ChecksumIEEE(genesis[:])
 	sums[0] = checksumToBytes(hash)
-	for i, fork := range allForks {
+	for i, fork := range forks {
 		hash = checksumUpdate(hash, fork)
 		sums[i+1] = checksumToBytes(hash)
 	}
 	// Add two sentries to simplify the fork checks and don't require special
 	// casing the last one.
+	forks = append(forks, math.MaxUint64) // Last fork will never be passed
 	if len(forksByTime) == 0 {
-		forks = append(forks, math.MaxUint64)
+		// In purely block based forks, avoid the sentry spilling into timestapt territory
+		forksByBlock = append(forksByBlock, math.MaxUint64) // Last fork will never be passed
 	}
-	forksByTime = append(forksByTime, math.MaxUint64) // Last fork will never be passed
-
 	// Create a validator that will filter out incompatible chains
 	return func(id ID) error {
 		// Run the fork checksum validation ruleset:
@@ -166,14 +173,24 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 		//        the remote, but at this current point in time we don't have enough
 		//        information.
 		//   4. Reject in all other cases.
-
-		verify := func(index int, headOrTime uint64) error {
+		block, time := headfn()
+		for i, fork := range forks {
+			// Pick the head comparison based on fork progression
+			head := block
+			if i >= len(forksByBlock) {
+				head = time
+			}
+			// If our head is beyond this fork, continue to the next (we have a dummy
+			// fork of maxuint64 as the last item to always fail this check eventually).
+			if head >= fork {
+				continue
+			}
 			// Found the first unpassed fork block, check if our current state matches
 			// the remote checksum (rule #1).
-			if sums[index] == id.Hash {
+			if sums[i] == id.Hash {
 				// Fork checksum matched, check if a remote future fork block already passed
 				// locally without the local node being aware of it (rule #1a).
-				if id.Next > 0 && headOrTime >= id.Next {
+				if id.Next > 0 && (head >= id.Next || (id.Next > timestampThreshold && time >= id.Next)) {
 					return ErrLocalIncompatibleOrStale
 				}
 				// Haven't passed locally a remote-only fork, accept the connection (rule #1b).
@@ -181,10 +198,10 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			}
 			// The local and remote nodes are in different forks currently, check if the
 			// remote checksum is a subset of our local forks (rule #2).
-			for j := 0; j < index; j++ {
+			for j := 0; j < i; j++ {
 				if sums[j] == id.Hash {
 					// Remote checksum is a subset, validate based on the announced next fork
-					if allForks[j] != id.Next {
+					if forks[j] != id.Next {
 						return ErrRemoteStale
 					}
 					return nil
@@ -192,7 +209,7 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			}
 			// Remote chain is not a subset of our local one, check if it's a superset by
 			// any chance, signalling that we're simply out of sync (rule #3).
-			for j := index + 1; j < len(sums); j++ {
+			for j := i + 1; j < len(sums); j++ {
 				if sums[j] == id.Hash {
 					// Yay, remote checksum is a superset, ignore upcoming forks
 					return nil
@@ -201,27 +218,6 @@ func newFilter(config *params.ChainConfig, genesis common.Hash, headfn func() (u
 			// No exact, subset or superset match. We are on differing chains, reject.
 			return ErrLocalIncompatibleOrStale
 		}
-
-		head, time := headfn()
-		// Verify forks by block
-		for i, fork := range forks {
-			// If our head is beyond this fork, continue to the next (we have a dummy
-			// fork of maxuint64 as the last item to always fail this check eventually).
-			if head >= fork {
-				continue
-			}
-			return verify(i, head)
-		}
-		// Verify forks by time
-		for i, fork := range forksByTime {
-			// If our head is beyond this fork, continue to the next (we have a dummy
-			// fork of maxuint64 as the last item to always fail this check eventually).
-			if time >= fork {
-				continue
-			}
-			return verify(len(forks)+i, time)
-		}
-
 		log.Error("Impossible fork ID validation", "id", id)
 		return nil // Something's very wrong, accept rather than reject
 	}
@@ -242,45 +238,45 @@ func checksumToBytes(hash uint32) [4]byte {
 	return blob
 }
 
-// gatherForks gathers all the known forks and creates a sorted list out of them.
+// gatherForks gathers all the known forks and creates two sorted lists out of
+// them, one for the block number based forks and the second for the timestamps.
 func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	// Gather all the fork block numbers via reflection
 	kind := reflect.TypeOf(params.ChainConfig{})
 	conf := reflect.ValueOf(config).Elem()
 
-	var forks []uint64
-	var forksByTime []uint64
+	var (
+		forksByBlock []uint64
+		forksByTime  []uint64
+	)
 	for i := 0; i < kind.NumField(); i++ {
 		// Fetch the next field and skip non-fork rules
 		field := kind.Field(i)
-		time := false
-		if !strings.HasSuffix(field.Name, "Block") {
-			if !strings.HasSuffix(field.Name, "Time") {
-				continue
-			}
-			time = true
+
+		time := strings.HasSuffix(field.Name, "Time")
+		if !time && !strings.HasSuffix(field.Name, "Block") {
+			continue
 		}
 		if field.Type != reflect.TypeOf(new(big.Int)) {
 			continue
 		}
-		// Extract the fork rule block number and aggregate it
+		// Extract the fork rule block number or timestamp and aggregate it
 		rule := conf.Field(i).Interface().(*big.Int)
 		if rule != nil {
 			if time {
 				forksByTime = append(forksByTime, rule.Uint64())
 			} else {
-				forks = append(forks, rule.Uint64())
+				forksByBlock = append(forksByBlock, rule.Uint64())
 			}
 		}
 	}
-
-	sort.Slice(forks, func(i, j int) bool { return forks[i] < forks[j] })
+	sort.Slice(forksByBlock, func(i, j int) bool { return forksByBlock[i] < forksByBlock[j] })
 	sort.Slice(forksByTime, func(i, j int) bool { return forksByTime[i] < forksByTime[j] })
 
-	// Deduplicate block numbers applying multiple forks
-	for i := 1; i < len(forks); i++ {
-		if forks[i] == forks[i-1] {
-			forks = append(forks[:i], forks[i+1:]...)
+	// Deduplicate fork identifiers applying multiple forks
+	for i := 1; i < len(forksByBlock); i++ {
+		if forksByBlock[i] == forksByBlock[i-1] {
+			forksByBlock = append(forksByBlock[:i], forksByBlock[i+1:]...)
 			i--
 		}
 	}
@@ -291,11 +287,11 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 		}
 	}
 	// Skip any forks in block 0, that's the genesis ruleset
-	if len(forks) > 0 && forks[0] == 0 {
-		forks = forks[1:]
+	if len(forksByBlock) > 0 && forksByBlock[0] == 0 {
+		forksByBlock = forksByBlock[1:]
 	}
 	if len(forksByTime) > 0 && forksByTime[0] == 0 {
 		forksByTime = forksByTime[1:]
 	}
-	return forks, forksByTime
+	return forksByBlock, forksByTime
 }

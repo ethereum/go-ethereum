@@ -584,10 +584,10 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		origin     = true
 	)
 	done := func(header *types.Header) bool {
-		if headBlock != 0 || headTime == 0 {
-			return header.Number.Uint64() <= headBlock
+		if headTime > 0 {
+			return header.Time <= headTime
 		}
-		return header.Time <= headTime
+		return header.Number.Uint64() <= headBlock
 	}
 	for hdr := hc.CurrentHeader(); hdr != nil && !done(hdr); hdr = hc.CurrentHeader() {
 		num := hdr.Number.Uint64()
@@ -611,7 +611,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 			newHead, force := updateFn(markerBatch, parent)
 			if force && ((headTime > 0 && newHead.Time < headTime) || (headTime == 0 && newHead.Number.Uint64() < headBlock)) {
 				log.Warn("Force rewinding till ancient limit", "head", newHead.Number.Uint64())
-				headBlock, headTime = newHead.Number.Uint64(), 0
+				headBlock, headTime = newHead.Number.Uint64(), 0 // Target timestamp passed, continue rewind in block mode (cleaner)
 			}
 		}
 		// Update head header then.
