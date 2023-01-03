@@ -22,12 +22,13 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// validateCode validates the code parameter against the EOF v1 validity requirements.
 func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) error {
 	var (
 		i        = 0
 		count    = 0
 		op       OpCode
-		analysis *bitvec
+		analysis bitvec
 	)
 	for i < len(code) {
 		count += 1
@@ -37,7 +38,6 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		}
 		switch {
 		case op >= PUSH1 && op <= PUSH32:
-			// Verify that push data is not truncated.
 			size := int(op - PUSH0)
 			if i+size >= len(code) {
 				return fmt.Errorf("truncated operand")
@@ -48,18 +48,13 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 				return fmt.Errorf("truncated rjump* operand")
 			}
 			if analysis == nil {
-				tmp := eofCodeBitmap(code)
-				analysis = &tmp
+				analysis = eofCodeBitmap(code)
 			}
-			// Verify that the relative jump offset points to a
-			// destination in-bounds.
-			if err := checkDest(code[i+1:], *analysis, i+3, len(code)); err != nil {
+			if err := checkDest(code[i+1:], i+3, len(code), analysis); err != nil {
 				return err
 			}
 			i += 2
 		case op == RJUMPV:
-			// Verify each branch in the jump table points to a
-			// destination in-bounds.
 			if i+1 >= len(code) {
 				return fmt.Errorf("truncated jump table operand")
 			}
@@ -71,11 +66,10 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 				return fmt.Errorf("truncated jump table operand")
 			}
 			if analysis == nil {
-				tmp := eofCodeBitmap(code)
-				analysis = &tmp
+				analysis = eofCodeBitmap(code)
 			}
 			for j := 0; j < count; j++ {
-				if err := checkDest(code[i+2+j*2:], *analysis, i+2*count+2, len(code)); err != nil {
+				if err := checkDest(code[i+2+j*2:], i+2*count+2, len(code), analysis); err != nil {
 					return err
 				}
 			}
@@ -110,12 +104,12 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 	return nil
 }
 
-func checkDest(code []byte, analysis bitvec, idx, length int) error {
+// checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.
+func checkDest(code []byte, from, length int, analysis bitvec) error {
 	if len(code) < 2 {
 		return fmt.Errorf("truncated operand")
 	}
-	offset := parseInt16(code)
-	dest := idx + int(offset)
+	dest := from + parseInt16(code)
 	if dest < 0 || dest >= length {
 		return fmt.Errorf("relative offset out-of-bounds: %d", dest)
 	}
@@ -125,6 +119,8 @@ func checkDest(code []byte, analysis bitvec, idx, length int) error {
 	return nil
 }
 
+// validateControlFlow iterates through all possible branches the provided code
+// value and determines if it is valid per EOF v1.
 func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) (int, int, error) {
 	type item struct {
 		pos    int
@@ -175,6 +171,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
 					return 0, 0, fmt.Errorf("stack overflow")
 				}
+				height += int(metadata[arg].Output)
 				pos += 3
 			case op == RETF:
 				if int(metadata[section].Output) != height {
@@ -183,16 +180,16 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				break outer
 			case op == RJUMP:
 				arg := parseInt16(code[pos+1:])
-				pos += 3 + int(arg)
+				pos += 3 + arg
 			case op == RJUMPI:
 				arg := parseInt16(code[pos+1:])
-				worklist = append(worklist, item{pos: pos + 3 + int(arg), height: height})
+				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
 				pos += 3
 			case op == RJUMPV:
 				count := int(code[pos+1])
 				for i := 0; i < count; i++ {
 					arg := parseInt16(code[pos+2+2*i:])
-					worklist = append(worklist, item{pos: pos + 2 + 2*count + int(arg), height: height})
+					worklist = append(worklist, item{pos: pos + 2 + 2*count + arg, height: height})
 				}
 				pos += 2 + 2*count
 			default:
@@ -201,7 +198,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				} else if jt[op].terminal {
 					break outer
 				} else {
-					// No immediate.
+					// Simple op, no operand.
 					pos += 1
 				}
 			}
@@ -209,11 +206,4 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 		}
 	}
 	return maxStackHeight, len(heights), nil
-}
-
-func max(a, b int) int {
-	if a < b {
-		return b
-	}
-	return a
 }

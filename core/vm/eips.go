@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -386,11 +387,4 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	*pc = 0
 	*pc -= 1 // hacks xD
 	return nil, nil
-}
-
-// parseInt16 returns the int16 located at b[0:2].
-func parseInt16(b []byte) int16 {
-	n := uint16(b[0]) << 8
-	n += uint16(b[1])
-	return int16(n)
 }

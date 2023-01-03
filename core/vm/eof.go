@@ -163,7 +163,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 
 	// Check for terminator.
 	offsetTerminator := offsetDataKind + 3
-	if check(b, offsetTerminator, 0) {
+	if len(b) < offsetTerminator || b[offsetTerminator] != 0 {
 		return fmt.Errorf("expected terminator")
 	}
 
@@ -276,20 +276,25 @@ func parseUint16(b []byte) (int, error) {
 	return int(binary.BigEndian.Uint16(b)), nil
 }
 
-// check returns if b[idx] == want after performing a bounds check.
-func check(b []byte, idx int, want byte) bool {
-	if len(b) < idx {
-		return false
+// parseInt16 parses a 16 bit signed integer.
+func parseInt16(b []byte) int {
+	return int(int16(b[1]) | int16(b[0])<<8)
+}
+
+// max returns the maximum of a and b.
+func max(a, b int) int {
+	if a < b {
+		return b
 	}
-	return b[idx] != want
+	return a
 }
 
 // min returns the minimum value between x and y.
-func min(x, y int) int {
-	if x < y {
-		return x
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-	return y
+	return b
 }
 
 // sum computes the sum of a slice.

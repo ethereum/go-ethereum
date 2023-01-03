@@ -143,13 +143,21 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 		if int8(op) >= int8(PUSH1) && int8(op) <= int8(PUSH32) {
 			numbits = uint8(op - PUSH1 + 1)
 		} else if int8(op) == int8(RJUMPV) {
-			// RJUMPV has variable sized operand
+			// RJUMPV is unique as it has a variable sized operand.
+			// The total size is determined by the count byte which
+			// immediate proceeds RJUMPV. Truncation will be caught
+			// in other validation steps -- for now, just return a
+			// valid bitmap for as much of the code as is
+			// available.
 			if pc >= uint64(len(code)) {
-				continue // skip over if rjumpv is truncated
+				// Count missing, no more bits to mark.
+				return bits
 			}
 			numbits = code[pc]*2 + 1
 			if pc+uint64(numbits) > uint64(len(code)) {
-				continue // skip over if rjumpv is truncated
+				// Jump table is truncated, mark as many bits
+				// as possible.
+				numbits = uint8(len(code) - int(pc))
 			}
 		} else {
 			// If not PUSH (the int8(op) > int(PUSH32) is always false).
