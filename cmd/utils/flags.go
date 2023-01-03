@@ -1376,7 +1376,11 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 			}
 			cfg.Miner.Etherbase = account.Address
 		} else {
-			Fatalf("No etherbase configured")
+			if common.IsHexAddress(etherbase) {
+				cfg.Miner.Etherbase = common.HexToAddress(etherbase)
+			} else {
+				Fatalf("No etherbase configured")
+			}
 		}
 	}
 }
