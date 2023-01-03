@@ -320,11 +320,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		sender           = vm.AccountRef(msg.From())
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To() == nil
-		eip3860          = st.evm.Config.HasEip3860()
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, rules.IsHomestead, rules.IsIstanbul, eip3860)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +338,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// Check whether the init code size has been exceeded.
-	if eip3860 && contractCreation && len(st.data) > params.MaxInitCodeSize {
+	if rules.IsShanghai && contractCreation && len(st.data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize)
 	}
 

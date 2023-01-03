@@ -401,15 +401,6 @@ func (c *codeAndHash) Hash() common.Hash {
 	return c.hash
 }
 
-func (vmConfig *Config) HasEip3860() bool {
-	for _, eip := range vmConfig.ExtraEips {
-		if eip == 3860 {
-			return true
-		}
-	}
-	return false
-}
-
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
