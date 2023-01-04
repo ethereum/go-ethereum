@@ -33,6 +33,18 @@ The website code is organized with a top-level `docs` folder that contains all t
 
 Documentation pages are located in the `/docs` folder in the root directory of the project. The docs pages are all markdown files. When you want to add a new page, add the new file in the appropriate folder in the `/docs` page. `index.md` files will be the default page for a directory, and `{pagename}.md` will define subpages for a directory.
 
+Notes in documentation pages are highlighted in pale blue boxes. To add a note, wrap the note text in `<Note>` tage as follows:
+
+```markdown
+<Note> text to include in note</Note>
+```
+
+Images should be saved to `public/images/docs` and included in the markdown as follows:
+
+```markdown
+![alt-text](/images/docs/image-title.png)
+```
+
 After adding a page, you will also need to list it in `/src/data/documentation-links.yaml`.  This file defines the documentation structure which you will see on the left sidebar in the documentation pages.
 
 
@@ -49,11 +61,6 @@ yarn dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
-
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
-
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
-
 
 ### Review and merge
 
