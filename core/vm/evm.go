@@ -444,15 +444,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsShanghai {
 		if isCallerEOF && !isInitcodeEOF {
 			// Don't allow EOF contract to run legacy initcode.
-			return nil, common.Address{}, 0, ErrLegacyCode
+			return nil, common.Address{}, gas, ErrLegacyCode
 		} else if isInitcodeEOF {
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
 			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
-				return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+				return nil, common.Address{}, gas, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
 			}
 			if err := c.ValidateCode(evm.interpreter.cfg.JumpTableEOF); err != nil {
-				return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+				return nil, common.Address{}, gas, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
 			}
 			contract.Container = &c
 		}
