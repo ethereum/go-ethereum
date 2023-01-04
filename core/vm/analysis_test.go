@@ -70,8 +70,8 @@ func TestEOFAnalysis(t *testing.T) {
 		exp   byte
 		which int
 	}{
-		// {[]byte{byte(RJUMP), 0x01, 0x01, 0x01}, 0b0000_0110, 0},
-		// {[]byte{byte(RJUMPI), byte(RJUMP), byte(RJUMP), byte(RJUMPI)}, 0b0011_0110, 0},
+		{[]byte{byte(RJUMP), 0x01, 0x01, 0x01}, 0b0000_0110, 0},
+		{[]byte{byte(RJUMPI), byte(RJUMP), byte(RJUMP), byte(RJUMPI)}, 0b0011_0110, 0},
 		{[]byte{byte(RJUMPV), 0x02, byte(RJUMP), 0x00, byte(RJUMPI), 0x00}, 0b0011_1110, 0},
 	}
 	for i, test := range tests {
