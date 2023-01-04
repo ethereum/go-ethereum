@@ -404,14 +404,17 @@ var (
 		LondonBlock:         big.NewInt(23850000),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(23850000),
+			DelhiBlock:  big.NewInt(38174376),
 			Period: map[string]uint64{
 				"0": 2,
 			},
 			ProducerDelay: map[string]uint64{
-				"0": 6,
+				"0":        6,
+				"38174376": 4,
 			},
 			Sprint: map[string]uint64{
-				"0": 64,
+				"0":        64,
+				"38174376": 16,
 			},
 			BackupMultiplier: map[string]uint64{
 				"0": 2,
