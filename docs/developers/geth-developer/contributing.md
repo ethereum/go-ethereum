@@ -25,7 +25,7 @@ We encourage an early pull request approach, meaning pull requests are created a
 
 ## Contributing to the Geth website {#contributing-to-website}
 
-The Geth website is hosted separately from Geth itself. The contribution guidelines are the same. Please check out the [website repository](https://github.com/ethereum/geth-website) and raise pull requests for the maintainers to review and merge.
+The Geth website is hosted on a separate branch of `go-ethereum` from the source code. To contribute, please check out the website branch and raise pull requests for the maintainers to review and merge. Please note that new pages added to the site must also be added to `/src/data/documentation-links.yaml` in order for it to be included in the navigation sidebar. Additional contributioon guidelines are available in the website [README](https://github.com/ethereum/go-ethereum/tree/website#readme).
 
 ## License {#license}
 
