@@ -47,6 +47,9 @@ Images should be saved to `public/images/docs` and included in the markdown as f
 
 After adding a page, you will also need to list it in `/src/data/documentation-links.yaml`.  This file defines the documentation structure which you will see on the left sidebar in the documentation pages.
 
+### Updating `/docs` folder structure
+
+Documentation pages are located in the `/docs` folder in the root directory of the project. If you want to update the structure of the docs, you will also need to update the `/src/data/documentation-links.yaml` file, which defines the documentation structure for the documentation navigation component. Failing to do will result in either missing or broken links.
 
 ### Building locally
 
