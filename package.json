@@ -18,6 +18,7 @@
     "@docsearch/react": "3",
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
+    "@socialgouv/matomo-next": "^1.4.0",
     "algoliasearch": "^4.14.2",
     "chakra-ui-markdown-renderer": "^4.1.0",
     "fast-xml-parser": "^4.0.12",
