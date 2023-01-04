@@ -44,8 +44,8 @@ const (
 
 var eofMagic = []byte{0xef, 0x00}
 
-// hasEOFByte returns true if code starts with 0xEF byte
-func hasEOFByte(code []byte) bool {
+// HasEOFByte returns true if code starts with 0xEF byte
+func HasEOFByte(code []byte) bool {
 	return len(code) != 0 && code[0] == eofFormatByte
 }
 

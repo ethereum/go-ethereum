@@ -262,6 +262,25 @@ func Transition(ctx *cli.Context) error {
 			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 		}
 	}
+	// Sanity check pre-allocated EOF code to not panic in state transition.
+	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number))) {
+		for addr, acc := range prestate.Pre {
+			if vm.HasEOFByte(acc.Code) {
+				var (
+					c   vm.Container
+					err error
+				)
+				err = c.UnmarshalBinary(acc.Code)
+				if err == nil {
+					jt := vm.NewShanghaiEOFInstructionSetForTesting()
+					err = c.ValidateCode(&jt)
+				}
+				if err != nil {
+					return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))
+				}
+			}
+		}
+	}
 	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
 	env := prestate.Env
 	if isMerged {

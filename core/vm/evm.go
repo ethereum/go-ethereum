@@ -438,7 +438,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	// If the initcode is EOF, verify it is well-formed.
-	isInitcodeEOF := hasEOFByte(codeAndHash.code)
+	isInitcodeEOF := HasEOFByte(codeAndHash.code)
 	if evm.chainRules.IsShanghai && isInitcodeEOF {
 		var c Container
 		if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
@@ -474,7 +474,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	// Reject legacy contract deployment from EOF.
-	if err == nil && isInitcodeEOF && !hasEOFByte(ret) {
+	if err == nil && isInitcodeEOF && !HasEOFByte(ret) {
 		err = ErrLegacyCode
 	}
 

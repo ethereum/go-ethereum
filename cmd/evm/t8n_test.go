@@ -251,6 +251,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
+		{ // Validate pre-allocated EOF code
+			base: "./testdata/26",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Shanghai", "",
+			},
+			output:      t8nOutput{alloc: true, result: false},
+			expExitCode: 3,
+		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.output.get()...)
