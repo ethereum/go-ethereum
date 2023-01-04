@@ -439,7 +439,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	var (
 		isCallerEOF   = fromEOF
-		isInitcodeEOF = HasEOFByte(codeAndHash.code)
+		isInitcodeEOF = hasEOFMagic(codeAndHash.code)
 	)
 	if evm.chainRules.IsShanghai {
 		if isCallerEOF && !isInitcodeEOF {
@@ -482,12 +482,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	// Reject legacy contract deployment from EOF.
-	if err == nil && isInitcodeEOF && !HasEOFByte(ret) {
+	if err == nil && isInitcodeEOF && !hasEOFMagic(ret) {
 		err = ErrLegacyCode
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if err == nil && len(ret) >= 1 && ret[0] == 0xEF {
+	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
 			var c Container
 			if err = c.UnmarshalBinary(ret); err == nil {
@@ -537,7 +537,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	isEOF := HasEOFByte(evm.StateDB.GetCode(caller.Address()))
+	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, isEOF)
 }
 
@@ -548,7 +548,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	isEOF := HasEOFByte(evm.StateDB.GetCode(caller.Address()))
+	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
 }
 
