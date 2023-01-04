@@ -51,7 +51,7 @@ Images should be saved to `public/images/docs` and included in the markdown as f
 ![alt-text](/images/docs/image-title.png)
 ```
 
-#### Metadata
+#### Frontmatter metadata
 
 `title` and `description` are **required** metadata props for a post: `title` will generate the main heading on the doc page and `description` is used for SEO purposes, to serve as a concise and appropiate description of the content.
 
