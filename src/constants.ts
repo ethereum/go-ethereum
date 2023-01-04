@@ -19,6 +19,10 @@ export const GETH_TWITTER_URL = 'https://twitter.com/go_ethereum';
 export const GETH_DISCORD_URL = 'https://discord.com/invite/nthXNEv';
 export const GO_URL = 'https://go.dev/';
 
+// analytics
+export const DO_NOT_TRACK_URL =
+  'http://matomo.ethereum.org/piwik/index.php?module=CoreAdminHome&action=optOut';
+
 // Downloads
 export const DEFAULT_BUILD_AMOUNT_TO_SHOW = 12;
 export const DOWNLOAD_HEADER_BUTTONS: {
