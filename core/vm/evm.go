@@ -407,7 +407,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode, fromEOF bool) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -437,17 +437,25 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
-	// If the initcode is EOF, verify it is well-formed.
-	isInitcodeEOF := HasEOFByte(codeAndHash.code)
-	if evm.chainRules.IsShanghai && isInitcodeEOF {
-		var c Container
-		if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
-			return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+	var (
+		isCallerEOF   = fromEOF
+		isInitcodeEOF = HasEOFByte(codeAndHash.code)
+	)
+	if evm.chainRules.IsShanghai {
+		if isCallerEOF && !isInitcodeEOF {
+			// Don't allow EOF contract to run legacy initcode.
+			return nil, common.Address{}, 0, ErrLegacyCode
+		} else if isInitcodeEOF {
+			// If the initcode is EOF, verify it is well-formed.
+			var c Container
+			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
+				return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+			}
+			if err := c.ValidateCode(evm.interpreter.cfg.JumpTableEOF); err != nil {
+				return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
+			}
+			contract.Container = &c
 		}
-		if err := c.ValidateCode(evm.interpreter.cfg.JumpTableEOF); err != nil {
-			return nil, common.Address{}, 0, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
-		}
-		contract.Container = &c
 	}
 
 	// Create a new account on the state
@@ -529,7 +537,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE)
+	isEOF := HasEOFByte(evm.StateDB.GetCode(caller.Address()))
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, isEOF)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -539,7 +548,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
+	isEOF := HasEOFByte(evm.StateDB.GetCode(caller.Address()))
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
 }
 
 // ChainConfig returns the environment's chain configuration
