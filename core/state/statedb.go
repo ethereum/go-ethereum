@@ -509,6 +509,11 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	if s.snap != nil {
 		s.snapAccounts[obj.addrHash] = snapshot.SlimAccountRLP(obj.data.Nonce, obj.data.Balance, obj.data.Root, obj.data.CodeHash)
 	}
+
+	if GlobalAddressIndex != nil {
+		GlobalAddressIndex.AddressSeen(addr)
+	}
+
 }
 
 // deleteStateObject removes the given object from the state trie.

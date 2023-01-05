@@ -16,7 +16,9 @@ type TreeSet struct {
 }
 
 func NewTreeSet() *TreeSet {
-	return &TreeSet{}
+	return &TreeSet{
+		set: make(map[common.Address]struct{}),
+	}
 }
 
 func (ts *TreeSet) Add(addr common.Address) bool {

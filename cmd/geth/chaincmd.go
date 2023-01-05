@@ -252,6 +252,10 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
+	println("Creating an address index...")
+	state.CreateAddressIndex(stack.ResolvePath("addressindex"))
+	defer state.GlobalAddressIndex.Stop()
+
 	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()
 
