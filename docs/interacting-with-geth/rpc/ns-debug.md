@@ -229,6 +229,8 @@ storage hash.
 | Console | `debug.getModifiedAccountsByNumber(startNum uint64, endNum uint64)`             |
 | RPC     | `{"method": "debug_getModifiedAccountsByNumber", "params": [startNum, endNum]}` |
 
+<Note> Geth only keeps recent trie nodes and preimages of keys in memory - for older blocks this information is deleted by Geth's garbage collection. This means that calls to `debug_GetModifiedAccountsByNumber` on blocks that are old enough to be eligible for garbage collection will return an error due to the trie nodes and preimages being unavailable. To fix this, run Geth with `--cache.preimages=true` to prevent the relevant data being lost to the garbage collector </Note>
+
 ### debug_getRawReceipts
 
 Returns the consensus-encoding of all receipts in a single block.
