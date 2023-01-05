@@ -60,6 +60,11 @@ const (
 	errMessageExecuting       = -40012
 	errEVMCancelled           = -40013
 	errEVMReverted            = -40014
+	errEVMFastFailed          = -40015
+
+	// internal error
+	errUnderlyingDB = -40020
+	errLoadingState = -40021
 )
 
 var (
@@ -253,7 +258,12 @@ func doOneCall(ctx context.Context, b Backend, state *state.StateDB, header *typ
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
 		result.Code = errEVMCancelled
-		result.Err = fmt.Sprintf("execution cancelled, either fast failed or exceeding timeout(%v)", singleCallTimeout)
+		result.Err = fmt.Sprintf("execution cancelled, timeout(%v)", singleCallTimeout)
+		// if execution time is close to timeout, not proper
+		if time.Since(start) < singleCallTimeout {
+			result.Code = errEVMFastFailed
+			result.Err = "fast failed"
+		}
 		return result, err
 	}
 
