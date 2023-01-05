@@ -41,7 +41,7 @@ func (c *Command) MarkDown() string {
 // Help implements the cli.Command interface
 func (c *Command) Help() string {
 	return `Usage: bor [options]
-  
+
 	Run the Bor server.
   ` + c.Flags().Help()
 }
@@ -72,7 +72,7 @@ func (c *Command) extractFlags(args []string) error {
 	}
 	// read if config file is provided, this will overwrite the cli flags, if provided
 	if c.configFile != "" {
-		log.Warn("Config File provided, this will overwrite the cli flags.", "configFile:", c.configFile)
+		log.Warn("Config File provided, this will overwrite the cli flags", "path", c.configFile)
 		cfg, err := readConfigFile(c.configFile)
 		if err != nil {
 			c.UI.Error(err.Error())
@@ -101,7 +101,7 @@ func (c *Command) Run(args []string) int {
 		return 1
 	}
 
-	srv, err := NewServer(c.config)
+	srv, err := NewServer(c.config, WithGRPCAddress())
 	if err != nil {
 		c.UI.Error(err.Error())
 		return 1

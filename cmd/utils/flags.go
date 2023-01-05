@@ -33,6 +33,10 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -68,9 +72,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
@@ -1503,7 +1504,7 @@ func setPeerRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 
 	if peerRequiredBlocks == "" {
 		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
-			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
+			log.Warn("The flag --whitelist is deprecated and will be removed, please use --eth.requiredblocks")
 			peerRequiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
 		} else {
 			return
@@ -2030,9 +2031,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		engine = clique.New(config.Clique, chainDb)
 	} else if config.Bor != nil {
 		ethereum = CreateBorEthereum(&eth.Config{
-			Genesis:         genesis,
-			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
-			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			Genesis:             genesis,
+			HeimdallURL:         ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall:     ctx.GlobalBool(WithoutHeimdallFlag.Name),
+			HeimdallgRPCAddress: ctx.GlobalString(HeimdallgRPCAddressFlag.Name),
 		})
 		engine = ethereum.Engine()
 	} else {
@@ -2079,7 +2081,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
 	// Disable transaction indexing/unindexing by default.
-	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

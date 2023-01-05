@@ -29,7 +29,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/api"
@@ -1788,6 +1787,8 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 	defer db.Close() // Might double close, should be fine
 
+	chainConfig := params.BorUnittestChainConfig
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -1795,10 +1796,10 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	ethAPIMock.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	spanner := bor.NewMockSpanner(ctrl)
-	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any()).Return([]*valset.Validator{
+	spanner.EXPECT().GetCurrentValidators(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
 		{
 			ID:               0,
-			Address:          common.Address{0x1},
+			Address:          miner.TestBankAddress,
 			VotingPower:      100,
 			ProposerPriority: 0,
 		},
@@ -1809,44 +1810,15 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 
 	contractMock := bor.NewMockGenesisContract(ctrl)
 
-	// Initialize a fresh chain
-	var (
-		gspec = &core.Genesis{
-			Config:  params.BorUnittestChainConfig,
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
-		config = &core.CacheConfig{
-			TrieCleanLimit: 256,
-			TrieDirtyLimit: 256,
-			TrieTimeLimit:  5 * time.Minute,
-			SnapshotLimit:  0, // Disable snapshot by default
-		}
-	)
-
-	engine := miner.NewFakeBor(t, db, params.BorUnittestChainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
+	engine := miner.NewFakeBor(t, db, chainConfig, ethAPIMock, spanner, heimdallClientMock, contractMock)
 	defer engine.Close()
 
-	engineBorInternal, ok := engine.(*bor.Bor)
-	if ok {
-		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
-		copy(gspec.ExtraData[32:32+common.AddressLength], testAddress1.Bytes())
+	chainConfig.LondonBlock = big.NewInt(0)
 
-		engineBorInternal.Authorize(testAddress1, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testKey1)
-		})
-	}
+	_, back, closeFn := miner.NewTestWorker(t, chainConfig, engine, db, 0)
+	defer closeFn()
 
-	genesis := gspec.MustCommit(db)
-
-	if snapshots {
-		config.SnapshotLimit = 256
-		config.SnapshotWait = true
-	}
-
-	chain, err := core.NewBlockChain(db, config, params.BorUnittestChainConfig, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to create chain: %v", err)
-	}
+	genesis := back.BlockChain().Genesis()
 
 	// If sidechain blocks are needed, make a light chain and import it
 	var sideblocks types.Blocks
@@ -1854,56 +1826,60 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 		sideblocks, _ = core.GenerateChain(params.BorUnittestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), tt.sidechainBlocks, func(i int, b *core.BlockGen) {
 			b.SetCoinbase(testAddress1)
 
-			if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.Sprint) {
-				b.SetExtra(gspec.ExtraData)
+			if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.CalculateSprint(b.Number().Uint64())) {
+				b.SetExtra(back.Genesis.ExtraData)
 			} else {
 				b.SetExtra(make([]byte, 32+crypto.SignatureLength))
 			}
 		})
-		if _, err := chain.InsertChain(sideblocks); err != nil {
+		if _, err := back.BlockChain().InsertChain(sideblocks); err != nil {
 			t.Fatalf("Failed to import side chain: %v", err)
 		}
 	}
 
 	canonblocks, _ := core.GenerateChain(params.BorUnittestChainConfig, genesis, engine, rawdb.NewMemoryDatabase(), tt.canonicalBlocks, func(i int, b *core.BlockGen) {
-		b.SetCoinbase(common.Address{0x02})
+		b.SetCoinbase(miner.TestBankAddress)
 		b.SetDifficulty(big.NewInt(1000000))
 
-		if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.Sprint) {
-			b.SetExtra(gspec.ExtraData)
+		if bor.IsSprintStart(b.Number().Uint64(), params.BorUnittestChainConfig.Bor.CalculateSprint(b.Number().Uint64())) {
+			b.SetExtra(back.Genesis.ExtraData)
 		} else {
 			b.SetExtra(make([]byte, 32+crypto.SignatureLength))
 		}
 	})
-	if _, err := chain.InsertChain(canonblocks[:tt.commitBlock]); err != nil {
+	if _, err := back.BlockChain().InsertChain(canonblocks[:tt.commitBlock]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
 	if tt.commitBlock > 0 {
-		err = chain.StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
+		err = back.BlockChain().StateCache().TrieDB().Commit(canonblocks[tt.commitBlock-1].Root(), true, nil)
 		if err != nil {
 			t.Fatal("on trieDB.Commit", err)
 		}
 
 		if snapshots {
-			if err := chain.Snaps().Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
+			if err := back.BlockChain().Snaps().Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
 		}
 	}
-	if _, err := chain.InsertChain(canonblocks[tt.commitBlock:]); err != nil {
+
+	if _, err := back.BlockChain().InsertChain(canonblocks[tt.commitBlock:]); err != nil {
 		t.Fatalf("Failed to import canonical chain tail: %v", err)
 	}
+
 	// Force run a freeze cycle
 	type freezer interface {
 		Freeze(threshold uint64) error
 		Ancients() (uint64, error)
 	}
+
 	db.(freezer).Freeze(tt.freezeThreshold)
 
 	// Set the simulated pivot block
 	if tt.pivotBlock != nil {
 		rawdb.WriteLastPivotNumber(db, *tt.pivotBlock)
 	}
+
 	// Pull the plug on the database, simulating a hard crash
 	db.Close()
 
@@ -1912,12 +1888,14 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+
 	defer db.Close()
 
-	newChain, err := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	newChain, err := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
+
 	defer newChain.Stop()
 
 	// Iterate over all the remaining blocks and ensure there are no gaps
@@ -1929,12 +1907,15 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadHeader {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadHeader)
 	}
+
 	if head := newChain.CurrentFastBlock(); head.NumberU64() != tt.expHeadFastBlock {
 		t.Errorf("Head fast block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadFastBlock)
 	}
+
 	if head := newChain.CurrentBlock(); head.NumberU64() != tt.expHeadBlock {
 		t.Errorf("Head block mismatch: have %d, want %d", head.NumberU64(), tt.expHeadBlock)
 	}
+
 	if frozen, err := db.(freezer).Ancients(); err != nil {
 		t.Errorf("Failed to retrieve ancient count: %v\n", err)
 	} else if int(frozen) != tt.expFrozen {
@@ -1988,7 +1969,7 @@ func TestIssue23496(t *testing.T) {
 		}
 	)
 
-	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, config, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -2043,7 +2024,7 @@ func TestIssue23496(t *testing.T) {
 
 	defer db.Close()
 
-	chain, err = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil)
+	chain, err = core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

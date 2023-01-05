@@ -44,7 +44,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 	}
 
 	// block object cannot be converted to JSON since much of the fields are non-public
-	blockFields, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig())
+	blockFields, err := ethapi.RPCMarshalBlock(block, true, true, api.backend.ChainConfig(), api.backend.ChainDb())
 	if err != nil {
 		return nil, err
 	}

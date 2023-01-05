@@ -122,13 +122,14 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 
 	b.Log("Running filter benchmarks...")
 	start = time.Now()
-	var backend *testBackend
+
+	var backend *TestBackend
 
 	for i := 0; i < benchFilterCnt; i++ {
 		if i%20 == 0 {
 			db.Close()
 			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
-			backend = &testBackend{db: db, sections: cnt}
+			backend = &TestBackend{DB: db, sections: cnt}
 		}
 		var addr common.Address
 		addr[0] = byte(i)
@@ -173,7 +174,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()
-	backend := &testBackend{db: db}
+	backend := &TestBackend{DB: db}
 	filter := NewRangeFilter(backend, 0, int64(*headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)

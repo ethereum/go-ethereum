@@ -28,15 +28,18 @@ import (
 var Forks = map[string]*params.ChainConfig{
 	"Frontier": {
 		ChainID: big.NewInt(1),
+		Bor:     params.BorUnittestChainConfig.Bor,
 	},
 	"Homestead": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"EIP150": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"EIP158": {
 		ChainID:        big.NewInt(1),
@@ -44,6 +47,7 @@ var Forks = map[string]*params.ChainConfig{
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"Byzantium": {
 		ChainID:        big.NewInt(1),
@@ -53,6 +57,7 @@ var Forks = map[string]*params.ChainConfig{
 		EIP158Block:    big.NewInt(0),
 		DAOForkBlock:   big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"Constantinople": {
 		ChainID:             big.NewInt(1),
@@ -64,6 +69,7 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(10000000),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"ConstantinopleFix": {
 		ChainID:             big.NewInt(1),
@@ -75,6 +81,7 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"Istanbul": {
 		ChainID:             big.NewInt(1),
@@ -87,21 +94,25 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"FrontierToHomesteadAt5": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(5),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"HomesteadToEIP150At5": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(5),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"HomesteadToDaoAt5": {
 		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   big.NewInt(5),
 		DAOForkSupport: true,
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"EIP158ToByzantiumAt5": {
 		ChainID:        big.NewInt(1),
@@ -110,6 +121,7 @@ var Forks = map[string]*params.ChainConfig{
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(5),
+		Bor:            params.BorUnittestChainConfig.Bor,
 	},
 	"ByzantiumToConstantinopleAt5": {
 		ChainID:             big.NewInt(1),
@@ -119,6 +131,7 @@ var Forks = map[string]*params.ChainConfig{
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(5),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"ByzantiumToConstantinopleFixAt5": {
 		ChainID:             big.NewInt(1),
@@ -129,6 +142,7 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(5),
 		PetersburgBlock:     big.NewInt(5),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"ConstantinopleFixToIstanbulAt5": {
 		ChainID:             big.NewInt(1),
@@ -140,6 +154,7 @@ var Forks = map[string]*params.ChainConfig{
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(5),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"Berlin": {
 		ChainID:             big.NewInt(1),
@@ -153,6 +168,7 @@ var Forks = map[string]*params.ChainConfig{
 		IstanbulBlock:       big.NewInt(0),
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"BerlinToLondonAt5": {
 		ChainID:             big.NewInt(1),
@@ -167,6 +183,7 @@ var Forks = map[string]*params.ChainConfig{
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(5),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"London": {
 		ChainID:             big.NewInt(1),
@@ -181,6 +198,7 @@ var Forks = map[string]*params.ChainConfig{
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 	"ArrowGlacier": {
 		ChainID:             big.NewInt(1),
@@ -196,6 +214,7 @@ var Forks = map[string]*params.ChainConfig{
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		ArrowGlacierBlock:   big.NewInt(0),
+		Bor:                 params.BorUnittestChainConfig.Bor,
 	},
 }
 

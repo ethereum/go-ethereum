@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/bor"
+	"github.com/ethereum/go-ethereum/consensus/beacon" //nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor"    //nolint:typecheck
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -54,7 +54,22 @@ type Server struct {
 	tracerAPI *tracers.API
 }
 
-func NewServer(config *Config) (*Server, error) {
+type serverOption func(srv *Server, config *Config) error
+
+func WithGRPCAddress() serverOption {
+	return func(srv *Server, config *Config) error {
+		return srv.gRPCServerByAddress(config.GRPC.Addr)
+	}
+}
+
+func WithGRPCListener(lis net.Listener) serverOption {
+	return func(srv *Server, _ *Config) error {
+		return srv.gRPCServerByListener(lis)
+	}
+}
+
+//nolint:gocognit
+func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 	srv := &Server{
 		config: config,
 	}
@@ -62,12 +77,17 @@ func NewServer(config *Config) (*Server, error) {
 	// start the logger
 	setupLogger(config.LogLevel)
 
-	if err := srv.setupGRPCServer(config.GRPC.Addr); err != nil {
-		return nil, err
+	var err error
+
+	for _, opt := range opts {
+		err = opt(srv, config)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// load the chain genesis
-	if err := config.loadChain(); err != nil {
+	if err = config.loadChain(); err != nil {
 		return nil, err
 	}
 
@@ -155,7 +175,6 @@ func NewServer(config *Config) (*Server, error) {
 				wallet, err := accountManager.Find(accounts.Account{Address: eb})
 				if wallet == nil || err != nil {
 					log.Error("Etherbase account unavailable locally", "err", err)
-
 					return nil, fmt.Errorf("signer missing: %v", err)
 				}
 
@@ -221,8 +240,13 @@ func NewServer(config *Config) (*Server, error) {
 }
 
 func (s *Server) Stop() {
-	s.node.Close()
-	s.grpcServer.Stop()
+	if s.node != nil {
+		s.node.Close()
+	}
+
+	if s.grpcServer != nil {
+		s.grpcServer.Stop()
+	}
 
 	// shutdown the tracer
 	if s.tracer != nil {
@@ -351,22 +375,26 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 	return nil
 }
 
-func (s *Server) setupGRPCServer(addr string) error {
-	s.grpcServer = grpc.NewServer(s.withLoggingUnaryInterceptor())
-	proto.RegisterBorServer(s.grpcServer, s)
-
+func (s *Server) gRPCServerByAddress(addr string) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
 
+	return s.gRPCServerByListener(lis)
+}
+
+func (s *Server) gRPCServerByListener(listener net.Listener) error {
+	s.grpcServer = grpc.NewServer(s.withLoggingUnaryInterceptor())
+	proto.RegisterBorServer(s.grpcServer, s)
+
 	go func() {
-		if err := s.grpcServer.Serve(lis); err != nil {
+		if err := s.grpcServer.Serve(listener); err != nil {
 			log.Error("failed to serve grpc server", "err", err)
 		}
 	}()
 
-	log.Info("GRPC Server started", "addr", addr)
+	log.Info("GRPC Server started", "addr", listener.Addr())
 
 	return nil
 }

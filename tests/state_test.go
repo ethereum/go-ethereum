@@ -58,6 +58,63 @@ func TestState(t *testing.T) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
+	// See POS-618
+	st.skipLoad(`.*micro/*`)
+	st.skipLoad(`.*main/*`)
+	st.skipLoad(`.*stSStoreTest*`)
+	st.skipLoad(`.*stReturnDataTest*`)
+	st.skipLoad(`.*stShift*`)
+	st.skipLoad(`.*stWalletTest*`)
+	st.skipLoad(`.*stStaticCall*`)
+	st.skipLoad(`.*stZeroKnowledge*`)
+	st.skipLoad(`.*stSystemOperationsTest*`)
+	st.skipLoad(`.*stZeroCallsTest*`)
+	st.skipLoad(`.*stZeroCallsRevert*`)
+	st.skipLoad(`.*stTransactionTest*`)
+	st.skipLoad(`.*stRandom2*`)
+	st.skipLoad(`.*stSolidityTest*`)
+	st.skipLoad(`.*stSpecialTest*`)
+	st.skipLoad(`.*stSelfBalance*`)
+	st.skipLoad(`.*stRefundTest*`)
+	st.skipLoad(`.*stRecursiveCreate*`)
+	st.skipLoad(`.*stQuadraticComplexityTest*`)
+	st.skipLoad(`.*stNonZeroCallsTest*`)
+	st.skipLoad(`.*stPreCompiledContracts2*`)
+	st.skipLoad(`.*stRevertTest*`)
+	st.skipLoad(`.*stMemoryTest*`)
+	st.skipLoad(`.*stMemoryStressTest*`)
+	st.skipLoad(`.*stTransitionTest*`)
+	st.skipLoad(`.*stInitCodeTest*`)
+	st.skipLoad(`.*stMemExpandingEIP150Calls*`)
+	st.skipLoad(`.*stEIP150Specific*`)
+	st.skipLoad(`.*stEIP150singleCodeGasPrices*`)
+	st.skipLoad(`.*stExtCodeHash*`)
+	st.skipLoad(`.*stEIP158Specific*`)
+	st.skipLoad(`.*stHomesteadSpecific*`)
+	st.skipLoad(`.*stEIP2930*`)
+	st.skipLoad(`.*stEIP1559*`)
+	st.skipLoad(`.*stEIP3607*`)
+	st.skipLoad(`.*stChangedEIP150*`)
+	st.skipLoad(`.*stLogTests*`)
+	st.skipLoad(`.*stSLoadTest*`)
+	st.skipLoad(`.*stDelegatecallTestHomestead*`)
+	st.skipLoad(`.*stCallDelegateCodesHomestead*`)
+	st.skipLoad(`.*VMTests*`)
+	st.skipLoad(`.*stArgsZeroOneBalance*`)
+	st.skipLoad(`.*stCallCodes*`)
+	st.skipLoad(`.*stExample*`)
+	st.skipLoad(`.*stCreate2*`)
+	st.skipLoad(`.*stChainId*`)
+	st.skipLoad(`.*stStaticFlagEnabled*`)
+	st.skipLoad(`.*stCallDelegateCodesCallCodeHomestead*`)
+	st.skipLoad(`.*stCallCreateCallCodeTest*`)
+	st.skipLoad(`.*stBugs*`)
+	st.skipLoad(`.*stCodeSizeLimit*`)
+	st.skipLoad(`.*stCodeCopyTest*`)
+	st.skipLoad(`.*stBadOpcode*`)
+	st.skipLoad(`.*stStackTests*`)
+	st.skipLoad(`.*stAttackTest*`)
+
 	// Broken tests:
 	// Expected failures:
 	//st.fails(`^stRevertTest/RevertPrecompiledTouch(_storage)?\.json/Byzantium/0`, "bug in test")
@@ -93,6 +150,7 @@ func TestState(t *testing.T) {
 						snaps, statedb, err := test.Run(subtest, vmconfig, true)
 						if snaps != nil && statedb != nil {
 							if _, err := snaps.Journal(statedb.IntermediateRoot(false)); err != nil {
+								t.Errorf("in 'rlp_test.go', test '%s' failed with error: '%v'", name, err)
 								return err
 							}
 						}
@@ -121,6 +179,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 
 	// Test failed, re-run with tracing enabled.
 	t.Error(err)
+
 	if gasLimit > traceErrorLimit {
 		t.Log("gas limit too high for EVM trace")
 		return

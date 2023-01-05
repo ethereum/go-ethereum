@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
@@ -91,6 +91,7 @@ type handlerConfig struct {
 	EthAPI     *ethapi.PublicBlockChainAPI // EthAPI to interact
 
 	PeerRequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	checker            ethereum.ChainValidator
 }
 
 type handler struct {
@@ -209,7 +210,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// sync is requested. The downloader is responsible for deallocating the state
 	// bloom when it's done.
 	// todo: it'd better to extract maxCapacity into config
-	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success, whitelist.NewService(10))
+	h.downloader = downloader.New(h.checkpointNumber, config.Database, h.eventMux, h.chain, nil, h.removePeer, success, config.checker)
 
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
@@ -439,7 +440,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		}()
 	}
 	// If we have any explicit peer required block hashes, request them
-	for number := range h.peerRequiredBlocks {
+	for number, hash := range h.peerRequiredBlocks {
 		resCh := make(chan *eth.Response)
 		if _, err := peer.RequestHeadersByNumber(number, 1, 0, false, resCh); err != nil {
 			return err

@@ -214,7 +214,7 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		db := rawdb.NewMemoryDatabase()
 		core.GenesisBlockForTesting(db, testAddress, big.NewInt(1000000000000000))
 
-		chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
+		chain, err := core.NewBlockChain(db, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 		if err != nil {
 			panic(err)
 		}

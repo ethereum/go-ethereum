@@ -126,6 +126,7 @@ syncmode = "full"
   # noprefetch = false
   # preimages = false
   # txlookuplimit = 2350000
+  # triesinmemory = 128
   # timeout = "1h0m0s"
 
 [accounts]

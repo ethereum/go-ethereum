@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -24,9 +25,16 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"runtime"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
+	"pgregory.net/rapid"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -45,6 +53,10 @@ var (
 
 	// eip1559Config is a chain config with EIP-1559 enabled at block 0.
 	eip1559Config *params.ChainConfig
+)
+
+const (
+	txPoolGasLimit = 10_000_000
 )
 
 func init() {
@@ -114,15 +126,17 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 }
 
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
-	return setupTxPoolWithConfig(params.TestChainConfig)
+	return setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, txPoolGasLimit)
 }
 
-func setupTxPoolWithConfig(config *params.ChainConfig) (*TxPool, *ecdsa.PrivateKey) {
+func setupTxPoolWithConfig(config *params.ChainConfig, txPoolConfig TxPoolConfig, gasLimit uint64, options ...func(pool *TxPool)) (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := &testBlockChain{10000000, statedb, new(event.Feed)}
+
+	blockchain := &testBlockChain{gasLimit, statedb, new(event.Feed)}
 
 	key, _ := crypto.GenerateKey()
-	pool := NewTxPool(testTxPoolConfig, config, blockchain)
+
+	pool := NewTxPool(txPoolConfig, config, blockchain, options...)
 
 	// wait for the pool to initialize
 	<-pool.initDoneCh
@@ -273,6 +287,16 @@ func testSetNonce(pool *TxPool, addr common.Address, nonce uint64) {
 	pool.mu.Unlock()
 }
 
+func getBalance(pool *TxPool, addr common.Address) *big.Int {
+	bal := big.NewInt(0)
+
+	pool.mu.Lock()
+	bal.Set(pool.currentState.GetBalance(addr))
+	pool.mu.Unlock()
+
+	return bal
+}
+
 func TestInvalidTransactions(t *testing.T) {
 	t.Parallel()
 
@@ -384,7 +408,7 @@ func TestTransactionNegativeValue(t *testing.T) {
 func TestTransactionTipAboveFeeCap(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
@@ -397,7 +421,7 @@ func TestTransactionTipAboveFeeCap(t *testing.T) {
 func TestTransactionVeryHighValues(t *testing.T) {
 	t.Parallel()
 
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 
 	veryBigNumber := big.NewInt(1)
@@ -1449,7 +1473,7 @@ func TestTransactionPoolRepricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 
 	// Keep track of transaction events to ensure all executables get announced
@@ -1820,7 +1844,7 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 2
@@ -1927,7 +1951,7 @@ func TestTransactionPoolUnderpricingDynamicFee(t *testing.T) {
 func TestDualHeapEviction(t *testing.T) {
 	t.Parallel()
 
-	pool, _ := setupTxPoolWithConfig(eip1559Config)
+	pool, _ := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 
 	pool.config.GlobalSlots = 10
@@ -2130,7 +2154,7 @@ func TestTransactionReplacementDynamicFee(t *testing.T) {
 	t.Parallel()
 
 	// Create the pool to test the pricing enforcement with
-	pool, key := setupTxPoolWithConfig(eip1559Config)
+	pool, key := setupTxPoolWithConfig(eip1559Config, testTxPoolConfig, txPoolGasLimit)
 	defer pool.Stop()
 	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
@@ -2559,5 +2583,518 @@ func BenchmarkPoolMultiAccountBatchInsert(b *testing.B) {
 	b.ResetTimer()
 	for _, tx := range batches {
 		pool.AddRemotesSync([]*types.Transaction{tx})
+	}
+}
+
+type acc struct {
+	nonce   uint64
+	key     *ecdsa.PrivateKey
+	account common.Address
+}
+
+type testTx struct {
+	tx      *types.Transaction
+	idx     int
+	isLocal bool
+}
+
+const localIdx = 0
+
+func getTransactionGen(t *rapid.T, keys []*acc, nonces []uint64, localKey *acc, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64) *testTx {
+	idx := rapid.IntRange(0, len(keys)-1).Draw(t, "accIdx").(int)
+
+	var (
+		isLocal bool
+		key     *ecdsa.PrivateKey
+	)
+
+	if idx == localIdx {
+		isLocal = true
+		key = localKey.key
+	} else {
+		key = keys[idx].key
+	}
+
+	nonces[idx]++
+
+	gasPriceUint := rapid.Uint64Range(gasPriceMin, gasPriceMax).Draw(t, "gasPrice").(uint64)
+	gasPrice := big.NewInt(0).SetUint64(gasPriceUint)
+	gasLimit := rapid.Uint64Range(gasLimitMin, gasLimitMax).Draw(t, "gasLimit").(uint64)
+
+	return &testTx{
+		tx:      pricedTransaction(nonces[idx]-1, gasLimit, gasPrice, key),
+		idx:     idx,
+		isLocal: isLocal,
+	}
+}
+
+type transactionBatches struct {
+	txs      []*testTx
+	totalTxs int
+}
+
+func transactionsGen(keys []*acc, nonces []uint64, localKey *acc, minTxs int, maxTxs int, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax uint64, caseParams *strings.Builder) func(t *rapid.T) *transactionBatches {
+	return func(t *rapid.T) *transactionBatches {
+		totalTxs := rapid.IntRange(minTxs, maxTxs).Draw(t, "totalTxs").(int)
+		txs := make([]*testTx, totalTxs)
+
+		gasValues := make([]float64, totalTxs)
+
+		fmt.Fprintf(caseParams, " totalTxs = %d;", totalTxs)
+
+		keys = keys[:len(nonces)]
+
+		for i := 0; i < totalTxs; i++ {
+			txs[i] = getTransactionGen(t, keys, nonces, localKey, gasPriceMin, gasPriceMax, gasLimitMin, gasLimitMax)
+
+			gasValues[i] = float64(txs[i].tx.Gas())
+		}
+
+		mean, stddev := stat.MeanStdDev(gasValues, nil)
+		fmt.Fprintf(caseParams, " gasValues mean %d, stdev %d, %d-%d);", int64(mean), int64(stddev), int64(floats.Min(gasValues)), int64(floats.Max(gasValues)))
+
+		return &transactionBatches{txs, totalTxs}
+	}
+}
+
+type txPoolRapidConfig struct {
+	gasLimit    uint64
+	avgBlockTxs uint64
+
+	minTxs int
+	maxTxs int
+
+	minAccs int
+	maxAccs int
+
+	// less tweakable, more like constants
+	gasPriceMin uint64
+	gasPriceMax uint64
+
+	gasLimitMin uint64
+	gasLimitMax uint64
+
+	balance int64
+
+	blockTime      time.Duration
+	maxEmptyBlocks int
+	maxStuckBlocks int
+}
+
+func defaultTxPoolRapidConfig() txPoolRapidConfig {
+	gasLimit := uint64(30_000_000)
+	avgBlockTxs := gasLimit/params.TxGas + 1
+	maxTxs := int(25 * avgBlockTxs)
+
+	return txPoolRapidConfig{
+		gasLimit: gasLimit,
+
+		avgBlockTxs: avgBlockTxs,
+
+		minTxs: 1,
+		maxTxs: maxTxs,
+
+		minAccs: 1,
+		maxAccs: maxTxs,
+
+		// less tweakable, more like constants
+		gasPriceMin: 1,
+		gasPriceMax: 1_000,
+
+		gasLimitMin: params.TxGas,
+		gasLimitMax: gasLimit / 2,
+
+		balance: 0xffffffffffffff,
+
+		blockTime:      2 * time.Second,
+		maxEmptyBlocks: 10,
+		maxStuckBlocks: 10,
+	}
+}
+
+// TestSmallTxPool is not something to run in parallel as far it uses all CPUs
+// nolint:paralleltest
+func TestSmallTxPool(t *testing.T) {
+	t.Parallel()
+
+	t.Skip("a red test to be fixed")
+
+	cfg := defaultTxPoolRapidConfig()
+
+	cfg.maxEmptyBlocks = 10
+	cfg.maxStuckBlocks = 10
+
+	cfg.minTxs = 1
+	cfg.maxTxs = 2
+
+	cfg.minAccs = 1
+	cfg.maxAccs = 2
+
+	testPoolBatchInsert(t, cfg)
+}
+
+// This test is not something to run in parallel as far it uses all CPUs
+// nolint:paralleltest
+func TestBigTxPool(t *testing.T) {
+	t.Parallel()
+
+	t.Skip("a red test to be fixed")
+
+	cfg := defaultTxPoolRapidConfig()
+
+	testPoolBatchInsert(t, cfg)
+}
+
+//nolint:gocognit,thelper
+func testPoolBatchInsert(t *testing.T, cfg txPoolRapidConfig) {
+	t.Helper()
+
+	t.Parallel()
+
+	const debug = false
+
+	initialBalance := big.NewInt(cfg.balance)
+
+	keys := make([]*acc, cfg.maxAccs)
+
+	var key *ecdsa.PrivateKey
+
+	// prealloc keys
+	for idx := 0; idx < cfg.maxAccs; idx++ {
+		key, _ = crypto.GenerateKey()
+
+		keys[idx] = &acc{
+			key:     key,
+			nonce:   0,
+			account: crypto.PubkeyToAddress(key.PublicKey),
+		}
+	}
+
+	var threads = runtime.NumCPU()
+
+	if debug {
+		// 1 is set only for debug
+		threads = 1
+	}
+
+	testsDone := new(uint64)
+
+	for i := 0; i < threads; i++ {
+		t.Run(fmt.Sprintf("thread %d", i), func(t *testing.T) {
+			t.Parallel()
+
+			rapid.Check(t, func(rt *rapid.T) {
+				caseParams := new(strings.Builder)
+
+				defer func() {
+					res := atomic.AddUint64(testsDone, 1)
+
+					if res%100 == 0 {
+						fmt.Println("case-done", res)
+					}
+				}()
+
+				// Generate a batch of transactions to enqueue into the pool
+				testTxPoolConfig := testTxPoolConfig
+
+				// from sentry config
+				testTxPoolConfig.AccountQueue = 16
+				testTxPoolConfig.AccountSlots = 16
+				testTxPoolConfig.GlobalQueue = 32768
+				testTxPoolConfig.GlobalSlots = 32768
+				testTxPoolConfig.Lifetime = time.Hour + 30*time.Minute //"1h30m0s"
+				testTxPoolConfig.PriceLimit = 1
+
+				now := time.Now()
+				pendingAddedCh := make(chan struct{}, 1024)
+				pool, key := setupTxPoolWithConfig(params.TestChainConfig, testTxPoolConfig, cfg.gasLimit, MakeWithPromoteTxCh(pendingAddedCh))
+				defer pool.Stop()
+
+				totalAccs := rapid.IntRange(cfg.minAccs, cfg.maxAccs).Draw(rt, "totalAccs").(int)
+
+				fmt.Fprintf(caseParams, "Case params: totalAccs = %d;", totalAccs)
+
+				defer func() {
+					pending, queued := pool.Content()
+
+					if len(pending) != 0 {
+						pendingGas := make([]float64, 0, len(pending))
+
+						for _, txs := range pending {
+							for _, tx := range txs {
+								pendingGas = append(pendingGas, float64(tx.Gas()))
+							}
+						}
+
+						mean, stddev := stat.MeanStdDev(pendingGas, nil)
+						fmt.Fprintf(caseParams, "\tpending mean %d, stdev %d, %d-%d;\n", int64(mean), int64(stddev), int64(floats.Min(pendingGas)), int64(floats.Max(pendingGas)))
+					}
+
+					if len(queued) != 0 {
+						queuedGas := make([]float64, 0, len(queued))
+
+						for _, txs := range queued {
+							for _, tx := range txs {
+								queuedGas = append(queuedGas, float64(tx.Gas()))
+							}
+						}
+
+						mean, stddev := stat.MeanStdDev(queuedGas, nil)
+						fmt.Fprintf(caseParams, "\tqueued mean %d, stdev %d, %d-%d);\n\n", int64(mean), int64(stddev), int64(floats.Min(queuedGas)), int64(floats.Max(queuedGas)))
+					}
+
+					rt.Log(caseParams)
+				}()
+
+				// regenerate only local key
+				localKey := &acc{
+					key:     key,
+					account: crypto.PubkeyToAddress(key.PublicKey),
+				}
+
+				if err := validateTxPoolInternals(pool); err != nil {
+					rt.Fatalf("pool internal state corrupted: %v", err)
+				}
+
+				var wg sync.WaitGroup
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+					now = time.Now()
+
+					testAddBalance(pool, localKey.account, initialBalance)
+
+					for idx := 0; idx < totalAccs; idx++ {
+						testAddBalance(pool, keys[idx].account, initialBalance)
+					}
+				}()
+
+				nonces := make([]uint64, totalAccs)
+				gen := rapid.Custom(transactionsGen(keys, nonces, localKey, cfg.minTxs, cfg.maxTxs, cfg.gasPriceMin, cfg.gasPriceMax, cfg.gasLimitMin, cfg.gasLimitMax, caseParams))
+
+				txs := gen.Draw(rt, "batches").(*transactionBatches)
+
+				wg.Wait()
+
+				var (
+					addIntoTxPool func(tx []*types.Transaction) []error
+					totalInBatch  int
+				)
+
+				for _, tx := range txs.txs {
+					addIntoTxPool = pool.AddRemotesSync
+
+					if tx.isLocal {
+						addIntoTxPool = pool.AddLocals
+					}
+
+					err := addIntoTxPool([]*types.Transaction{tx.tx})
+					if len(err) != 0 && err[0] != nil {
+						rt.Log("on adding a transaction to the tx pool", err[0], tx.tx.Gas(), tx.tx.GasPrice(), pool.GasPrice(), getBalance(pool, keys[tx.idx].account))
+					}
+				}
+
+				var (
+					block              int
+					emptyBlocks        int
+					stuckBlocks        int
+					lastTxPoolStats    int
+					currentTxPoolStats int
+				)
+
+				for {
+					// we'd expect fulfilling block take comparable, but less than blockTime
+					ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.maxStuckBlocks)*cfg.blockTime)
+
+					select {
+					case <-pendingAddedCh:
+					case <-ctx.Done():
+						pendingStat, queuedStat := pool.Stats()
+						if pendingStat+queuedStat == 0 {
+							cancel()
+
+							break
+						}
+
+						rt.Fatalf("got %ds block timeout (expected less then %s): total accounts %d. Pending %d, queued %d)",
+							block, 5*cfg.blockTime, txs.totalTxs, pendingStat, queuedStat)
+					}
+
+					pendingStat, queuedStat := pool.Stats()
+					currentTxPoolStats = pendingStat + queuedStat
+					if currentTxPoolStats == 0 {
+						cancel()
+						break
+					}
+
+					// check if txPool got stuck
+					if currentTxPoolStats == lastTxPoolStats {
+						stuckBlocks++ //todo: переписать
+					} else {
+						stuckBlocks = 0
+						lastTxPoolStats = currentTxPoolStats
+					}
+
+					// copy-paste
+					start := time.Now()
+					pending := pool.Pending(true)
+					locals := pool.Locals()
+
+					// from fillTransactions
+					removedFromPool, blockGasLeft, err := fillTransactions(ctx, pool, locals, pending, cfg.gasLimit)
+
+					done := time.Since(start)
+
+					if removedFromPool > 0 {
+						emptyBlocks = 0
+					} else {
+						emptyBlocks++
+					}
+
+					if emptyBlocks >= cfg.maxEmptyBlocks || stuckBlocks >= cfg.maxStuckBlocks {
+						// check for nonce gaps
+						var lastNonce, currentNonce int
+
+						pending = pool.Pending(true)
+
+						for txAcc, pendingTxs := range pending {
+							lastNonce = int(pool.Nonce(txAcc)) - len(pendingTxs) - 1
+
+							isFirst := true
+
+							for _, tx := range pendingTxs {
+								currentNonce = int(tx.Nonce())
+								if currentNonce-lastNonce != 1 {
+									rt.Fatalf("got a nonce gap for account %q. Current pending nonce %d, previous %d %v; emptyBlocks - %v; stuckBlocks - %v",
+										txAcc, currentNonce, lastNonce, isFirst, emptyBlocks >= cfg.maxEmptyBlocks, stuckBlocks >= cfg.maxStuckBlocks)
+								}
+
+								lastNonce = currentNonce
+							}
+						}
+					}
+
+					if emptyBlocks >= cfg.maxEmptyBlocks {
+						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
+							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
+					}
+
+					if stuckBlocks >= cfg.maxStuckBlocks {
+						rt.Fatalf("got %d empty blocks in a row(expected less then %d): total time %s, total accounts %d. Pending %d, locals %d)",
+							emptyBlocks, cfg.maxEmptyBlocks, done, txs.totalTxs, len(pending), len(locals))
+					}
+
+					if err != nil {
+						rt.Fatalf("took too long: total time %s(expected %s), total accounts %d. Pending %d, locals %d)",
+							done, cfg.blockTime, txs.totalTxs, len(pending), len(locals))
+					}
+
+					rt.Log("current_total", txs.totalTxs, "in_batch", totalInBatch, "removed", removedFromPool, "emptyBlocks", emptyBlocks, "blockGasLeft", blockGasLeft, "pending", len(pending), "locals", len(locals),
+						"locals+pending", done)
+
+					rt.Log("block", block, "pending", pendingStat, "queued", queuedStat, "elapsed", done)
+
+					block++
+
+					cancel()
+
+					//time.Sleep(time.Second)
+				}
+
+				rt.Logf("case completed totalTxs %d %v\n\n", txs.totalTxs, time.Since(now))
+			})
+		})
+	}
+
+	t.Log("done test cases", atomic.LoadUint64(testsDone))
+}
+
+func fillTransactions(ctx context.Context, pool *TxPool, locals []common.Address, pending map[common.Address]types.Transactions, gasLimit uint64) (int, uint64, error) {
+	localTxs := make(map[common.Address]types.Transactions)
+	remoteTxs := pending
+
+	for _, txAcc := range locals {
+		if txs := remoteTxs[txAcc]; len(txs) > 0 {
+			delete(remoteTxs, txAcc)
+
+			localTxs[txAcc] = txs
+		}
+	}
+
+	// fake signer
+	signer := types.NewLondonSigner(big.NewInt(1))
+
+	// fake baseFee
+	baseFee := big.NewInt(1)
+
+	blockGasLimit := gasLimit
+
+	var (
+		txLocalCount  int
+		txRemoteCount int
+	)
+
+	if len(localTxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, baseFee)
+
+		select {
+		case <-ctx.Done():
+			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+		default:
+		}
+
+		blockGasLimit, txLocalCount = commitTransactions(pool, txs, blockGasLimit)
+	}
+
+	select {
+	case <-ctx.Done():
+		return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+	default:
+	}
+
+	if len(remoteTxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, baseFee)
+
+		select {
+		case <-ctx.Done():
+			return txLocalCount + txRemoteCount, blockGasLimit, ctx.Err()
+		default:
+		}
+
+		blockGasLimit, txRemoteCount = commitTransactions(pool, txs, blockGasLimit)
+	}
+
+	return txLocalCount + txRemoteCount, blockGasLimit, nil
+}
+
+func commitTransactions(pool *TxPool, txs *types.TransactionsByPriceAndNonce, blockGasLimit uint64) (uint64, int) {
+	var (
+		tx      *types.Transaction
+		txCount int
+	)
+
+	for {
+		tx = txs.Peek()
+
+		if tx == nil {
+			return blockGasLimit, txCount
+		}
+
+		if tx.Gas() <= blockGasLimit {
+			blockGasLimit -= tx.Gas()
+			pool.removeTx(tx.Hash(), false)
+
+			txCount++
+		} else {
+			// we don't maximize fulfilment of the block. just fill somehow
+			return blockGasLimit, txCount
+		}
+	}
+}
+
+func MakeWithPromoteTxCh(ch chan struct{}) func(*TxPool) {
+	return func(pool *TxPool) {
+		pool.promoteTxCh = ch
 	}
 }

@@ -18,7 +18,11 @@ var (
 	getDerivedBorTxHash = types.GetDerivedBorTxHash
 
 	// borTxLookupPrefix + hash -> transaction/receipt lookup metadata
-	borTxLookupPrefix = []byte("matic-bor-tx-lookup-")
+	borTxLookupPrefix = []byte(borTxLookupPrefixStr)
+)
+
+const (
+	borTxLookupPrefixStr = "matic-bor-tx-lookup-"
 
 	// freezerBorReceiptTable indicates the name of the freezer bor receipts table.
 	freezerBorReceiptTable = "matic-bor-receipts"

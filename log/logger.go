@@ -18,7 +18,8 @@ const skipLevel = 2
 type Lvl int
 
 const (
-	LvlCrit Lvl = iota
+	LvlDiscard Lvl = -1
+	LvlCrit    Lvl = iota
 	LvlError
 	LvlWarn
 	LvlInfo
@@ -131,6 +132,10 @@ type logger struct {
 }
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
+	if l.h.Level() < lvl {
+		return
+	}
+
 	l.h.Log(&Record{
 		Time: time.Now(),
 		Lvl:  lvl,

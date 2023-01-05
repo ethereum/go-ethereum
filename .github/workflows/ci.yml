@@ -8,7 +8,7 @@ on:
   pull_request:
     branches:
       - "**"
-    types: [opened, synchronize, edited]
+    types: [opened, synchronize]
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
@@ -19,7 +19,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-11 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v3
@@ -29,7 +29,7 @@ jobs:
 
         - uses: actions/setup-go@v3
           with:
-            go-version: 1.18.x
+            go-version: 1.19.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -63,7 +63,7 @@ jobs:
 
         - name: test-integration
           run: make test-integration
-        
+
         - name: Upload coverage to Codecov
           uses: codecov/codecov-action@v1
           with:
@@ -104,7 +104,7 @@ jobs:
           uses: actions/checkout@v3
           with:
             repository: maticnetwork/matic-cli
-            ref: v0.3.0-dev
+            ref: arpit/pos-655-2
             path: matic-cli
 
         - name: Install dependencies on Linux
@@ -154,7 +154,7 @@ jobs:
             cd matic-cli/devnet/code/contracts
             npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
             cd -
-            bash bor/integration-tests/smoke_test.sh
+            timeout 20m bash bor/integration-tests/smoke_test.sh
 
         - name: Upload logs
           if: always()

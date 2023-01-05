@@ -268,6 +268,8 @@ type TxPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	promoteTxCh chan struct{} // should be used only for tests
 }
 
 type txpoolResetRequest struct {
@@ -276,7 +278,7 @@ type txpoolResetRequest struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, options ...func(pool *TxPool)) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -299,6 +301,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		initDoneCh:      make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
 	}
+
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
 		log.Info("Setting new local account", "address", addr)
@@ -306,6 +309,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 	pool.priced = newTxPricedList(pool.all)
 	pool.reset(nil, chain.CurrentBlock().Header())
+
+	// apply options
+	for _, fn := range options {
+		fn(pool)
+	}
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -809,6 +817,17 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 //
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
+	defer func() {
+		if pool.promoteTxCh == nil {
+			return
+		}
+
+		select {
+		case pool.promoteTxCh <- struct{}{}:
+		default:
+		}
+	}()
+
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
@@ -1080,6 +1099,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 		dirtyAccounts *accountSet
 		queuedEvents  = make(map[common.Address]*txSortedMap)
 	)
+
 	for {
 		// Launch next background reorg if needed
 		if curDone == nil && launchNextRun {

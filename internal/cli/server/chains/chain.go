@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,7 +49,7 @@ func GetChain(name string) (*Chain, error) {
 }
 
 func ImportFromFile(filename string) (*Chain, error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

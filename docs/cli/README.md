@@ -44,6 +44,10 @@
 
 - [```server```](./server.md)
 
+- [```snapshot```](./snapshot.md)
+
+- [```snapshot prune-state```](./snapshot_prune-state.md)
+
 - [```status```](./status.md)
 
 - [```version```](./version.md)

@@ -34,6 +34,10 @@ bor:
 protoc:
 	protoc --go_out=. --go-grpc_out=. ./internal/cli/server/proto/*.proto
 
+generate-mocks:
+	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
+	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
+
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
@@ -61,7 +65,7 @@ test-race:
 	$(GOTEST) --timeout 15m -race -shuffle=on $(TESTALL)
 
 test-integration:
-	$(GOTEST) --timeout 30m -tags integration $(TESTE2E)
+	$(GOTEST) --timeout 60m -tags integration $(TESTE2E)
 
 escape:
 	cd $(path) && go test -gcflags "-m -m" -run none -bench=BenchmarkJumpdest* -benchmem -memprofile mem.out
@@ -71,7 +75,7 @@ lint:
 
 lintci-deps:
 	rm -f ./build/bin/golangci-lint
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.46.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./build/bin v1.48.0
 
 goimports:
 	goimports -local "$(PACKAGE)" -w .
@@ -93,7 +97,7 @@ devtools:
 	$(GOBUILD) -o $(GOBIN)/codecgen github.com/ugorji/go/codec/codecgen
 	$(GOBUILD) -o $(GOBIN)/abigen ./cmd/abigen
 	$(GOBUILD) -o $(GOBIN)/mockgen github.com/golang/mock/mockgen
-	$(GOBUILD) -o $(GOBIN)/protoc-gen-go github.com/golang/protobuf/protoc-gen-go
+	$(GOBUILD) -o $(GOBIN)/protoc-gen-go google.golang.org/protobuf/cmd/protoc-gen-go
 	PATH=$(GOBIN):$(PATH) go generate ./common
 	PATH=$(GOBIN):$(PATH) go generate ./core/types
 	PATH=$(GOBIN):$(PATH) go generate ./consensus/bor
@@ -192,7 +196,7 @@ geth-windows-amd64:
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
 
 PACKAGE_NAME          := github.com/maticnetwork/bor
-GOLANG_CROSS_VERSION  ?= v1.18.1
+GOLANG_CROSS_VERSION  ?= v1.19.1
 
 .PHONY: release-dry-run
 release-dry-run:
@@ -220,6 +224,7 @@ release:
 		-e DOCKER_PASSWORD \
 		-e SLACK_WEBHOOK \
 		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v $(HOME)/.docker/config.json:/root/.docker/config.json \
 		-v `pwd`:/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
 		goreleaser/goreleaser-cross:${GOLANG_CROSS_VERSION} \

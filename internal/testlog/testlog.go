@@ -26,17 +26,22 @@ import (
 
 // Handler returns a log handler which logs to the unit test log of t.
 func Handler(t *testing.T, level log.Lvl) log.Handler {
-	return log.LvlFilterHandler(level, &handler{t, log.TerminalFormat(false)})
+	return log.LvlFilterHandler(level, &handler{t, log.TerminalFormat(false), level})
 }
 
 type handler struct {
 	t   *testing.T
 	fmt log.Format
+	lvl log.Lvl
 }
 
 func (h *handler) Log(r *log.Record) error {
 	h.t.Logf("%s", h.fmt.Format(r))
 	return nil
+}
+
+func (h *handler) Level() log.Lvl {
+	return h.lvl
 }
 
 // logger implements log.Logger such that all output goes to the unit test log via
@@ -58,6 +63,9 @@ type bufHandler struct {
 func (h *bufHandler) Log(r *log.Record) error {
 	h.buf = append(h.buf, r)
 	return nil
+}
+func (h *bufHandler) Level() log.Lvl {
+	return log.LvlTrace
 }
 
 // Logger returns a logger which logs to the unit test log of t.

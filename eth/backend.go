@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/downloader/whitelist"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -216,9 +218,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieTimeLimit:       config.TrieTimeout,
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
+			TriesInMemory:       config.TriesInMemory,
 		}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+
+	checker := whitelist.NewService(10)
+
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +265,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Checkpoint:         checkpoint,
 		EthAPI:             ethAPI,
 		PeerRequiredBlocks: config.PeerRequiredBlocks,
+		checker:            checker,
 	}); err != nil {
 		return nil, err
 	}
@@ -374,6 +381,10 @@ func (s *Ethereum) APIs() []rpc.API {
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
+}
+
+func (s *Ethereum) PublicBlockChainAPI() *ethapi.PublicBlockChainAPI {
+	return s.handler.ethAPI
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
@@ -621,6 +632,13 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
+var (
+	ErrNotBorConsensus             = errors.New("not bor consensus was given")
+	ErrBorConsensusWithoutHeimdall = errors.New("bor consensus without heimdall")
+
+	whitelistTimeout = 30 * time.Second
+)
+
 // StartCheckpointWhitelistService starts the goroutine to fetch checkpoints and update the
 // checkpoint whitelist map.
 func (s *Ethereum) startCheckpointWhitelistService() {
@@ -632,7 +650,11 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	}
 
 	// first run the checkpoint whitelist
-	err := s.handleWhitelistCheckpoint()
+	firstCtx, cancel := context.WithTimeout(context.Background(), whitelistTimeout)
+	err := s.handleWhitelistCheckpoint(firstCtx, true)
+
+	cancel()
+
 	if err != nil {
 		if errors.Is(err, ErrBorConsensusWithoutHeimdall) || errors.Is(err, ErrNotBorConsensus) {
 			return
@@ -647,7 +669,11 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	for {
 		select {
 		case <-ticker.C:
-			err := s.handleWhitelistCheckpoint()
+			ctx, cancel := context.WithTimeout(context.Background(), whitelistTimeout)
+			err := s.handleWhitelistCheckpoint(ctx, false)
+
+			cancel()
+
 			if err != nil {
 				log.Warn("unable to whitelist checkpoint", "err", err)
 			}
@@ -657,13 +683,8 @@ func (s *Ethereum) startCheckpointWhitelistService() {
 	}
 }
 
-var (
-	ErrNotBorConsensus             = errors.New("not bor consensus was given")
-	ErrBorConsensusWithoutHeimdall = errors.New("bor consensus without heimdall")
-)
-
 // handleWhitelistCheckpoint handles the checkpoint whitelist mechanism.
-func (s *Ethereum) handleWhitelistCheckpoint() error {
+func (s *Ethereum) handleWhitelistCheckpoint(ctx context.Context, first bool) error {
 	ethHandler := (*ethHandler)(s.handler)
 
 	bor, ok := ethHandler.chain.Engine().(*bor.Bor)
@@ -675,13 +696,20 @@ func (s *Ethereum) handleWhitelistCheckpoint() error {
 		return ErrBorConsensusWithoutHeimdall
 	}
 
-	endBlockNum, endBlockHash, err := ethHandler.fetchWhitelistCheckpoint(bor)
-	if err != nil {
+	// Create a new checkpoint verifier
+	verifier := newCheckpointVerifier(nil)
+	blockNums, blockHashes, err := ethHandler.fetchWhitelistCheckpoints(ctx, bor, verifier, first)
+	// If the array is empty, we're bound to receive an error. Non-nill error and non-empty array
+	// means that array has partial elements and it failed for some block. We'll add those partial
+	// elements anyway.
+	if len(blockNums) == 0 {
 		return err
 	}
 
 	// Update the checkpoint whitelist map.
-	ethHandler.downloader.ProcessCheckpoint(endBlockNum, endBlockHash)
+	for i := 0; i < len(blockNums); i++ {
+		ethHandler.downloader.ProcessCheckpoint(blockNums[i], blockHashes[i])
+	}
 
 	return nil
 }
