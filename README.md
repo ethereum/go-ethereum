@@ -13,13 +13,17 @@ Contributions from the community are very welcome. Please contribute by cloning 
 geth.ethereum.org is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app). The following tools were used to build the site:
 
 - [Node.js](https://nodejs.org/)
-- [Yarn package manager](https://yarnpkg.com/cli/install)
 - [React](https://reactjs.org/) - A JavaScript library for building component-based user interfaces
 - [Typescript](https://www.typescriptlang.org/) - TypeScript is a strongly typed programming language that builds on JavaScript
 - [Chakra UI](https://chakra-ui.com/) - A UI library (Migration in progress)
 - [Algolia](https://www.algolia.com/) - Site indexing, rapid intra-site search results, and search analytics. [Learn more on how we implement Algolia for site search](./docs/ALGOLIA_DOCSEARCH.md).
   - Primary implementation: `/src/components/Search/index.ts`
 - [Netlify](https://www.netlify.com/) - DNS management and primary host for `master` build.
+
+#### Resources
+
+- Official [NextJS tutorial](https://nextjs.org/learn/foundations/about-nextjs)
+- Recommended [free tutorial to learn ChakraUI](https://egghead.io/courses/build-a-modern-user-interface-with-chakra-ui-fac68106).
 
 ### Repository structure
 
