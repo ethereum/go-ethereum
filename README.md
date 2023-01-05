@@ -20,9 +20,12 @@ geth.ethereum.org is a [Next.js](https://nextjs.org/) project bootstrapped with 
   - Primary implementation: `/src/components/Search/index.ts`
 - [Netlify](https://www.netlify.com/) - DNS management and primary host for `master` build.
 
-#### Resources
+#### Learn more
 
-- Official [NextJS tutorial](https://nextjs.org/learn/foundations/about-nextjs)
+To learn more about the stack, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 - Recommended [free tutorial to learn ChakraUI](https://egghead.io/courses/build-a-modern-user-interface-with-chakra-ui-fac68106).
 
 ### Repository structure
