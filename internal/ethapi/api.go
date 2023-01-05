@@ -733,10 +733,10 @@ func (s *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) m
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
@@ -2041,7 +2041,7 @@ func NewPrivateTxBundleAPI(b Backend) *PrivateTxBundleAPI {
 	return &PrivateTxBundleAPI{b}
 }
 
-// BundleAPI offers an API for accepting bundled transactions
+// BundleAPI offers an API for accepting bundled  / and for BNTraceBundle
 type BundleAPI struct {
 	b     Backend
 	chain *core.BlockChain
@@ -2052,8 +2052,8 @@ func NewBundleAPI(b Backend, chain *core.BlockChain) *BundleAPI {
 	return &BundleAPI{b, chain}
 }
 
-// CallBundleArgs represents the arguments for a bundle of calls.
-type CallBundleArgs struct {
+// BNTraceBundleArgs represents the arguments for a multi-sim
+type BNMultiSimArgs struct {
 	Txs        []TransactionArgs `json:"txs"`
 	Coinbase   *string           `json:"coinbase"`
 	Timestamp  *uint64           `json:"timestamp"`
@@ -2063,9 +2063,10 @@ type CallBundleArgs struct {
 	BaseFee    *big.Int          `json:"baseFee"`
 }
 
-// CallBundle will simulate a bundle of transactions on top of
-// the most recent block. Partially follows flashbots spec v0.5.
-func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[string]interface{}, error) {
+// BNMultiSim works similar to Flashbots' `eth_callBundle`, however we use a custom tracer for opcodes, and take an unsigned transaction
+// This is custom work for the multi-simulation functionality of Simulation Platform
+// We should look into moving this into a
+func (s *BundleAPI) BNMultiSim(ctx context.Context, args BNMultiSimArgs) (map[string]interface{}, error) {
 	if len(args.Txs) == 0 {
 		return nil, errors.New("bundle missing unsigned txs")
 	}
@@ -2201,4 +2202,27 @@ func (s *BundleAPI) CallBundle(ctx context.Context, args CallBundleArgs) (map[st
 
 	ret["args"] = header
 	return ret, nil
+}
+
+// CallBundleArgs represents the arguments for a call.
+type CallBundleArgs struct {
+	Txs                    []hexutil.Bytes       `json:"txs"`
+	BlockNumber            rpc.BlockNumber       `json:"blockNumber"`
+	StateBlockNumberOrHash rpc.BlockNumberOrHash `json:"stateBlockNumber"`
+	Coinbase               *string               `json:"coinbase"`
+	Timestamp              *uint64               `json:"timestamp"`
+	Timeout                *int64                `json:"timeout"`
+	GasLimit               *uint64               `json:"gasLimit"`
+	Difficulty             *big.Int              `json:"difficulty"`
+	BaseFee                *big.Int              `json:"baseFee"`
+}
+
+// CallBundle will simulate a bundle of transactions at the top of a given block
+// number with the state of another (or the same) block. This can be used to
+// simulate future blocks with the current state, or it can be used to simulate
+// a past block.
+// The sender is responsible for signing the transactions and using the correct
+// nonce and ensuring validity
+func (s *BundleAPI) CallBundle(ctx context.Context, args BNMultiSimArgs) (map[string]interface{}, error) {
+	return s.BNMultiSim(ctx, args)
 }
