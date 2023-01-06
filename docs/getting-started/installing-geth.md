@@ -203,38 +203,29 @@ docker run -it -p 30303:30303 ethereum/client-go
 
 Geth is written in [Go](https://golang.org/), so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page](https://golang.org/doc/install) and necessary bundles can be downloaded from the [Go download page](https://golang.org/dl/).
 
-With Go installed, Geth can be downloaded into a `GOPATH` workspace via:
+Since Go 1.18 the `go get` command is [no longer used](https://go.dev/doc/go-get-install-deprecation) to download and install packages. Instead, use `go install`, passing the URL of the source code you want to build and a version specifier. For example, the following command will download and build the latest version of Geth:
 
 ```sh
-go get -d github.com/ethereum/go-ethereum
+go install github.com/ethereum/go-ethereum/cmd/geth@latest
 ```
 
-You can also install specific versions via:
+In order for this to work, `GOPATH` must be set (if it is not, you can set it using `export GOPATH="<path>"`). The source code will be downloaded into `GOPATH/pkg/github.com/ethereum/go-ethereum@v1.10.26` (your version suffix might be different to the one in the example). The binary will be saved in `GOPATH/bin/`.
+
+The other tools bundled with Geth can be downloaded and built in the same way, for example the following command will install the Clef binary in `GOPATH/bin/`:
 
 ```sh
-go get -d github.com/ethereum/go-ethereum@v1.9.21
+go install github.com/ethereum/go-ethereum/cmd/clef@latest
 ```
 
-The above commands do not build any executables. To do that you can either build one specifically:
+An existing Geth installation can be updated by navigating to the source directory and running `go get -u`, for example:
 
 ```sh
-go install github.com/ethereum/go-ethereum/cmd/geth
-```
-
-Alternatively, the following command, run in the project root directory (`ethereum/go-ethereum`) in the GO workspace, builds the entire project and installs Geth and all the developer tools:
-
-```sh
-go install ./...
+cd <GOPATH>/pkg/mod/github.com/ethereum/go-ethereum@v1.10.26 && go get -u
 ```
 
 For macOS users, errors related to macOS header files are usually fixed by installing XCode Command Line Tools with `xcode-select --install`.
 Another common error is: `go: cannot use path@version syntax in GOPATH mode`. This and other similar errors can often be fixed by enabling gomodules using `export GO111MODULE=on`.
 
-Updating an existing Geth installation can be achieved using `go get`:
-
-```sh
-go get -u github.com/ethereum/go-ethereum
-```
 
 ### Windows {#windows}
 
