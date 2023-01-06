@@ -82,6 +82,10 @@ var tmplSource = map[Lang]string{
 	LangGo: tmplSourceGo,
 }
 
+var tmplSourceV2 = map[Lang]string{
+	LangGo: tmplSourceGoV2,
+}
+
 // tmplSourceGo is the Go source template that the generated Go contract binding
 // is based on.
 //

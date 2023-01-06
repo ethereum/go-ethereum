@@ -72,6 +72,10 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
 	}
+	v2Flag = &cli.BoolFlag{
+		Name:  "v2",
+		Usage: "Generates v2 bindings",
+	}
 )
 
 var app = flags.NewApp("Ethereum ABI wrapper code generator")
@@ -88,6 +92,7 @@ func init() {
 		outFlag,
 		langFlag,
 		aliasFlag,
+		v2Flag,
 	}
 	app.Action = abigen
 }
@@ -216,7 +221,15 @@ func abigen(c *cli.Context) error {
 		}
 	}
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
+	var (
+		code string
+		err  error
+	)
+	if c.IsSet(v2Flag.Name) {
+		code, err = bind.BindV2(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
+	} else {
+		code, err = bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
+	}
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)
 	}
