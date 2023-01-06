@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -63,7 +63,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      fmt.Errorf("code section ends with non-terminal instruction"),
+			err:      ErrInvalidCodeTermination,
 		},
 		{
 			code: []byte{
@@ -75,7 +75,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
-			err:      fmt.Errorf("unreachable code"),
+			err:      ErrUnreachableCode,
 		},
 		{
 			code: []byte{
@@ -86,7 +86,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      fmt.Errorf("stack underflow"),
+			err:      ErrStackUnderflow{stackLen: 1, required: 2},
 		},
 		{
 			code: []byte{
@@ -97,7 +97,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 2}},
-			err:      fmt.Errorf("computed max stack height for code section 0 does not match expected (want: 2, got: 1)"),
+			err:      ErrInvalidMaxStackHeight,
 		},
 		{
 			code: []byte{
@@ -112,7 +112,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      fmt.Errorf("relative offset into immediate operand: 5"),
+			err:      ErrInvalidJumpDest,
 		},
 		{
 			code: []byte{
@@ -130,7 +130,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      fmt.Errorf("relative offset into immediate operand: 8"),
+			err:      ErrInvalidJumpDest,
 		},
 		{
 			code: []byte{
@@ -141,7 +141,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      fmt.Errorf("rjumpv branch count must not be 0"),
+			err:      ErrInvalidBranchCount,
 		},
 		{
 			code: []byte{
@@ -204,7 +204,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
-			err:      fmt.Errorf("unreachable code"),
+			err:      ErrUnreachableCode,
 		},
 		{
 			code: []byte{
@@ -212,7 +212,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 1, MaxStackHeight: 0}},
-			err:      fmt.Errorf("wrong number of outputs (want: 1, got: 0)"),
+			err:      ErrInvalidOutputs,
 		},
 		{
 			code: []byte{
@@ -243,7 +243,7 @@ func TestValidateCode(t *testing.T) {
 		},
 	} {
 		err := validateCode(test.code, test.section, test.metadata, &shanghaiEOFInstructionSet)
-		if (err != nil && test.err == nil) || (err == nil && test.err != nil) || (err != nil && test.err != nil && err.Error() != test.err.Error()) {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
 	}

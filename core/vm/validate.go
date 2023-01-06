@@ -1,5 +1,3 @@
-// Copyright 2022 The go-ethereum Authors
-// This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -17,15 +15,30 @@
 package vm
 
 import (
-	"fmt"
+	"errors"
+	"io"
 
 	"github.com/ethereum/go-ethereum/params"
+)
+
+var (
+	ErrUndefinedInstruction   = errors.New("undefined instrustion")
+	ErrTruncatedImmediate     = errors.New("truncated immediate")
+	ErrInvalidSectionArgument = errors.New("invalid section argument")
+	ErrInvalidJumpDest        = errors.New("invalid jump destination")
+	ErrConflictingStack       = errors.New("conflicting stack height")
+	ErrInvalidBranchCount     = errors.New("invalid number of branches in jump table")
+	ErrInvalidOutputs         = errors.New("invalid number of outputs")
+	ErrInvalidMaxStackHeight  = errors.New("invalid max stack height")
+	ErrInvalidCodeTermination = errors.New("invalid code termination")
+	ErrUnreachableCode        = errors.New("unreachable code")
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
 func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) error {
 	var (
 		i = 0
+		e = NewParseError
 		// Tracks the number of actual instructions in the code (e.g.
 		// non-immediate values). This is used at the end to determine
 		// if each instruction is reachable.
@@ -43,18 +56,18 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		count++
 		op = OpCode(code[i])
 		if jt[op].undefined {
-			return fmt.Errorf("use of undefined opcode %s", op)
+			return e(ErrUndefinedInstruction, i, "opcode=%s", op)
 		}
 		switch {
 		case op >= PUSH1 && op <= PUSH32:
 			size := int(op - PUSH0)
 			if len(code) <= i+size {
-				return fmt.Errorf("truncated operand")
+				return e(ErrTruncatedImmediate, i, "op=%s", op)
 			}
 			i += size
 		case op == RJUMP || op == RJUMPI:
 			if len(code) <= i+2 {
-				return fmt.Errorf("truncated rjump* operand")
+				return e(ErrTruncatedImmediate, i, "op=%s", op)
 			}
 			if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
 				return err
@@ -62,14 +75,14 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 			i += 2
 		case op == RJUMPV:
 			if len(code) <= i+1 {
-				return fmt.Errorf("truncated jump table operand")
+				return e(ErrTruncatedImmediate, i, "jump table size missing")
 			}
 			count := int(code[i+1])
 			if count == 0 {
-				return fmt.Errorf("rjumpv branch count must not be 0")
+				return e(ErrInvalidBranchCount, i, "must not be 0")
 			}
 			if len(code) <= i+count {
-				return fmt.Errorf("truncated jump table operand")
+				return e(ErrTruncatedImmediate, i, "jump table truncated")
 			}
 			for j := 0; j < count; j++ {
 				if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
@@ -79,11 +92,11 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 			i += 1 + 2*count
 		case op == CALLF:
 			if i+2 >= len(code) {
-				return fmt.Errorf("truncated operand")
+				return e(ErrTruncatedImmediate, i, "op=%s", op)
 			}
 			arg, _ := parseUint16(code[i+1:])
 			if arg >= len(metadata) {
-				return fmt.Errorf("code section out-of-bounds (want: %d, have: %d)", arg, len(metadata))
+				return e(ErrInvalidSectionArgument, i, "arg %d, last section %d", arg, len(metadata))
 			}
 			i += 2
 		}
@@ -92,12 +105,13 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 	// Code sections may not "fall through" and require proper termination.
 	// Therefore, the last instruction must be considered terminal.
 	if !jt[op].terminal {
-		return fmt.Errorf("code section ends with non-terminal instruction")
+		return e(ErrInvalidCodeTermination, i, "ends with op %s", op)
 	}
 	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
 		return err
 	} else if paths != count {
-		return fmt.Errorf("unreachable code")
+		// TODO(matt): return actual position of unreacable code
+		return e(ErrUnreachableCode, 0, "")
 	}
 	return nil
 }
@@ -105,17 +119,18 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 // checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.
 func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
 	if len(code) < imm+2 {
-		return fmt.Errorf("truncated operand")
+		return io.ErrUnexpectedEOF
 	}
 	if analysis != nil && *analysis == nil {
 		*analysis = eofCodeBitmap(code)
 	}
-	dest := from + parseInt16(code[imm:])
+	offset := parseInt16(code[imm:])
+	dest := from + offset
 	if dest < 0 || dest >= length {
-		return fmt.Errorf("relative offset out-of-bounds: %d", dest)
+		return NewParseError(ErrInvalidJumpDest, imm, "relative offset out-of-bounds: offset %d, dest %d", offset, dest)
 	}
 	if !analysis.codeSegment(uint64(dest)) {
-		return fmt.Errorf("relative offset into immediate operand: %d", dest)
+		return NewParseError(ErrInvalidJumpDest, imm, "relative offset into immediate value: offset %d, dest %d", offset, dest)
 	}
 	return nil
 }
@@ -128,6 +143,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 		height int
 	}
 	var (
+		e              = NewParseError
 		heights        = make(map[int]int)
 		worklist       = []item{{0, int(metadata[section].Input)}}
 		maxStackHeight = int(metadata[section].Input)
@@ -144,9 +160,9 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			op := OpCode(code[pos])
 
 			// Check if pos has already be visited; if so, the stack heights should be the same.
-			if exp, ok := heights[pos]; ok {
-				if height != exp {
-					return 0, fmt.Errorf("stack height mismatch for different paths")
+			if want, ok := heights[pos]; ok {
+				if height != want {
+					return 0, e(ErrConflictingStack, pos, "have %d, want %d", height, want)
 				}
 				// Already visited this path and stack height
 				// matches.
@@ -156,10 +172,10 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 
 			// Validate height for current op and update as needed.
 			if jt[op].minStack > height {
-				return 0, fmt.Errorf("stack underflow")
+				return 0, e(ErrStackUnderflow{stackLen: height, required: jt[op].minStack}, pos, "")
 			}
 			if jt[op].maxStack < height {
-				return 0, fmt.Errorf("stack overflow")
+				return 0, e(ErrStackOverflow{stackLen: height, limit: jt[op].maxStack}, pos, "")
 			}
 			height += int(params.StackLimit) - jt[op].maxStack
 
@@ -167,17 +183,17 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
 				if metadata[arg].Input > uint8(height) {
-					return 0, fmt.Errorf("stack underflow")
+					return 0, e(ErrStackUnderflow{stackLen: height, required: int(metadata[arg].Input)}, pos, "CALLF underflow to section %d", arg)
 				}
 				if int(metadata[arg].Output)+height > int(params.StackLimit) {
-					return 0, fmt.Errorf("stack overflow")
+					return 0, e(ErrStackOverflow{stackLen: int(metadata[arg].Output) + height, limit: int(params.StackLimit)}, pos, "CALLF overflow to section %d")
 				}
 				height -= int(metadata[arg].Input)
 				height += int(metadata[arg].Output)
 				pos += 3
 			case op == RETF:
 				if int(metadata[section].Output) != height {
-					return 0, fmt.Errorf("wrong number of outputs (want: %d, got: %d)", metadata[section].Output, height)
+					return 0, e(ErrInvalidOutputs, pos, "have %d, want %d", height, metadata[section].Output)
 				}
 				break outer
 			case op == RJUMP:
@@ -208,7 +224,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 		}
 	}
 	if maxStackHeight != int(metadata[section].MaxStackHeight) {
-		return 0, fmt.Errorf("computed max stack height for code section %d does not match expected (want: %d, got: %d)", section, metadata[section].MaxStackHeight, maxStackHeight)
+		return 0, e(ErrInvalidMaxStackHeight, 0, "at code section %d, have %d, want %d", section, maxStackHeight, metadata[section].MaxStackHeight)
 	}
 	return len(heights), nil
 }
