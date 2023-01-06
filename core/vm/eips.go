@@ -367,5 +367,10 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	scope.ReturnStack = scope.ReturnStack[:last]
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1
+
+	// If returning from top frame, exit cleanly.
+	if len(scope.ReturnStack) == 0 {
+		return nil, errStopToken
+	}
 	return nil, nil
 }
