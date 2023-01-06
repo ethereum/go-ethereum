@@ -178,6 +178,17 @@ func (lc *LightChain) SetHead(head uint64) error {
 	return lc.loadLastState()
 }
 
+// SetHeadWithTimestamp rewinds the local chain to a new head that has at max
+// the given timestamp. Everything above the new head will be deleted and the
+// new one set.
+func (lc *LightChain) SetHeadWithTimestamp(timestamp uint64) error {
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
+
+	lc.hc.SetHeadWithTimestamp(timestamp, nil, nil)
+	return lc.loadLastState()
+}
+
 // GasLimit returns the gas limit of the current HEAD block.
 func (lc *LightChain) GasLimit() uint64 {
 	return lc.hc.CurrentHeader().GasLimit

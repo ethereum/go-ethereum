@@ -183,7 +183,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.Error(err)
 				return
 			}
-			var rules = config.Rules(new(big.Int), false)
+			var rules = config.Rules(new(big.Int), false, new(big.Int))
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
