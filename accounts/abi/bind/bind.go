@@ -82,6 +82,100 @@ func isKeyWord(arg string) bool {
 // enforces compile time type safety and naming convention as opposed to having to
 // manually maintain hard coded strings that break on runtime.
 func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
+	data, err := bind(types, abis, bytecodes, fsigs, pkg, lang, libs, aliases)
+	if err != nil {
+		return "", err
+	}
+	buffer := new(bytes.Buffer)
+
+	funcs := map[string]interface{}{
+		"bindtype":      bindType[lang],
+		"bindtopictype": bindTopicType[lang],
+		"namedtype":     namedType[lang],
+		"capitalise":    capitalise,
+		"decapitalise":  decapitalise,
+	}
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
+	if err := tmpl.Execute(buffer, data); err != nil {
+		return "", err
+	}
+	// For Go bindings pass the code through gofmt to clean it up
+	if lang == LangGo {
+		code, err := format.Source(buffer.Bytes())
+		if err != nil {
+			return "", fmt.Errorf("%v\n%s", err, buffer)
+		}
+		return string(code), nil
+	}
+	// For all others just return as is for now
+	return buffer.String(), nil
+}
+
+func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
+	data, err := bind(types, abis, bytecodes, fsigs, pkg, lang, libs, aliases)
+	if err != nil {
+		return "", err
+	}
+	for _, c := range data.Contracts {
+		// We want pack/unpack methods for all existing methods.
+		for name, t := range c.Transacts {
+			c.Calls[name] = t
+		}
+		c.Transacts = nil
+
+		// Make sure we return one argument. If multiple exist
+		// merge them into a struct.
+		for _, call := range c.Calls {
+			if call.Structured {
+				continue
+			}
+			if len(call.Normalized.Outputs) == 1 {
+				continue
+			}
+			// Build up dictionary of existing arg names.
+			keys := make(map[string]struct{})
+			for _, o := range call.Normalized.Outputs {
+				if o.Name != "" {
+					keys[strings.ToLower(o.Name)] = struct{}{}
+				}
+			}
+			// Assign names to anonymous fields.
+			for i, o := range call.Normalized.Outputs {
+				if o.Name != "" {
+					continue
+				}
+				o.Name = capitalise(abi.ResolveNameConflict("arg", func(name string) bool { _, ok := keys[name]; return ok }))
+				call.Normalized.Outputs[i] = o
+				keys[strings.ToLower(o.Name)] = struct{}{}
+			}
+			call.Structured = true
+		}
+	}
+	buffer := new(bytes.Buffer)
+	funcs := map[string]interface{}{
+		"bindtype":      bindType[lang],
+		"bindtopictype": bindTopicType[lang],
+		"namedtype":     namedType[lang],
+		"capitalise":    capitalise,
+		"decapitalise":  decapitalise,
+	}
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSourceV2[lang]))
+	if err := tmpl.Execute(buffer, data); err != nil {
+		return "", err
+	}
+	// For Go bindings pass the code through gofmt to clean it up
+	if lang == LangGo {
+		code, err := format.Source(buffer.Bytes())
+		if err != nil {
+			return "", fmt.Errorf("%v\n%s", err, buffer)
+		}
+		return string(code), nil
+	}
+	// For all others just return as is for now
+	return buffer.String(), nil
+}
+
+func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (*tmplData, error) {
 	var (
 		// contracts is the map of each individual contract requested binding
 		contracts = make(map[string]*tmplContract)
@@ -96,7 +190,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		// Parse the actual ABI to generate the binding for
 		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		// Strip any whitespace from the JSON ABI
 		strippedABI := strings.Map(func(r rune) rune {
@@ -147,7 +241,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				})
 			}
 			if identifiers[normalizedName] {
-				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
 			identifiers[normalizedName] = true
 
@@ -198,7 +292,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				})
 			}
 			if eventIdentifiers[normalizedName] {
-				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
 			eventIdentifiers[normalizedName] = true
 			normalized.Name = normalizedName
@@ -233,6 +327,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		if evmABI.HasReceive() {
 			receive = &tmplMethod{Original: evmABI.Receive}
 		}
+
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
@@ -277,29 +372,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		Libraries: libs,
 		Structs:   structs,
 	}
-	buffer := new(bytes.Buffer)
-
-	funcs := map[string]interface{}{
-		"bindtype":      bindType[lang],
-		"bindtopictype": bindTopicType[lang],
-		"namedtype":     namedType[lang],
-		"capitalise":    capitalise,
-		"decapitalise":  decapitalise,
-	}
-	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
-	if err := tmpl.Execute(buffer, data); err != nil {
-		return "", err
-	}
-	// For Go bindings pass the code through gofmt to clean it up
-	if lang == LangGo {
-		code, err := format.Source(buffer.Bytes())
-		if err != nil {
-			return "", fmt.Errorf("%v\n%s", err, buffer)
-		}
-		return string(code), nil
-	}
-	// For all others just return as is for now
-	return buffer.String(), nil
+	return data, nil
 }
 
 // bindType is a set of type binders that convert Solidity types to some supported
