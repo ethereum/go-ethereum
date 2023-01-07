@@ -138,7 +138,7 @@ func Merkleize(list DerivableList) common.Hash {
 	for i := 0; i < list.Len(); i++ {
 		valueBuf.Reset()
 		list.EncodeIndex(i, valueBuf)
-		roots[i] = SSZChunkAndRoot(valueBuf.Bytes())
+		roots[i] = chunkAndHashSSZ(valueBuf.Bytes())
 	}
 	return mixinLength(merkleize(roots), list.Len())
 }
@@ -162,7 +162,7 @@ func merkleize(values []common.Hash) common.Hash {
 	return round[0]
 }
 
-func SSZChunkAndRoot(input []byte) common.Hash {
+func chunkAndHashSSZ(input []byte) common.Hash {
 	size := nextPowerOfTwo(uint32(len(input)))
 	roots := make([]common.Hash, size)
 	for start := 0; start < len(input); start += common.HashLength {
