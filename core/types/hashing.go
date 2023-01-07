@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/bits"
 	"sync"
@@ -137,9 +138,9 @@ func Merkleize(list DerivableList) common.Hash {
 	for i := 0; i < list.Len(); i++ {
 		valueBuf.Reset()
 		list.EncodeIndex(i, valueBuf)
-		roots[i].SetBytes(sha.Sum(valueBuf.Bytes()))
+		roots[i] = SSZChunkAndRoot(valueBuf.Bytes())
 	}
-	return merkleize(roots)
+	return mixinLength(merkleize(roots), list.Len())
 }
 
 func merkleize(values []common.Hash) common.Hash {
@@ -159,4 +160,31 @@ func merkleize(values []common.Hash) common.Hash {
 		round = round[0 : len(round)/2]
 	}
 	return round[0]
+}
+
+func SSZChunkAndRoot(input []byte) common.Hash {
+	size := nextPowerOfTwo(uint32(len(input)))
+	roots := make([]common.Hash, size)
+	for start := 0; start < len(input); start += common.HashLength {
+		end := start + common.HashLength
+		if end > len(input) {
+			end = len(input)
+		}
+		copy(roots[start/common.HashLength][:], input[start:end])
+	}
+	return mixinLength(merkleize(roots), len(input))
+}
+
+func mixinLength(root common.Hash, length int) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+
+	var buf []byte
+	binary.LittleEndian.PutUint64(buf, uint64(length))
+
+	sha.Reset()
+	sha.Write(root[:])
+	sha.Write(buf[:])
+	sha.Read(h[:])
+	return h
 }
