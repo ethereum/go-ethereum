@@ -18,6 +18,8 @@ package types
 
 import (
 	"bytes"
+	"fmt"
+	"math/bits"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -110,4 +112,51 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 		hasher.Update(indexBuf, value)
 	}
 	return hasher.Hash()
+}
+
+func nextPowerOfTwo(v uint32) uint32 {
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	v++
+	return v
+}
+
+func Merkleize(list DerivableList) common.Hash {
+	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(valueBuf)
+
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+
+	size := nextPowerOfTwo(uint32(list.Len()))
+	roots := make([]common.Hash, size)
+	for i := 0; i < list.Len(); i++ {
+		valueBuf.Reset()
+		list.EncodeIndex(i, valueBuf)
+		roots[i].SetBytes(sha.Sum(valueBuf.Bytes()))
+	}
+	return merkleize(roots)
+}
+
+func merkleize(values []common.Hash) common.Hash {
+	// Check if len(values) is power of two
+	if len(values)&(len(values)-1) != 0 || len(values) == 0 {
+		panic(fmt.Sprintf("not a power of 2: %v", len(values)))
+	}
+	if len(values) == 1 {
+		return values[0]
+	}
+	round := make([]common.Hash, len(values))
+	copy(round, values)
+	for i := 0; i < bits.Len(uint(len(values)))-1; i++ {
+		for k := 0; k < len(round)/2; k++ {
+			round[int(k)] = crypto.Keccak256Hash(round[k*2][:], round[k*2+1][:])
+		}
+		round = round[0 : len(round)/2]
+	}
+	return round[0]
 }
