@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -47,28 +48,32 @@ func TestBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	verify := func(data *beacon.ExecutableData, txs int) {
-		if data.ParentHash != b.chain.CurrentBlock().Hash() {
+	verify := func(data *beacon.ExecutableDataV2, txs int, expectedFees *big.Int) {
+		payload := data.ExecutionPayload
+		if payload.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
 		}
-		if data.Random != (common.Hash{}) {
+		if payload.Random != (common.Hash{}) {
 			t.Fatal("Unexpect random value")
 		}
-		if data.Timestamp != timestamp {
+		if payload.Timestamp != timestamp {
 			t.Fatal("Unexpect timestamp")
 		}
-		if data.FeeRecipient != recipient {
+		if payload.FeeRecipient != recipient {
 			t.Fatal("Unexpect fee recipient")
 		}
-		if len(data.Transactions) != txs {
+		if len(payload.Transactions) != txs {
 			t.Fatal("Unexpect transaction set")
+		}
+		if data.BlockValue.Cmp(expectedFees) != 0 {
+			t.Fatalf("Block value (%v) != expected fees (%v)", data.BlockValue, expectedFees)
 		}
 	}
 	empty := payload.ResolveEmpty()
-	verify(empty, 0)
+	verify(empty, 0, big.NewInt(0))
 
 	full := payload.ResolveFull()
-	verify(full, len(pendingTxs))
+	verify(full, len(pendingTxs), big.NewInt(2625000000000))
 
 	// Ensure resolve can be called multiple times and the
 	// result should be unchanged

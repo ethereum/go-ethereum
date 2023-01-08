@@ -108,7 +108,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 
 // Resolve returns the latest built payload and also terminates the background
 // thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) Resolve() *beacon.ExecutableData {
+func (payload *Payload) Resolve() *beacon.ExecutableDataV2 {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -118,9 +118,9 @@ func (payload *Payload) Resolve() *beacon.ExecutableData {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return beacon.BlockToExecutableData(payload.full)
+		return beacon.BlockToExecutableData(payload.full, payload.fullFees)
 	}
-	return beacon.BlockToExecutableData(payload.empty)
+	return beacon.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
 // ResolveToBlobsBundle returns the latest built blobs bundle payload and also terminates the
@@ -142,16 +142,16 @@ func (payload *Payload) ResolveToBlobsBundle() (*beacon.BlobsBundle, error) {
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
 // It's only used in tests.
-func (payload *Payload) ResolveEmpty() *beacon.ExecutableData {
+func (payload *Payload) ResolveEmpty() *beacon.ExecutableDataV2 {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return beacon.BlockToExecutableData(payload.empty)
+	return beacon.BlockToExecutableData(payload.empty, big.NewInt(0))
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
 // It's only used in tests.
-func (payload *Payload) ResolveFull() *beacon.ExecutableData {
+func (payload *Payload) ResolveFull() *beacon.ExecutableDataV2 {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -163,7 +163,7 @@ func (payload *Payload) ResolveFull() *beacon.ExecutableData {
 		}
 		payload.cond.Wait()
 	}
-	return beacon.BlockToExecutableData(payload.full)
+	return beacon.BlockToExecutableData(payload.full, payload.fullFees)
 }
 
 // buildPayload builds the payload according to the provided parameters.

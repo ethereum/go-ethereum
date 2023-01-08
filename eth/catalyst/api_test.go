@@ -653,7 +653,7 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *beacon.Pay
 	if err != nil {
 		return nil, err
 	}
-	return payload.ResolveFull(), nil
+	return payload.ResolveFull().ExecutionPayload, nil
 }
 
 func TestEmptyBlocks(t *testing.T) {
@@ -896,7 +896,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	data := *payload.Resolve()
+	data := *payload.Resolve().ExecutionPayload
 	resp2, err := api.NewPayloadV1(data)
 	if err != nil {
 		t.Fatalf("error sending NewPayload, err=%v", err)
@@ -1028,13 +1028,13 @@ func TestEIP4844(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if status, err := api.NewPayloadV3(*execData); err != nil {
+	if status, err := api.NewPayloadV3(*execData.ExecutionPayload); err != nil {
 		t.Fatalf("error validating payload: %v", err)
 	} else if status.Status != beacon.VALID {
 		t.Fatalf("invalid payload")
 	}
 
-	fcState.HeadBlockHash = execData.BlockHash
+	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
 	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
@@ -1080,10 +1080,11 @@ func TestEIP4844Withdrawals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if execData.StateRoot != parent.Root {
-		t.Fatalf("mismatch state roots (got: %s, want: %s)", execData.StateRoot, blocks[8].Root())
+	ep := execData.ExecutionPayload
+	if ep.StateRoot != parent.Root {
+		t.Fatalf("mismatch state roots (got: %s, want: %s)", ep.StateRoot, blocks[8].Root())
 	}
-	if execData.Withdrawals == nil || len(execData.Withdrawals) != 0 {
-		t.Fatalf("expected empty withdrawals list. got %v", execData.Withdrawals)
+	if ep.Withdrawals == nil || len(ep.Withdrawals) != 0 {
+		t.Fatalf("expected empty withdrawals list. got %v", ep.Withdrawals)
 	}
 }

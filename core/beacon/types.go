@@ -85,6 +85,11 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
+type ExecutableDataV2 struct {
+	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+}
+
 type PayloadStatusV1 struct {
 	Status          string       `json:"status"`
 	LatestValidHash *common.Hash `json:"latestValidHash"`
@@ -206,27 +211,30 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 	return block, nil
 }
 
-// BlockToExecutableData constructs the executableData structure by filling the
-// fields from the given block. It assumes the given block is post-merge block.
-// Additional blob contents are provided as well.
-func BlockToExecutableData(block *types.Block) *ExecutableData {
-	return &ExecutableData{
-		BlockHash:     block.Hash(),
-		ParentHash:    block.ParentHash(),
-		FeeRecipient:  block.Coinbase(),
-		StateRoot:     block.Root(),
-		Number:        block.NumberU64(),
-		GasLimit:      block.GasLimit(),
-		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee(),
-		ExcessDataGas: block.ExcessDataGas(),
-		Timestamp:     block.Time(),
-		ReceiptsRoot:  block.ReceiptHash(),
-		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        block.MixDigest(),
-		ExtraData:     block.Extra(),
-		Withdrawals:   block.Withdrawals(),
+// BlockToExecutableData constructs the ExecutableDataV2 structure by filling the fields from the
+// given block, and setting BlockValue field to 'fees'. It assumes the given block is a post-merge
+// block.
+func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutableDataV2 {
+	return &ExecutableDataV2{
+		ExecutionPayload: &ExecutableData{
+			BlockHash:     block.Hash(),
+			ParentHash:    block.ParentHash(),
+			FeeRecipient:  block.Coinbase(),
+			StateRoot:     block.Root(),
+			Number:        block.NumberU64(),
+			GasLimit:      block.GasLimit(),
+			GasUsed:       block.GasUsed(),
+			BaseFeePerGas: block.BaseFee(),
+			ExcessDataGas: block.ExcessDataGas(),
+			Timestamp:     block.Time(),
+			ReceiptsRoot:  block.ReceiptHash(),
+			LogsBloom:     block.Bloom().Bytes(),
+			Transactions:  encodeTransactions(block.Transactions()),
+			Random:        block.MixDigest(),
+			ExtraData:     block.Extra(),
+			Withdrawals:   block.Withdrawals(),
+		},
+		BlockValue: fees,
 	}
 }
 
