@@ -20,6 +20,7 @@ package ethereum
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -52,8 +53,8 @@ type Subscription interface {
 //
 // The returned error is NotFound if the requested item does not exist.
 type ChainReader interface {
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*ethclient.Block, error)
+	BlockByNumber(ctx context.Context, number *big.Int) (*ethclient.Block, error)
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error)

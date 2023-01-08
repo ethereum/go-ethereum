@@ -31,6 +31,15 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+type Block struct {
+	rawJson []byte
+	*types.Block
+}
+
+func (b *Block) GetRawJson() []byte {
+	return b.rawJson
+}
+
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
 	c *rpc.Client
@@ -74,7 +83,7 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 //
 // Note that loading full blocks requires two requests. Use HeaderByHash
 // if you don't need all transactions or uncle headers.
-func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*Block, error) {
 	return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
 }
 
@@ -83,7 +92,7 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 //
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
-func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*Block, error) {
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
@@ -107,7 +116,7 @@ type rpcBlock struct {
 	UncleHashes  []common.Hash    `json:"uncles"`
 }
 
-func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
+func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*Block, error) {
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, method, args...)
 	if err != nil {
@@ -169,7 +178,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(txs, uncles), nil
+	return &Block{rawJson: raw, Block: types.NewBlockWithHeader(head).WithBody(txs, uncles)}, nil
 }
 
 // HeaderByHash returns the block header with the given hash.

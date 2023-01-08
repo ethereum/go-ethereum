@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -161,13 +162,13 @@ func (h *Headers) Get(index int) (header *Header, _ error) {
 
 // Block represents an entire block in the Ethereum blockchain.
 type Block struct {
-	block *types.Block
+	block *ethclient.Block
 }
 
 // NewBlockFromRLP parses a block from an RLP data dump.
 func NewBlockFromRLP(data []byte) (*Block, error) {
 	b := &Block{
-		block: new(types.Block),
+		block: new(ethclient.Block),
 	}
 	if err := rlp.DecodeBytes(common.CopyBytes(data), b.block); err != nil {
 		return nil, err
@@ -183,7 +184,7 @@ func (b *Block) EncodeRLP() ([]byte, error) {
 // NewBlockFromJSON parses a block from a JSON data dump.
 func NewBlockFromJSON(data string) (*Block, error) {
 	b := &Block{
-		block: new(types.Block),
+		block: new(ethclient.Block),
 	}
 	if err := json.Unmarshal([]byte(data), b.block); err != nil {
 		return nil, err
