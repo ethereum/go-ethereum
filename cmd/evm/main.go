@@ -21,9 +21,12 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
 
@@ -125,6 +128,26 @@ var (
 		Value: true,
 		Usage: "enable return data output",
 	}
+	HexFlag = &cli.StringFlag{
+		Name:  "hex",
+		Usage: "single container data parse and validation",
+	}
+	ForknameFlag = &cli.StringFlag{
+		Name: "state.fork",
+		Usage: fmt.Sprintf("Name of ruleset to use."+
+			"\n\tAvailable forknames:"+
+			"\n\t    %v"+
+			"\n\tAvailable extra eips:"+
+			"\n\t    %v"+
+			"\n\tSyntax <forkname>(+ExtraEip)",
+			strings.Join(tests.AvailableForks(), "\n\t    "),
+			strings.Join(vm.ActivateableEips(), ", ")),
+		Value: "Shanghai",
+	}
+	RefTestFlag = &cli.StringFlag{
+		Name:  "test",
+		Usage: "Path to EOF validation reference test.",
+	}
 )
 
 var stateTransitionCommand = &cli.Command{
@@ -185,6 +208,18 @@ var blockBuilderCommand = &cli.Command{
 	},
 }
 
+var eofParserCommand = &cli.Command{
+	Name:    "eofparser",
+	Aliases: []string{"eof"},
+	Usage:   "parses hex eof container and returns validation errors (if any)",
+	Action:  eofParser,
+	Flags: []cli.Flag{
+		VerbosityFlag,
+		HexFlag,
+		RefTestFlag,
+	},
+}
+
 var app = flags.NewApp("the evm command line interface")
 
 func init() {
@@ -221,6 +256,7 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
+		eofParserCommand,
 	}
 }
 
