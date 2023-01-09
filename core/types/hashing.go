@@ -126,6 +126,10 @@ func nextPowerOfTwo(v uint32) uint32 {
 	return v
 }
 
+func MerkleizeAndMix(list DerivableList) common.Hash {
+	return mixinLength(Merkleize(list), list.Len())
+}
+
 func Merkleize(list DerivableList) common.Hash {
 	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(valueBuf)
@@ -140,7 +144,7 @@ func Merkleize(list DerivableList) common.Hash {
 		list.EncodeIndex(i, valueBuf)
 		roots[i] = chunkAndHashSSZ(valueBuf.Bytes())
 	}
-	return mixinLength(merkleize(roots), list.Len())
+	return merkleize(roots)
 }
 
 func merkleize(values []common.Hash) common.Hash {
@@ -155,7 +159,7 @@ func merkleize(values []common.Hash) common.Hash {
 	copy(round, values)
 	for i := 0; i < bits.Len(uint(len(values)))-1; i++ {
 		for k := 0; k < len(round)/2; k++ {
-			round[int(k)] = crypto.Keccak256Hash(round[k*2][:], round[k*2+1][:])
+			round[k] = crypto.Keccak256Hash(round[k*2][:], round[k*2+1][:])
 		}
 		round = round[0 : len(round)/2]
 	}
@@ -185,6 +189,41 @@ func mixinLength(root common.Hash, length int) (h common.Hash) {
 	sha.Reset()
 	sha.Write(root[:])
 	sha.Write(buf[:])
+	sha.Read(h[:])
+	return h
+}
+
+var lookup map[int]common.Hash
+
+func init() {
+	// initialize the lookup
+	max := 2 ^ 30
+	base := [32]byte{}
+	prev := crypto.Keccak256Hash(base[:])
+	lookup[1] = prev
+	for i := 2; i < max; i = i << 1 {
+		prev = crypto.Keccak256Hash(prev.Bytes(), prev.Bytes())
+		lookup[i] = prev
+	}
+}
+
+func MerkleWithLimit(list DerivableList, limit int) (h common.Hash) {
+	if limit == 0 {
+		panic("should not happen")
+	}
+	if list.Len() <= limit/2 {
+		// TODO use merkleize, change to bytes based,
+		return Merkleize(list)
+	}
+	left := MerkleWithLimit(list, limit/2)
+	right := lookup[limit/2]
+
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+
+	sha.Reset()
+	sha.Write(left[:])
+	sha.Write(right[:])
 	sha.Read(h[:])
 	return h
 }
