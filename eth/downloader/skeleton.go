@@ -977,8 +977,14 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				// the expected new sync cycle after some propagated blocks. Log
 				// it for debugging purposes, explicitly clean and don't escalate.
 				case subchains == 2 && s.progress.Subchains[1].Head == s.progress.Subchains[1].Tail:
-					log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
-					rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					// Remove the leftover skeleton header associated with old
+					// skeleton chain only if it's not covered by the current
+					// skeleton range.
+					if s.progress.Subchains[1].Head < s.progress.Subchains[0].Tail {
+						log.Debug("Cleaning previous beacon sync state", "head", s.progress.Subchains[1].Head)
+						rawdb.DeleteSkeletonHeader(batch, s.progress.Subchains[1].Head)
+					}
+					// Drop the leftover skeleton chain since it's stale.
 					s.progress.Subchains = s.progress.Subchains[:1]
 
 				// If we have more than one header or more than one leftover chain,
