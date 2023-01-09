@@ -1,0 +1,37 @@
+name: Run Gosec
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  Gosec:
+    permissions:
+      security-events: write
+
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Get Diff
+        uses: technote-space/get-diff-action@v6.1.2
+        with:
+          PATTERNS: |
+            **/*.go
+            go.mod
+            go.sum
+      - name: Run Gosec Security Scanner
+        uses: cosmos/gosec@master
+        with:
+          # we let the report trigger content trigger a failure using the GitHub Security features.
+          args: "-no-fail -fmt sarif -out results.sarif ./..."
+        if: "env.GIT_DIFF_FILTERED != ''"
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          # Path to SARIF file relative to the root of the repository
+          sarif_file: results.sarif
+        if: "env.GIT_DIFF_FILTERED != ''"
