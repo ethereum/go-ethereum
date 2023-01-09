@@ -315,7 +315,7 @@ func GlobalBig(ctx *cli.Context, name string) *big.Int {
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
 	// Named pipes are not file paths on windows, ignore
-	if strings.HasPrefix(p, "\\\\.\\pipe") {
+	if strings.HasPrefix(p, `\\.\pipe`) {
 		return p
 	}
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
