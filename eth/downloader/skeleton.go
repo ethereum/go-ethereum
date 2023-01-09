@@ -520,7 +520,7 @@ func (s *skeleton) initSync(head *types.Header) {
 				}
 				break
 			}
-			// If the last subchain can be extended, we're lucky. Otherwise create
+			// If the last subchain can be extended, we're lucky. Otherwise, create
 			// a new subchain sync task.
 			var extended bool
 			if n := len(s.progress.Subchains); n > 0 {
