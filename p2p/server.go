@@ -23,6 +23,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/bloXroute-Labs/upscale-client"
+	"github.com/bloXroute-Labs/upscale-client/types"
 	"net"
 	"sort"
 	"sync"
@@ -813,16 +815,36 @@ running:
 }
 
 func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+	replace, peerToRemoveID, reject := upscale_client.UpScale(types.ID(c.node.ID()), c.fd.RemoteAddr(), len(peers), srv.MaxPeers, inboundCount, srv.maxInboundConns(),
+		c.is(inboundConn), c.is(trustedConn))
+	if !c.is(trustedConn) && reject {
+		return DiscUselessPeer
+	}
 	switch {
-	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
+	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers && !replace:
 		return DiscTooManyPeers
-	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns() && !replace:
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
 	case c.node.ID() == srv.localnode.ID():
 		return DiscSelf
 	default:
+		if replace {
+			p, ok := peers[enode.ID(peerToRemoveID)]
+			if ok {
+				node, err := enode.Parse(enode.ValidSchemes, p.Node().URLv4())
+				if err == nil {
+					srv.log.Info("removing peer", "ID", p.ID(), "enode", node)
+					go srv.RemovePeer(node)
+				} else {
+					srv.log.Error("peer to be replaced has bad enode", "ID", peerToRemoveID, "enode", p.Node().URLv4())
+				}
+			} else {
+				srv.log.Error("peer to be replaced not found", "ID", peerToRemoveID)
+			}
+		}
+
 		return nil
 	}
 }
@@ -1045,6 +1067,7 @@ func (srv *Server) runPeer(p *Peer) {
 		RemoteAddress: p.RemoteAddr().String(),
 		LocalAddress:  p.LocalAddr().String(),
 	})
+	upscale_client.PeerAdded(0, types.ID(p.ID()), p.rw.flags.String(), p.RemoteAddr(), p.Name(), p.Info().Enode)
 
 	// Run the per-peer main loop.
 	remoteRequested, err := p.run()
@@ -1065,6 +1088,8 @@ func (srv *Server) runPeer(p *Peer) {
 		RemoteAddress: p.RemoteAddr().String(),
 		LocalAddress:  p.LocalAddr().String(),
 	})
+
+	upscale_client.PeerRemoved(0, types.ID(p.ID()))
 }
 
 // NodeInfo represents a short summary of the information known about the host.

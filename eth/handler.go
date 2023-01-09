@@ -18,6 +18,8 @@ package eth
 
 import (
 	"errors"
+	"github.com/bloXroute-Labs/upscale-client"
+	types2 "github.com/bloXroute-Labs/upscale-client/types"
 	"math"
 	"math/big"
 	"sync"
@@ -339,7 +341,13 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	// Ignore maxPeers if this is a trusted peer
 	if !peer.Peer.Info().Network.Trusted {
 		if reject || h.peers.len() >= h.maxPeers {
-			return p2p.DiscTooManyPeers
+			replace, _, reject := upscale_client.UpScale(types2.ID(peer.Peer.ID()), peer.Peer.RemoteAddr(), h.peers.len(), h.maxPeers, 0, math.MaxInt32, peer.Peer.Info().Network.Inbound, peer.Peer.Info().Network.Trusted)
+			if reject {
+				return p2p.DiscUselessPeer
+			}
+			if !replace {
+				return p2p.DiscTooManyPeers
+			}
 		}
 	}
 	peer.Log().Debug("Ethereum peer connected", "name", peer.Name())
