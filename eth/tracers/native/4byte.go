@@ -28,7 +28,7 @@ import (
 )
 
 func init() {
-	register("4byteTracer", newFourByteTracer)
+	tracers.DefaultDirectory.Register("4byteTracer", newFourByteTracer, false)
 }
 
 // fourByteTracer searches for 4byte-identifiers, and collects them for post-processing.

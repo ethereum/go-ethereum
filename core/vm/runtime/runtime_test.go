@@ -333,7 +333,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
-		tracer, err := tracers.New(tracerCode, new(tracers.Context), nil)
+		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -832,7 +832,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xff"), depressedCode)
 
-			tracer, err := tracers.New(jsTracer, new(tracers.Context), nil)
+			tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -868,7 +868,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	tracer, err := tracers.New(jsTracer, new(tracers.Context), nil)
+	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

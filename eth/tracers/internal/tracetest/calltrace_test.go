@@ -140,7 +140,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				}
 				_, statedb = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false)
 			)
-			tracer, err := tracers.New(tracerName, new(tracers.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -243,7 +243,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tracer, err := tracers.New(tracerName, new(tracers.Context), nil)
+		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
@@ -309,7 +309,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
 	// Create the tracer, the EVM environment and run it
-	tracer, err := tracers.New("callTracer", nil, nil)
+	tracer, err := tracers.DefaultDirectory.New("callTracer", nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
