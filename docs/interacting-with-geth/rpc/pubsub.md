@@ -110,7 +110,7 @@ returns
             },
             "subscription": "0x9ce59a13059e417087c02d3236a0b1cc"
         }
-        }
+}
 ```
 
 ### logs {#logs}
