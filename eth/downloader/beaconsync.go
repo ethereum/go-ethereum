@@ -308,10 +308,9 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
 				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
 					if number < tail.Number.Uint64() {
-						count := int(tail.Number.Uint64() - number) // it's capped by fsMinFullBlocks
-						headers := d.readHeaderRange(tail, count)
-						if len(headers) == count {
-							d.pivotHeader = headers[len(headers)-1]
+						dist := tail.Number.Uint64() - number
+						if len(localHeaders) >= int(dist) {
+							d.pivotHeader = localHeaders[dist-1]
 							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
 						}
 					}
