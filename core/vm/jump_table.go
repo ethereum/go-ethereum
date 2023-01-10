@@ -45,26 +45,57 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet         = newFrontierInstructionSet()
-	homesteadInstructionSet        = newHomesteadInstructionSet()
-	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
-	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
-	byzantiumInstructionSet        = newByzantiumInstructionSet()
-	constantinopleInstructionSet   = newConstantinopleInstructionSet()
-	istanbulInstructionSet         = newIstanbulInstructionSet()
-	berlinInstructionSet           = newBerlinInstructionSet()
-	londonInstructionSet           = newLondonInstructionSet()
-	mergeInstructionSet            = newMergeInstructionSet()
+	FrontierInstructionSet         = newFrontierInstructionSet()
+	HomesteadInstructionSet        = newHomesteadInstructionSet()
+	TangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
+	SpuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
+	ByzantiumInstructionSet        = newByzantiumInstructionSet()
+	ConstantinopleInstructionSet   = newConstantinopleInstructionSet()
+	IstanbulInstructionSet         = newIstanbulInstructionSet()
+	BerlinInstructionSet           = newBerlinInstructionSet()
+	LondonInstructionSet           = newLondonInstructionSet()
+	MergeInstructionSet            = newMergeInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-func validate(jt JumpTable) JumpTable {
+// DefaultJumpTable defines the default jump table used by the EVM interpreter.
+func DefaultJumpTable(rules params.Rules) (jumpTable *JumpTable) {
+	switch {
+	case rules.IsMerge:
+		jumpTable = &MergeInstructionSet
+	case rules.IsLondon:
+		jumpTable = &LondonInstructionSet
+	case rules.IsBerlin:
+		jumpTable = &BerlinInstructionSet
+	case rules.IsIstanbul:
+		jumpTable = &IstanbulInstructionSet
+	case rules.IsConstantinople:
+		jumpTable = &ConstantinopleInstructionSet
+	case rules.IsByzantium:
+		jumpTable = &ByzantiumInstructionSet
+	case rules.IsEIP158:
+		jumpTable = &SpuriousDragonInstructionSet
+	case rules.IsEIP150:
+		jumpTable = &TangerineWhistleInstructionSet
+	case rules.IsHomestead:
+		jumpTable = &HomesteadInstructionSet
+	default:
+		jumpTable = &FrontierInstructionSet
+	}
+
+	return jumpTable
+}
+
+// Validate checks if all the operations are set and if they are valid according to the
+// interpreter assumptions.
+func (jt JumpTable) Validate() error {
 	for i, op := range jt {
 		if op == nil {
-			panic(fmt.Sprintf("op %#x is not set", i))
+			return fmt.Errorf("op %#x is not set", i)
 		}
+
 		// The interpreter has an assumption that if the memorySize function is
 		// set, then the dynamicGas function is also set. This is a somewhat
 		// arbitrary assumption, and can be removed if we need to -- but it
@@ -72,10 +103,18 @@ func validate(jt JumpTable) JumpTable {
 		// in there, this little sanity check prevents us from merging in a
 		// change which violates it.
 		if op.memorySize != nil && op.dynamicGas == nil {
-			panic(fmt.Sprintf("op %v has dynamic memory but not dynamic gas", OpCode(i).String()))
+			return fmt.Errorf("op %v has dynamic memory but not dynamic gas", OpCode(i).String())
 		}
 	}
-	return jt
+
+	return nil
+}
+
+// MustValidate panics if the operations are not valid.
+func (jt JumpTable) MustValidate() {
+	if err := jt.Validate(); err != nil {
+		panic(err)
+	}
 }
 
 func newMergeInstructionSet() JumpTable {
@@ -86,7 +125,8 @@ func newMergeInstructionSet() JumpTable {
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
 	}
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newLondonInstructionSet returns the frontier, homestead, byzantium,
@@ -95,7 +135,8 @@ func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newBerlinInstructionSet returns the frontier, homestead, byzantium,
@@ -103,7 +144,8 @@ func newLondonInstructionSet() JumpTable {
 func newBerlinInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newIstanbulInstructionSet returns the frontier, homestead, byzantium,
@@ -115,7 +157,8 @@ func newIstanbulInstructionSet() JumpTable {
 	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
 	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
 
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newConstantinopleInstructionSet returns the frontier, homestead,
@@ -154,7 +197,8 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(4, 1),
 		memorySize:  memoryCreate2,
 	}
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newByzantiumInstructionSet returns the frontier, homestead and
@@ -190,14 +234,16 @@ func newByzantiumInstructionSet() JumpTable {
 		maxStack:   maxStack(2, 0),
 		memorySize: memoryRevert,
 	}
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // EIP 158 a.k.a Spurious Dragon
 func newSpuriousDragonInstructionSet() JumpTable {
 	instructionSet := newTangerineWhistleInstructionSet()
 	instructionSet[EXP].dynamicGas = gasExpEIP158
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // EIP 150 a.k.a Tangerine Whistle
@@ -210,7 +256,8 @@ func newTangerineWhistleInstructionSet() JumpTable {
 	instructionSet[CALL].constantGas = params.CallGasEIP150
 	instructionSet[CALLCODE].constantGas = params.CallGasEIP150
 	instructionSet[DELEGATECALL].constantGas = params.CallGasEIP150
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newHomesteadInstructionSet returns the frontier and homestead
@@ -225,7 +272,8 @@ func newHomesteadInstructionSet() JumpTable {
 		maxStack:    maxStack(6, 1),
 		memorySize:  memoryDelegateCall,
 	}
-	return validate(instructionSet)
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 // newFrontierInstructionSet returns the frontier instructions
@@ -1041,10 +1089,12 @@ func newFrontierInstructionSet() JumpTable {
 		}
 	}
 
-	return validate(tbl)
+	tbl.MustValidate()
+	return tbl
 }
 
-func copyJumpTable(source *JumpTable) *JumpTable {
+// CopyJumpTable creates copy of the operations from the provided source JumpTable.
+func CopyJumpTable(source *JumpTable) *JumpTable {
 	dest := *source
 	for i, op := range source {
 		if op != nil {

@@ -1,4 +1,3 @@
-
 <!--
 Guiding Principles:
 
@@ -40,4 +39,5 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
+* [#3](https://github.com/evmos/go-ethereum/pull/3) Move the `JumpTable` defaults to a separate function.
 * [#2](https://github.com/evmos/go-ethereum/pull/2) Define `Interpreter` interface for the EVM.

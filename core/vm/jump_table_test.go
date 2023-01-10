@@ -28,7 +28,7 @@ func TestJumpTableCopy(t *testing.T) {
 	require.Equal(t, uint64(0), tbl[SLOAD].constantGas)
 
 	// a deep copy won't modify the shared jump table
-	deepCopy := copyJumpTable(&tbl)
+	deepCopy := CopyJumpTable(&tbl)
 	deepCopy[SLOAD].constantGas = 100
 	require.Equal(t, uint64(100), deepCopy[SLOAD].constantGas)
 	require.Equal(t, uint64(0), tbl[SLOAD].constantGas)

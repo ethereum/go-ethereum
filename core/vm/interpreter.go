@@ -61,32 +61,12 @@ type EVMInterpreter struct {
 func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
-		switch {
-		case evm.chainRules.IsMerge:
-			cfg.JumpTable = &mergeInstructionSet
-		case evm.chainRules.IsLondon:
-			cfg.JumpTable = &londonInstructionSet
-		case evm.chainRules.IsBerlin:
-			cfg.JumpTable = &berlinInstructionSet
-		case evm.chainRules.IsIstanbul:
-			cfg.JumpTable = &istanbulInstructionSet
-		case evm.chainRules.IsConstantinople:
-			cfg.JumpTable = &constantinopleInstructionSet
-		case evm.chainRules.IsByzantium:
-			cfg.JumpTable = &byzantiumInstructionSet
-		case evm.chainRules.IsEIP158:
-			cfg.JumpTable = &spuriousDragonInstructionSet
-		case evm.chainRules.IsEIP150:
-			cfg.JumpTable = &tangerineWhistleInstructionSet
-		case evm.chainRules.IsHomestead:
-			cfg.JumpTable = &homesteadInstructionSet
-		default:
-			cfg.JumpTable = &frontierInstructionSet
-		}
+		cfg.JumpTable = DefaultJumpTable(evm.chainRules)
+
 		var extraEips []int
 		if len(cfg.ExtraEips) > 0 {
 			// Deep-copy jumptable to prevent modification of opcodes in other tables
-			cfg.JumpTable = copyJumpTable(cfg.JumpTable)
+			cfg.JumpTable = CopyJumpTable(cfg.JumpTable)
 		}
 		for _, eip := range cfg.ExtraEips {
 			if err := EnableEIP(eip, cfg.JumpTable); err != nil {
