@@ -563,7 +563,7 @@ func (evm *EVM) parseContainer(b []byte) *Container {
 			return nil
 		} else if err != nil {
 			// Code was already validated, so no other errors should be possible.
-			panic(fmt.Sprintf("unexpected error: %v", err))
+			panic(fmt.Sprintf("unexpected error: %v\ncode: %s\n", err, common.Bytes2Hex(b)))
 		}
 		return &c
 	}

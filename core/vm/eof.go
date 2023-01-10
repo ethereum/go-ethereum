@@ -147,11 +147,11 @@ func (c *Container) MarshalBinary() []byte {
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte) error {
 	e := NewParseError
-	if len(b) < 14 {
-		return io.ErrUnexpectedEOF
-	}
 	if !hasEOFMagic(b) {
 		return e(ErrInvalidMagic, 0, "have %s, want %s", common.Bytes2Hex(b[:len(eofMagic)]), eofMagic)
+	}
+	if len(b) < 14 {
+		return io.ErrUnexpectedEOF
 	}
 	if !isEOFVersion1(b) {
 		return e(ErrInvalidVersion, 2, "have %d, want %d", b[2], eof1Version)
