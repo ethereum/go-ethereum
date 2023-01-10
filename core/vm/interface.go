@@ -92,3 +92,13 @@ type CallContext interface {
 	// Create creates a new contract
 	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
 }
+
+// Interpreter is used to run Ethereum based contracts and will utilize the
+// passed environment to query external sources for state information.
+// The Interpreter will run the byte code VM based on the passed
+// configuration.
+type Interpreter interface {
+	// Run loops and evaluates the contract's code with the given input data and returns
+	// the return byte-slice and an error if one occurred.
+	Run(contract *Contract, input []byte, static bool) ([]byte, error)
+}
