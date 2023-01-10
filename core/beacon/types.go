@@ -85,9 +85,16 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
+//go:generate go run github.com/fjl/gencodec -type ExecutableDataV2 -field-override executableDataV2Marshaling -out gen_edv2.go
+
 type ExecutableDataV2 struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+}
+
+// JSON type overrides for ExecutableDataV2.
+type executableDataV2Marshaling struct {
+	BlockValue *hexutil.Big
 }
 
 type PayloadStatusV1 struct {
