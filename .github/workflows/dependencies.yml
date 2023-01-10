@@ -1,0 +1,28 @@
+name: "Dependency Review"
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+          check-latest: true
+      - name: "Checkout Repository"
+        uses: actions/checkout@v3
+      - uses: technote-space/get-diff-action@v6.1.2
+        with:
+          PATTERNS: |
+            **/**.go
+            go.mod
+            go.sum
+      - name: "Dependency Review"
+        uses: actions/dependency-review-action@v3
+        if: env.GIT_DIFF
+      - name: "Go vulnerability check"
+        run: make vulncheck
+        if: env.GIT_DIFF

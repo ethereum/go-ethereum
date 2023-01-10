@@ -1,0 +1,72 @@
+name: Lint
+# Lint runs golangci-lint over the entire ethermint repository This workflow is
+# run on every pull request and push to main The `golangci` will pass without
+# running if no *.{go, mod, sum} files have been changed.
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+jobs:
+  golangci:
+    name: Run golangci-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Required: setup-go, for all versions v3.0.0+ of golangci-lint
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+          check-latest: true
+      - uses: actions/checkout@v3
+      - uses: technote-space/get-diff-action@v6.1.2
+        with:
+          PATTERNS: |
+            **/**.go
+            go.mod
+            go.sum
+      - uses: golangci/golangci-lint-action@v3.3.1
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: latest
+          args: --timeout 10m
+          github-token: ${{ secrets.github_token }}
+        # Check only if there are differences in the source code
+        if: env.GIT_DIFF
+  markdown-lint:
+    name: Run markdown-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: technote-space/get-diff-action@v6.1.2
+        with:
+          PATTERNS: |
+            docs/**/*.md
+            x/**/*.md
+            README.md
+      - uses: nosborn/github-action-markdown-cli@v3.2.0
+        with:
+          files: .
+          config_file: .markdownlint.yml
+          ignore_path: .markdownlintignore
+        # Check only if there are differences in the source code
+        if: env.GIT_DIFF
+  gomod2nix:
+    name: Check gomod2nix.toml file is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+      - uses: cachix/install-nix-action@v18
+      - uses: cachix/cachix-action@v12
+        with:
+          name: ethermint
+      - uses: technote-space/get-diff-action@v6.1.2
+        with:
+          PATTERNS: |
+            **/**.py
+      - name: run gomod2nix
+        run: |
+          nix run -f ./nix gomod2nix
+          git diff --no-ext-diff --exit-code
+        if: env.GIT_DIFF
