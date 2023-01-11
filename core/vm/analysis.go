@@ -130,39 +130,40 @@ func eofCodeBitmap(code []byte) bitvec {
 // code validation.
 func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 	for pc := uint64(0); pc < uint64(len(code)); {
-		op := OpCode(code[pc])
+		var (
+			op      = OpCode(code[pc])
+			numbits uint8
+		)
 		pc++
 
-		// RJUMP and RJUMPI always have 2 byte operand.
-		if int8(op) == int8(RJUMP) || int8(op) == int8(RJUMPI) {
-			bits.setN(set2BitsMask, pc)
-			pc += 2
-			continue
-		}
-		var numbits uint8
-		if int8(op) >= int8(PUSH1) && int8(op) <= int8(PUSH32) {
+		switch {
+		case op >= PUSH1 && op <= PUSH32:
 			numbits = uint8(op - PUSH1 + 1)
-		} else if int8(op) == int8(RJUMPV) {
+		case op == RJUMP || op == RJUMPI || op == CALLF:
+			numbits = 2
+		case op == RJUMPV:
 			// RJUMPV is unique as it has a variable sized operand.
 			// The total size is determined by the count byte which
 			// immediate proceeds RJUMPV. Truncation will be caught
 			// in other validation steps -- for now, just return a
 			// valid bitmap for as much of the code as is
 			// available.
-			if pc >= uint64(len(code)) {
+			end := uint64(len(code))
+			if pc >= end {
 				// Count missing, no more bits to mark.
 				return bits
 			}
 			numbits = code[pc]*2 + 1
-			if pc+uint64(numbits) > uint64(len(code)) {
+			if pc+uint64(numbits) > end {
 				// Jump table is truncated, mark as many bits
 				// as possible.
-				numbits = uint8(len(code) - int(pc))
+				numbits = uint8(end - pc)
 			}
-		} else {
-			// If not PUSH (the int8(op) > int(PUSH32) is always false).
+		default:
+			// Op had no immediate operand, continue.
 			continue
 		}
+
 		if numbits >= 8 {
 			for ; numbits >= 16; numbits -= 16 {
 				bits.set16(pc)
