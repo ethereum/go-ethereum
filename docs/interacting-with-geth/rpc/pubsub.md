@@ -117,7 +117,7 @@ returns
 
 Returns logs that are included in new imported blocks and match the given filter criteria.
 
-In case of a chain reorganization previous sent logs that are on the old chain will be resend with the `removed` property set to true. Logs from transactions that ended up in the new chain are emitted. Therefore a subscription can emit logs for the same transaction multiple times.
+In case of a chain reorganization previous sent logs that are on the old chain will be resent with the `removed` property set to true. Logs from transactions that ended up in the new chain are emitted. Therefore a subscription can emit logs for the same transaction multiple times.
 
 #### Parameters
 
