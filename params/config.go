@@ -683,17 +683,17 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 }
 
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
-func (c *ChainConfig) IsShanghai(time *big.Int) bool {
+func (c *ChainConfig) IsShanghai(time uint64) bool {
 	return isTimestampForked(c.ShanghaiTime, time)
 }
 
 // IsCancun returns whether num is either equal to the Cancun fork time or greater.
-func (c *ChainConfig) IsCancun(time *big.Int) bool {
+func (c *ChainConfig) IsCancun(time uint64) bool {
 	return isTimestampForked(c.CancunTime, time)
 }
 
 // IsPrague returns whether num is either equal to the Prague fork time or greater.
-func (c *ChainConfig) IsPrague(time *big.Int) bool {
+func (c *ChainConfig) IsPrague(time uint64) bool {
 	return isTimestampForked(c.PragueTime, time)
 }
 
@@ -702,7 +702,7 @@ func (c *ChainConfig) IsPrague(time *big.Int) bool {
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
 	var (
 		bhead = new(big.Int).SetUint64(height)
-		btime = new(big.Int).SetUint64(time)
+		btime = time
 	)
 	// Iterate checkCompatible to find the lowest conflict.
 	var lasterr *ConfigCompatError
@@ -714,7 +714,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 		lasterr = err
 
 		if err.RewindToTime > 0 {
-			btime.SetUint64(err.RewindToTime)
+			btime = err.RewindToTime
 		} else {
 			bhead.SetUint64(err.RewindToBlock)
 		}
@@ -789,7 +789,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	return nil
 }
 
-func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp *big.Int) *ConfigCompatError {
+func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
 	if isForkBlockIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, headNumber) {
 		return newBlockCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
 	}
@@ -895,18 +895,18 @@ func configBlockEqual(x, y *big.Int) bool {
 
 // isForkTimestampIncompatible returns true if a fork scheduled at timestamp s1
 // cannot be rescheduled to timestamp s2 because head is already past the fork.
-func isForkTimestampIncompatible(s1, s2, head *big.Int) bool {
+func isForkTimestampIncompatible(s1, s2 *big.Int, head uint64) bool {
 	return (isTimestampForked(s1, head) || isTimestampForked(s2, head)) && !configTimestampEqual(s1, s2)
 }
 
 // isTimestampForked returns whether a fork scheduled at timestamp s is active
 // at the given head timestamp. Whilst this method is the same as isBlockForked,
 // they are explicitly separate for clearer reading.
-func isTimestampForked(s, head *big.Int) bool {
-	if s == nil || head == nil {
+func isTimestampForked(s *big.Int, head uint64) bool {
+	if s == nil {
 		return false
 	}
-	return s.Cmp(head) <= 0
+	return s.IsUint64() && s.Uint64() <= head
 }
 
 func configTimestampEqual(x, y *big.Int) bool {
@@ -1020,8 +1020,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       c.IsShanghai(timestamp),
-		isCancun:         c.IsCancun(timestamp),
-		isPrague:         c.IsPrague(timestamp),
+		IsShanghai:       timestamp.IsUint64() && c.IsShanghai(timestamp.Uint64()),
+		isCancun:         timestamp.IsUint64() && c.IsCancun(timestamp.Uint64()),
+		isPrague:         timestamp.IsUint64() && c.IsPrague(timestamp.Uint64()),
 	}
 }

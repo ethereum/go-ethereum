@@ -140,7 +140,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 		// Check intrinsic gas
 		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(new(big.Int))); err != nil {
+			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(0)); err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
