@@ -135,7 +135,7 @@ Clef also has `account_signTypedData` that signs data structured according to [E
 
 Example call (use the following as a template for `<data>` in `curl --data <data> -X POST localhost:8550 -H "Content-Type: application/json"`)
 
-```sh
+```json
 {
   "id": 68,
   "jsonrpc": "2.0",
