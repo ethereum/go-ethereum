@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -314,22 +315,24 @@ func TestStateProcessorErrors(t *testing.T) {
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
 				Config: &params.ChainConfig{
-					ChainID:             big.NewInt(1),
-					HomesteadBlock:      big.NewInt(0),
-					EIP150Block:         big.NewInt(0),
-					EIP155Block:         big.NewInt(0),
-					EIP158Block:         big.NewInt(0),
-					ByzantiumBlock:      big.NewInt(0),
-					ConstantinopleBlock: big.NewInt(0),
-					PetersburgBlock:     big.NewInt(0),
-					IstanbulBlock:       big.NewInt(0),
-					MuirGlacierBlock:    big.NewInt(0),
-					BerlinBlock:         big.NewInt(0),
-					LondonBlock:         big.NewInt(0),
-					ArrowGlacierBlock:   big.NewInt(0),
-					GrayGlacierBlock:    big.NewInt(0),
-					MergeNetsplitBlock:  big.NewInt(0),
-					ShanghaiTime:        u64(0),
+					ChainID:                       big.NewInt(1),
+					HomesteadBlock:                big.NewInt(0),
+					EIP150Block:                   big.NewInt(0),
+					EIP155Block:                   big.NewInt(0),
+					EIP158Block:                   big.NewInt(0),
+					ByzantiumBlock:                big.NewInt(0),
+					ConstantinopleBlock:           big.NewInt(0),
+					PetersburgBlock:               big.NewInt(0),
+					IstanbulBlock:                 big.NewInt(0),
+					MuirGlacierBlock:              big.NewInt(0),
+					BerlinBlock:                   big.NewInt(0),
+					LondonBlock:                   big.NewInt(0),
+					ArrowGlacierBlock:             big.NewInt(0),
+					GrayGlacierBlock:              big.NewInt(0),
+					MergeNetsplitBlock:            big.NewInt(0),
+					TerminalTotalDifficulty:       big.NewInt(0),
+					TerminalTotalDifficultyPassed: true,
+					ShanghaiTime:                  u64(0),
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{
@@ -339,7 +342,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 			}
 			genesis        = gspec.MustCommit(db)
-			blockchain, _  = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 			smallInitCode  = [320]byte{}
 		)
@@ -361,7 +364,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0x39b7436cb432d3662a25626474282c5c4c1a213326fd87e4e18a91477bae98b2]: intrinsic gas too low: have 54299, want 54300",
 			},
 		} {
-			block := GenerateBadBlock(genesis, ethash.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(genesis, beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -378,22 +381,30 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
+	difficulty := big.NewInt(0)
+	if !config.TerminalTotalDifficultyPassed {
+		difficulty = engine.CalcDifficulty(&fakeChainReader{config}, parent.Time()+10, &types.Header{
 			Number:     parent.Number(),
 			Time:       parent.Time(),
 			Difficulty: parent.Difficulty(),
 			UncleHash:  parent.UncleHash(),
-		}),
-		GasLimit:  parent.GasLimit(),
-		Number:    new(big.Int).Add(parent.Number(), common.Big1),
-		Time:      parent.Time() + 10,
-		UncleHash: types.EmptyUncleHash,
+		})
+	}
+
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Coinbase:   parent.Coinbase(),
+		Difficulty: difficulty,
+		GasLimit:   parent.GasLimit(),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
+		Time:       parent.Time() + 10,
+		UncleHash:  types.EmptyUncleHash,
 	}
 	if config.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(config, parent.Header())
+	}
+	if config.IsShanghai(header.Time) {
+		header.WithdrawalsHash = &types.EmptyRootHash
 	}
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
