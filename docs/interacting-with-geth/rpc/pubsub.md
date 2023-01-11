@@ -166,7 +166,7 @@ returns
             "subscription":"0xc3b33aa549fb9a60e95d21862596617c",
             "result":"0xd6fdc5cc41a9959e922f30cb772a9aef46f4daea279307bc5f7024edc4ccd7fa"
         }
-    }
+}
 ```
 
 ### syncing {#syncing}
