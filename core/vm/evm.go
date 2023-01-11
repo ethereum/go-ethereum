@@ -416,6 +416,32 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
+
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only. If
+	// the initcode is EOF, contract.Container will be set.
+	contract := NewContract(caller, AccountRef(address), value, gas)
+	contract.SetCodeOptionalHash(&address, codeAndHash)
+
+	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
+	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
+	if evm.chainRules.IsShanghai {
+		if isInitcodeEOF {
+			// If the initcode is EOF, verify it is well-formed.
+			var c Container
+			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
+				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOF, err)
+			}
+			if err := c.ValidateCode(evm.interpreter.cfg.JumpTableEOF); err != nil {
+				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOF, err)
+			}
+			contract.Container = &c
+		} else if fromEOF {
+			// Don't allow EOF contract to execute legacy initcode.
+			return nil, common.Address{}, gas, ErrLegacyCode
+		}
+	}
+	// Check for nonce overflow and then update caller nonce by 1.
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	if nonce+1 < nonce {
 		return nil, common.Address{}, gas, ErrNonceUintOverflow
@@ -430,32 +456,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
-	}
-
-	// Initialise a new contract and set the code that is to be used by the EVM.
-	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, AccountRef(address), value, gas)
-	contract.SetCodeOptionalHash(&address, codeAndHash)
-
-	var (
-		isCallerEOF   = fromEOF
-		isInitcodeEOF = hasEOFMagic(codeAndHash.code)
-	)
-	if evm.chainRules.IsShanghai {
-		if isCallerEOF && !isInitcodeEOF {
-			// Don't allow EOF contract to run legacy initcode.
-			return nil, common.Address{}, gas, ErrLegacyCode
-		} else if isInitcodeEOF {
-			// If the initcode is EOF, verify it is well-formed.
-			var c Container
-			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
-				return nil, common.Address{}, gas, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
-			}
-			if err := c.ValidateCode(evm.interpreter.cfg.JumpTableEOF); err != nil {
-				return nil, common.Address{}, gas, fmt.Errorf("%v: %v", ErrInvalidEOF, err)
-			}
-			contract.Container = &c
-		}
 	}
 
 	// Create a new account on the state
