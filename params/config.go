@@ -1020,8 +1020,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       timestamp.IsUint64() && c.IsShanghai(timestamp.Uint64()),
-		isCancun:         timestamp.IsUint64() && c.IsCancun(timestamp.Uint64()),
-		isPrague:         timestamp.IsUint64() && c.IsPrague(timestamp.Uint64()),
+		IsShanghai:       timestamp != nil && (!timestamp.IsUint64() || c.IsShanghai(timestamp.Uint64())),
+		isCancun:         timestamp != nil && (!timestamp.IsUint64() || c.IsCancun(timestamp.Uint64())),
+		isPrague:         timestamp != nil && (!timestamp.IsUint64() || c.IsPrague(timestamp.Uint64())),
 	}
 }

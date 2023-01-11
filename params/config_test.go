@@ -116,3 +116,25 @@ func TestCheckCompatible(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigRules(t *testing.T) {
+	c := &ChainConfig{
+		ShanghaiTime: big.NewInt(500),
+	}
+	var stamp *big.Int
+	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
+		t.Errorf("expected %v to not be shanghai", stamp)
+	}
+	stamp = big.NewInt(0)
+	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
+		t.Errorf("expected %v to not be shanghai", stamp)
+	}
+	stamp = big.NewInt(500)
+	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", stamp)
+	}
+	stamp, _ = big.NewInt(0).SetString("0xffffffff0000000000000000000000000000000000000000", 0)
+	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
+		t.Errorf("expected %v to be shanghai", stamp)
+	}
+}
