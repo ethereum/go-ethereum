@@ -4276,6 +4276,8 @@ func TestEIP3651(t *testing.T) {
 
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
 	gspec.Config.ShanghaiTime = common.Big0
 	signer := types.LatestSigner(gspec.Config)
 
