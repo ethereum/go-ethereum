@@ -62,6 +62,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		switch {
 		case evm.chainRules.IsSharding:
 			cfg.JumpTable = &shardingInstructionSet
+		case evm.chainRules.IsShanghai:
+			cfg.JumpTable = &shanghaiInstructionSet
 		case evm.chainRules.IsMerge:
 			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:

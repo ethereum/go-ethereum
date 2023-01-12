@@ -547,8 +547,8 @@ func TestExchangeTransitionConfig(t *testing.T) {
 
 /*
 TestNewPayloadOnInvalidChain sets up a valid chain and tries to feed blocks
-from an invalid chain to test if latestValidHash (LVH) works correctly.
-
+from an invalid chain to test if latestValidHash (LVH) works correctly
+.
 We set up the following chain where P1 ... Pn and P1” are valid while
 P1' is invalid.
 We expect
@@ -861,11 +861,11 @@ func TestInvalidBloom(t *testing.T) {
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 	genesis, preMergeBlocks := generateChain(100, false)
-	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
 
+	genesis.Config.TerminalTotalDifficulty = preMergeBlocks[0].Difficulty() //.Sub(genesis.Config.TerminalTotalDifficulty, preMergeBlocks[len(preMergeBlocks)-1].Difficulty())
 	var (
 		api    = NewConsensusAPI(ethservice)
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
@@ -997,10 +997,9 @@ func TestSimultaneousNewBlock(t *testing.T) {
 func TestEIP4844(t *testing.T) {
 	genesis, blocks := generateChain(10, true)
 	lastBlockTime := blocks[len(blocks)-1].Time()
-	genesis.Config.ShanghaiTime = new(uint64)
-	*genesis.Config.ShanghaiTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
-	genesis.Config.ShardingForkTime = new(uint64)
-	*genesis.Config.ShardingForkTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	nextBlockTime := new(big.Int).SetUint64(lastBlockTime + 10) // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShanghaiTime = nextBlockTime
+	genesis.Config.ShardingForkTime = nextBlockTime
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, blocks)
@@ -1028,13 +1027,18 @@ func TestEIP4844(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if status, err := api.NewPayloadV3(*execData.ExecutionPayload); err != nil {
+	ep := execData.ExecutionPayload
+	if ep.ExcessDataGas == nil {
+		t.Fatal("got nil ExcessDataGas")
+	}
+
+	if status, err := api.NewPayloadV3(*ep); err != nil {
 		t.Fatalf("error validating payload: %v", err)
 	} else if status.Status != beacon.VALID {
 		t.Fatalf("invalid payload")
 	}
 
-	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
+	fcState.HeadBlockHash = ep.BlockHash
 	_, err = api.ForkchoiceUpdatedV2(fcState, nil)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
@@ -1049,8 +1053,8 @@ func TestEIP4844(t *testing.T) {
 func TestEIP4844Withdrawals(t *testing.T) {
 	genesis, blocks := generateChain(10, true)
 	lastBlockTime := blocks[len(blocks)-1].Time()
-	genesis.Config.ShanghaiTime = new(uint64)
-	*genesis.Config.ShanghaiTime = lastBlockTime + 10 // chainmakers block time is fixed at 10 seconds
+	nextBlockTime := new(big.Int).SetUint64(lastBlockTime + 10) // chainmakers block time is fixed at 10 seconds
+	genesis.Config.ShanghaiTime = nextBlockTime
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, blocks)
@@ -1062,7 +1066,7 @@ func TestEIP4844Withdrawals(t *testing.T) {
 	// 10: Build Shanghai block with no withdrawals.
 	parent := ethservice.BlockChain().CurrentHeader()
 	params := beacon.PayloadAttributes{
-		Timestamp:   parent.Time + 5,
+		Timestamp:   parent.Time + 10,
 		Withdrawals: make([]*types.Withdrawal, 0),
 	}
 	fcState := beacon.ForkchoiceStateV1{
@@ -1085,6 +1089,6 @@ func TestEIP4844Withdrawals(t *testing.T) {
 		t.Fatalf("mismatch state roots (got: %s, want: %s)", ep.StateRoot, blocks[8].Root())
 	}
 	if ep.Withdrawals == nil || len(ep.Withdrawals) != 0 {
-		t.Fatalf("expected empty withdrawals list. got %v", ep.Withdrawals)
+		t.Fatalf("expected empty withdrawals list. got %#v", ep.Withdrawals)
 	}
 }

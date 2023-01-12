@@ -95,6 +95,11 @@ func (b *BlockGen) SetDifficulty(diff *big.Int) {
 	b.header.Difficulty = diff
 }
 
+// SetPos makes the header a PoS-header (0 difficulty)
+func (b *BlockGen) SetPoS() {
+	b.header.Difficulty = new(big.Int)
+}
+
 // addTx adds a transaction to the generated block. If no coinbase has
 // been set, the block's coinbase is set to the zero address.
 //
@@ -296,7 +301,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			shanghai := config.IsShanghai(b.header.Time)
+			shanghai := config.IsShanghai(b.header.TimeBig())
 			if shanghai && b.withdrawals == nil {
 				// need to make empty list to denote non-nil, but empty withdrawals to calc withdrawals hash
 				b.withdrawals = make([]*types.Withdrawal, 0)

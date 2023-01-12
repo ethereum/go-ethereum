@@ -64,7 +64,7 @@ func init() {
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            big.NewInt(0),
-		ShanghaiTime:                  new(uint64),
+		ShanghaiTime:                  big.NewInt(0),
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(params.EthashConfig),

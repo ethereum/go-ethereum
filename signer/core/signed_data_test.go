@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"strings"
@@ -824,5 +825,26 @@ func TestComplexTypedData(t *testing.T) {
 	expSigHash := common.FromHex("0x42b1aca82bb6900ff75e90a136de550a58f1a220a071704088eabd5e6ce20446")
 	if !bytes.Equal(expSigHash, sighash) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
+	}
+}
+
+func TestGnosisSafe(t *testing.T) {
+	// json missing chain id
+	js := "{\n  \"safe\": \"0x899FcB1437DE65DC6315f5a69C017dd3F2837557\",\n  \"to\": \"0x899FcB1437DE65DC6315f5a69C017dd3F2837557\",\n  \"value\": \"0\",\n  \"data\": \"0x0d582f13000000000000000000000000d3ed2b8756b942c98c851722f3bd507a17b4745f0000000000000000000000000000000000000000000000000000000000000005\",\n  \"operation\": 0,\n  \"gasToken\": \"0x0000000000000000000000000000000000000000\",\n  \"safeTxGas\": 0,\n  \"baseGas\": 0,\n  \"gasPrice\": \"0\",\n  \"refundReceiver\": \"0x0000000000000000000000000000000000000000\",\n  \"nonce\": 0,\n  \"executionDate\": null,\n  \"submissionDate\": \"2022-02-23T14:09:00.018475Z\",\n  \"modified\": \"2022-12-01T15:52:21.214357Z\",\n  \"blockNumber\": null,\n  \"transactionHash\": null,\n  \"safeTxHash\": \"0x6f0f5cffee69087c9d2471e477a63cab2ae171cf433e754315d558d8836274f4\",\n  \"executor\": null,\n  \"isExecuted\": false,\n  \"isSuccessful\": null,\n  \"ethGasPrice\": null,\n  \"maxFeePerGas\": null,\n  \"maxPriorityFeePerGas\": null,\n  \"gasUsed\": null,\n  \"fee\": null,\n  \"origin\": \"https://gnosis-safe.io\",\n  \"dataDecoded\": {\n    \"method\": \"addOwnerWithThreshold\",\n    \"parameters\": [\n      {\n        \"name\": \"owner\",\n        \"type\": \"address\",\n        \"value\": \"0xD3Ed2b8756b942c98c851722F3bd507a17B4745F\"\n      },\n      {\n        \"name\": \"_threshold\",\n        \"type\": \"uint256\",\n        \"value\": \"5\"\n      }\n    ]\n  },\n  \"confirmationsRequired\": 4,\n  \"confirmations\": [\n    {\n      \"owner\": \"0x30B714E065B879F5c042A75Bb40a220A0BE27966\",\n      \"submissionDate\": \"2022-03-01T14:56:22Z\",\n      \"transactionHash\": \"0x6d0a9c83ac7578ef3be1f2afce089fb83b619583dfa779b82f4422fd64ff3ee9\",\n      \"signature\": \"0x00000000000000000000000030b714e065b879f5c042a75bb40a220a0be27966000000000000000000000000000000000000000000000000000000000000000001\",\n      \"signatureType\": \"APPROVED_HASH\"\n    },\n    {\n      \"owner\": \"0x8300dFEa25Da0eb744fC0D98c23283F86AB8c10C\",\n      \"submissionDate\": \"2022-12-01T15:52:21.214357Z\",\n      \"transactionHash\": null,\n      \"signature\": \"0xbce73de4cc6ee208e933a93c794dcb8ba1810f9848d1eec416b7be4dae9854c07dbf1720e60bbd310d2159197a380c941cfdb55b3ce58f9dd69efd395d7bef881b\",\n      \"signatureType\": \"EOA\"\n    }\n  ],\n  \"trusted\": true,\n  \"signatures\": null\n}\n"
+	var gnosisTx core.GnosisSafeTx
+	if err := json.Unmarshal([]byte(js), &gnosisTx); err != nil {
+		t.Fatal(err)
+	}
+	sighash, _, err := apitypes.TypedDataAndHash(gnosisTx.ToTypedData())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+		t.Fatal("expected inequality")
+	}
+	gnosisTx.ChainId = (*math.HexOrDecimal256)(big.NewInt(1))
+	sighash, _, _ = apitypes.TypedDataAndHash(gnosisTx.ToTypedData())
+	if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+		t.Fatal("expected equality")
 	}
 }

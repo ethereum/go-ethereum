@@ -255,6 +255,7 @@ type TxPool struct {
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are using EIP-2718 type transactions.
 	eip1559  bool // Fork indicator whether we are using EIP-1559 type transactions.
+	shanghai bool // Fork indicator whether we are in the Shanghai stage.
 	eip4844  bool // Fork indicator whether we are using EIP-4844 type transactions.
 
 	currentState         *state.StateDB // Current state in the blockchain head
@@ -657,7 +658,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return core.ErrInsufficientFunds
 	}
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul)
+	// Ensure the transaction has more gas than the basic tx fee.
+	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
 	if err != nil {
 		return err
 	}
@@ -1406,7 +1408,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 	pool.eip2718 = pool.chainconfig.IsBerlin(next)
 	pool.eip1559 = pool.chainconfig.IsLondon(next)
-	pool.eip4844 = pool.chainconfig.IsSharding(uint64(time.Now().Unix()))
+	now := big.NewInt(time.Now().Unix())
+	pool.shanghai = pool.chainconfig.IsShanghai(now)
+	pool.eip4844 = pool.chainconfig.IsSharding(now)
 }
 
 // promoteExecutables moves transactions that have become processable from the

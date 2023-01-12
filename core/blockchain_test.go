@@ -1961,7 +1961,8 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			Alloc:   GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer = types.LatestSigner(gspec.Config)
+		signer     = types.LatestSigner(gspec.Config)
+		mergeBlock = math.MaxInt32
 	)
 	// Generate and import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil)
@@ -1972,6 +1973,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 	// Activate the transition since genesis if required
 	if mergePoint == 0 {
+		mergeBlock = 0
 		merger.ReachTTD()
 		merger.FinalizePoS()
 
@@ -1984,6 +1986,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
+		if int(gen.header.Number.Uint64()) >= mergeBlock {
+			gen.SetPoS()
+		}
 		nonce++
 	})
 	if n, err := chain.InsertChain(blocks); err != nil {
@@ -2008,7 +2013,10 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		merger.ReachTTD()
 		merger.FinalizePoS()
 		// Set the terminal total difficulty in the config
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
+		ttd := big.NewInt(int64(len(blocks)))
+		ttd.Mul(ttd, params.GenesisDifficulty)
+		gspec.Config.TerminalTotalDifficulty = ttd
+		mergeBlock = len(blocks)
 	}
 
 	// Generate the sidechain
@@ -2020,6 +2028,9 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 	parent := blocks[parentIndex]
 	fork, _ := GenerateChain(gspec.Config, parent, engine, genDb, 2*TriesInMemory, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{2})
+		if int(b.header.Number.Uint64()) >= mergeBlock {
+			b.SetPoS()
+		}
 	})
 	// Prepend the parent(s)
 	var sidechain []*types.Block
@@ -2228,25 +2239,45 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			BaseFee: big.NewInt(params.InitialBaseFee),
 			Config:  &chainConfig,
 		}
-		engine = beacon.New(ethash.NewFaker())
+		engine     = beacon.New(ethash.NewFaker())
+		mergeBlock = uint64(math.MaxUint64)
 	)
 	// Apply merging since genesis
 	if mergeHeight == 0 {
 		genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+		mergeBlock = uint64(0)
 	}
-	genDb, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	genDb, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 32,
+		func(i int, b *BlockGen) {
+			if b.header.Number.Uint64() >= mergeBlock {
+				b.SetPoS()
+			}
+			b.SetCoinbase(common.Address{1})
+		})
 
 	// Apply merging after the first segment
 	if mergeHeight == 1 {
-		genesis.Config.TerminalTotalDifficulty = big.NewInt(int64(len(blocks)))
+		// TTD is genesis diff + blocks
+		ttd := big.NewInt(1 + int64(len(blocks)))
+		ttd.Mul(ttd, params.GenesisDifficulty)
+		genesis.Config.TerminalTotalDifficulty = ttd
+		mergeBlock = uint64(len(blocks))
 	}
 	// Longer chain and shorter chain
-	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		if b.header.Number.Uint64() >= mergeBlock {
+			b.SetPoS()
+		}
+	})
 	blocks3, receipts3 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9) // Time shifted, difficulty shouldn't be changed
+		if b.header.Number.Uint64() >= mergeBlock {
+			b.SetPoS()
+		}
 	})
-
 	// Import the shared chain and the original canonical one
 	chaindb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 	if err != nil {
@@ -2270,7 +2301,10 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers, 1)
+			if err != nil {
+				return fmt.Errorf("index %d, number %d: %w", i, headers[i].Number, err)
+			}
 			return err
 		}
 		asserter = func(t *testing.T, block *types.Block) {
@@ -2284,9 +2318,9 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
 			}
-			_, err := chain.InsertHeaderChain(headers, 1)
+			i, err := chain.InsertHeaderChain(headers, 1)
 			if err != nil {
-				return err
+				return fmt.Errorf("index %d: %w", i, err)
 			}
 			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
 			return err
@@ -2298,8 +2332,11 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		}
 	} else {
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
-			_, err := chain.InsertChain(blocks)
-			return err
+			i, err := chain.InsertChain(blocks)
+			if err != nil {
+				return fmt.Errorf("index %d: %w", i, err)
+			}
+			return nil
 		}
 		asserter = func(t *testing.T, block *types.Block) {
 			if chain.CurrentBlock().Hash() != block.Hash() {
@@ -4139,7 +4176,8 @@ func TestDataBlobTxs(t *testing.T) {
 	// Block 1          : ""
 	// Block 2          : Sharding
 	var time uint64 = 2 * 10 // block time is 10 seconds, so this corresponds to second block.
-	gspec.Config.ShardingForkTime = &time
+	gspec.Config.ShanghaiTime = new(big.Int).SetUint64(time)
+	gspec.Config.ShardingForkTime = new(big.Int).SetUint64(time)
 	genesis := gspec.MustCommit(db)
 	signer := types.LatestSigner(gspec.Config)
 
@@ -4333,7 +4371,7 @@ func TestEIP3651(t *testing.T) {
 
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
-	gspec.Config.ShanghaiTime = new(uint64)
+	gspec.Config.ShanghaiTime = common.Big0
 	signer := types.LatestSigner(gspec.Config)
 
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {

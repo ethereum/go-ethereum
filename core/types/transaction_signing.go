@@ -38,9 +38,10 @@ type sigCache struct {
 
 // MakeSigner returns a Signer based on the given chain config, block number and time.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, time uint64) Signer {
+	t := new(big.Int).SetUint64(time)
 	var signer Signer
 	switch {
-	case config.IsSharding(time):
+	case config.IsSharding(t):
 		signer = NewDankSigner(config.ChainID)
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSigner(config.ChainID)

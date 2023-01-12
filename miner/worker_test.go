@@ -609,7 +609,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 		}
 		_, isClique := engine.(*clique.Clique)
 		if !isClique {
-			if len(block.Extra()) != 0 {
+			if len(block.Extra()) != 2 {
 				t.Error("Unexpected extra field")
 			}
 			if block.Coinbase() != coinbase {
@@ -724,7 +724,8 @@ func testGenerateBlockWithBlobsAndImport(t *testing.T, isClique bool) {
 	}
 
 	chainConfig.LondonBlock = big.NewInt(0)
-	chainConfig.ShardingForkTime = new(uint64)
+	chainConfig.ShanghaiTime = big.NewInt(0)
+	chainConfig.ShardingForkTime = big.NewInt(0)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
 

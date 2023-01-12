@@ -156,8 +156,8 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch resetObjectChange) revert(s *StateDB) {
 	s.setStateObject(ch.prev)
-	if !ch.prevdestruct && s.snap != nil {
-		delete(s.snapDestructs, ch.prev.addrHash)
+	if !ch.prevdestruct {
+		delete(s.stateObjectsDestruct, ch.prev.address)
 	}
 }
 

@@ -556,7 +556,7 @@ type (
 	// before head header is updated. The method will return the actual block it
 	// updated the head to (missing state) and a flag if setHead should continue
 	// rewinding till that forcefully (exceeded ancient limits)
-	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (uint64, bool)
+	UpdateHeadBlocksCallback func(ethdb.KeyValueWriter, *types.Header) (*types.Header, bool)
 
 	// DeleteBlockContentCallback is a callback function that is called by SetHead
 	// before each header is deleted.
@@ -566,15 +566,46 @@ type (
 // SetHead rewinds the local chain to a new head. Everything above the new head
 // will be deleted and the new one set.
 func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+	hc.setHead(head, 0, updateFn, delFn)
+}
+
+// SetHeadWithTimestamp rewinds the local chain to a new head timestamp. Everything
+// above the new head will be deleted and the new one set.
+func (hc *HeaderChain) SetHeadWithTimestamp(time uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+	hc.setHead(0, time, updateFn, delFn)
+}
+
+// setHead rewinds the local chain to a new head block or a head timestamp.
+// Everything above the new head will be deleted and the new one set.
+func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn UpdateHeadBlocksCallback, delFn DeleteBlockContentCallback) {
+	// Sanity check that there's no attempt to undo the genesis block. This is
+	// a fairly synthetic case where someone enables a timestamp based fork
+	// below the genesis timestamp. It's nice to not allow that instead of the
+	// entire chain getting deleted.
+	if headTime > 0 && hc.genesisHeader.Time > headTime {
+		// Note, a critical error is quite brutal, but we should really not reach
+		// this point. Since pre-timestamp based forks it was impossible to have
+		// a fork before block 0, the setHead would always work. With timestamp
+		// forks it becomes possible to specify below the genesis. That said, the
+		// only time we setHead via timestamp is with chain config changes on the
+		// startup, so failing hard there is ok.
+		log.Crit("Rejecting genesis rewind via timestamp", "target", headTime, "genesis", hc.genesisHeader.Time)
+	}
 	var (
 		parentHash common.Hash
 		batch      = hc.chainDb.NewBatch()
 		origin     = true
 	)
-	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
+	done := func(header *types.Header) bool {
+		if headTime > 0 {
+			return header.Time <= headTime
+		}
+		return header.Number.Uint64() <= headBlock
+	}
+	for hdr := hc.CurrentHeader(); hdr != nil && !done(hdr); hdr = hc.CurrentHeader() {
 		num := hdr.Number.Uint64()
 
-		// Rewind block chain to new head.
+		// Rewind chain to new head
 		parent := hc.GetHeader(hdr.ParentHash, num-1)
 		if parent == nil {
 			parent = hc.genesisHeader
@@ -591,9 +622,9 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		markerBatch := hc.chainDb.NewBatch()
 		if updateFn != nil {
 			newHead, force := updateFn(markerBatch, parent)
-			if force && newHead < head {
-				log.Warn("Force rewinding till ancient limit", "head", newHead)
-				head = newHead
+			if force && ((headTime > 0 && newHead.Time < headTime) || (headTime == 0 && newHead.Number.Uint64() < headBlock)) {
+				log.Warn("Force rewinding till ancient limit", "head", newHead.Number.Uint64())
+				headBlock, headTime = newHead.Number.Uint64(), 0 // Target timestamp passed, continue rewind in block mode (cleaner)
 			}
 		}
 		// Update head header then.

@@ -271,8 +271,7 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideTerminalTotalDifficulty       *big.Int
-	OverrideTerminalTotalDifficultyPassed *bool
+	OverrideShanghai *big.Int
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -298,15 +297,11 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	applyOverrides := func(config *params.ChainConfig) {
 		if config != nil {
-			if overrides != nil && overrides.OverrideTerminalTotalDifficulty != nil {
-				config.TerminalTotalDifficulty = overrides.OverrideTerminalTotalDifficulty
-			}
-			if overrides != nil && overrides.OverrideTerminalTotalDifficultyPassed != nil {
-				config.TerminalTotalDifficultyPassed = *overrides.OverrideTerminalTotalDifficultyPassed
+			if overrides != nil && overrides.OverrideShanghai != nil {
+				config.ShanghaiTime = overrides.OverrideShanghai
 			}
 		}
 	}
-
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
@@ -373,12 +368,12 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
-	if height == nil {
-		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
+	head := rawdb.ReadHeadHeader(db)
+	if head == nil {
+		return newcfg, stored, fmt.Errorf("missing head header")
 	}
-	compatErr := storedcfg.CheckCompatible(newcfg, *height)
-	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
+	compatErr := storedcfg.CheckCompatible(newcfg, head.Number.Uint64(), head.Time)
+	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
 		return newcfg, stored, compatErr
 	}
 	// Don't overwrite if the old is identical to the new
@@ -479,10 +474,11 @@ func (g *Genesis) ToBlock() *types.Block {
 				head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 			}
 		}
-		if g.Config.IsShanghai(g.Timestamp) {
+		t := new(big.Int).SetUint64(g.Timestamp)
+		if g.Config.IsShanghai(t) {
 			head.WithdrawalsHash = &types.EmptyRootHash
 		}
-		if g.Config.IsSharding(g.Timestamp) {
+		if g.Config.IsSharding(t) {
 			head.SetExcessDataGas(g.ExcessDataGas)
 		}
 	}
