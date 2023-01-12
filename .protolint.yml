@@ -1,0 +1,174 @@
+---
+# Lint directives.
+lint:
+  # # Linter files to ignore.
+  # ignores:
+  #   - id: MESSAGE_NAMES_UPPER_CAMEL_CASE
+  #     files:
+  #       # NOTE: UNIX paths will be properly accepted by both UNIX and Windows.
+  #       - _example/proto/simple.proto
+  #   - id: ENUM_NAMES_UPPER_CAMEL_CASE
+  #     files:
+  #       - path/to/foo.proto
+
+  # # Linter files to walk.
+  # files:
+  #   # The specific files to exclude.
+  #   exclude:
+  #     # NOTE: UNIX paths will be properly accepted by both UNIX and Windows.
+  #     - path/to/file
+
+  # # Linter directories to walk.
+  # directories:
+  #   # The specific directories to exclude.
+  #   exclude:
+  #     # NOTE: UNIX paths will be properly accepted by both UNIX and Windows.
+  #     - path/to/dir
+
+  # Linter rules.
+  # Run `protolint list` to see all available rules.
+  rules:
+    # Determines whether or not to include the default set of linters.
+    no_default: true
+
+    # Set the default to all linters. This option works the other way around as no_default does.
+    # If you want to enable this option, delete the comment out below and no_default.
+    # all_default: true
+
+    # The specific linters to add.
+    add:
+      - FIELD_NAMES_LOWER_SNAKE_CASE
+      - MESSAGE_NAMES_UPPER_CAMEL_CASE
+      - MAX_LINE_LENGTH
+      - INDENT
+      # - SERVICE_NAMES_END_WITH
+      - FIELD_NAMES_EXCLUDE_PREPOSITIONS
+      - MESSAGE_NAMES_EXCLUDE_PREPOSITIONS
+      - FILE_NAMES_LOWER_SNAKE_CASE
+      - IMPORTS_SORTED
+      - PACKAGE_NAME_LOWER_CASE
+      - ORDER
+      - MESSAGES_HAVE_COMMENT
+      - SERVICES_HAVE_COMMENT
+      - RPCS_HAVE_COMMENT
+      - FIELDS_HAVE_COMMENT
+      - PROTO3_FIELDS_AVOID_REQUIRED
+      - PROTO3_GROUPS_AVOID
+      # - REPEATED_FIELD_NAMES_PLURALIZED
+      - ENUMS_HAVE_COMMENT
+      - ENUM_FIELDS_HAVE_COMMENT
+      - SYNTAX_CONSISTENT
+      - RPC_NAMES_UPPER_CAMEL_CASE
+      # - FILE_HAS_COMMENT
+      - QUOTE_CONSISTENT
+
+    # # The specific linters to remove.
+    # remove:
+    #   - RPC_NAMES_UPPER_CAMEL_CASE
+
+  # Linter rules option.
+  rules_option:
+    # MAX_LINE_LENGTH rule option.
+    max_line_length:
+      # Enforces a maximum line length
+      max_chars: 120
+      # Specifies the character count for tab characters
+      tab_chars: 2
+
+    # INDENT rule option.
+    indent:
+      # Available styles are 4(4-spaces), 2(2-spaces) or tab.
+      style: 2
+      # Specifies if it should stop considering and inserting new lines at the appropriate positions
+      # when the inner elements are on the same line. Default is false.
+      not_insert_newline: true
+
+    # # FILE_NAMES_LOWER_SNAKE_CASE rule option.
+    # file_names_lower_snake_case:
+    #   excludes:
+    #     - ../proto/invalidFileName.proto
+
+    # QUOTE_CONSISTENT rule option.
+    quote_consistent:
+      # Available quote are "double" or "single".
+      quote: double
+
+    # ENUM_FIELD_NAMES_ZERO_VALUE_END_WITH rule option.
+    enum_field_names_zero_value_end_with:
+      suffix: INVALID
+
+    # # SERVICE_NAMES_END_WITH rule option.
+    # service_names_end_with:
+    #   text: Service
+
+    # FIELD_NAMES_EXCLUDE_PREPOSITIONS rule option.
+    field_names_exclude_prepositions:
+      # The specific prepositions to determine if the field name includes.
+      prepositions:
+        - for
+        - at
+        - of
+      # The specific keywords including prepositions to ignore. E.g. end_of_support is a term you would like to use, and skip checking.
+      excludes:
+        - duration_of_decay
+
+    # # REPEATED_FIELD_NAMES_PLURALIZED rule option.
+    # ## The spec for each rules follows the implementation of https://github.com/gertd/go-pluralize.
+    # ## Plus, you can refer to this rule's test code.
+    # repeated_field_names_pluralized:
+    #   uncountable_rules:
+    #     - paper
+    #   irregular_rules:
+    #     Irregular: Regular
+
+    # MESSAGE_NAMES_EXCLUDE_PREPOSITIONS rule option.
+    message_names_exclude_prepositions:
+      # The specific prepositions to determine if the message name includes.
+      prepositions:
+        - With
+        - For
+        - Of
+      # # The specific keywords including prepositions to ignore. E.g. EndOfSupport is a term you would like to use, and skip checking.
+      # excludes:
+      #   - EndOfSupport
+
+    # #  RPC_NAMES_CASE rule option.
+    # rpc_names_case:
+    #   # The specific convention the name should conforms to.
+    #   ## Available conventions are "lower_camel_case", "upper_snake_case", or "lower_snake_case".
+    #   convention: upper_snake_case
+
+    # MESSAGES_HAVE_COMMENT rule option.
+    messages_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # SERVICES_HAVE_COMMENT rule option.
+    services_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # RPCS_HAVE_COMMENT rule option.
+    rpcs_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # FIELDS_HAVE_COMMENT rule option.
+    fields_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # ENUMS_HAVE_COMMENT rule option.
+    enums_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # ENUM_FIELDS_HAVE_COMMENT rule option.
+    enum_fields_have_comment:
+      # Comments need to begin with the name of the thing being described. default is false.
+      should_follow_golang_style: true
+
+    # # SYNTAX_CONSISTENT rule option.
+    # syntax_consistent:
+    #   # Default is proto3.
+    #   version: proto2
