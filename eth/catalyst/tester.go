@@ -77,7 +77,9 @@ func (tester *FullSyncTester) Start() error {
 				}
 				// Shoot out consensus events in order to trigger syncing.
 				data := beacon.BlockToExecutableData(tester.block)
-				tester.api.NewPayloadV1(*data)
+				if _, err := tester.api.NewPayloadV1(*data); err != nil {
+					log.Error("Error sending engine_newPayloadV1", "err", err)
+				}
 				tester.api.ForkchoiceUpdatedV1(beacon.ForkchoiceStateV1{
 					HeadBlockHash:      tester.block.Hash(),
 					SafeBlockHash:      tester.block.Hash(),
