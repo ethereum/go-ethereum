@@ -1102,6 +1102,7 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	var (
 		start = s.progress.Subchains[0].Tail // start deleting from the first known header
 		end   = number                       // delete until the requested threshold
+		batch = s.db.NewBatch()
 	)
 	s.progress.Subchains[0].Tail = number
 	s.progress.Subchains[0].Next = filled.ParentHash
@@ -1111,16 +1112,13 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 		// subchain forward to keep tracking the node's block imports
 		end = s.progress.Subchains[0].Head + 1 // delete the entire original range, including the head
 		s.progress.Subchains[0].Head = number  // assign a new head (tail is already assigned to this)
-	}
-	// Execute the trimming and the potential rewiring of the progress
-	batch := s.db.NewBatch()
 
-	if end != number {
 		// The entire original skeleton chain was deleted and a new one
 		// defined. Make sure the new single-header chain gets pushed to
 		// disk to keep internal state consistent.
 		rawdb.WriteSkeletonHeader(batch, filled)
 	}
+	// Execute the trimming and the potential rewiring of the progress
 	s.saveSyncStatus(batch)
 	for n := start; n < end; n++ {
 		// If the batch grew too big, flush it and continue with a new batch.
@@ -1176,8 +1174,13 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, err error) 
 		return nil, nil, err
 	}
 	head = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Head)
+	if head == nil {
+		return nil, nil, fmt.Errorf("head skeleton header %d is missing", progress.Subchains[0].Head)
+	}
 	tail = rawdb.ReadSkeletonHeader(s.db, progress.Subchains[0].Tail)
-
+	if tail == nil {
+		return nil, nil, fmt.Errorf("tail skeleton header %d is missing", progress.Subchains[0].Tail)
+	}
 	return head, tail, nil
 }
 
