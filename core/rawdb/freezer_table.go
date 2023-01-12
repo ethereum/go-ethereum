@@ -869,7 +869,9 @@ func (t *freezerTable) advanceHead() error {
 func (t *freezerTable) Sync() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-
+	if t.index == nil || t.head == nil {
+		return errClosed
+	}
 	var err error
 	trackError := func(e error) {
 		if e != nil && err == nil {
