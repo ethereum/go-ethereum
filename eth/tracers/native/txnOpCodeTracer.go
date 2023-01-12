@@ -161,6 +161,12 @@ func (t *txnOpCodeTracer) CaptureExit(output []byte, gasUsed uint64, err error) 
 		call.Output = bytesToHex(output)
 	} else {
 		call.Error = err.Error()
+		if err.Error() == "execution reverted" && len(output) > 0 {
+			call.Output = bytesToHex(output)
+			revertReason, _ := abi.UnpackRevert(output)
+			call.ErrorReason = revertReason
+		}
+
 		if call.Type == "CREATE" || call.Type == "CREATE2" {
 			call.To = ""
 		}
