@@ -3093,3 +3093,79 @@ func TestPoseidonCodeHash(t *testing.T) {
 	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash1, "code hash mismatch")
 	assert.Equal(t, common.HexToHash("0x2fa5836118b70a257defd2e54064ab63cc9bb2e91823eaacbdef32370050b5b2"), codeHash2, "code hash mismatch")
 }
+
+// TestFeeVault tests that the fee vault receives all tx fees correctly.
+func TestFeeVault(t *testing.T) {
+	var (
+		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+
+		// Generate a canonical chain to act as the main dataset
+		engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+
+		// A sender who makes transactions, has some funds
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec   = &Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  GenesisAlloc{addr1: {Balance: funds}},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	genesis := gspec.MustCommit(db)
+	signer := types.LatestSigner(gspec.Config)
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(common.Address{1})
+
+		// One transaction to 0xAAAA
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        30000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: types.AccessList{},
+			Data:       []byte{},
+		}
+
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key1)
+
+		b.AddTx(tx)
+	})
+
+	diskdb := rawdb.NewMemoryDatabase()
+	gspec.MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	block := chain.GetBlockByNumber(1)
+	state, _ := chain.State()
+
+	// Ensure that miner received only the miner reward
+	actual := state.GetBalance(block.Coinbase())
+	expected := ethash.ConstantinopleBlockReward
+
+	if actual.Cmp(expected) != 0 {
+		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
+	}
+
+	// Ensure that the fee vault received all tx fees
+	actual = state.GetBalance(*params.TestChainConfig.FeeVaultAddress)
+	expected = new(big.Int).SetUint64(block.GasUsed() * block.Transactions()[0].GasTipCap().Uint64())
+
+	if actual.Cmp(expected) != 0 {
+		t.Fatalf("fee vault balance incorrect: expected %d, got %d", expected, actual)
+	}
+}
