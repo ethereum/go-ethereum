@@ -1034,6 +1034,7 @@ func TestWithdrawals(t *testing.T) {
 		Timestamp:    params.Timestamp,
 		FeeRecipient: params.SuggestedFeeRecipient,
 		Random:       params.Random,
+		Withdrawals:  params.Withdrawals,
 	}).Id()
 	execData, err := api.GetPayloadV2(payloadID)
 	if err != nil {
@@ -1080,6 +1081,7 @@ func TestWithdrawals(t *testing.T) {
 		Timestamp:    params.Timestamp,
 		FeeRecipient: params.SuggestedFeeRecipient,
 		Random:       params.Random,
+		Withdrawals:  params.Withdrawals,
 	}).Id()
 	execData, err = api.GetPayloadV2(payloadID)
 	if err != nil {
