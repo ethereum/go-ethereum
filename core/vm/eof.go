@@ -306,14 +306,6 @@ func max(a, b int) int {
 	return a
 }
 
-// min returns the minimum value between x and y.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // sum computes the sum of a slice.
 func sum(list []int) (s int) {
 	for _, n := range list {
