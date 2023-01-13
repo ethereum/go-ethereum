@@ -209,8 +209,8 @@ const (
 
 // 0xb0 range - control flow ops.
 const (
-	CALLF = 0xb0 + iota
-	RETF
+	CALLF = 0xb0
+	RETF  = 0xb1
 )
 
 // 0xf0 range - closures.
