@@ -1,10 +1,15 @@
 FROM alpine:3.14
 
+ARG BOR_DIR=/var/lib/bor
+ENV BOR_DIR=$BOR_DIR
+
 RUN apk add --no-cache ca-certificates && \
-    mkdir -p /etc/bor
-COPY bor /usr/local/bin/
-COPY builder/files/genesis-mainnet-v1.json /etc/bor/
-COPY builder/files/genesis-testnet-v4.json /etc/bor/
+    mkdir -p ${BOR_DIR}
+
+WORKDIR ${BOR_DIR}
+COPY bor /usr/bin/
+COPY builder/files/genesis-mainnet-v1.json ${BOR_DIR}
+COPY builder/files/genesis-testnet-v4.json ${BOR_DIR}
 
 EXPOSE 8545 8546 8547 30303 30303/udp
 ENTRYPOINT ["bor"]

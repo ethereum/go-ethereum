@@ -259,7 +259,13 @@ func (s *Server) Stop() {
 func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
 	// Check the global metrics if they're matching with the provided config
 	if metrics.Enabled != config.Enabled || metrics.EnabledExpensive != config.Expensive {
-		log.Warn("Metric misconfiguration, some of them might not be visible")
+		log.Warn(
+			"Metric misconfiguration, some of them might not be visible",
+			"metrics", metrics.Enabled,
+			"config.metrics", config.Enabled,
+			"expensive", metrics.EnabledExpensive,
+			"config.expensive", config.Expensive,
+		)
 	}
 
 	// Update the values anyways (for services which don't need immediate attention)

@@ -4,6 +4,6 @@ The ```peers remove <enode>``` command disconnects the local client from a conne
 
 ## Options
 
-- ```address```: Address of the grpc endpoint
+- ```address```: Address of the grpc endpoint (default: 127.0.0.1:3131)
 
-- ```trusted```: Add the peer as a trusted
+- ```trusted```: Add the peer as a trusted (default: false)

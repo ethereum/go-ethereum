@@ -6,6 +6,7 @@ chain = "mainnet"
 # identity = "Pratiks-MacBook-Pro.local"
 # log-level = "INFO"
 datadir = "/var/lib/bor/data"
+# ancient = ""
 # keystore = "/var/lib/bor/keystore"
 syncmode = "full"
 # gcmode = "full"
@@ -52,7 +53,7 @@ syncmode = "full"
   # pricebump = 10
 
 [miner]
-  gaslimit = 20000000
+  gaslimit = 30000000
   gasprice = "30000000000"
   # mine = true
   # etherbase = "VALIDATOR ADDRESS"
@@ -60,38 +61,42 @@ syncmode = "full"
 
 
 # [jsonrpc]
-  # ipcdisable = false
-  # ipcpath = ""
-  # gascap = 50000000
-  # txfeecap = 5.0
-  # [jsonrpc.http]
-    # enabled = false
-    # port = 8545
-    # prefix = ""
-    # host = "localhost"
-    # api = ["eth", "net", "web3", "txpool", "bor"]
-    # vhosts = ["*"]
-    # corsdomain = ["*"]
-  # [jsonrpc.ws]
-    # enabled = false
-    # port = 8546
-    # prefix = ""
-    # host = "localhost"
-    # api = ["web3", "net"]
-    # origins = ["*"]
-  # [jsonrpc.graphql]
-    # enabled = false
-    # port = 0
-    # prefix = ""
-    # host = ""
-    # vhosts = ["*"]
-    # corsdomain = ["*"]
+#   ipcdisable = false
+#   ipcpath = ""
+#   gascap = 50000000
+#   txfeecap = 5.0
+#   [jsonrpc.http]
+#     enabled = false
+#     port = 8545
+#     prefix = ""
+#     host = "localhost"
+#     api = ["eth", "net", "web3", "txpool", "bor"]
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.ws]
+#     enabled = false
+#     port = 8546
+#     prefix = ""
+#     host = "localhost"
+#     api = ["web3", "net"]
+#     origins = ["*"]
+#   [jsonrpc.graphql]
+#     enabled = false
+#     port = 0
+#     prefix = ""
+#     host = ""
+#     vhosts = ["*"]
+#     corsdomain = ["*"]
+#   [jsonrpc.timeouts]
+#     read = "30s"
+#     write = "30s"
+#     idle = "2m0s"
 
-# [gpo]
+[gpo]
   # blocks = 20
   # percentile = 60
   # maxprice = "5000000000000"
-  # ignoreprice = "2"
+  ignoreprice = "30000000000"
 
 [telemetry]
   metrics = true
@@ -122,6 +127,7 @@ syncmode = "full"
   # preimages = false
   # txlookuplimit = 2350000
   # triesinmemory = 128
+  # timeout = "1h0m0s"
 
 [accounts]
   # allow-insecure-unlock = true

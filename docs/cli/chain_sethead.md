@@ -8,6 +8,6 @@ The ```chain sethead <number>``` command sets the current chain to a certain blo
 
 ## Options
 
-- ```address```: Address of the grpc endpoint
+- ```address```: Address of the grpc endpoint (default: 127.0.0.1:3131)
 
-- ```yes```: Force set head
+- ```yes```: Force set head (default: false)

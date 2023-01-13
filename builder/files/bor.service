@@ -6,7 +6,7 @@
 [Service]
   Restart=on-failure
   RestartSec=5s
-  ExecStart=/usr/local/bin/bor server -config="/var/lib/bor/config.toml"
+  ExecStart=/usr/local/bin/bor server -config "/var/lib/bor/config.toml"
   Type=simple
   User=bor
   KillSignal=SIGINT

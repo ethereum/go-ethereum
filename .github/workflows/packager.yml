@@ -1,0 +1,736 @@
+name: packager
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '**'
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@master
+        with:
+          go-version: 1.19
+      - name: Adding TAG to ENV
+        run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
+
+      - name: Cleaning repo
+        run: make clean
+      - name: Building for amd64
+        run: make bor
+
+      - name: Making directory structure
+        run: mkdir -p packaging/deb/bor/usr/bin
+      - name: Making directory structure for toml
+        run: mkdir -p packaging/deb/bor/var/lib/bor
+      - name: Copying necessary files
+        run: cp -rp build/bin/bor packaging/deb/bor/usr/bin/
+      - name: copying control file
+        run: cp -rp packaging/templates/package_scripts/control packaging/deb/bor/DEBIAN/control
+      - name: removing systemd file for binary
+        run: rm -rf lib/systemd/system/bor.service
+
+      - name: Creating package for binary for bor ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          
+      - name: Running package build
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+
+      - name: Removing the bor binary
+        run: rm -rf packaging/deb/bor/usr/bin/bor
+
+      - name: making directory structure for systemd
+        run: mkdir -p packaging/deb/bor/lib/systemd/system
+      - name: Copying systemd file
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Prepping ${{ env.NETWORK }} ${{ env.NODE }} node for ${{ env.ARCH }}
+        run:  cp -rp  packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Putting toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/sentry/sentry/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying systemd file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/lib/systemd/system/
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Running package build for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mumbai
+
+      - name: Setting up ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Putting toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Building ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: sentry
+          NETWORK: mainnet
+
+      - name: Prepping Bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.validator packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying Postinstall script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying Prerm script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying Postrm script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying config.toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/sentry/validator/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mumbai
+
+      - name: Prepping Bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.validator packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying Postinstall script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying config.toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/sentry/validator/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: validator
+          NETWORK: mainnet
+
+      - name: Creating bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying profile preinst file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying the profile postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying profile prerm file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying profile postrm file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying the toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/archive/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mumbai
+
+      - name: Creating bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.amd64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying profile preinst file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying the profile postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying profile prerm file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying profile postrm file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying the toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/archive/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: amd64
+          NODE: archive
+          NETWORK: mainnet
+
+      - name: Cleaning build directory for arm64 build
+        run: make clean
+
+      - name: Removing systemd file
+        run: rm -rf packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Updating the apt-get
+        run: sudo apt-get update -y
+
+      - name: Adding requirements for cross compile
+        run: sudo apt-get install g++-aarch64-linux-gnu gcc-aarch64-linux-gnu
+
+      - name: removing systemd file for binary
+        run: rm -rf lib/systemd/system/bor.service
+
+      - name: Building bor for arm64
+        run: GOARCH=arm64 GOOS=linux CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ CGO_ENABLED=1 go build -o build/bin/bor ./cmd/cli/main.go
+
+      - name: Copying bor arm64 for use with packaging
+        run: cp -rp build/bin/bor packaging/deb/bor/usr/bin/
+
+      - name: Creating package for binary only bor
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+      - name: Copying control file
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+      - name: Running package build
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+
+      - name: Removing the bor binary
+        run: rm -rf packaging/deb/bor/usr/bin/bor
+
+      - name: Copying systemd file
+        run: cp -rp packaging/templates/systemd/bor.service packaging/deb/bor/lib/systemd/system/bor.service
+
+      - name: Updating the control file to use with the arm64 profile
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
+
+      - name: Setting up bor for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Putting toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/sentry/sentry/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying the postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mumbai
+
+      - name: Setting up bor for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Putting toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying the postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: sentry
+          NETWORK: mainnet
+
+      - name: Prepping Bor for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.validator.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying Postinstall script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying config.toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/sentry/validator/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mumbai
+
+      - name: Prepping Bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.validator.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the preinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/preinst packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/preinst
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying Postinstall script for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying the postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying config.toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/sentry/validator/bor/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: validator
+          NETWORK: mainnet
+        
+      - name: Updating the control file to use with the arm64 profile
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor/DEBIAN/control
+
+      - name: Creating bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying over profile postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Copying the toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/testnet-v4/archive/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mumbai
+
+      - name: Creating bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying profile control file for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/control.profile.arm64 packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/control
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying over profile postinst for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postinst.profile packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postinst
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying prerm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/prerm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/prerm
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying postrm for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/package_scripts/postrm packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/DEBIAN/postrm
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Copying the toml for ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }}
+        run: cp -rp packaging/templates/mainnet-v1/archive/config.toml packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}/var/lib/bor/
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+      - name: Building bor ${{ env.NODE }} on ${{ env.NETWORK }} on ${{ env.ARCH }} profile 
+        run: dpkg-deb --build --root-owner-group packaging/deb/bor-${{ env.NETWORK }}-${{ env.NODE }}-config_${{ env.GIT_TAG }}-${{ env.ARCH }}
+        env:
+          ARCH: arm64
+          NODE: archive
+          NETWORK: mainnet
+
+      - name: Confirming package built
+        run: ls -ltr packaging/deb/ | grep bor
+
+      - name: Release bor Packages
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.GIT_TAG }}
+          prerelease: true
+          files: |
+            packaging/deb/bor**.deb
+            binary/bo**

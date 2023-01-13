@@ -1,0 +1,147 @@
+# This configuration file is for reference and learning purpose only.
+# The default value of the flags is provided below (except a few flags which has custom defaults which are explicitly mentioned).
+# Recommended values for mainnet and/or mumbai are also provided.
+
+chain = "mainnet"            # Name of the chain to sync ("mumbai", "mainnet") or path to a genesis file
+identity = "Annon-Identity"  # Name/Identity of the node (default = OS hostname)
+log-level = "INFO"           # Set log level for the server
+datadir = "var/lib/bor"      # Path of the data directory to store information
+ancient = ""                 # Data directory for ancient chain segments (default = inside chaindata)
+keystore = ""                # Path of the directory where keystores are located
+syncmode = "full"            # Blockchain sync mode (only "full" sync supported)
+gcmode = "full"              # Blockchain garbage collection mode ("full", "archive")
+snapshot = true              # Enables the snapshot-database mode
+"bor.logs" = false           # Enables bor log retrieval
+ethstats = ""                # Reporting URL of a ethstats service (nodename:secret@host:port)
+
+["eth.requiredblocks"]  # Comma separated block number-to-hash mappings to require for peering (<number>=<hash>) (default = empty map)
+  "31000000" = "0x2087b9e2b353209c2c21e370c82daa12278efd0fe5f0febe6c29035352cf050e"
+  "32000000" = "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68"
+
+[p2p]
+  maxpeers = 50       # Maximum number of network peers (network disabled if set to 0)
+  maxpendpeers = 50   # Maximum number of pending connection attempts
+  bind = "0.0.0.0"    # Network binding address
+  port = 30303        # Network listening port
+  nodiscover = false  # Disables the peer discovery mechanism (manual peer addition)
+  nat = "any"         # NAT port mapping mechanism (any|none|upnp|pmp|extip:<IP>)
+  [p2p.discovery]
+    v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
+    bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
+    bootnodesv4 = []    # List of initial v4 bootnodes
+    bootnodesv5 = []    # List of initial v5 bootnodes
+    static-nodes = []   # List of static nodes
+    trusted-nodes = []  # List of trusted nodes
+    dns = []            # List of enrtree:// URLs which will be queried for nodes to connect to
+
+[heimdall]
+  url = "http://localhost:1317"  # URL of Heimdall service
+  "bor.without" = false          # Run without Heimdall service (for testing purpose)
+  grpc-address = ""              # Address of Heimdall gRPC service
+
+[txpool]
+  locals = []                   # Comma separated accounts to treat as locals (no flush, priority inclusion)
+  nolocals = false              # Disables price exemptions for locally submitted transactions
+  journal = "transactions.rlp"  # Disk journal for local transaction to survive node restarts
+  rejournal = "1h0m0s"          # Time interval to regenerate the local transaction journal
+  pricelimit = 1                # Minimum gas price limit to enforce for acceptance into the pool (mainnet = 30000000000)
+  pricebump = 10                # Price bump percentage to replace an already existing transaction
+  accountslots = 16             # Minimum number of executable transaction slots guaranteed per account
+  globalslots = 32768           # Maximum number of executable transaction slots for all accounts
+  accountqueue = 16             # Maximum number of non-executable transaction slots permitted per account
+  globalqueue = 32768           # Maximum number of non-executable transaction slots for all accounts
+  lifetime = "3h0m0s"           # Maximum amount of time non-executable transaction are queued
+
+[miner]
+  mine = false             # Enable mining
+  etherbase = ""           # Public address for block mining rewards
+  extradata = ""           # Block extra data set by the miner (default = client version)
+  gaslimit = 30000000      # Target gas ceiling for mined blocks
+  gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
+
+[jsonrpc]
+  ipcdisable = false                               # Disable the IPC-RPC server
+  ipcpath = ""                                     # Filename for IPC socket/pipe within the datadir (explicit paths escape it)
+  gascap = 50000000                                # Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)
+  txfeecap = 5.0                                   # Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)
+  [jsonrpc.http]
+    enabled = false                                # Enable the HTTP-RPC server
+    port = 8545                                    # http.port
+    prefix = ""                                    # http.rpcprefix
+    host = "localhost"                             # HTTP-RPC server listening interface
+    api = ["eth", "net", "web3", "txpool", "bor"]  # API's offered over the HTTP-RPC interface
+    vhosts = ["localhost"]                         # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+    corsdomain = ["localhost"]                     # Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  [jsonrpc.ws]
+    enabled = false          # Enable the WS-RPC server
+    port = 8546              # WS-RPC server listening port
+    prefix = ""              # HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
+    host = "localhost"       # ws.addr
+    api = ["net", "web3"]    # API's offered over the WS-RPC interface
+    origins = ["localhost"]  # Origins from which to accept websockets requests
+  [jsonrpc.graphql]
+    enabled = false             # Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well.
+    port = 0                    # 
+    prefix = ""                 # 
+    host = ""                   # 
+    vhosts = ["localhost"]      # Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.
+    corsdomain = ["localhost"]  # Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  [jsonrpc.timeouts]
+    read = "30s"
+    write = "30s"
+    idle = "2m0s"
+
+[gpo]
+  blocks = 20                 # Number of recent blocks to check for gas prices
+  percentile = 60             # Suggested gas price is the given percentile of a set of recent transaction gas prices
+  maxprice = "5000000000000"  # Maximum gas price will be recommended by gpo
+  ignoreprice = "2"           # Gas price below which gpo will ignore transactions (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
+
+[telemetry]
+  metrics = false                            # Enable metrics collection and reporting
+  expensive = false                          # Enable expensive metrics collection and reporting
+  prometheus-addr = "127.0.0.1:7071"         # Address for Prometheus Server
+  opencollector-endpoint = "127.0.0.1:4317"  # OpenCollector Endpoint (host:port)
+  [telemetry.influx]
+    influxdb = false    # Enable metrics export/push to an external InfluxDB database (v1)
+    endpoint = ""       # InfluxDB API endpoint to report metrics to
+    database = ""       # InfluxDB database name to push reported metrics to
+    username = ""       # Username to authorize access to the database
+    password = ""       # Password to authorize access to the database
+    influxdbv2 = false  # Enable metrics export/push to an external InfluxDB v2 database
+    token = ""          # Token to authorize access to the database (v2 only)
+    bucket = ""         # InfluxDB bucket name to push reported metrics to (v2 only)
+    organization = ""   # InfluxDB organization name (v2 only)
+    [telemetry.influx.tags]  # Comma-separated InfluxDB tags (key/values) attached to all measurements
+      cloud = "aws"
+      host = "annon-host"
+      ip = "99.911.221.66"
+      region = "us-north-1"
+
+[cache]
+  cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for mumbai/devnet)
+  gc = 25                  # Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)
+  snapshot = 10            # Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)
+  database = 50            # Percentage of cache memory allowance to use for database io
+  trie = 15                # Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)
+  journal = "triecache"    # Disk journal directory for trie cache to survive node restarts
+  rejournal = "1h0m0s"     # Time interval to regenerate the trie cache journal
+  noprefetch = false       # Disable heuristic state prefetch during block import (less CPU and disk IO, more time waiting for data)
+  preimages = false        # Enable recording the SHA3/keccak preimages of trie keys
+  txlookuplimit = 2350000  # Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)
+  triesinmemory = 128      # Number of block states (tries) to keep in memory
+  timeout = "1h0m0s"       # Time after which the Merkle Patricia Trie is stored to disc from memory
+
+[accounts]
+  unlock = []                    # Comma separated list of accounts to unlock
+  password = ""                  # Password file to use for non-interactive password input
+  allow-insecure-unlock = false  # Allow insecure account unlocking when account-related RPCs are exposed by http
+  lightkdf = false               # Reduce key-derivation RAM & CPU usage at some expense of KDF strength
+  disable-bor-wallet = true      # Disable the personal wallet endpoints
+
+[grpc]
+  addr = ":3131" # Address and port to bind the GRPC server
+
+[developer]
+  dev = false  # Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled
+  period = 0   # Block period to use in developer mode (0 = mine only if transaction pending)

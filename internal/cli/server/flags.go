@@ -11,15 +11,16 @@ func (c *Command) Flags() *flagset.Flagset {
 
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "chain",
-		Usage:   "Name of the chain to sync",
+		Usage:   "Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file",
 		Value:   &c.cliConfig.Chain,
 		Default: c.cliConfig.Chain,
 	})
 	f.StringFlag(&flagset.StringFlag{
-		Name:    "identity",
-		Usage:   "Name/Identity of the node",
-		Value:   &c.cliConfig.Identity,
-		Default: c.cliConfig.Identity,
+		Name:               "identity",
+		Usage:              "Name/Identity of the node",
+		Value:              &c.cliConfig.Identity,
+		Default:            c.cliConfig.Identity,
+		HideDefaultFromDoc: true,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "log-level",
@@ -28,14 +29,21 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.LogLevel,
 	})
 	f.StringFlag(&flagset.StringFlag{
-		Name:    "datadir",
-		Usage:   "Path of the data directory to store information",
-		Value:   &c.cliConfig.DataDir,
-		Default: c.cliConfig.DataDir,
+		Name:               "datadir",
+		Usage:              "Path of the data directory to store information",
+		Value:              &c.cliConfig.DataDir,
+		Default:            c.cliConfig.DataDir,
+		HideDefaultFromDoc: true,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "datadir.ancient",
+		Usage:   "Data directory for ancient chain segments (default = inside chaindata)",
+		Value:   &c.cliConfig.Ancient,
+		Default: c.cliConfig.Ancient,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
-		Usage: "Path of the directory to store keystores",
+		Usage: "Path of the directory where keystores are located",
 		Value: &c.cliConfig.KeyStoreDir,
 	})
 	f.StringFlag(&flagset.StringFlag{
@@ -56,19 +64,20 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.GcMode,
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
-		Name:  "eth.requiredblocks",
-		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
-		Value: &c.cliConfig.RequiredBlocks,
+		Name:    "eth.requiredblocks",
+		Usage:   "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
+		Value:   &c.cliConfig.RequiredBlocks,
+		Default: c.cliConfig.RequiredBlocks,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "snapshot",
-		Usage:   `Enables the snapshot-database mode (default = true)`,
+		Usage:   `Enables the snapshot-database mode`,
 		Value:   &c.cliConfig.Snapshot,
 		Default: c.cliConfig.Snapshot,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "bor.logs",
-		Usage:   `Enables bor log retrieval (default = false)`,
+		Usage:   `Enables bor log retrieval`,
 		Value:   &c.cliConfig.BorLogs,
 		Default: c.cliConfig.BorLogs,
 	})
@@ -194,7 +203,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "miner.etherbase",
-		Usage:   "Public address for block mining rewards (default = first account)",
+		Usage:   "Public address for block mining rewards",
 		Value:   &c.cliConfig.Sealer.Etherbase,
 		Default: c.cliConfig.Sealer.Etherbase,
 		Group:   "Sealer",
@@ -208,16 +217,17 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "miner.gaslimit",
-		Usage:   "Target gas ceiling for mined blocks",
+		Usage:   "Target gas ceiling (gas limit) for mined blocks",
 		Value:   &c.cliConfig.Sealer.GasCeil,
 		Default: c.cliConfig.Sealer.GasCeil,
 		Group:   "Sealer",
 	})
 	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "miner.gasprice",
-		Usage: "Minimum gas price for mining a transaction",
-		Value: c.cliConfig.Sealer.GasPrice,
-		Group: "Sealer",
+		Name:    "miner.gasprice",
+		Usage:   "Minimum gas price for mining a transaction",
+		Value:   c.cliConfig.Sealer.GasPrice,
+		Group:   "Sealer",
+		Default: c.cliConfig.Sealer.GasPrice,
 	})
 
 	// ethstats
@@ -242,20 +252,22 @@ func (c *Command) Flags() *flagset.Flagset {
 		Default: c.cliConfig.Gpo.Percentile,
 	})
 	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "gpo.maxprice",
-		Usage: "Maximum gas price will be recommended by gpo",
-		Value: c.cliConfig.Gpo.MaxPrice,
+		Name:    "gpo.maxprice",
+		Usage:   "Maximum gas price will be recommended by gpo",
+		Value:   c.cliConfig.Gpo.MaxPrice,
+		Default: c.cliConfig.Gpo.MaxPrice,
 	})
 	f.BigIntFlag(&flagset.BigIntFlag{
-		Name:  "gpo.ignoreprice",
-		Usage: "Gas price below which gpo will ignore transactions",
-		Value: c.cliConfig.Gpo.IgnorePrice,
+		Name:    "gpo.ignoreprice",
+		Usage:   "Gas price below which gpo will ignore transactions",
+		Value:   c.cliConfig.Gpo.IgnorePrice,
+		Default: c.cliConfig.Gpo.IgnorePrice,
 	})
 
 	// cache options
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache",
-		Usage:   "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node)",
+		Usage:   "Megabytes of memory allocated to internal caching",
 		Value:   &c.cliConfig.Cache.Cache,
 		Default: c.cliConfig.Cache.Cache,
 		Group:   "Cache",
@@ -269,7 +281,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.trie",
-		Usage:   "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for trie caching",
 		Value:   &c.cliConfig.Cache.PercTrie,
 		Default: c.cliConfig.Cache.PercTrie,
 		Group:   "Cache",
@@ -290,14 +302,14 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.gc",
-		Usage:   "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for trie pruning",
 		Value:   &c.cliConfig.Cache.PercGc,
 		Default: c.cliConfig.Cache.PercGc,
 		Group:   "Cache",
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "cache.snapshot",
-		Usage:   "Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)",
+		Usage:   "Percentage of cache memory allowance to use for snapshot caching",
 		Value:   &c.cliConfig.Cache.PercSnapshot,
 		Default: c.cliConfig.Cache.PercSnapshot,
 		Group:   "Cache",
@@ -325,7 +337,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "txlookuplimit",
-		Usage:   "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
+		Usage:   "Number of recent blocks to maintain transactions index for",
 		Value:   &c.cliConfig.Cache.TxLookupLimit,
 		Default: c.cliConfig.Cache.TxLookupLimit,
 		Group:   "Cache",
@@ -510,7 +522,7 @@ func (c *Command) Flags() *flagset.Flagset {
 	})
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "maxpendpeers",
-		Usage:   "Maximum number of pending connection attempts (defaults used if set to 0)",
+		Usage:   "Maximum number of pending connection attempts",
 		Value:   &c.cliConfig.P2P.MaxPendPeers,
 		Default: c.cliConfig.P2P.MaxPendPeers,
 		Group:   "P2P",
@@ -588,10 +600,11 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "Telemetry",
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
-		Name:  "metrics.influxdb.tags",
-		Usage: "Comma-separated InfluxDB tags (key/values) attached to all measurements",
-		Value: &c.cliConfig.Telemetry.InfluxDB.Tags,
-		Group: "Telemetry",
+		Name:    "metrics.influxdb.tags",
+		Usage:   "Comma-separated InfluxDB tags (key/values) attached to all measurements",
+		Value:   &c.cliConfig.Telemetry.InfluxDB.Tags,
+		Group:   "Telemetry",
+		Default: c.cliConfig.Telemetry.InfluxDB.Tags,
 	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "metrics.prometheus-addr",

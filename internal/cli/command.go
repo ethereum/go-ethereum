@@ -189,6 +189,16 @@ func Commands() map[string]MarkDownCommandFactory {
 				Meta2: meta2,
 			}, nil
 		},
+		"snapshot": func() (MarkDownCommand, error) {
+			return &SnapshotCommand{
+				UI: ui,
+			}, nil
+		},
+		"snapshot prune-state": func() (MarkDownCommand, error) {
+			return &PruneStateCommand{
+				Meta: meta,
+			}, nil
+		},
 	}
 }
 
@@ -248,7 +258,7 @@ func (m *Meta) NewFlagSet(n string) *flagset.Flagset {
 	f.StringFlag(&flagset.StringFlag{
 		Name:  "keystore",
 		Value: &m.keyStoreDir,
-		Usage: "Path of the data directory to store information",
+		Usage: "Path of the data directory to store keys",
 	})
 
 	return f
