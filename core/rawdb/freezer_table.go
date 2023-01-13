@@ -852,8 +852,11 @@ func (t *freezerTable) advanceHead() error {
 	if err != nil {
 		return err
 	}
-
-	// Close old file, and reopen in RDONLY mode.
+	// Commit the contents of the old file to stable storage and
+	// tear it down. It will be re-opened in read-only mode.
+	if err := t.head.Sync(); err != nil {
+		return err
+	}
 	t.releaseFile(t.headId)
 	t.openFile(t.headId, openFreezerFileForReadOnly)
 
