@@ -1013,14 +1013,14 @@ func TestWithdrawals(t *testing.T) {
 
 	// 10: Build Shanghai block with no withdrawals.
 	parent := ethservice.BlockChain().CurrentHeader()
-	params := beacon.PayloadAttributes{
+	blockParams := beacon.PayloadAttributes{
 		Timestamp:   parent.Time + 5,
 		Withdrawals: make([]*types.Withdrawal, 0),
 	}
 	fcState := beacon.ForkchoiceStateV1{
 		HeadBlockHash: parent.Hash(),
 	}
-	resp, err := api.ForkchoiceUpdatedV2(fcState, &params)
+	resp, err := api.ForkchoiceUpdatedV2(fcState, &blockParams)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
@@ -1031,9 +1031,9 @@ func TestWithdrawals(t *testing.T) {
 	// 10: verify state root is the same as parent
 	payloadID := (&miner.BuildPayloadArgs{
 		Parent:       fcState.HeadBlockHash,
-		Timestamp:    params.Timestamp,
-		FeeRecipient: params.SuggestedFeeRecipient,
-		Random:       params.Random,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
 	}).Id()
 	execData, err := api.GetPayloadV2(payloadID)
 	if err != nil {
@@ -1053,7 +1053,7 @@ func TestWithdrawals(t *testing.T) {
 	// 11: build shanghai block with withdrawal
 	aa := common.Address{0xaa}
 	bb := common.Address{0xbb}
-	params = beacon.PayloadAttributes{
+	blockParams = beacon.PayloadAttributes{
 		Timestamp: execData.ExecutionPayload.Timestamp + 5,
 		Withdrawals: []*types.Withdrawal{
 			{
@@ -1069,7 +1069,7 @@ func TestWithdrawals(t *testing.T) {
 		},
 	}
 	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
-	_, err = api.ForkchoiceUpdatedV2(fcState, &params)
+	_, err = api.ForkchoiceUpdatedV2(fcState, &blockParams)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
@@ -1077,9 +1077,9 @@ func TestWithdrawals(t *testing.T) {
 	// 11: verify locally build block.
 	payloadID = (&miner.BuildPayloadArgs{
 		Parent:       fcState.HeadBlockHash,
-		Timestamp:    params.Timestamp,
-		FeeRecipient: params.SuggestedFeeRecipient,
-		Random:       params.Random,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
 	}).Id()
 	execData, err = api.GetPayloadV2(payloadID)
 	if err != nil {
@@ -1103,9 +1103,9 @@ func TestWithdrawals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to load db: %v", err)
 	}
-	for i, w := range params.Withdrawals {
+	for i, w := range blockParams.Withdrawals {
 		// w.Amount is in gwei, balance in wei
-		if db.GetBalance(w.Address).Uint64() != w.Amount*1e9 {
+		if db.GetBalance(w.Address).Uint64() != w.Amount*params.GWei {
 			t.Fatalf("failed to process withdrawal %d", i)
 		}
 	}
