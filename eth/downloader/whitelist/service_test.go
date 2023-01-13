@@ -119,8 +119,9 @@ func TestIsValidChain(t *testing.T) {
 	s := NewMockService(10, 10)
 	chainA := createMockChain(1, 20) // A1->A2...A19->A20
 	// case1: no checkpoint whitelist, should consider the chain as valid
-	res := s.IsValidChain(nil, chainA)
+	res, err := s.IsValidChain(nil, chainA)
 	require.Equal(t, res, true, "expected chain to be valid")
+	require.Equal(t, err, nil, "expected error to be nil")
 
 	tempChain := createMockChain(21, 22) // A21->A22
 
@@ -132,8 +133,9 @@ func TestIsValidChain(t *testing.T) {
 
 	// case2: We're behind the oldest whitelisted block entry, should consider
 	// the chain as valid as we're still far behind the latest blocks
-	res = s.IsValidChain(chainA[len(chainA)-1], chainA)
+	res, err = s.IsValidChain(chainA[len(chainA)-1], chainA)
 	require.Equal(t, res, true, "expected chain to be valid")
+	require.Equal(t, err, nil, "expected error to be nil")
 
 	// Clear checkpoint whitelist and add blocks A5 and A15 in whitelist
 	s.PurgeCheckpointWhitelist()
@@ -144,8 +146,9 @@ func TestIsValidChain(t *testing.T) {
 
 	// case3: Try importing a past chain having valid checkpoint, should
 	// consider the chain as valid
-	res = s.IsValidChain(chainA[len(chainA)-1], chainA)
+	res, err = s.IsValidChain(chainA[len(chainA)-1], chainA)
 	require.Equal(t, res, true, "expected chain to be valid")
+	require.Equal(t, err, nil, "expected error to be nil")
 
 	// Clear checkpoint whitelist and mock blocks in whitelist
 	tempChain = createMockChain(20, 20) // A20
@@ -156,22 +159,25 @@ func TestIsValidChain(t *testing.T) {
 	require.Equal(t, s.length(), 1, "expected 1 items in whitelist")
 
 	// case4: Try importing a past chain having invalid checkpoint
-	res = s.IsValidChain(chainA[len(chainA)-1], chainA)
+	res, _ = s.IsValidChain(chainA[len(chainA)-1], chainA)
 	require.Equal(t, res, false, "expected chain to be invalid")
+	// Not checking error here because we return nil in case of checkpoint mismatch
 
 	// create a future chain to be imported of length <= `checkpointInterval`
 	chainB := createMockChain(21, 30) // B21->B22...B29->B30
 
 	// case5: Try importing a future chain of acceptable length
-	res = s.IsValidChain(chainA[len(chainA)-1], chainB)
+	res, err = s.IsValidChain(chainA[len(chainA)-1], chainB)
 	require.Equal(t, res, true, "expected chain to be valid")
+	require.Equal(t, err, nil, "expected error to be nil")
 
 	// create a future chain to be imported of length > `checkpointInterval`
 	chainB = createMockChain(21, 40) // C21->C22...C39->C40
 
 	// case5: Try importing a future chain of unacceptable length
-	res = s.IsValidChain(chainA[len(chainA)-1], chainB)
+	res, err = s.IsValidChain(chainA[len(chainA)-1], chainB)
 	require.Equal(t, res, false, "expected chain to be invalid")
+	require.Equal(t, err, ErrLongFutureChain, "expected error")
 }
 
 func TestSplitChain(t *testing.T) {

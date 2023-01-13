@@ -13,7 +13,7 @@ import (
 
 // chainValidatorFake is a mock for the chain validator service
 type chainValidatorFake struct {
-	validate func(currentHeader *types.Header, chain []*types.Header) bool
+	validate func(currentHeader *types.Header, chain []*types.Header) (bool, error)
 }
 
 // chainReaderFake is a mock for the chain reader service
@@ -21,7 +21,7 @@ type chainReaderFake struct {
 	getTd func(hash common.Hash, number uint64) *big.Int
 }
 
-func newChainValidatorFake(validate func(currentHeader *types.Header, chain []*types.Header) bool) *chainValidatorFake {
+func newChainValidatorFake(validate func(currentHeader *types.Header, chain []*types.Header) (bool, error)) *chainValidatorFake {
 	return &chainValidatorFake{validate: validate}
 }
 
@@ -46,18 +46,18 @@ func TestPastChainInsert(t *testing.T) {
 	getTd := func(hash common.Hash, number uint64) *big.Int {
 		return big.NewInt(int64(number))
 	}
-	validate := func(currentHeader *types.Header, chain []*types.Header) bool {
+	validate := func(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 		// Put all explicit conditions here
 		// If canonical chain is empty and we're importing a chain of 64 blocks
 		if currentHeader.Number.Uint64() == uint64(0) && len(chain) == 64 {
-			return true
+			return true, nil
 		}
 		// If canonical chain is of len 64 and we're importing a past chain from 54-64, then accept it
 		if currentHeader.Number.Uint64() == uint64(64) && chain[0].Number.Uint64() == 55 && len(chain) == 10 {
-			return true
+			return true, nil
 		}
 
-		return false
+		return false, nil
 	}
 	mockChainReader := newChainReaderFake(getTd)
 	mockChainValidator := newChainValidatorFake(validate)
@@ -116,18 +116,18 @@ func TestFutureChainInsert(t *testing.T) {
 	getTd := func(hash common.Hash, number uint64) *big.Int {
 		return big.NewInt(int64(number))
 	}
-	validate := func(currentHeader *types.Header, chain []*types.Header) bool {
+	validate := func(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 		// Put all explicit conditions here
 		// If canonical chain is empty and we're importing a chain of 64 blocks
 		if currentHeader.Number.Uint64() == uint64(0) && len(chain) == 64 {
-			return true
+			return true, nil
 		}
 		// If length of future chains > some value, they should not be accepted
 		if currentHeader.Number.Uint64() == uint64(64) && len(chain) <= 10 {
-			return true
+			return true, nil
 		}
 
-		return false
+		return false, nil
 	}
 	mockChainReader := newChainReaderFake(getTd)
 	mockChainValidator := newChainValidatorFake(validate)
@@ -174,18 +174,18 @@ func TestOverlappingChainInsert(t *testing.T) {
 	getTd := func(hash common.Hash, number uint64) *big.Int {
 		return big.NewInt(int64(number))
 	}
-	validate := func(currentHeader *types.Header, chain []*types.Header) bool {
+	validate := func(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 		// Put all explicit conditions here
 		// If canonical chain is empty and we're importing a chain of 64 blocks
 		if currentHeader.Number.Uint64() == uint64(0) && len(chain) == 64 {
-			return true
+			return true, nil
 		}
 		// If length of chain is > some fixed value then don't accept it
 		if currentHeader.Number.Uint64() == uint64(64) && len(chain) <= 20 {
-			return true
+			return true, nil
 		}
 
-		return false
+		return false, nil
 	}
 	mockChainReader := newChainReaderFake(getTd)
 	mockChainValidator := newChainValidatorFake(validate)
@@ -227,7 +227,7 @@ func (c *chainReaderFake) GetTd(hash common.Hash, number uint64) *big.Int {
 func (w *chainValidatorFake) IsValidPeer(remoteHeader *types.Header, fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error) {
 	return true, nil
 }
-func (w *chainValidatorFake) IsValidChain(current *types.Header, headers []*types.Header) bool {
+func (w *chainValidatorFake) IsValidChain(current *types.Header, headers []*types.Header) (bool, error) {
 	return w.validate(current, headers)
 }
 func (w *chainValidatorFake) ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash) {}

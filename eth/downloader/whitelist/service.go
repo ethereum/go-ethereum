@@ -30,6 +30,7 @@ func NewService(maxCapacity uint) *Service {
 
 var (
 	ErrCheckpointMismatch = errors.New("checkpoint mismatch")
+	ErrLongFutureChain    = errors.New("received future chain of unacceptable length")
 	ErrNoRemoteCheckoint  = errors.New("remote peer doesn't have a checkoint")
 )
 
@@ -74,16 +75,16 @@ func (w *Service) IsValidPeer(remoteHeader *types.Header, fetchHeadersByNumber f
 
 // IsValidChain checks the validity of chain by comparing it
 // against the local checkpoint entries
-func (w *Service) IsValidChain(currentHeader *types.Header, chain []*types.Header) bool {
+func (w *Service) IsValidChain(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 	// Check if we have checkpoints to validate incoming chain in memory
 	if len(w.checkpointWhitelist) == 0 {
 		// We don't have any entries, no additional validation will be possible
-		return true
+		return true, nil
 	}
 
 	// Return if we've received empty chain
 	if len(chain) == 0 {
-		return false
+		return false, nil
 	}
 
 	var (
@@ -95,7 +96,7 @@ func (w *Service) IsValidChain(currentHeader *types.Header, chain []*types.Heade
 	if chain[len(chain)-1].Number.Uint64() < oldestCheckpointNumber {
 		// We have future whitelisted entries, so no additional validation will be possible
 		// This case will occur when bor is in middle of sync, but heimdall is ahead/fully synced.
-		return true
+		return true, nil
 	}
 
 	// Split the chain into past and future chain
@@ -109,18 +110,18 @@ func (w *Service) IsValidChain(currentHeader *types.Header, chain []*types.Heade
 
 	// Don't accept future chain of unacceptable length (from current block)
 	if len(futureChain)+offset > int(w.checkpointInterval) {
-		return false
+		return false, ErrLongFutureChain
 	}
 
 	// Iterate over the chain and validate against the last checkpoint
 	// It will handle all cases where the incoming chain has atleast one checkpoint
 	for i := len(pastChain) - 1; i >= 0; i-- {
 		if _, ok := w.checkpointWhitelist[pastChain[i].Number.Uint64()]; ok {
-			return pastChain[i].Hash() == w.checkpointWhitelist[pastChain[i].Number.Uint64()]
+			return pastChain[i].Hash() == w.checkpointWhitelist[pastChain[i].Number.Uint64()], nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 func splitChain(current uint64, chain []*types.Header) ([]*types.Header, []*types.Header) {

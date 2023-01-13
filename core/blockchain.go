@@ -68,6 +68,7 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredTimer("chain/snapshot/commits", nil)
 
+	blockImportTimer     = metrics.NewRegisteredMeter("chain/imports", nil)
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
@@ -1517,6 +1518,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	// Peek the error for the first block to decide the directing import logic
 	it := newInsertIterator(chain, results, bc.validator)
 	block, err := it.next()
+
+	// Update the block import meter; it will just record chains we've received
+	// from other peers. (Note that the actual chain which gets imported would be
+	// quite low).
+	blockImportTimer.Mark(int64(len(headers)))
 
 	// Check the validity of incoming chain
 	isValid, err1 := bc.forker.ValidateReorg(bc.CurrentBlock().Header(), headers)
