@@ -53,9 +53,9 @@ const (
 	// to validate whether they fit into the pool or not.
 	txMaxSize = 4 * txSlotSize // 128KB
 
-	// txWrapDataMax is the maximum size for the additional wrapper data,
-	// enough to encode a blob-transaction wrapper data (48 bytes for commitment, 4 for offset, 48 for a commitment)
-	txWrapDataMax = 4 + 4 + params.MaxBlobsPerBlock*(params.FieldElementsPerBlob*32+48)
+	// txWrapDataMax is the maximum size of an ssz encoded BlobTxWrapData (2 4-byte offsets + the
+	// raw data for each blob, each kzg commitment, and the aggregated commitment)
+	txWrapDataMax = 4 + 4 + params.MaxBlobsPerBlock*(params.FieldElementsPerBlob*32+48) + 48
 )
 
 var (
