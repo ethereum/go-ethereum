@@ -560,8 +560,12 @@ func (t *freezerTable) Close() error {
 
 	var errs []error
 	syncClose := func(f *os.File) {
-		if err := f.Sync(); err != nil {
-			errs = append(errs, err)
+		if !t.readonly {
+			// Trying to fsync a file opened in rdonly causes "Access denied"
+			// error on Windows.
+			if err := f.Sync(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		if err := f.Close(); err != nil {
 			errs = append(errs, err)
