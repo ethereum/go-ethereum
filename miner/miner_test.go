@@ -209,7 +209,6 @@ func TestCloseMiner(t *testing.T) {
 func TestMinerSetEtherbase(t *testing.T) {
 	miner, mux, cleanup := createMiner(t)
 	defer cleanup(false)
-	// Start with a 'bad' mining address
 	miner.Start()
 	waitForMiningState(t, miner, true)
 	// Start the downloader
@@ -220,6 +219,12 @@ func TestMinerSetEtherbase(t *testing.T) {
 	// Stop the downloader and wait for the update loop to run
 	mux.Post(downloader.DoneEvent{})
 	waitForMiningState(t, miner, true)
+
+	coinbase := common.HexToAddress("0xdeedbeef")
+	miner.SetEtherbase(coinbase)
+	if addr := miner.worker.etherbase(); addr != coinbase {
+		t.Fatalf("Unexpected etherbase want %x got %x", coinbase, addr)
+	}
 }
 
 // waitForMiningState waits until either
