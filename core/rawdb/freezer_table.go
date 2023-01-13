@@ -724,7 +724,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	defer t.lock.RUnlock()
 
 	// Ensure the table and the item are accessible
-	if t.index == nil || t.head == nil {
+	if t.index == nil || t.head == nil || t.meta == nil {
 		return nil, nil, errClosed
 	}
 	var (
@@ -869,7 +869,7 @@ func (t *freezerTable) advanceHead() error {
 func (t *freezerTable) Sync() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	if t.index == nil || t.head == nil {
+	if t.index == nil || t.head == nil || t.meta == nil {
 		return errClosed
 	}
 	var err error

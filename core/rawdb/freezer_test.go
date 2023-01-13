@@ -410,37 +410,9 @@ func TestRenameWindows(t *testing.T) {
 
 func TestFreezerCloseSync(t *testing.T) {
 	t.Parallel()
-
-	// Create test data.
-	var valuesRaw [][]byte
-	var valuesRLP []*big.Int
-	for x := 0; x < 100; x++ {
-		v := getChunk(256, x)
-		valuesRaw = append(valuesRaw, v)
-		iv := big.NewInt(int64(x))
-		iv = iv.Exp(iv, iv, nil)
-		valuesRLP = append(valuesRLP, iv)
-	}
-
-	tables := map[string]bool{"raw": true, "rlp": false}
-	f, _ := newFreezerForTesting(t, tables)
+	f, _ := newFreezerForTesting(t, map[string]bool{"a": true, "b": true})
 	defer f.Close()
 
-	// Commit test data.
-	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		for i := range valuesRaw {
-			if err := op.AppendRaw("raw", uint64(i), valuesRaw[i]); err != nil {
-				return err
-			}
-			if err := op.Append("rlp", uint64(i), valuesRLP[i]); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal("ModifyAncients failed:", err)
-	}
 	// Now, close and sync. This mimics the behaviour if the node is shut down,
 	// just as the chain freezer is writing.
 	// 1: thread-1: chain treezer writes, via freezeRange (holds lock)
@@ -451,7 +423,9 @@ func TestFreezerCloseSync(t *testing.T) {
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.Sync(); err != nil {
-		t.Fatal(err)
+	if err := f.Sync(); err == nil {
+		t.Fatalf("want error, have nil")
+	} else if have, want := err.Error(), "[closed closed]"; have != want {
+		t.Fatalf("want %v, have %v", have, want)
 	}
 }
