@@ -315,8 +315,9 @@ type BlobTxWrapData struct {
 	KzgAggregatedProof KZGProof
 }
 
+// sizeWrapData returns the size in bytes of the ssz-encoded BlobTxWrapData
 func (b *BlobTxWrapData) sizeWrapData() common.StorageSize {
-	return common.StorageSize(4 + 4 + b.BlobKzgs.ByteLength() + b.Blobs.ByteLength() + b.KzgAggregatedProof.ByteLength())
+	return common.StorageSize(codec.ContainerLength(&b.BlobKzgs, &b.Blobs, &b.KzgAggregatedProof))
 }
 
 // validateBlobTransactionWrapper implements validate_blob_transaction_wrapper from EIP-4844
