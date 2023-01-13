@@ -229,6 +229,7 @@ func (t *freezerTable) repair() error {
 		lastIndex   indexEntry
 		contentSize int64
 		contentExp  int64
+		verbose     bool
 	)
 	// Read index zero, determine what file is the earliest
 	// and what item offset to use
@@ -272,6 +273,7 @@ func (t *freezerTable) repair() error {
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
 	for contentExp != contentSize {
+		verbose = true
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
 			t.logger.Warn("Truncating dangling head", "indexed", contentExp, "stored", contentSize)
@@ -343,7 +345,11 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	t.logger.Debug("Chain freezer table opened", "items", t.items, "size", common.StorageSize(t.headBytes))
+	if verbose {
+		t.logger.Info("Chain freezer table opened", "items", t.items, "size", t.headBytes)
+	} else {
+		t.logger.Debug("Chain freezer table opened", "items", t.items, "size", common.StorageSize(t.headBytes))
+	}
 	return nil
 }
 
