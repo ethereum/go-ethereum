@@ -559,21 +559,21 @@ func (t *freezerTable) Close() error {
 	defer t.lock.Unlock()
 
 	var errs []error
-	if err := t.index.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	t.index = nil
-
-	if err := t.meta.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	t.meta = nil
-
-	for _, f := range t.files {
+	syncClose := func(f *os.File) {
+		if err := f.Sync(); err != nil {
+			errs = append(errs, err)
+		}
 		if err := f.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	syncClose(t.index)
+	syncClose(t.meta)
+	for _, f := range t.files {
+		syncClose(f)
+	}
+	t.index = nil
+	t.meta = nil
 	t.head = nil
 
 	if errs != nil {
