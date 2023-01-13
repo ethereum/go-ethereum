@@ -101,9 +101,9 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		}
 		// If the block number is a multiple of 7, add a withdrawal
 		if i > 0 && i%7 == 0 {
-			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(42)})
-			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(43)})
-			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: big.NewInt(44)})
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: 42})
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: 43})
+			block.AddWithdrawal(&types.Withdrawal{Address: testAddress, Amount: 44})
 		}
 	})
 	hashes := make([]common.Hash, n+1)

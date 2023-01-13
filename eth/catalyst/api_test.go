@@ -1059,12 +1059,12 @@ func TestWithdrawals(t *testing.T) {
 			{
 				Index:   0,
 				Address: aa,
-				Amount:  big.NewInt(32),
+				Amount:  32,
 			},
 			{
 				Index:   1,
 				Address: bb,
-				Amount:  big.NewInt(33),
+				Amount:  33,
 			},
 		},
 	}
@@ -1104,7 +1104,8 @@ func TestWithdrawals(t *testing.T) {
 		t.Fatalf("unable to load db: %v", err)
 	}
 	for i, w := range params.Withdrawals {
-		if db.GetBalance(w.Address).Uint64() != w.Amount.Uint64() {
+		// w.Amount is in gwei, balance in wei
+		if db.GetBalance(w.Address).Uint64() != w.Amount*1e9 {
 			t.Fatalf("failed to process withdrawal %d", i)
 		}
 	}

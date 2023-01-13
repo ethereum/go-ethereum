@@ -343,7 +343,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		if n%2 == 0 {
 			w := &types.Withdrawal{
 				Address: common.Address{0xaa},
-				Amount:  big.NewInt(42),
+				Amount:  42,
 			}
 			g.AddWithdrawal(w)
 		}

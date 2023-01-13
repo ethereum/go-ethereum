@@ -337,7 +337,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	// If withdrawals have been activated, process each one.
 	if chain.Config().IsShanghai(new(big.Int).SetUint64(header.Time)) {
 		for _, w := range withdrawals {
-			state.AddBalance(w.Address, w.Amount)
+			// Amount is in gwei, turn into wei
+			amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+			state.AddBalance(w.Address, amount)
 		}
 	}
 	// The block reward is no longer handled here. It's done by the
