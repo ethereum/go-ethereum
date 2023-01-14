@@ -559,22 +559,28 @@ func (t *freezerTable) Close() error {
 	defer t.lock.Unlock()
 
 	var errs []error
-	syncClose := func(f *os.File) {
-		if !t.readonly {
-			// Trying to fsync a file opened in rdonly causes "Access denied"
-			// error on Windows.
+	doClose := func(f *os.File, sync bool, close bool) {
+		if sync && !t.readonly {
 			if err := f.Sync(); err != nil {
 				errs = append(errs, err)
 			}
 		}
-		if err := f.Close(); err != nil {
-			errs = append(errs, err)
+		if close {
+			if err := f.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
-	syncClose(t.index)
-	syncClose(t.meta)
+	// Trying to fsync a file opened in rdonly causes "Access denied"
+	// error on Windows.
+	doClose(t.index, true, true)
+	doClose(t.meta, true, true)
+	// The preopened non-head data-files are all opened in readonly.
+	// The head is opened in rw-mode, so we sync it here - but since it's also
+	// part of t.files, it will be closed in the loop below.
+	doClose(t.head, true, false) // sync but do not close
 	for _, f := range t.files {
-		syncClose(f)
+		doClose(f, false, true) // close but do not sync
 	}
 	t.index = nil
 	t.meta = nil
