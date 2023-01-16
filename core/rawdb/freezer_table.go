@@ -229,6 +229,7 @@ func (t *freezerTable) repair() error {
 		lastIndex   indexEntry
 		contentSize int64
 		contentExp  int64
+		verbose     bool
 	)
 	// Read index zero, determine what file is the earliest
 	// and what item offset to use
@@ -272,9 +273,10 @@ func (t *freezerTable) repair() error {
 	// Keep truncating both files until they come in sync
 	contentExp = int64(lastIndex.offset)
 	for contentExp != contentSize {
+		verbose = true
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
-			t.logger.Warn("Truncating dangling head", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
+			t.logger.Warn("Truncating dangling head", "indexed", contentExp, "stored", contentSize)
 			if err := truncateFreezerFile(t.head, contentExp); err != nil {
 				return err
 			}
@@ -282,7 +284,7 @@ func (t *freezerTable) repair() error {
 		}
 		// Truncate the index to point within the head file
 		if contentExp > contentSize {
-			t.logger.Warn("Truncating dangling indexes", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
+			t.logger.Warn("Truncating dangling indexes", "indexes", offsetsSize/indexEntrySize, "indexed", contentExp, "stored", contentSize)
 			if err := truncateFreezerFile(t.index, offsetsSize-indexEntrySize); err != nil {
 				return err
 			}
@@ -343,7 +345,11 @@ func (t *freezerTable) repair() error {
 	if err := t.preopen(); err != nil {
 		return err
 	}
-	t.logger.Debug("Chain freezer table opened", "items", t.items, "size", common.StorageSize(t.headBytes))
+	if verbose {
+		t.logger.Info("Chain freezer table opened", "items", t.items, "size", t.headBytes)
+	} else {
+		t.logger.Debug("Chain freezer table opened", "items", t.items, "size", common.StorageSize(t.headBytes))
+	}
 	return nil
 }
 
@@ -553,21 +559,31 @@ func (t *freezerTable) Close() error {
 	defer t.lock.Unlock()
 
 	var errs []error
-	if err := t.index.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	t.index = nil
-
-	if err := t.meta.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	t.meta = nil
-
-	for _, f := range t.files {
-		if err := f.Close(); err != nil {
-			errs = append(errs, err)
+	doClose := func(f *os.File, sync bool, close bool) {
+		if sync && !t.readonly {
+			if err := f.Sync(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if close {
+			if err := f.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
+	// Trying to fsync a file opened in rdonly causes "Access denied"
+	// error on Windows.
+	doClose(t.index, true, true)
+	doClose(t.meta, true, true)
+	// The preopened non-head data-files are all opened in readonly.
+	// The head is opened in rw-mode, so we sync it here - but since it's also
+	// part of t.files, it will be closed in the loop below.
+	doClose(t.head, true, false) // sync but do not close
+	for _, f := range t.files {
+		doClose(f, false, true) // close but do not sync
+	}
+	t.index = nil
+	t.meta = nil
 	t.head = nil
 
 	if errs != nil {
@@ -724,7 +740,7 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	defer t.lock.RUnlock()
 
 	// Ensure the table and the item are accessible
-	if t.index == nil || t.head == nil {
+	if t.index == nil || t.head == nil || t.meta == nil {
 		return nil, nil, errClosed
 	}
 	var (
@@ -872,7 +888,9 @@ func (t *freezerTable) advanceHead() error {
 func (t *freezerTable) Sync() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-
+	if t.index == nil || t.head == nil || t.meta == nil {
+		return errClosed
+	}
 	var err error
 	trackError := func(e error) {
 		if e != nil && err == nil {
@@ -903,7 +921,8 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 		fmt.Fprintf(w, "Failed to decode freezer table %v\n", err)
 		return
 	}
-	fmt.Fprintf(w, "Version %d deleted %d, hidden %d\n", meta.Version, atomic.LoadUint64(&t.itemOffset), atomic.LoadUint64(&t.itemHidden))
+	fmt.Fprintf(w, "Version %d count %d, deleted %d, hidden %d\n", meta.Version,
+		atomic.LoadUint64(&t.items), atomic.LoadUint64(&t.itemOffset), atomic.LoadUint64(&t.itemHidden))
 
 	buf := make([]byte, indexEntrySize)
 
