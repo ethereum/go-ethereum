@@ -112,19 +112,23 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		return nil, nil
 	}
 
+	mem := NewMemory()       // bound memory
+	stack, err := NewStack() // local stack
+	if err != nil {
+		return nil, err
+	}
+	callContext := &ScopeContext{
+		Memory:   mem,
+		Stack:    stack,
+		Contract: contract,
+	}
+
 	var (
-		op          OpCode        // current opcode
-		mem         = NewMemory() // bound memory
-		stack       = newstack()  // local stack
-		callContext = &ScopeContext{
-			Memory:   mem,
-			Stack:    stack,
-			Contract: contract,
-		}
+		op OpCode // current opcode
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
-		pc   = uint64(0) // program counter
+		pc   uint64 // program counter
 		cost uint64
 		// copies used by tracer
 		pcCopy  uint64 // needed for the deferred EVMLogger
@@ -135,9 +139,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
-	defer func() {
-		returnStack(stack)
-	}()
+	defer ReturnNormalStack(stack)
 	contract.Input = input
 
 	if in.cfg.Debug {
@@ -166,7 +168,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		operation := in.cfg.JumpTable[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
-		if sLen := stack.len(); sLen < operation.minStack {
+		if sLen := stack.Len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}

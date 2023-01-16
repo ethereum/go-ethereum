@@ -138,7 +138,7 @@ func (a *AccessListTracer) CaptureStart(env *vm.EVM, from common.Address, to com
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
 func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	stack := scope.Stack
-	stackData := stack.Data()
+	stackData := stack.Data
 	stackLen := len(stackData)
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())

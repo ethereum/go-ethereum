@@ -640,14 +640,14 @@ func (s *stackObj) Peek(idx int) goja.Value {
 
 // peek returns the nth-from-the-top element of the stack.
 func (s *stackObj) peek(idx int) (*big.Int, error) {
-	if len(s.stack.Data()) <= idx || idx < 0 {
-		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data()), idx)
+	if len(s.stack.Data) <= idx || idx < 0 {
+		return nil, fmt.Errorf("tracer accessed out of bound stack: size %d, index %d", len(s.stack.Data), idx)
 	}
 	return s.stack.Back(idx).ToBig(), nil
 }
 
 func (s *stackObj) Length() int {
-	return len(s.stack.Data())
+	return len(s.stack.Data)
 }
 
 func (s *stackObj) setupObject() *goja.Object {
