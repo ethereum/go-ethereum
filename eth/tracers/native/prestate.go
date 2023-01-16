@@ -32,7 +32,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
 
 func init() {
-	register("prestateTracer", newPrestateTracer)
+	tracers.DefaultDirectory.Register("prestateTracer", newPrestateTracer, false)
 }
 
 type state = map[common.Address]*account
@@ -45,7 +45,7 @@ type account struct {
 }
 
 func (a *account) exists() bool {
-	return a.Balance.Sign() != 0 || a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0
+	return a.Nonce > 0 || len(a.Code) > 0 || len(a.Storage) > 0 || (a.Balance != nil && a.Balance.Sign() != 0)
 }
 
 type accountMarshaling struct {

@@ -19,7 +19,6 @@ package tracers
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -42,31 +41,55 @@ type Tracer interface {
 	Stop(err error)
 }
 
-type lookupFunc func(string, *Context, json.RawMessage) (Tracer, error)
+type ctorFn func(*Context, json.RawMessage) (Tracer, error)
+type jsCtorFn func(string, *Context, json.RawMessage) (Tracer, error)
 
-var (
-	lookups []lookupFunc
-)
+type elem struct {
+	ctor ctorFn
+	isJS bool
+}
 
-// RegisterLookup registers a method as a lookup for tracers, meaning that
-// users can invoke a named tracer through that lookup. If 'wildcard' is true,
-// then the lookup will be placed last. This is typically meant for interpreted
-// engines (js) which can evaluate dynamic user-supplied code.
-func RegisterLookup(wildcard bool, lookup lookupFunc) {
-	if wildcard {
-		lookups = append(lookups, lookup)
-	} else {
-		lookups = append([]lookupFunc{lookup}, lookups...)
-	}
+// DefaultDirectory is the collection of tracers bundled by default.
+var DefaultDirectory = directory{elems: make(map[string]elem)}
+
+// directory provides functionality to lookup a tracer by name
+// and a function to instantiate it. It falls back to a JS code evaluator
+// if no tracer of the given name exists.
+type directory struct {
+	elems  map[string]elem
+	jsEval jsCtorFn
+}
+
+// Register registers a method as a lookup for tracers, meaning that
+// users can invoke a named tracer through that lookup.
+func (d *directory) Register(name string, f ctorFn, isJS bool) {
+	d.elems[name] = elem{ctor: f, isJS: isJS}
+}
+
+// RegisterJSEval registers a tracer that is able to parse
+// dynamic user-provided JS code.
+func (d *directory) RegisterJSEval(f jsCtorFn) {
+	d.jsEval = f
 }
 
 // New returns a new instance of a tracer, by iterating through the
-// registered lookups.
-func New(code string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
-	for _, lookup := range lookups {
-		if tracer, err := lookup(code, ctx, cfg); err == nil {
-			return tracer, nil
-		}
+// registered lookups. Name is either name of an existing tracer
+// or an arbitrary JS code.
+func (d *directory) New(name string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
+	if elem, ok := d.elems[name]; ok {
+		return elem.ctor(ctx, cfg)
 	}
-	return nil, errors.New("tracer not found")
+	// Assume JS code
+	return d.jsEval(name, ctx, cfg)
+}
+
+// IsJS will return true if the given tracer will evaluate
+// JS code. Because code evaluation has high overhead, this
+// info will be used in determining fast and slow code paths.
+func (d *directory) IsJS(name string) bool {
+	if elem, ok := d.elems[name]; ok {
+		return elem.isJS
+	}
+	// JS eval will execute JS code
+	return true
 }

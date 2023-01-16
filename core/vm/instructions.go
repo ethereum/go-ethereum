@@ -633,7 +633,6 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas)

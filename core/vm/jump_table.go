@@ -55,6 +55,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	shardingInstructionSet         = newShardingInstructionSet()
 )
 
@@ -80,8 +81,14 @@ func validate(jt JumpTable) JumpTable {
 }
 
 func newShardingInstructionSet() JumpTable {
-	instructionSet := newLondonInstructionSet()
+	instructionSet := newShanghaiInstructionSet()
 	enableSharding(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable3860(&instructionSet)
 	return validate(instructionSet)
 }
 

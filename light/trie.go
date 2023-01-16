@@ -115,9 +115,9 @@ func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	return res, err
 }
 
-func (t *odrTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
-	key = crypto.Keccak256(key)
+func (t *odrTrie) TryGetAccount(address common.Address) (*types.StateAccount, error) {
 	var res types.StateAccount
+	key := crypto.Keccak256(address.Bytes())
 	err := t.do(key, func() (err error) {
 		value, err := t.trie.TryGet(key)
 		if err != nil {
@@ -131,8 +131,8 @@ func (t *odrTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	return &res, err
 }
 
-func (t *odrTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	key = crypto.Keccak256(key)
+func (t *odrTrie) TryUpdateAccount(address common.Address, acc *types.StateAccount) error {
+	key := crypto.Keccak256(address.Bytes())
 	value, err := rlp.EncodeToBytes(acc)
 	if err != nil {
 		return fmt.Errorf("decoding error in account update: %w", err)
@@ -157,8 +157,8 @@ func (t *odrTrie) TryDelete(key []byte) error {
 }
 
 // TryDeleteAccount abstracts an account deletion from the trie.
-func (t *odrTrie) TryDeleteAccount(key []byte) error {
-	key = crypto.Keccak256(key)
+func (t *odrTrie) TryDeleteAccount(address common.Address) error {
+	key := crypto.Keccak256(address.Bytes())
 	return t.do(key, func() error {
 		return t.trie.TryDelete(key)
 	})

@@ -115,6 +115,11 @@ type headerMarshaling struct {
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
+// TimeBig returns the header's time field as a big int.
+func (h *Header) TimeBig() *big.Int {
+	return new(big.Int).SetUint64(h.Time)
+}
+
 // SetExcessDataGas sets the excess_data_gas field in the header
 func (h *Header) SetExcessDataGas(v *big.Int) {
 	h.ExcessDataGas = new(big.Int)

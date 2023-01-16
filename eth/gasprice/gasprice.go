@@ -176,7 +176,8 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 		results   []*big.Int
 	)
 	for sent < oracle.checkBlocks && number > 0 {
-		go oracle.getBlockValues(ctx, types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number)), head.Time), number, sampleNumber, oracle.ignorePrice, result, quit)
+		signer := types.MakeSigner(oracle.backend.ChainConfig(), big.NewInt(int64(number)), head.Time)
+		go oracle.getBlockValues(ctx, signer, number, sampleNumber, oracle.ignorePrice, result, quit)
 		sent++
 		exp++
 		number--

@@ -208,8 +208,8 @@ func (test *udpV5Test) expectNodes(wantReqID []byte, wantTotal uint8, wantNodes 
 			if !bytes.Equal(p.ReqID, wantReqID) {
 				test.t.Fatalf("wrong request ID %v in response, want %v", p.ReqID, wantReqID)
 			}
-			if p.Total != wantTotal {
-				test.t.Fatalf("wrong total response count %d, want %d", p.Total, wantTotal)
+			if p.RespCount != wantTotal {
+				test.t.Fatalf("wrong total response count %d, want %d", p.RespCount, wantTotal)
 			}
 			for _, record := range p.Nodes {
 				n, _ := enode.New(enode.ValidSchemesForTesting, record)
@@ -301,14 +301,14 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 			t.Fatalf("wrong distances in request: %v", p.Distances)
 		}
 		test.packetIn(&v5wire.Nodes{
-			ReqID: p.ReqID,
-			Total: 2,
-			Nodes: nodesToRecords(nodes[:4]),
+			ReqID:     p.ReqID,
+			RespCount: 2,
+			Nodes:     nodesToRecords(nodes[:4]),
 		})
 		test.packetIn(&v5wire.Nodes{
-			ReqID: p.ReqID,
-			Total: 2,
-			Nodes: nodesToRecords(nodes[4:]),
+			ReqID:     p.ReqID,
+			RespCount: 2,
+			Nodes:     nodesToRecords(nodes[4:]),
 		})
 	})
 
@@ -409,16 +409,16 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 	test.waitPacketOut(func(p *v5wire.Findnode, addr *net.UDPAddr, _ v5wire.Nonce) {
 		time.Sleep(respTimeout - 50*time.Millisecond)
 		test.packetIn(&v5wire.Nodes{
-			ReqID: p.ReqID,
-			Total: 2,
-			Nodes: nodesToRecords(nodes[:4]),
+			ReqID:     p.ReqID,
+			RespCount: 2,
+			Nodes:     nodesToRecords(nodes[:4]),
 		})
 
 		time.Sleep(respTimeout - 50*time.Millisecond)
 		test.packetIn(&v5wire.Nodes{
-			ReqID: p.ReqID,
-			Total: 2,
-			Nodes: nodesToRecords(nodes[4:]),
+			ReqID:     p.ReqID,
+			RespCount: 2,
+			Nodes:     nodesToRecords(nodes[4:]),
 		})
 	})
 	if err := <-done; err != nil {
