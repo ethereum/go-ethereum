@@ -217,11 +217,8 @@ The other tools bundled with Geth can be downloaded and built in the same way, f
 go install github.com/ethereum/go-ethereum/cmd/clef@latest
 ```
 
-An existing Geth installation can be updated by navigating to the source directory and running `go get -u`, for example:
 
 ```sh
-cd <GOPATH>/pkg/mod/github.com/ethereum/go-ethereum@v1.10.26 && go get -u
-```
 
 For macOS users, errors related to macOS header files are usually fixed by installing XCode Command Line Tools with `xcode-select --install`.
 Another common error is: `go: cannot use path@version syntax in GOPATH mode`. This and other similar errors can often be fixed by enabling gomodules using `export GO111MODULE=on`.
