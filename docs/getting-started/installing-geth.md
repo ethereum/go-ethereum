@@ -218,7 +218,6 @@ go install github.com/ethereum/go-ethereum/cmd/clef@latest
 ```
 
 
-```sh
 
 For macOS users, errors related to macOS header files are usually fixed by installing XCode Command Line Tools with `xcode-select --install`.
 Another common error is: `go: cannot use path@version syntax in GOPATH mode`. This and other similar errors can often be fixed by enabling gomodules using `export GO111MODULE=on`.
