@@ -288,7 +288,7 @@ var (
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
-		OsakaTime:                     nil,
+		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -318,7 +318,7 @@ var (
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
-		OsakaTime:                     nil,
+		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
@@ -348,7 +348,7 @@ var (
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
-		OsakaTime:                     nil,
+		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -378,7 +378,7 @@ var (
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
 		CancunTime:                    nil,
-		OsakaTime:                     nil,
+		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
@@ -479,7 +479,7 @@ type ChainConfig struct {
 
 	ShanghaiTime *big.Int `json:"shanghaiTime,omitempty"` // Shanghai switch time (nil = no fork, 0 = already on shanghai)
 	CancunTime   *big.Int `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
-	OsakaTime    *big.Int `json:"osakaTime,omitempty"`    // Osaka switch time (nil = no fork, 0 = already on osaka)
+	PragueTime   *big.Int `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -597,8 +597,8 @@ func (c *ChainConfig) Description() string {
 	if c.CancunTime != nil {
 		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", c.CancunTime)
 	}
-	if c.OsakaTime != nil {
-		banner += fmt.Sprintf(" - Osaka:                      @%-10v\n", c.OsakaTime)
+	if c.PragueTime != nil {
+		banner += fmt.Sprintf(" - Prague:                      @%-10v\n", c.PragueTime)
 	}
 	return banner
 }
@@ -693,9 +693,9 @@ func (c *ChainConfig) IsCancun(time *big.Int) bool {
 	return isTimestampForked(c.CancunTime, time)
 }
 
-// IsOsaka returns whether num is either equal to the Osaka fork time or greater.
-func (c *ChainConfig) IsOsaka(time *big.Int) bool {
-	return isTimestampForked(c.OsakaTime, time)
+// IsPrague returns whether num is either equal to the Prague fork time or greater.
+func (c *ChainConfig) IsPrague(time *big.Int) bool {
+	return isTimestampForked(c.PragueTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -751,7 +751,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
-		{name: "osakaTime", timestamp: c.OsakaTime, optional: true},
+		{name: "osakaTime", timestamp: c.PragueTime, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -852,8 +852,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.CancunTime, newcfg.CancunTime, headTimestamp) {
 		return newTimestampCompatError("Cancun fork timestamp", c.CancunTime, newcfg.CancunTime)
 	}
-	if isForkTimestampIncompatible(c.OsakaTime, newcfg.OsakaTime, headTimestamp) {
-		return newTimestampCompatError("Osaka fork timestamp", c.OsakaTime, newcfg.OsakaTime)
+	if isForkTimestampIncompatible(c.PragueTime, newcfg.PragueTime, headTimestamp) {
+		return newTimestampCompatError("Prague fork timestamp", c.PragueTime, newcfg.PragueTime)
 	}
 	return nil
 }
@@ -999,7 +999,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, isCancun, isOsaka                  bool
+	IsMerge, IsShanghai, isCancun, isPrague                 bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1023,6 +1023,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(timestamp),
 		isCancun:         c.IsCancun(timestamp),
-		isOsaka:          c.IsOsaka(timestamp),
+		isPrague:         c.IsPrague(timestamp),
 	}
 }
