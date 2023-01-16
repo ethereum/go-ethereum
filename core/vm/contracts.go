@@ -39,6 +39,7 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
+	ContractRef
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
@@ -46,88 +47,115 @@ type PrecompiledContract interface {
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
 var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
+	ecrecover{}.Address():     &ecrecover{},
+	sha256hash{}.Address():    &sha256hash{},
+	ripemd160hash{}.Address(): &ripemd160hash{},
+	dataCopy{}.Address():      &dataCopy{},
 }
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
 var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}): &bn256AddByzantium{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulByzantium{},
-	common.BytesToAddress([]byte{8}): &bn256PairingByzantium{},
+	ecrecover{}.Address():               &ecrecover{},
+	sha256hash{}.Address():              &sha256hash{},
+	ripemd160hash{}.Address():           &ripemd160hash{},
+	dataCopy{}.Address():                &dataCopy{},
+	bigModExp{}.Address():               &bigModExp{eip2565: false},
+	bn256AddByzantium{}.Address():       &bn256AddByzantium{},
+	bn256ScalarMulByzantium{}.Address(): &bn256ScalarMulByzantium{},
+	bn256PairingByzantium{}.Address():   &bn256PairingByzantium{},
 }
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
 var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: false},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	ecrecover{}.Address():              &ecrecover{},
+	sha256hash{}.Address():             &sha256hash{},
+	ripemd160hash{}.Address():          &ripemd160hash{},
+	dataCopy{}.Address():               &dataCopy{},
+	bigModExp{}.Address():              &bigModExp{eip2565: false},
+	bn256AddIstanbul{}.Address():       &bn256AddIstanbul{},
+	bn256ScalarMulIstanbul{}.Address(): &bn256ScalarMulIstanbul{},
+	bn256PairingIstanbul{}.Address():   &bn256PairingIstanbul{},
+	blake2F{}.Address():                &blake2F{},
 }
 
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
 var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2F{},
+	ecrecover{}.Address():              &ecrecover{},
+	sha256hash{}.Address():             &sha256hash{},
+	ripemd160hash{}.Address():          &ripemd160hash{},
+	dataCopy{}.Address():               &dataCopy{},
+	bigModExp{}.Address():              &bigModExp{eip2565: true},
+	bn256AddIstanbul{}.Address():       &bn256AddIstanbul{},
+	bn256ScalarMulIstanbul{}.Address(): &bn256ScalarMulIstanbul{},
+	bn256PairingIstanbul{}.Address():   &bn256PairingIstanbul{},
+	blake2F{}.Address():                &blake2F{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
 // contracts specified in EIP-2537. These are exported for testing purposes.
 var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{10}): &bls12381G1Add{},
-	common.BytesToAddress([]byte{11}): &bls12381G1Mul{},
-	common.BytesToAddress([]byte{12}): &bls12381G1MultiExp{},
-	common.BytesToAddress([]byte{13}): &bls12381G2Add{},
-	common.BytesToAddress([]byte{14}): &bls12381G2Mul{},
-	common.BytesToAddress([]byte{15}): &bls12381G2MultiExp{},
-	common.BytesToAddress([]byte{16}): &bls12381Pairing{},
-	common.BytesToAddress([]byte{17}): &bls12381MapG1{},
-	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
+	bls12381G1Add{}.Address():      &bls12381G1Add{},
+	bls12381G1Mul{}.Address():      &bls12381G1Mul{},
+	bls12381G1MultiExp{}.Address(): &bls12381G1MultiExp{},
+	bls12381G2Add{}.Address():      &bls12381G2Add{},
+	bls12381G2Mul{}.Address():      &bls12381G2Mul{},
+	bls12381G2MultiExp{}.Address(): &bls12381G2MultiExp{},
+	bls12381Pairing{}.Address():    &bls12381Pairing{},
+	bls12381MapG1{}.Address():      &bls12381MapG1{},
+	bls12381MapG2{}.Address():      &bls12381MapG2{},
 }
 
 var (
-	PrecompiledAddressesBerlin    []common.Address
-	PrecompiledAddressesIstanbul  []common.Address
-	PrecompiledAddressesByzantium []common.Address
-	PrecompiledAddressesHomestead []common.Address
+	// PrecompiledAddressesBerlin defines the default set of pre-compiled
+	// Ethereum contract addresses used in the Berlin release.
+	PrecompiledAddressesBerlin = []common.Address{
+		ecrecover{}.Address(),
+		sha256hash{}.Address(),
+		ripemd160hash{}.Address(),
+		dataCopy{}.Address(),
+		bigModExp{}.Address(),
+		bn256AddIstanbul{}.Address(),
+		bn256ScalarMulIstanbul{}.Address(),
+		bn256PairingIstanbul{}.Address(),
+		blake2F{}.Address(),
+	}
+	// PrecompiledAddressesIstanbul defines the default set of pre-compiled
+	// Ethereum contract addresses used in the Istanbul release.
+	PrecompiledAddressesIstanbul = []common.Address{
+		ecrecover{}.Address(),
+		sha256hash{}.Address(),
+		ripemd160hash{}.Address(),
+		dataCopy{}.Address(),
+		bigModExp{}.Address(),
+		bn256AddIstanbul{}.Address(),
+		bn256ScalarMulIstanbul{}.Address(),
+		bn256PairingIstanbul{}.Address(),
+		blake2F{}.Address(),
+	}
+	// PrecompiledAddressesByzantium defines the default set of pre-compiled
+	// Ethereum contract addresses used in the Byzantium release.
+	PrecompiledAddressesByzantium = []common.Address{
+		ecrecover{}.Address(),
+		sha256hash{}.Address(),
+		ripemd160hash{}.Address(),
+		dataCopy{}.Address(),
+		bigModExp{}.Address(),
+		bn256AddByzantium{}.Address(),
+		bn256ScalarMulByzantium{}.Address(),
+		bn256PairingByzantium{}.Address(),
+	}
+	// PrecompiledAddressesHomestead defines the default set of pre-compiled
+	// Ethereum contract addresses used in the Homestead release.
+	PrecompiledAddressesHomestead = []common.Address{
+		ecrecover{}.Address(),
+		sha256hash{}.Address(),
+		ripemd160hash{}.Address(),
+		dataCopy{}.Address(),
+	}
 )
-
-func init() {
-	for k := range PrecompiledContractsHomestead {
-		PrecompiledAddressesHomestead = append(PrecompiledAddressesHomestead, k)
-	}
-	for k := range PrecompiledContractsByzantium {
-		PrecompiledAddressesByzantium = append(PrecompiledAddressesByzantium, k)
-	}
-	for k := range PrecompiledContractsIstanbul {
-		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
-	}
-	for k := range PrecompiledContractsBerlin {
-		PrecompiledAddressesBerlin = append(PrecompiledAddressesBerlin, k)
-	}
-}
 
 // DefaultActivePrecompiles returns the set of precompiles enabled with the default configuration.
 func DefaultActivePrecompiles(rules params.Rules) []common.Address {
@@ -242,6 +270,12 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 // ECRECOVER implemented as a native contract.
 type ecrecover struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (ecrecover) Address() common.Address {
+	return common.BytesToAddress([]byte{1})
+}
+
 func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
@@ -280,6 +314,12 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 // SHA256 implemented as a native contract.
 type sha256hash struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (sha256hash) Address() common.Address {
+	return common.BytesToAddress([]byte{2})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
 // This method does not require any overflow checking as the input size gas costs
@@ -295,6 +335,12 @@ func (c *sha256hash) Run(input []byte) ([]byte, error) {
 
 // RIPEMD160 implemented as a native contract.
 type ripemd160hash struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (ripemd160hash) Address() common.Address {
+	return common.BytesToAddress([]byte{3})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
@@ -312,6 +358,12 @@ func (c *ripemd160hash) Run(input []byte) ([]byte, error) {
 
 // data copy implemented as a native contract.
 type dataCopy struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (dataCopy) Address() common.Address {
+	return common.BytesToAddress([]byte{4})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
@@ -374,6 +426,12 @@ func modexpMultComplexity(x *big.Int) *big.Int {
 		)
 	}
 	return x
+}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bigModExp) Address() common.Address {
+	return common.BytesToAddress([]byte{5})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -522,6 +580,12 @@ func runBn256Add(input []byte) ([]byte, error) {
 // Istanbul consensus rules.
 type bn256AddIstanbul struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256AddIstanbul) Address() common.Address {
+	return common.BytesToAddress([]byte{6})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256AddIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256AddGasIstanbul
@@ -534,6 +598,12 @@ func (c *bn256AddIstanbul) Run(input []byte) ([]byte, error) {
 // bn256AddByzantium implements a native elliptic curve point addition
 // conforming to Byzantium consensus rules.
 type bn256AddByzantium struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256AddByzantium) Address() common.Address {
+	return common.BytesToAddress([]byte{6})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256AddByzantium) RequiredGas(input []byte) uint64 {
@@ -560,6 +630,12 @@ func runBn256ScalarMul(input []byte) ([]byte, error) {
 // multiplication conforming to Istanbul consensus rules.
 type bn256ScalarMulIstanbul struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256ScalarMulIstanbul) Address() common.Address {
+	return common.BytesToAddress([]byte{7})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMulIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256ScalarMulGasIstanbul
@@ -572,6 +648,12 @@ func (c *bn256ScalarMulIstanbul) Run(input []byte) ([]byte, error) {
 // bn256ScalarMulByzantium implements a native elliptic curve scalar
 // multiplication conforming to Byzantium consensus rules.
 type bn256ScalarMulByzantium struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256ScalarMulByzantium) Address() common.Address {
+	return common.BytesToAddress([]byte{7})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMulByzantium) RequiredGas(input []byte) uint64 {
@@ -628,6 +710,12 @@ func runBn256Pairing(input []byte) ([]byte, error) {
 // conforming to Istanbul consensus rules.
 type bn256PairingIstanbul struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256PairingIstanbul) Address() common.Address {
+	return common.BytesToAddress([]byte{8})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256PairingIstanbul) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasIstanbul + uint64(len(input)/192)*params.Bn256PairingPerPointGasIstanbul
@@ -641,6 +729,12 @@ func (c *bn256PairingIstanbul) Run(input []byte) ([]byte, error) {
 // conforming to Byzantium consensus rules.
 type bn256PairingByzantium struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bn256PairingByzantium) Address() common.Address {
+	return common.BytesToAddress([]byte{8})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
 	return params.Bn256PairingBaseGasByzantium + uint64(len(input)/192)*params.Bn256PairingPerPointGasByzantium
@@ -651,6 +745,12 @@ func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 }
 
 type blake2F struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (blake2F) Address() common.Address {
+	return common.BytesToAddress([]byte{9})
+}
 
 func (c *blake2F) RequiredGas(input []byte) uint64 {
 	// If the input is malformed, we can't calculate the gas, return 0 and let the
@@ -721,6 +821,12 @@ var (
 // bls12381G1Add implements EIP-2537 G1Add precompile.
 type bls12381G1Add struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G1Add) Address() common.Address {
+	return common.BytesToAddress([]byte{10})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1AddGas
@@ -759,6 +865,12 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 // bls12381G1Mul implements EIP-2537 G1Mul precompile.
 type bls12381G1Mul struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G1Mul) Address() common.Address {
+	return common.BytesToAddress([]byte{11})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G1MulGas
@@ -794,6 +906,12 @@ func (c *bls12381G1Mul) Run(input []byte) ([]byte, error) {
 
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
 type bls12381G1MultiExp struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G1MultiExp) Address() common.Address {
+	return common.BytesToAddress([]byte{12})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
@@ -852,6 +970,12 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 // bls12381G2Add implements EIP-2537 G2Add precompile.
 type bls12381G2Add struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G2Add) Address() common.Address {
+	return common.BytesToAddress([]byte{13})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2Add) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2AddGas
@@ -890,6 +1014,12 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 // bls12381G2Mul implements EIP-2537 G2Mul precompile.
 type bls12381G2Mul struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G2Mul) Address() common.Address {
+	return common.BytesToAddress([]byte{14})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2Mul) RequiredGas(input []byte) uint64 {
 	return params.Bls12381G2MulGas
@@ -925,6 +1055,12 @@ func (c *bls12381G2Mul) Run(input []byte) ([]byte, error) {
 
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
 type bls12381G2MultiExp struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381G2MultiExp) Address() common.Address {
+	return common.BytesToAddress([]byte{15})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
@@ -982,6 +1118,12 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 
 // bls12381Pairing implements EIP-2537 Pairing precompile.
 type bls12381Pairing struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381Pairing) Address() common.Address {
+	return common.BytesToAddress([]byte{16})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381Pairing) RequiredGas(input []byte) uint64 {
@@ -1062,6 +1204,12 @@ func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
 // bls12381MapG1 implements EIP-2537 MapG1 precompile.
 type bls12381MapG1 struct{}
 
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381MapG1) Address() common.Address {
+	return common.BytesToAddress([]byte{17})
+}
+
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381MapG1) RequiredGas(input []byte) uint64 {
 	return params.Bls12381MapG1Gas
@@ -1096,6 +1244,12 @@ func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
 
 // bls12381MapG2 implements EIP-2537 MapG2 precompile.
 type bls12381MapG2 struct{}
+
+// Address defines the precompiled contract address. This MUST match the address
+// set in the precompiled contract map.
+func (bls12381MapG2) Address() common.Address {
+	return common.BytesToAddress([]byte{18})
+}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bls12381MapG2) RequiredGas(input []byte) uint64 {
