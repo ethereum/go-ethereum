@@ -751,7 +751,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
-		{name: "osakaTime", timestamp: c.PragueTime, optional: true},
+		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
