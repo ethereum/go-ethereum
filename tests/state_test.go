@@ -183,7 +183,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				b.Error(err)
 				return
 			}
-			var rules = config.Rules(new(big.Int), false, new(big.Int))
+			rules := config.Rules(new(big.Int), false, new(big.Int))
 
 			vmconfig.ExtraEips = eips
 			block := t.genesis(config).ToBlock()
@@ -239,7 +239,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				snapshot := statedb.Snapshot()
-				statedb.Prepare(rules, msg.From(), context.Coinbase, msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+				statedb.Prepare(rules, msg.From(), context.Coinbase, msg.To(), evm.ActivePrecompiles(rules), msg.AccessList())
 				b.StartTimer()
 				start := time.Now()
 

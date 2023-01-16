@@ -82,7 +82,7 @@ func (t *fourByteTracer) store(id []byte, size int) {
 func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil, env.Context.Time)
-	t.activePrecompiles = vm.ActivePrecompiles(rules)
+	t.activePrecompiles = env.ActivePrecompiles(rules)
 
 	// Save the outer calldata also
 	if len(input) >= 4 {
