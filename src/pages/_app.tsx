@@ -1,4 +1,4 @@
-import { ChakraProvider } from '@chakra-ui/react';
+import { ChakraProvider, localStorageManager } from '@chakra-ui/react';
 import { AppProps } from 'next/app';
 import { useEffect } from 'react';
 import { init } from '@socialgouv/matomo-next';
@@ -20,7 +20,9 @@ export default function App({ Component, pageProps }: AppProps) {
   }, []);
 
   return (
-    <ChakraProvider theme={theme}>
+    // `colorModeManager` added to fix flashing issue
+    // See: https://chakra-ui.com/docs/styled-system/color-mode#add-colormodemanager-optional-for-ssr
+    <ChakraProvider theme={theme} colorModeManager={localStorageManager}>
       <Layout>
         <Component {...pageProps} />
       </Layout>
