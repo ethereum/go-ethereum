@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -353,6 +354,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
+		// Special case for EOF, if the initcode or deployed code is
+		// invalid, the tx is considered valid (so update nonce), but
+		// is to be treated as an exceptional abort (so burn all gas).
+		if errors.Is(vmerr, vm.ErrInvalidEOF) {
+			st.gas = 0
+			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		}
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

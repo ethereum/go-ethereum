@@ -4491,7 +4491,7 @@ func TestEOF(t *testing.T) {
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(aa)
 
-		// execute flag contract
+		// 0: execute flag contract
 		txdata := &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      0,
@@ -4506,7 +4506,7 @@ func TestEOF(t *testing.T) {
 		tx, _ = types.SignTx(tx, signer, key)
 		b.AddTx(tx)
 
-		// deploy eof contract from eoa
+		// 1: deploy eof contract from eoa
 		txdata = &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      1,
@@ -4521,10 +4521,31 @@ func TestEOF(t *testing.T) {
 		tx, _ = types.SignTx(tx, signer, key)
 		b.AddTx(tx)
 
-		// deploy eof contract from create contract
+		// 2: invalid initcode in create tx, should be valid and use all gas
+		invalid := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			Code:  [][]byte{common.Hex2Bytes("604200")},
+			Data:  []byte{0x01, 0x02, 0x03},
+		}).MarshalBinary()
+		invalid[2] = 0x02 // make version invalid
 		txdata = &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      2,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 3: deploy eof contract from create contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      3,
 			To:         &bb,
 			Gas:        500000,
 			GasFeeCap:  newGwei(5),
@@ -4539,7 +4560,7 @@ func TestEOF(t *testing.T) {
 		// deploy eof contract from create2 contract
 		txdata = &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
-			Nonce:      3,
+			Nonce:      4,
 			To:         &cc,
 			Gas:        500000,
 			GasFeeCap:  newGwei(5),
@@ -4565,6 +4586,11 @@ func TestEOF(t *testing.T) {
 		if state.GetState(aa, common.BigToHash(big.NewInt(int64(i)))).Big().Uint64() != 1 {
 			t.Fatalf("flag %d not set", i)
 		}
+	}
+
+	r := chain.GetReceiptsByHash(blocks[0].Hash())[2]
+	if got, want := r.GasUsed, blocks[0].Transactions()[2].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid initcode: gasUsed %d, gasLimit %d", got, want)
 	}
 
 	// Check various deployment mechanisms.
