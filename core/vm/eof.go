@@ -124,7 +124,7 @@ func (c *Container) MarshalBinary() []byte {
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte) error {
 	if !hasEOFMagic(b) {
-		return fmt.Errorf("%w: want %s", ErrInvalidMagic, eofMagic)
+		return fmt.Errorf("%w: want %x", ErrInvalidMagic, eofMagic)
 	}
 	if len(b) < 14 {
 		return io.ErrUnexpectedEOF
