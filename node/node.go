@@ -383,7 +383,7 @@ func (n *Node) startRPC() error {
 			if !n.config.EnablePersonal {
 				apis = append(apis[:i], apis[i+1:]...)
 			} else {
-				log.Error("Deprecated personal namespace activated")
+				log.Warn("Deprecated personal namespace activated")
 			}
 		}
 	}
