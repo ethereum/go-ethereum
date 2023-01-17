@@ -45,7 +45,7 @@ type multiCallStats struct {
 }
 
 const (
-	singleCallTimeout = 1 * time.Second
+	singleCallTimeout = 5 * time.Second
 	multiCallLimit    = 50
 
 	// client param error
