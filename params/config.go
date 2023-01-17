@@ -401,7 +401,6 @@ func (v *V2) UpdateConfig(round uint64) {
 	for i := range v.configIndex {
 		if v.configIndex[i] <= round {
 			index = v.configIndex[i]
-		} else {
 			break
 		}
 	}
@@ -418,7 +417,6 @@ func (v *V2) Config(round uint64) *V2Config {
 	for i := range v.configIndex {
 		if v.configIndex[i] <= configRound {
 			index = v.configIndex[i]
-		} else {
 			break
 		}
 	}
@@ -433,9 +431,10 @@ func (v *V2) BuildConfigIndex() {
 	}
 
 	// sort, sort lib doesn't support type uint64, it's ok to have O(n^2)  because only few items in the list
+	// Make it descending order
 	for i := 0; i < len(list)-1; i++ {
 		for j := i + 1; j < len(list); j++ {
-			if list[i] > list[j] {
+			if list[i] < list[j] {
 				list[i], list[j] = list[j], list[i]
 			}
 		}

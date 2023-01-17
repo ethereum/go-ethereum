@@ -58,9 +58,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+uint64(x.config.V2.CurrentConfig.MinePeriod) > header.Time.Uint64() {
-		return utils.ErrInvalidTimestamp
-	}
 
 	// Verify this is truely a v2 block first
 	quorumCert, round, _, err := x.getExtraFields(header)
@@ -68,6 +65,13 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		log.Warn("[verifyHeader] decode extra field error", "err", err)
 		return utils.ErrInvalidV2Extra
 	}
+
+	minePeriod := uint64(x.config.V2.Config(uint64(round)).MinePeriod)
+	if parent.Number.Uint64() > x.config.V2.SwitchBlock.Uint64() && parent.Time.Uint64()+minePeriod > header.Time.Uint64() {
+		log.Warn("[verifyHeader] Fail to verify header due to invalid timestamp", "ParentTime", parent.Time.Uint64(), "MinePeriod", minePeriod, "HeaderTime", header.Time.Uint64(), "Hash", header.Hash().Hex())
+		return utils.ErrInvalidTimestamp
+	}
+
 	if round <= quorumCert.ProposedBlockInfo.Round {
 		return utils.ErrRoundInvalid
 	}

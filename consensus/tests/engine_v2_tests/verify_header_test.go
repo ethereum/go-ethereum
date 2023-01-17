@@ -259,6 +259,59 @@ func TestConfigSwitchOnDifferentCertThreshold(t *testing.T) {
 	assert.Equal(t, utils.ErrValidatorNotWithinMasternodes, err)
 }
 
+func TestConfigSwitchOnDifferentMindPeriod(t *testing.T) {
+	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
+	assert.Nil(t, err)
+	configString := string(b)
+
+	var config params.ChainConfig
+	err = json.Unmarshal([]byte(configString), &config)
+	assert.Nil(t, err)
+	// Enable verify
+	config.XDPoS.V2.SkipV2Validation = false
+	// Block 901 is the first v2 block with round of 1
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, &config, nil)
+
+	adaptor := blockchain.Engine().(*XDPoS.XDPoS)
+
+	// Genrate 911 QC
+	proposedBlockInfo := &types.BlockInfo{
+		Hash:   blockchain.GetBlockByNumber(911).Hash(),
+		Round:  types.Round(11),
+		Number: blockchain.GetBlockByNumber(911).Number(),
+	}
+	voteForSign := &types.VoteForSign{
+		ProposedBlockInfo: proposedBlockInfo,
+		GapNumber:         450,
+	}
+
+	// Sign from acc 1, 2, 3
+	acc1SignedHash := SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, types.VoteSigHash(voteForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, types.VoteSigHash(voteForSign).Bytes())
+	var signaturesFirst []types.Signature
+	signaturesFirst = append(signaturesFirst, acc1SignedHash, acc2SignedHash, acc3SignedHash)
+	quorumCert := &types.QuorumCert{
+		ProposedBlockInfo: proposedBlockInfo,
+		Signatures:        signaturesFirst,
+		GapNumber:         450,
+	}
+
+	extra := types.ExtraFields_v2{
+		Round:      types.Round(12),
+		QuorumCert: quorumCert,
+	}
+	extraInBytes, _ := extra.EncodeToBytes()
+
+	// after 910 require 5 signs, but we only give 3 signs
+	block911 := blockchain.GetBlockByNumber(911).Header()
+	block911.Extra = extraInBytes
+	block911.Time = big.NewInt(blockchain.GetBlockByNumber(910).Time().Int64() + 2) //2 is previous config, should get the right config from round
+	err = adaptor.VerifyHeader(blockchain, block911, true)
+
+	assert.Equal(t, utils.ErrInvalidTimestamp, err)
+}
+
 func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	b, err := json.Marshal(params.TestXDPoSMockChainConfig)
 	assert.Nil(t, err)

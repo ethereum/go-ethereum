@@ -121,16 +121,6 @@ func New(config *params.XDPoSConfig, db ethdb.Database, waitPeriodCh chan int) *
 	return engine
 }
 
-/* V2 Block
-SignerFn is a signer callback function to request a hash to be signed by a
-backing account.
-type SignerFn func(accounts.Account, []byte) ([]byte, error)
-
-sigHash returns the hash which is used as input for the delegated-proof-of-stake
-signing. It is the hash of the entire header apart from the 65 byte signature
-contained at the end of the extra data.
-*/
-
 func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 	_, round, _, err := x.getExtraFields(header)
 	if err != nil {
@@ -148,6 +138,15 @@ func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 	}()
 }
 
+/* V2 Block
+SignerFn is a signer callback function to request a hash to be signed by a
+backing account.
+type SignerFn func(accounts.Account, []byte) ([]byte, error)
+
+sigHash returns the hash which is used as input for the delegated-proof-of-stake
+signing. It is the hash of the entire header apart from the 65 byte signature
+contained at the end of the extra data.
+*/
 func (x *XDPoS_v2) SignHash(header *types.Header) (hash common.Hash) {
 	return sigHash(header)
 }
@@ -255,7 +254,7 @@ func (x *XDPoS_v2) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 	_, parentRound, _, err := x.getExtraFields(parent)
 	minePeriod := x.config.V2.Config(uint64(parentRound) + 1).MinePeriod // plus 1 means current block
 	if waitedTime < int64(minePeriod) {
-		log.Trace("[YourTurn] wait after mine period", "minePeriod", x.config.V2.CurrentConfig.MinePeriod, "waitedTime", waitedTime)
+		log.Trace("[YourTurn] wait after mine period", "minePeriod", minePeriod, "waitedTime", waitedTime)
 		return false, nil
 	}
 

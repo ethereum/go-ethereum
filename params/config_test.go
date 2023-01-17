@@ -114,6 +114,6 @@ func TestV2Config(t *testing.T) {
 func TestBuildConfigIndex(t *testing.T) {
 	TestnetChainConfig.XDPoS.V2.BuildConfigIndex()
 	index := TestnetChainConfig.XDPoS.V2.ConfigIndex()
-	expected := []uint64{0, 10, 899}
+	expected := []uint64{899, 10, 0}
 	assert.Equal(t, expected, index)
 }
