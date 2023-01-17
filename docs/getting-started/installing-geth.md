@@ -199,29 +199,25 @@ docker run -it -p 30303:30303 ethereum/client-go
 
 ## Build from source code {#build-from-source}
 
-### Most Linux systems and macOS {#linux-and-macos}
+### Linux and Mac {#linux-and-mac}
 
-Geth is written in [Go](https://golang.org/), so building from source code requires the most recent version of Go to be installed. Instructions for installing Go are available at the [Go installation page](https://golang.org/doc/install) and necessary bundles can be downloaded from the [Go download page](https://golang.org/dl/).
-
-Since Go 1.18 the `go get` command is [no longer used](https://go.dev/doc/go-get-install-deprecation) to download and install packages. Instead, use `go install`, passing the URL of the source code you want to build and a version specifier. For example, the following command will download and build the latest version of Geth:
+The `go-ethereum` repository should be cloned locally. Then, the command `make geth` configures everything for a temporary build and cleans up afterwards. This method of building only works on UNIX-like operating systems, and a Go installation is still required.
 
 ```sh
-go install github.com/ethereum/go-ethereum/cmd/geth@latest
+git clone https://github.com/ethereum/go-ethereum.git
+cd go-ethereum
+make geth
 ```
 
-In order for this to work, `GOPATH` must be set (if it is not, you can set it using `export GOPATH="<path>"`). The source code will be downloaded into `GOPATH/pkg/github.com/ethereum/go-ethereum@v1.10.26` (your version suffix might be different to the one in the example). The binary will be saved in `GOPATH/bin/`.
+These commands create a Geth executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
 
-The other tools bundled with Geth can be downloaded and built in the same way, for example the following command will install the Clef binary in `GOPATH/bin/`:
+To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth GitHub repository. then rebuild and restart the node.
 
 ```sh
-go install github.com/ethereum/go-ethereum/cmd/clef@latest
+cd go-ethereum
+git pull
+make geth
 ```
-
-
-
-For macOS users, errors related to macOS header files are usually fixed by installing XCode Command Line Tools with `xcode-select --install`.
-Another common error is: `go: cannot use path@version syntax in GOPATH mode`. This and other similar errors can often be fixed by enabling gomodules using `export GO111MODULE=on`.
-
 
 ### Windows {#windows}
 
@@ -277,26 +273,7 @@ To start the node, the followijng command can be run:
 build/bin/geth
 ```
 
-### Building without a Go workflow {#building-without-go}
 
-Geth can also be built without using Go workspaces. In this case, the repository should be cloned to a local repository. Then, the command
-`make geth` configures everything for a temporary build and cleans up afterwards. This method of building only works on UNIX-like operating systems, and a Go installation is still required.
-
-```sh
-git clone https://github.com/ethereum/go-ethereum.git
-cd go-ethereum
-make geth
-```
-
-These commands create a Geth executable file in the `go-ethereum/build/bin` folder that can be moved and run from another directory if required. The binary is standalone and doesn't require any additional files.
-
-To update an existing Geth installation simply stop the node, navigate to the project root directory and pull the latest version from the Geth GitHub repository. then rebuild and restart the node.
-
-```sh
-cd go-ethereum
-git pull
-make geth
-```
 
 Additionally all the developer tools provided with Geth (`clef`, `devp2p`, `abigen`, `bootnode`, `evm`, `rlpdump` and `puppeth`) can be compiled by running `make all`. More information about these tools can be found [here](https://github.com/ethereum/go-ethereum#executables).
 
