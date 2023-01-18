@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
@@ -308,17 +307,6 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	return NewDatabase(db), nil
 }
 
-// NewPebbleDBDatabase creates a persistent key-value database without a freezer
-// moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-	log.Info("using Pebble as the backing database")
-	return NewDatabase(db), nil
-}
-
 type dbType int
 
 const (
@@ -351,7 +339,11 @@ func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handle
 		return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
 	}
 	if backingdb == "pebble" || preexistingDb == Pebble {
-		return NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+		if PebbleEnabled {
+			return NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+		} else {
+			return nil, errors.New("backingdb choice not supported on this platform")
+		}
 	}
 	return NewLevelDBDatabase(file, cache, handles, namespace, readonly)
 }
@@ -388,18 +380,18 @@ func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient 
 
 // NewPebbleDBDatabaseWithFreezer creates a persistent key-value database with a
 // freezer moving immutable chain segments into cold storage.
-func NewPebbleDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	kvdb, err := pebble.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-	return frdb, nil
-}
+//func NewPebbleDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+//	kvdb, err := pebble.New(file, cache, handles, namespace, readonly)
+//	if err != nil {
+//		return nil, err
+//	}
+//	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
+//	if err != nil {
+//		kvdb.Close()
+//		return nil, err
+//	}
+//	return frdb, nil
+//}
 
 type counter uint64
 

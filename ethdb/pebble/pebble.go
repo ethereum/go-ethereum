@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !386
+
 // Package pebble implements the key-value database layer based on pebble.
 package pebble
 
@@ -442,7 +444,7 @@ func (db *Database) meter(refresh time.Duration) {
 		}
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
 		manuallyAllocated := metrics.BlockCache.Size + int64(metrics.MemTable.Size) + int64(metrics.MemTable.ZombieSize)
-		db.manualMemAllocGauge.Update(int64(manuallyAllocated))
+		db.manualMemAllocGauge.Update(manuallyAllocated)
 		db.memCompGauge.Update(metrics.Flush.Count)
 		db.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		db.level0CompGauge.Update(level0CompCount)
