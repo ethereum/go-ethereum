@@ -89,8 +89,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		backoff   bool
 		triggered chan struct{} // Used in tests
 		nfdb      = &nofreezedb{KeyValueStore: db}
+		timer     = time.NewTimer(freezerRecheckInterval)
 	)
-	timer := time.NewTimer(freezerRecheckInterval)
 	defer timer.Stop()
 
 	for {
