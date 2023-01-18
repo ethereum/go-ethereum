@@ -338,8 +338,9 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 			continue
 		}
 		// Handle web3 in a special way (i.e. other numbers aren't auto completed)
-		if start >= 3 && line[start-3:start] == "web3" {
-			start -= 3
+		if start >= 3 && line[start-3:start+1] == "web3" {
+			// Start will be decremented one more by loop
+			start -= 2
 			continue
 		}
 		// We've hit an unexpected character, autocomplete form here
