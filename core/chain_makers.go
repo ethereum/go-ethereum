@@ -215,6 +215,12 @@ func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
 			idx = wd[len(wd)-1].Index + 1
 			break
 		}
+		if i == 0 {
+			// Correctly set the index if no parent had withdrawals
+			if wd := b.parent.Withdrawals(); len(wd) != 0 {
+				idx = wd[len(wd)-1].Index + 1
+			}
+		}
 	}
 	w.Index = idx
 	b.withdrawals = append(b.withdrawals, w)

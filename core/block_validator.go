@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -67,6 +68,9 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)
 	}
 	if v.config.IsShanghai(new(big.Int).SetUint64(block.Time())) {
+		if block.WithdrawalsHash() == nil {
+			return errors.New("nil withdrawal hash post-shanghai")
+		}
 		if hash := types.DeriveSha(block.Withdrawals(), trie.NewStackTrie(nil)); hash != *header.WithdrawalsHash {
 			return fmt.Errorf("withdrawals root hash mismatch: have %x, want %x", hash, *header.WithdrawalsHash)
 		}

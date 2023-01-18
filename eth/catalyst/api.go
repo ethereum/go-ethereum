@@ -348,7 +348,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config beacon.Transit
 
 // GetPayloadV1 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.ExecutableData, error) {
-	data, err := api.GetPayloadV2(payloadID)
+	data, err := api.getPayload(payloadID)
 	if err != nil {
 		return nil, err
 	}
@@ -357,6 +357,10 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 
 // GetPayloadV2 returns a cached payload by id.
 func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutableDataV2, error) {
+	return api.getPayload(payloadID)
+}
+
+func (api *ConsensusAPI) getPayload(payloadID beacon.PayloadID) (*beacon.ExecutableDataV2, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID)
 	if data == nil {
