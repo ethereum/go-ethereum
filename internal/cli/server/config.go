@@ -889,6 +889,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		n.Preimages = c.Cache.Preimages
 		n.TxLookupLimit = c.Cache.TxLookupLimit
 		n.TrieTimeout = c.Cache.TrieTimeout
+		n.TriesInMemory = c.Cache.TriesInMemory
 	}
 
 	n.RPCGasCap = c.JsonRPC.GasCap
