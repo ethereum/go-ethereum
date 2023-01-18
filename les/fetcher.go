@@ -272,6 +272,7 @@ func (f *lightFetcher) mainloop() {
 		localHead = f.chain.CurrentHeader()
 		localTd   = f.chain.GetTd(localHead.Hash(), localHead.Number.Uint64())
 	)
+	defer requestTimer.Stop()
 	sub := f.chain.SubscribeChainHeadEvent(headCh)
 	defer sub.Unsubscribe()
 
