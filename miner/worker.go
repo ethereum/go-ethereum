@@ -89,10 +89,6 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
-
-	// TODO: will be handled (and made mandatory) in a hardfork event
-	// when true, will get the transaction dependencies for parallel execution, also set in `state_processor.go`
-	EnableMVHashMap = true
 )
 
 // metrics gauge to track total and empty blocks sealed by a miner
@@ -964,6 +960,14 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	var count int
 
 	var depsWg sync.WaitGroup
+
+	var EnableMVHashMap bool
+
+	if w.chainConfig.Bor.IsParallelUniverse(env.header.Number) {
+		EnableMVHashMap = true
+	} else {
+		EnableMVHashMap = false
+	}
 
 	// create and add empty mvHashMap in statedb
 	if EnableMVHashMap {

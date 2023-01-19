@@ -716,6 +716,8 @@ func BenchmarkBorMining(b *testing.B) {
 }
 
 // uses core.NewParallelBlockChain to use the dependencies present in the block header
+// params.BorUnittestChainConfig contains the ParallelUniverseBlock ad big.NewInt(5), so the first 4 blocks will not have metadata.
+// nolint: gocognit
 func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 	chainConfig := params.BorUnittestChainConfig
 
@@ -810,11 +812,17 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 				b.Fatalf("failed to insert new mined block %d: %v", block.NumberU64(), err)
 			}
 
-			// check for dependencies
-			deps := block.TxDependency()
-			for i := 1; i < block.Transactions().Len(); i++ {
-				if deps[i][0] != uint64(i) || deps[i][1] != uint64(0) || deps[i][2] != uint64(i-1) || len(deps[i]) != 3 {
-					b.Fatalf("wrong dependency")
+			// check for dependencies for block number > 4
+			if block.NumberU64() <= 4 {
+				if block.TxDependency() != nil {
+					b.Fatalf("dependency not nil")
+				}
+			} else {
+				deps := block.TxDependency()
+				for i := 1; i < block.Transactions().Len(); i++ {
+					if deps[i][0] != uint64(i) || deps[i][1] != uint64(0) || deps[i][2] != uint64(i-1) || len(deps[i]) != 3 {
+						b.Fatalf("wrong dependency")
+					}
 				}
 			}
 
