@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !go1.18
-// +build !go1.18
+//go:build !go1.19
+// +build !go1.19
 
 package version
 
 import "runtime/debug"
 
-// In Go versions before 1.18, VCS information is not available.
+// In Go versions before 1.19, VCS information is not available.
 
 func buildInfoVCS(info *debug.BuildInfo) (VCSInfo, bool) {
 	return VCSInfo{}, false
