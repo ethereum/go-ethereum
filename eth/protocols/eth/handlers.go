@@ -524,6 +524,13 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		if tx == nil {
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
+		// TODO(eip-4844): implement penalizing of clients who send unrequested
+		// blob transactions. While we're interop testing we'll go ahead and
+		// accept any that happen to come our way.
+		/*if tx.Tx.Type() == types.BlobTxType {
+			// blob txs should never be broadcast
+			return fmt.Errorf("transaction %v is a blob tx", i)
+		}*/
 		peer.markTransaction(tx.Hash())
 	}
 	return backend.Handle(peer, &txs)

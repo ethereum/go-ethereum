@@ -72,6 +72,13 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return nil
 
 	case *eth.TransactionsPacket:
+		txs := packet.Unwrap()
+		for i, tx := range txs {
+			if tx.Type() == types.BlobTxType {
+				// blob txs should never be broadcast
+				return fmt.Errorf("transaction %v is a blob tx", i)
+			}
+		}
 		h.txBroadcasts.Send(packet.Unwrap())
 		return nil
 
