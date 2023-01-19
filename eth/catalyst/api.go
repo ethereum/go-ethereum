@@ -356,11 +356,11 @@ func (api *ConsensusAPI) GetPayloadV1(payloadID beacon.PayloadID) (*beacon.Execu
 }
 
 // GetPayloadV2 returns a cached payload by id.
-func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutableDataV2, error) {
+func (api *ConsensusAPI) GetPayloadV2(payloadID beacon.PayloadID) (*beacon.ExecutionPayloadEnvelope, error) {
 	return api.getPayload(payloadID)
 }
 
-func (api *ConsensusAPI) getPayload(payloadID beacon.PayloadID) (*beacon.ExecutableDataV2, error) {
+func (api *ConsensusAPI) getPayload(payloadID beacon.PayloadID) (*beacon.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID)
 	if data == nil {

@@ -95,7 +95,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 			TerminalTotalDifficultyPassed: true,
 			Ethash:                        new(params.EthashConfig),
 		}
-		engine = beacon.New(ethash.NewFaker())
+		engine = beacon.NewFaker()
 	}
 
 	gspec := &core.Genesis{

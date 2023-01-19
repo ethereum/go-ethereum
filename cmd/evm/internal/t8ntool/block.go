@@ -156,7 +156,7 @@ func (i *bbInput) ToBlock() *types.Block {
 	if header.Difficulty != nil {
 		header.Difficulty = i.Header.Difficulty
 	}
-	return types.NewBlockWithHeader(header).WithBody2(i.Txs, i.Ommers, i.Withdrawals)
+	return types.NewBlockWithHeader(header).WithBody(i.Txs, i.Ommers).WithWithdrawals(i.Withdrawals)
 }
 
 // SealBlock seals the given block using the configured engine.

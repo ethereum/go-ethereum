@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	beaconConsensus "github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -56,9 +57,11 @@ var (
 
 func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
+	engine := consensus.Engine(beaconConsensus.New(ethash.NewFaker()))
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
 		config.TerminalTotalDifficultyPassed = true
+		engine = beaconConsensus.NewFaker()
 	}
 	genesis := &core.Genesis{
 		Config:     &config,
@@ -76,7 +79,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		g.AddTx(tx)
 		testNonce++
 	}
-	_, blocks, _ := core.GenerateChainWithGenesis(genesis, beaconConsensus.New(ethash.NewFaker()), n, generate)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, n, generate)
 
 	if !merged {
 		totalDifficulty := big.NewInt(0)
@@ -1003,7 +1006,6 @@ func TestWithdrawals(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, true)
 	// Set shanghai time to last block + 5 seconds (first post-merge block)
 	genesis.Config.ShanghaiTime = big.NewInt(int64(blocks[len(blocks)-1].Time()) + 5)
-	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[0].Difficulty())
 
 	n, ethservice := startEthService(t, genesis, blocks)
 	ethservice.Merger().ReachTTD()

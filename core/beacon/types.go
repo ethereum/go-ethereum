@@ -75,15 +75,15 @@ type executableDataMarshaling struct {
 	Transactions  []hexutil.Bytes
 }
 
-//go:generate go run github.com/fjl/gencodec -type ExecutableDataV2 -field-override executableDataV2Marshaling -out gen_edv2.go
+//go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
 
-type ExecutableDataV2 struct {
+type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 }
 
-// JSON type overrides for ExecutableDataV2.
-type executableDataV2Marshaling struct {
+// JSON type overrides for ExecutionPayloadEnvelope.
+type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
 }
 
@@ -200,7 +200,7 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 		MixDigest:       params.Random,
 		WithdrawalsHash: withdrawalsRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody2(txs, nil /* uncles */, params.Withdrawals)
+	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
@@ -209,7 +209,7 @@ func ExecutableDataToBlock(params ExecutableData) (*types.Block, error) {
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutableDataV2 {
+func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
 		BlockHash:     block.Hash(),
 		ParentHash:    block.ParentHash(),
@@ -227,5 +227,5 @@ func BlockToExecutableData(block *types.Block, fees *big.Int) *ExecutableDataV2 
 		ExtraData:     block.Extra(),
 		Withdrawals:   block.Withdrawals(),
 	}
-	return &ExecutableDataV2{ExecutionPayload: data, BlockValue: fees}
+	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees}
 }

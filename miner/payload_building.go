@@ -108,7 +108,7 @@ func (payload *Payload) update(block *types.Block, fees *big.Int, elapsed time.D
 
 // Resolve returns the latest built payload and also terminates the background
 // thread for updating payload. It's safe to be called multiple times.
-func (payload *Payload) Resolve() *beacon.ExecutableDataV2 {
+func (payload *Payload) Resolve() *beacon.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -125,7 +125,7 @@ func (payload *Payload) Resolve() *beacon.ExecutableDataV2 {
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
 // It's only used in tests.
-func (payload *Payload) ResolveEmpty() *beacon.ExecutableDataV2 {
+func (payload *Payload) ResolveEmpty() *beacon.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
@@ -134,7 +134,7 @@ func (payload *Payload) ResolveEmpty() *beacon.ExecutableDataV2 {
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
 // It's only used in tests.
-func (payload *Payload) ResolveFull() *beacon.ExecutableDataV2 {
+func (payload *Payload) ResolveFull() *beacon.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 

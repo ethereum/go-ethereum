@@ -639,7 +639,7 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 		enc = append(enc, header.BaseFee)
 	}
 	if header.WithdrawalsHash != nil {
-		enc = append(enc, header.WithdrawalsHash)
+		panic("withdrawal hash set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
