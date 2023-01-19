@@ -302,6 +302,17 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		if tx.GasFeeCapIntCmp(thresholdFeeCap) < 0 || tx.GasTipCapIntCmp(thresholdTip) < 0 {
 			return false, nil
 		}
+
+		// If the old tx consumes data gas, ensure data gas is bumped by 1.1 in the
+		// new one as recommended by EIP-4844
+		if old.MaxFeePerDataGas().Sign() == 1 {
+			mul := big.NewInt(110)
+			dataFeeMin := new(big.Int).Mul(mul, old.MaxFeePerDataGas())
+			dataFeeMin.Div(dataFeeMin, b)
+			if dataFeeMin.Cmp(tx.MaxFeePerDataGas()) == 1 {
+				return false, nil
+			}
+		}
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)

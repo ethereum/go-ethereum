@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
+	"github.com/protolambda/ztyp/view"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -55,6 +58,7 @@ func init() {
 	eip1559Config = &cpy
 	eip1559Config.BerlinBlock = common.Big0
 	eip1559Config.LondonBlock = common.Big0
+	eip1559Config.ShardingForkTime = common.Big0 // for blob tx tests
 }
 
 type testBlockChain struct {
@@ -110,6 +114,46 @@ func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, 
 		Data:       nil,
 		AccessList: nil,
 	})
+	return tx
+}
+
+func blobTx(nonce uint64, gaslimit uint64, gasFee uint64, tip uint64, dataGasFee uint64, key *ecdsa.PrivateKey) *types.Transaction {
+	// Need tx wrap data that will pass blob verification
+	blobData := &types.BlobTxWrapData{
+		BlobKzgs: []types.KZGCommitment{},
+		Blobs:    []types.Blob{},
+	}
+	var hashes []common.Hash
+	for i := 0; i < len(blobData.BlobKzgs); i++ {
+		hashes = append(hashes, blobData.BlobKzgs[i].ComputeVersionedHash())
+	}
+	_, _, aggregatedProof, err := blobData.Blobs.ComputeCommitmentsAndAggregatedProof()
+	if err != nil {
+		panic(err)
+	}
+	blobData.KzgAggregatedProof = aggregatedProof
+
+	address := types.AddressSSZ(common.Address{})
+	sbtx := &types.SignedBlobTx{
+		Message: types.BlobTxMessage{
+			Nonce:               view.Uint64View(nonce),
+			GasTipCap:           view.Uint256View(*uint256.NewInt(tip)),
+			GasFeeCap:           view.Uint256View(*uint256.NewInt(gasFee)),
+			Gas:                 view.Uint64View(gaslimit),
+			To:                  types.AddressOptionalSSZ{&address},
+			Value:               view.Uint256View(*uint256.NewInt(100)),
+			Data:                nil,
+			AccessList:          nil,
+			MaxFeePerDataGas:    view.Uint256View(*uint256.NewInt(dataGasFee)),
+			BlobVersionedHashes: hashes,
+		},
+	}
+	sbtx.Message.ChainID.SetFromBig(params.TestChainConfig.ChainID)
+
+	tx, err := types.SignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), sbtx, types.WithTxWrapData(blobData))
+	if err != nil {
+		panic(err)
+	}
 	return tx
 }
 
@@ -2133,6 +2177,9 @@ func TestReplacementDynamicFee(t *testing.T) {
 	defer pool.Stop()
 	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
 
+	key2, _ := crypto.GenerateKey() // separate key for our blob tx tests
+	testAddBalance(pool, crypto.PubkeyToAddress(key2.PublicKey), big.NewInt(1000000000))
+
 	// Keep track of transaction events to ensure all executables get announced
 	events := make(chan core.NewTxsEvent, 32)
 	sub := pool.txFeed.Subscribe(events)
@@ -2145,17 +2192,22 @@ func TestReplacementDynamicFee(t *testing.T) {
 	tipThreshold := (gasTipCap * (100 + int64(testTxPoolConfig.PriceBump))) / 100
 
 	// Run the following identical checks for both the pending and queue pools:
-	//	1.  Send initial tx => accept
-	//	2.  Don't bump tip or fee cap => discard
-	//	3.  Bump both more than min => accept
-	//	4.  Check events match expected (2 new executable txs during pending, 0 during queue)
-	//	5.  Send new tx with larger tip and gasFeeCap => accept
-	//	6.  Bump tip max allowed so it's still underpriced => discard
-	//	7.  Bump fee cap max allowed so it's still underpriced => discard
-	//	8.  Bump tip min for acceptance => discard
-	//	9.  Bump feecap min for acceptance => discard
-	//	10. Bump feecap and tip min for acceptance => accept
-	//	11. Check events match expected (2 new executable txs during pending, 0 during queue)
+	//  1.  Send initial tx => accept
+	//  2.  Don't bump tip or fee cap => discard
+	//  3.  Bump both more than min => accept
+	//  4.  Check events match expected (2 new executable txs during pending, 0 during queue)
+	//  5.  Send new tx with larger tip and gasFeeCap => accept
+	//  6.  Bump tip max allowed so it's still underpriced => discard
+	//  7.  Bump fee cap max allowed so it's still underpriced => discard
+	//  8.  Bump tip min for acceptance => discard
+	//  9.  Bump feecap min for acceptance => discard
+	//  10. Bump feecap and tip min for acceptance => accept
+	//  11. Check events match expected (2 new executable txs during pending, 0 during queue)
+	//  12. Send initial blob tx => accept
+	//  13. bump tip/fee, but don't bump data gas fee => discard
+	//  14. bump tip/fee, insufficiently bump data gas fee => discard
+	//  15. bump tip/fee/datagasfee => accept
+	//  16. Check events match expected (2 new executable txs during pending, 0 during queue)
 	stages := []string{"pending", "queued"}
 	for _, stage := range stages {
 		// Since state is empty, 0 nonce txs are "executable" and can go
@@ -2219,6 +2271,34 @@ func TestReplacementDynamicFee(t *testing.T) {
 			t.Fatalf("failed to replace original cheap %s transaction: %v", stage, err)
 		}
 		// 11. Check events match expected (3 new executable txs during pending, 0 during queue)
+		count = 2
+		if stage == "queued" {
+			count = 0
+		}
+		if err := validateEvents(events, count); err != nil {
+			t.Fatalf("replacement %s event firing failed: %v", stage, err)
+		}
+		// 12.  Send initial tx => accept
+		tx = blobTx(nonce, 100000, uint64(2), uint64(1), uint64(100), key2)
+		if err := pool.addRemoteSync(tx); err != nil {
+			t.Fatalf("failed to add original cheap %s transaction: %v", stage, err)
+		}
+		// 13.  Bump cap & tip, but don't bump datagasfee => discard
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(100), key2)
+		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
+		}
+		// 14.  Bump cap, tip, & insufficiently bump datagasfee => discard
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(109), key2)
+		if err := pool.AddRemote(tx); err != ErrReplaceUnderpriced {
+			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, ErrReplaceUnderpriced)
+		}
+		// 15.  Bump cap, tip, & datagasfee => accept
+		tx = blobTx(nonce, 100000, uint64(3), uint64(2), uint64(110), key2)
+		if err := pool.AddRemote(tx); err != nil {
+			t.Fatalf("failed to replace cheap %s blob tx: %v", stage, err)
+		}
+		// 16. Check events match expected
 		count = 2
 		if stage == "queued" {
 			count = 0
