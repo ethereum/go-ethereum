@@ -303,57 +303,74 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 	if err != nil {
 		return nil, err
 	}
-	log.Info("using LevelDB as the backing database")
+	log.Info("Using LevelDB as the backing database")
 	return NewDatabase(db), nil
 }
 
-type dbType int
-
 const (
-	nonExistant dbType = iota
-	pebble
-	levelDb
+	dbPebble  = "pebble"
+	dbLeveldb = "leveldb"
 )
 
-func hasPreexistingDb(path string) dbType {
-	_, err := os.Stat(path + "/CURRENT")
-	if err != nil {
-		return nonExistant
+// hasPreexistingDb checks the given data directory whether a database is already
+// instantiated at that location, and if so, returns the type of database (or the
+// empty string).
+func hasPreexistingDb(path string) string {
+	if _, err := os.Stat(path + "/CURRENT"); err != nil {
+		return "" // No pre-existing db
 	}
 	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
-		return pebble
+		return dbPebble
 	}
-	return levelDb
+	return dbLeveldb
 }
 
-func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	preexistingDb := hasPreexistingDb(file)
+type OpenOptions struct {
+	Type              string // "leveldb" | "pebble"
+	Directory         string
+	AncientsDirectory string
+	Namespace         string
+	Cache             int
+	Handles           int
+	ReadOnly          bool
+}
 
-	if backingdb == "pebble" && preexistingDb == levelDb {
-		return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
+// openKvDb Opens a disk-based key-value database, e.g. leveldb or pebble.
+func openKvDb(o OpenOptions) (ethdb.Database, error) {
+	existingDb := hasPreexistingDb(o.Directory)
+	if len(existingDb) != 0 && o.Type != existingDb {
+		return nil, fmt.Errorf("backingdb choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
 	}
-	if backingdb == "leveldb" && preexistingDb == pebble {
-		return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
-	}
-	if backingdb == "pebble" || preexistingDb == pebble {
+	if o.Type == dbPebble || existingDb == dbPebble {
 		if PebbleEnabled {
-			return NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
+			return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 		} else {
 			return nil, errors.New("backingdb choice not supported on this platform")
 		}
 	}
-	return NewLevelDBDatabase(file, cache, handles, namespace, readonly)
+	if o.Type == dbLeveldb || existingDb == dbLeveldb {
+		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	}
+	return nil, fmt.Errorf("unknown backend %v", o.Type)
 }
 
-func NewPebbleOrLevelDBDatabaseWithFreezer(backingdb string, file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	kvdb, err := NewPebbleOrLevelDBDatabase(backingdb, file, cache, handles, namespace, readonly)
+// Open opens both a disk-based key-value database such as leveldb or pebble, but also
+// integrates it with a freezer database -- if the AncientDir option has been
+// set on the provided OpenOptions.
+// The passed o.AncientDir indicates the path of root ancient directory where
+// the chain freezer can be opened.
+func Open(o OpenOptions) (ethdb.Database, error) {
+	kvdb, err := openKvDb(o)
 	if err != nil {
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
+	if len(o.AncientsDirectory) == 0 {
+		return kvdb, nil
+	}
+	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
@@ -365,33 +382,18 @@ func NewPebbleOrLevelDBDatabaseWithFreezer(backingdb string, file string, cache 
 // freezer moving immutable chain segments into cold storage. The passed ancient
 // indicates the path of root ancient directory where the chain freezer can be
 // opened.
+// @deprecated: use Open instead
 func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-	return frdb, nil
+	return Open(OpenOptions{
+		Type:              "leveldb",
+		Directory:         file,
+		AncientsDirectory: ancient,
+		Namespace:         namespace,
+		Cache:             cache,
+		Handles:           handles,
+		ReadOnly:          readonly,
+	})
 }
-
-// NewPebbleDBDatabaseWithFreezer creates a persistent key-value database with a
-// freezer moving immutable chain segments into cold storage.
-//func NewPebbleDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-//	kvdb, err := pebble.New(file, cache, handles, namespace, readonly)
-//	if err != nil {
-//		return nil, err
-//	}
-//	frdb, err := NewDatabaseWithFreezer(kvdb, ancient, namespace, readonly)
-//	if err != nil {
-//		kvdb.Close()
-//		return nil, err
-//	}
-//	return frdb, nil
-//}
 
 type counter uint64
 

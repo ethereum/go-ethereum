@@ -18,6 +18,6 @@ func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, 
 	if err != nil {
 		return nil, err
 	}
-	log.Info("using Pebble as the backing database")
+	log.Info("Using Pebble as the backing database")
 	return NewDatabase(db), nil
 }
