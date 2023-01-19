@@ -187,7 +187,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			eventIdentifiers[normalizedName] = true
 			normalized.Name = normalizedName
-
+			
 			used := make(map[string]bool)
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)

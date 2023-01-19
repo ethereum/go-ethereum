@@ -46,7 +46,7 @@ type PrecompileHost interface {
 	Exists(addr common.Address) (PrecompiledContract, bool)
 
 	// `Run` runs a precompiled contract and returns the leftover gas.
-	Run(p PrecompiledContract, sdb StateDB, input []byte, caller common.Address,
+	Run(p PrecompiledContract, input []byte, caller common.Address,
 		value *big.Int, suppliedGas uint64, readonly bool,
 	) (ret []byte, remainingGas uint64, err error)
 }
@@ -217,7 +217,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, evm.StateDB, input, caller.Address(), value, gas, false)
+		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), value, gas, false)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -280,7 +280,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, evm.StateDB, input, caller.Address(), value, gas, true)
+		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), value, gas, true)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -326,7 +326,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
 		parent := caller.(*Contract)
-		ret, gas, err = evm.precompileHost.Run(p, evm.StateDB, input, parent.CallerAddress, parent.value, gas, false)
+		ret, gas, err = evm.precompileHost.Run(p, input, parent.CallerAddress, parent.value, gas, false)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
@@ -375,7 +375,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, evm.StateDB, input, caller.Address(), new(big.Int), gas, true)
+		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), new(big.Int), gas, true)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
