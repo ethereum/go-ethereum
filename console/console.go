@@ -38,8 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var (
@@ -196,36 +194,9 @@ func (c *Console) initWeb3(bridge *bridge) error {
 		transport.Set("send", jsre.MakeCallback(vm, bridge.Send))
 		transport.Set("sendAsync", jsre.MakeCallback(vm, bridge.Send))
 		vm.Set("_consoleWeb3Transport", transport)
-		var val goja.Value
-		val, err = vm.RunString("new Web3(_consoleWeb3Transport)")
-		if err != nil {
-			return
-		}
-		// Some JS properties like eth.protocolVersion are non-configurable in web3.js.
-		// I.e. they cannot be deleted via `delete`. Work-around: copy all properties
-		// except the ones to be deleted to a new object.
-		web3 := val.ToObject(vm)
-		eth := web3.Get("eth").ToObject(vm)
-		eth = deleteProperties(vm, eth, map[string]struct{}{"protocolVersion": struct{}{}, asyncGetterName("protocolVersion"): struct{}{}})
-		web3.Set("eth", eth)
-		vm.GlobalObject().Set("web3", web3)
+		_, err = vm.RunString("var web3 = new Web3(_consoleWeb3Transport)")
 	})
 	return err
-}
-
-func deleteProperties(vm *goja.Runtime, obj *goja.Object, names map[string]struct{}) *goja.Object {
-	new := vm.NewObject()
-	for _, k := range obj.Keys() {
-		if _, ignore := names[k]; ignore {
-			continue
-		}
-		new.Set(k, obj.Get(k))
-	}
-	return new
-}
-
-func asyncGetterName(name string) string {
-	return fmt.Sprintf("get%s", cases.Title(language.English, cases.NoLower).String(name))
 }
 
 var defaultAPIs = map[string]string{"eth": "1.0", "net": "1.0", "debug": "1.0"}
@@ -334,13 +305,8 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
-		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
-			continue
-		}
-		// Handle web3 in a special way (i.e. other numbers aren't auto completed)
-		if start >= 3 && line[start-3:start+1] == "web3" {
-			// Start will be decremented one more by loop
-			start -= 2
+		c := line[start]
+		if c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '1' && c <= '9') {
 			continue
 		}
 		// We've hit an unexpected character, autocomplete form here
