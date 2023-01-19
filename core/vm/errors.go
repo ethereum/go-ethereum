@@ -38,6 +38,7 @@ var (
 	ErrLegacyCode               = errors.New("invalid code: EOF contract must not deploy legacy code")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 	ErrInvalidEOF               = errors.New("invalid eof")
+	ErrInvalidEOFInitcode       = errors.New("invalid eof initcode")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
 
 	// errStopToken is an internal token indicating interpreter loop termination,

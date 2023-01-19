@@ -4472,20 +4472,22 @@ func TestEOF(t *testing.T) {
 		Code:  [][]byte{{byte(vm.STOP)}},
 		Data:  nil,
 	}
-	deployCode := container.MarshalBinary()
+	deployed := container.MarshalBinary()
+	makeDeployCode := func(b []byte) []byte {
+		out := []byte{
+			byte(vm.PUSH1), byte(len(b)), // len
+			byte(vm.PUSH1), 0x0c, // offset
+			byte(vm.PUSH1), 0x00, // dst offset
+			byte(vm.CODECOPY),
 
-	initCode := []byte{
-		byte(vm.PUSH1), byte(len(deployCode)), // len
-		byte(vm.PUSH1), 0x0c, // offset
-		byte(vm.PUSH1), 0x00, // dst offset
-		byte(vm.CODECOPY),
-
-		// code in memory
-		byte(vm.PUSH1), byte(len(deployCode)), // size
-		byte(vm.PUSH1), 0x00, // offset
-		byte(vm.RETURN),
+			// code in memory
+			byte(vm.PUSH1), byte(len(b)), // size
+			byte(vm.PUSH1), 0x00, // offset
+			byte(vm.RETURN),
+		}
+		return append(out, b...)
 	}
-	initCode = append(initCode, deployCode...)
+	initCode := makeDeployCode(deployed)
 	initHash := crypto.Keccak256Hash(initCode)
 
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
@@ -4542,10 +4544,30 @@ func TestEOF(t *testing.T) {
 		tx, _ = types.SignTx(tx, signer, key)
 		b.AddTx(tx)
 
-		// 3: deploy eof contract from create contract
+		// 3: invalid deployed eof in create tx, should be valid and use all gas
+		inner := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+			Code:  [][]byte{common.Hex2Bytes("0000")},
+		}).MarshalBinary()
+		invalid = makeDeployCode(inner)
 		txdata = &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
 			Nonce:      3,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 4: deploy eof contract from create contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      4,
 			To:         &bb,
 			Gas:        500000,
 			GasFeeCap:  newGwei(5),
@@ -4557,10 +4579,10 @@ func TestEOF(t *testing.T) {
 		tx, _ = types.SignTx(tx, signer, key)
 		b.AddTx(tx)
 
-		// deploy eof contract from create2 contract
+		// 5: deploy eof contract from create2 contract
 		txdata = &types.DynamicFeeTx{
 			ChainID:    gspec.Config.ChainID,
-			Nonce:      4,
+			Nonce:      5,
 			To:         &cc,
 			Gas:        500000,
 			GasFeeCap:  newGwei(5),
@@ -4592,15 +4614,19 @@ func TestEOF(t *testing.T) {
 	if got, want := r.GasUsed, blocks[0].Transactions()[2].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
 		t.Fatalf("gas accounting invalid for create tx with invalid initcode: gasUsed %d, gasLimit %d", got, want)
 	}
+	r = chain.GetReceiptsByHash(blocks[0].Hash())[3]
+	if got, want := r.GasUsed, blocks[0].Transactions()[3].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid deployed code: gasUsed %d, gasLimit %d", got, want)
+	}
 
 	// Check various deployment mechanisms.
-	if !bytes.Equal(state.GetCode(crypto.CreateAddress(addr, 1)), deployCode) {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(addr, 1)), deployed) {
 		t.Fatalf("failed to deploy EOF with EOA")
 	}
-	if !bytes.Equal(state.GetCode(crypto.CreateAddress(bb, 0)), deployCode) {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(bb, 0)), deployed) {
 		t.Fatalf("failed to deploy EOF with CREATE")
 	}
-	if !bytes.Equal(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployCode) {
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployed) {
 		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }

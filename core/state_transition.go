@@ -357,7 +357,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// Special case for EOF, if the initcode or deployed code is
 		// invalid, the tx is considered valid (so update nonce), but
 		// is to be treated as an exceptional abort (so burn all gas).
-		if errors.Is(vmerr, vm.ErrInvalidEOF) {
+		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
 			st.gas = 0
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		}
