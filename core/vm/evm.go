@@ -121,17 +121,22 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileHost PrecompileHost) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config) *EVM {
 	evm := &EVM{
-		Context:        blockCtx,
-		TxContext:      txCtx,
-		StateDB:        statedb,
-		precompileHost: precompileHost,
-		Config:         config,
-		chainConfig:    chainConfig,
-		chainRules:     chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
+		Context:     blockCtx,
+		TxContext:   txCtx,
+		StateDB:     statedb,
+		Config:      config,
+		chainConfig: chainConfig,
+		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil),
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
+	return evm
+}
+
+func NewEVMWithPrecompileHost(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileHost PrecompileHost) *EVM {
+	evm := NewEVM(blockCtx, txCtx, statedb, chainConfig, config)
+	evm.precompileHost = precompileHost
 	return evm
 }
 
