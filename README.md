@@ -56,7 +56,7 @@ We believe one of the things that makes Polygon special is its coherent design a
 
 ### Building the source
 
-- Building `bor` requires both a Go (version 1.14 or later) and a C compiler. You can install
+- Building `bor` requires both a Go (version 1.19 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
 
      ```shell
