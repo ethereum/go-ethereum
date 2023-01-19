@@ -1,4 +1,4 @@
-//go:build !(arm64 || amd64 || x84_64)
+//go:build !(arm64 || amd64)
 
 package rawdb
 
