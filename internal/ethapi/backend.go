@@ -48,10 +48,11 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager
 	ExtRPCEnabled() bool
-	RPCGasCap() uint64            // global gas cap for eth_call over rpc: DoS protection
-	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
-	RPCTxFeeCap() float64         // global tx fee cap for all transaction related APIs
-	UnprotectedAllowed() bool     // allows only for EIP155 transactions.
+	RPCGasCap() uint64             // global gas cap for eth_call over rpc: DoS protection
+	RPCRpcReturnDataLimit() uint64 // Maximum size (in bytes) a result of an rpc request could have
+	RPCEVMTimeout() time.Duration  // global timeout for eth_call over rpc: DoS protection
+	RPCTxFeeCap() float64          // global tx fee cap for all transaction related APIs
+	UnprotectedAllowed() bool      // allows only for EIP155 transactions.
 
 	// Blockchain API
 	SetHead(number uint64)

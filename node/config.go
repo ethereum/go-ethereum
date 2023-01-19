@@ -204,6 +204,9 @@ type Config struct {
 
 	// JWTSecret is the hex-encoded jwt secret.
 	JWTSecret string `toml:",omitempty"`
+
+	// Maximum number of messages in a batch
+	RPCBatchLimit uint64 `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

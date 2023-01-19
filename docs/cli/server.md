@@ -16,6 +16,10 @@ The ```bor server``` command runs the Bor client.
 
 - ```keystore```: Path of the directory where keystores are located
 
+- ```rpc.batchlimit```: Maximum number of messages in a batch (default=100, use 0 for no limits) (default: 100)
+
+- ```rpc.returndatalimit```: Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits) (default: 100000)
+
 - ```config```: File for the config file
 
 - ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
