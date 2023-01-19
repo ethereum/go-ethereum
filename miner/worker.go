@@ -80,7 +80,6 @@ const (
 var (
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
-	errMaxBlobsReached            = errors.New("reached max number of blobs per block")
 	errBlockInterruptedByTimeout  = errors.New("timeout while building block")
 )
 
@@ -943,7 +942,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
 
-		case errors.Is(err, errMaxBlobsReached):
+		case errors.Is(err, core.ErrDataGasLimitReached):
 			// Shift, as the next tx from the account may not contain blobs
 			log.Trace("Skipping blob transaction. Reached max number of blobs in current context", "sender", from, "numBlobs", len(tx.DataHashes()))
 			txs.Shift()
