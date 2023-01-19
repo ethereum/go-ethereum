@@ -310,35 +310,35 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 type dbType int
 
 const (
-	Nonexistent dbType = iota
-	Pebble
-	LevelDb
+	nonExistant dbType = iota
+	pebble
+	levelDb
 )
 
 func hasPreexistingDb(path string) dbType {
 	_, err := os.Stat(path + "/CURRENT")
 	if err != nil {
-		return Nonexistent
+		return nonExistant
 	}
 	if matches, err := filepath.Glob(path + "/OPTIONS*"); len(matches) > 0 || err != nil {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
-		return Pebble
+		return pebble
 	}
-	return LevelDb
+	return levelDb
 }
 
 func NewPebbleOrLevelDBDatabase(backingdb string, file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	preexistingDb := hasPreexistingDb(file)
 
-	if backingdb == "pebble" && preexistingDb == LevelDb {
+	if backingdb == "pebble" && preexistingDb == levelDb {
 		return nil, errors.New("backingdb choice was pebble but found pre-existing leveldb database in specified data directory")
 	}
-	if backingdb == "leveldb" && preexistingDb == Pebble {
+	if backingdb == "leveldb" && preexistingDb == pebble {
 		return nil, errors.New("backingdb choice was leveldb but found pre-existing pebble database in specified data directory")
 	}
-	if backingdb == "pebble" || preexistingDb == Pebble {
+	if backingdb == "pebble" || preexistingDb == pebble {
 		if PebbleEnabled {
 			return NewPebbleDBDatabase(file, cache, handles, namespace, readonly)
 		} else {

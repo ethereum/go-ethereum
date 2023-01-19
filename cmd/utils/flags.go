@@ -1017,7 +1017,6 @@ var (
 		AncientFlag,
 		RemoteDBFlag,
 		HttpHeaderFlag,
-		//BackingDBFlag,
 	}
 )
 
