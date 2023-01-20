@@ -383,7 +383,7 @@ var (
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 	}
-	TestRules = TestChainConfig.Rules(new(big.Int), false, new(big.Int))
+	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
 )
 
 // NetworkNames are user friendly names to use in the chain spec banner.
@@ -1002,7 +1002,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rules {
+func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -1020,8 +1020,8 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
-		IsShanghai:       timestamp != nil && (!timestamp.IsUint64() || c.IsShanghai(timestamp.Uint64())),
-		isCancun:         timestamp != nil && (!timestamp.IsUint64() || c.IsCancun(timestamp.Uint64())),
-		isPrague:         timestamp != nil && (!timestamp.IsUint64() || c.IsPrague(timestamp.Uint64())),
+		IsShanghai:       c.IsShanghai(timestamp),
+		isCancun:         c.IsCancun(timestamp),
+		isPrague:         c.IsPrague(timestamp),
 	}
 }

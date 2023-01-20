@@ -121,7 +121,7 @@ func TestConfigRules(t *testing.T) {
 	c := &ChainConfig{
 		ShanghaiTime: big.NewInt(500),
 	}
-	var stamp *big.Int
+	var stamp uint64
 	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
 		t.Errorf("expected %v to not be shanghai", stamp)
 	}
