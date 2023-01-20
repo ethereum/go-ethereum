@@ -27,8 +27,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/protolambda/ztyp/view"
 
@@ -40,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
 
 type ValidationInfo struct {
 	Typ     string `json:"type"`
@@ -253,15 +251,6 @@ func (t *Type) typeName() string {
 		return strings.TrimSuffix(t.Type, "[]")
 	}
 	return t.Type
-}
-
-func (t *Type) isReferenceType() bool {
-	if len(t.Type) == 0 {
-		return false
-	}
-	// Reference types must have a leading uppercase character
-	r, _ := utf8.DecodeRuneInString(t.Type)
-	return unicode.IsUpper(r)
 }
 
 type Types map[string][]Type
@@ -762,15 +751,15 @@ func (t Types) validate() error {
 			if typeKey == typeObj.Type {
 				return fmt.Errorf("type %q cannot reference itself", typeObj.Type)
 			}
-			if typeObj.isReferenceType() {
-				if _, exist := t[typeObj.typeName()]; !exist {
-					return fmt.Errorf("reference type %q is undefined", typeObj.Type)
-				}
-				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
-					return fmt.Errorf("unknown reference type %q", typeObj.Type)
-				}
-			} else if !isPrimitiveTypeValid(typeObj.Type) {
-				return fmt.Errorf("unknown type %q", typeObj.Type)
+			if isPrimitiveTypeValid(typeObj.Type) {
+				continue
+			}
+			// Must be reference type
+			if _, exist := t[typeObj.typeName()]; !exist {
+				return fmt.Errorf("reference type %q is undefined", typeObj.Type)
+			}
+			if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
+				return fmt.Errorf("unknown reference type %q", typeObj.Type)
 			}
 		}
 	}

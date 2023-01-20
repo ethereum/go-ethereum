@@ -387,10 +387,10 @@ func TestValidation(t *testing.T) {
 		// TODO(karalabe): Enable this when Cancun is specced, update local head and time, next timestamp
 		//{&timestampedConfig, 21123456, 1678123456, ID{Hash: checksumToBytes(0x71147644), Next: 1678000000}, nil},
 
-		// Local is mainnet Osaka, remote announces Shanghai + knowledge about Cancun. Remote
-		// is definitely out of sync. It may or may not need the Osaka update, we don't know yet.
+		// Local is mainnet Prague, remote announces Shanghai + knowledge about Cancun. Remote
+		// is definitely out of sync. It may or may not need the Prague update, we don't know yet.
 		//
-		// TODO(karalabe): Enable this when Cancun **and** Osaka is specced, update all the numbers
+		// TODO(karalabe): Enable this when Cancun **and** Prague is specced, update all the numbers
 		//{&timestampedConfig, 0, 0, ID{Hash: checksumToBytes(0x3edd5b10), Next: 4370000}, nil},
 
 		// Local is mainnet Shanghai, remote announces Cancun. Local is out of sync, accept.
@@ -398,10 +398,10 @@ func TestValidation(t *testing.T) {
 		// TODO(karalabe): Enable this when Cancun is specced, update remote checksum
 		//{&timestampedConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0x00000000), Next: 0}, nil},
 
-		// Local is mainnet Shanghai, remote announces Cancun, but is not aware of Osaka. Local
+		// Local is mainnet Shanghai, remote announces Cancun, but is not aware of Prague. Local
 		// out of sync. Local also knows about a future fork, but that is uncertain yet.
 		//
-		// TODO(karalabe): Enable this when Cancun **and** Osaka is specced, update remote checksum
+		// TODO(karalabe): Enable this when Cancun **and** Prague is specced, update remote checksum
 		//{&timestampedConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0x00000000), Next: 0}, nil},
 
 		// Local is mainnet Cancun. remote announces Shanghai but is not aware of further forks.
