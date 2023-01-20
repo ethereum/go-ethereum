@@ -96,6 +96,11 @@ func (ec *Client) GetProof(ctx context.Context, account common.Address, keys []s
 		StorageProof []storageResult `json:"storageProof"`
 	}
 
+	// Avoid keys being 'null'.
+	if keys == nil {
+		keys = []string{}
+	}
+
 	var res accountResult
 	err := ec.c.CallContext(ctx, &res, "eth_getProof", account, keys, toBlockNumArg(blockNumber))
 	// Turn hexutils back to normal datatypes

@@ -585,7 +585,7 @@ type Txs []string
 
 #### `clique`
 
-The `clique` object provides the neccesary information to complete a clique
+The `clique` object provides the necessary information to complete a clique
 seal of the block.
 
 ```go=
