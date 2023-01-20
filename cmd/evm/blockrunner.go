@@ -67,7 +67,6 @@ func blockTestCmd(ctx *cli.Context) error {
 		if err := test.Run(false); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
