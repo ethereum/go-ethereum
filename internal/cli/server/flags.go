@@ -95,6 +95,12 @@ func (c *Command) Flags() *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.Without,
 		Default: c.cliConfig.Heimdall.Without,
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "bor.devfakeauthor",
+		Usage:   "Run miner without validator set authorization [dev mode] : Use with '--bor.withoutheimdall'",
+		Value:   &c.cliConfig.DevFakeAuthor,
+		Default: c.cliConfig.DevFakeAuthor,
+	})
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "bor.heimdallgRPC",
 		Usage:   "Address of Heimdall gRPC service",

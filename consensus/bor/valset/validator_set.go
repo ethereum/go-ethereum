@@ -305,7 +305,7 @@ func (vals *ValidatorSet) UpdateTotalVotingPower() error {
 // It recomputes the total voting power if required.
 func (vals *ValidatorSet) TotalVotingPower() int64 {
 	if vals.totalVotingPower == 0 {
-		log.Info("invoking updateTotalVotingPower before returning it")
+		log.Debug("invoking updateTotalVotingPower before returning it")
 
 		if err := vals.UpdateTotalVotingPower(); err != nil {
 			// Can/should we do better?
@@ -641,14 +641,15 @@ func (vals *ValidatorSet) UpdateValidatorMap() {
 
 // UpdateWithChangeSet attempts to update the validator set with 'changes'.
 // It performs the following steps:
-// - validates the changes making sure there are no duplicates and splits them in updates and deletes
-// - verifies that applying the changes will not result in errors
-// - computes the total voting power BEFORE removals to ensure that in the next steps the priorities
-//   across old and newly added validators are fair
-// - computes the priorities of new validators against the final set
-// - applies the updates against the validator set
-// - applies the removals against the validator set
-// - performs scaling and centering of priority values
+//   - validates the changes making sure there are no duplicates and splits them in updates and deletes
+//   - verifies that applying the changes will not result in errors
+//   - computes the total voting power BEFORE removals to ensure that in the next steps the priorities
+//     across old and newly added validators are fair
+//   - computes the priorities of new validators against the final set
+//   - applies the updates against the validator set
+//   - applies the removals against the validator set
+//   - performs scaling and centering of priority values
+//
 // If an error is detected during verification steps, it is returned and the validator set
 // is not changed.
 func (vals *ValidatorSet) UpdateWithChangeSet(changes []*Validator) error {
