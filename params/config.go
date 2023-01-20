@@ -287,7 +287,7 @@ var (
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
 		ShanghaiTime:                  nil,
-		ShardingTime:                  nil,
+		ShardingForkTime:              nil,
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		TerminalTotalDifficulty:       nil,
@@ -574,16 +574,7 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Arrow Glacier:               #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)\n", c.ArrowGlacierBlock)
 	}
 	if c.GrayGlacierBlock != nil {
-		banner += fmt.Sprintf(" - Gray Glacier:                %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
-	}
-	if c.ShanghaiTime != nil {
-		banner += fmt.Sprintf(" - Shanghai:                     %-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiTime)
-	}
-	if c.CancunBlock != nil {
-		banner += fmt.Sprintf(" - Cancun:                      %-8v\n", c.CancunBlock)
-	}
-	if c.ShardingForkTime != nil {
-		banner += fmt.Sprintf(" - ShardingFork:                %-8v\n", c.ShardingForkTime)
+		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
 	}
 	banner += "\n"
 
@@ -606,6 +597,9 @@ func (c *ChainConfig) Description() string {
 	banner += "Post-Merge hard forks (timestamp based):\n"
 	if c.ShanghaiTime != nil {
 		banner += fmt.Sprintf(" - Shanghai:                    @%-10v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md)\n", c.ShanghaiTime)
+	}
+	if c.ShardingForkTime != nil {
+		banner += fmt.Sprintf(" - ShardingFork:                @%-10v\n", c.ShardingForkTime)
 	}
 	if c.CancunTime != nil {
 		banner += fmt.Sprintf(" - Cancun:                      @%-10v\n", c.CancunTime)
@@ -1045,7 +1039,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp *big.Int) Rule
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(timestamp),
 		IsSharding:       c.IsSharding(timestamp),
-		isCancun:         c.IsCancun(num),
+		isCancun:         c.IsCancun(timestamp),
 		isPrague:         c.IsPrague(timestamp),
 	}
 }

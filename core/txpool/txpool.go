@@ -620,6 +620,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Reject transactions that have too much wrap data to prevent DOS attacks.
 	if uint64(tx.WrapDataSize()) > txWrapDataMax {
 		return ErrOversizedData
+	}
 	// Check whether the init code size has been exceeded.
 	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)

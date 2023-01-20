@@ -17,7 +17,6 @@
 package catalyst
 
 import (
-	"math/big"
 	"sync"
 	"time"
 
