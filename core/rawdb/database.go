@@ -328,12 +328,14 @@ func hasPreexistingDb(path string) string {
 	return dbLeveldb
 }
 
+// OpenOptions contains the options to apply when opening a database.
+// OBS: If AncientsDirectory is empty, it indicates that no freezer is to be used.
 type OpenOptions struct {
 	Type              string // "leveldb" | "pebble"
-	Directory         string
-	AncientsDirectory string
+	Directory         string // the datadir
+	AncientsDirectory string // the ancients-dir
 	Namespace         string
-	Cache             int
+	Cache             int // Cache size in MiB
 	Handles           int
 	ReadOnly          bool
 }
@@ -377,23 +379,6 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 		return nil, err
 	}
 	return frdb, nil
-}
-
-// NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
-// freezer moving immutable chain segments into cold storage. The passed ancient
-// indicates the path of root ancient directory where the chain freezer can be
-// opened.
-// @deprecated: use Open instead
-func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	return Open(OpenOptions{
-		Type:              "leveldb",
-		Directory:         file,
-		AncientsDirectory: ancient,
-		Namespace:         namespace,
-		Cache:             cache,
-		Handles:           handles,
-		ReadOnly:          readonly,
-	})
 }
 
 type counter uint64
