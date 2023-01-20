@@ -136,7 +136,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
-	eventListener := pebble.EventListener{
+	eventListener := &pebble.EventListener{
 		CompactionBegin: func(info pebble.CompactionInfo) {
 			pebbleDb.onCompactionBegin(info)
 		},
