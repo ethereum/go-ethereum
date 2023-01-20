@@ -17,16 +17,20 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
-var customGenesisTests = []struct {
+type genesisTest struct {
 	genesis string
 	query   string
 	result  string
-}{
+}
+
+var customGenesisTests = []genesisTest{
 	// Genesis file with an empty chain configuration (ensure missing fields work)
 	{
 		genesis: `{
@@ -70,23 +74,46 @@ var customGenesisTests = []struct {
 // Tests that initializing Geth with a custom genesis block and chain definitions
 // work properly.
 func TestCustomGenesis(t *testing.T) {
-	for i, tt := range customGenesisTests {
+	testfunc := func(t *testing.T, tt genesisTest, db string) error {
 		// Create a temporary data directory to use and inspect later
 		datadir := t.TempDir()
 
 		// Initialize the data directory with the custom genesis block
 		json := filepath.Join(datadir, "genesis.json")
 		if err := os.WriteFile(json, []byte(tt.genesis), 0600); err != nil {
-			t.Fatalf("test %d: failed to write genesis file: %v", i, err)
+			return fmt.Errorf("failed to write genesis file: %v", err)
 		}
-		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
+		runGeth(t, "--backingdb", db, "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
-		geth := runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
+		geth := runGeth(t, "--backingdb", db, "--networkid", "1337", "--syncmode=full", "--cache", "16",
 			"--datadir", datadir, "--maxpeers", "0", "--port", "0", "--authrpc.port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
 		geth.ExpectRegexp(tt.result)
 		geth.ExpectExit()
+
+		// This time, we do not specify a backingdb, but instead see if it is
+		// correctly detected
+		geth = runGeth(t, "--networkid", "1337", "--syncmode=full", "--cache", "16",
+			"--datadir", datadir, "--maxpeers", "0", "--port", "0", "--authrpc.port", "0",
+			"--nodiscover", "--nat", "none", "--ipcdisable",
+			"--exec", tt.query, "console")
+		geth.ExpectRegexp(tt.result)
+		geth.ExpectExit()
+
+		return nil
+	}
+	for i, tt := range customGenesisTests {
+		if err := testfunc(t, tt, "leveldb"); err != nil {
+			t.Fatalf("test %d-leveldb: %v", i, err)
+		}
+		// Test pebble, but only on 64-bit platforms
+		if strconv.IntSize != 64 {
+			continue
+		}
+		if err := testfunc(t, tt, "pebble"); err != nil {
+			t.Fatalf("test %d-pebble: %v", i, err)
+		}
 	}
 }

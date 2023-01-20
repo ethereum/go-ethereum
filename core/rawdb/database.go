@@ -341,7 +341,7 @@ type OpenOptions struct {
 // openKvDb Opens a disk-based key-value database, e.g. leveldb or pebble.
 func openKvDb(o OpenOptions) (ethdb.Database, error) {
 	existingDb := hasPreexistingDb(o.Directory)
-	if len(existingDb) != 0 && o.Type != existingDb {
+	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
 		return nil, fmt.Errorf("backingdb choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
 	}
 	if o.Type == dbPebble || existingDb == dbPebble {
@@ -351,10 +351,11 @@ func openKvDb(o OpenOptions) (ethdb.Database, error) {
 			return nil, errors.New("backingdb choice not supported on this platform")
 		}
 	}
-	if o.Type == dbLeveldb || existingDb == dbLeveldb {
-		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	if len(o.Type) != 0 && o.Type != dbLeveldb {
+		return nil, fmt.Errorf("unknown backend %v", o.Type)
 	}
-	return nil, fmt.Errorf("unknown backend %v", o.Type)
+	// Use leveldb, either as default (no explicit choice), or pre-existing, or chosen explicitly
+	return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
 }
 
 // Open opens both a disk-based key-value database such as leveldb or pebble, but also

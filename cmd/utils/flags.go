@@ -102,7 +102,7 @@ var (
 	BackingDBFlag = &cli.StringFlag{
 		Name:  "backingdb",
 		Usage: "Backing database implementation to use",
-		Value: ethconfig.Defaults.BackingDB,
+		Value: "leveldb",
 	}
 	AncientFlag = &flags.DirectoryFlag{
 		Name:     "datadir.ancient",
@@ -1513,7 +1513,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		if backingDB != "leveldb" && backingDB != "pebble" {
 			Fatalf("invalid choice for backing db: %s", backingDB)
 		}
-		log.Info(fmt.Sprintf("using %s as backing db", backingDB))
+		log.Info(fmt.Sprintf("Using %s as backing db", backingDB))
 		cfg.BackingDB = backingDB
 	}
 }
