@@ -485,12 +485,12 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 
 	x.lock.RLock()
 	snap := newSnapshot(number, header.Hash(), masterNodes)
-	log.Trace("[UpdateMasternodes] take snapshot", "number", number, "hash", header.Hash())
+	log.Info("[UpdateMasternodes] take snapshot", "number", number, "hash", header.Hash())
 	x.lock.RUnlock()
 
 	err := storeSnapshot(snap, x.db)
 	if err != nil {
-		log.Error("[UpdateMasternodes] Error while store snashot", "hash", header.Hash(), "currentRound", x.currentRound, "error", err)
+		log.Error("[UpdateMasternodes] Error while store snapshot", "hash", header.Hash(), "currentRound", x.currentRound, "error", err)
 		return err
 	}
 	x.snapshots.Add(snap.Hash, snap)

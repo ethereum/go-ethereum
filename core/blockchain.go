@@ -1413,7 +1413,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		if bc.chainConfig.XDPoS != nil && ((block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap)) {
 			err := bc.UpdateM1()
 			if err != nil {
-				log.Crit("Error when update masternodes set. Stopping node", "err", err)
+				log.Crit("Error when update masternodes set. Stopping node", "err", err, "blockNum", block.NumberU64())
 			}
 		}
 	}
@@ -2225,7 +2225,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if bc.chainConfig.XDPoS != nil && ((newChain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap)) {
 			err := bc.UpdateM1()
 			if err != nil {
-				log.Crit("Error when update masternodes set. Stopping node", "err", err)
+				log.Crit("Error when update masternodes set. Stopping node", "err", err, "blockNumber", newChain[i].NumberU64())
 			}
 		}
 	}
