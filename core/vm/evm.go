@@ -40,8 +40,8 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
-// `PrecompileHost` is allows the EVM to execute a precompiled contract.
-type PrecompileHost interface {
+// `PrecompileRunner` is allows the EVM to execute a precompiled contract.
+type PrecompileRunner interface {
 	// `Exists` returns if a precompiled contract was found at `addr`.
 	Exists(addr common.Address) (PrecompiledContract, bool)
 
@@ -95,8 +95,8 @@ type EVM struct {
 	TxContext
 	// StateDB gives access to the underlying state
 	StateDB StateDB
-	// precompileHost gives access to the precompiled contracts
-	precompileHost PrecompileHost
+	// precompileRunner gives access to the precompiled contracts
+	precompileRunner PrecompileRunner
 	// Depth is the current call stack
 	depth int
 
@@ -134,9 +134,9 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	return evm
 }
 
-func NewEVMWithPrecompileHost(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileHost PrecompileHost) *EVM {
+func NewEVMWithPrecompileHost(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileRunner PrecompileRunner) *EVM {
 	evm := NewEVM(blockCtx, txCtx, statedb, chainConfig, config)
-	evm.precompileHost = precompileHost
+	evm.precompileRunner = precompileRunner
 	return evm
 }
 
@@ -185,7 +185,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 	snapshot := evm.StateDB.Snapshot()
-	p, isPrecompile := evm.precompileHost.Exists(addr)
+	p, isPrecompile := evm.precompileRunner.Exists(addr)
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
@@ -222,7 +222,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), value, gas, false)
+		ret, gas, err = evm.precompileRunner.Run(p, input, caller.Address(), value, gas, false)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -284,8 +284,8 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), value, gas, true)
+	if p, isPrecompile := evm.precompileRunner.Exists(addr); isPrecompile {
+		ret, gas, err = evm.precompileRunner.Run(p, input, caller.Address(), value, gas, true)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -329,9 +329,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 
 	// It is allowed to call precompiles, even via delegatecall
-	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
+	if p, isPrecompile := evm.precompileRunner.Exists(addr); isPrecompile {
 		parent := caller.(*Contract)
-		ret, gas, err = evm.precompileHost.Run(p, input, parent.CallerAddress, parent.value, gas, false)
+		ret, gas, err = evm.precompileRunner.Run(p, input, parent.CallerAddress, parent.value, gas, false)
 	} else {
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
@@ -379,8 +379,8 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		}(gas)
 	}
 
-	if p, isPrecompile := evm.precompileHost.Exists(addr); isPrecompile {
-		ret, gas, err = evm.precompileHost.Run(p, input, caller.Address(), new(big.Int), gas, true)
+	if p, isPrecompile := evm.precompileRunner.Exists(addr); isPrecompile {
+		ret, gas, err = evm.precompileRunner.Run(p, input, caller.Address(), new(big.Int), gas, true)
 	} else {
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
