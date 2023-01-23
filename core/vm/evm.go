@@ -134,7 +134,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	return evm
 }
 
-func NewEVMWithPrecompileHost(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileRunner PrecompileRunner) *EVM {
+func NewEVMWithPrecompiles(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig *params.ChainConfig, config Config, precompileRunner PrecompileRunner) *EVM {
 	evm := NewEVM(blockCtx, txCtx, statedb, chainConfig, config)
 	evm.precompileRunner = precompileRunner
 	return evm
