@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -1344,14 +1345,19 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
-	if ctx.IsSet(MinerEtherbaseFlag.Name) {
-		b, err := hexutil.Decode(ctx.String(MinerEtherbaseFlag.Name))
-		if err != nil || len(b) != common.AddressLength {
-			log.Info("Failed to decode etherbase", "err", err)
-			return
-		}
-		cfg.Miner.Etherbase = common.BytesToAddress(b)
+	if !ctx.IsSet(MinerEtherbaseFlag.Name) {
+		return
 	}
+	addr := ctx.String(MinerEtherbaseFlag.Name)
+	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
+		addr = addr[2:]
+	}
+	b, err := hex.DecodeString(addr)
+	if err != nil || len(b) != common.AddressLength {
+		Fatalf("-%s: invalid etherbase address %q", MinerEtherbaseFlag.Name, addr)
+		return
+	}
+	cfg.Miner.Etherbase = common.BytesToAddress(b)
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
