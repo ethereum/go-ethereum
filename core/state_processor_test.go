@@ -35,6 +35,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // TestStateProcessorErrors tests the output from the 'core' errors
 // as defined in core/error.go. These errors are generated when the
 // blockchain imports bad blocks, meaning blocks which have valid headers but
@@ -327,7 +329,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					ArrowGlacierBlock:   big.NewInt(0),
 					GrayGlacierBlock:    big.NewInt(0),
 					MergeNetsplitBlock:  big.NewInt(0),
-					ShanghaiTime:        big.NewInt(0),
+					ShanghaiTime:        u64(0),
 				},
 				Alloc: GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): GenesisAccount{

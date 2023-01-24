@@ -269,7 +269,7 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideShanghai *big.Int
+	OverrideShanghai *uint64
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.

@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 func TestCheckCompatible(t *testing.T) {
 	type test struct {
 		stored, new   *ChainConfig
@@ -93,19 +95,19 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        &ChainConfig{ShanghaiTime: big.NewInt(10)},
-			new:           &ChainConfig{ShanghaiTime: big.NewInt(20)},
+			stored:        &ChainConfig{ShanghaiTime: u64(10)},
+			new:           &ChainConfig{ShanghaiTime: u64(20)},
 			headTimestamp: 9,
 			wantErr:       nil,
 		},
 		{
-			stored:        &ChainConfig{ShanghaiTime: big.NewInt(10)},
-			new:           &ChainConfig{ShanghaiTime: big.NewInt(20)},
+			stored:        &ChainConfig{ShanghaiTime: u64(10)},
+			new:           &ChainConfig{ShanghaiTime: u64(20)},
 			headTimestamp: 25,
 			wantErr: &ConfigCompatError{
 				What:         "Shanghai fork timestamp",
-				StoredTime:   big.NewInt(10),
-				NewTime:      big.NewInt(20),
+				StoredTime:   u64(10),
+				NewTime:      u64(20),
 				RewindToTime: 9,
 			},
 		},
@@ -121,7 +123,7 @@ func TestCheckCompatible(t *testing.T) {
 
 func TestConfigRules(t *testing.T) {
 	c := &ChainConfig{
-		ShanghaiTime: big.NewInt(500),
+		ShanghaiTime: u64(500),
 	}
 	var stamp uint64
 	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
