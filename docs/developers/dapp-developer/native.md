@@ -178,7 +178,7 @@ An instance of `gethclient` can be used in exactly the same way as `ethclient`. 
 
 ```sh
 CallContract()
-CreatAccessList()
+CreateAccessList()
 GCStats()
 GetNodeInfo()
 GetProof()
