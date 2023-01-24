@@ -19,7 +19,6 @@ package forkid
 import (
 	"bytes"
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
