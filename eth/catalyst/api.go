@@ -785,6 +785,10 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*types
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count uint64) []*types.Body {
 	var bodies []*types.Body
+	if api.eth.BlockChain().CurrentBlock().NumberU64() < start {
+		// Return [] if the requested range is past our latest block
+		return bodies
+	}
 	for i := uint64(0); i < count; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(start + i)
 		if block == nil {
