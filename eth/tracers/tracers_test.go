@@ -56,7 +56,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		Transfer:    core.Transfer,
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(uint64(5)),
-		Time:        new(big.Int).SetUint64(uint64(5)),
+		Time:        5,
 		Difficulty:  big.NewInt(0xffffffff),
 		GasLimit:    gas,
 		BaseFee:     big.NewInt(8),

@@ -17,6 +17,7 @@
 package params
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 	"reflect"
 	"testing"
@@ -125,15 +126,11 @@ func TestConfigRules(t *testing.T) {
 	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
 		t.Errorf("expected %v to not be shanghai", stamp)
 	}
-	stamp = big.NewInt(0)
-	if r := c.Rules(big.NewInt(0), true, stamp); r.IsShanghai {
-		t.Errorf("expected %v to not be shanghai", stamp)
-	}
-	stamp = big.NewInt(500)
+	stamp = 500
 	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", stamp)
 	}
-	stamp, _ = big.NewInt(0).SetString("0xffffffff0000000000000000000000000000000000000000", 0)
+	stamp = math.MaxInt64
 	if r := c.Rules(big.NewInt(0), true, stamp); !r.IsShanghai {
 		t.Errorf("expected %v to be shanghai", stamp)
 	}
