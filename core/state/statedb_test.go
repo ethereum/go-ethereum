@@ -524,8 +524,8 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	states[1].FlushMVWriteSet()
 
 	// Tx1 read
-	v = states[2].GetState(addr, key)
-	b := states[2].GetBalance(addr)
+	v = states[1].GetState(addr, key)
+	b := states[1].GetBalance(addr)
 
 	assert.Equal(t, val, v)
 	assert.Equal(t, balance, b)
