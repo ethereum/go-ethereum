@@ -45,22 +45,22 @@ func TestEcrecover(t *testing.T) {
 }
 
 func TestAlterSignatureOffsetID(t *testing.T) {
-  alteredSig, alterErr := AlterRecoveryOffsetID(testsig, 27)
-  if alterErr != nil {
-    t.Fatal(alterErr)
-  }
-  if testsig[RecoveryIDOffset] + 27 != alteredSig[RecoveryIDOffset] {
-    t.Errorf("byte not assigned correctly to signature")
-  }
-  alterReverse, alterRevErr := AlterRecoveryOffsetID(alteredSig, -27)
-  if alterRevErr != nil {
-    t.Fatal(alterRevErr)
-  }
-  for i, _ := range testsig {
-    if testsig[i] != alterReverse[i] {
-      t.Errorf("AlterRecoverOffset is not associative")
-    }
-  }
+	alteredSig, alterErr := AlterRecoveryOffsetID(testsig, 27)
+	if alterErr != nil {
+		t.Fatal(alterErr)
+	}
+	if testsig[RecoveryIDOffset]+27 != alteredSig[RecoveryIDOffset] {
+		t.Errorf("byte not assigned correctly to signature")
+	}
+	alterReverse, alterRevErr := AlterRecoveryOffsetID(alteredSig, -27)
+	if alterRevErr != nil {
+		t.Fatal(alterRevErr)
+	}
+	for i := range testsig {
+		if testsig[i] != alterReverse[i] {
+			t.Errorf("AlterRecoverOffset is not associative")
+		}
+	}
 }
 
 func TestVerifySignature(t *testing.T) {
