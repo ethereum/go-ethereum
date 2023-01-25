@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/grpc"
 	empty "google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
@@ -103,7 +104,7 @@ func (d *DebugPprofCommand) Run(args []string) int {
 			req.Profile = profile
 		}
 
-		stream, err := clt.DebugPprof(ctx, req)
+		stream, err := clt.DebugPprof(ctx, req, grpc.MaxCallRecvMsgSize(1024*1024*1024))
 
 		if err != nil {
 			return err
