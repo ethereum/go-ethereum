@@ -73,10 +73,6 @@ func setDefaults(cfg *Config) {
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
-	//if cfg.Time == nil {
-	// TODO? Somehow use time.Now instead of zero?
-	//	cfg.Time = big.NewInt(time.Now().Unix())
-	//}
 	if cfg.GasLimit == 0 {
 		cfg.GasLimit = math.MaxUint64
 	}
