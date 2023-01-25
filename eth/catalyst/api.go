@@ -731,6 +731,6 @@ func (api *ConsensusAPI) heartbeat() {
 	}
 }
 
-func GetCapabilities([]string) []string {
+func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
