@@ -355,6 +355,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts, nil)
 	}
+	shanghai := chain.Config().IsShanghai(header.Time)
+	if !shanghai && len(withdrawals) > 0 {
+		return nil, errors.New("withdrawals set before Shanghai activation")
+	}
 	// Finalize and assemble the block.
 	beacon.Finalize(chain, header, state, txs, uncles, withdrawals)
 	return types.NewBlockWithWithdrawals(header, txs, uncles, receipts, withdrawals, trie.NewStackTrie(nil)), nil
