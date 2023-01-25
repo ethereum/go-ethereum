@@ -469,7 +469,7 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
-	if g.Config != nil && g.Config.IsShanghai(big.NewInt(int64(g.Timestamp))) {
+	if g.Config != nil && g.Config.IsShanghai(g.Timestamp) {
 		head.WithdrawalsHash = &types.EmptyRootHash
 	}
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))

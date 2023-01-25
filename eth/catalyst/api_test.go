@@ -1005,7 +1005,8 @@ func TestSimultaneousNewBlock(t *testing.T) {
 func TestWithdrawals(t *testing.T) {
 	genesis, blocks := generateMergeChain(10, true)
 	// Set shanghai time to last block + 5 seconds (first post-merge block)
-	genesis.Config.ShanghaiTime = big.NewInt(int64(blocks[len(blocks)-1].Time()) + 5)
+	time := blocks[len(blocks)-1].Time() + 5
+	genesis.Config.ShanghaiTime = &time
 
 	n, ethservice := startEthService(t, genesis, blocks)
 	ethservice.Merger().ReachTTD()

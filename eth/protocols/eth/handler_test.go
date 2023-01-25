@@ -47,6 +47,8 @@ var (
 	testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 )
 
+func u64(val uint64) *uint64 { return &val }
+
 // testBackend is a mock implementation of the live Ethereum message handler. Its
 // purpose is to allow testing the request/reply workflows and wire serialization
 // in the `eth` protocol without actually doing any data processing.
@@ -90,7 +92,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 			ArrowGlacierBlock:             big.NewInt(0),
 			GrayGlacierBlock:              big.NewInt(0),
 			MergeNetsplitBlock:            big.NewInt(0),
-			ShanghaiTime:                  big.NewInt(0),
+			ShanghaiTime:                  u64(0),
 			TerminalTotalDifficulty:       big.NewInt(0),
 			TerminalTotalDifficultyPassed: true,
 			Ethash:                        new(params.EthashConfig),
