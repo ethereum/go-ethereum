@@ -267,7 +267,7 @@ var (
 		Value:    2048,
 		Category: flags.EthCategory,
 	}
-	OverrideShanghai = &flags.BigFlag{
+	OverrideShanghai = &cli.Uint64Flag{
 		Name:     "override.shanghai",
 		Usage:    "Manually specify the Shanghai fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,

@@ -244,7 +244,7 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 	// Gather all the fork block numbers via reflection
 	kind := reflect.TypeOf(params.ChainConfig{})
 	conf := reflect.ValueOf(config).Elem()
-
+	x := uint64(0)
 	var (
 		forksByBlock []uint64
 		forksByTime  []uint64
@@ -257,15 +257,15 @@ func gatherForks(config *params.ChainConfig) ([]uint64, []uint64) {
 		if !time && !strings.HasSuffix(field.Name, "Block") {
 			continue
 		}
-		if field.Type != reflect.TypeOf(new(big.Int)) {
-			continue
-		}
+
 		// Extract the fork rule block number or timestamp and aggregate it
-		rule := conf.Field(i).Interface().(*big.Int)
-		if rule != nil {
-			if time {
-				forksByTime = append(forksByTime, rule.Uint64())
-			} else {
+		if field.Type == reflect.TypeOf(&x) {
+			if rule := conf.Field(i).Interface().(*uint64); rule != nil {
+				forksByTime = append(forksByTime, *rule)
+			}
+		}
+		if field.Type == reflect.TypeOf(new(big.Int)) {
+			if rule := conf.Field(i).Interface().(*big.Int); rule != nil {
 				forksByBlock = append(forksByBlock, rule.Uint64())
 			}
 		}
