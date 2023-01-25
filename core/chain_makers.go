@@ -302,15 +302,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 		if b.engine != nil {
-			// Finalize and seal the block
-			shanghai := config.IsShanghai(b.header.Time)
-			if shanghai && b.withdrawals == nil {
-				// need to make empty list to denote non-nil, but empty withdrawals to calc withdrawals hash
-				b.withdrawals = make([]*types.Withdrawal, 0)
-			} else if !shanghai && b.withdrawals != nil {
-				panic("withdrawals set before activation")
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+			if err != nil {
+				panic(err)
 			}
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
