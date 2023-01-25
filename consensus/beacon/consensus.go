@@ -266,7 +266,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("missing withdrawalsHash")
 	}
 	if !shanghai && header.WithdrawalsHash != nil {
-		return fmt.Errorf("invalid withdrawalsHash: have %s, expected nil", header.WithdrawalsHash)
+		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	return nil
 }
