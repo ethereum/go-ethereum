@@ -334,13 +334,12 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		beacon.ethone.Finalize(chain, header, state, txs, uncles, nil)
 		return
 	}
-	// If withdrawals have been activated, process each one.
-	if chain.Config().IsShanghai(header.Time) {
-		for _, w := range withdrawals {
-			// Amount is in gwei, turn into wei
-			amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-			state.AddBalance(w.Address, amount)
-		}
+	// Withdrawals processing.
+	for _, w := range withdrawals {
+		// Convert amount from gwei to wei.
+		amount := new(big.Int).SetUint64(w.Amount)
+		amount = amount.Mul(amount, big.NewInt(params.GWei))
+		state.AddBalance(w.Address, amount)
 	}
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
