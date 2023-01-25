@@ -350,15 +350,6 @@ func (b *Block) BaseFee() *big.Int {
 	return new(big.Int).Set(b.header.BaseFee)
 }
 
-func (b *Block) WithdrawalsHash() *common.Hash {
-	if b.header.WithdrawalsHash == nil {
-		return nil
-	}
-	var h common.Hash
-	h.SetBytes(b.header.WithdrawalsHash.Bytes())
-	return &h
-}
-
 func (b *Block) Withdrawals() Withdrawals {
 	return b.withdrawals
 }
