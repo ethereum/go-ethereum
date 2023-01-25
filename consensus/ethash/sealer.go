@@ -379,7 +379,7 @@ func (s *remoteSealer) notifyWork() {
 func (s *remoteSealer) sendNotification(ctx context.Context, url string, json []byte, work [4]string) {
 	defer s.reqWG.Done()
 
-	req, err := http.NewRequest("POST", url, bytes.NewReader(json))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(json))
 	if err != nil {
 		s.ethash.config.Log.Warn("Can't create remote miner notification", "err", err)
 		return
