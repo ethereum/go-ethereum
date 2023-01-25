@@ -24,7 +24,7 @@ import (
 )
 
 // NewFaker creates a fake consensus engine for testing.
-// The fake engine simulateds a merged network.
+// The fake engine simulates a merged network.
 // It can not be used to test the merge transition.
 // This type is needed since the fakeChainReader can not be used with
 // a normal beacon consensus engine.
