@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"sync/atomic"
 
@@ -42,6 +43,9 @@ type (
 
 // `PrecompileController` allows the EVM to execute a precompiled contract.
 type PrecompileController interface {
+	// `SetEphemeralContext` sets the precompile's native environment context.
+	SetEphemeralContext(ctx context.Context)
+
 	// `Exists` returns if a precompiled contract was found at `addr`.
 	Exists(addr common.Address) (p PrecompiledContract, found bool)
 
