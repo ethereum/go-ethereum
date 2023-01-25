@@ -4229,7 +4229,7 @@ func TestEIP3651(t *testing.T) {
 	var (
 		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
-		engine = ethash.NewFaker()
+		engine = beacon.NewFaker()
 
 		// A sender who makes transactions, has some funds
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -4237,8 +4237,9 @@ func TestEIP3651(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config  = *params.AllEthashProtocolChanges
 		gspec   = &Genesis{
-			Config: params.AllEthashProtocolChanges,
+			Config: &config,
 			Alloc: GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
@@ -4275,6 +4276,8 @@ func TestEIP3651(t *testing.T) {
 
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
 	gspec.Config.ShanghaiTime = u64(0)
 	signer := types.LatestSigner(gspec.Config)
 
@@ -4317,10 +4320,7 @@ func TestEIP3651(t *testing.T) {
 
 	// 3: Ensure that miner received only the tx's tip.
 	actual := state.GetBalance(block.Coinbase())
-	expected := new(big.Int).Add(
-		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].GasTipCap().Uint64()),
-		ethash.ConstantinopleBlockReward,
-	)
+	expected := new(big.Int).SetUint64(block.GasUsed() * block.Transactions()[0].GasTipCap().Uint64())
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}

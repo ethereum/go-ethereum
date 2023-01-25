@@ -41,10 +41,11 @@ type BlockGen struct {
 	header  *types.Header
 	statedb *state.StateDB
 
-	gasPool  *GasPool
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	uncles   []*types.Header
+	gasPool     *GasPool
+	txs         []*types.Transaction
+	receipts    []*types.Receipt
+	uncles      []*types.Header
+	withdrawals []*types.Withdrawal
 
 	config *params.ChainConfig
 	engine consensus.Engine
@@ -205,6 +206,26 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	b.uncles = append(b.uncles, h)
 }
 
+// AddWithdrawal adds a withdrawal to the generated block.
+func (b *BlockGen) AddWithdrawal(w *types.Withdrawal) {
+	// The withdrawal will be assigned the next valid index.
+	var idx uint64
+	for i := b.i - 1; i >= 0; i-- {
+		if wd := b.chain[i].Withdrawals(); len(wd) != 0 {
+			idx = wd[len(wd)-1].Index + 1
+			break
+		}
+		if i == 0 {
+			// Correctly set the index if no parent had withdrawals
+			if wd := b.parent.Withdrawals(); len(wd) != 0 {
+				idx = wd[len(wd)-1].Index + 1
+			}
+		}
+	}
+	w.Index = idx
+	b.withdrawals = append(b.withdrawals, w)
+}
+
 // PrevBlock returns a previously generated block by number. It panics if
 // num is greater or equal to the number of the block being generated.
 // For index -1, PrevBlock returns the parent block given to GenerateChain.
@@ -281,8 +302,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 		if b.engine != nil {
-			// Finalize and seal the block
-			block, _ := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			block, err := b.engine.FinalizeAndAssemble(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, b.withdrawals)
+			if err != nil {
+				panic(err)
+			}
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))

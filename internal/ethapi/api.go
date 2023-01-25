@@ -1214,6 +1214,10 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
 	}
 
+	if head.WithdrawalsHash != nil {
+		result["withdrawalsRoot"] = head.WithdrawalsHash
+	}
+
 	return result
 }
 
@@ -1242,6 +1246,8 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 			}
 		}
 		fields["transactions"] = transactions
+		// inclTx also expands withdrawals
+		fields["withdrawals"] = block.Withdrawals()
 	}
 	uncles := block.Uncles()
 	uncleHashes := make([]common.Hash, len(uncles))

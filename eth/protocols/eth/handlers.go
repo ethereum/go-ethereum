@@ -379,15 +379,19 @@ func handleBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	metadata := func() interface{} {
 		var (
-			txsHashes   = make([]common.Hash, len(res.BlockBodiesPacket))
-			uncleHashes = make([]common.Hash, len(res.BlockBodiesPacket))
+			txsHashes        = make([]common.Hash, len(res.BlockBodiesPacket))
+			uncleHashes      = make([]common.Hash, len(res.BlockBodiesPacket))
+			withdrawalHashes = make([]common.Hash, len(res.BlockBodiesPacket))
 		)
 		hasher := trie.NewStackTrie(nil)
 		for i, body := range res.BlockBodiesPacket {
 			txsHashes[i] = types.DeriveSha(types.Transactions(body.Transactions), hasher)
 			uncleHashes[i] = types.CalcUncleHash(body.Uncles)
+			if body.Withdrawals != nil {
+				withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
+			}
 		}
-		return [][]common.Hash{txsHashes, uncleHashes}
+		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes}
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,

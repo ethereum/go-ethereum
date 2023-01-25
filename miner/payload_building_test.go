@@ -47,20 +47,21 @@ func TestBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	verify := func(data *beacon.ExecutableDataV1, txs int) {
-		if data.ParentHash != b.chain.CurrentBlock().Hash() {
+	verify := func(outer *beacon.ExecutionPayloadEnvelope, txs int) {
+		payload := outer.ExecutionPayload
+		if payload.ParentHash != b.chain.CurrentBlock().Hash() {
 			t.Fatal("Unexpect parent hash")
 		}
-		if data.Random != (common.Hash{}) {
+		if payload.Random != (common.Hash{}) {
 			t.Fatal("Unexpect random value")
 		}
-		if data.Timestamp != timestamp {
+		if payload.Timestamp != timestamp {
 			t.Fatal("Unexpect timestamp")
 		}
-		if data.FeeRecipient != recipient {
+		if payload.FeeRecipient != recipient {
 			t.Fatal("Unexpect fee recipient")
 		}
-		if len(data.Transactions) != txs {
+		if len(payload.Transactions) != txs {
 			t.Fatal("Unexpect transaction set")
 		}
 	}

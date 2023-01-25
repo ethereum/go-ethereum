@@ -130,7 +130,7 @@ func TestExecutePayloadV1(t *testing.T) {
 		BaseFee:     block.BaseFee(),
 	}, nil, nil, nil, trie.NewStackTrie(nil))
 
-	_, err := api.ExecutePayloadV1(beacon.ExecutableDataV1{
+	_, err := api.ExecutePayloadV1(beacon.ExecutableData{
 		ParentHash:    fakeBlock.ParentHash(),
 		FeeRecipient:  fakeBlock.Coinbase(),
 		StateRoot:     fakeBlock.Root(),

@@ -540,8 +540,8 @@ func (f *BlockFetcher) loop() {
 					select {
 					case res := <-resCh:
 						res.Done <- nil
-
-						txs, uncles := res.Res.(*eth.BlockBodiesPacket).Unpack()
+						// Ignoring withdrawals here, since the block fetcher is not used post-merge.
+						txs, uncles, _ := res.Res.(*eth.BlockBodiesPacket).Unpack()
 						f.FilterBodies(peer, txs, uncles, time.Now())
 
 					case <-timeout.C:

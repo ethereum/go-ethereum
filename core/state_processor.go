@@ -86,8 +86,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+	// Fail if Shanghai not enabled and len(withdrawals) is non-zero.
+	withdrawals := block.Withdrawals()
+	if len(withdrawals) > 0 && !p.config.IsShanghai(block.Time()) {
+		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
+	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), withdrawals)
 
 	return receipts, allLogs, *usedGas, nil
 }

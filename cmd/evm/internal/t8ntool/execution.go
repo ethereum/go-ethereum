@@ -47,16 +47,17 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot   common.Hash           `json:"stateRoot"`
-	TxRoot      common.Hash           `json:"txRoot"`
-	ReceiptRoot common.Hash           `json:"receiptsRoot"`
-	LogsHash    common.Hash           `json:"logsHash"`
-	Bloom       types.Bloom           `json:"logsBloom"        gencodec:"required"`
-	Receipts    types.Receipts        `json:"receipts"`
-	Rejected    []*rejectedTx         `json:"rejected,omitempty"`
-	Difficulty  *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
-	GasUsed     math.HexOrDecimal64   `json:"gasUsed"`
-	BaseFee     *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
+	StateRoot       common.Hash           `json:"stateRoot"`
+	TxRoot          common.Hash           `json:"txRoot"`
+	ReceiptRoot     common.Hash           `json:"receiptsRoot"`
+	LogsHash        common.Hash           `json:"logsHash"`
+	Bloom           types.Bloom           `json:"logsBloom"        gencodec:"required"`
+	Receipts        types.Receipts        `json:"receipts"`
+	Rejected        []*rejectedTx         `json:"rejected,omitempty"`
+	Difficulty      *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
+	GasUsed         math.HexOrDecimal64   `json:"gasUsed"`
+	BaseFee         *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
+	WithdrawalsRoot *common.Hash          `json:"withdrawalsRoot,omitempty"`
 }
 
 type ommer struct {
@@ -79,6 +80,7 @@ type stEnv struct {
 	ParentTimestamp  uint64                              `json:"parentTimestamp,omitempty"`
 	BlockHashes      map[math.HexOrDecimal64]common.Hash `json:"blockHashes,omitempty"`
 	Ommers           []ommer                             `json:"ommers,omitempty"`
+	Withdrawals      []*types.Withdrawal                 `json:"withdrawals,omitempty"`
 	BaseFee          *big.Int                            `json:"currentBaseFee,omitempty"`
 	ParentUncleHash  common.Hash                         `json:"parentUncleHash"`
 }
@@ -254,6 +256,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		statedb.AddBalance(pre.Env.Coinbase, minerReward)
 	}
+	// Apply withdrawals
+	for _, w := range pre.Env.Withdrawals {
+		// Amount is in gwei, turn into wei
+		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+		statedb.AddBalance(w.Address, amount)
+	}
 	// Commit block
 	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
 	if err != nil {
@@ -271,6 +279,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
 		GasUsed:     (math.HexOrDecimal64)(gasUsed),
 		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
+	}
+	if pre.Env.Withdrawals != nil {
+		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
+		execRs.WithdrawalsRoot = &h
 	}
 	return statedb, execRs, nil
 }
