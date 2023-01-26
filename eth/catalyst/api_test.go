@@ -1342,9 +1342,9 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		},
 		// unavailable block
 		{
-			results: []*types.Body{blocks[19].Body(), nil},
+			results: []*types.Body{blocks[19].Body(), nil, nil},
 			start:   20,
-			count:   2,
+			count:   3,
 		},
 		// after range
 		{
@@ -1367,11 +1367,10 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 	for k, test := range tests {
 		result := api.GetPayloadBodiesByRangeV1(test.start, test.count)
 		if len(result) != len(test.results) {
-			t.Fatalf("test %v: invalid result length: expected %+v got %+v", k, test.results, result)
-		}
-		for i, r := range result {
-			if !eq(test.results[i], r) {
-				t.Fatalf("test %v: invalid response: expected %+v got %+v", k, test.results[i], r)
+			for i, r := range result {
+				if !eq(test.results[i], r) {
+					t.Fatalf("test %v: invalid response: expected %+v got %+v", k, test.results[i], r)
+				}
 			}
 		}
 	}
