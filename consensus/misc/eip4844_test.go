@@ -49,7 +49,7 @@ func TestFakeExponential(t *testing.T) {
 		factor := big.NewInt(tt.factor)
 		num := big.NewInt(tt.num)
 		denom := big.NewInt(tt.denom)
-		result := FakeExponential(factor, num, denom)
+		result := fakeExponential(factor, num, denom)
 		//t.Logf("%v*e^(%v/%v): %v", factor, num, denom, result)
 		if tt.want != result.Int64() {
 			t.Errorf("got %v want %v", result, tt.want)
