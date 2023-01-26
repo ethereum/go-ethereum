@@ -165,7 +165,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 // ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload attributes.
 func (api *ConsensusAPI) ForkchoiceUpdatedV2(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
 	if payloadAttributes != nil && payloadAttributes.Withdrawals == nil {
-		return beacon.STATUS_INVALID, errors.New("missing withdrawals list")
+		// Reject payload attributes with nil withdrawals after shanghai
+		if api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+			return beacon.STATUS_INVALID, errors.New("missing withdrawals list")
+		}
 	}
 	return api.forkchoiceUpdated(update, payloadAttributes)
 }
