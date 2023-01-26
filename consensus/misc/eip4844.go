@@ -69,6 +69,8 @@ func VerifyEip4844Header(config *params.ChainConfig, parent, header *types.Heade
 	if header.ExcessDataGas == nil {
 		return fmt.Errorf("header is missing excessDataGas")
 	}
+	// TODO: Make sure excess data gas is computed correctly. This requires we know the
+	// number of blobs in the previous block.
 	return nil
 }
 
