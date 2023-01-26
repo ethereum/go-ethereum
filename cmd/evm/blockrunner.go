@@ -19,12 +19,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/tests"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -33,16 +32,6 @@ var blockTestCommand = &cli.Command{
 	Name:      "blocktest",
 	Usage:     "executes the given blockchain tests",
 	ArgsUsage: "<file>",
-}
-
-// BlocktestResult contains the execution status after running a blockchain test, any
-// error that might have occurred and a dump of the final blockchain if requested.
-type BlocktestResult struct {
-	Name  string      `json:"name"`
-	Pass  bool        `json:"pass"`
-	Fork  string      `json:"fork"`
-	Error string      `json:"error,omitempty"`
-	State *state.Dump `json:"state,omitempty"`
 }
 
 func blockTestCmd(ctx *cli.Context) error {
@@ -63,9 +52,9 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
-	for _, test := range tests {
+	for i, test := range tests {
 		if err := test.Run(false); err != nil {
-			return err
+			return fmt.Errorf("test %v: %w", i, err)
 		}
 	}
 	return nil
