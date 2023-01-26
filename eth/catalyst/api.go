@@ -79,6 +79,7 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// All methods provided over the engine endpoint.
 var caps = []string{
 	"engine_forkchoiceUpdatedV1",
 	"engine_forkchoiceUpdatedV2",
@@ -731,6 +732,7 @@ func (api *ConsensusAPI) heartbeat() {
 	}
 }
 
+// ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
 	return caps
 }
