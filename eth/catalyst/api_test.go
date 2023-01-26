@@ -1133,6 +1133,35 @@ func TestNilWithdrawals(t *testing.T) {
 		wantErr     bool
 	}
 	tests := []test{
+		// Before Shanghai
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 2,
+				Withdrawals: nil,
+			},
+			wantErr: false,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp:   parent.Time + 2,
+				Withdrawals: make([]*types.Withdrawal, 0),
+			},
+			wantErr: true,
+		},
+		{
+			blockParams: beacon.PayloadAttributes{
+				Timestamp: parent.Time + 2,
+				Withdrawals: []*types.Withdrawal{
+					{
+						Index:   0,
+						Address: aa,
+						Amount:  32,
+					},
+				},
+			},
+			wantErr: true,
+		},
+		// After Shanghai
 		{
 			blockParams: beacon.PayloadAttributes{
 				Timestamp:   parent.Time + 5,
