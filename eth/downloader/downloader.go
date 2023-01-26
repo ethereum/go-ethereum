@@ -1595,10 +1595,12 @@ func (d *Downloader) processSnapSyncContent() error {
 	}()
 
 	closeOnErr := func(s *stateSync) {
+		defer d.cancelWg.Done()
 		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
 			d.queue.Close() // wake up Results
 		}
 	}
+	d.cancelWg.Add(1)
 	go closeOnErr(sync)
 
 	// To cater for moving pivot points, track the pivot block and subsequently
@@ -1638,6 +1640,7 @@ func (d *Downloader) processSnapSyncContent() error {
 				sync.Cancel()
 				sync = d.syncState(pivot.Root)
 
+				d.cancelWg.Add(1)
 				go closeOnErr(sync)
 			}
 		} else {
@@ -1676,6 +1679,7 @@ func (d *Downloader) processSnapSyncContent() error {
 				sync.Cancel()
 				sync = d.syncState(P.Header.Root)
 
+				d.cancelWg.Add(1)
 				go closeOnErr(sync)
 				oldPivot = P
 			}
