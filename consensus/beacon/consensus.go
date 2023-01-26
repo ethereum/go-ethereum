@@ -275,6 +275,8 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if err := misc.VerifyEip4844Header(chain.Config(), parent, header); err != nil {
 			return err
 		}
+	} else if header.ExcessDataGas != nil {
+		return fmt.Errorf("invalied ExcessDataGas: have %v, expected nil", header.ExcessDataGas)
 	}
 	return nil
 }
@@ -336,17 +338,17 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 
 // Finalize implements consensus.Engine, setting the final state on the header
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
-	// Finalize is different with Prepare, it can be used in both block generation
-	// and verification. So determine the consensus rules by header type.
-	if !beacon.IsPoSHeader(header) {
-		beacon.ethone.Finalize(chain, header, state, txs, uncles, withdrawals)
-		return
-	}
 	// If withdrawals have been activated, process each one.
 	if chain.Config().IsShanghai(header.TimeBig()) {
 		for _, w := range withdrawals {
 			state.AddBalance(w.Address, w.Amount)
 		}
+	}
+	// Finalize is different with Prepare, it can be used in both block generation
+	// and verification. So determine the consensus rules by header type.
+	if !beacon.IsPoSHeader(header) {
+		beacon.ethone.Finalize(chain, header, state, txs, uncles, withdrawals)
+		return
 	}
 	// The block reward is no longer handled here. It's done by the
 	// external consensus engine.
