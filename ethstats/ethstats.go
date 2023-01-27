@@ -118,8 +118,7 @@ type Service struct {
 type connWrapper struct {
 	conn *websocket.Conn
 
-	rlock sync.Mutex
-	wlock sync.Mutex
+	lock sync.RWMutex
 }
 
 func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
@@ -129,16 +128,16 @@ func newConnectionWrapper(conn *websocket.Conn) *connWrapper {
 
 // WriteJSON wraps corresponding method on the websocket but is safe for concurrent calling
 func (w *connWrapper) WriteJSON(v interface{}) error {
-	w.wlock.Lock()
-	defer w.wlock.Unlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
 
 	return w.conn.WriteJSON(v)
 }
 
 // ReadJSON wraps corresponding method on the websocket but is safe for concurrent calling
 func (w *connWrapper) ReadJSON(v interface{}) error {
-	w.rlock.Lock()
-	defer w.rlock.Unlock()
+	w.lock.RLock()
+	defer w.lock.RUnlock()
 
 	return w.conn.ReadJSON(v)
 }
