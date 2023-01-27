@@ -365,6 +365,13 @@ func (c *Command) Flags() *flagset.Flagset {
 		Group:   "JsonRPC",
 	})
 	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "rpc.allow-unprotected-txs",
+		Usage:   "Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC",
+		Value:   &c.cliConfig.JsonRPC.AllowUnprotectedTxs,
+		Default: c.cliConfig.JsonRPC.AllowUnprotectedTxs,
+		Group:   "JsonRPC",
+	})
+	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "ipcdisable",
 		Usage:   "Disable the IPC-RPC server",
 		Value:   &c.cliConfig.JsonRPC.IPCDisable,

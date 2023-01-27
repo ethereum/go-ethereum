@@ -1856,7 +1856,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	// Print a log with full tx details for manual investigations and interventions
 	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 	from, err := types.Sender(signer, tx)
-	if err != nil {
+
+	if err != nil && (!b.UnprotectedAllowed() || (b.UnprotectedAllowed() && err != types.ErrInvalidChainId)) {
 		return common.Hash{}, err
 	}
 
@@ -2046,6 +2047,10 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	for _, p := range pending {
 		wantSigHash := s.signer.Hash(matchTx)
 		pFrom, err := types.Sender(s.signer, p)
+
+		if err != nil && (s.b.UnprotectedAllowed() && err == types.ErrInvalidChainId) {
+			err = nil
+		}
 		if err == nil && pFrom == sendArgs.from() && s.signer.Hash(p) == wantSigHash {
 			// Match. Re-sign and send the transaction.
 			if gasPrice != nil && (*big.Int)(gasPrice).Sign() != 0 {

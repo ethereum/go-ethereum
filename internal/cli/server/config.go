@@ -254,6 +254,8 @@ type JsonRPCConfig struct {
 	Graphql *APIConfig `hcl:"graphql,block" toml:"graphql,block"`
 
 	HttpTimeout *HttpTimeouts `hcl:"timeouts,block" toml:"timeouts,block"`
+
+	AllowUnprotectedTxs bool `hcl:"unprotectedtxs,optional" toml:"unprotectedtxs,optional"`
 }
 
 type GRPCConfig struct {
@@ -504,10 +506,11 @@ func DefaultConfig() *Config {
 			IgnorePrice: gasprice.DefaultIgnorePrice,
 		},
 		JsonRPC: &JsonRPCConfig{
-			IPCDisable: false,
-			IPCPath:    "",
-			GasCap:     ethconfig.Defaults.RPCGasCap,
-			TxFeeCap:   ethconfig.Defaults.RPCTxFeeCap,
+			IPCDisable:          false,
+			IPCPath:             "",
+			GasCap:              ethconfig.Defaults.RPCGasCap,
+			TxFeeCap:            ethconfig.Defaults.RPCTxFeeCap,
+			AllowUnprotectedTxs: false,
 			Http: &APIConfig{
 				Enabled: false,
 				Port:    8545,
@@ -1049,6 +1052,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 		InsecureUnlockAllowed: c.Accounts.AllowInsecureUnlock,
 		Version:               params.VersionWithCommit(gitCommit, gitDate),
 		IPCPath:               ipcPath,
+		AllowUnprotectedTxs:   c.JsonRPC.AllowUnprotectedTxs,
 		P2P: p2p.Config{
 			MaxPeers:        int(c.P2P.MaxPeers),
 			MaxPendingPeers: int(c.P2P.MaxPendPeers),
