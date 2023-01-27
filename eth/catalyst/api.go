@@ -175,19 +175,27 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 
 // ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload attributes.
 func (api *ConsensusAPI) ForkchoiceUpdatedV2(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
-	if !api.eth.BlockChain().Config().IsShanghai(payloadAttributes.Timestamp) {
+	if payloadAttributes != nil {
+		if err := api.verifyPayloadAttributes(payloadAttributes); err != nil {
+			return beacon.STATUS_INVALID, beacon.InvalidPayloadAttributes.With(err)
+		}
+	}
+	return api.forkchoiceUpdated(update, payloadAttributes)
+}
+
+func (api *ConsensusAPI) verifyPayloadAttributes(attr *beacon.PayloadAttributes) error {
+	if !api.eth.BlockChain().Config().IsShanghai(attr.Timestamp) {
 		// Reject payload attributes with withdrawals before shanghai
-		if payloadAttributes != nil && payloadAttributes.Withdrawals != nil {
-			return beacon.STATUS_INVALID, beacon.InvalidPayloadAttributes.With(errors.New("withdrawals before shanghai"))
+		if attr.Withdrawals != nil {
+			return errors.New("withdrawals before shanghai")
 		}
 	} else {
 		// Reject payload attributes with nil withdrawals after shanghai
-		if payloadAttributes != nil && payloadAttributes.Withdrawals == nil {
-			return beacon.STATUS_INVALID, beacon.InvalidPayloadAttributes.With(errors.New("missing withdrawals list"))
+		if attr.Withdrawals == nil {
+			return errors.New("missing withdrawals list")
 		}
 	}
-
-	return api.forkchoiceUpdated(update, payloadAttributes)
+	return nil
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributes) (beacon.ForkChoiceResponse, error) {
